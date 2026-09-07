@@ -20,6 +20,16 @@ var timeLayouts = []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"}
 // omits empty values, so "" and "field absent" mean the same thing to the
 // server. Booleans stay pointers, because false and absent do not.
 //
+// The tier tags name the same tiers internal/tools/workitems puts on the
+// filters of the same name, so one filter is advertised at one tier whichever
+// domain a caller reaches it through: iterations, weight, custom fields and
+// status are Premium and health status is Ultimate. A saved view is itself
+// available on every tier; only these conditions inside one are gated. GitLab
+// documents work item status and custom fields at "Tier: Premium, Ultimate"
+// (https://docs.gitlab.com/user/work_items/status/ and
+// https://docs.gitlab.com/user/work_items/custom_fields/), both read on
+// 2026-09-07.
+//
 // GitLab API docs: https://docs.gitlab.com/api/graphql/reference/#workitemsavedviewfilterinput
 type Filters struct {
 	AssigneeUsernames          []string            `json:"assignee_usernames,omitempty"            jsonschema:"Usernames of the assignees to match"`
@@ -32,21 +42,21 @@ type Filters struct {
 	CreatedBefore              string              `json:"created_before,omitempty"                jsonschema:"Match work items created before this timestamp (ISO 8601)"`
 	CRMContactID               string              `json:"crm_contact_id,omitempty"                jsonschema:"CRM contact global ID whose work items to match"`
 	CRMOrganizationID          string              `json:"crm_organization_id,omitempty"           jsonschema:"CRM organization global ID whose work items to match"`
-	CustomField                []CustomFieldFilter `json:"custom_field,omitempty"                  jsonschema:"Custom field filters, each matching one custom field by ID or name"`
+	CustomField                []CustomFieldFilter `json:"custom_field,omitempty"                  tier:"premium" jsonschema:"Custom field filters, each matching one custom field by ID or name"`
 	DueAfter                   string              `json:"due_after,omitempty"                     jsonschema:"Match work items due after this timestamp (ISO 8601)"`
 	DueBefore                  string              `json:"due_before,omitempty"                    jsonschema:"Match work items due before this timestamp (ISO 8601)"`
 	ExcludeGroupWorkItems      *bool               `json:"exclude_group_work_items,omitempty"      jsonschema:"Exclude work items owned by the group itself"`
 	ExcludeProjects            *bool               `json:"exclude_projects,omitempty"              jsonschema:"Exclude work items owned by projects under the namespace"`
 	FullPath                   string              `json:"full_path,omitempty"                     jsonschema:"Full path of the project or group whose work items to match"`
-	HealthStatusFilter         string              `json:"health_status_filter,omitempty"          jsonschema:"Health status to match: onTrack, needsAttention, atRisk, ANY, or NONE"`
+	HealthStatusFilter         string              `json:"health_status_filter,omitempty"          tier:"ultimate" jsonschema:"Health status to match: onTrack, needsAttention, atRisk, ANY, or NONE"`
 	HierarchyFilters           *HierarchyFilter    `json:"hierarchy_filters,omitempty"             jsonschema:"Filter by position in the work item hierarchy"`
 	IID                        string              `json:"iid,omitempty"                           jsonschema:"Internal ID (IID) of a single work item to match"`
 	In                         []string            `json:"in,omitempty"                            jsonschema:"Fields the search term is matched against, e.g. TITLE or DESCRIPTION"`
 	IncludeDescendantWorkItems *bool               `json:"include_descendant_work_items,omitempty" jsonschema:"Include work items below the matched ones in the hierarchy"`
 	IncludeDescendants         *bool               `json:"include_descendants,omitempty"           jsonschema:"Include work items from descendant namespaces"`
-	IterationCadenceID         []string            `json:"iteration_cadence_id,omitempty"          jsonschema:"Iteration cadence global IDs to match"`
-	IterationID                []string            `json:"iteration_id,omitempty"                  jsonschema:"Iteration global IDs to match"`
-	IterationWildcardID        string              `json:"iteration_wildcard_id,omitempty"         jsonschema:"Iteration wildcard filter: NONE, ANY, CURRENT"`
+	IterationCadenceID         []string            `json:"iteration_cadence_id,omitempty"          tier:"premium" jsonschema:"Iteration cadence global IDs to match"`
+	IterationID                []string            `json:"iteration_id,omitempty"                  tier:"premium" jsonschema:"Iteration global IDs to match"`
+	IterationWildcardID        string              `json:"iteration_wildcard_id,omitempty"         tier:"premium" jsonschema:"Iteration wildcard filter: NONE, ANY, CURRENT"`
 	LabelName                  []string            `json:"label_name,omitempty"                    jsonschema:"Label names to match"`
 	MilestoneTitle             []string            `json:"milestone_title,omitempty"               jsonschema:"Milestone titles to match"`
 	MilestoneWildcardID        string              `json:"milestone_wildcard_id,omitempty"         jsonschema:"Milestone wildcard filter: NONE, ANY, STARTED, UPCOMING"`
@@ -57,13 +67,13 @@ type Filters struct {
 	ReleaseTagWildcardID       string              `json:"release_tag_wildcard_id,omitempty"       jsonschema:"Release tag wildcard filter: NONE or ANY"`
 	Search                     string              `json:"search,omitempty"                        jsonschema:"Free-text search term"`
 	State                      string              `json:"state,omitempty"                         jsonschema:"Work item state: opened, closed, locked, or all"`
-	Status                     *StatusFilter       `json:"status,omitempty"                        jsonschema:"Filter by the work item status widget value"`
+	Status                     *StatusFilter       `json:"status,omitempty"                        tier:"premium" jsonschema:"Filter by the work item status widget value"`
 	Subscribed                 string              `json:"subscribed,omitempty"                    jsonschema:"Subscription state of the authenticated user: EXPLICITLY_SUBSCRIBED, EXPLICITLY_UNSUBSCRIBED"`
 	Types                      []string            `json:"types,omitempty"                         jsonschema:"Work item type names to match, e.g. ISSUE, TASK, EPIC"`
 	UpdatedAfter               string              `json:"updated_after,omitempty"                 jsonschema:"Match work items updated after this timestamp (ISO 8601)"`
 	UpdatedBefore              string              `json:"updated_before,omitempty"                jsonschema:"Match work items updated before this timestamp (ISO 8601)"`
-	Weight                     string              `json:"weight,omitempty"                        jsonschema:"Weight to match"`
-	WeightWildcardID           string              `json:"weight_wildcard_id,omitempty"            jsonschema:"Weight wildcard filter: NONE or ANY"`
+	Weight                     string              `json:"weight,omitempty"                        tier:"premium" jsonschema:"Weight to match"`
+	WeightWildcardID           string              `json:"weight_wildcard_id,omitempty"            tier:"premium" jsonschema:"Weight wildcard filter: NONE or ANY"`
 	WorkItemTypeIDs            []string            `json:"work_item_type_ids,omitempty"            jsonschema:"Work item type global IDs to match"`
 }
 
@@ -74,10 +84,10 @@ type Filters struct {
 type NegatedFilters struct {
 	AssigneeUsernames   []string            `json:"assignee_usernames,omitempty"    jsonschema:"Assignee usernames to exclude"`
 	AuthorUsername      []string            `json:"author_username,omitempty"       jsonschema:"Author usernames to exclude"`
-	CustomField         []CustomFieldFilter `json:"custom_field,omitempty"          jsonschema:"Custom field values to exclude"`
-	HealthStatusFilter  []string            `json:"health_status_filter,omitempty"  jsonschema:"Health statuses to exclude"`
-	IterationID         []string            `json:"iteration_id,omitempty"          jsonschema:"Iteration global IDs to exclude"`
-	IterationWildcardID string              `json:"iteration_wildcard_id,omitempty" jsonschema:"Iteration wildcard filter to exclude"`
+	CustomField         []CustomFieldFilter `json:"custom_field,omitempty"          tier:"premium" jsonschema:"Custom field values to exclude"`
+	HealthStatusFilter  []string            `json:"health_status_filter,omitempty"  tier:"ultimate" jsonschema:"Health statuses to exclude"`
+	IterationID         []string            `json:"iteration_id,omitempty"          tier:"premium" jsonschema:"Iteration global IDs to exclude"`
+	IterationWildcardID string              `json:"iteration_wildcard_id,omitempty" tier:"premium" jsonschema:"Iteration wildcard filter to exclude"`
 	LabelName           []string            `json:"label_name,omitempty"            jsonschema:"Label names to exclude"`
 	MilestoneTitle      []string            `json:"milestone_title,omitempty"       jsonschema:"Milestone titles to exclude"`
 	MilestoneWildcardID string              `json:"milestone_wildcard_id,omitempty" jsonschema:"Milestone wildcard filter to exclude"`
@@ -85,7 +95,7 @@ type NegatedFilters struct {
 	ParentIDs           []string            `json:"parent_ids,omitempty"            jsonschema:"Parent work item global IDs to exclude"`
 	ReleaseTag          []string            `json:"release_tag,omitempty"           jsonschema:"Release tags to exclude"`
 	Types               []string            `json:"types,omitempty"                 jsonschema:"Work item type names to exclude"`
-	Weight              string              `json:"weight,omitempty"                jsonschema:"Weight to exclude"`
+	Weight              string              `json:"weight,omitempty"                tier:"premium" jsonschema:"Weight to exclude"`
 	WorkItemTypeIDs     []string            `json:"work_item_type_ids,omitempty"    jsonschema:"Work item type global IDs to exclude"`
 }
 
@@ -96,7 +106,7 @@ type NegatedFilters struct {
 type UnionedFilters struct {
 	AssigneeUsernames []string            `json:"assignee_usernames,omitempty" jsonschema:"Assignee usernames where matching any one includes the work item"`
 	AuthorUsernames   []string            `json:"author_usernames,omitempty"   jsonschema:"Author usernames where matching any one includes the work item"`
-	CustomField       []CustomFieldFilter `json:"custom_field,omitempty"       jsonschema:"Custom field values where matching any one includes the work item"`
+	CustomField       []CustomFieldFilter `json:"custom_field,omitempty"       tier:"premium" jsonschema:"Custom field values where matching any one includes the work item"`
 	LabelNames        []string            `json:"label_names,omitempty"        jsonschema:"Label names where matching any one includes the work item"`
 }
 

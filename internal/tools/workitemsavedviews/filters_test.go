@@ -4,6 +4,7 @@
 package workitemsavedviews
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -427,6 +428,50 @@ func TestSubFilters_NilReceivers(t *testing.T) {
 			t.Errorf("customFieldsToSDK(nil) = %+v, want nil", got)
 		}
 	})
+}
+
+// TestFilters_TierTags_MatchTheWorkItemListFilters pins the tier of every
+// gated filter, in all three filter objects, to the tier
+// internal/tools/workitems publishes for the filter of the same name.
+//
+// The two domains publish the same condition names through different tools,
+// and until this change one of them advertised every one of them as Free. The
+// table is written down rather than read from the sibling package because
+// ADR-0004 forbids a domain sub-package from importing another; the names are
+// the join, so a tag dropped or downgraded on either side shows up as a
+// mismatch here or in that package's own tier assertions.
+func TestFilters_TierTags_MatchTheWorkItemListFilters(t *testing.T) {
+	cases := []struct {
+		object reflect.Type
+		field  string
+		want   string
+	}{
+		{reflect.TypeFor[Filters](), "CustomField", "premium"},
+		{reflect.TypeFor[Filters](), "HealthStatusFilter", "ultimate"},
+		{reflect.TypeFor[Filters](), "IterationCadenceID", "premium"},
+		{reflect.TypeFor[Filters](), "IterationID", "premium"},
+		{reflect.TypeFor[Filters](), "IterationWildcardID", "premium"},
+		{reflect.TypeFor[Filters](), "Status", "premium"},
+		{reflect.TypeFor[Filters](), "Weight", "premium"},
+		{reflect.TypeFor[Filters](), "WeightWildcardID", "premium"},
+		{reflect.TypeFor[NegatedFilters](), "CustomField", "premium"},
+		{reflect.TypeFor[NegatedFilters](), "HealthStatusFilter", "ultimate"},
+		{reflect.TypeFor[NegatedFilters](), "IterationID", "premium"},
+		{reflect.TypeFor[NegatedFilters](), "IterationWildcardID", "premium"},
+		{reflect.TypeFor[NegatedFilters](), "Weight", "premium"},
+		{reflect.TypeFor[UnionedFilters](), "CustomField", "premium"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.object.Name()+"."+testCase.field, func(t *testing.T) {
+			field, ok := testCase.object.FieldByName(testCase.field)
+			if !ok {
+				t.Fatalf("%s has no field %s", testCase.object.Name(), testCase.field)
+			}
+			if got := field.Tag.Get("tier"); got != testCase.want {
+				t.Errorf("tier tag = %q, want %q", got, testCase.want)
+			}
+		})
+	}
 }
 
 // TestOptionalString verifies that only a non-empty string produces a pointer.

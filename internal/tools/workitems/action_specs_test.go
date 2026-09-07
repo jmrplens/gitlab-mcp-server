@@ -5,11 +5,13 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
@@ -209,6 +211,149 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected non-nil result for declined confirmation")
 	}
+}
+
+// TestActionSpecs_ListFilters_PublishTheirEnums verifies the served schema
+// carries the closed value set of every enum and wildcard filter.
+//
+// Nothing injects these centrally: toolutil's canonical enums reach the
+// property literally named sort and no other. Without them a model guesses
+// "none" or "any", GitLab matches the enum case sensitively, and the document
+// is refused before anything executes with a message the caller cannot act on.
+func TestActionSpecs_ListFilters_PublishTheirEnums(t *testing.T) {
+	props := workItemToolProperties(t, "gitlab_list_work_items")
+
+	cases := []struct {
+		property string
+		want     []any
+	}{
+		{"assignee_wildcard_id", []any{"ANY", "ME", "NONE"}},
+		{"health_status_filter", []any{"ANY", "NONE", "atRisk", "needsAttention", "onTrack"}},
+		{"iteration_wildcard_id", []any{"ANY", "CURRENT", "NONE"}},
+		{"milestone_wildcard_id", []any{"ANY", "NONE", "STARTED", "UPCOMING"}},
+		{"release_tag_wildcard_id", []any{"ANY", "NONE"}},
+		{"subscribed", []any{"EXPLICITLY_SUBSCRIBED", "EXPLICITLY_UNSUBSCRIBED"}},
+		{"weight_wildcard_id", []any{"ANY", "NONE"}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.property, func(t *testing.T) {
+			property := schemaProperty(t, props, testCase.property)
+			if got := property["enum"]; !reflect.DeepEqual(got, testCase.want) {
+				t.Errorf("%s enum = %#v, want %#v", testCase.property, got, testCase.want)
+			}
+		})
+	}
+
+	t.Run("in publishes its enum on the array items", func(t *testing.T) {
+		items, ok := schemaProperty(t, props, "in")["items"].(map[string]any)
+		if !ok {
+			t.Fatal("in has no items schema")
+		}
+		want := []any{"DESCRIPTION", "TITLE"}
+		if got := items["enum"]; !reflect.DeepEqual(got, want) {
+			t.Errorf("in items enum = %#v, want %#v", got, want)
+		}
+	})
+}
+
+// TestActionSpecs_ReturnedFields_PublishTheSDKRegistry holds the served enum to
+// exactly the names client-go accepts, Enterprise ones included.
+//
+// The set is read out of the SDK rather than written down twice, so this test
+// asserts the two agree: client-go refuses an unknown name before the request
+// is built, and a hand-copied list would drift into advertising a name that
+// refusal rejects.
+func TestActionSpecs_ReturnedFields_PublishTheSDKRegistry(t *testing.T) {
+	props := workItemToolProperties(t, "gitlab_list_work_items")
+	items, ok := schemaProperty(t, props, "returned_fields")["items"].(map[string]any)
+	if !ok {
+		t.Fatal("returned_fields has no items schema")
+	}
+	got, ok := items["enum"].([]any)
+	if !ok {
+		t.Fatalf("returned_fields items enum = %#v, want a list", items["enum"])
+	}
+	want := make([]string, 0, len(got))
+	want = append(want, gl.WorkItemDefaultListFields()...)
+	want = append(want, workItemEEListFields...)
+	slices.Sort(want)
+	names := make([]string, 0, len(got))
+	for _, value := range got {
+		name, isString := value.(string)
+		if !isString {
+			t.Fatalf("returned_fields enum entry %#v is not a string", value)
+		}
+		names = append(names, name)
+	}
+	if !slices.Equal(names, want) {
+		t.Errorf("returned_fields enum = %v, want %v", names, want)
+	}
+	// The five Enterprise names must be offered even though the process may
+	// have resolved a Free tier: in HTTP mode one process serves instances of
+	// several tiers, and hiding them would refuse a valid call before it left.
+	for _, name := range workItemEEListFields {
+		t.Run("offers "+name, func(t *testing.T) {
+			if !slices.Contains(names, name) {
+				t.Errorf("returned_fields enum omits %q", name)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_TimeFilters_PublishOneFormat holds the eight date-range
+// filters to a single treatment. toolutil injects date-time into four of them
+// by name, and without the overrides beside them the other four would publish
+// no format at all, leaving one input struct advertising sibling filters as
+// two different things while the handler parses all eight the same way.
+func TestActionSpecs_TimeFilters_PublishOneFormat(t *testing.T) {
+	props := workItemToolProperties(t, "gitlab_list_work_items")
+
+	for _, name := range []string{
+		"closed_after", "closed_before", "created_after", "created_before",
+		"due_after", "due_before", "updated_after", "updated_before",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := schemaProperty(t, props, name)["format"]; got != "date-time" {
+				t.Errorf("%s format = %#v, want date-time", name, got)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_CreateCreatedAt_PublishesDateTime covers the one create
+// field toolutil does not know by name, beside two date-only siblings.
+func TestActionSpecs_CreateCreatedAt_PublishesDateTime(t *testing.T) {
+	props := workItemToolProperties(t, "gitlab_create_work_item")
+	if got := schemaProperty(t, props, "created_at")["format"]; got != "date-time" {
+		t.Errorf("created_at format = %#v, want date-time", got)
+	}
+}
+
+// workItemToolProperties returns the served input-schema properties of one
+// work item tool, with every override and canonical injection applied.
+func workItemToolProperties(t *testing.T, tool string) map[string]any {
+	t.Helper()
+	byTool := workItemSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t))))
+	spec, ok := byTool[tool]
+	if !ok {
+		t.Fatalf("no spec for %q", tool)
+	}
+	props, ok := spec.Route.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s input schema has no properties", tool)
+	}
+	return props
+}
+
+// schemaProperty returns one property schema, failing rather than returning a
+// nil map a later assertion would read as an absent enum.
+func schemaProperty(t *testing.T, props map[string]any, name string) map[string]any {
+	t.Helper()
+	property, ok := props[name].(map[string]any)
+	if !ok {
+		t.Fatalf("property %q = %#v, want an object", name, props[name])
+	}
+	return property
 }
 
 func workItemActionHandler() http.Handler {

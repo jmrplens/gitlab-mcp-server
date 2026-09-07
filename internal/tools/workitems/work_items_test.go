@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -29,6 +30,31 @@ var invalidIIDCases = []struct {
 	{"zero", 0},
 	{"negative", -1},
 	{"large_negative", -100},
+}
+
+// namedUser builds the author or assignee object a test needs when only the
+// username matters to what it asserts.
+func namedUser(username string) *toolutil.BasicUserOutput {
+	return &toolutil.BasicUserOutput{Username: username}
+}
+
+// namedUsers builds an assignee list from usernames alone, for the same reason
+// [namedUser] exists.
+func namedUsers(usernames ...string) []*toolutil.BasicUserOutput {
+	users := make([]*toolutil.BasicUserOutput, 0, len(usernames))
+	for _, username := range usernames {
+		users = append(users, namedUser(username))
+	}
+	return users
+}
+
+// namedLabels builds a label list from titles alone.
+func namedLabels(names ...string) []*toolutil.LabelDetailsOutput {
+	labels := make([]*toolutil.LabelDetailsOutput, 0, len(names))
+	for _, name := range names {
+		labels = append(labels, &toolutil.LabelDetailsOutput{Name: name})
+	}
+	return labels
 }
 
 // TestGet_Success verifies Get when success.
@@ -94,7 +120,7 @@ func TestList_Success(t *testing.T) {
 		t.Fatalf("expected 2 work items, got %d", len(out.WorkItems))
 	}
 	first := out.WorkItems[0]
-	if first.ID != 1 || first.IID != 10 || first.Type != testTypeIssue || first.Author != "dev1" {
+	if first.ID != 1 || first.IID != 10 || first.Type != testTypeIssue || authorName(first.Author) != "dev1" {
 		t.Fatalf("unexpected first work item: %+v", first)
 	}
 	if !first.Confidential || first.WebURL == "" || first.CreatedAt == "" || first.UpdatedAt == "" {
@@ -144,17 +170,66 @@ func TestList_WidgetFields_ArePopulatedFromTheDefaultFieldSet(t *testing.T) {
 		t.Fatalf("expected 1 work item, got %d", len(out.WorkItems))
 	}
 	item := out.WorkItems[0]
-	if len(item.Assignees) != 2 || item.Assignees[0] != testAuthorBob || item.Assignees[1] != testAuthorCarol {
-		t.Errorf("Assignees = %v, want [bob carol]", item.Assignees)
+	if got := assigneeNames(item.Assignees); len(got) != 2 || got[0] != testAuthorBob || got[1] != testAuthorCarol {
+		t.Errorf("Assignees = %v, want [bob carol]", got)
 	}
-	if len(item.Labels) != 1 || item.Labels[0] != testLabelBug {
-		t.Errorf("Labels = %v, want [bug]", item.Labels)
+	if got := labelNames(item.Labels); len(got) != 1 || got[0] != testLabelBug {
+		t.Errorf("Labels = %v, want [bug]", got)
 	}
 	if len(item.LinkedItems) != 1 {
 		t.Fatalf("LinkedItems = %d, want 1", len(item.LinkedItems))
 	}
 	if item.LinkedItems[0].IID != 7 || item.LinkedItems[0].LinkType != "blocks" || item.LinkedItems[0].Path != "my-group/other" {
 		t.Errorf("LinkedItems[0] = %+v, want {7 blocks my-group/other}", item.LinkedItems[0])
+	}
+}
+
+// TestList_AssigneesAndLabels_CarryTheWholeObject verifies that the fields the
+// UserCoreBasic and label fragments already fetch reach the output instead of
+// being reduced to a name.
+//
+// The fixture answers with every field of both fragments, because the fragment
+// pays for all of them on every list call: publishing only the username and
+// the title threw away six user fields and five label fields per entry.
+func TestList_AssigneesAndLabels_CarryTheWholeObject(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"Item 1","author":{"id":"gid://gitlab/User/2","username":"alice","name":"Alice A","state":"active","avatarUrl":"https://gitlab.example.com/alice.png","webUrl":"https://gitlab.example.com/alice","createdAt":"2026-01-01T00:00:00Z"},"features":{"assignees":{"assignees":{"nodes":[{"id":"gid://gitlab/User/3","username":"bob","name":"Bob B","state":"active","avatarUrl":"https://gitlab.example.com/bob.png","webUrl":"https://gitlab.example.com/bob","createdAt":"2026-01-02T00:00:00Z"}]}},"labels":{"labels":{"nodes":[{"id":"gid://gitlab/ProjectLabel/7","title":"bug","color":"#d9534f","description":"Something is broken","descriptionHtml":"<p>Something is broken</p>","textColor":"#ffffff"}]}}}}]}}}}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.WorkItems) != 1 {
+		t.Fatalf("expected 1 work item, got %d", len(out.WorkItems))
+	}
+	item := out.WorkItems[0]
+	wantAuthor := &toolutil.BasicUserOutput{
+		ID: 2, Username: testAuthorAlice, Name: "Alice A", State: "active",
+		AvatarURL: "https://gitlab.example.com/alice.png",
+		WebURL:    "https://gitlab.example.com/alice",
+		CreatedAt: "2026-01-01T00:00:00Z",
+	}
+	if !reflect.DeepEqual(item.Author, wantAuthor) {
+		t.Errorf("Author = %+v, want %+v", item.Author, wantAuthor)
+	}
+	wantAssignees := []*toolutil.BasicUserOutput{{
+		ID: 3, Username: testAuthorBob, Name: "Bob B", State: "active",
+		AvatarURL: "https://gitlab.example.com/bob.png",
+		WebURL:    "https://gitlab.example.com/bob",
+		CreatedAt: "2026-01-02T00:00:00Z",
+	}}
+	if !reflect.DeepEqual(item.Assignees, wantAssignees) {
+		t.Errorf("Assignees = %+v, want %+v", item.Assignees, wantAssignees)
+	}
+	wantLabels := []*toolutil.LabelDetailsOutput{{
+		ID: 7, Name: testLabelBug, Color: "#d9534f",
+		Description:     "Something is broken",
+		DescriptionHTML: "<p>Something is broken</p>",
+		TextColor:       "#ffffff",
+	}}
+	if !reflect.DeepEqual(item.Labels, wantLabels) {
+		t.Errorf("Labels = %+v, want %+v", item.Labels, wantLabels)
 	}
 }
 
@@ -588,7 +663,7 @@ func TestDelete_Error(t *testing.T) {
 // TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	result := FormatGetMarkdown(GetOutput{WorkItem: WorkItemItem{
-		IID: 42, Title: "Test", Type: "Issue", State: "OPEN", Author: "dev",
+		IID: 42, Title: "Test", Type: "Issue", State: "OPEN", Author: namedUser("dev"),
 	}})
 	if result == nil {
 		t.Fatal(errExpNonNilResult)
@@ -608,7 +683,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // back through the after input.
 func TestFormatListMarkdown_WithNextPage_EmitsTheCursorLine(t *testing.T) {
 	out := ListOutput{
-		WorkItems: []WorkItemItem{{IID: 1, Type: testTypeIssue, State: testStateOpen, Title: "A", Author: testAuthorDev}},
+		WorkItems: []WorkItemItem{{IID: 1, Type: testTypeIssue, State: testStateOpen, Title: "A", Author: namedUser(testAuthorDev)}},
 		Pagination: toolutil.GraphQLPaginationOutput{
 			HasNextPage: true,
 			EndCursor:   "next-page-cursor",
@@ -623,7 +698,7 @@ func TestFormatListMarkdown_WithNextPage_EmitsTheCursorLine(t *testing.T) {
 // TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{WorkItems: []WorkItemItem{
-		{IID: 1, Type: "Issue", State: "OPEN", Title: "A", Author: "dev"},
+		{IID: 1, Type: "Issue", State: "OPEN", Title: "A", Author: namedUser("dev")},
 	}}
 	result := FormatListMarkdown(out)
 	if result == nil {
@@ -711,9 +786,12 @@ func TestWorkItemToItem_FullData(t *testing.T) {
 		Description:  "A detailed description",
 		WebURL:       testWorkItemURL,
 		Confidential: true,
-		Author:       &gl.BasicUser{Username: testAuthorAlice},
-		Assignees:    []*gl.BasicUser{{Username: testAuthorBob}, {Username: testAuthorCarol}},
-		Labels:       []gl.LabelDetails{{Name: testLabelBug}, {Name: testLabelUrgent}},
+		Author:       &gl.BasicUser{ID: 2, Username: testAuthorAlice, Name: "Alice A", State: "active"},
+		Assignees:    []*gl.BasicUser{{ID: 3, Username: testAuthorBob}, {ID: 4, Username: testAuthorCarol}},
+		Labels: []gl.LabelDetails{
+			{ID: 7, Name: testLabelBug, Color: "#d9534f", Description: "broken", DescriptionHTML: "<p>broken</p>", TextColor: "#ffffff"},
+			{ID: 8, Name: testLabelUrgent},
+		},
 		LinkedItems: []gl.LinkedWorkItem{
 			{NamespacePath: "my-group/other", IID: 7, LinkType: "blocks"},
 		},
@@ -786,16 +864,29 @@ func assertFullItemCore(t *testing.T, item WorkItemItem) {
 }
 
 // assertFullItemPeople checks full item people invariants for tests.
+//
+// Each of the three is checked whole rather than by name, because the whole
+// object is what the converter now carries and a name-only assertion is what
+// let the other fields go missing before.
 func assertFullItemPeople(t *testing.T, item WorkItemItem) {
 	t.Helper()
-	if item.Author != testAuthorAlice {
-		t.Errorf("Author = %q, want alice", item.Author)
+	wantAuthor := &toolutil.BasicUserOutput{ID: 2, Username: testAuthorAlice, Name: "Alice A", State: "active"}
+	if !reflect.DeepEqual(item.Author, wantAuthor) {
+		t.Errorf("Author = %+v, want %+v", item.Author, wantAuthor)
 	}
-	if len(item.Assignees) != 2 || item.Assignees[0] != testAuthorBob || item.Assignees[1] != testAuthorCarol {
-		t.Errorf("Assignees = %v, want [bob carol]", item.Assignees)
+	wantAssignees := []*toolutil.BasicUserOutput{
+		{ID: 3, Username: testAuthorBob},
+		{ID: 4, Username: testAuthorCarol},
 	}
-	if len(item.Labels) != 2 || item.Labels[0] != testLabelBug || item.Labels[1] != testLabelUrgent {
-		t.Errorf("Labels = %v, want [bug urgent]", item.Labels)
+	if !reflect.DeepEqual(item.Assignees, wantAssignees) {
+		t.Errorf("Assignees = %+v, want %+v", item.Assignees, wantAssignees)
+	}
+	wantLabels := []*toolutil.LabelDetailsOutput{
+		{ID: 7, Name: testLabelBug, Color: "#d9534f", Description: "broken", DescriptionHTML: "<p>broken</p>", TextColor: "#ffffff"},
+		{ID: 8, Name: testLabelUrgent},
+	}
+	if !reflect.DeepEqual(item.Labels, wantLabels) {
+		t.Errorf("Labels = %+v, want %+v", item.Labels, wantLabels)
 	}
 }
 
@@ -828,8 +919,8 @@ func TestWorkItemToItem_Minimal(t *testing.T) {
 	if item.Status != "" {
 		t.Errorf("Status should be empty, got %q", item.Status)
 	}
-	if item.Author != "" {
-		t.Errorf("Author should be empty, got %q", item.Author)
+	if item.Author != nil {
+		t.Errorf("Author should be absent, got %+v", item.Author)
 	}
 	if len(item.Assignees) != 0 {
 		t.Errorf("Assignees should be empty, got %v", item.Assignees)
@@ -862,8 +953,8 @@ func TestWorkItemToItemNilStatusNon_NilAuthor(t *testing.T) {
 	if item.Status != "" {
 		t.Errorf("Status = %q, want empty", item.Status)
 	}
-	if item.Author != testAuthorDev {
-		t.Errorf("Author = %q, want dev", item.Author)
+	if authorName(item.Author) != testAuthorDev {
+		t.Errorf("Author = %+v, want dev", item.Author)
 	}
 }
 
@@ -898,9 +989,9 @@ func TestFormatGetMarkdown_FullPopulated(t *testing.T) {
 		Title:       "Full WI",
 		Type:        testTypeTask,
 		State:       testStateOpen,
-		Author:      testAuthorAlice,
-		Assignees:   []string{testAuthorBob, testAuthorCarol},
-		Labels:      []string{testLabelBug, testLabelUrgent},
+		Author:      namedUser(testAuthorAlice),
+		Assignees:   namedUsers(testAuthorBob, testAuthorCarol),
+		Labels:      namedLabels(testLabelBug, testLabelUrgent),
 		WebURL:      "https://gitlab.example.com/work_items/42",
 		Description: "A very detailed description.",
 	}}
@@ -991,7 +1082,7 @@ func TestFormatGetMarkdown_OnlyAuthor(t *testing.T) {
 		Title:  "Simple",
 		Type:   testTypeIssue,
 		State:  testStateClosed,
-		Author: testAuthorDev,
+		Author: namedUser(testAuthorDev),
 	}}
 	result := FormatGetMarkdown(out)
 	text := extractText(t, result)
@@ -1010,7 +1101,7 @@ func TestFormatGetMarkdown_OnlyAssignees(t *testing.T) {
 		Title:     "Assigned",
 		Type:      testTypeTask,
 		State:     testStateOpen,
-		Assignees: []string{testAuthorAlice},
+		Assignees: namedUsers(testAuthorAlice),
 	}}
 	result := FormatGetMarkdown(out)
 	text := extractText(t, result)
@@ -1026,7 +1117,7 @@ func TestFormatGetMarkdown_OnlyLabels(t *testing.T) {
 		Title:  "Labeled",
 		Type:   testTypeIssue,
 		State:  testStateOpen,
-		Labels: []string{"feature"},
+		Labels: namedLabels("feature"),
 	}}
 	result := FormatGetMarkdown(out)
 	text := extractText(t, result)
@@ -1077,9 +1168,9 @@ func TestFormatGetMarkdown_OnlyDescription(t *testing.T) {
 // TestFormatListMarkdown_MultipleItems verifies FormatListMarkdown when multiple items.
 func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 	out := ListOutput{WorkItems: []WorkItemItem{
-		{IID: 1, Type: testTypeIssue, State: testStateOpen, Title: "First", Author: "dev1"},
-		{IID: 2, Type: testTypeTask, State: testStateClosed, Title: "Second", Author: "dev2"},
-		{IID: 3, Type: "Epic", State: testStateOpen, Title: "Third", Author: "dev3"},
+		{IID: 1, Type: testTypeIssue, State: testStateOpen, Title: "First", Author: namedUser("dev1")},
+		{IID: 2, Type: testTypeTask, State: testStateClosed, Title: "Second", Author: namedUser("dev2")},
+		{IID: 3, Type: "Epic", State: testStateOpen, Title: "Third", Author: namedUser("dev3")},
 	}}
 	result := FormatListMarkdown(out)
 	if result == nil {
@@ -1109,7 +1200,7 @@ func TestFormatListMarkdown_EmptyReturnsMessage(t *testing.T) {
 // TestFormatListMarkdown_SpecialCharsInTitle verifies FormatListMarkdown when special chars in title.
 func TestFormatListMarkdown_SpecialCharsInTitle(t *testing.T) {
 	out := ListOutput{WorkItems: []WorkItemItem{
-		{IID: 1, Type: testTypeIssue, State: testStateOpen, Title: "Has | pipe", Author: testAuthorDev},
+		{IID: 1, Type: testTypeIssue, State: testStateOpen, Title: "Has | pipe", Author: namedUser(testAuthorDev)},
 	}}
 	result := FormatListMarkdown(out)
 	text := extractText(t, result)
@@ -1354,24 +1445,35 @@ func TestCreate_MinimalOptions(t *testing.T) {
 	}
 }
 
-// TestCreate_InvalidDueDate verifies Create when invalid due date.
-func TestCreate_InvalidDueDate(t *testing.T) {
-	// DueDate parsing uses time.Parse -- invalid format is silently ignored
-	// (err == nil check), so invalid dates just skip setting the field.
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"Bad date","author":{"username":"dev"},"widgets":[]}}}}`)
-	})
-	client := testutil.NewTestClient(t, handler)
-
-	_, err := Create(t.Context(), client, CreateInput{
-		FullPath:       testProjectPath,
-		WorkItemTypeID: testTypeGID,
-		Title:          "Bad date",
-		DueDate:        "not-a-date",
-		StartDate:      "also-not-a-date",
-	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
+// TestCreate_MalformedDate_RefusesAndNamesTheField verifies that create stops
+// on a start_date or due_date it cannot read, naming the one at fault, instead
+// of dropping it and reporting a work item created without the date asked for.
+//
+// One case per field: a shared parser reached from two call sites is exactly
+// the shape where one of the two silently keeps the old behavior.
+func TestCreate_MalformedDate_RefusesAndNamesTheField(t *testing.T) {
+	cases := []struct {
+		name  string
+		input CreateInput
+	}{
+		{"start_date", CreateInput{StartDate: "not-a-date"}},
+		{"due_date", CreateInput{DueDate: "31/01/2025"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			input := tc.input
+			input.FullPath = testProjectPath
+			input.WorkItemTypeID = testTypeGID
+			input.Title = "Bad date"
+			_, err := Create(t.Context(), client, input)
+			if err == nil {
+				t.Fatal(errExpectedNil)
+			}
+			if !strings.Contains(err.Error(), tc.name) {
+				t.Errorf("error = %v, want it to name %s", err, tc.name)
+			}
+		})
 	}
 }
 
@@ -1648,32 +1750,32 @@ func TestUpdate_Error(t *testing.T) {
 	}
 }
 
-// TestUpdate_InvalidDates verifies that invalid date formats for StartDate
-// and DueDate are silently ignored (the field is not set) without causing errors.
-func TestUpdate_InvalidDates(t *testing.T) {
-	call := 0
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		call++
-		switch call {
-		case 1:
-			testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItem":{"id":"gid://gitlab/WorkItem/1"}}}}`)
-		default:
-			testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemUpdate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"Bad dates","author":{"username":"dev"},"widgets":[]}}}}`)
-		}
-	})
-	client := testutil.NewTestClient(t, handler)
-
-	out, err := Update(t.Context(), client, UpdateInput{
-		FullPath:  testFullPath,
-		IID:       1,
-		StartDate: "not-a-date",
-		DueDate:   "also-invalid",
-	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
+// TestUpdate_MalformedDate_RefusesBeforeAnyRequest verifies that update stops
+// on a start_date or due_date it cannot read, naming the one at fault, and
+// does so before issuing anything: the clearing guard's read would otherwise be
+// spent on a call already destined to be refused.
+func TestUpdate_MalformedDate_RefusesBeforeAnyRequest(t *testing.T) {
+	cases := []struct {
+		name  string
+		input UpdateInput
+	}{
+		{"start_date", UpdateInput{StartDate: "not-a-date"}},
+		{"due_date", UpdateInput{DueDate: "also-invalid"}},
 	}
-	if out.WorkItem.Title != "Bad dates" {
-		t.Errorf("Title = %q", out.WorkItem.Title)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			input := tc.input
+			input.FullPath = testFullPath
+			input.IID = 1
+			_, err := Update(t.Context(), client, input)
+			if err == nil {
+				t.Fatal(errExpectedNil)
+			}
+			if !strings.Contains(err.Error(), tc.name) {
+				t.Errorf("error = %v, want it to name %s", err, tc.name)
+			}
+		})
 	}
 }
 
@@ -2478,8 +2580,8 @@ func TestGet_RichResponse(t *testing.T) {
 	if wi.Title != "Rich item" {
 		t.Errorf("Title = %q", wi.Title)
 	}
-	if wi.Author != testAuthorAlice {
-		t.Errorf("Author = %q", wi.Author)
+	if authorName(wi.Author) != testAuthorAlice {
+		t.Errorf("Author = %+v", wi.Author)
 	}
 	if wi.Description != "Detailed desc" {
 		t.Errorf(fmtDescWant, wi.Description)
@@ -2498,6 +2600,468 @@ func TestGet_RichResponse(t *testing.T) {
 	}
 	if wi.WebURL != testWorkItemURL {
 		t.Errorf("WebURL = %q", wi.WebURL)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Filters, widgets and the field set a list asks for
+// ---------------------------------------------------------------------------.
+
+// graphQLRequest is what a test needs out of a recorded GraphQL POST: the
+// document, so it can assert which fields the query asked GitLab for, and the
+// variables, so it can assert what a filter turned into on the wire.
+type graphQLRequest struct {
+	Query     string         `json:"query"`
+	Variables map[string]any `json:"variables"`
+}
+
+// recordGraphQL answers every POST with response and records the request into
+// got. The request is written before the answer and read after the call
+// returns, so the HTTP round trip orders the two.
+func recordGraphQL(t *testing.T, got *graphQLRequest, response string) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(got); err != nil {
+			t.Errorf("decode GraphQL request: %v", err)
+			http.Error(w, "decode GraphQL request", http.StatusInternalServerError)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, response)
+	}
+}
+
+// emptyWorkItemsResponse is the shortest answer a list query accepts, for the
+// tests whose whole assertion is on the request.
+const emptyWorkItemsResponse = `{"data":{"namespace":{"workItems":{"nodes":[]}}}}`
+
+// TestList_Filters_ReachTheWire proves each filter this action exposes is
+// declared as a GraphQL variable carrying the value the caller sent.
+//
+// A filter that never reaches GitLab is worse than one that does not exist:
+// the answer comes back unnarrowed, and nothing in it says the condition was
+// dropped. The variable names are client-go's, and the pinned schema judges
+// both the document and these values on every request, so a case here also
+// proves GitLab would accept the pair.
+func TestList_Filters_ReachTheWire(t *testing.T) {
+	cases := []struct {
+		name     string
+		input    ListInput
+		variable string
+		want     any
+	}{
+		{"assignee_usernames", ListInput{AssigneeUsernames: []string{testAuthorBob, testAuthorCarol}}, "assigneeUsernames", []any{testAuthorBob, testAuthorCarol}},
+		{"assignee_wildcard_id", ListInput{AssigneeWildcardID: "ANY"}, "assigneeWildcardId", "ANY"},
+		// GitLab compares both against a numeric column without parsing, so the
+		// value that reaches the wire has to be the bare id.
+		{"crm_contact_id", ListInput{CRMContactID: "1"}, "crmContactId", "1"},
+		{"crm_organization_id", ListInput{CRMOrganizationID: "2"}, "crmOrganizationId", "2"},
+		{"health_status_filter", ListInput{HealthStatusFilter: "onTrack"}, "healthStatusFilter", "onTrack"},
+		{"ids", ListInput{IDs: []string{"gid://gitlab/WorkItem/1"}}, "ids", []any{"gid://gitlab/WorkItem/1"}},
+		{"iids", ListInput{IIDs: []string{"12"}}, "iids", []any{"12"}},
+		{"in", ListInput{Search: "needle", In: []string{"TITLE"}}, "in", []any{"TITLE"}},
+		{"iteration_cadence_id", ListInput{IterationCadenceID: []string{"gid://gitlab/Iterations::Cadence/3"}}, "iterationCadenceId", []any{"gid://gitlab/Iterations::Cadence/3"}},
+		{"iteration_id", ListInput{IterationID: []string{"gid://gitlab/Iteration/4"}}, "iterationId", []any{"gid://gitlab/Iteration/4"}},
+		{"iteration_wildcard_id", ListInput{IterationWildcardID: "CURRENT"}, "iterationWildcardId", "CURRENT"},
+		{"milestone_title", ListInput{MilestoneTitle: []string{"v1.0"}}, "milestoneTitle", []any{"v1.0"}},
+		{"milestone_wildcard_id", ListInput{MilestoneWildcardID: "UPCOMING"}, "milestoneWildcardId", "UPCOMING"},
+		{"my_reaction_emoji", ListInput{MyReactionEmoji: "thumbsup"}, "myReactionEmoji", "thumbsup"},
+		{"parent_ids", ListInput{ParentIDs: []string{"gid://gitlab/WorkItem/9"}}, "parentIds", []any{"gid://gitlab/WorkItem/9"}},
+		{"release_tag", ListInput{ReleaseTag: []string{"v1.0.0"}}, "releaseTag", []any{"v1.0.0"}},
+		{"release_tag_wildcard_id", ListInput{ReleaseTagWildcardID: "ANY"}, "releaseTagWildcardId", "ANY"},
+		{"subscribed", ListInput{Subscribed: "EXPLICITLY_SUBSCRIBED"}, "subscribed", "EXPLICITLY_SUBSCRIBED"},
+		{"weight", ListInput{Weight: "3"}, "weight", "3"},
+		{"weight_wildcard_id", ListInput{WeightWildcardID: "NONE"}, "weightWildcardId", "NONE"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var got graphQLRequest
+			client := testutil.NewTestClient(t, recordGraphQL(t, &got, emptyWorkItemsResponse))
+			input := testCase.input
+			input.FullPath = testFullPath
+			if _, err := List(t.Context(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if sent := got.Variables[testCase.variable]; !reflect.DeepEqual(sent, testCase.want) {
+				t.Errorf("variable %s = %#v, want %#v", testCase.variable, sent, testCase.want)
+			}
+		})
+	}
+}
+
+// TestList_TimeFilters_ReachTheWireAsRFC3339 covers the eight date-range
+// filters, which are the only ones this handler parses rather than forwards.
+func TestList_TimeFilters_ReachTheWireAsRFC3339(t *testing.T) {
+	const sent = "2025-03-04T05:06:07Z"
+	cases := []struct {
+		name     string
+		input    ListInput
+		variable string
+	}{
+		{"closed_after", ListInput{ClosedAfter: sent}, "closedAfter"},
+		{"closed_before", ListInput{ClosedBefore: sent}, "closedBefore"},
+		{"created_after", ListInput{CreatedAfter: sent}, "createdAfter"},
+		{"created_before", ListInput{CreatedBefore: sent}, "createdBefore"},
+		{"due_after", ListInput{DueAfter: sent}, "dueAfter"},
+		{"due_before", ListInput{DueBefore: sent}, "dueBefore"},
+		{"updated_after", ListInput{UpdatedAfter: sent}, "updatedAfter"},
+		{"updated_before", ListInput{UpdatedBefore: sent}, "updatedBefore"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var got graphQLRequest
+			client := testutil.NewTestClient(t, recordGraphQL(t, &got, emptyWorkItemsResponse))
+			input := testCase.input
+			input.FullPath = testFullPath
+			if _, err := List(t.Context(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if value := got.Variables[testCase.variable]; value != sent {
+				t.Errorf("variable %s = %#v, want %q", testCase.variable, value, sent)
+			}
+		})
+	}
+}
+
+// TestList_TimeFilter_AcceptsTheThreeSpellings pins the leniency the schema
+// advertises in prose: the date-time format names the canonical spelling, and
+// a bare date is read as midnight UTC rather than refused, because a model
+// told a value is a date sends exactly that.
+func TestList_TimeFilter_AcceptsTheThreeSpellings(t *testing.T) {
+	cases := []struct {
+		name string
+		sent string
+		want string
+	}{
+		{"RFC 3339", "2025-03-04T05:06:07Z", "2025-03-04T05:06:07Z"},
+		{"bare datetime", "2025-03-04T05:06:07", "2025-03-04T05:06:07Z"},
+		{"bare date", "2025-03-04", "2025-03-04T00:00:00Z"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var got graphQLRequest
+			client := testutil.NewTestClient(t, recordGraphQL(t, &got, emptyWorkItemsResponse))
+			_, err := List(t.Context(), client, ListInput{FullPath: testFullPath, ClosedAfter: testCase.sent})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if value := got.Variables["closedAfter"]; value != testCase.want {
+				t.Errorf("closedAfter = %#v, want %q", value, testCase.want)
+			}
+		})
+	}
+}
+
+// TestList_MalformedTimeFilter_IsRefusedByName verifies the whole call fails
+// and names the offending filter, rather than dropping it and answering with
+// more work items than were asked for.
+func TestList_MalformedTimeFilter_IsRefusedByName(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := List(t.Context(), client, ListInput{FullPath: testFullPath, DueBefore: "next tuesday"})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "due_before") {
+		t.Errorf("error = %v, want it to name due_before", err)
+	}
+}
+
+// TestList_ReturnedFields_FollowTheResolvedTier covers the defect this change
+// closes: list asked for client-go's CE default alone, so status, weight,
+// health status, iteration and color were requested by nothing and every
+// listed work item came back without them whatever the instance held. They are
+// asked for only on Premium and Ultimate, because a Community Edition schema
+// does not define those widgets and one unknown field fails the whole query.
+func TestList_ReturnedFields_FollowTheResolvedTier(t *testing.T) {
+	eeFragments := []string{"color {", "healthStatus {", "iteration {", "status {", "weight {"}
+	cases := []struct {
+		name       string
+		enterprise bool
+	}{
+		{"community edition asks for the CE default only", false},
+		{"enterprise asks for the five EE widgets too", true},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var got graphQLRequest
+			client := testutil.NewTestClient(t, recordGraphQL(t, &got, emptyWorkItemsResponse))
+			client.SetEnterprise(testCase.enterprise)
+			if _, err := List(t.Context(), client, ListInput{FullPath: testFullPath}); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			for _, fragment := range eeFragments {
+				if strings.Contains(got.Query, fragment) != testCase.enterprise {
+					t.Errorf("query contains %q = %v, want %v\nquery: %s",
+						fragment, strings.Contains(got.Query, fragment), testCase.enterprise, got.Query)
+				}
+			}
+		})
+	}
+}
+
+// TestWorkItems_TierTags_CoverEveryEnterpriseWidget pins the tier of every
+// gated field on the three shapes that carry one.
+//
+// It is the other half of the saved-views table: the two domains publish the
+// same conditions through different tools, and a tag dropped on either side is
+// a filter one tool offers a tier that cannot use it. The five widget fields
+// are the ones client-go keeps out of its Community Edition default set, so
+// this table and workItemEEListFields describe the same set from two angles.
+func TestWorkItems_TierTags_CoverEveryEnterpriseWidget(t *testing.T) {
+	cases := []struct {
+		object reflect.Type
+		field  string
+		want   string
+	}{
+		{reflect.TypeFor[WorkItemItem](), "Color", "premium"},
+		{reflect.TypeFor[WorkItemItem](), "HealthStatus", "ultimate"},
+		{reflect.TypeFor[WorkItemItem](), "IterationID", "premium"},
+		{reflect.TypeFor[WorkItemItem](), "Status", "premium"},
+		{reflect.TypeFor[WorkItemItem](), "Weight", "premium"},
+		{reflect.TypeFor[CreateInput](), "Color", "premium"},
+		{reflect.TypeFor[CreateInput](), "HealthStatus", "ultimate"},
+		{reflect.TypeFor[CreateInput](), "IterationID", "premium"},
+		{reflect.TypeFor[CreateInput](), "Status", "premium"},
+		{reflect.TypeFor[CreateInput](), "Weight", "premium"},
+		{reflect.TypeFor[UpdateInput](), "Color", "premium"},
+		{reflect.TypeFor[UpdateInput](), "HealthStatus", "ultimate"},
+		{reflect.TypeFor[UpdateInput](), "IterationID", "premium"},
+		{reflect.TypeFor[UpdateInput](), "Status", "premium"},
+		{reflect.TypeFor[UpdateInput](), "Weight", "premium"},
+		{reflect.TypeFor[ListInput](), "HealthStatusFilter", "ultimate"},
+		{reflect.TypeFor[ListInput](), "IterationCadenceID", "premium"},
+		{reflect.TypeFor[ListInput](), "IterationID", "premium"},
+		{reflect.TypeFor[ListInput](), "IterationWildcardID", "premium"},
+		{reflect.TypeFor[ListInput](), "Weight", "premium"},
+		{reflect.TypeFor[ListInput](), "WeightWildcardID", "premium"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.object.Name()+"."+testCase.field, func(t *testing.T) {
+			field, ok := testCase.object.FieldByName(testCase.field)
+			if !ok {
+				t.Fatalf("%s has no field %s", testCase.object.Name(), testCase.field)
+			}
+			if got := field.Tag.Get("tier"); got != testCase.want {
+				t.Errorf("tier tag = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestList_ReturnedFields_SelectTheFragment proves that returned_fields reaches
+// the rendered document: the fields named are the ones asked for, and the
+// per-tier default is not merged back in over the caller's narrower choice.
+//
+// The instance is Enterprise here on purpose, since that is the case where an
+// implementation that appended the default set instead of replacing it would
+// still look right on a Community Edition one.
+func TestList_ReturnedFields_SelectTheFragment(t *testing.T) {
+	var got graphQLRequest
+	client := testutil.NewTestClient(t, recordGraphQL(t, &got, emptyWorkItemsResponse))
+	client.SetEnterprise(true)
+	if _, err := List(t.Context(), client, ListInput{
+		FullPath:       testFullPath,
+		ReturnedFields: []string{"iid", "title", "weight"},
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, want := range []string{"iid", "title", "weight {"} {
+		t.Run("asks for "+want, func(t *testing.T) {
+			if !strings.Contains(got.Query, want) {
+				t.Errorf("query does not ask for %q:\n%s", want, got.Query)
+			}
+		})
+	}
+	// A default-set field the caller did not name: present without this
+	// input, and proof the selection replaces rather than extends.
+	for _, unwanted := range []string{"webUrl", "healthStatus {"} {
+		t.Run("omits "+unwanted, func(t *testing.T) {
+			if strings.Contains(got.Query, unwanted) {
+				t.Errorf("query still asks for %q:\n%s", unwanted, got.Query)
+			}
+		})
+	}
+}
+
+// TestList_ReturnedFields_UnknownName_IsRefusedBeforeTheRequest verifies that a
+// name outside client-go's registry stops the call rather than reaching GitLab,
+// which is what makes the published enum the whole story for a caller.
+func TestList_ReturnedFields_UnknownName_IsRefusedBeforeTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := List(t.Context(), client, ListInput{
+		FullPath:       testFullPath,
+		ReturnedFields: []string{"iid", "totallyMadeUp"},
+	})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "totallyMadeUp") {
+		t.Errorf("error = %v, want it to name the unknown field", err)
+	}
+}
+
+// workItemWidgetsResponse is a get answer carrying every widget this package
+// reads, so one round trip covers the whole converter.
+const workItemWidgetsResponse = `{"data":{"namespace":{"workItem":{` +
+	`"id":"gid://gitlab/WorkItem/42","iid":"42","workItemType":{"name":"Epic"},"state":"OPEN","title":"Widgets",` +
+	`"author":{"username":"dev"},"features":{` +
+	`"color":{"color":"#ff0000","textColor":"#ffffff"},` +
+	`"healthStatus":{"healthStatus":"needsAttention"},` +
+	`"hierarchy":{"hasParent":true,"parent":{"iid":"3","namespace":{"fullPath":"my-group/parent"}},"hasChildren":false},` +
+	`"iteration":{"iteration":{"id":"gid://gitlab/Iteration/9"}},` +
+	`"milestone":{"milestone":{"id":"gid://gitlab/Milestone/4"}},` +
+	`"startAndDueDate":{"startDate":"2026-01-05","dueDate":"2026-02-10"},` +
+	`"status":{"status":{"name":"In progress"}},` +
+	`"weight":{"weight":5}}}}}}`
+
+// TestGet_WidgetFields_RoundTripFromTheFixture asserts every widget-backed
+// output field against one answer. The static fragment client-go uses for get,
+// create and update selects all of them unconditionally, so these arrive on
+// every one of the three whatever the tier.
+func TestGet_WidgetFields_RoundTripFromTheFixture(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, workItemWidgetsResponse)
+	})
+	out, err := Get(t.Context(), testutil.NewTestClient(t, handler), GetInput{FullPath: testFullPath, IID: 42})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	wi := out.WorkItem
+	if wi.Parent == nil {
+		t.Fatal("Parent = nil, want the hierarchy widget's parent")
+	}
+	if wi.Parent.IID != 3 || wi.Parent.Path != "my-group/parent" {
+		t.Errorf("Parent = %+v, want {3 my-group/parent}", *wi.Parent)
+	}
+	if wi.Weight == nil || *wi.Weight != 5 {
+		t.Errorf("Weight = %v, want 5", wi.Weight)
+	}
+	checks := []struct {
+		field string
+		got   any
+		want  any
+	}{
+		{"Color", wi.Color, "#ff0000"},
+		{"HealthStatus", wi.HealthStatus, "needsAttention"},
+		{"IterationID", wi.IterationID, int64(9)},
+		{"MilestoneID", wi.MilestoneID, int64(4)},
+		{"StartDate", wi.StartDate, "2026-01-05"},
+		{"DueDate", wi.DueDate, "2026-02-10"},
+		{"Status", wi.Status, "In progress"},
+	}
+	for _, check := range checks {
+		t.Run(check.field, func(t *testing.T) {
+			if check.got != check.want {
+				t.Errorf("%s = %#v, want %#v", check.field, check.got, check.want)
+			}
+		})
+	}
+}
+
+// TestFormatGetMarkdown_WidgetFields verifies the detail view renders the
+// widget values, since a field nothing prints is a field a reader never sees.
+func TestFormatGetMarkdown_WidgetFields(t *testing.T) {
+	weight := int64(5)
+	text := extractText(t, FormatGetMarkdown(GetOutput{WorkItem: WorkItemItem{
+		IID:          42,
+		Title:        "Widgets",
+		Parent:       &ChildItem{IID: 3, Path: "my-group/parent"},
+		MilestoneID:  4,
+		IterationID:  9,
+		Weight:       &weight,
+		HealthStatus: "needsAttention",
+		StartDate:    "2026-01-05",
+		DueDate:      "2026-02-10",
+		Color:        "#ff0000",
+	}}))
+	for _, want := range []string{
+		"- **Parent**: #3 in my-group/parent",
+		"- **Milestone ID**: 4",
+		"- **Iteration ID**: 9",
+		"- **Weight**: 5",
+		"- **Health Status**: needsAttention",
+		"- **Start Date**: 2026-01-05",
+		"- **Due Date**: 2026-02-10",
+		"- **Color**: #ff0000",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("markdown missing %q:\n%s", want, text)
+			}
+		})
+	}
+}
+
+// TestCreate_Fields_ReachTheWire proves the five create fields added for issue
+// 583 arrive inside the mutation input, each in the widget client-go folds it
+// into, with the global ID wrapping client-go applies.
+func TestCreate_Fields_ReachTheWire(t *testing.T) {
+	var got graphQLRequest
+	client := testutil.NewTestClient(t, recordGraphQL(t, &got,
+		`{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Task"},"state":"OPEN","title":"Fields","author":{"username":"dev"}}}}}`))
+
+	parent, iteration := int64(9), int64(7)
+	_, err := Create(t.Context(), client, CreateInput{
+		FullPath:       testFullPath,
+		WorkItemTypeID: testTypeGID,
+		Title:          "Fields",
+		CRMContactIDs:  []int64{4},
+		ParentID:       &parent,
+		IterationID:    &iteration,
+		CreatedAt:      "2025-03-04T05:06:07Z",
+		CreateSource:   "gitlab-mcp-server",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	input, ok := got.Variables["input"].(map[string]any)
+	if !ok {
+		t.Fatalf("mutation input = %#v, want an object", got.Variables["input"])
+	}
+	checks := []struct {
+		name string
+		got  any
+		want any
+	}{
+		{"createSource", input["createSource"], "gitlab-mcp-server"},
+		{"createdAt", input["createdAt"], "2025-03-04T05:06:07Z"},
+		{"crmContactsWidget.contactIds", widgetField(t, input, "crmContactsWidget", "contactIds"), []any{"gid://gitlab/CustomerRelations::Contact/4"}},
+		{"hierarchyWidget.parentId", widgetField(t, input, "hierarchyWidget", "parentId"), "gid://gitlab/WorkItem/9"},
+		{"iterationWidget.iterationId", widgetField(t, input, "iterationWidget", "iterationId"), "gid://gitlab/Iteration/7"},
+	}
+	for _, check := range checks {
+		t.Run(check.name, func(t *testing.T) {
+			if !reflect.DeepEqual(check.got, check.want) {
+				t.Errorf("%s = %#v, want %#v", check.name, check.got, check.want)
+			}
+		})
+	}
+}
+
+// widgetField reads one leaf out of a widget of the create mutation input.
+func widgetField(t *testing.T, input map[string]any, widget, field string) any {
+	t.Helper()
+	nested, ok := input[widget].(map[string]any)
+	if !ok {
+		t.Fatalf("input[%q] = %#v, want an object", widget, input[widget])
+	}
+	return nested[field]
+}
+
+// TestCreate_MalformedCreatedAt_IsRefusedByName verifies a created_at GitLab
+// could not read stops the call instead of creating a work item stamped now.
+func TestCreate_MalformedCreatedAt_IsRefusedByName(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := Create(t.Context(), client, CreateInput{
+		FullPath:       testFullPath,
+		WorkItemTypeID: testTypeGID,
+		Title:          "Bad timestamp",
+		CreatedAt:      "yesterday",
+	})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "created_at") {
+		t.Errorf("error = %v, want it to name created_at", err)
 	}
 }
 

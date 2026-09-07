@@ -3,6 +3,9 @@ package workitems
 import (
 	"context"
 	"fmt"
+	"slices"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -51,12 +54,12 @@ func workItemReadSpec(name string, route toolutil.ActionRoute, individualTool st
 		opts.Usage = "Get one exact work item by namespace full_path plus work_item_iid. Use this after list/search results or when the prompt already names a concrete work item number. Prefer work_item.get over work_item.list when the target is already known."
 		opts.Aliases = []string{"get work item", "show work item details", "fetch work item by iid", individualTool}
 		opts.RelatedActions = []string{actionWorkItemList, "work_item.update", "work_item.delete"}
-		opts.IndividualTool.Description = "Get a single work item by namespace path and IID. Returns: id, iid, type, state, status, title, description, author, assignees, labels, linked items, child work items, confidentiality, timestamps, and web URL. Experimental. See also: gitlab_list_work_items, gitlab_update_work_item, gitlab_delete_work_item."
+		opts.IndividualTool.Description = "Get a single work item by namespace path and IID. Returns: id, iid, type, state, status, title, description, author, assignees, labels, linked items, parent and child work items, milestone, iteration, weight, health status, color, start and due dates, confidentiality, timestamps, and web URL. Experimental. See also: gitlab_list_work_items, gitlab_update_work_item, gitlab_delete_work_item."
 	case "gitlab_list_work_items":
-		opts.Usage = "List work items in one project or group namespace. Use filters such as state, search, types, author_username, label_name, confidential, sort, include_ancestors/descendants, and cursor pagination when the prompt asks for matching work items in a known namespace. Pages in both directions: first with after walks forward, last with before walks back from a start cursor."
+		opts.Usage = "List work items in one project or group namespace. Use filters such as state, search, types, author_username, assignee_usernames, label_name, milestone_title, iteration_id, weight, health_status_filter, the closed/created/due/updated date ranges, confidential, sort, include_ancestors/descendants, and cursor pagination when the prompt asks for matching work items in a known namespace. The ids, parent_ids, iteration_id and iteration_cadence_id filters take full global IDs (gid://gitlab/WorkItem/123), while iids takes the plain numbers shown in the UI and crm_contact_id and crm_organization_id take plain numeric ids as strings, never the gid:// form. returned_fields is not a filter: it names the fields of each matching work item the query asks for, so a listing that only needs iid and title can say so and pay for nothing else. Pages in both directions: first with after walks forward, last with before walks back from a start cursor."
 		opts.Aliases = []string{"list work items", "find work items in namespace", "show open work items", individualTool}
 		opts.RelatedActions = []string{actionWorkItemGet, "work_item.create", "work_item.type_list"}
-		opts.IndividualTool.Description = "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, child work items, timestamps, and the cursors for the next and previous pages. Pages in both directions: first with after walks forward, last with before walks back. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types."
+		opts.IndividualTool.Description = "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, parent and child work items, milestone, start and due dates, timestamps, and the cursors for the next and previous pages. On Premium and Ultimate instances the status, weight, health status, iteration and color of each item come back too. returned_fields narrows that set to the fields named, which shrinks a large page without changing which work items match. Pages in both directions: first with after walks forward, last with before walks back. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types."
 		opts.InputSchemaOverrides = workItemListEnumOverrides()
 	case "gitlab_list_work_item_types":
 		opts.Usage = "List available work item types (system-defined and custom) for a project or group namespace. Supports filtering by name and availability, with cursor-based pagination. Returns: type definitions with id, name, and enabled status. Experimental: the Work Items API may introduce breaking changes between minor versions."
@@ -71,10 +74,10 @@ func workItemReadSpec(name string, route toolutil.ActionRoute, individualTool st
 // workItemCreateSpec builds the canonical create spec for a work item tool.
 func workItemCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	opts := workItemOptions(individualTool)
-	opts.Usage = "Create a new work item under a project or group namespace. Provide full_path, a work_item_type_id (discover with work_item.type_list), and a title. Add description, confidential, assignee_ids, milestone_id, label_ids, weight, health_status, status, color, dates, or linked_items only when requested."
+	opts.Usage = "Create a new work item under a project or group namespace. Provide full_path, a work_item_type_id (discover with work_item.type_list), and a title. Add description, confidential, assignee_ids, milestone_id, label_ids, crm_contact_ids, parent_id, iteration_id, weight, health_status, status, color, dates, create_source, or linked_items only when requested. parent_id creates the item already under its parent, which otherwise takes a create followed by an update."
 	opts.Aliases = []string{"create work item", "open new work item", "add epic or task", individualTool}
 	opts.RelatedActions = []string{actionWorkItemGet, actionWorkItemList, "work_item.type_list"}
-	opts.IndividualTool.Description = "Create a new work item under a namespace. Returns: the created work item with id, iid, type, state, title, description, assignees, labels, linked items, child work items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_list_work_items, gitlab_list_work_item_types."
+	opts.IndividualTool.Description = "Create a new work item under a namespace. Returns: the created work item with id, iid, type, state, title, description, assignees, labels, linked items, parent and child work items, milestone, iteration, weight, health status, color, start and due dates, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_list_work_items, gitlab_list_work_item_types."
 	opts.InputSchemaOverrides = workItemCreateEnumOverrides()
 	return toolutil.NewCreateActionSpec(name, route, opts)
 }
@@ -85,7 +88,7 @@ func workItemUpdateSpec(name string, route toolutil.ActionRoute, individualTool 
 	opts.Usage = "Update an existing work item's fields, status, labels, or hierarchy. Provide full_path plus work_item_iid. Set state_event to CLOSE or REOPEN to change state, and supply only the widget-supported fields you want to change. assignee_ids and crm_contact_ids replace the whole list: send an empty array to remove every entry, and omit the field to leave it untouched. Clearing entries that exist requires confirm=true (or an approved elicitation prompt)."
 	opts.Aliases = []string{"update work item", "edit work item fields", "close or reopen work item", individualTool}
 	opts.RelatedActions = []string{actionWorkItemGet, "work_item.delete", actionWorkItemList}
-	opts.IndividualTool.Description = "Update an existing work item by namespace path and IID. Returns: the updated work item with id, iid, type, state, status, title, description, assignees, labels, linked items, child work items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_delete_work_item, gitlab_list_work_items."
+	opts.IndividualTool.Description = "Update an existing work item by namespace path and IID. Returns: the updated work item with id, iid, type, state, status, title, description, assignees, labels, linked items, parent and child work items, milestone, iteration, weight, health status, color, start and due dates, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_delete_work_item, gitlab_list_work_items."
 	opts.InputSchemaOverrides = workItemUpdateEnumOverrides()
 	return toolutil.NewUpdateActionSpec(name, route, opts)
 }
@@ -109,9 +112,10 @@ func workItemOptions(individualTool string) toolutil.ActionSpecOptions {
 	}
 }
 
-// workItemListEnumOverrides constrains the state and sort filters on the work
-// item list action. The state field maps to IssuableState in the GraphQL query;
-// the three values below are the safe, stable subset documented for work items.
+// workItemListEnumOverrides constrains the enum-valued and wildcard filters on
+// the work item list action. The state field maps to IssuableState in the
+// GraphQL query; the three values below are the safe, stable subset documented
+// for work items.
 //
 // The sort override is not decoration. Without it, toolutil.canonicalParamEnums
 // injects the REST-wide [asc, desc] pair, and this action's sort is a GraphQL
@@ -124,9 +128,18 @@ func workItemOptions(individualTool string) toolutil.ActionSpecOptions {
 // carried, and it survives here only because it is reached through client-go
 // rather than through one of this repository's own documents.
 //
+// That injection reaches the property literally named sort and no other, so the
+// seven wildcard and enum filters below are not exposed to it. They are
+// published for the plainer reason: each is a GraphQL enum GitLab matches case
+// sensitively, a model guessing "none" or "any" is refused before anything
+// executes, and the refusal names nothing the caller can act on. The health
+// status filter deliberately does not reuse the create and update
+// health_status list: HealthStatusFilter carries ANY and NONE on top of the
+// three HealthStatus values.
+//
 // GitLab API docs: https://docs.gitlab.com/api/graphql/reference/#workitemsort
 func workItemListEnumOverrides() []toolutil.InputSchemaOverride {
-	return []toolutil.InputSchemaOverride{
+	overrides := []toolutil.InputSchemaOverride{
 		toolutil.SchemaPropertyOverride("state", map[string]any{
 			"enum": []any{"opened", "closed", "all"},
 		}),
@@ -134,7 +147,59 @@ func workItemListEnumOverrides() []toolutil.InputSchemaOverride {
 		toolutil.SchemaPropertyOverride("types", map[string]any{
 			"items": map[string]any{"type": "string", "enum": issueTypeValues},
 		}),
+		toolutil.SchemaPropertyOverride("in", map[string]any{
+			"items": map[string]any{"type": "string", "enum": []any{"DESCRIPTION", "TITLE"}},
+		}),
+		toolutil.SchemaEnumOverride("assignee_wildcard_id", "ANY", "ME", "NONE"),
+		toolutil.SchemaEnumOverride("health_status_filter", "ANY", "NONE", "atRisk", "needsAttention", "onTrack"),
+		toolutil.SchemaEnumOverride("iteration_wildcard_id", "ANY", "CURRENT", "NONE"),
+		toolutil.SchemaEnumOverride("milestone_wildcard_id", "ANY", "NONE", "STARTED", "UPCOMING"),
+		toolutil.SchemaEnumOverride("release_tag_wildcard_id", "ANY", "NONE"),
+		toolutil.SchemaEnumOverride("subscribed", "EXPLICITLY_SUBSCRIBED", "EXPLICITLY_UNSUBSCRIBED"),
+		toolutil.SchemaEnumOverride("weight_wildcard_id", "ANY", "NONE"),
+		toolutil.SchemaPropertyOverride("returned_fields", map[string]any{
+			"items": map[string]any{"type": "string", "enum": workItemReturnedFieldValues()},
+		}),
 	}
+	return append(overrides, workItemTimeFilterFormatOverrides()...)
+}
+
+// workItemReturnedFieldValues is the closed set of field names
+// [gl.ListWorkItemsOptions.ReturnedFields] accepts.
+//
+// It is read out of client-go rather than written down here so the published
+// enum tracks the SDK: client-go refuses a name outside its own registry
+// before the request is built, and a hand-copied list would drift into
+// advertising a name that refusal rejects. The five Enterprise names are
+// published alongside the Community Edition ones because the tier this process
+// resolved is not the tier of every instance an HTTP deployment serves, and a
+// name a Community Edition schema cannot answer is refused by GitLab with its
+// own message rather than hidden here.
+func workItemReturnedFieldValues() []any {
+	names := append(gl.WorkItemDefaultListFields(), workItemEEListFields...)
+	slices.Sort(names)
+	values := make([]any, len(names))
+	for i, name := range names {
+		values[i] = name
+	}
+	return values
+}
+
+// workItemTimeFilterFormatOverrides publishes the date-time format on the four
+// time filters toolutil.canonicalParamFormats does not know.
+//
+// It knows created_after, created_before, updated_after and updated_before by
+// name and injects the format into them centrally. Without these four the
+// other half of one filter set would publish no format at all, and one input
+// struct would advertise eight sibling filters as two different things while
+// the handler parses all eight the same way.
+func workItemTimeFilterFormatOverrides() []toolutil.InputSchemaOverride {
+	names := []string{"closed_after", "closed_before", "due_after", "due_before"}
+	overrides := make([]toolutil.InputSchemaOverride, 0, len(names))
+	for _, name := range names {
+		overrides = append(overrides, toolutil.SchemaFormatOverride(name, "date-time"))
+	}
+	return overrides
 }
 
 // issueTypeValues is the IssueType GraphQL enum, which the types filter and the
@@ -202,6 +267,9 @@ func workItemCreateEnumOverrides() []toolutil.InputSchemaOverride {
 		toolutil.SchemaPropertyOverride("status", map[string]any{
 			"enum": []any{"TODO", "IN_PROGRESS", "DONE", "WONT_DO", "DUPLICATE"},
 		}),
+		// created_at is a full timestamp, unlike the two date-only fields
+		// beside it, and is not one of the names toolutil knows centrally.
+		toolutil.SchemaFormatOverride("created_at", "date-time"),
 	}
 }
 
