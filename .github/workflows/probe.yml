@@ -1,0 +1,29 @@
+name: probe
+
+on:
+  pull_request:
+
+env:
+  WF_EVENT: ${{ github.event_name }}
+  WF_BASE_REF: ${{ github.base_ref }}
+  WF_PAYLOAD_BASE: ${{ github.event.pull_request.base.ref }}
+  WF_FRESH_BASE_REF: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' && 'deferred' || 'checked' }}
+  WF_FRESH_PAYLOAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref != 'main' && 'deferred' || 'checked' }}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      JOB_BASE_REF: ${{ github.base_ref }}
+      JOB_FRESH_BASE_REF: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' && 'deferred' || 'checked' }}
+      JOB_FRESH_PAYLOAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref != 'main' && 'deferred' || 'checked' }}
+    steps:
+      - name: Print the candidates
+        run: env | grep -E '^(WF_|JOB_)' | sort
+      - name: Step-level if on the workflow env
+        if: env.WF_FRESH_BASE_REF == 'checked'
+        run: echo "step saw WF_FRESH_BASE_REF == checked"
+      - name: Step-level if on the payload variant
+        if: env.WF_FRESH_PAYLOAD == 'checked'
+        run: echo "step saw WF_FRESH_PAYLOAD == checked"
