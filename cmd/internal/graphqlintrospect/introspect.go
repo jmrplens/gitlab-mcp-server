@@ -1,4 +1,4 @@
-package main
+package graphqlintrospect
 
 import (
 	"bytes"
@@ -8,9 +8,49 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
+
+const (
+	// UnknownVersion is recorded when the instance would not say what it runs,
+	// which is what GitLab answers an anonymous caller.
+	UnknownVersion = "unknown"
+	// FetchTimeout bounds one whole fetch. The introspection payload is tens
+	// of megabytes of JSON and gitlab.com takes seconds to produce it.
+	FetchTimeout = 3 * time.Minute
+	// MinimumTypes is the floor a GitLab schema has to clear before anything
+	// is judged against it. gitlab.com answered with 4331 types on the day of
+	// the pin and an unlicensed gitlab/gitlab-ee:latest with 4233, and the
+	// figure grows release over release, so a count well under that is not a
+	// GitLab schema: the introspection was truncated, or the instance answering
+	// is not the GitLab this server targets.
+	//
+	// The consequence of accepting one is the same wherever it happens. A pin
+	// taken from a truncated answer narrows what every later gate promises, and
+	// a live re-probe run against one reports that every document passed a
+	// question nobody asked, which is worse than not running at all.
+	MinimumTypes = 4000
+)
+
+// Target is the instance to ask and how to ask it.
+type Target struct {
+	// Endpoint is the GraphQL endpoint, such as https://gitlab.com/api/graphql.
+	Endpoint string
+	// Token is sent as a bearer credential when it is not empty. GitLab answers
+	// introspection to anyone, so this is only needed for [InstanceVersion],
+	// which it refuses to tell an anonymous caller.
+	Token string
+	// Client performs the request. A caller supplies its own so the timeout,
+	// and a test's transport, stay the caller's business.
+	Client *http.Client
+}
+
+// TruncatedAnswer reports whether an introspection carrying this many types is
+// too short to be a whole GitLab schema. See [MinimumTypes] for why the two
+// callers share one floor rather than each picking a number.
+func TruncatedAnswer(types int) bool { return types < MinimumTypes }
 
 // introspectionQuery asks for everything the SDL needs and nothing it does
 // not. Descriptions and deprecation reasons are left out because validation
@@ -102,56 +142,55 @@ fragment TypeRef on __Type {
 }`
 
 // metadataQuery asks the instance what version it runs. GitLab answers it with
-// null to an anonymous caller, so the generator treats a null as "unknown"
-// rather than as a failure.
+// null to an anonymous caller, so a null is read as "unknown" rather than as a
+// failure.
 const metadataQuery = `query { metadata { version revision } }`
 
-// schemaIntrospection is the __schema payload, holding only what the SDL
-// renderer reads.
-type schemaIntrospection struct {
-	QueryType        *typeName    `json:"queryType"`
-	MutationType     *typeName    `json:"mutationType"`
-	SubscriptionType *typeName    `json:"subscriptionType"`
-	Types            []schemaType `json:"types"`
+// Schema is the __schema payload, holding only what the SDL renderer reads.
+type Schema struct {
+	QueryType        *TypeName `json:"queryType"`
+	MutationType     *TypeName `json:"mutationType"`
+	SubscriptionType *TypeName `json:"subscriptionType"`
+	Types            []Type    `json:"types"`
 }
 
-// typeName is a bare reference to a named type.
-type typeName struct {
+// TypeName is a bare reference to a named type.
+type TypeName struct {
 	Name string `json:"name"`
 }
 
-// schemaType is one introspected type in any of the six kinds.
-type schemaType struct {
+// Type is one introspected type in any of the six kinds.
+type Type struct {
 	Kind          string       `json:"kind"`
 	Name          string       `json:"name"`
-	Fields        []schemaItem `json:"fields"`
-	InputFields   []inputValue `json:"inputFields"`
-	Interfaces    []typeName   `json:"interfaces"`
-	EnumValues    []typeName   `json:"enumValues"`
-	PossibleTypes []typeName   `json:"possibleTypes"`
+	Fields        []Field      `json:"fields"`
+	InputFields   []InputValue `json:"inputFields"`
+	Interfaces    []TypeName   `json:"interfaces"`
+	EnumValues    []TypeName   `json:"enumValues"`
+	PossibleTypes []TypeName   `json:"possibleTypes"`
 }
 
-// schemaItem is one output field with the arguments it accepts.
-type schemaItem struct {
+// Field is one output field with the arguments it accepts.
+type Field struct {
 	Name string       `json:"name"`
-	Args []inputValue `json:"args"`
-	Type *typeRef     `json:"type"`
+	Args []InputValue `json:"args"`
+	Type *TypeRef     `json:"type"`
 }
 
-// inputValue is one argument or input-object field. DefaultValue is a pointer
+// InputValue is one argument or input-object field. DefaultValue is a pointer
 // because introspection reports the absence of a default as null, which is not
 // the same as a default whose literal happens to be empty.
-type inputValue struct {
+type InputValue struct {
 	Name         string   `json:"name"`
-	Type         *typeRef `json:"type"`
+	Type         *TypeRef `json:"type"`
 	DefaultValue *string  `json:"defaultValue"`
 }
 
-// typeRef is a type reference, wrapped in NON_NULL and LIST nodes.
-type typeRef struct {
+// TypeRef is a type reference, wrapped in NON_NULL and LIST nodes.
+type TypeRef struct {
 	Kind   string   `json:"kind"`
 	Name   string   `json:"name"`
-	OfType *typeRef `json:"ofType"`
+	OfType *TypeRef `json:"ofType"`
 }
 
 // graphQLResponse is the envelope both queries come back in.
@@ -164,7 +203,7 @@ type graphQLResponse struct {
 
 // introspectData is the shape of a successful introspection response.
 type introspectData struct {
-	Schema *schemaIntrospection `json:"__schema"`
+	Schema *Schema `json:"__schema"`
 }
 
 // metadataData is the shape of a successful metadata response.
@@ -175,9 +214,9 @@ type metadataData struct {
 	} `json:"metadata"`
 }
 
-// introspect asks the instance for its whole schema.
-func introspect(ctx context.Context, cfg genRun) (*schemaIntrospection, error) {
-	raw, err := post(ctx, cfg, introspectionQuery)
+// Introspect asks the instance for its whole schema.
+func Introspect(ctx context.Context, target Target) (*Schema, error) {
+	raw, err := post(ctx, target, introspectionQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -186,65 +225,65 @@ func introspect(ctx context.Context, cfg genRun) (*schemaIntrospection, error) {
 		return nil, fmt.Errorf("decode the introspection payload: %w", unmarshalErr)
 	}
 	if data.Schema == nil || len(data.Schema.Types) == 0 {
-		return nil, fmt.Errorf("%s answered introspection with no types", cfg.endpoint)
+		return nil, fmt.Errorf("%s answered introspection with no types", target.Endpoint)
 	}
 	return data.Schema, nil
 }
 
-// instanceVersion asks the instance what it runs. Failure is not fatal: the
+// InstanceVersion asks the instance what it runs. Failure is not fatal: the
 // schema is the artifact and the version is provenance, so an anonymous run
-// records unknownVersion and carries on.
-func instanceVersion(ctx context.Context, cfg genRun) (version, revision string) {
-	raw, err := post(ctx, cfg, metadataQuery)
+// reports [UnknownVersion] and the caller carries on.
+func InstanceVersion(ctx context.Context, target Target) (version, revision string) {
+	raw, err := post(ctx, target, metadataQuery)
 	if err != nil {
-		return unknownVersion, ""
+		return UnknownVersion, ""
 	}
 	var data metadataData
 	if unmarshalErr := json.Unmarshal(raw, &data); unmarshalErr != nil || data.Metadata == nil {
-		return unknownVersion, ""
+		return UnknownVersion, ""
 	}
 	return data.Metadata.Version, data.Metadata.Revision
 }
 
 // post sends one GraphQL document and returns the data member of the answer.
-func post(ctx context.Context, cfg genRun, document string) (json.RawMessage, error) {
+func post(ctx context.Context, target Target, document string) (json.RawMessage, error) {
 	// A map of strings always marshals, and a caller could do nothing with the
 	// error if it did not.
 	body := cmdutil.Must(json.Marshal(map[string]string{"query": document}))
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.endpoint, bytes.NewReader(body))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, target.Endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("build the request for %s: %w", cfg.endpoint, err)
+		return nil, fmt.Errorf("build the request for %s: %w", target.Endpoint, err)
 	}
 	request.Header.Set("Content-Type", "application/json")
-	if cfg.token != "" {
-		request.Header.Set("Authorization", "Bearer "+cfg.token)
+	if target.Token != "" {
+		request.Header.Set("Authorization", "Bearer "+target.Token)
 	}
 
-	response, err := cfg.client.Do(request)
+	response, err := target.Client.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("ask %s: %w", cfg.endpoint, err)
+		return nil, fmt.Errorf("ask %s: %w", target.Endpoint, err)
 	}
 	defer func() { _ = response.Body.Close() }()
 
 	payload, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read the answer from %s: %w", cfg.endpoint, err)
+		return nil, fmt.Errorf("read the answer from %s: %w", target.Endpoint, err)
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s answered %s: %s", cfg.endpoint, response.Status, snippet(payload))
+		return nil, fmt.Errorf("%s answered %s: %s", target.Endpoint, response.Status, snippet(payload))
 	}
 
 	var envelope graphQLResponse
 	if unmarshalErr := json.Unmarshal(payload, &envelope); unmarshalErr != nil {
-		return nil, fmt.Errorf("decode the answer from %s: %w", cfg.endpoint, unmarshalErr)
+		return nil, fmt.Errorf("decode the answer from %s: %w", target.Endpoint, unmarshalErr)
 	}
 	if len(envelope.Errors) > 0 {
 		messages := make([]string, 0, len(envelope.Errors))
 		for _, item := range envelope.Errors {
 			messages = append(messages, item.Message)
 		}
-		return nil, fmt.Errorf("%s refused the query: %s", cfg.endpoint, strings.Join(messages, "; "))
+		return nil, fmt.Errorf("%s refused the query: %s", target.Endpoint, strings.Join(messages, "; "))
 	}
 	return envelope.Data, nil
 }

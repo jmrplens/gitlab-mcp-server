@@ -62,7 +62,7 @@ gitlab-mcp-server/
 │   ├── audit_e2e_gaps/          # Reports catalog actions not exercised by the e2e suite (make audit-e2e-gaps)
 │   ├── audit_edition_tier/      # Audits doc-grounded edition tier gating (Free/Premium/Ultimate)
 │   ├── audit_gateway_chars/     # Audits served descriptions/titles for characters MCP gateway validators reject (make check-gateway-chars)
-│   ├── audit_graphql_documents/ # Fails when a raw GraphQL document in the source is one the pinned GitLab schema refuses; loads the program with go/packages so a document assembled from a shared fragment is judged as the string GitLab receives, and reads `.graphql` files too since a go:embed var folds to nothing (make check-graphql-documents). `-schema` judges against a schema fetched now instead of the pin, which is the live re-probe (make check-graphql-documents-live). It reads `./internal/...` only: the ~42 documents client-go builds are judged by the test transport alone
+│   ├── audit_graphql_documents/ # Fails when a raw GraphQL document in the source is one the pinned GitLab schema refuses; loads the program with go/packages so a document assembled from a shared fragment is judged as the string GitLab receives, and reads `.graphql` files too since a go:embed var folds to nothing (make check-graphql-documents). `-live <endpoint>` introspects an instance now and judges by what it serves, refusing an answer too short to be a GitLab schema, and reports where the pin and that instance disagree about a type, field or argument one of our documents touches (make check-graphql-documents-live; `-schema` does the same against an SDL file on disk). It reads `./internal/...` only: the ~42 documents client-go builds are judged by the test transport alone
 │   ├── audit_install_buttons/  # Decodes every one-click install payload (base64 or percent-encoded JSON) and holds the buttons to one configuration per command (make check-install-buttons)
 │   ├── godoc_tool/              # Consolidated Go doc auditor + fixer (was audit_godocs + add_docs)
 │   ├── audit_md_escaping/       # Fails when a Markdown formatter interpolates a GitLab-authored value into a table cell, heading, list item or link without EscapeMdTableCell/EscapeMdHeading/MdTitleLink; `//gitlab:allow-unescaped <expr>: <reason>` declares a value that needs none (make check-md-escaping)
@@ -87,7 +87,7 @@ gitlab-mcp-server/
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt for LLM discovery
 │   ├── gen_stats/               # Generates README stats section from codebase metrics
 │   ├── gen_testing_docs/        # Generates docs/development/testing/testing.md
-│   └── internal/                # Helpers shared by the commands: apidocs (GitLab API doc fetcher), auditshared, docgen, mcpsurface (pinned surface introspection for generators)
+│   └── internal/                # Helpers shared by the commands: apidocs (GitLab API doc fetcher), auditshared, docgen, graphqlintrospect (one introspection and SDL conversion for gen_graphql_schema and the live re-probe), mcpsurface (pinned surface introspection for generators)
 ├── internal/
 │   ├── auditclient/             # GitLab clients for the command-line audit tools
 │   ├── cachehints/              # SEP-2549 cache hints (ttlMs/cacheScope) on MCP results
