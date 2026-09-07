@@ -17,6 +17,15 @@ import (
 // fixedClock is the day a generated record is asserted against.
 func fixedClock() time.Time { return time.Date(2026, 9, 7, 11, 30, 0, 0, time.UTC) }
 
+// refusedDial is a transport nothing can answer through: every request fails
+// the way a connection refused fails, without a socket that another process
+// could answer on.
+type refusedDial struct{}
+
+func (refusedDial) RoundTrip(request *http.Request) (*http.Response, error) {
+	return nil, fmt.Errorf("dial tcp %s: connect: connection refused", request.URL.Host)
+}
+
 // runCommand runs the command with both streams captured.
 func runCommand(t *testing.T, cfg genRun) (int, string, string) {
 	t.Helper()
@@ -122,9 +131,6 @@ func TestRun_GenerationFailures_ExitNonZeroAndSayWhy(t *testing.T) {
 	}))
 	t.Cleanup(refusing.Close)
 
-	unreachable := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	unreachable.Close()
-
 	cases := []struct {
 		name string
 		cfg  genRun
@@ -136,8 +142,12 @@ func TestRun_GenerationFailures_ExitNonZeroAndSayWhy(t *testing.T) {
 			want: "404",
 		},
 		{
+			// A refused dial rather than a closed httptest server: closing one
+			// frees its port, and under a parallel suite another test binary
+			// can bind that port between the close and the request, which is
+			// how this case answered once on a loaded box.
 			name: "nothing answered",
-			cfg:  genRun{dir: t.TempDir(), client: unreachable.Client(), url: unreachable.URL, now: fixedClock},
+			cfg:  genRun{dir: t.TempDir(), client: &http.Client{Transport: refusedDial{}}, url: "http://127.0.0.1:1", now: fixedClock},
 			want: "fetch ",
 		},
 		{
