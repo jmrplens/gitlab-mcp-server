@@ -371,6 +371,23 @@ func TestOptionsValidate_RejectsValuesThatWouldMeasureNothing(t *testing.T) {
 		// legitimate command.
 		{"render ignores them", options{render: true}, ""},
 		{"check ignores them", options{check: true}, ""},
+		// A fairness run measures whatever else was asked for, so it is the
+		// one thing that short-circuit must not carry past: with -check it
+		// spent minutes measuring two servers while claiming to verify the
+		// committed artifacts, and it took the sample interval to the ticker
+		// that panics on a zero one.
+		{"fairness with check", options{check: true, fairness: "tools-call-rps"}, "-check"},
+		{"fairness with render", options{render: true, fairness: "tools-call-rps"}, "-render"},
+		{
+			"fairness that measures", options{
+				fairness: "tools-call-rps", rounds: 3, sampleInterval: good, stepDuration: step,
+			}, "",
+		},
+		{
+			"fairness with a sample interval the ticker cannot take", options{
+				fairness: "tools-call-rps", rounds: 3, sampleInterval: 0, stepDuration: step,
+			}, "-sample-interval",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -555,6 +572,18 @@ func TestExecute_RefusesWhatItCannotRun(t *testing.T) {
 			t.Errorf("execute = %v, want it to name %s", err, absent)
 		}
 	})
+	// The fairness mode returns before the record is read or any chart is
+	// drawn, which is what keeps a scenario whose rendering has not landed yet
+	// from touching artifacts a byte comparison gates.
+	t.Run("a fairness run with a bound nobody declared", func(t *testing.T) {
+		err := execute(options{
+			rounds: 1, sampleInterval: time.Millisecond, stepDuration: time.Millisecond,
+			fairness: "no-such-bound", fairnessJSON: filepath.Join(t.TempDir(), "fairness.json"),
+		})
+		if err == nil || !strings.Contains(err.Error(), "no bound named") {
+			t.Errorf("execute = %v, want the fairness mode to answer before anything else", err)
+		}
+	})
 }
 
 // writeModuleFile creates one file of the throwaway module below.
@@ -665,6 +694,20 @@ func TestLocateRoot_MeasureOnlyRunNeedsNoRepository(t *testing.T) {
 	t.Run("a rendering run", func(t *testing.T) {
 		if _, err := locateRoot(options{render: true}); err == nil {
 			t.Error("locateRoot found a root to render into where there is none")
+		}
+	})
+	// A fairness run returns before the record is read or a chart is drawn, so
+	// it needs the checkout for nothing but building a server it was not given.
+	// It said so through -no-render, a flag about rendering in a mode that
+	// renders nothing, and the refusal named neither.
+	t.Run("a fairness run with a binary", func(t *testing.T) {
+		if _, err := locateRoot(options{fairness: "tools-call-rps", binary: "/somewhere/server"}); err != nil {
+			t.Errorf("locateRoot = %v, want a fairness run to need no checkout", err)
+		}
+	})
+	t.Run("a fairness run that must build one", func(t *testing.T) {
+		if _, err := locateRoot(options{fairness: "tools-call-rps"}); err == nil {
+			t.Error("locateRoot found a root to build the server in where there is none")
 		}
 	})
 	t.Run("working directory unreadable", func(t *testing.T) {

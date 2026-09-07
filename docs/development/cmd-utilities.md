@@ -42,7 +42,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `gen_brand`                    | Generators                    | Emits every vector brand asset from one parametric geometry                                                                                                                                         | `make brand`, `make brand-check`                       |
 | `gen_icon_webp`                | Generators                    | Rasterizes the SVG icons into light/dark WebP fallbacks (maintainer-only)                                                                                                                           | `make gen-icon-webp`                                   |
 | `format_md_tables`             | Formatters                    | Normalizes Markdown pipe tables in `README.md`, `docs/` and `site/src/content/docs/`                                                                                                                | part of `make audit-docs`                              |
-| `bench_resources`              | Benchmarks                    | Measures what the server costs to run (memory, startup, a second credential) and draws the published charts                                                                                         | `make bench-resources`                                 |
+| `bench_resources`              | Benchmarks                    | Measures what the server costs to run (memory, startup, a second credential), draws the published charts, and measures whether a bound leaves a quiet tenant better off                             | `make bench-resources`, `make bench-fairness`          |
 | `eval_mcp_surfaces`            | Evaluation                    | Evaluates model behavior across MCP tool surfaces                                                                                                                                                   | `make eval-surfaces-docker*`                           |
 | `server`                       | Server                        | The main `gitlab-mcp-server` MCP binary (runtime entry point)                                                                                                                                       | `make build`, `make run`                               |
 
@@ -1314,6 +1314,9 @@ go run ./cmd/bench_resources/ -check
 
 # Short smoke matrix, for verifying a change to this command
 go run ./cmd/bench_resources/ -quick -json /tmp/x.json
+
+# Fairness: does a bound leave the quiet tenant better off?
+go run ./cmd/bench_resources/ -fairness tools-call-rps
 ```
 
 #### Flags
@@ -1341,6 +1344,43 @@ go run ./cmd/bench_resources/ -quick -json /tmp/x.json
 | `-no-render`       | `bool`     | `false`                                                       | Measure and write the record and profiles, then stop: for a host with no repository to render into                                            |
 
 A partial matrix (`-scenarios`, `-quick`, `-clients`) is refused unless `-json` names a record of its own, so it cannot overwrite the published one.
+
+#### The fairness mode
+
+`-fairness <bound>` replaces the matrix with a different question. Every scenario above starts the server with the limiter off and drives every credential the same way, so none of them can see fairness: a harness where every caller behaves alike has no quiet neighbor to protect, and with no bound in force there is nothing to protect it. This mode runs two populations of credentials against one server, twice, and reports the quiet one's experience with the bound in force and without it.
+
+It writes its own document to `bench/fairness.json`, which is not committed, and draws no chart, so it touches neither the published record nor the artifacts `-check` compares. Rendering waits on the chart rework rather than adding figures that are about to be redrawn.
+
+Six things about it are load-bearing, and each is a way the report would otherwise mislead:
+
+- **Both populations are open loop.** A refusal returns in about two milliseconds against tens for a served call, so a closed-loop driver would send several times as many requests in the arm with the bound on and the arms would be different experiments. The schedule is computed before the phase and is identical in both.
+- **Served and refused are never one number.** Four terminal outcomes per population and per method (served, refused, failed, timed out), held to `served + refused + failed + timed out == dispatched` in code, with separate latency distributions that no field merges. A refused request also never enters a served percentile.
+- **Processor time is published per served request**, never per request, beside the counts and the saturation reading. A per-request figure falls by an order of magnitude the moment a bound refuses anything, which would present not doing the work as doing it cheaply.
+- **Every percentile is quoted with its survivorship.** The distributions are over served requests alone, so what they mean depends on how much of the population reached them: a repetition in which less than three quarters of the quiet population's dispatched requests completed is refused rather than compared, and the share that did completes every sentence the verdict can be quoted from.
+- **The harness is measured too, and can disqualify its own result.** The driver shares the host with the server, and with the bound in force it parses a two-kilobyte refusal where it parsed a hundred-and-seventy-kilobyte result, so it hands the host back in exactly the arm that is supposed to look better. Both processes are sampled, and a claim that the quiet tenant improved is refused when the driver handed back at least as much of the machine as the server did.
+- **The verdict can say no.** `better`, `worse`, `indistinguishable` and `not comparable` are all first-class. It refuses to call a change an improvement when the quiet population was itself refused, when the arms did not offer the server the same work, when the host was never contended for (a per-credential bound can only reach the quiet tenant through contention), or when the driver's own dispatch lateness moved between the arms by as much as the difference being claimed. Two answers need no comparison at all and are given before any: the bound refusing a quiet request, and the quiet population abandoning more requests with the bound in force in every repetition.
+
+| Flag                   | Type       | Default               | Description                                                                                                 |
+| ---------------------- | ---------- | --------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `-fairness`            | `string`   | `""`                  | Bound to measure: `tools-call-rps`, `tools-list-rps` or `listen-streams`                                    |
+| `-fairness-json`       | `string`   | `bench/fairness.json` | Document to write; refused if it names the published record                                                 |
+| `-fairness-surface`    | `string`   | `dynamic`             | Tool surface the run drives                                                                                 |
+| `-fairness-quiet`      | `int`      | `8`                   | Credentials in the quiet population                                                                         |
+| `-fairness-noisy`      | `int`      | `4`                   | Credentials in the noisy population                                                                         |
+| `-fairness-quiet-rate` | `float`    | `0`                   | Requests per second each quiet credential offers; `0` takes a quarter of what the bound meters, capped at 2 |
+| `-fairness-noisy-rate` | `float`    | `20`                  | Requests per second each noisy credential offers                                                            |
+| `-fairness-phase`      | `duration` | `20s`                 | Measured window per arm                                                                                     |
+| `-fairness-lead-in`    | `duration` | `5s`                  | Unmeasured window before it, which drains the bound's burst                                                 |
+| `-fairness-deadline`   | `duration` | `2s`                  | How long a request may take from its intended dispatch before a client would have given up                  |
+| `-fairness-repeats`    | `int`      | `2`                   | How many times the pair of arms runs, alternating their order                                               |
+
+The defaults are sized for a modest host and take a few minutes. A larger one needs a noisier population rather than a longer phase, since the answer depends on the host actually being contended: `-fairness-noisy=16 -fairness-quiet=32 -fairness-phase=60s -fairness-repeats=4`. Raising the noisy population past a few dozen credentials needs the file-descriptor limit raised with it, since a credential may hold `rate x deadline` requests outstanding. With `-binary` the mode needs no checkout at all, so a prebuilt driver and server measure it on a host that has neither the repository nor a Go toolchain.
+
+The quiet rate is left to the bound for a reason. What counts as quiet is a fact about the bound and not about this command: the shipped bucket meters ten requests a second and the listing bucket derived from it meters one, so a single default that leaves the first a tenfold margin would sit exactly on the second, and the run would report on a tenant the bound was itself turning away. A rate given explicitly is refused when it reaches half of what the bound meters, counting only the verbs the bound looks at.
+
+The mode is refused together with `-render` and `-check`, which draw the committed artifacts and measure nothing: it is a measurement whatever else was asked for, and combining them ran two servers for minutes while claiming to verify a drawing.
+
+`tools-list-rps` measures the bound [PR 566](https://github.com/jmrplens/gitlab-mcp-server/pull/566) adds and stops the run on a build that does not meter listings, rather than reporting a bound that was never there as one that helped nobody. Its bucket is derived rather than configured: `--rate-limit-rps=10` puts it in force but listings refill a tenth as fast, so the rate a noisy population has to exceed is one a second per credential, and the lead-in that drains the burst is computed from that rather than from the flag. `listen-streams` is declared but refused by name: it bounds a held resource rather than a rate, and this driver has no verb that opens a stream and keeps it open.
 
 With `-no-render` and `-binary` the driver reads nothing from a checkout, so a prebuilt driver and server can measure the series on a host with no Go toolchain; the record is then copied back and rendered with `-render`. The server is started with `--pprof-addr` on a loopback port the driver picks, which is where the per-step profiles and goroutine counts come from.
 

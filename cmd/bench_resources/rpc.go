@@ -96,6 +96,43 @@ func (e rpcError) Error() string {
 	return fmt.Sprintf("jsonrpc error %d: %s", e.Code, e.Message)
 }
 
+// toolResultError is a successful JSON-RPC response whose tool result reports
+// failure, carrying the text that came with it.
+//
+// The text is kept because on this wire it is the only thing that separates a
+// refusal from a handler failure: a refused tools/call arrives as HTTP 200 with
+// a well formed result and no code anywhere, so a driver that discarded the
+// message could not tell "the bound said no" from "the tool broke". Every
+// caller that only tests err != nil is unaffected.
+type toolResultError struct{ Text string }
+
+// Error renders the failed result, naming the text when the server sent one.
+func (e *toolResultError) Error() string {
+	if e.Text == "" {
+		return "the tool returned an error result"
+	}
+	return "the tool returned an error result: " + e.Text
+}
+
+// httpStatusError is a response the transport refused outright, keeping the
+// status.
+//
+// The status is kept for the same reason as the text above, and settles one
+// collision in particular: the per-credential rate limit and the per-address
+// authentication lockout both answer JSON-RPC -42900, and only the status
+// (200 against 429) tells them apart. Its message is what the caller used to
+// build inline, so nothing downstream reads differently.
+type httpStatusError struct {
+	Method  string
+	Status  int
+	Snippet string
+}
+
+// Error renders the refused response.
+func (e *httpStatusError) Error() string {
+	return fmt.Sprintf("%s: HTTP %d: %s", e.Method, e.Status, e.Snippet)
+}
+
 // checkResponse rejects a payload carrying a JSON-RPC error, and a tool result
 // that reports failure inside a successful response.
 func checkResponse(payload []byte) error {
@@ -112,9 +149,34 @@ func checkResponse(payload []byte) error {
 		return *envelope.Error
 	}
 	if envelope.Result != nil && envelope.Result.IsError {
-		return errors.New("the tool returned an error result")
+		return &toolResultError{Text: firstResultText(payload)}
 	}
 	return nil
+}
+
+// firstResultText pulls the first text block out of a tool result.
+//
+// A second decode of a payload already decoded once, and only on the failing
+// path: a tools/call result on the individual surface is megabytes of content,
+// and decoding all of it into strings on every successful call would put the
+// driver's own cost into every latency this command publishes.
+func firstResultText(payload []byte) string {
+	var envelope struct {
+		Result struct {
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return ""
+	}
+	for _, block := range envelope.Result.Content {
+		if block.Text != "" {
+			return block.Text
+		}
+	}
+	return ""
 }
 
 // httpRPC talks to a server in HTTP mode, one credential per client.
@@ -172,7 +234,7 @@ func (c *httpRPC) call(ctx context.Context, method string, params map[string]any
 		return nil, fmt.Errorf("read %s response: %w", method, err)
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-		return nil, fmt.Errorf("%s: HTTP %d: %s", method, resp.StatusCode, firstLine(payload))
+		return nil, &httpStatusError{Method: method, Status: resp.StatusCode, Snippet: firstLine(payload)}
 	}
 	message := payload
 	if strings.HasPrefix(resp.Header.Get(headerContentType), mediaEventStream) {

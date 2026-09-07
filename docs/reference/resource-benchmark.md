@@ -119,10 +119,13 @@ inherits is stripped of every variable this server reads.
 
 A few details that change what the numbers mean:
 
-- **The rate limiter is off** (`--rate-limit-rps=0`). HTTP mode defaults to ten
-  requests per second, which a benchmark firing parallel requests would spend
-  its time being refused by. Refusals are a different measurement, and
-  `test/e2e/http` already makes it.
+- **The rate limiter is off** (`--rate-limit-rps=0`) **in every scenario on this
+  page**. HTTP mode defaults to ten requests per second, which a benchmark
+  firing parallel requests would spend its time being refused by, so a capacity
+  figure measured with it on would be the cost of saying no. Refusals are a
+  different measurement: `test/e2e/http` checks that they happen, and
+  `make bench-fairness` measures whether they help anybody, in an opt-in
+  scenario that publishes nothing here.
 - **The harness speaks JSON-RPC directly, not through the Go SDK.** From
   protocol 2026-07-28 a client may serve `tools/list` from its own cache, and
   the SDK client does: measured through it, a `tools/list` that costs the
