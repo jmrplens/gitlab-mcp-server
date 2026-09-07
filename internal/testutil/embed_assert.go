@@ -31,33 +31,71 @@ func AssertEmbeddedResource(t *testing.T, ctx context.Context, session *mcp.Clie
 	t.Run("enabled by default", func(t *testing.T) {
 		toggle(true)
 		t.Cleanup(func() { toggle(true) })
-		result := callToolSuccessfully(ctx, t, session, name, args)
-		found := firstEmbeddedResource(result)
-		if found == nil || found.Resource == nil {
-			t.Fatalf("expected EmbeddedResource for %s, got %d blocks", name, len(result.Content))
-		}
-		assertEmbeddedResourcePayload(t, found.Resource, wantURI)
+		assertResourceEmbedded(ctx, t, session, name, args, wantURI)
 	})
 	t.Run("disabled produces no embed", func(t *testing.T) {
 		toggle(false)
 		t.Cleanup(func() { toggle(true) })
-		result := callToolSuccessfully(ctx, t, session, name, args)
-		if firstEmbeddedResource(result) != nil {
-			t.Fatalf("expected no EmbeddedResource when disabled (tool=%s)", name)
-		}
+		assertResourceNotEmbedded(ctx, t, session, name, args)
 	})
 }
 
+// embedReporter is the part of [testing.T] these assertions use. It is an
+// interface so a tool that answers wrongly can be reported to a recorder, since
+// every failure below is one the test exercising it would otherwise take
+// itself.
+//
+// Fatalf does not abort a recorder the way [testing.T.Fatalf] does, so each
+// site returns as well.
+type embedReporter interface {
+	Helper()
+	Error(args ...any)
+	Errorf(format string, args ...any)
+	Fatalf(format string, args ...any)
+}
+
+// assertResourceEmbedded checks that the tool answered with an embedded
+// resource carrying wantURI.
+func assertResourceEmbedded(ctx context.Context, t embedReporter, session *mcp.ClientSession, name string, args map[string]any, wantURI string) {
+	t.Helper()
+	result := callToolSuccessfully(ctx, t, session, name, args)
+	if result == nil {
+		return
+	}
+	found := firstEmbeddedResource(result)
+	if found == nil || found.Resource == nil {
+		t.Fatalf("expected EmbeddedResource for %s, got %d blocks", name, len(result.Content))
+		return
+	}
+	assertEmbeddedResourcePayload(t, found.Resource, wantURI)
+}
+
+// assertResourceNotEmbedded checks that the tool answered with no embedded
+// resource at all, which is what the toggle turned off promises.
+func assertResourceNotEmbedded(ctx context.Context, t embedReporter, session *mcp.ClientSession, name string, args map[string]any) {
+	t.Helper()
+	result := callToolSuccessfully(ctx, t, session, name, args)
+	if result == nil {
+		return
+	}
+	if firstEmbeddedResource(result) != nil {
+		t.Fatalf("expected no EmbeddedResource when disabled (tool=%s)", name)
+	}
+}
+
 // callToolSuccessfully invokes an MCP tool and fails the test on transport
-// error or IsError=true. It returns the successful [*mcp.CallToolResult].
-func callToolSuccessfully(ctx context.Context, t *testing.T, session *mcp.ClientSession, name string, args map[string]any) *mcp.CallToolResult {
+// error or IsError=true. It returns the successful [*mcp.CallToolResult], or
+// nil when it reported one of those, which a recorder does not abort on.
+func callToolSuccessfully(ctx context.Context, t embedReporter, session *mcp.ClientSession, name string, args map[string]any) *mcp.CallToolResult {
 	t.Helper()
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
 	if err != nil {
 		t.Fatalf("CallTool(%s): %v", name, err)
+		return nil
 	}
 	if result == nil || result.IsError {
 		t.Fatalf("CallTool(%s): expected successful result, got IsError=%v", name, result != nil && result.IsError)
+		return nil
 	}
 	return result
 }
@@ -76,7 +114,7 @@ func firstEmbeddedResource(result *mcp.CallToolResult) *mcp.EmbeddedResource {
 // assertEmbeddedResourcePayload checks that resource has wantURI, MIME type
 // "application/json", and a non-empty Text payload. Mismatches are recorded
 // via t.Errorf so a single subtest can report every problem at once.
-func assertEmbeddedResourcePayload(t *testing.T, resource *mcp.ResourceContents, wantURI string) {
+func assertEmbeddedResourcePayload(t embedReporter, resource *mcp.ResourceContents, wantURI string) {
 	t.Helper()
 	if resource.URI != wantURI {
 		t.Errorf("URI = %q, want %q", resource.URI, wantURI)

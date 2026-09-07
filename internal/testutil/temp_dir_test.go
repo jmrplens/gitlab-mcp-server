@@ -2,8 +2,10 @@
 package testutil
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -33,6 +35,37 @@ func TestIsolateTempDir_EveryPlatformVariable_PointsOsTempDirAtTheDirectory(t *t
 			}
 		})
 	}
+}
+
+// TestVerifyTempDir_APlatformThatReadsAnotherVariable_IsToldSo verifies the
+// refusal no supported platform reaches: with every variable set and the
+// process temporary directory still somewhere else, the helper says the
+// isolation did not take rather than letting a containment test assert nothing.
+func TestVerifyTempDir_APlatformThatReadsAnotherVariable_IsToldSo(t *testing.T) {
+	original := processTempDir
+	processTempDir = func() string { return filepath.Join("somewhere", "else") }
+	t.Cleanup(func() { processTempDir = original })
+	reporter := &recordingTempDirReporter{}
+
+	verifyTempDir(reporter, filepath.Join("the", "isolated", "one"))
+
+	if !strings.Contains(reporter.message, "does not cover") {
+		t.Errorf("report = %q, want it to name the variables it covers", reporter.message)
+	}
+}
+
+// recordingTempDirReporter stands in for *testing.T so the refusal is recorded
+// rather than failing the test that provoked it.
+type recordingTempDirReporter struct {
+	message string
+}
+
+// Helper satisfies the reporter and does nothing.
+func (*recordingTempDirReporter) Helper() {}
+
+// Fatalf records what would have been reported.
+func (r *recordingTempDirReporter) Fatalf(format string, args ...any) {
+	r.message = fmt.Sprintf(format, args...)
 }
 
 // TestIsolateTempDir_Restored_LeavesTheProcessAsItFoundIt verifies the cleanup

@@ -84,6 +84,7 @@ func createSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 		"avatar_file_path":      avatarPathGuidance(),
 		"avatar_content_base64": avatarBase64Guidance(),
 		"avatar_filename":       avatarFilenameGuidance(),
+		"avatar_content_type":   avatarContentTypeGuidance(),
 	}
 	opts.IndividualTool.Description = "Define a new achievement in a group or project namespace. Creating one awards it to nobody. Returns: the created achievement with id, namespace_id, name, description, avatar_url, and timestamps. See also: gitlab_achievement_award, gitlab_achievement_list, gitlab_achievement_update."
 	return toolutil.NewCreateActionSpec("create", route, opts)
@@ -99,6 +100,7 @@ func updateSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 		"avatar_file_path":      avatarPathGuidance(),
 		"avatar_content_base64": avatarBase64Guidance(),
 		"avatar_filename":       avatarFilenameGuidance(),
+		"avatar_content_type":   avatarContentTypeGuidance(),
 	}
 	opts.IndividualTool.Description = "Change an existing achievement's name, description, or avatar. Omitted fields keep their current value. Returns: the updated achievement with id, namespace_id, name, description, avatar_url, and timestamps. See also: gitlab_achievement_list, gitlab_achievement_create, gitlab_achievement_delete."
 	return toolutil.NewUpdateActionSpec("update", route, opts)
@@ -350,9 +352,9 @@ func pageSizeGuidance() toolutil.ParameterGuidance {
 	}
 }
 
-// avatarPathGuidance, avatarBase64Guidance and avatarFilenameGuidance describe
-// the dual file shape create and update share, so the two actions cannot
-// describe the same three parameters differently.
+// avatarPathGuidance and the three below it describe the dual file shape create
+// and update share, so the two actions cannot describe the same four parameters
+// differently.
 func avatarPathGuidance() toolutil.ParameterGuidance {
 	return toolutil.ParameterGuidance{
 		SemanticRole:   "local_file_path",
@@ -379,5 +381,13 @@ func avatarFilenameGuidance() toolutil.ParameterGuidance {
 		ValueSource:      "File name to record for the upload, such as badge.png.",
 		ExampleBinding:   `params.avatar_filename:"badge.png"`,
 		CommonConfusions: []string{"Required whenever an avatar is sent by either route, because GitLab identifies the upload part by its file name."},
+	}
+}
+
+func avatarContentTypeGuidance() toolutil.ParameterGuidance {
+	return toolutil.ParameterGuidance{
+		ValueSource:      "MIME type of the image being sent, such as image/png or image/jpeg.",
+		ExampleBinding:   `params.avatar_content_type:"image/png"`,
+		CommonConfusions: []string{"Optional. An omitted content type is sent as application/octet-stream, which GitLab accepts."},
 	}
 }

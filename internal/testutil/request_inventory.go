@@ -285,7 +285,7 @@ func describeRequest(origin requestOrigin, r *http.Request) (requestRecord, bool
 		return record, true
 	}
 
-	document, ok := graphQLDocument(r)
+	document, ok := recordedGraphQLDocument(r)
 	if !ok {
 		return requestRecord{}, false
 	}
@@ -333,21 +333,24 @@ func bodyKeys(r *http.Request) []string {
 	return slices.Sorted(maps.Keys(fields))
 }
 
-// graphQLDocument reads the document out of a request body and puts the body
-// back for the mock to read.
+// recordedGraphQLDocument reads the document out of a request body and puts the
+// body back for the mock to read. It shares [graphQLDocument] with the schema
+// gate, so a request one of them judges is a request the other records: an
+// upload arrives as a multipart form, and reading only the JSON envelope left
+// every mutation carrying a file out of the inventory.
 //
-// It reports false for a body it cannot read or that is not the JSON envelope,
-// which covers the multipart form a GraphQL upload arrives as. Neither is
-// reported as a failure here: the schema gate one hop away already reports an
-// unreadable body, and reporting it twice would name the same defect twice.
-func graphQLDocument(r *http.Request) (string, bool) {
+// It reports false for a body it cannot read or that carries no document, and
+// neither is reported as a failure here: the schema gate one hop away already
+// reports an unreadable body, and reporting it twice would name the same defect
+// twice.
+func recordedGraphQLDocument(r *http.Request) (string, bool) {
 	body, err := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(bytes.NewReader(body))
 	if err != nil {
 		return "", false
 	}
-	var request graphqlRequest
-	if json.Unmarshal(body, &request) != nil || strings.TrimSpace(request.Query) == "" {
+	request, ok := graphQLDocument(r.Header.Get("Content-Type"), body)
+	if !ok {
 		return "", false
 	}
 	return request.Query, true

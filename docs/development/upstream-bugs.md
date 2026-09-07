@@ -92,6 +92,7 @@ readable without opening the tracker:
 | 24 | gitlab-org/gitlab | [Approvals page documents the POST's response under the GET](#the-merge-request-approvals-page-documents-the-deprecated-posts-response-under-the-get) | No | No | No | No | Yes |
 | 25 | client-go | [`CreateProjectForkRelation` declares a response GitLab does not send](#createprojectforkrelation-declares-a-response-gitlab-does-not-send) | No | No | No | No | Yes |
 | 26 | client-go | [The invitations wrapper is missing two parameters and a response field](#the-invitations-wrapper-is-missing-two-parameters-and-a-response-field) | No | No | No | No | Yes |
+| 27 | client-go | [The achievements fragments select less than the schema offers](#the-achievements-fragments-select-less-than-the-schema-offers) | No | No | No | No | None possible |
 
 States verified against the upstream trackers on 2026-09-05.
 
@@ -434,6 +435,43 @@ told.
 
 **Effort**: small. Two fields on the options struct and one on the result; all
 three are additive.
+
+### The achievements fragments select less than the schema offers
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: none possible. The selection is a private constant inside
+  `achievements.go` and every method builds its document from it, so a caller
+  cannot ask for a field the fragment omits; reaching the missing data means
+  leaving the service and issuing raw GraphQL, which would duplicate the
+  service rather than extend it.
+
+**What**: `achievementFields` and `userAchievementFields` in `achievements.go`
+select a strict subset of what the GraphQL schema declares for the two types,
+and the `Achievement` and `UserAchievement` structs carry only what those
+fragments ask for.
+
+- `UserAchievement.awardMessageHtml` is never selected, so the rendered form of
+  the award message is unavailable while the raw one is.
+- `achievement.namespace`, `userAchievement.user`, `.awardedByUser` and
+  `.revokedByUser` are each selected as `{ id }` alone, and the structs keep the
+  numeric id. GitLab returns a `Namespace` and a `UserCore` there, so a caller
+  that wants a name, a path or an avatar has to make a second request per id.
+
+**Found from**: this server mirrors what the SDK exposes, one field for one
+field, so `internal/tools/achievements` publishes `namespace_id`, `user_id`,
+`awarded_by_user_id` and `revoked_by_user_id` where every other list tool in the
+repository publishes a user object, and publishes no HTML award message at all.
+The gap was measured against the pinned GitLab schema in
+`internal/graphqlschema/gitlab-schema.graphql` (types `Achievement` and
+`UserAchievement`).
+
+**Effort**: small for the message (one line in the fragment plus a field on the
+struct). Larger for the user objects, because widening them changes the shape of
+a published struct: the ids would stay and a `*BasicUser` would join them, which
+is the same accretion the SDK already makes elsewhere.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

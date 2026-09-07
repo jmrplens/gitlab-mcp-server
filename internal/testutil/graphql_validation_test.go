@@ -1,10 +1,12 @@
 package testutil
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -142,6 +144,128 @@ func TestValidateGraphQLRequest_RequestsThatCarryNoDocument_AreLeftAlone(t *test
 			}
 		})
 	}
+}
+
+// TestValidateGraphQLRequest_RefusedUploadDocument_IsReported verifies that a
+// document sent as a multipart upload is judged like any other.
+//
+// It used to be waved through for not looking like the JSON envelope,
+// which meant the only mutations this repository sends with a file attached
+// (the avatar an achievement is created and updated with) were the only ones
+// nobody judged. The map part comes first here on purpose: the document is
+// found by name, not by position.
+func TestValidateGraphQLRequest_RefusedUploadDocument_IsReported(t *testing.T) {
+	reporter := &recordingReporter{name: t.Name()}
+	request := multipartGraphQLRequest(t,
+		formPart{name: "map", value: `{"0":["variables.input.avatar"]}`},
+		formPart{name: "operations", value: `{"query":"query($id: VulnerabilityID!) { vulnerability(id: $id) { hasSolutions } }","variables":{"id":"gid://gitlab/Vulnerability/1"}}`},
+	)
+
+	validateGraphQLRequest(reporter, request)
+
+	if !strings.Contains(reporter.joined(), `Cannot query field "hasSolutions"`) {
+		t.Errorf("report = %q, want the refusal of the document in the operations part", reporter.joined())
+	}
+}
+
+// TestValidateGraphQLRequest_AcceptedUploadDocument_ReportsNothing verifies the
+// quiet path for an upload, with the document and variables client-go really
+// sends for an achievement avatar: the upload itself is null in the operations
+// part, because its bytes travel in a part of their own.
+func TestValidateGraphQLRequest_AcceptedUploadDocument_ReportsNothing(t *testing.T) {
+	reporter := &recordingReporter{name: t.Name()}
+	request := multipartGraphQLRequest(t, formPart{
+		name:  "operations",
+		value: `{"query":"mutation CreateAchievement($input: AchievementsCreateInput!) { achievementsCreate(input: $input) { achievement { id } errors } }","variables":{"input":{"namespaceId":"gid://gitlab/Namespace/10","name":"First Contribution","avatar":null}}}`,
+	})
+
+	validateGraphQLRequest(reporter, request)
+
+	if len(reporter.messages) != 0 {
+		t.Errorf("reported %v, want nothing", reporter.messages)
+	}
+}
+
+// TestValidateGraphQLRequest_MultipartCarryingNoDocument_IsLeftAlone verifies
+// that only a body which really carries a document is judged. A multipart POST
+// to this path that this cannot read the operations of is a test of the
+// transport, and the gate has no opinion about those.
+func TestValidateGraphQLRequest_MultipartCarryingNoDocument_IsLeftAlone(t *testing.T) {
+	cases := []struct {
+		name        string
+		contentType string
+		body        string
+	}{
+		{
+			name:        "a content type that is not multipart",
+			contentType: "application/x-www-form-urlencoded",
+			body:        "operations=whatever",
+		},
+		{
+			name:        "a content type this cannot parse",
+			contentType: "multipart/form-data; boundary",
+			body:        "",
+		},
+		{
+			name:        "multipart with no boundary",
+			contentType: "multipart/form-data",
+			body:        "",
+		},
+		{
+			name:        "no operations part",
+			contentType: `multipart/form-data; boundary="frontier"`,
+			body:        "--frontier\r\nContent-Disposition: form-data; name=\"map\"\r\n\r\n{}\r\n--frontier--\r\n",
+		},
+		{
+			name:        "a body that ends mid-part",
+			contentType: `multipart/form-data; boundary="frontier"`,
+			body:        "--frontier\r\nContent-Disposition: form-data; name=\"operations\"\r\n\r\n{\"query\":\"query { currentUser { id",
+		},
+		{
+			name:        "an operations part that is not the envelope",
+			contentType: `multipart/form-data; boundary="frontier"`,
+			body:        "--frontier\r\nContent-Disposition: form-data; name=\"operations\"\r\n\r\nnot json\r\n--frontier--\r\n",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			reporter := &recordingReporter{name: t.Name()}
+			request := graphQLRequest(t, testCase.body)
+			request.Header.Set("Content-Type", testCase.contentType)
+
+			validateGraphQLRequest(reporter, request)
+
+			if len(reporter.messages) != 0 {
+				t.Errorf("reported %v, want nothing", reporter.messages)
+			}
+		})
+	}
+}
+
+// formPart is one field of a multipart body, in the order it is written.
+type formPart struct {
+	name  string
+	value string
+}
+
+// multipartGraphQLRequest builds the POST client-go sends for a query carrying
+// an upload: the parts the GraphQL multipart request specification defines,
+// written by the same mime/multipart writer the SDK uses.
+func multipartGraphQLRequest(t *testing.T, parts ...formPart) *http.Request {
+	t.Helper()
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	for _, part := range parts {
+		if err := writer.WriteField(part.name, part.value); err != nil {
+			t.Fatalf("write %s field: %v", part.name, err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close the multipart body: %v", err)
+	}
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "http://gitlab.example.com"+graphQLPath, body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	return request
 }
 
 // TestValidateGraphQLRequest_UnreadableBody_ReportsAndRestoresTheBody verifies

@@ -276,14 +276,11 @@ func TestCreate_APIError(t *testing.T) {
 
 // TestCreate_SendsAvatarAsMultipart verifies the avatar really leaves the
 // process: the SDK switches to a multipart request when the mutation carries an
-// upload, so the assertion is on the file part rather than on the JSON body.
+// upload, so the assertions are on the parts of that body rather than on a JSON
+// one. The document itself is judged by the test transport, which reads the
+// operations part of a multipart request against the pinned schema.
 func TestCreate_SendsAvatarAsMultipart(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "badge.png")
-	if err := os.WriteFile(path, []byte("PNG-BYTES"), 0o600); err != nil {
-		t.Fatalf("write avatar fixture: %v", err)
-	}
-	t.Setenv(toolutil.UploadDirAllowlistEnv, dir)
+	path := avatarFixture(t)
 
 	cases := []struct {
 		name  string
@@ -303,25 +300,82 @@ func TestCreate_SendsAvatarAsMultipart(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var uploaded string
-			client := testutil.NewTestClient(t, uploadCapturingHandler(t, &uploaded,
+			var captured uploadCapture
+			client := testutil.NewTestClient(t, uploadCapturingHandler(t, &captured,
 				`{"data":{"achievementsCreate":{"achievement":`+achievementNode+`,"errors":[]}}}`))
 
 			if _, err := Create(t.Context(), client, CreateInput{NamespaceID: 10, Name: "x", AvatarInput: tc.input}); err != nil {
 				t.Fatalf("Create() error = %v", err)
 			}
-			if uploaded != "badge.png:PNG-BYTES" {
-				t.Errorf("uploaded part = %q, want the avatar file name and its bytes", uploaded)
-			}
+			captured.assert(t, "achievementsCreate")
 		})
 	}
 }
 
+// TestUpdate_SendsAvatarAsMultipart is the same wire proof for update, which
+// takes the avatar through the same shared input and must reach GitLab the same
+// way: the two mutations differ only in which one the operations part names.
+func TestUpdate_SendsAvatarAsMultipart(t *testing.T) {
+	path := avatarFixture(t)
+
+	var captured uploadCapture
+	client := testutil.NewTestClient(t, uploadCapturingHandler(t, &captured,
+		`{"data":{"achievementsUpdate":{"achievement":`+achievementNode+`,"errors":[]}}}`))
+
+	avatar := AvatarInput{AvatarFilePath: path, AvatarFilename: "badge.png", AvatarContentType: "image/png"}
+	if _, err := Update(t.Context(), client, UpdateInput{AchievementID: 7, AvatarInput: avatar}); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	captured.assert(t, "achievementsUpdate")
+}
+
+// avatarFixture writes an image the upload allow-list admits and returns its
+// path. The allow-list is what a local path is checked against, so a fixture
+// outside it would be refused before any request was built.
+func avatarFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "badge.png")
+	if err := os.WriteFile(path, []byte("PNG-BYTES"), 0o600); err != nil {
+		t.Fatalf("write avatar fixture: %v", err)
+	}
+	t.Setenv(toolutil.UploadDirAllowlistEnv, dir)
+	return path
+}
+
+// uploadCapture is what one multipart GraphQL request carried: the uploaded
+// part as "filename:content", the operations document, and the map that ties
+// the two together.
+type uploadCapture struct {
+	part       string
+	operations string
+	fileMap    string
+}
+
+// assert checks that the captured request is the multipart form the GraphQL
+// multipart request specification defines for mutation, with the bytes in a
+// part of their own and null left where the variable was.
+func (c uploadCapture) assert(t *testing.T, mutation string) {
+	t.Helper()
+	if c.part != "badge.png:PNG-BYTES" {
+		t.Errorf("uploaded part = %q, want the avatar file name and its bytes", c.part)
+	}
+	if !strings.Contains(c.operations, mutation) {
+		t.Errorf("operations = %q, want the %s document", c.operations, mutation)
+	}
+	if !strings.Contains(c.operations, `"avatar":null`) {
+		t.Errorf("operations = %q, want null where the avatar variable was moved out", c.operations)
+	}
+	if want := `{"0":["variables.input.avatar"]}`; c.fileMap != want {
+		t.Errorf("map = %q, want %q so GitLab knows which variable the part fills", c.fileMap, want)
+	}
+}
+
 // uploadCapturingHandler answers a multipart GraphQL request with body, after
-// recording the single uploaded part as "filename:content" in captured. It runs
-// on the httptest server goroutine, so every failure is reported with t.Errorf
-// and answered deterministically rather than aborting the test from there.
-func uploadCapturingHandler(t *testing.T, captured *string, body string) http.HandlerFunc {
+// recording what it carried in captured. It runs on the httptest server
+// goroutine, so every failure is reported with t.Errorf and answered
+// deterministically rather than aborting the test from there.
+func uploadCapturingHandler(t *testing.T, captured *uploadCapture, body string) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
@@ -330,13 +384,25 @@ func uploadCapturingHandler(t *testing.T, captured *string, body string) http.Ha
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
+		captured.operations = formField(r.MultipartForm.Value, "operations")
+		captured.fileMap = formField(r.MultipartForm.Value, "map")
 		for _, headers := range r.MultipartForm.File {
 			for _, header := range headers {
-				*captured = readUploadedPart(t, header)
+				captured.part = readUploadedPart(t, header)
 			}
 		}
 		testutil.RespondJSON(w, http.StatusOK, body)
 	}
+}
+
+// formField returns the first value of a multipart form field, or an empty
+// string when the request carried none: an absent field is an assertion for the
+// test goroutine to make, not a panic on the server's.
+func formField(values map[string][]string, name string) string {
+	if found := values[name]; len(found) > 0 {
+		return found[0]
+	}
+	return ""
 }
 
 // readUploadedPart returns one multipart file part as "filename:content", or
