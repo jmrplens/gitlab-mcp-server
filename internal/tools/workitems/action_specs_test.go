@@ -5,11 +5,13 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -48,6 +50,89 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestActionSpecs_WorkItemListSortEnum verifies the schema gitlab_list_work_items
+// serves publishes exactly the WorkItemSort values the pinned GitLab schema
+// declares, and neither half of the asc/desc pair.
+//
+// Both halves matter, and they fail in opposite directions. asc and desc are
+// what toolutil injects into any string sort carrying no enum of its own, and
+// GitLab refuses both here; the values GitLab does accept would then be refused
+// by go-sdk before the request is built, since it validates arguments against
+// the published schema. The expectation is read out of the pin rather than
+// written down again, so a re-pin that changes the enum fails here instead of
+// leaving two lists to drift apart.
+func TestActionSpecs_WorkItemListSortEnum(t *testing.T) {
+	byTool := workItemSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, workItemActionHandler())))
+	served := servedEnum(t, byTool["gitlab_list_work_items"].Route.InputSchema, "sort")
+
+	schema, err := graphqlschema.Schema()
+	if err != nil {
+		t.Fatalf("graphqlschema.Schema() error: %v", err)
+	}
+	definition, ok := schema.Types["WorkItemSort"]
+	if !ok {
+		t.Fatal("pinned schema declares no WorkItemSort enum")
+	}
+	// The pin still carries the lowercase aliases GitLab renamed in 13.5, and
+	// the override leaves them out on purpose: they work, and offering both
+	// spellings would double the list. The pin records no deprecation, so the
+	// spelling is what separates them, and the aliases are collected rather
+	// than skipped so a new one cannot slip past unnoticed.
+	var want, aliases []string
+	for _, value := range definition.EnumValues {
+		if value.Name != strings.ToUpper(value.Name) {
+			aliases = append(aliases, value.Name)
+			continue
+		}
+		want = append(want, value.Name)
+	}
+	slices.Sort(aliases)
+	if !slices.Equal(aliases, []string{"created_asc", "created_desc", "updated_asc", "updated_desc"}) {
+		t.Errorf("pinned WorkItemSort aliases = %v, want the four renamed in 13.5", aliases)
+	}
+
+	slices.Sort(served)
+	slices.Sort(want)
+	if !slices.Equal(served, want) {
+		t.Errorf("served sort enum = %v, want the pinned WorkItemSort values %v", served, want)
+	}
+	for _, rejected := range []string{"asc", "desc"} {
+		t.Run(rejected, func(t *testing.T) {
+			if slices.Contains(served, rejected) {
+				t.Errorf("served sort enum offers %q, which GitLab refuses for WorkItemSort", rejected)
+			}
+		})
+	}
+}
+
+// servedEnum returns the enum values a built input schema publishes for one
+// top-level property, which is what a client is offered after the action's
+// overrides and the canonical parameter enums have both been applied.
+func servedEnum(t *testing.T, schema map[string]any, property string) []string {
+	t.Helper()
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("input schema has no properties: %v", schema)
+	}
+	field, ok := properties[property].(map[string]any)
+	if !ok {
+		t.Fatalf("input schema has no %q property", property)
+	}
+	enum, ok := field["enum"].([]any)
+	if !ok {
+		t.Fatalf("%q publishes no enum: %v", property, field)
+	}
+	values := make([]string, 0, len(enum))
+	for _, value := range enum {
+		text, isText := value.(string)
+		if !isText {
+			t.Fatalf("%q enum carries a non-string value %v", property, value)
+		}
+		values = append(values, text)
+	}
+	return values
 }
 
 // TestActionSpecs_DeleteOutput verifies the delete route preserves its success message.

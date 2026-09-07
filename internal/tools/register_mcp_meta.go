@@ -12,12 +12,23 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// mcpActionGroup builds the gitlab_server group. It is a variable so a test can
+// hand [RegisterMCPMeta] a group the catalog rejects: the real builder produces
+// one fixed, valid group, so the failure the guard below exists for cannot be
+// provoked through any input this package takes.
+var mcpActionGroup = BuildMCPActionGroup
+
+// mcpHealthActionSpecs is the health domain's action specs, as a variable for
+// the same reason: the specs are compiled in and always project cleanly, so
+// only a test can exercise what happens when they do not.
+var mcpHealthActionSpecs = health.ActionSpecs
+
 // RegisterMCPMeta registers the gitlab_server meta-tool carrying MCP server
 // health and status. Catalog construction failures are logged and the
 // function returns without registering.
 func RegisterMCPMeta(server *mcp.Server, client *gitlabclient.Client) {
 	catalog := actioncatalog.NewCatalog()
-	if err := catalog.AddGroup(BuildMCPActionGroup(client)); err != nil {
+	if err := catalog.AddGroup(mcpActionGroup(client)); err != nil {
 		slog.Error("failed to add MCP meta action group", "error", err)
 		return
 	}
@@ -48,8 +59,8 @@ NOT for: resolving a git remote URL to a project (use gitlab_discover_project), 
 Returns: {status, mcp_server_version, gitlab_url, gitlab_version, gitlab_revision, authenticated (bool), username, user_id, response_time_ms, error}. Authentication and connectivity failures are surfaced inside this diagnostics object (status / error fields), not as a tool-level JSON-RPC error.
 Errors: tool-level errors are rare. Inspect the returned status / error fields. Network errors include the GitLab URL verbatim.
 
-- status: (no params), returns the diagnostics object above.
-- health_check: alias for status. (no params)
+- status: (no params). Returns the diagnostics object above.
+- health_check: (no params). Alias for status.
 
 See also: gitlab_discover_project (resolve git remote URL -> project_id), gitlab_admin (instance admin), gitlab_user (current user details and impersonation tokens).`
 
@@ -60,7 +71,7 @@ See also: gitlab_discover_project (resolve git remote URL -> project_id), gitlab
 		ReadOnly:    true,
 	})
 	specActions, specErr := actioncatalog.ActionsFromSpecs(
-		actioncompat.ApplyToActionSpecs("gitlab_server", "server", health.ActionSpecs(client)),
+		actioncompat.ApplyToActionSpecs("gitlab_server", "server", mcpHealthActionSpecs(client)),
 	)
 	if specErr != nil {
 		slog.Error("failed to build MCP health action specs", "error", specErr)

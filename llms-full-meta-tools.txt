@@ -933,7 +933,7 @@ Settings & appearance:
 - appearance_update: title, description, header_message, footer_message, message_background_color, message_font_color, email_header_and_footer_enabled, pwa_name, pwa_short_name, pwa_description, member_guidelines, new_project_guidelines, profile_image_guidelines
 
 Broadcast messages:
-- broadcast_message_list: (no params) lists existing broadcast messages only. It does not read instance settings.
+- broadcast_message_list: (no params). Lists existing broadcast messages only. It does not read instance settings.
 - broadcast_message_get / broadcast_message_delete: id*
 - broadcast_message_create: message*, starts_at, ends_at, broadcast_type, theme, dismissable (bool), target_path, target_access_levels
 - broadcast_message_update: id*, message, starts_at, ends_at, broadcast_type, theme, dismissable
@@ -982,7 +982,7 @@ Custom attributes:
 - custom_attr_set: resource_type*, resource_id*, key*, value*
 
 Bulk import:
-- bulk_import_start: url*, access_token*, entities* (array of {source_type, source_full_path, destination_slug, destination_namespace, migrate_projects (bool), migrate_memberships (bool)})
+- bulk_import_start: configuration*, entities*. configuration is {url, access_token} and is nested, not two top-level params. Each entity is {source_type, source_full_path, destination_slug, destination_namespace, migrate_projects (bool), migrate_memberships (bool)}.
 - bulk_import_list: status, page, per_page
 - bulk_import_get: id*
 - bulk_import_cancel: id*
@@ -1006,7 +1006,7 @@ Alert metric images:
 Secure files:
 - secure_file_list: project_id*
 - secure_file_get / secure_file_delete: project_id*, file_id*
-- secure_file_create: project_id*, name*, content* (base64-encoded)
+- secure_file_create: project_id*, name*, file_path or content_base64 (exactly one)
 
 Terraform states:
 - terraform_state_list: project_path*
@@ -1038,11 +1038,11 @@ Parameter constraints (beyond schema):
 - system_hook_add.url MUST be https when enable_ssl_verification=true. Token is sent as X-Gitlab-Token on every delivery.
 - application_create.scopes is a SPACE-separated string of OAuth scopes (e.g. 'api read_user'). Confidential=false enables PKCE for public clients. The client_secret is returned ONCE on creation and cannot be retrieved later.
 - cluster_agent_token_create returns the token ONCE. Revoke + re-create to rotate.
-- secure_file_create.content is Base64-encoded. Max size 5 MiB.
+- secure_file_create.content_base64 is Base64-encoded, and file_path reads a local file instead. Max size 5 MiB.
 - custom_attr_set.resource_type is one of user, group, project and (resource_type, resource_id, key) is a unique upsert key.
 - bulk_import_start.entities[].source_type is one of group_entity, project_entity. migrate_projects and migrate_memberships apply only to group_entity. destination_namespace must already exist on the target instance.
 - import_bitbucket_server.bitbucket_server_project is the project KEY (usually uppercase, from the Bitbucket URL), not the display name.
-- usage_data_track_event: namespace_id and project_id are mutually-exclusive context refs (provide at most one). send_to_snowplow=false keeps the event internal to GitLab.
+- usage_data_track_event.namespace_id and .project_id are mutually-exclusive context refs (provide at most one). send_to_snowplow=false keeps the event internal to GitLab.
 - db_migration_mark.database is one of main, ci. Defaults to 'main'. Marking a non-applied migration corrupts schema_migrations. Verify first via metadata_get.
 - terraform_state_lock fails if the state is already locked. Unlock breaks any active client session holding the lock.
 - topic_create.name must be globally unique (slug). Title is the display name shown in the UI.
@@ -1966,7 +1966,7 @@ Errors: 404 not found (hint: check full_path or id), 403 forbidden (hint: requir
 Param conventions: * = required. id format = GID (gid://gitlab/Ci::Catalog::Resource/123). full_path = namespace/project (e.g. mygroup/components/docker-build).
 
 - list: search, scope (ALL/NAMESPACES), sort (NAME_ASC/NAME_DESC/LATEST_RELEASED_AT_ASC/LATEST_RELEASED_AT_DESC/STAR_COUNT_ASC/STAR_COUNT_DESC/CREATED_ASC/CREATED_DESC/USAGE_COUNT_ASC/USAGE_COUNT_DESC), first (max 100), after (cursor)
-- get: exactly one of id* or full_path* (mutually exclusive)
+- get: id* or full_path*. Exactly one of the two, never both.
 
 See also: gitlab_template (built-in templates and CI lint), gitlab_pipeline (run pipelines using catalog components), gitlab_project (publisher project metadata).
 
@@ -2922,8 +2922,8 @@ Group queries:
 Webhooks (hook_*):
 - hook_list: group_id*
 - hook_get / hook_delete: group_id*, hook_id*
-- hook_add: group_id*, url*, name, description, token, event booleans (push/tag_push/merge_requests/issues/note/job/pipeline/wiki_page/deployment/releases/subgroup/member_events), enable_ssl_verification, push_events_branch_filter
-- hook_edit: group_id*, hook_id*, same params as hook_add
+- hook_add: group_id*, url*, name, description, token, signing_token, push_events, tag_push_events, merge_requests_events, issues_events, confidential_issues_events, note_events, confidential_note_events, job_events, pipeline_events, wiki_page_events, deployment_events, releases_events, milestone_events, feature_flag_events, subgroup_events, member_events, project_events, vulnerability_events, emoji_events, resource_access_token_events, enable_ssl_verification, push_events_branch_filter, branch_filter_strategy, custom_webhook_template, custom_headers
+- hook_edit: group_id*, hook_id*. Same params as hook_add.
 
 Badges (badge_*):
 - badge_list: group_id*, name
@@ -2936,8 +2936,8 @@ Members (group_member_*):
 - group_member_get_inherited: group_id*, user_id* (includes inherited)
 - group_member_add / group_member_edit: group_id*, user_id*, access_level*, expires_at
 - group_member_remove: group_id*, user_id*
-- group_member_share: group_id*, shared_with_group_id*, group_access*, expires_at
-- group_member_unshare: group_id*, shared_with_group_id*
+- group_member_share: group_id*, share_group_id*, group_access*, expires_at
+- group_member_unshare: group_id*, share_group_id*
 
 Labels (group_label_*):
 - group_label_list: group_id*, search, with_counts, include_ancestor_groups, include_descendant_groups
@@ -2977,7 +2977,7 @@ Releases:
 
 Premium+ behavior notes (GITLAB_MCP_TIER=premium): service_account_pat_create returns the cleartext token only ONCE. Store it immediately in a secure secrets manager and never log or echo it. service_account_delete and service_account_pat_revoke are irreversible.
 
-Epics (Premium+, GITLAB_MCP_TIER=premium. CRUD/notes/discussions use Work Items GraphQL API with full_path + iid. Only epic_get_links and epic boards use REST with group_id):
+Epics (Premium+, GITLAB_MCP_TIER=premium. CRUD/notes/discussions use Work Items GraphQL API with full_path + iid. Only epic_get_links, which takes full_path, and the epic boards, which take group_id, use REST):
 
 Epic discussions (epic_discussion_*): full_path*, epic_iid* for all. GraphQL pagination: first, after, last, before.
 - epic_discussion_list / epic_discussion_get (+ discussion_id*)
@@ -2989,7 +2989,7 @@ Epic discussions (epic_discussion_*): full_path*, epic_iid* for all. GraphQL pag
 Epic CRUD (epic_*): full_path* for all.
 - epic_list: state, search, author_username, label_name, confidential, sort, first, after, include_ancestors, include_descendants
 - epic_get: epic_iid*
-- epic_get_links: epic_iid* [REST]
+- epic_get_links: epic_iid*. Reads the REST endpoint rather than GraphQL.
 - epic_create: title*, description, confidential, color, start_date, due_date, assignee_ids, label_ids, weight, health_status
 - epic_update: epic_iid*, title, description, state_event, color, start_date, due_date, add_label_ids, remove_label_ids, assignee_ids, weight, health_status, status
 - epic_delete: epic_iid*
@@ -3018,8 +3018,8 @@ Group Wikis (Premium+):
 Protected Branches (Premium+):
 - protected_branch_list: group_id*, search
 - protected_branch_get / protected_branch_unprotect: group_id*, branch*
-- protected_branch_protect: group_id*, name*, push_access_level, merge_access_level, unprotect_access_level, allow_force_push, code_owner_approval_required, allowed_to_push/merge/unprotect
-- protected_branch_update: group_id*, branch*, name, allow_force_push, code_owner_approval_required, allowed_to_push/merge/unprotect
+- protected_branch_protect: group_id*, name*, push_access_level, merge_access_level, unprotect_access_level, allow_force_push, code_owner_approval_required, allowed_to_push, allowed_to_merge, allowed_to_unprotect
+- protected_branch_update: group_id*, branch*, name, allow_force_push, code_owner_approval_required, allowed_to_push, allowed_to_merge, allowed_to_unprotect
 
 Protected Environments (Premium+):
 - protected_env_list: group_id*
@@ -4632,8 +4632,8 @@ Issue CRUD:
 - create: project_id*, title*, description, assignee_id, assignee_ids ([]int), labels (comma-separated), milestone_id, due_date (YYYY-MM-DD), confidential, issue_type (issue/incident/test_case/task), weight, epic_id
 - get: project_id*, issue_iid*
 - get_by_id: issue_id* (global ID, no project_id needed)
-- list: project_id*, state (opened/closed/all), labels, not_labels, milestone, scope (created_by_me/assigned_to_me/all), search, assignee_username, author_username, iids ([]int), issue_type, confidential, created_after/before, updated_after/before (ISO 8601), order_by (created_at/updated_at/priority/due_date), sort (asc/desc)
-- list_all: global issue list (no project_id). Same filters as list.
+- list: project_id*, state (opened/closed/all), labels, not_labels, milestone, scope (created_by_me/assigned_to_me/all), search, assignee_username, author_username, iids ([]int), issue_type, confidential, created_after, created_before, updated_after, updated_before (ISO 8601), order_by (created_at/updated_at/priority/due_date), sort (asc/desc)
+- list_all: (no project_id). The global issue list, with the same filters as list.
 - list_group: group_id*, state, labels, milestone, scope, search, order_by, sort
 - update: project_id*, issue_iid*, title, description, state_event (close/reopen), assignee_id, assignee_ids, labels, add_labels, remove_labels, milestone_id, due_date, confidential, issue_type, weight, epic_id, discussion_locked
 - delete: project_id*, issue_iid* (permanent, irreversible)
@@ -4674,19 +4674,20 @@ Discussions (discussion_*): project_id*, issue_iid* for all.
 Work Items (work_item_*): full_path* for all. Use types=["Epic"] to list epics (replaces deprecated epic_list).
 - work_item_list: state, search, types, author_username, label_name, confidential, sort, first, after
 - work_item_get: work_item_iid*
-- work_item_create: work_item_type_id*, title*, description, confidential, assignee_ids, milestone_id, label_ids, weight, health_status, color, due_date, start_date, linked_items {work_item_ids, link_type}
+- work_item_create: work_item_type_id*, title*, description, confidential, assignee_ids, milestone_id, label_ids, weight, health_status, color, due_date, start_date, linked_items. linked_items is {work_item_ids, link_type}.
 - work_item_update: work_item_iid*, title, state_event (CLOSE/REOPEN), description, assignee_ids, milestone_id, crm_contact_ids, parent_id, add_label_ids, remove_label_ids, start_date, due_date, weight, health_status, iteration_id, color, status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE)
 - work_item_delete: work_item_iid* (permanent)
 
 Statistics:
-- statistics_get: global issue stats (optional filters same as list)
+- statistics_get: (optional filters, the same ones as list). Global issue statistics.
 - statistics_get_group: group_id*
 - statistics_get_project: project_id*
 
 Award emoji (emoji_issue_*): project_id*, issue_iid* for all.
 - emoji_issue_list / emoji_issue_get (+ award_id*) / emoji_issue_delete (+ award_id*)
 - emoji_issue_create: name*
-- emoji_issue_note_list / emoji_issue_note_get: note_id*, (+ award_id* for get)
+- emoji_issue_note_list: note_id*
+- emoji_issue_note_get: note_id*, award_id*
 - emoji_issue_note_create: note_id*, name*
 - emoji_issue_note_delete: note_id*, award_id*
 
@@ -5373,7 +5374,7 @@ Jobs:
 - get: project_id*, job_id*
 - trace: project_id*, job_id*. Returns job log (truncated to 100KB).
 - cancel / retry / erase / keep_artifacts: project_id*, job_id*
-- play: project_id*, job_id*, variables (array of {key, value, variable_type})
+- play: project_id*, job_id*, job_variables_attributes (array of {key, value, variable_type}), job_inputs (object keyed by input name)
 - wait: project_id*, job_id*, interval_seconds (5-60, default 10), timeout_seconds (1-3600, default 300), fail_on_error (default true)
 - list_bridges: project_id*, pipeline_id*, scope
 - delete_artifacts: project_id*, job_id*
@@ -5737,8 +5738,8 @@ IMPORTANT for merge: auto-detects project squash/delete-branch settings. Do NOT 
 MR lifecycle:
 - create: project_id*, source_branch*, target_branch*, title*, description, assignee_id, assignee_ids, reviewer_ids, labels (comma-separated), milestone_id, remove_source_branch, squash, allow_collaboration, target_project_id (forks)
 - get: project_id*, merge_request_iid*
-- list: project_id*, state (opened/closed/merged/all), labels, not_labels, milestone, scope, search, source_branch, target_branch, author_username, draft, iids, created_after/before, updated_after/before, order_by, sort
-- list_global / list_group: same filters as list. list_group needs group_id* instead of project_id.
+- list: project_id*, state (opened/closed/merged/all), labels, not_labels, milestone, scope, search, source_branch, target_branch, author_username, draft, iids, created_after, created_before, updated_after, updated_before, order_by, sort
+- list_global / list_group: (the same filters as list). list_group needs group_id* instead of project_id.
 - update: project_id*, merge_request_iid*, title, description, target_branch, assignee_id, assignee_ids, reviewer_ids, labels, add_labels, remove_labels, milestone_id, remove_source_branch, squash, discussion_locked, allow_collaboration, state_event (close/reopen)
 - merge: project_id*, merge_request_iid*, merge_commit_message, squash, should_remove_source_branch, auto_merge, sha, squash_commit_message
 - approve / unapprove / rebase / delete / participants / reviewers / create_pipeline / cancel_auto_merge: project_id*, merge_request_iid*
@@ -6433,9 +6434,9 @@ Discussions (threaded, can be inline via position):
 - discussion_note_delete: discussion_id*, note_id*
 
 Changes and diff versions:
-- changes_get: returns structured MR file diffs by merge_request_iid. Use this for "inspect/view MR changes" and for comments that need new_path/old_path/new_line/old_line.
+- changes_get: unidiff (bool), order_by, sort. Returns structured MR file diffs. Use this for "inspect/view MR changes" and for comments that need new_path/old_path/new_line/old_line.
 - raw_diffs: project_id*, merge_request_iid*. Returns the full raw unified diff for the MR head (use only when a raw patch/unified diff is requested or changes_get reports truncated_files)
-- diff_versions_list: list MR diff revisions
+- diff_versions_list: order_by, sort. Lists the MR diff revisions.
 - diff_version_get: version_id*, unidiff (bool)
 
 Draft notes (batch review, not immediately published):
@@ -6444,7 +6445,7 @@ Draft notes (batch review, not immediately published):
 - draft_note_create: note*, commit_id, in_reply_to_discussion_id, resolve_discussion (bool), position
 - draft_note_update: note_id*, note, position
 - draft_note_delete / draft_note_publish: note_id*
-- draft_note_publish_all: publishes ALL pending drafts as a single review notification
+- draft_note_publish_all: (no params beyond the shared ones). Publishes ALL pending drafts as a single review notification.
 
 See also: gitlab_merge_request (MR lifecycle, approvals, merge, time tracking, reactions), gitlab_pipeline (MR pipelines), gitlab_repository (file blame for context).
 
@@ -6732,7 +6733,7 @@ Packages:
 - file_list: project_id*, package_id*
 - delete: project_id*, package_id*. Deletes package and all files.
 - file_delete: project_id*, package_id*, package_file_id*
-- publish_and_link: publish + create release link. project_id*, package_name*, package_version*, file_name*, file_path or content_base64 (one required), tag_name*, link_name, link_type
+- publish_and_link: project_id*, package_name*, package_version*, file_name*, file_path or content_base64 (one required), tag_name*, link_name, link_type. Publishes the package and creates the release link in one call.
 - publish_directory: project_id*, package_name*, package_version*, directory_path*, include_pattern (glob), status
 
 Container registry:
@@ -7737,10 +7738,10 @@ Errors: 404 (hint: project_id may be a numeric ID or URL-encoded path like 'grou
 Param conventions: * = required. Most actions need project_id* (numeric ID or URL-encoded path like 'group/repo'). List actions accept page, per_page. Access levels: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner.
 
 Project CRUD:
-- create: name*, namespace_id, description, visibility (private/internal/public), initialize_with_readme, default_branch, path, topics, merge_method (merge/rebase_merge/ff), squash_option (never/always/default_on/default_off), ci_config_path, feature toggles (issues/merge_requests/wiki/jobs/lfs/request_access_enabled)
+- create: name*, namespace_id, description, visibility (private/internal/public), initialize_with_readme, default_branch, path, topics, merge_method (merge/rebase_merge/ff), squash_option (never/always/default_on/default_off), ci_config_path, issues_enabled, merge_requests_enabled, wiki_enabled, jobs_enabled, lfs_enabled, request_access_enabled
 - get: project_id*
-- list: owned, search, visibility, archived, order_by, sort, topic, simple, min_access_level, last_activity_after/before, starred, membership, search_namespaces, statistics, include_pending_delete, include_hidden
-- update: project_id*, name, description, visibility, default_branch, merge_method, topics, squash_option, merge_commit_template, squash_commit_template, merge_pipelines_enabled, merge_trains_enabled, approvals_before_merge, feature toggles
+- list: owned, search, visibility, archived, order_by, sort, topic, simple, min_access_level, last_activity_after, last_activity_before, starred, membership, search_namespaces, statistics, include_pending_delete, include_hidden
+- update: project_id*, name, description, visibility, default_branch, merge_method, topics, squash_option, merge_commit_template, squash_commit_template, merge_pipelines_enabled, merge_trains_enabled, approvals_before_merge, issues_enabled, merge_requests_enabled, wiki_enabled, jobs_enabled, lfs_enabled, request_access_enabled
 - delete: project_id*, permanently_remove, full_path (required when permanently_remove=true). Delayed deletion by default. permanently_remove bypasses it
 - restore: project_id*
 
@@ -7771,8 +7772,8 @@ Members (member_*):
 Webhooks (hook_*): project webhook event booleans are push_events, tag_push_events, issues_events, confidential_issues_events, merge_requests_events, note_events, confidential_note_events, job_events, pipeline_events, wiki_page_events, deployment_events, releases_events, emoji_events, and resource_access_token_events. Do not send member_events or subgroup_events for project hooks. Those are group hook fields. Omit params that are not requested, and omit null values.
 - hook_list: project_id*
 - hook_get / hook_delete: project_id*, hook_id*
-- hook_add: project_id*, url*, name, description, token, event booleans, enable_ssl_verification, push_events_branch_filter, custom_webhook_template, branch_filter_strategy
-- hook_edit: project_id*, hook_id*, same params as hook_add
+- hook_add: project_id*, url*, name, description, token, signing_token, push_events, issues_events, confidential_issues_events, merge_requests_events, tag_push_events, note_events, confidential_note_events, job_events, pipeline_events, wiki_page_events, deployment_events, releases_events, milestone_events, feature_flag_events, emoji_events, resource_access_token_events, resource_deploy_token_events, vulnerability_events, enable_ssl_verification, push_events_branch_filter, custom_webhook_template, branch_filter_strategy, custom_headers
+- hook_edit: project_id*, hook_id*. Same params as hook_add.
 - hook_test: project_id*, hook_id*, event* (e.g. push_events)
 - hook_set_custom_header / hook_set_url_variable: project_id*, hook_id*, key*, value*
 - hook_delete_custom_header / hook_delete_url_variable: project_id*, hook_id*, key*
@@ -7823,7 +7824,7 @@ Import/Export:
 
 Pages (pages_*):
 - pages_get / pages_unpublish: project_id*
-- pages_update: project_id*, pages_https_only, pages_access_level
+- pages_update: project_id*, pages_https_only, pages_unique_domain_enabled, pages_primary_domain
 - pages_domain_list_all: (admin only)
 - pages_domain_list: project_id*
 - pages_domain_get / pages_domain_delete: project_id*, domain*
@@ -9369,7 +9370,7 @@ Changelogs:
 Commits:
 - commit_create: project_id*, branch*, commit_message*, actions* (array of {action: create/update/delete/move, file_path, content, previous_path}), start_branch, author_email, author_name
 - commit_list: project_id*, ref_name, since, until, path, author, with_stats
-- file_history: alias for commit_list filtered by path*. Lists commits modifying a specific file
+- file_history: project_id*, path*, ref_name, since, until, author, with_stats. Alias for commit_list filtered by path, so it lists the commits that modify one file.
 - commit_get: project_id*, sha*
 - commit_diff: project_id*, sha*. Commit SHA only. Not for merge_request_iid or MR changes.
 - commit_refs: project_id*, sha*, type (branch/tag/all)
@@ -9383,8 +9384,8 @@ Commits:
 
 Files:
 - file_get / file_raw / file_metadata / file_raw_metadata / file_blame: project_id*, file_path*, ref. Use only when the exact repository file_path is known. Use gitlab_search/code for text search across files. Blame also accepts range_start, range_end.
-  - file_metadata: HEAD-style metadata for the file content endpoint (size, encoding, content_sha256, blob_id, last_commit_id, ref).
-  - file_raw_metadata: HEAD-style metadata for the raw file endpoint (size, content_type, ref). Useful to size-check before downloading via file_raw.
+  - file_metadata returns HEAD-style metadata for the file content endpoint (size, encoding, content_sha256, blob_id, last_commit_id, ref).
+  - file_raw_metadata returns HEAD-style metadata for the raw file endpoint (size, content_type, ref). Useful to size-check before downloading via file_raw.
 - file_create: project_id*, file_path*, branch*, commit_message*, content, start_branch, encoding (text/base64), author_email, author_name, execute_filemode
 - file_update: project_id*, file_path*, branch*, commit_message*, content, start_branch, encoding, author_email, author_name, last_commit_id, execute_filemode
 - file_delete: project_id*, file_path*, branch*, commit_message*, start_branch, author_email, author_name, last_commit_id
@@ -9398,12 +9399,12 @@ Markdown:
 - markdown_render: text*, gfm, project (path for resolving references)
 
 Commit discussions:
-- commit_discussion_list: project_id*, commit_id*
-- commit_discussion_get: project_id*, commit_id*, discussion_id*
-- commit_discussion_create: project_id*, commit_id*, body*, position
-- commit_discussion_add_note: project_id*, commit_id*, discussion_id*, body*
-- commit_discussion_update_note: project_id*, commit_id*, discussion_id*, note_id*, body*
-- commit_discussion_delete_note: project_id*, commit_id*, discussion_id*, note_id*
+- commit_discussion_list: project_id*, commit_sha*
+- commit_discussion_get: project_id*, commit_sha*, discussion_id*
+- commit_discussion_create: project_id*, commit_sha*, body*, position
+- commit_discussion_add_note: project_id*, commit_sha*, discussion_id*, body*
+- commit_discussion_update_note: project_id*, commit_sha*, discussion_id*, note_id*, body*
+- commit_discussion_delete_note: project_id*, commit_sha*, discussion_id*, note_id*
 
 See also: gitlab_branch, gitlab_tag, gitlab_project, gitlab_merge_request
 
@@ -10378,7 +10379,7 @@ Param conventions: * = required. List actions accept page, per_page. visibility 
 Personal snippets:
 - list / list_all / explore: (no required params)
 - get / content: snippet_id*
-- file_content: snippet_id*, file_path*
+- file_content: snippet_id*, ref*, file_name*
 - create: title*, file_name*, content*, visibility, description
 - update: snippet_id*, title, file_name, content, visibility, description
 - delete: snippet_id*
@@ -10387,7 +10388,7 @@ Project snippets:
 - project_list: project_id*
 - project_get / project_content: project_id*, snippet_id*
 - project_create: project_id*, title*, file_name*, content*, visibility
-- project_update: project_id*, snippet_id*, title, visibility, files* to change snippet file content. For updating existing content use files: [{"action":"update","file_path":"<returned file_path>","content":"..."}]. Do not put file_path/content directly under params.
+- project_update: project_id*, snippet_id*, title, visibility, files*. files carries the snippet file changes. For updating existing content use files: [{"action":"update","file_path":"<returned file_path>","content":"..."}]. Do not put file_path/content directly under params.
 - project_delete: project_id*, snippet_id*
 
 Discussions (threaded):
@@ -11336,8 +11337,8 @@ When to use: any user-management workflow such as user CRUD (create / modify / d
 Param conventions: * = required. User IDs are integers. List actions accept page, per_page. Actions ending in _for_user take the same params as the base action plus user_id*. Plain ssh_keys / gpg_keys / emails (no suffix) operate on the current authenticated user with no params.
 
 Current user:
-- current: returns authenticated user info. The legacy alias me is accepted and normalized to current, but current is the canonical action to emit.
-- current_user_status: returns emoji, message, availability.
+- current: (no params). Returns the authenticated user info. The legacy alias me is accepted and normalized to current, but current is the canonical action to emit.
+- current_user_status: (no params). Returns emoji, message, availability.
 - set_status: emoji, message, availability (not_set/busy), clear_status_after (30_minutes/3_hours/8_hours/1_day/3_days/7_days/30_days)
 
 User CRUD (admin):
@@ -11391,10 +11392,11 @@ Activity and events:
 Todos:
 - todo_list: action, author_id, project_id, group_id, state (pending/done), type
 - todo_mark_done: id*
-- todo_mark_all_done: no params
+- todo_mark_all_done: (no params)
 
 Notifications:
-- notification_global_get / notification_global_update: no ID needed. Update params: level, notification_email, event booleans
+- notification_global_get: (no params)
+- notification_global_update: level (disabled/participating/watch/global/mention/custom), notification_email, close_issue, close_merge_request, failed_pipeline, fixed_pipeline, issue_due, merge_merge_request, merge_when_pipeline_succeeds, moved_project, new_epic, new_issue, new_merge_request, new_note, push_to_merge_request, reassign_issue, reassign_merge_request, reopen_issue, reopen_merge_request, success_pipeline
 - notification_project_get / notification_project_update: project_id*. Update params: level, event booleans
 - notification_group_get / notification_group_update: group_id*. Update params: level, event booleans
 
@@ -11402,9 +11404,9 @@ Keys and namespaces:
 - key_get_with_user: key_id*. Returns SSH key with user info.
 - key_get_by_fingerprint: fingerprint*
 - namespace_list: search, owned_only
-- namespace_get: namespace_id*
-- namespace_exists: namespace*, parent_id
-- namespace_search: search*
+- namespace_get: id* (numeric ID or full path)
+- namespace_exists: id* (namespace path), parent_id
+- namespace_search: query*
 - avatar_get: email*, size
 
 Misc:
@@ -12069,7 +12071,7 @@ Param conventions: * = required. All actions need project_id* (numeric ID or url
 - create: project_id*, title*, content*, format (markdown/rdoc/asciidoc/org)
 - update: project_id*, slug*, title, content, format
 - delete: project_id*, slug*
-- upload_attachment: project_id*, filename*, content_base64 OR file_path (exactly one), branch
+- upload_attachment: project_id*, filename*, content_base64 or file_path (exactly one), branch
 
 See also: gitlab_project (settings/membership), gitlab_repository (file commits), gitlab_snippet (standalone code snippets).
 
@@ -12272,7 +12274,7 @@ Parameter guidance:
 Get and update admin compliance policy settings (CSP namespace configuration).
 Returns: JSON with resource data for get/update actions. Errors: 404 not found, 403 forbidden, 400 invalid params, each with actionable hints.
 
-- get: no params
+- get: (no params)
 - update: csp_namespace_id (int64)
 
 See also: gitlab_admin
@@ -12605,7 +12607,7 @@ Param conventions: * = required.
 - list / list_status: page, per_page
 - get / get_status / delete / repair: id*
 - create: name, url, primary, enabled, internal_url, files_max_capacity, repos_max_capacity, verification_max_capacity, container_repositories_max_capacity, sync_object_storage, selective_sync_type, selective_sync_shards, selective_sync_namespace_ids, minimum_reverification_interval
-- edit: id*, plus create params (except primary, sync_object_storage)
+- edit: id*. Plus the create params, except primary and sync_object_storage.
 
 See also: gitlab_admin
 
@@ -12755,10 +12757,10 @@ Action guidance:
 - list_group: Lists custom member roles available for a specific group_id. Deprecated on self-managed GitLab 17+. Use list_instance instead on self-managed. Still valid on GitLab.com Ultimate.
 - list_instance: Lists all custom member roles defined at the instance level (Ultimate on self-managed, all tiers on GitLab.com). Use this when the prompt asks for custom member roles in general, because list_group is deprecated on self-managed 17+ and returns 400 in that environment.
 Parameter guidance:
-- create_group.base_access_level: access_level. Source: Numeric base access level the custom role extends (5/10/15/20/25/30/40/50). Avoid: Use a valid numeric level (5/10/15/20/25/30/40/50). 60=Admin is not accepted, and do not pass role names like Developer.
+- create_group.base_access_level: access_level. Source: Numeric base access level the custom role extends (10/15/20/25/30/40/50). Avoid: Use a valid numeric level (10/15/20/25/30/40/50). 0, 5=Minimal access and 60=Admin are not accepted, and do not pass role names like Developer.
 - create_group.group_id: scope_group. Source: Top-level group ID or full group path that will own the custom role. Avoid: Use a top-level group, not a subgroup or project. Group-level roles are deprecated on self-managed. Use create_instance there.
 - create_group.name: member_role_name. Source: Short, unique name for the custom role within the group.
-- create_instance.base_access_level: access_level. Source: Numeric base access level the custom role extends (5/10/15/20/25/30/40/50). Avoid: Use a valid numeric level (5/10/15/20/25/30/40/50). 60=Admin is not accepted, and do not pass role names like Developer.
+- create_instance.base_access_level: access_level. Source: Numeric base access level the custom role extends (10/15/20/25/30/40/50). Avoid: Use a valid numeric level (10/15/20/25/30/40/50). 0, 5=Minimal access and 60=Admin are not accepted, and do not pass role names like Developer.
 - create_instance.name: member_role_name. Source: Short, unique name for the custom role from the user's request.
 - delete_group.group_id: scope_group. Source: Top-level group ID or full group path that owns the custom role. Avoid: Use the group that owns the role, not a subgroup or project. Group-level roles are deprecated on self-managed.
 - delete_group.member_role_id: member_role_id. Source: Numeric ID of the group member role to delete, usually from gitlab_list_group_member_roles output. Avoid: Use the role's member_role_id, not its name or a user/member ID. Verify it with gitlab_list_group_member_roles first.
@@ -12769,13 +12771,13 @@ Manage custom member roles at instance or group level. Fine-grained permissions 
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params, each with actionable hints.
 
 Instance-level:
-- list_instance: no params
-- create_instance: name*, base_access_level* (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. 60=Admin is not valid), description, permissions (object)
+- list_instance: (no params)
+- create_instance: name*, base_access_level* (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. 0, 5 and 60 are not valid), description, admin_cicd_variables, admin_compliance_framework, admin_group_member, admin_merge_request, admin_push_rules, admin_terraform_state, admin_vulnerability, admin_web_hook, archive_project, manage_deploy_tokens, manage_group_access_tokens, manage_merge_request_settings, manage_project_access_tokens, manage_security_policy_link, read_code, read_runners, read_dependency, read_vulnerability, remove_group, remove_project (one boolean per permission)
 - delete_instance: member_role_id*
 
 Group-level:
 - list_group: group_id*
-- create_group: group_id*, name*, base_access_level*, description, permissions
+- create_group: group_id*, name*, base_access_level*, description. Same permission booleans as create_instance.
 - delete_group: group_id*, member_role_id*
 
 See also: gitlab_group, gitlab_user
@@ -12989,7 +12991,7 @@ Parameter guidance:
 CRUD project aliases: short names that redirect to projects (admin, Premium/Ultimate).
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params, each with actionable hints.
 
-- list: no params
+- list: (no params)
 - get / delete: name*
 - create: name*, project_id* (int64)
 

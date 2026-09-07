@@ -1,0 +1,796 @@
+// Package main tests the meta description auditor: the extraction rule for
+// both blocks a description enumerates parameters in, the comparison against
+// the routes' input schemas, the report and its exit codes, and one full run
+// over the served surface, which is the CI gate's own assertion.
+package main
+
+import (
+	"bytes"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+)
+
+// metaPreamble is the header StripMetaToolDescriptionPrefix removes, so a test
+// description reaches the enumeration rule the way a served one does.
+const metaPreamble = "Use {\"action\":\"list\",\"params\":{...}}. The only top-level keys are action and params.\n" +
+	"Action params schema: gitlab://tools/gitlab_widget.<action>.\n\n"
+
+// captureStdout redirects the command's report stream into a buffer for the
+// duration of the test.
+func captureStdout(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	out := &bytes.Buffer{}
+	previous := stdout
+	stdout = out
+	t.Cleanup(func() { stdout = previous })
+	return out
+}
+
+// mentionNames reduces parsed mentions to the names they carry, which is what
+// most cases assert on.
+func mentionNames(mentions []mention) []string {
+	names := make([]string, 0, len(mentions))
+	for _, m := range mentions {
+		names = append(names, m.name)
+	}
+	return names
+}
+
+// TestParseEnumerationLine_HouseShapes_ParsedOrSkippedWhole verifies the
+// extraction rule against every shape the served descriptions really use, and
+// against the prose shapes it must refuse.
+//
+// A refusal is the important half. The rule reads a line only when the whole
+// line parses, so a description sentence, a "Returns:" entry and an
+// enumeration ending in a remark are all skipped rather than mined for the
+// words that happen to look like parameter names: a guess here is a false
+// failure, which is worse than a missed one.
+func TestParseEnumerationLine_HouseShapes_ParsedOrSkippedWhole(t *testing.T) {
+	cases := []struct {
+		name   string
+		line   string
+		parsed bool
+		names  []string
+		values map[string][]string
+	}{
+		{name: "single_required_parameter", line: "- feature_delete: name*", parsed: true, names: []string{"name"}},
+		{
+			name:   "annotations_and_enum_values",
+			line:   "- list: search, scope (ALL/NAMESPACES), first (max 100), after (cursor)",
+			parsed: true,
+			names:  []string{"search", "scope", "first", "after"},
+			values: map[string][]string{"scope": {"ALL", "NAMESPACES"}},
+		},
+		{
+			name:   "several_actions_and_alternatives",
+			line:   "- token_project_get / token_group_get: project_id* or group_id*, token_id*",
+			parsed: true,
+			names:  []string{"project_id", "group_id", "token_id"},
+		},
+		{
+			name:   "or_inside_an_annotation_is_not_an_alternative",
+			line:   "- namespace_get: id* (numeric ID or full path)",
+			parsed: true,
+			names:  []string{"id"},
+		},
+		{
+			name:   "comma_inside_an_annotation_stays_one_item",
+			line:   "- freeze_create: project_id*, freeze_start* (cron, e.g. '0 23 * * 5')",
+			parsed: true,
+			names:  []string{"project_id", "freeze_start"},
+		},
+		{name: "leading_parenthetical_remark", line: "- list_all: (admin) type, status", parsed: true, names: []string{"type", "status"}},
+		{name: "no_params_enumerates_nothing", line: "- license_get: (no params)", parsed: true},
+		{
+			name:   "labeled_annotation_is_a_value_set",
+			line:   "- create: base_access_level* (10=Guest, 20=Reporter. 60=Admin is not valid)",
+			parsed: true,
+			names:  []string{"base_access_level"},
+			values: map[string][]string{"base_access_level": {"10", "20"}},
+		},
+		{
+			name:   "remark_after_a_sentence_break_is_dropped",
+			line:   "- create_group: group_id*, name*. Same permission booleans as create_instance.",
+			parsed: true,
+			names:  []string{"group_id", "name"},
+		},
+		{name: "wildcard_action_head", line: "- token_group_*: group_id*", parsed: true, names: []string{"group_id"}},
+		{name: "trailing_prose_item_skips_the_line", line: "- hook_edit: group_id*, hook_id*, same params as hook_add"},
+		{name: "returned_shape_is_not_an_enumeration", line: "- get: {id, full_path, name}."},
+		{name: "guidance_sentence_is_not_an_enumeration", line: "- list: Browse the CI/CD Catalog of published component projects."},
+		{name: "unbalanced_parenthetical_skips_the_line", line: "- get: (admin only"},
+		{name: "not_a_bullet", line: "Returns: a page of issues."},
+		{name: "slashed_parameter_names_skip_the_line", line: "- protected_branch_update: group_id*, allowed_to_push/merge"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, params, ok := parseEnumerationLine(tc.line)
+			if ok != tc.parsed {
+				t.Fatalf("parseEnumerationLine(%q) parsed = %v, want %v", tc.line, ok, tc.parsed)
+			}
+			if !ok {
+				return
+			}
+			if got := mentionNames(params); !slices.Equal(got, tc.names) {
+				t.Errorf("parameter names = %v, want %v", got, tc.names)
+			}
+			for _, m := range params {
+				want := tc.values[m.name]
+				if !slices.Equal(m.values, want) {
+					t.Errorf("%q enum values = %v, want %v", m.name, m.values, want)
+				}
+			}
+		})
+	}
+}
+
+// TestParseEnumerations_StripsPreambleAndReadsTheCuratedBody verifies the
+// enumeration side reads only what survives StripMetaToolDescriptionPrefix,
+// so the action-guidance bullets above the curated body are not mistaken for
+// parameter lines.
+func TestParseEnumerations_StripsPreambleAndReadsTheCuratedBody(t *testing.T) {
+	description := metaPreamble + "Widget actions.\n\n- list: search, first (max 100)\n- get: {id, name}.\n"
+
+	found, _ := parseEnumerations(description)
+	if len(found) != 1 {
+		t.Fatalf("parseEnumerations() = %+v, want the one parameter line", found)
+	}
+	if found[0].text != "- list: search, first (max 100)" {
+		t.Errorf("line = %q, want the enumeration line verbatim", found[0].text)
+	}
+	if got := mentionNames(found[0].params); !slices.Equal(got, []string{"search", "first"}) {
+		t.Errorf("parameter names = %v, want [search first]", got)
+	}
+}
+
+// TestParseEnumerations_RefusedLines_CarryTheirHeadsActions verifies the second
+// return value: a line that opens like an enumeration and did not parse comes
+// back with the action names its head spells, and the "Returns:" block is
+// bounded and skipped whole rather than refused line by line.
+//
+// The block matters because its bullets name real actions and then describe
+// what they answer with. Counting them as refused parameter lines would make
+// the coverage number unreachable, and a coverage number nobody can reach is
+// one nobody reads.
+func TestParseEnumerations_RefusedLines_CarryTheirHeadsActions(t *testing.T) {
+	description := metaPreamble + "Widget actions.\n\n" +
+		"Returns:\n- list / get: array or object, with pagination.\n\n" +
+		"- hook_edit: id*, same params as hook_add\n" +
+		"- Destructive: delete removes everything, irreversibly\n"
+
+	found, refused := parseEnumerations(description)
+	if len(found) != 0 {
+		t.Fatalf("parseEnumerations() parsed %+v, want nothing readable here", found)
+	}
+	if len(refused) != 2 {
+		t.Fatalf("refused = %+v, want the hook_edit line and the Destructive bullet, and not the Returns block", refused)
+	}
+	if refused[0].text != "- hook_edit: id*, same params as hook_add" {
+		t.Errorf("first refusal = %q, want the hook_edit line verbatim", refused[0].text)
+	}
+	if !slices.Equal(refused[0].actions, []string{"hook_edit"}) {
+		t.Errorf("first refusal actions = %v, want [hook_edit]", refused[0].actions)
+	}
+	if !slices.Equal(refused[1].actions, []string{"Destructive"}) {
+		t.Errorf("second refusal actions = %v, want [Destructive], which names no action", refused[1].actions)
+	}
+}
+
+// TestParseEnumerations_ReturnsBlockEndsAtANonBullet verifies the block bound
+// releases at the first line that is not one of its bullets, so an enumeration
+// printed below the returns block is read rather than swallowed with it.
+func TestParseEnumerations_ReturnsBlockEndsAtANonBullet(t *testing.T) {
+	description := metaPreamble + "Widget actions.\n\n" +
+		"Returns:\n- list: array with pagination.\n" +
+		"Errors: 404 not found.\n\n- list: search\n"
+
+	found, refused := parseEnumerations(description)
+	if len(found) != 1 || found[0].text != "- list: search" {
+		t.Fatalf("parseEnumerations() = %+v, want the enumeration below the block", found)
+	}
+	if len(refused) != 0 {
+		t.Errorf("refused = %+v, want none", refused)
+	}
+}
+
+// TestHeadActions_SharedLine_NamesEveryAction verifies a head shared by several
+// actions is attributed to each, since one such line covers them all.
+func TestHeadActions_SharedLine_NamesEveryAction(t *testing.T) {
+	if got := headActions("token_project_get / token_group_get"); !slices.Equal(got, []string{"token_project_get", "token_group_get"}) {
+		t.Errorf("headActions() = %v, want both action names", got)
+	}
+}
+
+// TestDescribesAnAction_OnlyAKnownActionCountsAsCoverage verifies the filter
+// that separates a parameter line the rule could not read from a bullet that
+// merely opens like one.
+func TestDescribesAnAction_OnlyAKnownActionCountsAsCoverage(t *testing.T) {
+	allowed := schemas{byAction: map[string]accepted{"hook_edit": newAccepted()}}
+
+	cases := []struct {
+		name    string
+		actions []string
+		want    bool
+	}{
+		{name: "known_action", actions: []string{"hook_edit"}, want: true},
+		{name: "one_of_several_is_known", actions: []string{"hook_show", "hook_edit"}, want: true},
+		{name: "prose_bullet", actions: []string{"Destructive"}},
+		{name: "no_head_at_all"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := allowed.describesAnAction(tc.actions); got != tc.want {
+				t.Errorf("describesAnAction(%v) = %v, want %v", tc.actions, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestLabeledValues_ReadsTheOfferedSetAndNotTheDenied verifies the extraction
+// both sides of the documented-value comparison share: it finds the labeled
+// list wherever it sits, and stops at the sentence break so a value the prose
+// spells only to deny it is not read as one on offer.
+func TestLabeledValues_ReadsTheOfferedSetAndNotTheDenied(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+		want []string
+	}{
+		{
+			name: "list_the_text_opens_with",
+			text: "10=Guest, 20=Reporter, 30=Developer",
+			want: []string{"10", "20", "30"},
+		},
+		{
+			name: "denial_after_the_sentence_break_is_not_a_value",
+			text: "10=Guest, 20=Reporter. 60=Admin is not valid",
+			want: []string{"10", "20"},
+		},
+		{
+			name: "list_inside_a_parenthetical",
+			text: "Base access level (10=Guest, 20=Reporter). 0, 5 and 60 are not valid",
+			want: []string{"10", "20"},
+		},
+		{
+			name: "nested_parenthetical_inside_an_item",
+			text: "Access level (10=Guest, 15=Planner (Premium), 20=Reporter)",
+			want: []string{"10", "15", "20"},
+		},
+		{name: "prose_with_no_pairs", text: "Numeric ID or full path"},
+		{name: "a_single_pair_is_not_a_set", text: "Access level (30=Developer)"},
+		{name: "a_numeric_right_hand_side_is_not_a_label", text: "first=1, second=2"},
+		{name: "empty"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := labeledValues(tc.text); !slices.Equal(got, tc.want) {
+				t.Errorf("labeledValues(%q) = %v, want %v", tc.text, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestParseGuidance_ReadsTheBlockAndStopsAtItsEnd verifies the guidance rule
+// takes its lines from the "Parameter guidance:" block alone and ends at the
+// first line that is not one of its bullets, so the enumeration block further
+// down is left to the other rule.
+func TestParseGuidance_ReadsTheBlockAndStopsAtItsEnd(t *testing.T) {
+	description := "Action guidance:\n- list: Browse the catalog.\n\n" +
+		"Parameter guidance:\n" +
+		"- list.scope: catalog_scope. Source: ALL or NAMESPACES.\n" +
+		"- get.full_path: project_path. Source: namespace/project.\n" +
+		"\n- list: search, scope (ALL/NAMESPACES)\n"
+
+	found := parseGuidance(description)
+	if len(found) != 2 {
+		t.Fatalf("parseGuidance() = %+v, want the two guidance lines", found)
+	}
+	if found[0].action != "list" || found[0].param != "scope" {
+		t.Errorf("first guidance = %+v, want list.scope", found[0])
+	}
+	if found[1].action != "get" || found[1].param != "full_path" {
+		t.Errorf("second guidance = %+v, want get.full_path", found[1])
+	}
+	if !strings.HasPrefix(found[0].text, "- list.scope:") {
+		t.Errorf("line = %q, want the guidance line verbatim", found[0].text)
+	}
+}
+
+// TestAcceptedAdd_SchemaShapes_CollectsNamesAndStringEnums verifies the
+// accepted side reads top-level property names and the string enum values
+// beside them, and survives every shape a schema can arrive in without one.
+func TestAcceptedAdd_SchemaShapes_CollectsNamesAndStringEnums(t *testing.T) {
+	cases := []struct {
+		name   string
+		schema map[string]any
+		names  []string
+		values map[string][]string
+	}{
+		{name: "nil_schema_adds_nothing", schema: nil},
+		{name: "properties_of_the_wrong_type", schema: map[string]any{"properties": []any{"scope"}}},
+		{
+			name:   "property_that_is_not_an_object",
+			schema: map[string]any{"properties": map[string]any{"scope": "string"}},
+			names:  []string{"scope"},
+		},
+		{
+			name:   "property_without_an_enum",
+			schema: map[string]any{"properties": map[string]any{"search": map[string]any{"type": "string"}}},
+			names:  []string{"search"},
+		},
+		{
+			name: "enum_keeps_only_its_string_values",
+			schema: map[string]any{"properties": map[string]any{
+				"scope": map[string]any{"type": "string", "enum": []any{"ALL", 30, "NAMESPACES"}},
+			}},
+			names:  []string{"scope"},
+			values: map[string][]string{"scope": {"ALL", "NAMESPACES"}},
+		},
+		{
+			name: "description_that_spells_no_set_documents_nothing",
+			schema: map[string]any{"properties": map[string]any{
+				"search": map[string]any{"type": "string", "description": "Free-text search"},
+			}},
+			names: []string{"search"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			allowed := newAccepted()
+			allowed.add(tc.schema)
+
+			names := make([]string, 0, len(allowed.names))
+			for name := range allowed.names {
+				names = append(names, name)
+			}
+			slices.Sort(names)
+			if !slices.Equal(names, tc.names) {
+				t.Errorf("names = %v, want %v", names, tc.names)
+			}
+			for name, want := range tc.values {
+				for _, value := range want {
+					if !allowed.values[name][value] {
+						t.Errorf("%q enum does not carry %q", name, value)
+					}
+				}
+			}
+			if len(tc.values) == 0 && len(allowed.values) != 0 {
+				t.Errorf("values = %v, want none", allowed.values)
+			}
+		})
+	}
+}
+
+// TestAcceptedAdd_DescribedValueSets_AreUnionedAcrossRoutes verifies the
+// documented side: a property whose description spells a labeled value set
+// contributes those values, and two routes describing one parameter contribute
+// both sets rather than one overwriting the other. Pooling is what keeps a
+// value that is real on one route from being condemned by another route's
+// narrower sentence.
+func TestAcceptedAdd_DescribedValueSets_AreUnionedAcrossRoutes(t *testing.T) {
+	allowed := newAccepted()
+	allowed.add(map[string]any{"properties": map[string]any{
+		"level": map[string]any{"type": "integer", "description": "Access level (10=Guest, 20=Reporter). 5 is not valid"},
+	}})
+	allowed.add(map[string]any{"properties": map[string]any{
+		"level": map[string]any{"type": "integer", "description": "Access level (30=Developer, 40=Maintainer)"},
+	}})
+
+	for _, value := range []string{"10", "20", "30", "40"} {
+		t.Run(value, func(t *testing.T) {
+			if !allowed.documented["level"][value] {
+				t.Errorf("documented set = %v, want it to carry %q", allowed.documented["level"], value)
+			}
+		})
+	}
+	t.Run("denied_value", func(t *testing.T) {
+		if allowed.documented["level"]["5"] {
+			t.Error("documented set carries 5, which the description denies rather than offers")
+		}
+	})
+}
+
+// TestSchemaMap_UnreadableSchemas_DecodeToNothing verifies a served schema
+// that is not a JSON object yields no accepted names rather than a panic. A
+// tool with no schema and one whose schema cannot be marshaled are both
+// simply nothing to compare a description against.
+func TestSchemaMap_UnreadableSchemas_DecodeToNothing(t *testing.T) {
+	cases := []struct {
+		name   string
+		schema any
+		want   bool
+	}{
+		{name: "nil"},
+		{name: "unmarshalable", schema: make(chan int)},
+		{name: "not_an_object", schema: 42},
+		{name: "object", schema: map[string]any{"type": "object"}, want: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := schemaMap(tc.schema) != nil; got != tc.want {
+				t.Errorf("schemaMap(%v) != nil = %v, want %v", tc.schema, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestJudge_EnumerationLine_ReportsUnknownNamesAndValues verifies the three
+// enumeration findings and the case that must stay silent: a parameter whose
+// routes publish neither an enum nor a described value set has its spelled
+// values left unjudged, because the prose is then the only description of the
+// value set there is.
+func TestJudge_EnumerationLine_ReportsUnknownNamesAndValues(t *testing.T) {
+	allowed := newAccepted()
+	allowed.add(map[string]any{"properties": map[string]any{
+		"scope":  map[string]any{"type": "string", "enum": []any{"ALL", "NAMESPACES"}},
+		"state":  map[string]any{"type": "string"},
+		"search": map[string]any{"type": "string"},
+		"level":  map[string]any{"type": "integer", "description": "Access level (10=Guest, 20=Reporter)"},
+	}})
+
+	cases := []struct {
+		name  string
+		line  enumeration
+		kinds []string
+		want  []string
+	}{
+		{name: "known_name_and_value", line: enumeration{params: []mention{{name: "scope", values: []string{"ALL"}}}}},
+		{
+			name:  "unknown_name",
+			line:  enumeration{params: []mention{{name: "confidence"}}},
+			kinds: []string{kindParameter},
+			want:  []string{"confidence"},
+		},
+		{
+			name:  "unknown_value",
+			line:  enumeration{params: []mention{{name: "scope", values: []string{"NAMESPACED"}}}},
+			kinds: []string{kindEnumValue},
+			want:  []string{"scope=NAMESPACED"},
+		},
+		{name: "value_of_a_parameter_that_publishes_no_set", line: enumeration{params: []mention{{name: "state", values: []string{"opened", "closed"}}}}},
+		{name: "documented_value", line: enumeration{params: []mention{{name: "level", values: []string{"10"}}}}},
+		{
+			name:  "value_outside_the_documented_set",
+			line:  enumeration{params: []mention{{name: "level", values: []string{"5"}}}},
+			kinds: []string{kindDocValue},
+			want:  []string{"level=5"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			found := judge("gitlab_widget", tc.line, allowed)
+			if len(found) != len(tc.want) {
+				t.Fatalf("judge() = %+v, want %d finding(s)", found, len(tc.want))
+			}
+			for i, f := range found {
+				if f.detail != tc.want[i] || f.kind != tc.kinds[i] {
+					t.Errorf("finding %d = %s/%s, want %s/%s", i, f.kind, f.detail, tc.kinds[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+// TestJudgeGuidance_PerAction_ReportsOnlyAKnownActionsUnknownParameter
+// verifies the guidance side is judged against the action its own line names,
+// and stays silent for an action the catalog does not know: the standalone
+// meta tools carry no per-action schemas, and condemning them would report a
+// missing lookup as a stale description.
+func TestJudgeGuidance_PerAction_ReportsOnlyAKnownActionsUnknownParameter(t *testing.T) {
+	perAction := newAccepted()
+	perAction.add(map[string]any{"properties": map[string]any{"commit_sha": map[string]any{"type": "string"}}})
+	allowed := schemas{union: perAction, byAction: map[string]accepted{"discussion_list": perAction}}
+
+	cases := []struct {
+		name      string
+		mentioned guidance
+		want      string
+	}{
+		{name: "known_action_known_parameter", mentioned: guidance{action: "discussion_list", param: "commit_sha"}},
+		{name: "unknown_action", mentioned: guidance{action: "not_an_action", param: "commit_id"}},
+		{name: "known_action_unknown_parameter", mentioned: guidance{action: "discussion_list", param: "commit_id"}, want: "discussion_list.commit_id"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			found := judgeGuidance("gitlab_widget", tc.mentioned, allowed)
+			if tc.want == "" {
+				if len(found) != 0 {
+					t.Fatalf("judgeGuidance() = %+v, want no finding", found)
+				}
+				return
+			}
+			if len(found) != 1 || found[0].detail != tc.want || found[0].kind != kindGuidance {
+				t.Fatalf("judgeGuidance() = %+v, want one guidance finding %q", found, tc.want)
+			}
+		})
+	}
+}
+
+// testCatalog returns a one-group catalog whose single action accepts the
+// named parameters, which is enough to drive acceptedFor and audit without
+// building the real catalog.
+func testCatalog(t *testing.T, toolName, actionName string, parameters ...string) *actioncatalog.Catalog {
+	t.Helper()
+	properties := make(map[string]any, len(parameters))
+	for _, parameter := range parameters {
+		properties[parameter] = map[string]any{"type": "string"}
+	}
+	catalog := actioncatalog.NewCatalog()
+	action := actioncatalog.Action{
+		Name:         actionName,
+		OwnerPackage: "tools",
+		Route:        toolutil.ActionRoute{InputSchema: map[string]any{"type": "object", "properties": properties}},
+	}
+	options := actioncatalog.GroupOptions{ToolName: toolName, OwnerPackage: "tools", SurfaceKind: actioncatalog.SurfaceKindMetaGroup}
+	if err := catalog.AddAction(toolName, action, options); err != nil {
+		t.Fatalf("AddAction() error: %v", err)
+	}
+	return catalog
+}
+
+// TestAcceptedFor_GroupOrStandalone_ReadsTheRightSchemas verifies where the
+// accepted names come from on each side of the meta surface: a catalog group
+// pools its routes and keeps them per action too, while a standalone tool,
+// which is no group, is compared against its own input schema.
+func TestAcceptedFor_GroupOrStandalone_ReadsTheRightSchemas(t *testing.T) {
+	catalog := testCatalog(t, "gitlab_widget", "list", "search", "scope")
+
+	t.Run("catalog_group", func(t *testing.T) {
+		allowed := acceptedFor(&mcp.Tool{Name: "gitlab_widget"}, catalog)
+		if !allowed.union.names["search"] || !allowed.union.names["scope"] {
+			t.Errorf("union names = %v, want the route's parameters", allowed.union.names)
+		}
+		if !allowed.byAction["list"].names["search"] {
+			t.Errorf("per-action names = %+v, want the route's parameters under list", allowed.byAction)
+		}
+	})
+
+	t.Run("standalone_tool", func(t *testing.T) {
+		tool := &mcp.Tool{Name: "gitlab_discover_project", InputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"remote_url": map[string]any{"type": "string"}},
+		}}
+		allowed := acceptedFor(tool, catalog)
+		if !allowed.union.names["remote_url"] {
+			t.Errorf("union names = %v, want the tool's own schema", allowed.union.names)
+		}
+		if len(allowed.byAction) != 0 {
+			t.Errorf("byAction = %+v, want none for a tool that is no group", allowed.byAction)
+		}
+	})
+}
+
+// TestAudit_BothBlocks_CountsLinesAndSortsFindings verifies audit reads both
+// blocks of a served description, counts every line it read, and orders the
+// findings by tool, then kind, then detail.
+func TestAudit_BothBlocks_CountsLinesAndSortsFindings(t *testing.T) {
+	catalog := testCatalog(t, "gitlab_widget", "list", "search")
+	tool := &mcp.Tool{Name: "gitlab_widget", Description: metaPreamble +
+		"Parameter guidance:\n- list.query: search_term. Source: the prompt.\n\n" +
+		"Widget actions.\n\n- list: search, query\n"}
+
+	findings, lines, refused := audit([]*mcp.Tool{tool}, catalog)
+	if len(refused) != 0 {
+		t.Fatalf("refused = %+v, want none", refused)
+	}
+	if lines != 2 {
+		t.Fatalf("lines read = %d, want the guidance line plus the enumeration line", lines)
+	}
+	if len(findings) != 2 {
+		t.Fatalf("findings = %+v, want one per block", findings)
+	}
+	if findings[0].kind != kindGuidance || findings[0].detail != "list.query" {
+		t.Errorf("first finding = %+v, want the guidance one, which sorts first", findings[0])
+	}
+	if findings[1].kind != kindParameter || findings[1].detail != "query" {
+		t.Errorf("second finding = %+v, want the enumeration one", findings[1])
+	}
+}
+
+// TestAudit_RefusedLines_KeepsOnlyTheOnesAboutAnAction verifies audit passes a
+// refused line through only when its head names an action of the group, which
+// is what makes the refused count a work list rather than a tally of every
+// bullet the descriptions happen to open with a colon.
+func TestAudit_RefusedLines_KeepsOnlyTheOnesAboutAnAction(t *testing.T) {
+	catalog := testCatalog(t, "gitlab_widget", "list", "search")
+	tool := &mcp.Tool{Name: "gitlab_widget", Description: metaPreamble + "Widget actions.\n\n" +
+		"- list: search, same params as get\n" +
+		"- Destructive: delete removes everything, irreversibly\n"}
+
+	findings, lines, refused := audit([]*mcp.Tool{tool}, catalog)
+	if len(findings) != 0 || lines != 0 {
+		t.Fatalf("audit() = %+v over %d line(s), want nothing readable here", findings, lines)
+	}
+	if len(refused) != 1 {
+		t.Fatalf("refused = %+v, want the list line alone", refused)
+	}
+	if refused[0].tool != "gitlab_widget" || refused[0].line != "- list: search, same params as get" {
+		t.Errorf("refusal = %+v, want the list line attributed to the tool", refused[0])
+	}
+}
+
+// TestForLine_SingleActionLine_IsHeldToThatActionsSchema verifies which side of
+// the comparison one enumeration line gets: a line about one known action is
+// judged against that action alone, while a shared line and a wildcard head
+// fall back to the group's pooled union, which is the only set that can hold a
+// line whose items belong to different actions.
+func TestForLine_SingleActionLine_IsHeldToThatActionsSchema(t *testing.T) {
+	perAction := newAccepted()
+	perAction.add(map[string]any{"properties": map[string]any{"search": map[string]any{"type": "string"}}})
+	pooled := newAccepted()
+	pooled.add(map[string]any{"properties": map[string]any{
+		"search": map[string]any{"type": "string"},
+		"query":  map[string]any{"type": "string"},
+	}})
+	allowed := schemas{union: pooled, byAction: map[string]accepted{"list": perAction}}
+
+	cases := []struct {
+		name    string
+		actions []string
+		pooled  bool
+	}{
+		{name: "one_known_action", actions: []string{"list"}},
+		{name: "one_head_no_action_answers_to", actions: []string{"token_group_*"}, pooled: true},
+		{name: "line_shared_by_several_actions", actions: []string{"list", "get"}, pooled: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := allowed.forLine(tc.actions).names["query"]; got != tc.pooled {
+				t.Errorf("forLine(%v) accepts a sibling's parameter = %v, want %v", tc.actions, got, tc.pooled)
+			}
+		})
+	}
+}
+
+// TestAudit_SingleActionLine_ReportsASiblingsParameter verifies the rule where
+// it matters: a line naming one action that offers a parameter only another
+// action of the group accepts is reported. The pooled union used to accept it,
+// which is how gitlab_project offered pages_update a pages_access_level that
+// belongs to project.update.
+func TestAudit_SingleActionLine_ReportsASiblingsParameter(t *testing.T) {
+	catalog := testCatalog(t, "gitlab_widget", "list", "search")
+	sibling := actioncatalog.Action{
+		Name:         "update",
+		OwnerPackage: "tools",
+		Route: toolutil.ActionRoute{InputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"name": map[string]any{"type": "string"}},
+		}},
+	}
+	options := actioncatalog.GroupOptions{ToolName: "gitlab_widget", OwnerPackage: "tools", SurfaceKind: actioncatalog.SurfaceKindMetaGroup}
+	if err := catalog.AddAction("gitlab_widget", sibling, options); err != nil {
+		t.Fatalf("AddAction() error: %v", err)
+	}
+	tool := &mcp.Tool{Name: "gitlab_widget", Description: metaPreamble + "Widget actions.\n\n- list: search, name\n"}
+
+	findings, _, _ := audit([]*mcp.Tool{tool}, catalog)
+	if len(findings) != 1 || findings[0].kind != kindParameter || findings[0].detail != "name" {
+		t.Fatalf("audit() = %+v, want the sibling's parameter reported against list", findings)
+	}
+}
+
+// TestAudit_SortsAcrossTools verifies the tool name orders the report before
+// the kind does, so a growing catalog cannot reshuffle an unchanged report.
+func TestAudit_SortsAcrossTools(t *testing.T) {
+	catalog := actioncatalog.NewCatalog()
+	body := metaPreamble + "Widget actions.\n\n- list: query\n"
+	served := []*mcp.Tool{
+		{Name: "gitlab_zeta", Description: body},
+		{Name: "gitlab_alpha", Description: body},
+	}
+
+	findings, _, _ := audit(served, catalog)
+	if len(findings) != 2 || findings[0].tool != "gitlab_alpha" || findings[1].tool != "gitlab_zeta" {
+		t.Fatalf("findings = %+v, want them ordered by tool name", findings)
+	}
+}
+
+// TestAudit_SortsByDetailWithinAKind verifies two findings of one kind on one
+// tool are ordered by what they name, which is the last tie-break and the one
+// that keeps a multi-parameter line reported in a stable order.
+func TestAudit_SortsByDetailWithinAKind(t *testing.T) {
+	catalog := testCatalog(t, "gitlab_widget", "list", "search")
+	tool := &mcp.Tool{Name: "gitlab_widget", Description: metaPreamble + "Widget actions.\n\n- list: query, filter\n"}
+
+	findings, _, _ := audit([]*mcp.Tool{tool}, catalog)
+	if len(findings) != 2 || findings[0].detail != "filter" || findings[1].detail != "query" {
+		t.Fatalf("findings = %+v, want them ordered by the name they report", findings)
+	}
+}
+
+// TestAudit_SortsByLineWhenEverythingElseTies verifies two findings that agree
+// on tool, kind and detail are ordered by the line they came from: six actions
+// of one tool offering one wrong parameter tie on every other part of the key,
+// and without the line they printed in a different order from run to run.
+func TestAudit_SortsByLineWhenEverythingElseTies(t *testing.T) {
+	catalog := testCatalog(t, "gitlab_widget", "list", "search")
+	tool := &mcp.Tool{Name: "gitlab_widget", Description: metaPreamble +
+		"Widget actions.\n\n- search: query\n- list: query\n"}
+
+	findings, _, _ := audit([]*mcp.Tool{tool}, catalog)
+	if len(findings) != 2 || findings[0].line != "- list: query" || findings[1].line != "- search: query" {
+		t.Fatalf("findings = %+v, want them ordered by the line each came from", findings)
+	}
+}
+
+// TestReport_FindingsAndExitCodes verifies the report prints one line per
+// finding plus the summary, that a refused line is counted always and named
+// only under -uncovered, and that only -check turns a finding into a non-zero
+// exit: the plain report is meant to be readable during a fix.
+func TestReport_FindingsAndExitCodes(t *testing.T) {
+	found := []finding{{tool: "gitlab_widget", kind: kindParameter, detail: "confidence", line: "- list: confidence"}}
+	refused := []skipped{{tool: "gitlab_widget", line: "- hook_edit: id*, same params as hook_add"}}
+
+	cases := []struct {
+		name      string
+		findings  []finding
+		refused   []skipped
+		check     bool
+		uncovered bool
+		code      int
+		contains  string
+		absent    string
+	}{
+		{name: "clean_run", contains: "7 description line(s) read, 0 refused, every parameter and value they offer exists"},
+		{name: "findings_without_check", findings: found, contains: "7 description line(s) read, 0 refused, 1 disagree with the schemas"},
+		{name: "findings_under_check", findings: found, check: true, code: 1, contains: "confidence"},
+		{
+			name:     "refused_lines_are_counted_but_not_named",
+			refused:  refused,
+			contains: "7 description line(s) read, 1 refused",
+			absent:   "hook_edit",
+		},
+		{
+			name:      "uncovered_names_them",
+			refused:   refused,
+			uncovered: true,
+			contains:  "- hook_edit: id*, same params as hook_add",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := captureStdout(t)
+			if got := report(tc.findings, 7, tc.refused, tc.check, tc.uncovered); got != tc.code {
+				t.Errorf("report() = %d, want %d", got, tc.code)
+			}
+			if !strings.Contains(out.String(), tc.contains) {
+				t.Errorf("stdout = %q, want it to contain %q", out.String(), tc.contains)
+			}
+			if tc.absent != "" && strings.Contains(out.String(), tc.absent) {
+				t.Errorf("stdout = %q, want it not to name %q without -uncovered", out.String(), tc.absent)
+			}
+		})
+	}
+}
+
+// TestRun_ServedSurface_IsClean is the gate's own assertion: every parameter
+// and value the served meta descriptions offer is one the actions behind them
+// accept, and every line that describes an action's parameters is one the rule
+// can read. A description that goes stale fails here rather than telling a
+// model to send a parameter GitLab refuses, and a line rewritten back into
+// prose fails here rather than quietly leaving the check.
+func TestRun_ServedSurface_IsClean(t *testing.T) {
+	out := captureStdout(t)
+
+	if got := run(true, true); got != 0 {
+		t.Fatalf("run(check=true) = %d, want 0\nstdout:\n%s", got, out.String())
+	}
+	if !strings.Contains(out.String(), "0 refused, every parameter and value they offer exists") {
+		t.Errorf("stdout = %q, want the all-clear summary with nothing refused", out.String())
+	}
+}

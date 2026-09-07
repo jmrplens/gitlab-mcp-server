@@ -18,26 +18,26 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,769 |
-| Unit test functions                                   | 14,166 |
+| Total test functions                                  | 14,801 |
+| Unit test functions                                   | 14,198 |
 | E2E test functions                                    |    603 |
-| cmd test functions                                    |  2,846 |
-| Test files (internal/)                                |    518 |
-| Test files (cmd/)                                     |    194 |
+| cmd test functions                                    |  2,869 |
+| Test files (internal/)                                |    519 |
+| Test files (cmd/)                                     |    195 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     22 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  98.3% |
 | Overall coverage (`go test ./internal/...`)           |  98.6% |
-| Average package coverage                              |  98.7% |
+| Average package coverage                              |  98.6% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,837 | 80.1% |
+| `TestFunc_Scenario` (2-part)           | 11,849 | 80.1% |
 | `TestFunc` (no underscore)             |    981 |  6.6% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,951 | 13.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,971 | 13.3% |
 
 ## Test Distribution
 
@@ -46,11 +46,11 @@
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,426 |        144 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            332 |         15 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,562 |        359 | domain-specific GitLab tool handlers                                                            |
+| Tools orchestration     |            339 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Tool sub-packages (177) |          8,564 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            603 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,846 |        194 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,769** |    **952** |                                                                                                 |
+| cmd packages            |          2,869 |        195 | server entry point and developer command utilities                                              |
+| **Total**               |     **14,801** |    **954** |                                                                                                 |
 
 ### Core Packages
 
@@ -98,7 +98,7 @@
 | awardemoji        |   113 |   100.0% |    24 |
 | pipelines         |   110 |   100.0% |    12 |
 | runners           |   109 |   100.0% |    19 |
-| workitems         |   102 |   100.0% |     6 |
+| workitems         |   103 |   100.0% |     6 |
 | containerregistry |   101 |   100.0% |    16 |
 | accesstokens      |    97 |   100.0% |    18 |
 | branches          |    95 |   100.0% |    10 |
@@ -108,7 +108,7 @@
 | integrations      |    87 |    99.6% |    12 |
 | files             |    84 |   100.0% |     8 |
 | mrapprovals       |    84 |   100.0% |     7 |
-| tags              |    83 |   100.0% |     9 |
+| groupmembers      |    83 |   100.0% |    10 |
 
 ### Complete Tool Sub-Package Test Counts
 
@@ -187,7 +187,7 @@
 | grouplabels             |        54 |          2 |   100.0% |         7 |
 | groupldap               |        14 |          2 |   100.0% |         5 |
 | groupmarkdownuploads    |        37 |          2 |   100.0% |         3 |
-| groupmembers            |        82 |          3 |   100.0% |        10 |
+| groupmembers            |        83 |          3 |   100.0% |        10 |
 | groupmilestones         |        90 |          2 |   100.0% |         8 |
 | groupprotectedbranches  |        16 |          2 |   100.0% |         5 |
 | groupprotectedenvs      |        19 |          2 |   100.0% |         5 |
@@ -292,9 +292,9 @@
 | vulnerabilities         |        65 |          3 |   100.0% |         8 |
 | waitpoll                |        13 |          1 |    99.2% |         0 |
 | wikis                   |        61 |          2 |   100.0% |         6 |
-| workitems               |       102 |          3 |   100.0% |         6 |
+| workitems               |       103 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        51 |          4 |   100.0% |         7 |
-| **Total**               | **8,562** |    **359** |          | **1,187** |
+| **Total**               | **8,564** |    **359** |          | **1,187** |
 
 </details>
 
@@ -324,6 +324,7 @@
 | cmd/audit_graphql_documents                    |    93.6% |
 | cmd/audit_install_buttons                      |    84.2% |
 | cmd/audit_md_escaping                          |   100.0% |
+| cmd/audit_meta_descriptions                    |    96.7% |
 | cmd/audit_metrics                              |    97.8% |
 | cmd/audit_readonly_graphql                     |    90.8% |
 | cmd/audit_string_dupes                         |    92.1% |
@@ -392,7 +393,7 @@
 
 | Package                 | Coverage |
 | ----------------------- | -------: |
-| tools (orch.)           |    98.9% |
+| tools (orch.)           |   100.0% |
 | accessrequests          |   100.0% |
 | accesstokens            |   100.0% |
 | achievements            |   100.0% |

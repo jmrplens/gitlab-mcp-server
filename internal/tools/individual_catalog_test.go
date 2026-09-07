@@ -385,6 +385,68 @@ func TestRegisterIndividualCatalogTools_DestructiveConfirmationDeclined(t *testi
 	}
 }
 
+// TestRegisterIndividualCatalogTools_ForgedRequestState_FailsClosed verifies
+// the destructive guard's own failure path: when the confirmation state cannot
+// be read at all, the call fails rather than proceeding.
+//
+// A requestState this server never issued is the shape that matters, because it
+// is the one an attacker can send. Reading it fails, and the only safe answer to
+// "I cannot tell whether this was confirmed" is to refuse: a guard that fell
+// through to the handler on an unreadable state would be a guard anyone could
+// switch off by sending garbage.
+func TestRegisterIndividualCatalogTools_ForgedRequestState_FailsClosed(t *testing.T) {
+	var called atomic.Bool
+	spec := toolutil.NewActionSpec("delete", toolutil.RouteAction(nil,
+		func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+			called.Store(true)
+			return struct{}{}, nil
+		}), toolutil.ActionSpecOptions{
+		Destructive:    true,
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_delete", Title: "Delete", Description: "Delete test."},
+	})
+	catalog := testIndividualCatalog(t, spec)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
+	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{})
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirmed": true}}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		_ = serverSession.Close()
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Close()
+	})
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:         "gitlab_test_delete",
+		Arguments:    map[string]any{},
+		RequestState: "not-a-state-this-server-issued",
+	})
+
+	// The SDK surfaces a handler's coded error as a transport error or as an
+	// error result depending on the negotiated revision; what must not happen
+	// is a successful call.
+	if err == nil && (result == nil || !result.IsError) {
+		t.Fatalf("a forged requestState was accepted (result = %+v); the guard can be bypassed by sending one", result)
+	}
+	if called.Load() {
+		t.Error("the destructive route ran despite a confirmation that could not be read")
+	}
+}
+
 // TestRegisterIndividualCatalogTools_InputRequiredResultSurfaced verifies
 // that individualCatalogHandler surfaces an *elicitation.InputRequiredError
 // returned by a route handler as a successful tool result instead of a

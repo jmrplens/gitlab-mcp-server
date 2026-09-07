@@ -135,8 +135,11 @@ const (
 )
 
 // baseAccessLevelConfusion is the shared CommonConfusions note for the
-// base_access_level parameter on the create actions.
-var baseAccessLevelConfusion = []string{"Use a valid numeric level (5/10/15/20/25/30/40/50). 60=Admin is not accepted, and do not pass role names like Developer."}
+// base_access_level parameter on the create actions. The set is the one
+// doc/api/member_roles.md publishes for the attribute: 10, 15, 20, 25, 30, 40
+// and 50. Minimal access (5) is a membership level and not a level a custom
+// role may extend, so offering it here sent a value GitLab refuses.
+var baseAccessLevelConfusion = []string{"Use a valid numeric level (10/15/20/25/30/40/50). 0, 5=Minimal access and 60=Admin are not accepted, and do not pass role names like Developer."}
 
 // memberRoleActionMeta maps each canonical member role action name to its
 // non-generic Usage, natural-language Aliases, canonical RelatedActions,
@@ -175,7 +178,7 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 			},
 			"base_access_level": {
 				SemanticRole:     "access_level",
-				ValueSource:      "Numeric base access level the custom role extends (5/10/15/20/25/30/40/50).",
+				ValueSource:      "Numeric base access level the custom role extends (10/15/20/25/30/40/50).",
 				ExampleBinding:   "params.base_access_level:30",
 				CommonConfusions: baseAccessLevelConfusion,
 			},
@@ -200,7 +203,7 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 			},
 			"base_access_level": {
 				SemanticRole:     "access_level",
-				ValueSource:      "Numeric base access level the custom role extends (5/10/15/20/25/30/40/50).",
+				ValueSource:      "Numeric base access level the custom role extends (10/15/20/25/30/40/50).",
 				ExampleBinding:   "params.base_access_level:30",
 				CommonConfusions: baseAccessLevelConfusion,
 			},

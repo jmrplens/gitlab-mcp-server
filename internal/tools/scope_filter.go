@@ -11,6 +11,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 )
 
+// addFilteredGroup re-adds a group to the catalog a filter is rebuilding. It is
+// a variable so a test can drive the failure the guard around it exists for:
+// every real call hands back a group the source catalog already normalized,
+// under a name that is unique there, so no configuration an operator can write
+// makes it fail. The guard stays because group normalization is free to gain a
+// rule, and a filter that swallowed such a failure would serve a catalog
+// missing a domain with nothing said about it.
+var addFilteredGroup = (*actioncatalog.Catalog).AddGroup
+
 // MetaToolScopes maps meta-tool names to the PAT scopes required for that
 // tool. Tools not listed here have no scope requirement and are always
 // registered. A tool is removed when ANY of its required scopes is missing
@@ -132,7 +141,7 @@ func FilterScopeFilteredCatalog(catalog *actioncatalog.Catalog, tokenScopes []st
 			)
 			continue
 		}
-		if err := filtered.AddGroup(group); err != nil {
+		if err := addFilteredGroup(filtered, group); err != nil {
 			return nil, fmt.Errorf("add scope-filtered catalog group %q: %w", group.ToolName, err)
 		}
 	}

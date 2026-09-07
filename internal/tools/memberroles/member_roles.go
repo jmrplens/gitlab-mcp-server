@@ -26,6 +26,11 @@ type ListGroupInput struct {
 // [Permissions]) and is the canonical typed pairing the shared options builder
 // consumes, so the SDK Options literal is attributed here rather than to the
 // permission-only [Permissions] fragment.
+//
+// base_access_level accepts 10, 15, 20, 25, 30, 40 and 50, which is the set
+// doc/api/member_roles.md publishes for the attribute. Minimal access (5) is a
+// membership level and not one a custom role may extend: the served prose used
+// to offer it, and GitLab refuses it.
 type CreateInstanceInput struct {
 	Name            string `json:"name"              jsonschema:"Name of the custom role,required"`
 	BaseAccessLevel int    `json:"base_access_level" jsonschema:"Base access level (10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner). 0, 5 and 60 are not valid,required"`
@@ -285,7 +290,7 @@ func CreateInstance(ctx context.Context, client *gitlabclient.Client, in CreateI
 	role, _, err := client.GL().MemberRolesService.CreateInstanceMemberRole(opts)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("create instance member role", err, http.StatusBadRequest,
-			"requires admin + self-managed Ultimate; base_access_level must be 5/10/15/20/25/30/40/50 (Minimal/Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner); 60=Admin is not valid; name must be unique; permissions are a list of valid permission strings")
+			"requires admin + self-managed Ultimate; base_access_level must be 10/15/20/25/30/40/50 (Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner); 0, 5=Minimal access and 60=Admin are not valid; name must be unique; permissions are a list of valid permission strings")
 	}
 	return toOutput(role), nil
 }
@@ -318,7 +323,7 @@ func CreateGroup(ctx context.Context, client *gitlabclient.Client, in CreateGrou
 			return Output{}, toolutil.WrapErrWithHint("create group member role", err, groupMemberRoleSelfManagedHint)
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("create group member role", err, http.StatusBadRequest,
-			"requires Owner + Ultimate; base_access_level 5/10/15/20/25/30/40/50 (60=Admin is not valid); name unique within group; permissions must be valid; group_id must reference a top-level group")
+			"requires Owner + Ultimate; base_access_level 10/15/20/25/30/40/50 (0, 5=Minimal access and 60=Admin are not valid); name unique within group; permissions must be valid; group_id must reference a top-level group")
 	}
 	return toOutput(role), nil
 }

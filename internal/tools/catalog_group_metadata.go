@@ -83,7 +83,15 @@ func loadCatalogIndividualToolDescriptions() map[string]string {
 // prefix when present. Falls back to a deterministic "<domain> actions"
 // sentence when the curated snapshot is missing or its stripped form
 // is empty.
-func catalogGroupDescription(toolName string, _ toolutil.ActionMap) string {
+//
+// It used to take the group's actions and discard them, which read as a
+// promise that the prose was derived from them. It is not: the text comes
+// from the snapshot the regenerator writes from this same function, so the
+// round trip can never notice a description that has gone stale. What
+// compares the two is cmd/audit_meta_descriptions, which reads the served
+// description on one side and the routes' input schemas on the other
+// (make check-meta-descriptions).
+func catalogGroupDescription(toolName string) string {
 	fullDescription := catalogMetaToolDescriptions[toolName]
 	if fullDescription != "" {
 		baseDescription := toolutil.StripMetaToolDescriptionPrefix(fullDescription)

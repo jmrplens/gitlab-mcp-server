@@ -3,10 +3,12 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -14,6 +16,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestRemoveScopeFilteredTools_NilScopes verifies that nil token scopes
@@ -154,6 +157,62 @@ func TestFilterScopeFilteredCatalog_NilCatalog(t *testing.T) {
 	}
 	if filtered.CountGroups() != 0 || filtered.CountActions() != 0 {
 		t.Fatalf("filtered counts = groups %d actions %d, want empty catalog", filtered.CountGroups(), filtered.CountActions())
+	}
+}
+
+// scopeFilterTestCatalog returns a one-group catalog the scope filter keeps
+// whole: its tool name is in no MetaToolScopes entry, so every token scope
+// carries it through to the rebuild.
+func scopeFilterTestCatalog(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
+	catalog := actioncatalog.NewCatalog()
+	action := actioncatalog.Action{
+		Name:         "list",
+		OwnerPackage: "tools",
+		Route:        toolutil.ActionRoute{InputSchema: map[string]any{"type": "object"}},
+	}
+	options := actioncatalog.GroupOptions{
+		ToolName:     "gitlab_scope_filter_fixture",
+		OwnerPackage: "tools",
+		SurfaceKind:  actioncatalog.SurfaceKindMetaGroup,
+	}
+	if err := catalog.AddAction(options.ToolName, action, options); err != nil {
+		t.Fatalf("AddAction() error: %v", err)
+	}
+	return catalog
+}
+
+// failAddFilteredGroup makes the rebuild step fail and returns the restore. The
+// real call re-adds a group the source catalog already normalized under a name
+// unique there, so no input reaches the guard; the seam is what lets the guard
+// be tested rather than merely trusted.
+func failAddFilteredGroup(t *testing.T) func() {
+	t.Helper()
+	original := addFilteredGroup
+	addFilteredGroup = func(*actioncatalog.Catalog, actioncatalog.Group) error {
+		return errors.New("group refused")
+	}
+	return func() { addFilteredGroup = original }
+}
+
+// TestFilterScopeFilteredCatalog_RebuildFails_ReportsWhichGroup verifies the
+// rebuild failure names the group it stopped at: the catalog it would have
+// returned is incomplete, so the caller is given the error instead, and the
+// message has to say enough to find the offending group.
+func TestFilterScopeFilteredCatalog_RebuildFails_ReportsWhichGroup(t *testing.T) {
+	restore := failAddFilteredGroup(t)
+	defer restore()
+
+	filtered, err := FilterScopeFilteredCatalog(scopeFilterTestCatalog(t), []string{"api"})
+
+	if err == nil {
+		t.Fatal("FilterScopeFilteredCatalog() error = nil, want the rebuild failure")
+	}
+	if filtered != nil {
+		t.Errorf("catalog = %+v, want none when the rebuild failed", filtered)
+	}
+	if !strings.Contains(err.Error(), "gitlab_scope_filter_fixture") {
+		t.Errorf("error = %q, want it to name the group it stopped at", err)
 	}
 }
 

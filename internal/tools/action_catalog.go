@@ -366,9 +366,8 @@ func groupFromActionSpecGroup(specGroup ActionSpecGroup) (actioncatalog.Group, e
 		specGroup.OwnerPackage = "tools"
 	}
 	specGroup.Actions = ensureActionSpecOwners(specGroup.Actions, specGroup.OwnerPackage)
-	if specGroup.SurfaceKind == "" {
-		specGroup.SurfaceKind = actioncatalog.SurfaceKindMetaGroup
-	}
+	// SurfaceKind is not defaulted here: the clone above already did it, so a
+	// second check could only ever be dead code pretending to be a guard.
 	if len(specGroup.Icons) == 0 {
 		specGroup.Icons = catalogGroupIcons(specGroup.ToolName)
 	}
@@ -379,11 +378,7 @@ func groupFromActionSpecGroup(specGroup ActionSpecGroup) (actioncatalog.Group, e
 		specGroup.ReadOnly = catalogGroupReadOnly(specGroup.Actions)
 	}
 	if specGroup.Description == "" {
-		routes, err := toolutil.ActionSpecsToMapWithError(specGroup.Actions)
-		if err != nil {
-			return actioncatalog.Group{}, err
-		}
-		specGroup.Description = catalogGroupDescription(specGroup.ToolName, routes)
+		specGroup.Description = catalogGroupDescription(specGroup.ToolName)
 	}
 	if err := specGroup.Validate(); err != nil {
 		return actioncatalog.Group{}, err

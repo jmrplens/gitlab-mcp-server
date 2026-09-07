@@ -137,6 +137,40 @@ func TestWrapMutatingToolsForSafeMode_MutatingToolReturnsPreview(t *testing.T) {
 	}
 }
 
+// TestWrapMutatingToolsForSafeModeExcept_ExemptToolKeepsItsHandler verifies the
+// exemption list: a mutating tool named there is left alone and still runs.
+//
+// It is what lets safe mode keep the flows that exist to ask the user something
+// rather than to change GitLab: wrapping one of those would answer a
+// confirmation prompt with a preview of itself.
+func TestWrapMutatingToolsForSafeModeExcept_ExemptToolKeepsItsHandler(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
+	var calls atomic.Int64
+	server.AddTool(&mcp.Tool{
+		Name:        "gitlab_interactive_create_issue",
+		Description: "Create an issue interactively",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false},
+		InputSchema: &map[string]any{"type": "object"},
+	}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		calls.Add(1)
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ran"}}}, nil
+	})
+
+	exempt := map[string]struct{}{"gitlab_interactive_create_issue": {}}
+	if wrapped := WrapMutatingToolsForSafeModeExcept(t.Context(), server, exempt); wrapped != 0 {
+		t.Fatalf("wrapped %d tool(s), want the exempt one left alone", wrapped)
+	}
+
+	result := callTool(t, server, "gitlab_interactive_create_issue", json.RawMessage(`{}`))
+
+	if calls.Load() != 1 {
+		t.Errorf("the exempt tool's handler ran %d time(s), want once", calls.Load())
+	}
+	if result.IsError {
+		t.Errorf("result = %+v, want the tool's own answer rather than a safe-mode preview", result)
+	}
+}
+
 // TestWrapMutatingToolsForSafeMode_NilAnnotations verifies that tools with nil
 // annotations are treated as mutating and get wrapped.
 func TestWrapMutatingToolsForSafeMode_NilAnnotations(t *testing.T) {
