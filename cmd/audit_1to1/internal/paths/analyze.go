@@ -67,6 +67,16 @@ type Summary struct {
 	// UnpublishedFields counts the output fields no endpoint of their package
 	// declares. A lower bound, for the reason unpublishedFields records.
 	UnpublishedFields int `json:"unpublished_fields"`
+	// The typed counts are the same comparison held at type grain, where an
+	// output type is judged only against the endpoints its client-go struct
+	// models. They are published beside the package-grain count rather than
+	// instead of it, so a reader can see how much of that number the sharper
+	// join keeps. See [TypedShapeCheck].
+	TypedCompared         int `json:"typed_types_compared"`
+	TypedNoPairing        int `json:"typed_types_without_pairing"`
+	TypedNoRoute          int `json:"typed_types_without_route"`
+	TypedNoSchema         int `json:"typed_types_without_schema"`
+	TypedUnpublishedField int `json:"typed_unpublished_fields"`
 }
 
 // observedGrain is what [Summary.Grain] says, spelled once.
@@ -188,6 +198,11 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 			UndeclaredEndpoints:   endpoints.undeclared(),
 			UntemplatedSegments:   len(shapes.Untemplated),
 			UnpublishedFields:     len(shapes.Unpublished),
+			TypedCompared:         shapes.Typed.Compared,
+			TypedNoPairing:        shapes.Typed.SkippedNoPairing,
+			TypedNoRoute:          shapes.Typed.SkippedNoRoute,
+			TypedNoSchema:         shapes.Typed.SkippedNoSchema,
+			TypedUnpublishedField: len(shapes.Typed.Unpublished),
 		},
 	}
 	if gapsOnly {

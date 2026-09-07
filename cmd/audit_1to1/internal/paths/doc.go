@@ -13,7 +13,7 @@
 // This rule reads the request instead. Its input is the inventory
 // internal/testutil records and cmd/gen_request_inventory commits, which is the
 // first honest answer to what this server sends GitLab, and it puts that
-// inventory through three checks.
+// inventory through four checks.
 //
 // # Has the path ever been observed
 //
@@ -81,6 +81,38 @@
 // asked for. The declarations are what make that safe, since the oracle is
 // prose and a handful of endpoints GitLab serves are written down in a way no
 // comparison can match; [EndpointCheck] has the categories and the reasons.
+//
+// # Does GitLab say it sends what we publish
+//
+// The one check here whose oracle is GitLab itself: the OpenAPI document
+// GitLab generates out of its own Grape entities, pinned by cmd/gen_api_shapes.
+// It reports and never gates, and it asks its question at two grains, both
+// published so a reader can compare them.
+//
+// The package grain unions the responses of every endpoint a package was
+// recorded calling and holds each of that package's top-level output types
+// against the union. It is exact for a package with one endpoint and weaker as
+// the package grows, which is the honest shape available while the inventory
+// records a package and never an action. It finds 611 fields across 130
+// packages, and most of them are not phantoms: our own wrappers around a JSON
+// array, our own answers to a 204 and to a not-found, and an endpoint the
+// document gives no schema for sitting in a package where another endpoint has
+// one.
+//
+// The type grain asks only about the endpoints a type actually models, along a
+// chain in which every link already existed. A converter pairs an output type
+// with a client-go struct, which is what structs.CollectOutputPairings reads
+// out of the same pass the field diff runs over; client-go's service methods
+// say which endpoints answer with that struct, which readSDKRoutes reads out of
+// the SDK source the handlers compile against; and the document says what those
+// endpoints send. Nothing in it consults the inventory, which is the point: the
+// inventory cannot be sharpened, because it records a package by construction.
+// Of 433 top-level output types it compares 25 and reports 5 fields, skipping
+// 394 that no converter pairs, 1 that no method answers with, and 13 whose
+// endpoints the document describes no response for. mrapprovals.ConfigOutput,
+// the one confirmed phantom this repository has found, is the case the join was
+// built against: its old shape produces exactly the twenty findings the fix
+// removed, and its current one produces none.
 //
 // # Where the report goes
 //
