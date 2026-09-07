@@ -3039,7 +3039,10 @@ func skipDeferredSnapshotParity(t *testing.T) {
 }
 
 // compareOrUpdate either updates the golden file or compares current
-// output against it, reporting a clear diff on mismatch.
+// output against it, reporting a clear diff on mismatch. It does neither when
+// snapshot parity is deferred (GITLAB_MCP_TEST_SNAPSHOT_PARITY=deferred): the
+// test is skipped before the golden file is read or written, so a stacked
+// pull request is neither failed by a stale snapshot nor allowed to refresh it.
 func compareOrUpdate(t *testing.T, goldenPath string, current []toolSnapshot) {
 	t.Helper()
 	skipDeferredSnapshotParity(t)
