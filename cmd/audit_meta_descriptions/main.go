@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -128,20 +127,10 @@ func run(check, uncovered bool) int {
 // metaTools lists the meta surface at the widest tier over a real tools/list
 // round-trip, so the descriptions judged are the ones that cross the wire.
 //
-// Registering a surface and listing it in memory cannot fail here: the catalog
-// is the one compiled into this binary and both ends of the transport are this
-// process. An audit that cannot build the surface it audits has nothing to
-// report either way, so the failure aborts rather than reaching the exit code,
-// which is reserved for what the -check gate found.
+// [mcpsurface.MetaTools] registers what cmd/server registers for this surface,
+// gitlab_server included, and lists it through the served-schema chain.
 func metaTools(client *gitlabclient.Client) []*mcp.Tool {
-	session, cleanup := mcpsurface.Session(func(server *mcp.Server) {
-		cmdutil.MustDo(tools.RegisterAllMeta(server, client, edition.Ultimate))
-		tools.RegisterMCPMeta(server, client)
-		tools.RegisterMetaStandaloneTools(server, client)
-	})
-	defer cleanup()
-
-	return cmdutil.Must(session.ListTools(context.Background(), nil)).Tools
+	return mcpsurface.MetaTools(client, edition.Ultimate)
 }
 
 // audit compares every served description with what its actions accept and

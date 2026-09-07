@@ -1,14 +1,14 @@
 # Meta-Tools Reference
 
-Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 866 (Free/CE) to 1085 (self-managed Ultimate) individual tools, or 1091 on GitLab.com Ultimate, **33 base meta-tools** (39 on Premium, 50 on self-managed Ultimate, 51 on GitLab.com Ultimate) provide the same functionality while reducing token overhead for LLMs.
+Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 866 (Free/CE) to 1085 (self-managed Ultimate) individual tools, or 1091 on GitLab.com Ultimate, **34 base meta-tools** (40 on Premium, 51 on self-managed Ultimate, 52 on GitLab.com Ultimate) provide the same functionality while reducing token overhead for LLMs.
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Understanding of MCP protocol and tool concepts
 
-In meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`), the server registers **33 base GitLab/interactive tools**: 29 catalog-backed meta-tools plus 4 interactive elicitation tools. Premium registers 6 additional inline meta-tools for **39 tools**, Ultimate 11 more for **50 tools** on self-managed GitLab, and GitLab.com adds the experimental `gitlab_orbit` meta-tool on Premium and Ultimate, for **51 tools** on GitLab.com Ultimate. The default tool surface is now dynamic find/execute; set `GITLAB_MCP_TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
+In meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`), the server registers **34 base GitLab/interactive tools**: 29 catalog-backed meta-tools, the `gitlab_server` diagnostics tool, and 4 interactive elicitation tools. Premium registers 6 additional inline meta-tools for **40 tools**, Ultimate 11 more for **51 tools** on self-managed GitLab, and GitLab.com adds the experimental `gitlab_orbit` meta-tool on Premium and Ultimate, for **52 tools** on GitLab.com Ultimate. The default tool surface is now dynamic find/execute; set `GITLAB_MCP_TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
 
-The `gitlab_server` meta-tool (actions `status` and `health_check`) is registered separately for server diagnostics and is not included in the 33/50/51 GitLab action catalog counts.
+The `gitlab_server` meta-tool (actions `status` and `health_check`) comes from a maintenance group of its own rather than from the GitLab action catalog, but the server registers it on every tier, so it is counted here. It used to be left out of the published figures, which is why they said one tool fewer than a client receives.
 
 Stdio mode enables the Enterprise/Premium catalog with `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate`. HTTP mode can force the tier with `--tier`, and otherwise detects it per token+URL pool entry from the instance license (fallback `free`).
 
@@ -66,7 +66,7 @@ Meta-tools remain available because they are the most broadly compatible consoli
 | Mode              |                                                                       Tool Count | Best For                                                                         |
 | ----------------- | -------------------------------------------------------------------------------: | -------------------------------------------------------------------------------- |
 | Dynamic (default) |                                2 (`gitlab_find_action`, `gitlab_execute_action`) | Any client; lowest startup context, every action reachable by `domain.action` ID |
-| Meta-tools        |                   33 Free/CE / 39 Premium / 50 Ultimate / 51 GitLab.com Ultimate | LLM clients that need the complete GitLab surface with a compact tool list       |
+| Meta-tools        |                   34 Free/CE / 40 Premium / 51 Ultimate / 52 GitLab.com Ultimate | LLM clients that need the complete GitLab surface with a compact tool list       |
 | Individual tools  | 866 Free/CE / 1019 Premium / 1085 Ultimate / 1091 GitLab.com Ultimate with Orbit | Clients that benefit from one MCP tool per GitLab operation                      |
 
 ---

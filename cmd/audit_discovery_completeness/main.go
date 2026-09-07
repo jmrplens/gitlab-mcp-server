@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -246,7 +245,7 @@ func (r report) check(threshold int) error {
 // producible; what a caller acts on is its contents, which is what -check reads.
 func buildReport(gapsOnly bool, minAliases int) report {
 	cmdutil.Progressf("audit_discovery_completeness: building catalog and analyzing discovery metadata...")
-	client, cleanup := auditclient.NewMock()
+	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	defer cleanup()
 
 	projected := auditshared.CachedIndividualDescriptions(client)

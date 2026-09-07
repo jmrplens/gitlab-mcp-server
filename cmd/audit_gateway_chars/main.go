@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -15,12 +14,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/gatewaycompat"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
 // offendingChars lists the ASCII characters gateway validators are known to
@@ -150,25 +147,16 @@ func scanTools(client *gitlabclient.Client) []offender {
 // report either way, so the failure aborts rather than reaching the exit code,
 // which is reserved for what the -check gate found.
 func listSurface(client *gitlabclient.Client, surface string) []*mcp.Tool {
-	if surface == config.ToolSurfaceDynamic {
+	switch surface {
+	case config.ToolSurfaceDynamic:
 		return mcpsurface.DynamicTools(client)
+	case config.ToolSurfaceMeta:
+		return mcpsurface.MetaTools(client, edition.TierForEnterprise(true))
+	case config.ToolSurfaceIndividual:
+		return mcpsurface.IndividualTools(client, edition.TierForEnterprise(true))
+	default:
+		return nil
 	}
-
-	session, cleanup := mcpsurface.Session(func(server *mcp.Server) {
-		switch surface {
-		case config.ToolSurfaceMeta:
-			cmdutil.MustDo(tools.RegisterAllMeta(server, client, edition.TierForEnterprise(true)))
-			tools.RegisterMCPMeta(server, client)
-		case config.ToolSurfaceIndividual:
-			tools.RegisterAll(server, client, edition.TierForEnterprise(true))
-		}
-	})
-	defer cleanup()
-
-	// One ListTools call, not the Tools iterator: the session's page size
-	// holds the whole surface, and the iterator left the connection with
-	// state that made the deferred Close wait forever.
-	return cmdutil.Must(session.ListTools(context.Background(), nil)).Tools
 }
 
 // scanPromptsAndResources covers the two shared list surfaces.

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
@@ -34,7 +34,7 @@ type outputJSONReport struct {
 // against, closing its backing server when the test ends.
 func stubClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
-	client, cleanup := auditclient.NewMock()
+	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	t.Cleanup(cleanup)
 	return client
 }

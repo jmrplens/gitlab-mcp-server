@@ -7,8 +7,8 @@
 // The same per-surface, per-tier derivations used by the text report drive
 // these counts:
 //
-//   - tools.*           individual tool surface via [tools.RegisterAll] per tier
-//   - meta.*            meta-tool surface via [tools.RegisterAllMeta]
+//   - tools.*           individual tool surface via [mcpsurface.IndividualTools] per tier
+//   - meta.*            meta-tool surface via [mcpsurface.MetaTools] per tier
 //   - dynamic           the fixed find/execute dynamic surface (2 tools)
 //   - catalog_actions.* dynamic catalog action routes per tier
 //   - catalog_groups.*  catalog group count per tier (IncludeMCP)
@@ -25,8 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
@@ -167,13 +166,11 @@ func siteCatalogGroupsFor(client *gitlabclient.Client) siteCatalogGroups {
 	}
 }
 
-// countIndividualTools registers the individual tool surface for tier and
-// returns the number of advertised tools, mirroring how the text report
-// derives its per-surface individual-tool numbers.
+// countIndividualTools returns the number of tools the individual surface
+// advertises at tier, from the same [mcpsurface] listing the text report
+// derives its per-surface individual-tool numbers from.
 func countIndividualTools(client *gitlabclient.Client, tier edition.Tier) int {
-	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{PageSize: 4000, Capabilities: &mcp.ServerCapabilities{}})
-	tools.RegisterAll(server, client, tier)
-	return len(listToolsFromServer(server))
+	return len(mcpsurface.IndividualTools(client, tier))
 }
 
 // countCatalogGroupsForTier builds the canonical action catalog for tier

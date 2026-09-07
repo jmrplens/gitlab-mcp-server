@@ -32,7 +32,7 @@
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | MCP Tools (individual)    | By instance tier: ~866 Free/CE; ~1019 Premium; ~1085 Ultimate (self-managed) / ~1091 on GitLab.com Ultimate with Orbit |
 | Catalog groups            | By instance tier: 29 Free/CE; 35 Premium; 46 Ultimate                                                       |
-| Meta-mode tools           | 33 base (Free/CE) / 39 Premium / 50 self-managed Ultimate / 51 GitLab.com Ultimate (Orbit)                 |
+| Meta-mode tools           | 34 base (Free/CE) / 40 Premium / 51 self-managed Ultimate / 52 GitLab.com Ultimate (Orbit); `gitlab_server` is served on every one of them and is counted here |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
 | MCP Resources             | 45 across dynamic/full, meta/full, and individual/full modes; `gitlab://tools` adapts to the active surface |
 | MCP Prompts               | 37 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 2 git-workflow + 2 audit)      |
@@ -89,9 +89,8 @@ gitlab-mcp-server/
 │   ├── gen_request_inventory/   # Merges the request shards the unit suite records into docs/development/request-inventory.json, the committed answer to what this server sends GitLab (make gen-request-inventory); -check gates it, -v names the packages the catalog owns actions in that issued nothing
 │   ├── gen_stats/               # Generates README stats section from codebase metrics
 │   ├── gen_testing_docs/        # Generates docs/development/testing/testing.md
-│   └── internal/                # Helpers shared by the commands: apidocs (GitLab API doc fetcher, and the doc/api page listing R-PATH reads through it), auditshared, docgen, graphqldocs (reads every raw GraphQL document out of the source and judges it against a schema), graphqlintrospect (one introspection and SDL conversion for gen_graphql_schema and the live re-probe), mcpsurface (pinned surface introspection for generators), requestinventory (the committed record of what this server sends GitLab, and the one definition of which catalog actions it covers)
+│   └── internal/                # Helpers shared by the commands: apidocs (GitLab API doc fetcher, and the doc/api page listing R-PATH reads through it), auditshared, docgen, graphqldocs (reads every raw GraphQL document out of the source and judges it against a schema), graphqlintrospect (one introspection and SDL conversion for gen_graphql_schema and the live re-probe), mcpsurface (the one reader of the served surface: the per-surface listings, the offline stub client, the served-schema chain and the memo behind them), requestinventory (the committed record of what this server sends GitLab, and the one definition of which catalog actions it covers)
 ├── internal/
-│   ├── auditclient/             # GitLab clients for the command-line audit tools
 │   ├── cachehints/              # SEP-2549 cache hints (ttlMs/cacheScope) on MCP results
 │   ├── capguard/                # Keeps the methods answered in step with the capabilities declared
 │   ├── clientcompat/            # Per-client response compatibility profiles (GITLAB_MCP_CLIENT_COMPAT)

@@ -1,18 +1,11 @@
 package auditshared
 
 import (
-	"context"
-	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"regexp"
 	"strings"
 	"sync"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
@@ -89,30 +82,17 @@ func CachedActionSpecs(client *gitlabclient.Client, enterprise bool) []tools.Act
 	return result.groups
 }
 
-// ProjectIndividualDescriptions registers the individual-tool surface on an
-// in-memory MCP server and returns the projected description per tool name —
-// the exact text the model consumes. Prefer CachedIndividualDescriptions
-// unless a fresh projection is the point.
+// ProjectIndividualDescriptions returns the projected description per
+// individual-tool name — the exact text the model consumes. Prefer
+// CachedIndividualDescriptions unless a fresh projection is the point.
 //
-// Registration projects the catalog compiled into this binary and both ends of
-// the transport are this process, so none of the three steps can fail and no
-// auditor could do anything with the failure but print it.
+// It is a projection over [mcpsurface.IndividualTools], which is the one
+// reader of the served surface: the listing itself, the served-schema chain
+// applied to it and the memo behind it all live there.
 func ProjectIndividualDescriptions(client *gitlabclient.Client) map[string]string {
-	server := mcp.NewServer(&mcp.Implementation{Name: "audit", Version: "0.0.1"}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
-	tools.RegisterAll(server, client, edition.Ultimate)
-	toolutil.LockdownInputSchemas(server)
-
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	cmdutil.Must(server.Connect(ctx, serverTransport, nil))
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "audit-client", Version: "0.0.1"}, nil)
-	session := cmdutil.Must(mcpClient.Connect(ctx, clientTransport, nil))
-	defer func() { _ = session.Close() }()
-
-	result := cmdutil.Must(session.ListTools(ctx, nil))
-	descriptions := make(map[string]string, len(result.Tools))
-	for _, tool := range result.Tools {
+	listed := mcpsurface.IndividualTools(client, edition.Ultimate)
+	descriptions := make(map[string]string, len(listed))
+	for _, tool := range listed {
 		descriptions[tool.Name] = tool.Description
 	}
 	return descriptions
@@ -130,22 +110,19 @@ func OwnerPackage(group tools.ActionSpecGroup, spec toolutil.ActionSpec) string 
 	return strings.TrimSpace(group.BaseDomain)
 }
 
+// StubToken is the dummy credential the audit commands authenticate their stub
+// client with. It is never sent to a real GitLab instance: the client points at
+// an in-process HTTP server.
+const StubToken = "audit-token" //#nosec G101 -- not a real credential, in-process stub only
+
 // NewStubGitLabClient builds a GitLab client pointed at an in-process HTTP
 // stub that answers every request with a fixed version payload. Generators
 // and auditors use it to register the tool catalog offline. The returned
 // cleanup func shuts the stub server down.
 //
-// The only thing client construction validates is the base URL, and that one
-// comes from the httptest server started two lines earlier.
+// It is [mcpsurface.NewStubClientWithToken] under the name the audit commands
+// call it by: one stub, so a command cannot audit a surface built against a
+// differently configured client than the one the generators describe.
 func NewStubGitLabClient(token string) (client *gitlabclient.Client, cleanup func()) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"version":"17.0.0"}`)
-	}))
-
-	return cmdutil.Must(gitlabclient.NewClient(&config.Config{
-		GitLabURL:   srv.URL,
-		GitLabToken: token,
-	})), srv.Close
+	return mcpsurface.NewStubClientWithToken(token)
 }

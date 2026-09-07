@@ -11,7 +11,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
@@ -41,7 +41,7 @@ type catalogSnapshot struct {
 // capabilities doc's gitlab_server_status is included.
 func loadCatalog(repoRoot string) (*catalogSnapshot, error) {
 	_ = repoRoot // reserved for future repo-root-aware catalog options.
-	client, cleanup := auditclient.NewMock()
+	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	defer cleanup()
 
 	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{

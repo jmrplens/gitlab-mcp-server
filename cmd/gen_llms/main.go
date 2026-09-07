@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -217,28 +216,19 @@ func readVersion(rootDir string) string {
 }
 
 // listTools returns either the enterprise individual catalog or the base
-// meta-tool catalog, depending on meta.
+// meta-tool catalog, depending on meta. Both come from [mcpsurface], which
+// registers what cmd/server registers for the surface — so the documented meta
+// surface carries gitlab_server, as the served one does.
 func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
-	session, cleanup := mcpsurface.Session(func(server *mcp.Server) {
-		if meta {
-			cmdutil.MustDo(tools.RegisterAllMeta(server, client, edition.Free))
-			return
-		}
-		tools.RegisterAll(server, client, edition.Ultimate)
-	})
-	defer cleanup()
-
-	return cmdutil.Must(session.ListTools(context.Background(), nil)).Tools
+	if meta {
+		return mcpsurface.MetaTools(client, edition.Free)
+	}
+	return mcpsurface.IndividualTools(client, edition.Ultimate)
 }
 
 // listToolsEnterprise returns the Enterprise/Premium meta-tool catalog.
 func listToolsEnterprise(client *gitlabclient.Client) []*mcp.Tool {
-	session, cleanup := mcpsurface.Session(func(server *mcp.Server) {
-		cmdutil.MustDo(tools.RegisterAllMeta(server, client, edition.Ultimate))
-	})
-	defer cleanup()
-
-	return cmdutil.Must(session.ListTools(context.Background(), nil)).Tools
+	return mcpsurface.MetaTools(client, edition.Ultimate)
 }
 
 // writeLLMSTxt generates the concise llms.txt overview. referenceSizeBytes maps

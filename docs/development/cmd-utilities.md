@@ -516,6 +516,8 @@ One block per refused document on stderr, naming the package, the constant it is
 
 Consolidated MCP tool surface quality audit. It combines metadata-quality checks (naming, annotations, schema shape, duplicates — formerly `audit_tools`) and output-quality checks (`OutputSchema`, Returns/See-also, Title — formerly `audit_output`) behind a single `-view` flag.
 
+Both views judge the surface as a client receives it, because both list it through `cmd/internal/mcpsurface`: the meta view therefore includes `gitlab_server`, and every schema it inspects has been through the lockdown and the pagination bounds. `make audit-docs` runs the command once with the default `-view=all` rather than once per view, since one listing now serves both.
+
 #### Usage
 
 ```bash
