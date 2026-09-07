@@ -1035,7 +1035,46 @@ func extraOutputFields(pkg, mcpType string, mcpFields, sdkFields map[string]stri
 func flattenFields(st *types.Struct, tagKeys []string) map[string]string {
 	out := map[string]string{}
 	flattenInto(st, tagKeys, out, 0)
+	if len(out) > 0 {
+		return out
+	}
+	// A struct that carries no tag of the kind we index by cannot be compared
+	// by tag at all: every field on our side is then reported as one the SDK
+	// does not have, which says nothing about either. client-go's Achievement
+	// and UserAchievement are exactly that, and they produced the only 18
+	// entries left in the backlog while our field names matched theirs one for
+	// one. encoding/json serializes such a field under its own name, so that is
+	// what the comparison uses.
+	//
+	// The fallback is per struct rather than per field on purpose. An untagged
+	// field in a struct that tags the rest is also serialized by its name, but
+	// changing that case would re-open every gap somebody has already
+	// adjudicated, for a shape nothing has yet been found in.
+	flattenNamesInto(st, out, 0)
 	return out
+}
+
+// flattenNamesInto is flattenInto keyed by the Go field name, for a struct that
+// tags nothing.
+func flattenNamesInto(st *types.Struct, out map[string]string, depth int) {
+	if st == nil || depth > 6 {
+		return
+	}
+	for field := range st.Fields() {
+		if !field.Exported() {
+			continue
+		}
+		if field.Embedded() {
+			if embedded, ok := structUnder(field.Type()); ok {
+				flattenNamesInto(embedded, out, depth+1)
+				continue
+			}
+		}
+		name := shared.FieldNameTag(field.Name())
+		if _, exists := out[name]; !exists {
+			out[name] = types.TypeString(field.Type(), shortQualifier)
+		}
+	}
 }
 
 func flattenInto(st *types.Struct, tagKeys []string, out map[string]string, depth int) {
