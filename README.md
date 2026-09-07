@@ -467,10 +467,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,215 |     252,067 |
-| Unit tests (`_test.go`)  |       709 |     412,105 |
+| Source (`.go`, non-test) |     1,215 |     252,085 |
+| Unit tests (`_test.go`)  |       709 |     412,129 |
 | End-to-end tests         |       244 |      66,211 |
-| **Total**                | **2,168** | **730,383** |
+| **Total**                | **2,168** | **730,425** |
 
 ### Functions
 
@@ -479,7 +479,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                |  9,319 |
 | . Exported (public)             |  2,937 |
 | . Unexported (private)          |  6,382 |
-| Unit test functions (`TestXxx`) | 14,139 |
+| Unit test functions (`TestXxx`) | 14,140 |
 | Subtests (`t.Run(...)`)         |  5,608 |
 | End-to-end test functions       |    603 |
 
@@ -490,7 +490,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.63× more tests than code |
 | Average source file length         |                 ~207 lines |
 | Average test file length           |                 ~581 lines |
-| Comment lines in source            |  44,031 (~17.5% of source) |
+| Comment lines in source            |  44,034 (~17.5% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
