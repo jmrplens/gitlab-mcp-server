@@ -163,11 +163,16 @@ func (l *epicLabels) UnmarshalJSON(data []byte) error {
 // decode.
 //
 // The fields are GitLab's own, not ours to infer: its generated OpenAPI record
-// lists every one of them on each epic GET
-// (docs/development/gitlab-api-shapes.json, GET /api/v4/groups/{id}/-/epics),
-// doc/api/epics.md prints them in its example bodies, and a live gitlab.com
-// response carries them. Reading them costs no extra round trip, since they
-// arrive on the response client-go already asks for and discards.
+// lists all fourteen on each of the five epic GETs
+// (docs/development/gitlab-api-shapes.json, GET /api/v4/groups/{id}/-/epics).
+// Two further oracles each corroborate all but a couple, and not the same
+// couple, so every field rests on the record plus at least one of them: live
+// gitlab.com GETs on 2026-09-07 carried all but reference (the list response
+// omits subscribed too, the single-epic one sends it), while doc/api/epics.md
+// prints all but web_edit_url, which it never mentions, and text_color, which
+// appears only in its with_labels_details parameter row.
+// Reading them costs no extra round trip, since they arrive on the response
+// client-go already asks for and discards.
 //
 // Author and Labels shadow the embedded gl.Epic fields of the same name: the
 // shallower field is the one encoding/json fills, so the embedded ones stay

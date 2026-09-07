@@ -32,7 +32,7 @@ const (
 	docCommitSignature  = "commits.md#get-the-signature-of-a-commit"
 	docPipelineTriggers = "pipeline_triggers.md"
 	docMRApprovals      = "merge_request_approvals.md"
-	docEpics            = "epics.md#list-epics-for-a-group"
+	docEpics            = "epics.md#list-all-group-epics"
 	// The dual-shape labels array cannot be two types under one key in a typed
 	// schema, so the object half is published beside the names the way issues
 	// and merge requests publish theirs.
@@ -41,11 +41,19 @@ const (
 	// user object inside it, so the author's own field set is read off the
 	// response GitLab sends.
 	docEpicsAuthor = docEpics + " (a live GET /api/v4/groups/gitlab-org/epics on 2026-09-07 answered with " +
-		"eight author keys; gl.EpicAuthor and gl.BasicUser declare six, omitting locked and public_email)"
+		"eight author keys; gl.EpicAuthor declares six and gl.BasicUser seven, neither of them locked or public_email)"
 	// epicPhantomWidget is the reason every widget-backed work item option an
 	// Epic does not carry is absent from the epic inputs.
 	epicPhantomWidget = "an Epic carries no STATUS, ITERATION or CRM_CONTACTS widget, so GitLab refuses the field; " +
 		"exposed on internal/tools/workitems, where the type is the caller's to choose"
+	// epicReleaseFilter is the reason the two release filters are absent, which
+	// is not the widget one: the schema does accept them here, and it is the
+	// epic that has nothing for them to match.
+	epicReleaseFilter = "Group.workItems declares releaseTag and releaseTagWildcardId, so GitLab accepts them " +
+		"rather than refusing them the way it refuses the widget filters; the schema puts releases on Project " +
+		"and epic.list pins types to EPIC at group scope, so the filter would select epics by an association " +
+		"only a project's work items can have. Exposed on internal/tools/workitems, where the type is the " +
+		"caller's to choose"
 	tagKeyJSON    = "json"
 	typNameString = "string"
 	typNameInt64  = "int64"
@@ -376,7 +384,7 @@ var docAddedFields = map[string]string{
 	"commits.GPGSignatureOutput.key":              docCommitSignature,
 	"commits.GPGSignatureOutput.x509_certificate": docCommitSignature,
 
-	// epics — fourteen fields the epic response documents and gl.Epic does not
+	// epics: fourteen fields the epic response documents and gl.Epic does not
 	// declare, plus the object half of the dual-shape labels array that
 	// with_labels_details asks for; fetched via raw REST (rawListEpics into the
 	// epicAPI superset) on the list and child-epic paths. Like the omissions
@@ -503,19 +511,23 @@ var acceptedMissingInputs = map[string]string{
 	// START_AND_DUE_DATE, TIME_TRACKING, VERIFICATION_STATUS and WEIGHT, while
 	// Issue and Task carry the other three. internal/tools/workitems exposes
 	// them, because there the type is the caller's to choose.
-	"epics.CreateInput.status":                epicPhantomWidget,
-	"epics.CreateInput.iteration_id":          epicPhantomWidget,
-	"epics.CreateInput.crm_contact_ids":       epicPhantomWidget,
-	"epics.UpdateInput.status":                epicPhantomWidget,
-	"epics.UpdateInput.iteration_id":          epicPhantomWidget,
-	"epics.UpdateInput.crm_contact_ids":       epicPhantomWidget,
-	"epics.ListInput.iteration_id":            epicPhantomWidget,
-	"epics.ListInput.iteration_cadence_id":    epicPhantomWidget,
-	"epics.ListInput.iteration_wildcard_id":   epicPhantomWidget,
-	"epics.ListInput.crm_contact_id":          epicPhantomWidget,
-	"epics.ListInput.crm_organization_id":     epicPhantomWidget,
-	"epics.ListInput.release_tag":             epicPhantomWidget,
-	"epics.ListInput.release_tag_wildcard_id": epicPhantomWidget,
+	"epics.CreateInput.status":              epicPhantomWidget,
+	"epics.CreateInput.iteration_id":        epicPhantomWidget,
+	"epics.CreateInput.crm_contact_ids":     epicPhantomWidget,
+	"epics.UpdateInput.status":              epicPhantomWidget,
+	"epics.UpdateInput.iteration_id":        epicPhantomWidget,
+	"epics.UpdateInput.crm_contact_ids":     epicPhantomWidget,
+	"epics.ListInput.iteration_id":          epicPhantomWidget,
+	"epics.ListInput.iteration_cadence_id":  epicPhantomWidget,
+	"epics.ListInput.iteration_wildcard_id": epicPhantomWidget,
+	"epics.ListInput.crm_contact_id":        epicPhantomWidget,
+	"epics.ListInput.crm_organization_id":   epicPhantomWidget,
+
+	// The release filters are left out for the other reason: Group.workItems
+	// declares both, so they are accepted here, and what an epic lacks is a
+	// release to be filtered by rather than the widget.
+	"epics.ListInput.release_tag":             epicReleaseFilter,
+	"epics.ListInput.release_tag_wildcard_id": epicReleaseFilter,
 
 	// Work item options this action pins rather than publishes.
 	"epics.ListInput.types":           "pinned to EPIC: this action lists epics, and the type is what makes it that action rather than workitems.list",

@@ -1856,9 +1856,10 @@ func TestBuildCreateOptions_EmptyLinkedItems(t *testing.T) {
 
 // restEpicJSON is one epic as GitLab really answers, taken from
 // GET /api/v4/groups/gitlab-org/epics on 2026-09-07 and reshaped to the
-// example bodies of doc/api/epics.md, which add the fields an anonymous
-// request does not see (subscribed, reference) and the parent that a
-// top-level epic has none of.
+// example bodies of doc/api/epics.md, which add the two the list response
+// leaves out (subscribed, which the single-epic GET does carry, and reference,
+// which neither live response did) and the parent that a top-level epic has
+// none of.
 const restEpicJSON = `{
 	"id": 29,
 	"work_item_id": 1032,

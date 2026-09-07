@@ -492,18 +492,26 @@ is the same accretion the SDK already makes elsewhere.
 really sends or really accepts.
 
 - `ListGroupEpicsOptions` declares no `AuthorUsername` and no `Confidential`.
-  Both are listed as parameters of `GET /groups/:id/epics` in
-  [doc/api/epics.md](https://docs.gitlab.com/api/epics/#list-epics-for-a-group)
-  and in the OpenAPI document GitLab generates from its own Grape definitions
-  (`docs/development/gitlab-api-shapes.json`, `GET /api/v4/groups/{id}/-/epics`).
-  There is no way to send either one through the wrapper.
+  Both are listed as parameters of `GET /api/v4/groups/{id}/-/epics` in the
+  OpenAPI document GitLab generates from its own Grape definitions
+  (`docs/development/gitlab-api-shapes.json`); the prose page
+  [doc/api/epics.md](https://docs.gitlab.com/api/epics/#list-all-group-epics)
+  lists `author_username` in the list endpoint's parameter table and mentions
+  `confidential` only under create and update, which is a gap in the page
+  rather than in the endpoint. There is no way to send either one through the
+  wrapper.
 - `Epic` declares fourteen fewer fields than the endpoint returns: `parent_iid`,
   `color`, `text_color`, `web_edit_url`, `work_item_id`, `subscribed`,
   `reference`, `references`, `imported`, `imported_from`, `_links`, `end_date`,
   `start_date_from_inherited_source` and `due_date_from_inherited_source`. The
-  same OpenAPI record lists every one of them on all five epic GETs, the
-  documentation page prints them in its example bodies, and a live gitlab.com
-  response carries them.
+  same OpenAPI record lists every one of them on all five epic GETs. The other
+  two oracles each corroborate all but a couple, and not the same couple, so
+  every field has the record plus at least one of them behind it: live
+  gitlab.com GETs on 2026-09-07 carried all but `reference` (the list response
+  leaves out `subscribed` as well, the single-epic one sends it), and the
+  documentation page's example bodies print all but `web_edit_url`, which it
+  never mentions, and `text_color`, which appears only in its
+  `with_labels_details` parameter row.
 - `Epic.Labels` is typed `[]string`, and the documented `with_labels_details`
   parameter makes GitLab answer with an array of label objects instead. A caller
   who sends it gets a JSON decode failure rather than epics, so the parameter
