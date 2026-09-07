@@ -1,4 +1,4 @@
-package main
+package graphqlintrospect
 
 import (
 	"strings"
@@ -8,48 +8,48 @@ import (
 )
 
 // ref builds a named type reference.
-func ref(name string) *typeRef { return &typeRef{Kind: kindScalar, Name: name} }
+func ref(name string) *TypeRef { return &TypeRef{Kind: kindScalar, Name: name} }
 
 // nonNull wraps a reference so it cannot be null.
-func nonNull(inner *typeRef) *typeRef { return &typeRef{Kind: kindNonNull, OfType: inner} }
+func nonNull(inner *TypeRef) *TypeRef { return &TypeRef{Kind: kindNonNull, OfType: inner} }
 
 // list wraps a reference in a list.
-func list(inner *typeRef) *typeRef { return &typeRef{Kind: kindList, OfType: inner} }
+func list(inner *TypeRef) *TypeRef { return &TypeRef{Kind: kindList, OfType: inner} }
 
 // TestRenderSDL_EveryKind_ProducesSchemaGqlparserLoads is the test that matters
 // for this renderer: the output is fed back into the parser that will judge
 // every document, so a dropped implements clause or a mangled default is
 // caught here rather than by a document being wrongly refused months later.
 func TestRenderSDL_EveryKind_ProducesSchemaGqlparserLoads(t *testing.T) {
-	schema := &schemaIntrospection{
-		QueryType:        &typeName{Name: "Query"},
-		MutationType:     &typeName{Name: "Mutation"},
-		SubscriptionType: &typeName{Name: "Subscription"},
-		Types: []schemaType{
-			{Kind: kindObject, Name: "Query", Fields: []schemaItem{
-				{Name: "node", Args: []inputValue{
+	schema := &Schema{
+		QueryType:        &TypeName{Name: "Query"},
+		MutationType:     &TypeName{Name: "Mutation"},
+		SubscriptionType: &TypeName{Name: "Subscription"},
+		Types: []Type{
+			{Kind: kindObject, Name: "Query", Fields: []Field{
+				{Name: "node", Args: []InputValue{
 					{Name: "id", Type: nonNull(ref("ID"))},
 					{Name: "limit", Type: ref("Int"), DefaultValue: new("100")},
 				}, Type: ref("Node")},
 				{Name: "everything", Type: list(nonNull(ref("Thing")))},
 			}},
-			{Kind: kindObject, Name: "Mutation", Fields: []schemaItem{
-				{Name: "touch", Args: []inputValue{{Name: "input", Type: nonNull(ref("TouchInput"))}}, Type: ref("Boolean")},
+			{Kind: kindObject, Name: "Mutation", Fields: []Field{
+				{Name: "touch", Args: []InputValue{{Name: "input", Type: nonNull(ref("TouchInput"))}}, Type: ref("Boolean")},
 			}},
-			{Kind: kindObject, Name: "Subscription", Fields: []schemaItem{{Name: "tick", Type: ref("Time")}}},
-			{Kind: kindObject, Name: "Thing", Interfaces: []typeName{{Name: "Node"}, {Name: "Named"}}, Fields: []schemaItem{
+			{Kind: kindObject, Name: "Subscription", Fields: []Field{{Name: "tick", Type: ref("Time")}}},
+			{Kind: kindObject, Name: "Thing", Interfaces: []TypeName{{Name: "Node"}, {Name: "Named"}}, Fields: []Field{
 				{Name: "id", Type: nonNull(ref("ID"))},
 				{Name: "name", Type: ref("String")},
 				{Name: "mood", Type: ref("Mood")},
 			}},
-			{Kind: kindInterface, Name: "Node", Fields: []schemaItem{{Name: "id", Type: nonNull(ref("ID"))}}},
-			{Kind: kindInterface, Name: "Named", Interfaces: []typeName{{Name: "Node"}}, Fields: []schemaItem{
+			{Kind: kindInterface, Name: "Node", Fields: []Field{{Name: "id", Type: nonNull(ref("ID"))}}},
+			{Kind: kindInterface, Name: "Named", Interfaces: []TypeName{{Name: "Node"}}, Fields: []Field{
 				{Name: "id", Type: nonNull(ref("ID"))},
 				{Name: "name", Type: ref("String")},
 			}},
-			{Kind: kindUnion, Name: "Anything", PossibleTypes: []typeName{{Name: "Thing"}}},
-			{Kind: kindEnum, Name: "Mood", EnumValues: []typeName{{Name: "GOOD"}, {Name: "BAD"}}},
-			{Kind: kindInputObject, Name: "TouchInput", InputFields: []inputValue{
+			{Kind: kindUnion, Name: "Anything", PossibleTypes: []TypeName{{Name: "Thing"}}},
+			{Kind: kindEnum, Name: "Mood", EnumValues: []TypeName{{Name: "GOOD"}, {Name: "BAD"}}},
+			{Kind: kindInputObject, Name: "TouchInput", InputFields: []InputValue{
 				{Name: "id", Type: nonNull(ref("ID"))},
 				{Name: "note", Type: ref("String"), DefaultValue: new(`"none"`)},
 			}},
@@ -57,12 +57,12 @@ func TestRenderSDL_EveryKind_ProducesSchemaGqlparserLoads(t *testing.T) {
 			// Omitted: the prelude defines these, and emitting them again
 			// would fail the load with a duplicate definition.
 			{Kind: kindScalar, Name: "String"},
-			{Kind: kindObject, Name: "__Type", Fields: []schemaItem{{Name: "name", Type: ref("String")}}},
+			{Kind: kindObject, Name: "__Type", Fields: []Field{{Name: "name", Type: ref("String")}}},
 			{Kind: "SOMETHING_NEW", Name: "Future"},
 		},
 	}
 
-	sdl := renderSDL(schema)
+	sdl := RenderSDL(schema)
 
 	if _, err := graphqlschema.Load([]byte(sdl)); err != nil {
 		t.Fatalf("the rendered SDL does not load:\n%v\n\n%s", err, sdl)
@@ -101,11 +101,11 @@ func TestRenderSDL_EveryKind_ProducesSchemaGqlparserLoads(t *testing.T) {
 // branch a self-managed instance can take: a root the introspection does not
 // name must not appear in the schema block as an empty entry.
 func TestRenderSDL_InstanceWithoutMutations_EmitsOnlyTheRootsItHas(t *testing.T) {
-	sdl := renderSDL(&schemaIntrospection{
-		QueryType:    &typeName{Name: "Query"},
-		MutationType: &typeName{},
-		Types: []schemaType{
-			{Kind: kindObject, Name: "Query", Fields: []schemaItem{{Name: "ok", Type: ref("Boolean")}}},
+	sdl := RenderSDL(&Schema{
+		QueryType:    &TypeName{Name: "Query"},
+		MutationType: &TypeName{},
+		Types: []Type{
+			{Kind: kindObject, Name: "Query", Fields: []Field{{Name: "ok", Type: ref("Boolean")}}},
 		},
 	})
 
@@ -124,7 +124,7 @@ func TestRenderSDL_InstanceWithoutMutations_EmitsOnlyTheRootsItHas(t *testing.T)
 func TestRenderTypeRef_NestedWrappers_UnwrapInOrder(t *testing.T) {
 	cases := []struct {
 		name string
-		ref  *typeRef
+		ref  *TypeRef
 		want string
 	}{
 		{name: "nothing", ref: nil, want: ""},

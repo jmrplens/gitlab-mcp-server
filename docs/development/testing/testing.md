@@ -18,12 +18,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,591 |
-| Unit test functions                                   | 13,988 |
+| Total test functions                                  | 14,609 |
+| Unit test functions                                   | 14,006 |
 | E2E test functions                                    |    603 |
-| cmd test functions                                    |  2,697 |
+| cmd test functions                                    |  2,715 |
 | Test files (internal/)                                |    516 |
-| Test files (cmd/)                                     |    172 |
+| Test files (cmd/)                                     |    174 |
 | Test files (test/e2e/)                                |    238 |
 | Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     22 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,829 | 81.1% |
+| `TestFunc_Scenario` (2-part)           | 11,829 | 81.0% |
 | `TestFunc` (no underscore)             |    981 |  6.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  1,781 | 12.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  1,799 | 12.3% |
 
 ## Test Distribution
 
@@ -49,8 +49,8 @@
 | Tools orchestration     |            332 |         15 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (177) |          8,558 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            603 |        238 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,697 |        172 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,591** |    **926** |                                                                                                 |
+| cmd packages            |          2,715 |        174 | server entry point and developer command utilities                                              |
+| **Total**               |     **14,609** |    **928** |                                                                                                 |
 
 ### Core Packages
 
@@ -320,7 +320,7 @@
 | cmd/audit_e2e_gaps                             |    92.9% |
 | cmd/audit_edition_tier                         |    86.9% |
 | cmd/audit_gateway_chars                        |    88.2% |
-| cmd/audit_graphql_documents                    |    94.7% |
+| cmd/audit_graphql_documents                    |    96.6% |
 | cmd/audit_install_buttons                      |    84.2% |
 | cmd/audit_md_escaping                          |   100.0% |
 | cmd/audit_metrics                              |    97.8% |
@@ -341,7 +341,7 @@
 | cmd/gen_action_catalog_manifest                |    66.7% |
 | cmd/gen_brand                                  |    87.1% |
 | cmd/gen_docker_tools                           |    95.9% |
-| cmd/gen_graphql_schema                         |    95.5% |
+| cmd/gen_graphql_schema                         |    90.2% |
 | cmd/gen_icon_webp                              |    92.3% |
 | cmd/gen_lhm_manifest                           |    89.4% |
 | cmd/gen_llms                                   |    98.9% |
@@ -351,6 +351,7 @@
 | cmd/internal/apidocs                           |   100.0% |
 | cmd/internal/auditshared                       |   100.0% |
 | cmd/internal/docgen                            |    99.6% |
+| cmd/internal/graphqlintrospect                 |   100.0% |
 | cmd/internal/mcpsurface                        |   100.0% |
 | cmd/server                                     |    99.9% |
 

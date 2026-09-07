@@ -34,9 +34,20 @@
 // drive. The summary line counts this repository's documents, not the server's
 // whole GraphQL surface.
 //
+// # The live re-probe
+//
+// -live introspects an instance right now and judges the documents against the
+// schema it serves. The pin can only report a document that was already broken
+// on the day it was taken; this reports one GitLab has narrowed since, which is
+// how every defect this gate was built for arose. The same run names every
+// type, field and argument the pin and that instance disagree about under our
+// own selection sets, so the pin's age is a number somebody sees. -schema is
+// the same against an SDL file already on disk.
+//
 // Usage:
 //
 //	go run ./cmd/audit_graphql_documents/
 //	go run ./cmd/audit_graphql_documents/ -v
+//	go run ./cmd/audit_graphql_documents/ -live https://gitlab.com/api/graphql
 //	go run ./cmd/audit_graphql_documents/ -schema /tmp/live/gitlab-schema.graphql
 package main
