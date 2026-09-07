@@ -366,6 +366,13 @@ jobs:
       - run: go build -o /dev/null ./cmd/server
       - name: Verify E2E tests compile
         run: go test -tags e2e -c -o /dev/null ./test/e2e/suite/
+      # A second compile rather than a second tag on the line above: the
+      # suite's *_ce_test.go and *_ee_test.go files exclude each other, so one
+      # compile sees one half and never the other. Between the day the first
+      # _ee_test.go was written and issue 570, nothing compiled the 41 EE files
+      # except a person running make test-e2e-docker-enterprise by hand.
+      - name: Verify the Enterprise E2E tests compile
+        run: go test -tags "e2e enterprise" -c -o /dev/null ./test/e2e/suite/
 
   # Type-checks every build-constrained file including the tests, for each
   # platform this project ships, on a Linux runner. The cross-platform matrix

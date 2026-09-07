@@ -20,7 +20,7 @@ The project uses three complementary analysis surfaces:
 
 Standalone Go tools that are already executed through `golangci-lint` are not run separately in Make or CI. This avoids duplicate work, divergent flags, and inconsistent findings. The consolidated Go gate covers `govet`, `modernize`, `gosec`, `staticcheck`, `goimports`, `gofumpt`, and `gci` through `.golangci.yml`.
 
-Go analysis targets pass every end-to-end build tag (`e2e,collectore2e,httpe2e,orbitlive,stdioe2e`, the Makefile's `GO_ANALYSIS_TAGS`) so every tagged suite under `test/e2e/` is analysed without being run; a suite added behind a new tag is invisible to `go vet` and `golangci-lint` until its tag is added to that list. Markdown linting remains repository-wide for Markdown files, excluding `plan/` drafts in Make targets.
+Go analysis targets pass every end-to-end build tag (`e2e,collectore2e,httpe2e,orbitlive,stdioe2e`, the Makefile's `GO_ANALYSIS_TAGS`) so every tagged suite under `test/e2e/` is analysed without being run; a suite added behind a new tag is invisible to `go vet` and `golangci-lint` until its tag is added to that list. The `enterprise` tag is the exception, because it is not a suite's tag but a switch between the two halves of `test/e2e/suite` (`*_ce_test.go` carry `e2e && !enterprise`, `*_ee_test.go` carry `e2e && enterprise`): one run can only see one half, so the Enterprise half gets a second `golangci-lint run` of its own, scoped to that package, with `GO_ANALYSIS_ENTERPRISE_TAGS`. Markdown linting remains repository-wide for Markdown files, excluding `plan/` drafts in Make targets.
 
 ## Quick Start
 
@@ -141,6 +141,7 @@ make golangci-lint
 golangci-lint config verify
 golangci-lint fmt --diff
 golangci-lint run --build-tags e2e,collectore2e,httpe2e,orbitlive,stdioe2e ./...
+golangci-lint run --build-tags e2e,collectore2e,httpe2e,orbitlive,stdioe2e,enterprise ./test/e2e/suite/
 ```
 
 The Make target performs these steps:
@@ -148,6 +149,7 @@ The Make target performs these steps:
 1. Validate `.golangci.yml`.
 2. Check configured Go formatters with `golangci-lint fmt --diff`.
 3. Run configured linters with every end-to-end build tag.
+4. Run them again over `test/e2e/suite/` with `enterprise` added, since that tag selects the Enterprise half of the suite rather than adding a module, and the run above never sees it.
 
 Configured formatters:
 

@@ -24,6 +24,15 @@ import (
 // TestMeta_GroupLDAPLinks exercises the group LDAP link lifecycle
 // (add/list/delete) via the gitlab_group meta-tool. Falls back to
 // the error path if LDAP integration is not configured.
+// ldapIntegrationAbsent reports whether err is the instance saying it has no
+// LDAP integration to link against: absent (404), refusing the link (422), or
+// unable to reach an LDAP server (502, 503). Each of those proves the tool
+// routed the request; the only failure mode worth failing on is a 2xx with no
+// side effect, which the success path asserts instead.
+func ldapIntegrationAbsent(err error) bool {
+	return isHTTPStatus(err, 404) || isHTTPStatus(err, 422) || isHTTPStatus(err, 502) || isHTTPStatus(err, 503)
+}
+
 func TestMeta_GroupLDAPLinks(t *testing.T) {
 	if !sess.enterprise {
 		t.Skip("group LDAP links require GitLab Ultimate")
@@ -85,7 +94,7 @@ func TestMeta_GroupLDAPLinks(t *testing.T) {
 		// (404) or the LDAP server may be unreachable (502/503). All of
 		// these indicate the tool routes correctly; a 2xx without
 		// side-effect would be the only failure mode.
-		if isHTTPStatus(err, 404) || isHTTPStatus(err, 422) || isHTTPStatus(err, 502) || isHTTPStatus(err, 503) {
+		if ldapIntegrationAbsent(err) {
 			t.Logf("LDAP link add returned expected error (integration may be absent): %v", err)
 			return
 		}
@@ -101,7 +110,7 @@ func TestMeta_GroupLDAPLinks(t *testing.T) {
 			t.Log("LDAP list ok")
 			return
 		}
-		if isHTTPStatus(err, 404) || isHTTPStatus(err, 422) || isHTTPStatus(err, 502) || isHTTPStatus(err, 503) {
+		if ldapIntegrationAbsent(err) {
 			t.Logf("LDAP link list returned expected error: %v", err)
 			return
 		}
@@ -125,7 +134,7 @@ func TestMeta_GroupLDAPLinks(t *testing.T) {
 			t.Log("LDAP link deleted and verified absent from list")
 			return
 		}
-		if isHTTPStatus(err, 404) || isHTTPStatus(err, 422) || isHTTPStatus(err, 502) || isHTTPStatus(err, 503) {
+		if ldapIntegrationAbsent(err) {
 			t.Logf("LDAP link delete returned expected error: %v", err)
 			return
 		}

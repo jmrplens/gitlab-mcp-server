@@ -39,11 +39,24 @@ GO_ANALYSIS_PKGS=./...
 # Every e2e build tag, and it must stay every one. A tagged file is invisible
 # to go vet and to golangci-lint unless its tag is listed here, so a suite
 # added behind a new tag is analysed by nothing until it is added. That has
-# happened three times: `httpe2e` was missing until the HTTP suite broke CI,
-# `stdioe2e` until the stdio suite did, and `orbitlive` had never been listed
-# at all, so test/e2e/orbit had gone unlinted since it was written. The same
+# happened four times: `httpe2e` was missing until the HTTP suite broke CI,
+# `stdioe2e` until the stdio suite did, `orbitlive` had never been listed
+# at all, so test/e2e/orbit had gone unlinted since it was written, and
+# `enterprise` (below) left the 41 Enterprise files of test/e2e/suite
+# unanalysed from the day the first was written until issue 570. The same
 # list lives in cmd/gen_testing_docs as e2eTags, for the same reason.
 GO_ANALYSIS_TAGS=e2e,collectore2e,httpe2e,orbitlive,stdioe2e
+# `enterprise` is not one more entry in that list, because it is not one more
+# suite: it selects between two runtimes of the same package. Every
+# *_ce_test.go in test/e2e/suite carries `e2e && !enterprise` and every
+# *_ee_test.go carries `e2e && enterprise`, so one analysis run sees one half
+# and never the other, and adding the tag above would trade the 128 CE files
+# for the 41 EE ones. The EE half therefore gets a run of its own, scoped to
+# the one package the tag reaches. That run is what found nineteen helpers
+# and four constants only CE tests use sitting in files both halves compile,
+# unused under the EE tag: nothing had ever compiled that combination.
+GO_ANALYSIS_ENTERPRISE_TAGS=$(GO_ANALYSIS_TAGS),enterprise
+GO_ANALYSIS_ENTERPRISE_PKGS=./test/e2e/suite/
 PROJECT_GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 GO_TOOLCHAIN ?= go$(PROJECT_GO_VERSION)
 export GOTOOLCHAIN := $(GO_TOOLCHAIN)
@@ -510,6 +523,8 @@ golangci-lint:
 	golangci-lint fmt --diff
 	@echo === golangci-lint run ===
 	golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
+	@echo === golangci-lint run, Enterprise half of the e2e suite ===
+	golangci-lint run --build-tags $(GO_ANALYSIS_ENTERPRISE_TAGS) $(GO_ANALYSIS_ENTERPRISE_PKGS)
 
 ## govulncheck: scan Go dependencies for known CVEs using call-graph analysis.
 ## Only reports vulnerabilities where the vulnerable function is actually called.
@@ -598,19 +613,21 @@ analyze:
 	echo "Go toolchain: $$GOTOOLCHAIN (go.mod: $(PROJECT_GO_VERSION))"; \
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
+	echo "Enterprise e2e analysis: $(GO_ANALYSIS_ENTERPRISE_PKGS) with $(GO_ANALYSIS_ENTERPRISE_TAGS)"; \
 	echo ""; \
-	run_check "[1/12] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/12] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/12] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/12] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[5/12] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[6/12] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[7/12] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[8/12] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[9/12] Markdown escaping" go run ./cmd/audit_md_escaping --check; \
-	run_check "[10/12] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[11/12] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[12/12] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[1/13] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/13] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/13] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/13] golangci-lint run (Enterprise e2e half)" golangci-lint run --build-tags $(GO_ANALYSIS_ENTERPRISE_TAGS) $(GO_ANALYSIS_ENTERPRISE_PKGS); \
+	run_check "[5/13] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/13] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[7/13] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/13] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/13] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/13] Markdown escaping" go run ./cmd/audit_md_escaping --check; \
+	run_check "[11/13] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[12/13] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[13/13] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
