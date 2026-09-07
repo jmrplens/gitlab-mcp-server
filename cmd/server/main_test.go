@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime/debug"
 	"slices"
@@ -10503,6 +10504,47 @@ func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
 			t.Parallel()
 			if !strings.Contains(string(encoded), `"`+reason+`"`) {
 				t.Errorf("the serialized card does not name %q:\n%s", reason, encoded)
+			}
+		})
+	}
+}
+
+// TestDependencies_TestSupport_NeverReachesTheServerBinary verifies that the
+// test-only packages stay out of what a user downloads.
+//
+// internal/graphqlschema embeds a 155 KB compressed GitLab schema and exists
+// for two readers: the test transport, which judges every document a test
+// sends, and the audit that judges the ones no test reaches. Neither runs in
+// the server. internal/testutil carries that schema plus net/http/httptest and
+// is imported only from _test.go files.
+//
+// Today both stay out by accident, because nothing in the server's import graph
+// happens to reach them. This makes it hold on purpose: the day somebody
+// imports test support from production code, this is the check that says so,
+// and it says so before the binary grows.
+func TestDependencies_TestSupport_NeverReachesTheServerBinary(t *testing.T) {
+	const modulePrefix = "github.com/jmrplens/gitlab-mcp-server/v2/"
+	forbidden := []string{"internal/testutil", "internal/graphqlschema"}
+
+	// The package list is asked of the toolchain rather than derived from the
+	// source, because an indirect import through any of the 250 packages in
+	// between is exactly the case a source scan would miss.
+	listed, err := exec.CommandContext(t.Context(), "go", "list", "-deps", ".").Output()
+	if err != nil {
+		t.Fatalf("go list -deps .: %v", err)
+	}
+	linked := map[string]bool{}
+	for line := range strings.SplitSeq(string(listed), "\n") {
+		linked[strings.TrimSpace(line)] = true
+	}
+	if !linked[modulePrefix+"internal/tools"] {
+		t.Fatalf("go list -deps . named %d package(s) and not internal/tools, so it is not listing this binary's imports", len(linked))
+	}
+
+	for _, pkg := range forbidden {
+		t.Run(pkg, func(t *testing.T) {
+			if linked[modulePrefix+pkg] {
+				t.Errorf("cmd/server links %s: test support has reached production code, and the pinned GraphQL schema now ships in the binary a user downloads", pkg)
 			}
 		})
 	}

@@ -151,6 +151,12 @@ jobs:
       # ones no test reaches, which is why it is a gate of its own.
       - name: Check every GraphQL document against the pinned schema
         run: make check-graphql-documents
+      # R-PATH, the dimension that reads the request rather than the surface.
+      # It reads the committed inventory the coverage job regenerates, so it
+      # needs no suite run and no network, and it fails on a package the suite
+      # never drives as loudly as on a document GitLab would refuse.
+      - name: Check the request every action issues
+        run: make audit-1to1-paths
       - name: Check the one-click install buttons
         run: make check-install-buttons
       # The manifest validator is the registry's publisher, a module whose 77

@@ -128,6 +128,8 @@ For a full walkthrough use the `create-mcp-tool` skill
    no test drives is covered by `make check-graphql-documents`. That client also
    records the request each call issues, so a new endpoint shows up in
    `docs/development/request-inventory.json` after `make gen-request-inventory`.
+   A package no test drives records nothing, and `make audit-1to1-paths` fails
+   on that: it is the one check that reads the request rather than the surface.
 5. **Markdown formatter**: register via `toolutil.RegisterMarkdown[T](fn)`
    in the sub-package `markdown.go` `init()`. List formatters must add
    `toolutil.HintPreserveLinks` as the first hint in `WriteHints()`.
