@@ -15,6 +15,7 @@ package suite
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -99,6 +100,9 @@ func TestMeta_WorkItemSavedViews(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "work_item_saved_view_update")
+		requireTruef(t, out.SavedView.Sort == "UPDATED_DESC", "saved view sort = %q, want %q", out.SavedView.Sort, "UPDATED_DESC")
+		requireTruef(t, out.SavedView.Description == "updated by the e2e suite",
+			"saved view description = %q, want the text sent", out.SavedView.Description)
 		t.Logf("Updated saved view: sort=%q description=%q", out.SavedView.Sort, out.SavedView.Description)
 	})
 
@@ -111,6 +115,7 @@ func TestMeta_WorkItemSavedViews(t *testing.T) {
 			"params": map[string]any{"saved_view_id": savedViewID},
 		})
 		requireNoError(t, err, "work_item_saved_view_subscribe")
+		requireTruef(t, out.SavedView.Subscribed, "saved view %d reports subscribed=false right after subscribing", savedViewID)
 		t.Logf("Subscribed to saved view: subscribed=%v", out.SavedView.Subscribed)
 	})
 
@@ -123,6 +128,7 @@ func TestMeta_WorkItemSavedViews(t *testing.T) {
 			"params": map[string]any{"saved_view_id": savedViewID},
 		})
 		requireNoError(t, err, "work_item_saved_view_unsubscribe")
+		requireTruef(t, !out.SavedView.Subscribed, "saved view %d still reports subscribed=true after unsubscribing", savedViewID)
 		t.Logf("Unsubscribed from saved view: subscribed=%v", out.SavedView.Subscribed)
 	})
 
@@ -152,6 +158,11 @@ func TestMeta_WorkItemSavedViews(t *testing.T) {
 			"params": map[string]any{"saved_view_id": savedViewID, "confirm": true},
 		})
 		requireNoError(t, err, "work_item_saved_view_delete")
+		remaining, listErr := listSavedViews(ctx, t, grp.Path)
+		requireNoError(t, listErr, "work_item_saved_view_list after delete")
+		requireTruef(t, !slices.ContainsFunc(remaining.SavedViews, func(v workitemsavedviews.Item) bool {
+			return v.ID == savedViewID
+		}), "saved view %d is still listed after the delete: %+v", savedViewID, remaining.SavedViews)
 		t.Log("Deleted saved view")
 	})
 }

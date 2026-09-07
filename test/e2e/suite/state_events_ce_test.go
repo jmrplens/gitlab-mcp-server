@@ -103,6 +103,10 @@ func TestMeta_StateEvents(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "delete issue for state events")
+		requireGoneOn(ctx, t, sess.meta, "issue after delete", "gitlab_issue", map[string]any{
+			"action": "get",
+			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
+		})
 		t.Logf("Deleted issue IID=%d", issueIID)
 	})
 }

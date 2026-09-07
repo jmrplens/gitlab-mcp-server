@@ -87,6 +87,10 @@ func runGroupExtrasUploadHappyPath(t *testing.T, ctx context.Context, grp GroupF
 			},
 		})
 		requireNoError(t, err, "group_upload_delete_by_id")
+		requireNotListedOn(ctx, t, sess.meta, "group uploads after delete by ID", "gitlab_group", map[string]any{
+			"action": "group_upload_list",
+			"params": map[string]any{"group_id": grp.gidStr()},
+		}, groupUploadIDs, first.ID)
 		t.Logf("Deleted upload %d by ID", first.ID)
 	})
 
@@ -105,6 +109,16 @@ func runGroupExtrasUploadHappyPath(t *testing.T, ctx context.Context, grp GroupF
 			},
 		})
 		requireNoError(t, err, "group_upload_delete_by_secret")
+		requireNotListedOn(ctx, t, sess.meta, "group uploads after delete by secret", "gitlab_group", map[string]any{
+			"action": "group_upload_list",
+			"params": map[string]any{"group_id": grp.gidStr()},
+		}, func(out groupmarkdownuploads.ListOutput) []string {
+			names := make([]string, 0, len(out.Uploads))
+			for _, u := range out.Uploads {
+				names = append(names, u.Filename)
+			}
+			return names
+		}, second.Filename)
 		t.Logf("Deleted upload %q by secret", second.Filename)
 	})
 }

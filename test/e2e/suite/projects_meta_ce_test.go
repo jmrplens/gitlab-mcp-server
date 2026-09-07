@@ -105,6 +105,9 @@ func TestMeta_ProjectCore(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta project unstar")
+		requireTruef(t, out.ID == proj.ID, "unstar answered for project %d, want %d", out.ID, proj.ID)
+		// The Star subtest is the only star this fixture project ever had.
+		requireTruef(t, out.StarCount == 0, "star_count = %d after unstarring, want 0", out.StarCount)
 		t.Logf("Unstarred project %d", out.ID)
 	})
 
@@ -182,6 +185,9 @@ func TestMeta_ProjectCore(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "meta project repository_storage_get")
+		// Every project lives on a named storage shard, "default" on a
+		// single-shard instance.
+		requireTruef(t, out.RepositoryStorage != "", "project %d reports no repository storage shard", proj.ID)
 		t.Logf("Got repository storage: %s", out.RepositoryStorage)
 	})
 
@@ -322,6 +328,12 @@ func TestMeta_ProjectHooks(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta project hook_set_custom_header")
+		// GitLab masks a custom header's value on read but keeps its key, so the
+		// key is what a read observes.
+		requireListedOn(ctx, t, sess.meta, "hook custom headers after set", "gitlab_project", map[string]any{
+			"action": "hook_get",
+			"params": map[string]any{"project_id": proj.pidStr(), "hook_id": hookID},
+		}, hookCustomHeaderKeys, "X-E2E-Test")
 		t.Log("Set custom header on hook")
 	})
 
@@ -336,6 +348,10 @@ func TestMeta_ProjectHooks(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta project hook_delete_custom_header")
+		requireNotListedOn(ctx, t, sess.meta, "hook custom headers after delete", "gitlab_project", map[string]any{
+			"action": "hook_get",
+			"params": map[string]any{"project_id": proj.pidStr(), "hook_id": hookID},
+		}, hookCustomHeaderKeys, "X-E2E-Test")
 		t.Log("Deleted custom header from hook")
 	})
 
@@ -394,6 +410,16 @@ func TestMeta_ProjectHooks(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta project hook_delete")
+		requireNotListedOn(ctx, t, sess.meta, "project hooks after delete", "gitlab_project", map[string]any{
+			"action": "hook_list",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, func(out projects.ListHooksOutput) []int64 {
+			ids := make([]int64, 0, len(out.Hooks))
+			for _, h := range out.Hooks {
+				ids = append(ids, h.ID)
+			}
+			return ids
+		}, hookID)
 		t.Logf("Deleted hook %d", hookID)
 	})
 }
@@ -475,6 +501,19 @@ func TestMeta_ProjectLabelsDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "label unsubscribe")
+		// The action answers with no content, but the label a read returns
+		// carries the subscription, which is what the group twin asserts and
+		// what makes the difference between the call returning and the
+		// subscription actually ending.
+		read, err := callToolOn[labels.Output](ctx, sess.meta, "gitlab_project", map[string]any{
+			"action": "label_get",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+				"label_id":   labelName,
+			},
+		})
+		requireNoError(t, err, "re-read label after unsubscribe")
+		requireTruef(t, !read.Subscribed, "label %q still reports subscribed=true after unsubscribing", labelName)
 		t.Logf("Unsubscribed from label %q", labelName)
 	})
 
@@ -666,6 +705,9 @@ func TestMeta_ProjectBadgesDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "badge_preview")
+		// The URL previewed carries no placeholders, so rendering leaves it alone.
+		requireTruef(t, out.Badge.RenderedLinkURL == "https://example.com/preview",
+			"rendered link_url = %q, want the URL previewed", out.Badge.RenderedLinkURL)
 		t.Logf("Badge preview rendered: link=%s", out.Badge.RenderedLinkURL)
 	})
 }
@@ -807,6 +849,19 @@ func TestMeta_ProjectBoardsDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "board_list_delete")
+		requireNotListedOn(ctx, t, sess.meta, "board lists after delete", "gitlab_project", map[string]any{
+			"action": "board_list_list",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+				"board_id":   boardID,
+			},
+		}, func(out boards.ListBoardListsOutput) []int64 {
+			ids := make([]int64, 0, len(out.Lists))
+			for _, l := range out.Lists {
+				ids = append(ids, l.ID)
+			}
+			return ids
+		}, listID)
 		t.Logf("Deleted board list %d", listID)
 	})
 }
@@ -852,7 +907,7 @@ func TestMeta_ProjectApprovals(t *testing.T) {
 		if !sess.enterprise {
 			return
 		}
-		_, err := callToolOn[projects.ApprovalConfigOutput](ctx, sess.meta, "gitlab_project", map[string]any{
+		out, err := callToolOn[projects.ApprovalConfigOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "approval_config_change",
 			"params": map[string]any{
 				"project_id":              proj.pidStr(),
@@ -861,6 +916,9 @@ func TestMeta_ProjectApprovals(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "approval_config_change")
+		requireTruef(t, out.ResetApprovalsOnPush, "reset_approvals_on_push = false after asking for true")
+		requireTruef(t, !out.DisableOverridingApproversPerMergeRequest,
+			"disable_overriding_approvers_per_merge_request = true after asking for false")
 		t.Log("Changed approval config")
 	})
 
@@ -924,6 +982,9 @@ func TestMeta_ProjectApprovals(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "approval_rule_update")
+		requireTruef(t, out.ID == ruleID, "approval_rule_update answered for rule %d, want %d", out.ID, ruleID)
+		requireTruef(t, out.Name == "E2E Approval Rule Updated", "approval rule name = %q, want %q", out.Name, "E2E Approval Rule Updated")
+		requireTruef(t, out.ApprovalsRequired == 2, "approvals_required = %d, want 2", out.ApprovalsRequired)
 		t.Logf("Updated approval rule %d", out.ID)
 	})
 
@@ -939,6 +1000,16 @@ func TestMeta_ProjectApprovals(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "approval_rule_delete")
+		requireNotListedOn(ctx, t, sess.meta, "project approval rules after delete", "gitlab_project", map[string]any{
+			"action": "approval_rule_list",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, func(out projects.ListApprovalRulesOutput) []int64 {
+			ids := make([]int64, 0, len(out.Rules))
+			for _, r := range out.Rules {
+				ids = append(ids, r.ID)
+			}
+			return ids
+		}, ruleID)
 		t.Logf("Deleted approval rule %d", ruleID)
 	})
 }
@@ -974,11 +1045,15 @@ func TestMeta_ProjectExport(t *testing.T) {
 	})
 
 	t.Run("ExportStatus", func(t *testing.T) {
-		_, err := callToolOn[projectimportexport.ExportStatusOutput](ctx, sess.meta, "gitlab_project", map[string]any{
+		out, err := callToolOn[projectimportexport.ExportStatusOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "export_status",
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "export_status")
+		requireTruef(t, out.ID == proj.ID, "export status is for project %d, want %d", out.ID, proj.ID)
+		// Which state the export has reached is Sidekiq's business, so only the
+		// presence of a state is assertable here.
+		requireTruef(t, out.ExportStatus != "", "project %d reports an empty export status", proj.ID)
 		t.Log("Got export status")
 	})
 
@@ -988,6 +1063,8 @@ func TestMeta_ProjectExport(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "import_status")
+		// The fixture created this project rather than importing it.
+		requireTruef(t, out.ImportStatus == "none", "import status = %q, want %q for a project that was never imported", out.ImportStatus, "none")
 		t.Logf("Import status: %s", out.ImportStatus)
 	})
 }

@@ -96,6 +96,16 @@ func TestMeta_GroupLabels(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group label delete")
+		requireNotListedOn(ctx, t, sess.meta, "group labels after delete", "gitlab_group", map[string]any{
+			"action": "group_label_list",
+			"params": map[string]any{"group_id": gid},
+		}, func(out grouplabels.ListOutput) []int64 {
+			ids := make([]int64, 0, len(out.Labels))
+			for _, l := range out.Labels {
+				ids = append(ids, l.ID)
+			}
+			return ids
+		}, labelID)
 		t.Logf("Deleted group label %d", labelID)
 	})
 }

@@ -57,6 +57,8 @@ func runMetaGroupCoreOperations(t *testing.T, ctx context.Context, grpName strin
 			},
 		})
 		requireNoError(t, err, "group update")
+		requireTruef(t, out.ID == groupID, "update answered for group %d, want %d", out.ID, groupID)
+		requireTruef(t, out.Description == "Deep test group", "group description = %q, want %q", out.Description, "Deep test group")
 		t.Logf("Updated group %d", out.ID)
 	})
 
@@ -137,6 +139,9 @@ func runMetaGroupBadgeOperations(t *testing.T, ctx context.Context, groupID int6
 			},
 		})
 		requireNoError(t, err, "badge_edit")
+		requireTruef(t, out.Badge.ID == badgeID, "badge_edit answered for badge %d, want %d", out.Badge.ID, badgeID)
+		requireTruef(t, out.Badge.LinkURL == "https://example.com/badge-updated",
+			"badge link_url = %q, want the updated one", out.Badge.LinkURL)
 		t.Logf("Edited badge %d", out.Badge.ID)
 	})
 
@@ -151,6 +156,9 @@ func runMetaGroupBadgeOperations(t *testing.T, ctx context.Context, groupID int6
 			},
 		})
 		requireNoError(t, err, "badge_preview")
+		// The URL previewed carries no placeholders, so rendering leaves it alone.
+		requireTruef(t, out.Badge.RenderedLinkURL == "https://example.com/badge",
+			"rendered link_url = %q, want the URL previewed", out.Badge.RenderedLinkURL)
 		t.Logf("Preview rendered: %s", out.Badge.RenderedLinkURL)
 	})
 
@@ -161,6 +169,16 @@ func runMetaGroupBadgeOperations(t *testing.T, ctx context.Context, groupID int6
 			"params": map[string]any{"group_id": groupIDStr, "badge_id": badgeID},
 		})
 		requireNoError(t, err, "badge_delete")
+		requireNotListedOn(ctx, t, sess.meta, "group badges after delete", "gitlab_group", map[string]any{
+			"action": "badge_list",
+			"params": map[string]any{"group_id": groupIDStr},
+		}, func(out badges.ListGroupOutput) []int64 {
+			ids := make([]int64, 0, len(out.Badges))
+			for _, b := range out.Badges {
+				ids = append(ids, b.ID)
+			}
+			return ids
+		}, badgeID)
 		t.Logf("Deleted badge %d", badgeID)
 	})
 }
@@ -219,6 +237,8 @@ func runMetaGroupLabelOperations(t *testing.T, ctx context.Context, groupID int6
 			},
 		})
 		requireNoError(t, err, "label create")
+		requireTruef(t, out.Name == labelName, "label name = %q, want %q", out.Name, labelName)
+		requireTruef(t, strings.EqualFold(out.Color, "#FF0000"), "label color = %q, want %q", out.Color, "#FF0000")
 		t.Logf("Created label: %s (ID=%d)", out.Name, out.ID)
 	})
 
@@ -243,6 +263,7 @@ func runMetaGroupLabelOperations(t *testing.T, ctx context.Context, groupID int6
 			},
 		})
 		requireNoError(t, err, "label get")
+		requireTruef(t, out.Name == labelName, "label get returned %q, want %q", out.Name, labelName)
 		t.Logf("Got label: %s", out.Name)
 	})
 
@@ -272,6 +293,8 @@ func runMetaGroupLabelOperations(t *testing.T, ctx context.Context, groupID int6
 			},
 		})
 		requireNoError(t, err, "label subscribe")
+		requireTruef(t, out.Name == labelName, "subscribe answered for label %q, want %q", out.Name, labelName)
+		requireTruef(t, out.Subscribed, "label %q reports subscribed=false right after subscribing", labelName)
 		t.Logf("Subscribed to label: %s", out.Name)
 	})
 
@@ -285,6 +308,15 @@ func runMetaGroupLabelOperations(t *testing.T, ctx context.Context, groupID int6
 			},
 		})
 		requireNoError(t, err, "label unsubscribe")
+		read, err := callToolOn[grouplabels.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_label_get",
+			"params": map[string]any{
+				"group_id": groupIDStr,
+				"label_id": labelName,
+			},
+		})
+		requireNoError(t, err, "re-read label after unsubscribe")
+		requireTruef(t, !read.Subscribed, "label %q still reports subscribed=true after unsubscribing", labelName)
 		t.Log("Unsubscribed from label")
 	})
 
@@ -298,6 +330,16 @@ func runMetaGroupLabelOperations(t *testing.T, ctx context.Context, groupID int6
 			},
 		})
 		requireNoError(t, err, "label delete")
+		requireNotListedOn(ctx, t, sess.meta, "group labels after delete", "gitlab_group", map[string]any{
+			"action": "group_label_list",
+			"params": map[string]any{"group_id": groupIDStr},
+		}, func(out grouplabels.ListOutput) []string {
+			names := make([]string, 0, len(out.Labels))
+			for _, l := range out.Labels {
+				names = append(names, l.Name)
+			}
+			return names
+		}, labelName)
 		t.Log("Deleted label")
 	})
 }
@@ -345,6 +387,10 @@ func runMetaGroupMilestoneOperations(t *testing.T, ctx context.Context, groupID 
 			},
 		})
 		requireNoError(t, err, "milestone update")
+		// milestoneID holds the IID the create answered with, which is what the
+		// update was addressed by.
+		requireTruef(t, out.IID == milestoneID, "update answered for milestone IID %d, want %d", out.IID, milestoneID)
+		requireTruef(t, out.Description == "Updated milestone", "milestone description = %q, want %q", out.Description, "Updated milestone")
 		t.Logf("Updated milestone %d", out.ID)
 	})
 
@@ -815,6 +861,8 @@ func runEnterpriseMetaGroupBoardOperations(t *testing.T, ctx context.Context, gr
 			},
 		})
 		requireNoError(t, err, "group_board_update")
+		requireTruef(t, out.ID == boardID, "update answered for board %d, want %d", out.ID, boardID)
+		requireTruef(t, out.Name == "Updated Board", "board name = %q, want %q", out.Name, "Updated Board")
 		t.Logf("Updated board %d: %s", out.ID, out.Name)
 	})
 
@@ -839,6 +887,10 @@ func runEnterpriseMetaGroupBoardOperations(t *testing.T, ctx context.Context, gr
 			"params": map[string]any{"group_id": groupIDStr, "board_id": boardID},
 		})
 		requireNoError(t, err, "group_board_delete")
+		requireNotListedOn(ctx, t, sess.meta, "group boards after delete", "gitlab_group", map[string]any{
+			"action": "group_board_list",
+			"params": map[string]any{"group_id": groupIDStr},
+		}, groupBoardIDs, boardID)
 		t.Logf("Deleted board %d", boardID)
 	})
 }
@@ -937,6 +989,9 @@ func runEnterpriseMetaGroupWikiOperations(t *testing.T, ctx context.Context, gro
 			},
 		})
 		requireNoError(t, err, "wiki_edit")
+		requireTruef(t, out.Slug == wikiSlug, "wiki_edit answered for slug %q, want %q", out.Slug, wikiSlug)
+		requireTruef(t, out.Content == "# E2E group wiki\n\nUpdated content.",
+			"wiki content = %q, want the text just written", out.Content)
 		t.Logf("Updated group wiki page %s", out.Slug)
 	})
 
@@ -947,6 +1002,16 @@ func runEnterpriseMetaGroupWikiOperations(t *testing.T, ctx context.Context, gro
 			"params": map[string]any{"group_id": groupIDStr, "slug": wikiSlug},
 		})
 		requireNoError(t, err, "wiki_delete")
+		requireNotListedOn(ctx, t, sess.meta, "group wiki pages after delete", "gitlab_group", map[string]any{
+			"action": "wiki_list",
+			"params": map[string]any{"group_id": groupIDStr},
+		}, func(out groupwikis.ListOutput) []string {
+			slugs := make([]string, 0, len(out.WikiPages))
+			for _, p := range out.WikiPages {
+				slugs = append(slugs, p.Slug)
+			}
+			return slugs
+		}, wikiSlug)
 		t.Logf("Deleted group wiki page %s", wikiSlug)
 	})
 }
@@ -1014,6 +1079,16 @@ func runEnterpriseMetaGroupProtectedBranchOperations(t *testing.T, ctx context.C
 			"params": map[string]any{"group_id": groupIDStr, "branch": branchName},
 		})
 		requireNoError(t, err, "protected_branch_unprotect")
+		requireNotListedOn(ctx, t, sess.meta, "group protected branches after unprotect", "gitlab_group", map[string]any{
+			"action": "protected_branch_list",
+			"params": map[string]any{"group_id": groupIDStr},
+		}, func(out groupprotectedbranches.ListOutput) []string {
+			names := make([]string, 0, len(out.Branches))
+			for _, b := range out.Branches {
+				names = append(names, b.Name)
+			}
+			return names
+		}, branchName)
 		t.Logf("Unprotected group branch %s", branchName)
 	})
 }
@@ -1116,6 +1191,16 @@ func runEnterpriseMetaGroupProtectedEnvOperations(t *testing.T, ctx context.Cont
 			"params": map[string]any{"group_id": groupIDStr, "environment": envName},
 		})
 		requireNoError(t, err, "protected_env_unprotect")
+		requireNotListedOn(ctx, t, sess.meta, "group protected environments after unprotect", "gitlab_group", map[string]any{
+			"action": "protected_env_list",
+			"params": map[string]any{"group_id": groupIDStr},
+		}, func(out groupprotectedenvs.ListOutput) []string {
+			names := make([]string, 0, len(out.Environments))
+			for _, e := range out.Environments {
+				names = append(names, e.Name)
+			}
+			return names
+		}, envName)
 		t.Logf("Unprotected group environment %s", envName)
 	})
 }

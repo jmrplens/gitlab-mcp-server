@@ -67,6 +67,9 @@ func TestMeta_SecurityScanProfiles(t *testing.T) {
 		},
 	})
 	requireNoError(t, err, "create project in group for scan profile test")
+	requireTruef(t, proj.ID > 0, "created project has no ID")
+	requireTruef(t, strings.HasPrefix(proj.PathWithNamespace, grp.Path+"/"),
+		"project path %q is not under the group %q a scan profile needs", proj.PathWithNamespace, grp.Path)
 	t.Logf("Group %d, project %d (%s)", grp.ID, proj.ID, proj.PathWithNamespace)
 
 	t.Run("Meta/SecurityScanProfile/Attach", func(t *testing.T) {

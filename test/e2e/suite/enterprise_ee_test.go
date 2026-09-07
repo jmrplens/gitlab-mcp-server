@@ -1383,6 +1383,14 @@ func TestMeta_StorageMoves(t *testing.T) {
 // TestMeta_SecurityFindings exercises security finding tools via the
 // gitlab_security_finding meta-tool.
 // Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
+//
+// Its fixture is a fresh project with no pipeline, so an empty listing is the
+// correct answer and these subtests can only show that the action routes and
+// that its filters are accepted. That is deliberately not enough to catch a
+// refused GraphQL document, which also answers empty and without an error: the
+// assertion that the findings really come back lives in
+// [TestMeta_VulnerabilityLifecycle], which owns a pipeline that publishes
+// three CRITICAL SAST findings.
 func TestMeta_SecurityFindings(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {

@@ -83,7 +83,7 @@ func TestMeta_GroupProtectedBranchesEE(t *testing.T) {
 	})
 
 	t.Run("Meta/GroupProtectedBranch/Update", func(t *testing.T) {
-		_, err := callToolOn[groupprotectedbranches.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+		out, err := callToolOn[groupprotectedbranches.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "protected_branch_update",
 			"params": map[string]any{
 				"group_id":         grp.gidStr(),
@@ -92,6 +92,8 @@ func TestMeta_GroupProtectedBranchesEE(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "protected_branch_update")
+		requireTruef(t, out.Name == branchName, "update answered for branch %q, want %q", out.Name, branchName)
+		requireTruef(t, out.AllowForcePush, "allow_force_push = false after asking for true")
 		t.Logf("Updated group protected branch %s (allow_force_push=true)", branchName)
 	})
 
@@ -101,6 +103,10 @@ func TestMeta_GroupProtectedBranchesEE(t *testing.T) {
 			"params": map[string]any{"group_id": grp.gidStr(), "branch": branchName},
 		})
 		requireNoError(t, err, "protected_branch_unprotect")
+		requireGoneOn(ctx, t, sess.meta, "group protected branch after unprotect", "gitlab_group", map[string]any{
+			"action": "protected_branch_get",
+			"params": map[string]any{"group_id": grp.gidStr(), "branch": branchName},
+		})
 		t.Logf("Unprotected group branch %s", branchName)
 	})
 }

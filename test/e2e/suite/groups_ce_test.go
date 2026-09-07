@@ -9,6 +9,7 @@ package suite
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -88,6 +89,10 @@ func TestIndividual_Groups(t *testing.T) {
 			GroupID: toolutil.StringOrInt(gid),
 		})
 		requireNoError(t, err, "group members list")
+		// The account that created the group is its owner, so it is always a member.
+		requireTruef(t, slices.ContainsFunc(out.Members, func(m groups.MemberOutput) bool {
+			return m.Username == sess.username
+		}), "group %d members do not include its creator %q: %+v", groupID, sess.username, out.Members)
 		t.Logf("Group %d has %d members", groupID, len(out.Members))
 	})
 
@@ -291,6 +296,10 @@ func TestMeta_Groups(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta group members list")
+		// The account that created the group is its owner, so it is always a member.
+		requireTruef(t, slices.ContainsFunc(out.Members, func(m groups.MemberOutput) bool {
+			return m.Username == sess.username
+		}), "group %d members do not include its creator %q: %+v", groupID, sess.username, out.Members)
 		t.Logf("Group %d has %d members via meta-tool", groupID, len(out.Members))
 	})
 

@@ -83,6 +83,10 @@ func TestMeta_DeployTokens(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "deploy token delete")
+		requireNotListedOn(ctx, t, sess.meta, "project deploy tokens after delete", "gitlab_access", map[string]any{
+			"action": "deploy_token_list_project",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, deployTokenIDs, tokenID)
 		t.Logf("Deleted deploy token %d", tokenID)
 	})
 }

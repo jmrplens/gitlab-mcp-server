@@ -64,6 +64,37 @@ func runnerCtlScopeConflict(err error) bool {
 	return isHTTPStatus(err, 409) || strings.Contains(strings.ToLower(err.Error()), "already")
 }
 
+// runnerCtlTokenIDs maps a controller token listing to the token IDs it holds.
+func runnerCtlTokenIDs(out runnercontrollertokens.ListOutput) []int64 {
+	ids := make([]int64, 0, len(out.Tokens))
+	for _, tok := range out.Tokens {
+		ids = append(ids, tok.ID)
+	}
+	return ids
+}
+
+// runnerCtlScopedRunnerIDs maps a controller's scopings to the runners scoped
+// to it, which is what adding and removing a runner scope changes.
+func runnerCtlScopedRunnerIDs(out runnercontrollerscopes.ScopesOutput) []int64 {
+	ids := make([]int64, 0, len(out.RunnerLevelScopings))
+	for _, scoping := range out.RunnerLevelScopings {
+		ids = append(ids, scoping.RunnerID)
+	}
+	return ids
+}
+
+// runnerCtlScopes re-reads a controller's scopings, so the add and remove
+// subtests observe their effect instead of only their return.
+func runnerCtlScopes(ctx context.Context, t *testing.T, label string, controllerID int64) runnercontrollerscopes.ScopesOutput {
+	t.Helper()
+	out, err := callToolOn[runnercontrollerscopes.ScopesOutput](ctx, sess.meta, "gitlab_runner", map[string]any{
+		"action": "controller_scope_list",
+		"params": map[string]any{"controller_id": controllerID},
+	})
+	requireNoError(t, err, label)
+	return out
+}
+
 // TestMeta_RunnerControllerLifecycle exercises the runner controller CRUD,
 // token, and scope actions via the gitlab_runner meta-tool against a live
 // GitLab Ultimate instance.
@@ -197,6 +228,10 @@ func TestMeta_RunnerControllerLifecycle(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "controller_token_revoke")
+			requireNotListedOn(ctx, t, sess.meta, "controller tokens after revoke", "gitlab_runner", map[string]any{
+				"action": "controller_token_list",
+				"params": map[string]any{"controller_id": controllerID},
+			}, runnerCtlTokenIDs, tokenID)
 			t.Logf("Revoked controller token %d", tokenID)
 		})
 
@@ -220,6 +255,9 @@ func TestMeta_RunnerControllerLifecycle(t *testing.T) {
 				return
 			}
 			requireNoError(t, err, "controller_scope_add_instance")
+			scopes := runnerCtlScopes(ctx, t, "controller_scope_list after add instance", controllerID)
+			requireTruef(t, len(scopes.InstanceLevelScopings) > 0,
+				"controller %d reports no instance-level scoping right after adding one", controllerID)
 			t.Log("Added instance scope")
 		})
 
@@ -229,6 +267,9 @@ func TestMeta_RunnerControllerLifecycle(t *testing.T) {
 				"params": map[string]any{"controller_id": controllerID},
 			})
 			requireNoError(t, err, "controller_scope_remove_instance")
+			scopes := runnerCtlScopes(ctx, t, "controller_scope_list after remove instance", controllerID)
+			requireTruef(t, len(scopes.InstanceLevelScopings) == 0,
+				"controller %d still reports %d instance-level scopings after removing them", controllerID, len(scopes.InstanceLevelScopings))
 			t.Log("Removed instance scope")
 		})
 
@@ -266,6 +307,10 @@ func TestMeta_RunnerControllerLifecycle(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "controller_scope_remove_runner")
+			requireNotListedOn(ctx, t, sess.meta, "controller runner scopings after remove", "gitlab_runner", map[string]any{
+				"action": "controller_scope_list",
+				"params": map[string]any{"controller_id": controllerID},
+			}, runnerCtlScopedRunnerIDs, runnerID)
 			t.Logf("Removed runner %d from controller scope", runnerID)
 		})
 

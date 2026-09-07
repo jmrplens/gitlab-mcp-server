@@ -9,6 +9,7 @@ package suite
 import (
 	"context"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -173,6 +174,10 @@ func TestMeta_Epics(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_delete")
+		requireGoneOn(ctx, t, sess.meta, "epic after delete", "gitlab_group", map[string]any{
+			"action": "epic_get",
+			"params": map[string]any{"full_path": groupPath, "epic_iid": epicIID},
+		})
 		t.Log("Deleted epic successfully")
 	})
 }
@@ -301,6 +306,16 @@ func TestMeta_EpicNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_note_delete")
+		requireNotListedOn(ctx, t, sess.meta, "epic notes after delete", "gitlab_group", map[string]any{
+			"action": "epic_note_list",
+			"params": map[string]any{"full_path": groupPath, "epic_iid": epicIID},
+		}, func(out epicnotes.ListOutput) []int64 {
+			ids := make([]int64, 0, len(out.Notes))
+			for _, n := range out.Notes {
+				ids = append(ids, n.ID)
+			}
+			return ids
+		}, noteID)
 		t.Log("Deleted note successfully")
 	})
 }
@@ -451,6 +466,20 @@ func TestMeta_EpicDiscussions(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_discussion_delete_note")
+		requireNotListedOn(ctx, t, sess.meta, "discussion notes after delete", "gitlab_group", map[string]any{
+			"action": "epic_discussion_get",
+			"params": map[string]any{
+				"full_path":     groupPath,
+				"epic_iid":      epicIID,
+				"discussion_id": discussionID,
+			},
+		}, func(out epicdiscussions.Output) []int64 {
+			ids := make([]int64, 0, len(out.Notes))
+			for _, n := range out.Notes {
+				ids = append(ids, n.ID)
+			}
+			return ids
+		}, replyNoteID)
 		t.Log("Deleted discussion note successfully")
 	})
 }
@@ -505,6 +534,9 @@ func TestMeta_EpicIssues(t *testing.T) {
 		},
 	})
 	requireNoError(t, setupErr, "create project in group")
+	requireTruef(t, projOut.ID > 0, "created project has no ID")
+	requireTruef(t, strings.HasPrefix(projOut.PathWithNamespace, grpOut.FullPath+"/"),
+		"project path %q is not under the group %q it was created in", projOut.PathWithNamespace, grpOut.FullPath)
 	t.Logf("Created project: %s (ID=%d)", projOut.PathWithNamespace, projOut.ID)
 
 	defer func() {
@@ -745,6 +777,9 @@ func TestMeta_EpicLinks(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "epic_get_links")
+		// The epic was created moments ago with no children, which is the case
+		// this subtest is named for.
+		requireTruef(t, len(out.ChildEpics) == 0, "fresh epic reports %d child epics, want none", len(out.ChildEpics))
 		t.Logf("Got %d linked epic(s) (expected 0)", len(out.ChildEpics))
 	})
 }

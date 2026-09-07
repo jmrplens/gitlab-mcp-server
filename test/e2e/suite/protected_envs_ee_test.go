@@ -82,6 +82,10 @@ func TestMeta_ProtectedEnvs(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta protected env unprotect")
+		requireGoneOn(ctx, t, sess.meta, "protected environment after unprotect", "gitlab_environment", map[string]any{
+			"action": "protected_get",
+			"params": map[string]any{"project_id": proj.pidStr(), "environment": envName},
+		})
 		t.Logf("Unprotected environment: %s", envName)
 	})
 }

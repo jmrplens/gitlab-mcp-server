@@ -11,6 +11,7 @@ package suite
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -305,6 +306,11 @@ func TestMeta_DeployKeysExtended(t *testing.T) {
 			"params": map[string]any{"user_id": sess.username},
 		})
 		requireNoError(t, err, "deploy_key_list_user_project")
+		// The key this test created is enabled on two projects the same account
+		// owns, which is exactly what this listing reports.
+		requireTruef(t, slices.ContainsFunc(out.DeployKeys, func(k deploykeys.Output) bool {
+			return k.ID == keyID
+		}), "deploy key %d is not among the account's project deploy keys: %+v", keyID, out.DeployKeys)
 		t.Logf("User project deploy keys: %d", len(out.DeployKeys))
 	})
 }
@@ -380,6 +386,17 @@ func TestMeta_Invitations(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "invite_project")
+		requireTruef(t, out.Status == "success", "invite status = %q (message %v), want %q", out.Status, out.Message, "success")
+		requireListedOn(ctx, t, sess.meta, "project invitations after invite", "gitlab_access", map[string]any{
+			"action": "invite_list_project",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, func(list invites.ListPendingInvitationsOutput) []string {
+			emails := make([]string, 0, len(list.Invitations))
+			for _, inv := range list.Invitations {
+				emails = append(emails, inv.InviteEmail)
+			}
+			return emails
+		}, email)
 		t.Logf("Invite result: status=%s", out.Status)
 	})
 }

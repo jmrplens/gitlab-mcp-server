@@ -120,6 +120,15 @@ func TestIndividual_UserEmails(t *testing.T) {
 			requireTruef(t, emailID > 0, "emailID not set")
 			err := callToolVoidOn(ctx, sess.individual, "gitlab_delete_email", useremails.DeleteInput{EmailID: emailID})
 			requireNoError(t, err, "delete email")
+			requireNotListedOn(ctx, t, sess.individual, "account emails after delete", "gitlab_list_emails",
+				users.ListEmailsInput{},
+				func(out users.EmailListOutput) []int64 {
+					ids := make([]int64, 0, len(out.Emails))
+					for _, e := range out.Emails {
+						ids = append(ids, e.ID)
+					}
+					return ids
+				}, emailID)
 			t.Logf("Deleted secondary email %d", emailID)
 			emailID = 0
 		})
@@ -178,6 +187,8 @@ func TestIndividual_UserGPGKeys(t *testing.T) {
 			requireTruef(t, keyID > 0, "keyID not set")
 			err := callToolVoidOn(ctx, sess.individual, "gitlab_delete_gpg_key", usergpgkeys.DeleteInput{KeyID: keyID})
 			requireNoError(t, err, "delete gpg key")
+			requireNotListedOn(ctx, t, sess.individual, "account GPG keys after delete", "gitlab_list_gpg_keys",
+				usergpgkeys.ListInput{}, gpgKeyIDs, keyID)
 			t.Logf("Deleted GPG key %d", keyID)
 			keyID = 0
 		})

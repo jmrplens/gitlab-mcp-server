@@ -136,6 +136,7 @@ func TestMeta_ProjectRemoteMirrors(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "mirror_delete")
+		// MirrorList_AfterDelete is where this delete's effect is observed.
 		t.Logf("Deleted mirror %d", mirrorID)
 	})
 
