@@ -155,7 +155,7 @@ func audit(served []*mcp.Tool, catalog *actioncatalog.Catalog) (findings []findi
 		read, unread := parseEnumerations(tool.Description)
 		for _, enumeration := range read {
 			lines++
-			findings = append(findings, judge(tool.Name, enumeration, allowed.union)...)
+			findings = append(findings, judge(tool.Name, enumeration, allowed.forLine(enumeration.actions))...)
 		}
 		for _, line := range unread {
 			if !allowed.describesAnAction(line.actions) {
@@ -282,6 +282,24 @@ func acceptedFor(tool *mcp.Tool, catalog *actioncatalog.Catalog) schemas {
 	return allowed
 }
 
+// forLine returns the set one enumeration line is judged against: the action
+// its head names, when it names exactly one the catalog knows, and the pooled
+// union otherwise. A line shared by several actions lists what each of them
+// takes and annotates which is which, so only the union can hold it; a line
+// about one action can be held to that action's own schema, and must be. The
+// union is what let "- pages_update: project_id*, pages_https_only,
+// pages_access_level" pass while pages_access_level belongs to project.update,
+// and what hid bulk_import_start's flat url behind another action's url.
+func (s schemas) forLine(actions []string) accepted {
+	if len(actions) != 1 {
+		return s.union
+	}
+	if action, known := s.byAction[actions[0]]; known {
+		return action
+	}
+	return s.union
+}
+
 // describesAnAction reports whether a refused line's head names an action of
 // this group, which is what separates a parameter line the rule could not read
 // from a bullet that merely opens like one. "- Destructive: …" and "- HTTPS: …"
@@ -367,10 +385,12 @@ func schemaMap(schema any) map[string]any {
 	return decoded
 }
 
-// enumeration is one parsed "- <action>: <parameters>" line.
+// enumeration is one parsed "- <action>: <parameters>" line, with the action
+// names its head spells: a line about one action is held to that action alone.
 type enumeration struct {
-	text   string
-	params []mention
+	text    string
+	actions []string
+	params  []mention
 }
 
 // refusal is one line that opens like a parameter enumeration and that the rule
@@ -402,14 +422,15 @@ func parseEnumerations(description string) (found []enumeration, refused []refus
 			}
 			inReturns = false
 		}
-		params, ok := parseEnumerationLine(line)
-		if !ok {
-			if head := enumerationHead.FindStringSubmatch(trimmed); head != nil {
-				refused = append(refused, refusal{actions: headActions(head[1]), text: trimmed})
-			}
+		actions, params, ok := parseEnumerationLine(line)
+		if actions == nil {
 			continue
 		}
-		found = append(found, enumeration{text: trimmed, params: params})
+		if !ok {
+			refused = append(refused, refusal{actions: actions, text: trimmed})
+			continue
+		}
+		found = append(found, enumeration{text: trimmed, actions: actions, params: params})
 	}
 	return found, refused
 }
@@ -456,31 +477,35 @@ func parseGuidance(description string) []guidance {
 	return found
 }
 
-// parseEnumerationLine parses one line, reporting whether it is a parameter
-// enumeration at all. A line whose head is not "- <action>: " is prose; a line
-// with a single item that does not parse as a parameter is prose too, and is
-// skipped whole rather than mined for the words that happen to look like names.
-func parseEnumerationLine(line string) (params []mention, ok bool) {
+// parseEnumerationLine parses one line, reporting the actions its head names
+// and whether the body is a parameter enumeration at all. A line whose head is
+// not "- <action>: " is prose and returns no actions; a line with a single item
+// that does not parse as a parameter is prose too, and is skipped whole rather
+// than mined for the words that happen to look like names. The actions are
+// returned either way, so a refused line can still be attributed to what it
+// describes.
+func parseEnumerationLine(line string) (actions []string, params []mention, ok bool) {
 	head := enumerationHead.FindStringSubmatch(strings.TrimSpace(line))
 	if head == nil {
-		return nil, false
+		return nil, nil, false
 	}
+	actions = headActions(head[1])
 	body := stripLeadingParenthetical(sentenceHead(strings.TrimSpace(head[2])))
 	if body == "" {
 		// "- license_get: (no params)" and its siblings: a real
 		// enumeration that enumerates nothing.
-		return nil, true
+		return actions, nil, true
 	}
 	for _, item := range splitTopLevel(body, ",") {
 		for _, alternative := range splitTopLevel(item, " or ") {
 			parsed := parameterItem.FindStringSubmatch(alternative)
 			if parsed == nil {
-				return nil, false
+				return actions, nil, false
 			}
 			params = append(params, mention{name: parsed[1], values: annotationValues(parsed[3])})
 		}
 	}
-	return params, true
+	return actions, params, true
 }
 
 // annotationValues reads an item's parenthesised annotation as a list of the

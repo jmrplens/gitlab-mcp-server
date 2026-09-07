@@ -111,7 +111,7 @@ func TestParseEnumerationLine_HouseShapes_ParsedOrSkippedWhole(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			params, ok := parseEnumerationLine(tc.line)
+			_, params, ok := parseEnumerationLine(tc.line)
 			if ok != tc.parsed {
 				t.Fatalf("parseEnumerationLine(%q) parsed = %v, want %v", tc.line, ok, tc.parsed)
 			}
@@ -619,6 +619,67 @@ func TestAudit_RefusedLines_KeepsOnlyTheOnesAboutAnAction(t *testing.T) {
 	}
 	if refused[0].tool != "gitlab_widget" || refused[0].line != "- list: search, same params as get" {
 		t.Errorf("refusal = %+v, want the list line attributed to the tool", refused[0])
+	}
+}
+
+// TestForLine_SingleActionLine_IsHeldToThatActionsSchema verifies which side of
+// the comparison one enumeration line gets: a line about one known action is
+// judged against that action alone, while a shared line and a wildcard head
+// fall back to the group's pooled union, which is the only set that can hold a
+// line whose items belong to different actions.
+func TestForLine_SingleActionLine_IsHeldToThatActionsSchema(t *testing.T) {
+	perAction := newAccepted()
+	perAction.add(map[string]any{"properties": map[string]any{"search": map[string]any{"type": "string"}}})
+	pooled := newAccepted()
+	pooled.add(map[string]any{"properties": map[string]any{
+		"search": map[string]any{"type": "string"},
+		"query":  map[string]any{"type": "string"},
+	}})
+	allowed := schemas{union: pooled, byAction: map[string]accepted{"list": perAction}}
+
+	cases := []struct {
+		name    string
+		actions []string
+		pooled  bool
+	}{
+		{name: "one_known_action", actions: []string{"list"}},
+		{name: "one_head_no_action_answers_to", actions: []string{"token_group_*"}, pooled: true},
+		{name: "line_shared_by_several_actions", actions: []string{"list", "get"}, pooled: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := allowed.forLine(tc.actions).names["query"]; got != tc.pooled {
+				t.Errorf("forLine(%v) accepts a sibling's parameter = %v, want %v", tc.actions, got, tc.pooled)
+			}
+		})
+	}
+}
+
+// TestAudit_SingleActionLine_ReportsASiblingsParameter verifies the rule where
+// it matters: a line naming one action that offers a parameter only another
+// action of the group accepts is reported. The pooled union used to accept it,
+// which is how gitlab_project offered pages_update a pages_access_level that
+// belongs to project.update.
+func TestAudit_SingleActionLine_ReportsASiblingsParameter(t *testing.T) {
+	catalog := testCatalog(t, "gitlab_widget", "list", "search")
+	sibling := actioncatalog.Action{
+		Name:         "update",
+		OwnerPackage: "tools",
+		Route: toolutil.ActionRoute{InputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"name": map[string]any{"type": "string"}},
+		}},
+	}
+	options := actioncatalog.GroupOptions{ToolName: "gitlab_widget", OwnerPackage: "tools", SurfaceKind: actioncatalog.SurfaceKindMetaGroup}
+	if err := catalog.AddAction("gitlab_widget", sibling, options); err != nil {
+		t.Fatalf("AddAction() error: %v", err)
+	}
+	tool := &mcp.Tool{Name: "gitlab_widget", Description: metaPreamble + "Widget actions.\n\n- list: search, name\n"}
+
+	findings, _, _ := audit([]*mcp.Tool{tool}, catalog)
+	if len(findings) != 1 || findings[0].kind != kindParameter || findings[0].detail != "name" {
+		t.Fatalf("audit() = %+v, want the sibling's parameter reported against list", findings)
 	}
 }
 

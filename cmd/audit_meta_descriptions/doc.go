@@ -79,6 +79,17 @@
 // hook_add." One of them was hiding a defect: bulk_import_start offered a flat
 // url and access_token, and the action takes a nested configuration object.
 //
+// # Which schema a line is judged against
+//
+// A line whose head names exactly one action the catalog knows is judged
+// against that action's own schema; a line shared by several actions, or one
+// whose head is a wildcard, is judged against the group's pooled union, which
+// is the only set that can hold a line whose items belong to different
+// actions. The union alone used to judge every line, and it is what let
+// gitlab_project offer pages_update a pages_access_level that belongs to
+// project.update, and what hid bulk_import_start's flat url behind another
+// action's url of the same name.
+//
 // The "Parameter guidance:" block is generated per action from a hand-written
 // map keyed by parameter name, and is read by its own rule, since its shape is
 // exact: "- <action>.<parameter>: <role>. Source: …". Nothing filters that map
@@ -91,9 +102,10 @@
 // The descriptions come from a real tools/list round-trip on the meta surface
 // at the widest tier, through cmd/internal/mcpsurface, so what is judged is
 // what crosses the wire. The accepted parameter names come from the same
-// compiled catalog: for a meta group, the union over its routes' input schemas;
-// for a standalone meta tool such as gitlab_discover_project, which is no
-// group, the tool's own input schema.
+// compiled catalog: for a meta group, each route's input schema on its own and
+// the union over all of them, chosen per line by the rule above; for a
+// standalone meta tool such as gitlab_discover_project, which is no group, the
+// tool's own input schema.
 //
 // With -check it exits non-zero on any finding, which is the CI gate
 // (make check-meta-descriptions); without it, it prints the findings and exits

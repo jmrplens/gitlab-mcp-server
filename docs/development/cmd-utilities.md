@@ -22,7 +22,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_readonly_graphql`       | Catalog & metadata audits     | No action classified ReadOnly can reach a GraphQL mutation                                                                                                                                          | `make check-readonly-graphql`                                       |
 | `audit_surface_quality`        | Surface quality audits        | Consolidated MCP tool surface quality audit (metadata + output)                                                                                                                                     | `make audit-surface-quality`                                        |
 | `audit_gateway_chars`          | Surface quality audits        | Served descriptions and titles carry no character an MCP gateway validator rejects                                                                                                                  | `make check-gateway-chars`                                          |
-| `audit_meta_descriptions`      | Surface quality audits        | Every parameter and enum value a served meta-tool description offers is one its actions accept                                                                                                      | `make check-meta-descriptions`                                      |
+| `audit_meta_descriptions`      | Surface quality audits        | Every parameter and value a served meta-tool description offers is one its actions accept, whether the value set is a schema enum or one a schema description spells                                | `make check-meta-descriptions`                                      |
 | `audit_tokens`                 | Surface quality audits        | LLM context-window overhead of every tool/resource/prompt definition; `-footprint` regenerates the README token-footprint section                                                                   | `make audit-tokens`, `make gen-footprint`                           |
 | `audit_metrics`                | Surface quality audits        | Comprehensive metrics summary (tools, resources, prompts, codebase); `-site-stats` writes the site's stats JSON                                                                                     | `make audit-metrics`, `make gen-site-stats`                         |
 | `gen_graphql_schema`           | Generators                    | Pins a GitLab GraphQL schema by introspecting a live instance; `--check` gates the committed one                                                                                                    | `make gen-graphql-schema`, `make check-graphql-schema`              |
@@ -588,9 +588,15 @@ One line per offender (surface, location, excerpt), sorted by surface, then a su
 
 Checks the prose a meta-tool serves against the parameters its actions accept. A meta group's description enumerates its parameters by hand, and nothing connected the prose to the schemas: the text is read out of `internal/tools/testdata/tools_meta.json`, which is the golden snapshot the regenerator writes from the running server, so the description's only source is the file that records the description and `TestToolSnapshots` compares two copies of one string. Repairing an action can therefore leave the served prose offering a parameter GitLab refuses, with every gate green. This audit is the third party: it reads the served description on one side, over a real `tools/list` round-trip on the meta surface at the widest tier, and the routes' input schemas on the other.
 
-It fails on a parameter name the description enumerates that no route of that group accepts, on an enum value it spells for a parameter whose routes publish an enum without it, and on a `Parameter guidance:` line written for a parameter the action it names does not accept.
+It fails on a parameter name the description enumerates that no route of that group accepts, on an enum value it spells for a parameter whose routes publish an enum without it, on a value it spells for a parameter that publishes no enum but whose own schema description spells a value set of its own, and on a `Parameter guidance:` line written for a parameter the action it names does not accept.
+
+That third rule exists because a JSON Schema enum is a closed set of strings, so a numeric value set cannot be one and nothing compared the two sides. `gitlab_member_role`'s `base_access_level` offered `5` in the prose while its schema description said 10 to 50, and `doc/api/member_roles.md` agrees with the schema. Both sides are extracted by one function, so the property's own description is the oracle and a parameter whose description spells no set is judged against nothing rather than guessed at.
 
 The extraction rule and the shapes it does and does not parse are written out in the command's package comment (`cmd/audit_meta_descriptions/doc.go`). In short: a line is read as a parameter enumeration only when every comma-separated item on it parses as a parameter token, so prose and the `Returns:` block are skipped whole rather than mined for words. The report prints how many description lines it read, because a rule that suddenly reads nothing would otherwise be a silent pass.
+
+A line whose head names exactly one action is judged against that action's own schema; a line shared by several actions, or one whose head is a wildcard, is judged against the group's pooled union, which is the only set that can hold a line whose items belong to different actions. Judging every line against the union is what let `gitlab_project` offer `pages_update` a `pages_access_level` that belongs to `project.update`, and what hid `bulk_import_start`'s flat `url` behind another action's `url` of the same name.
+
+Skipping costs coverage, so the report names that too: every line the rule refused is counted, and `-uncovered` prints them one per line. A refusal only counts when the line's head names an action of the group, since `- Destructive: …` and `- HTTPS: …` open exactly like an enumeration and name no action, and the bullets under a `Returns:` heading describe what an action answers with rather than what it accepts. What is left is a work list a maintainer can drive to zero, and the served descriptions carry none.
 
 #### Usage
 
@@ -598,23 +604,27 @@ The extraction rule and the shapes it does and does not parse are written out in
 # Report every disagreement with the line it came from
 go run ./cmd/audit_meta_descriptions/
 
+# Report, plus every action line the extraction rule refused
+go run ./cmd/audit_meta_descriptions/ -uncovered
+
 # CI gate
 go run ./cmd/audit_meta_descriptions/ -check
 ```
 
 #### Flags
 
-| Flag     | Type   | Default | Description                                                        |
-| -------- | ------ | ------- | ------------------------------------------------------------------ |
-| `-check` | `bool` | `false` | Exit non-zero when a served description disagrees with the schemas |
+| Flag         | Type   | Default | Description                                                                                      |
+| ------------ | ------ | ------- | ------------------------------------------------------------------------------------------------ |
+| `-check`     | `bool` | `false` | Exit non-zero when a served description disagrees with the schemas                               |
+| `-uncovered` | `bool` | `false` | Name every action line the extraction rule refused, instead of only counting them in the summary |
 
 #### Output
 
-One line per finding (tool, kind, the offending name or `parameter=value`, and the description line it came from), sorted by tool then kind, then a summary line naming how many lines were read. Exits `1` under `-check` when anything disagrees.
+One line per finding (tool, kind, the offending name or `parameter=value`, and the description line it came from), sorted by tool then kind, then a summary line naming how many lines were read and how many were refused. Under `-uncovered`, each refused line is printed as well, marked `uncovered`. Exits `1` under `-check` when anything disagrees; a refused line is coverage the report admits to, never a failure.
 
 #### Make targets
 
-- `make audit-meta-descriptions` prints the report.
+- `make audit-meta-descriptions` prints the report and passes `-uncovered`, since a line outside the check is where a stale parameter hides.
 - `make check-meta-descriptions` is the CI gate.
 
 ### audit_tokens
@@ -1608,7 +1618,7 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `check-supply-chain`                     | `audit_supply_chain`               | The five release-configuration invariants still hold                                                                       | Non-zero if any is broken, or if the audit cannot be run                             |
 | `check-doc-tool-names`                   | `audit_doc_tool_names`             | Every `gitlab_*` name the documentation mentions is registered on some surface                                             | Non-zero if any name is unregistered                                                 |
 | `check-gateway-chars`                    | `audit_gateway_chars`              | Nothing served carries a character a gateway validator rejects                                                             | Non-zero if any offender is served                                                   |
-| `check-meta-descriptions`                | `audit_meta_descriptions -check`   | Every parameter and enum value a served meta-tool description offers is one its actions accept                             | Non-zero if a description and the schemas disagree                                   |
+| `check-meta-descriptions`                | `audit_meta_descriptions -check`   | Every parameter and value a served meta-tool description offers is one its actions accept                                  | Non-zero if a description and the schemas disagree                                   |
 | `check-install-buttons`                  | `audit_install_buttons`            | Every install button decodes and agrees with the others for its command                                                    | Non-zero on a problem, or when no button is found                                    |
 | `check-test-goroutines`                  | `audit_test_goroutines`            | No `testing.T` abort is made off the test goroutine                                                                        | Non-zero if any abort site exists                                                    |
 | `check-test-subtests`                    | `audit_test_subtests`              | No case loop asserts without a `t.Run` subtest                                                                             | Non-zero if any site remains                                                         |
