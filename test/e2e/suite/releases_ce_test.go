@@ -47,6 +47,7 @@ func TestIndividual_Releases(t *testing.T) {
 		Message:   "Release E2E tag",
 	})
 	requireNoError(t, tagErr, "create tag for release")
+	requireTruef(t, tagOut.Name == tagName, "created tag = %q, want %q", tagOut.Name, tagName)
 	t.Logf("Created tag %s (target=%s)", tagOut.Name, tagOut.Target)
 
 	var releaseLinkID int64

@@ -67,6 +67,8 @@ func TestIndividual_PushRules(t *testing.T) {
 			ProjectID: proj.pidOf(),
 		})
 		requireNoError(t, err, "delete push rule")
+		requireGoneOn(ctx, t, sess.individual, "project push rule after delete", "gitlab_project_get_push_rules",
+			projects.GetPushRulesInput{ProjectID: proj.pidOf()})
 		t.Log("Deleted push rule")
 	})
 }
@@ -137,6 +139,10 @@ func TestMeta_PushRules(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta delete push rule")
+		requireGoneOn(ctx, t, sess.meta, "project push rule after delete", "gitlab_project", map[string]any{
+			"action": "push_rule_get",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		})
 		t.Log("Deleted push rule via meta-tool")
 	})
 }

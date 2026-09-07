@@ -341,6 +341,15 @@ func TestIndividual_PackageRegistryRules(t *testing.T) {
 			TagName:      "seed-b",
 		})
 		requireNoError(t, deleteErr, "delete registry tag seed-b")
+		requireNotListedOn(ctx, t, sess.individual, "registry tags after delete", "gitlab_registry_list_tags",
+			containerregistry.ListTagsInput{ProjectID: toolutil.StringOrInt(seedProject), RepositoryID: repo.ID},
+			func(out containerregistry.TagListOutput) []string {
+				names := make([]string, 0, len(out.Tags))
+				for _, tg := range out.Tags {
+					names = append(names, tg.Name)
+				}
+				return names
+			}, "seed-b")
 		t.Log("Deleted seeded registry tag seed-b")
 	})
 }

@@ -127,6 +127,16 @@ func TestMeta_GroupProtectedEnvironmentsEE(t *testing.T) {
 			"params": map[string]any{"group_id": grp.gidStr(), "environment": envName},
 		})
 		requireNoError(t, err, "protected_env_unprotect")
+		requireNotListedOn(ctx, t, sess.meta, "group protected environments after unprotect", "gitlab_group", map[string]any{
+			"action": "protected_env_list",
+			"params": map[string]any{"group_id": grp.gidStr()},
+		}, func(out groupprotectedenvs.ListOutput) []string {
+			names := make([]string, 0, len(out.Environments))
+			for _, e := range out.Environments {
+				names = append(names, e.Name)
+			}
+			return names
+		}, envName)
 		t.Logf("Unprotected group env %s", envName)
 	})
 }

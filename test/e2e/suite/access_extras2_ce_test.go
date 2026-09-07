@@ -172,6 +172,9 @@ func TestIndividual_AccessRequests(t *testing.T) {
 				UserID:    userDeny.ID,
 			})
 			requireNoError(t, err, "deny project access request")
+			requireNotListedOn(ctx, t, sess.individual, "project access requests after deny", "gitlab_access_request_list_project",
+				accessrequests.ListProjectInput{ProjectID: proj.pidOf()},
+				accessRequestUserIDs, userDeny.ID)
 			t.Logf("Denied project access for user %d", userDeny.ID)
 		})
 
@@ -192,6 +195,9 @@ func TestIndividual_AccessRequests(t *testing.T) {
 				UserID:  userDeny.ID,
 			})
 			requireNoError(t, err, "deny group access request")
+			requireNotListedOn(ctx, t, sess.individual, "group access requests after deny", "gitlab_access_request_list_group",
+				accessrequests.ListGroupInput{GroupID: groupID},
+				accessRequestUserIDs, userDeny.ID)
 			t.Logf("Denied group access for user %d", userDeny.ID)
 		})
 	})
@@ -248,6 +254,11 @@ func TestIndividual_PersonalAccessTokenAdminOps(t *testing.T) {
 				TokenID: latestTokenID,
 			})
 			requireNoError(t, err, "revoke personal access token")
+			// A revoked token stays listed under the default state filter, so the
+			// active listing is what observes the revocation.
+			requireNotListedOn(ctx, t, sess.individual, "active personal access tokens after revoke", "gitlab_personal_access_token_list",
+				accesstokens.PersonalListInput{UserID: user.ID, State: "active"},
+				personalAccessTokenIDs, latestTokenID)
 			t.Logf("Revoked PAT %d", latestTokenID)
 		})
 	})
@@ -280,7 +291,10 @@ func TestIndividual_PersonalAccessTokenSelfOps(t *testing.T) {
 		user := accessExtrasCreateUser(ctx, t, "pat-self")
 		pat := accessExtrasCreatePAT(ctx, t, user.ID, "pat-self")
 
-		var rotatedToken string
+		var (
+			rotatedToken   string
+			rotatedTokenID int64
+		)
 		t.Run("RotateSelf", func(t *testing.T) {
 			//nolint:contextcheck // The extra MCP session outlives this call context; its lifetime is bound to t.Cleanup.
 			selfSession := accessExtrasStartSession(t, "pat-self", pat.Token)
@@ -288,6 +302,7 @@ func TestIndividual_PersonalAccessTokenSelfOps(t *testing.T) {
 			requireNoError(t, err, "self-rotate personal access token")
 			requireTruef(t, out.Token != "", "expected self-rotated token value")
 			rotatedToken = out.Token
+			rotatedTokenID = out.ID
 			t.Logf("Self-rotated PAT %d → %d", pat.ID, out.ID)
 		})
 
@@ -297,6 +312,11 @@ func TestIndividual_PersonalAccessTokenSelfOps(t *testing.T) {
 			revokeSession := accessExtrasStartSession(t, "pat-self-revoke", rotatedToken)
 			err := callToolVoidOn(ctx, revokeSession, "gitlab_personal_access_token_revoke_self", accesstokens.PersonalRevokeSelfInput{})
 			requireNoError(t, err, "self-revoke personal access token")
+			// The revoked credential can no longer read anything, so the admin
+			// session is where the effect is observable.
+			requireNotListedOn(ctx, t, sess.individual, "active personal access tokens after self-revoke", "gitlab_personal_access_token_list",
+				accesstokens.PersonalListInput{UserID: user.ID, State: "active"},
+				personalAccessTokenIDs, rotatedTokenID)
 			t.Log("Self-revoked rotated PAT")
 		})
 	})

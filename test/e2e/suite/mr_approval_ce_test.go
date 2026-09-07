@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergerequests"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrapprovals"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 )
 
@@ -50,6 +51,8 @@ func TestIndividual_MRApproval(t *testing.T) {
 			SkipCI:    true,
 		})
 		requireNoError(t, err, "rebase MR")
+		// rebase_in_progress reports whether the queued job is still pending, so
+		// a rebase Sidekiq finishes first legitimately answers false.
 		t.Logf("Rebase MR !%d: in_progress=%v", mr.IID, out.RebaseInProgress)
 	})
 
@@ -59,6 +62,7 @@ func TestIndividual_MRApproval(t *testing.T) {
 			MRIID:     mr.IID,
 		})
 		requireNoError(t, err, "approve MR")
+		requireTruef(t, out.ApprovedBy > 0, "MR !%d reports %d approvers right after approving", mr.IID, out.ApprovedBy)
 		t.Logf("Approved MR !%d (approved=%v)", mr.IID, out.Approved)
 	})
 
@@ -68,6 +72,12 @@ func TestIndividual_MRApproval(t *testing.T) {
 			MRIID:     mr.IID,
 		})
 		requireNoError(t, err, "unapprove MR")
+		config, err := callToolOn[mrapprovals.ConfigOutput](ctx, sess.individual, "gitlab_mr_approval_config", mrapprovals.ConfigInput{
+			ProjectID: proj.pidOf(),
+			MRIID:     mr.IID,
+		})
+		requireNoError(t, err, "read approval config after unapprove")
+		requireTruef(t, len(config.ApprovedBy) == 0, "MR !%d still lists %d approvers after unapproving", mr.IID, len(config.ApprovedBy))
 		t.Logf("Unapproved MR !%d", mr.IID)
 	})
 
@@ -156,6 +166,7 @@ func TestMeta_MRApproval(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta approve MR")
+		requireTruef(t, out.ApprovedBy > 0, "MR !%d reports %d approvers right after approving", mr.IID, out.ApprovedBy)
 		t.Logf("Approved MR !%d (approved=%v)", mr.IID, out.Approved)
 	})
 
@@ -168,6 +179,15 @@ func TestMeta_MRApproval(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta unapprove MR")
+		config, err := callToolOn[mrapprovals.ConfigOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
+			"action": "approval_config",
+			"params": map[string]any{
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+			},
+		})
+		requireNoError(t, err, "read approval config after unapprove")
+		requireTruef(t, len(config.ApprovedBy) == 0, "MR !%d still lists %d approvers after unapproving", mr.IID, len(config.ApprovedBy))
 		t.Logf("Unapproved MR !%d via meta-tool", mr.IID)
 	})
 

@@ -9,8 +9,10 @@ package suite
 
 import (
 	"context"
+	"slices"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/branchrules"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/cicatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deployments"
@@ -59,6 +61,23 @@ func TestMeta_BranchRules(t *testing.T) {
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
 
+	// Protect a wildcard branch so the project owns a rule the list has to
+	// name. The list is served by a raw GraphQL document, and a document
+	// GitLab refuses comes back as an empty rule set rather than an error, so
+	// counting rules cannot tell the two apart and naming one can.
+	const ruleBranch = "e2e-rule-*"
+	protected, protectErr := callToolOn[branches.ProtectedOutput](ctx, sess.meta, "gitlab_branch", map[string]any{
+		"action": "protect",
+		"params": map[string]any{
+			"project_id":         proj.pidStr(),
+			"branch_name":        ruleBranch,
+			"push_access_level":  40,
+			"merge_access_level": 30,
+		},
+	})
+	requireNoError(t, protectErr, "protect branch for branch rule fixture")
+	requireTruef(t, protected.Name == ruleBranch, "protected branch = %q, want %q", protected.Name, ruleBranch)
+
 	t.Run("Meta/BranchRule/List", func(t *testing.T) {
 		out, err := callToolOn[branchrules.ListOutput](ctx, sess.meta, "gitlab_branch", map[string]any{
 			"action": "rule_list",
@@ -67,6 +86,9 @@ func TestMeta_BranchRules(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "branch rule list")
+		requireTruef(t, slices.ContainsFunc(out.Rules, func(r branchrules.BranchRuleItem) bool {
+			return r.Name == ruleBranch
+		}), "branch rules do not name the protected %q: %+v", ruleBranch, out.Rules)
 		t.Logf("Project %s has %d branch rule(s)", proj.Path, len(out.Rules))
 	})
 }
@@ -166,11 +188,26 @@ func TestIndividual_BranchRules(t *testing.T) {
 	ctx := context.Background()
 	proj := createProject(ctx, t, sess.individual)
 
+	// Same reasoning as TestMeta_BranchRules: give the project a rule of its
+	// own so an empty answer cannot pass for a correct one.
+	const ruleBranch = "e2e-rule-*"
+	protected, protectErr := callToolOn[branches.ProtectedOutput](ctx, sess.individual, "gitlab_branch_protect", branches.ProtectInput{
+		ProjectID:        proj.pidOf(),
+		BranchName:       ruleBranch,
+		PushAccessLevel:  40,
+		MergeAccessLevel: 30,
+	})
+	requireNoError(t, protectErr, "protect branch for branch rule fixture")
+	requireTruef(t, protected.Name == ruleBranch, "protected branch = %q, want %q", protected.Name, ruleBranch)
+
 	t.Run("ListBranchRules", func(t *testing.T) {
 		out, err := callToolOn[branchrules.ListOutput](ctx, sess.individual, "gitlab_list_branch_rules", branchrules.ListInput{
 			ProjectPath: proj.Path,
 		})
 		requireNoError(t, err, "list branch rules")
+		requireTruef(t, slices.ContainsFunc(out.Rules, func(r branchrules.BranchRuleItem) bool {
+			return r.Name == ruleBranch
+		}), "branch rules do not name the protected %q: %+v", ruleBranch, out.Rules)
 		t.Logf("Project %s has %d branch rule(s)", proj.Path, len(out.Rules))
 	})
 }
@@ -254,6 +291,8 @@ func TestMeta_FeatureFlagUserLists(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "ff_user_list_get")
+		requireTruef(t, out.IID == listIID, "ff_user_list_get answered for IID %d, want %d", out.IID, listIID)
+		requireTruef(t, out.Name == "e2e test user list", "user list name = %q, want the name the create sent", out.Name)
 		t.Logf("Got user list: IID=%d name=%q", out.IID, out.Name)
 	})
 

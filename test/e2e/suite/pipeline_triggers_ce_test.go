@@ -87,6 +87,16 @@ func TestMeta_PipelineTriggers(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "pipeline trigger delete")
+		requireNotListedOn(ctx, t, sess.meta, "pipeline triggers after delete", "gitlab_pipeline", map[string]any{
+			"action": "trigger_list",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, func(out pipelinetriggers.ListOutput) []int64 {
+			ids := make([]int64, 0, len(out.Triggers))
+			for _, tr := range out.Triggers {
+				ids = append(ids, tr.ID)
+			}
+			return ids
+		}, triggerID)
 		t.Logf("Deleted trigger %d", triggerID)
 	})
 }

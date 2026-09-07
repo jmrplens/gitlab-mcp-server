@@ -154,6 +154,8 @@ func TestIndividual_Branches(t *testing.T) {
 			BranchName: featureBranch,
 		})
 		requireNoError(t, err, "delete branch")
+		requireGoneOn(ctx, t, sess.individual, "branch "+featureBranch+" after delete", "gitlab_branch_get",
+			branches.GetInput{ProjectID: proj.pidOf(), BranchName: featureBranch})
 		t.Logf("Deleted branch %s", featureBranch)
 	})
 }
@@ -361,6 +363,13 @@ func TestMeta_Branches(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta branch delete")
+		requireGoneOn(ctx, t, sess.meta, "branch "+featureBranch+" after delete", "gitlab_branch", map[string]any{
+			"action": "get",
+			"params": map[string]any{
+				"project_id":  proj.pidStr(),
+				"branch_name": featureBranch,
+			},
+		})
 		t.Logf("Deleted branch %s", featureBranch)
 	})
 }

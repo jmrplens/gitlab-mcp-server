@@ -257,6 +257,11 @@ func TestMeta_ProjectIntegrationConfig(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "integration_delete (jira)")
+		// The listing reports only active integrations, so a deleted one leaves it.
+		requireNotListedOn(ctx, t, sess.meta, "project integrations after delete", "gitlab_project", map[string]any{
+			"action": "integration_list",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, integrationSlugs, "jira")
 		t.Log("Deleted Jira integration")
 	})
 
@@ -269,6 +274,10 @@ func TestMeta_ProjectIntegrationConfig(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "integration_delete")
+		requireNotListedOn(ctx, t, sess.meta, "project integrations after delete", "gitlab_project", map[string]any{
+			"action": "integration_list",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, integrationSlugs, projectExtrasIntegrationSlug)
 		t.Logf("Deleted integration %q", projectExtrasIntegrationSlug)
 	})
 }
@@ -346,6 +355,16 @@ func TestMeta_ProjectGroupIntegrations(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "integration_delete_group")
+		requireNotListedOn(ctx, t, sess.meta, "group integrations after delete", "gitlab_project", map[string]any{
+			"action": "integration_list_group",
+			"params": map[string]any{"group_id": groupID},
+		}, func(out integrations.ListGroupIntegrationsOutput) []string {
+			slugs := make([]string, 0, len(out.Integrations))
+			for _, i := range out.Integrations {
+				slugs = append(slugs, i.Slug)
+			}
+			return slugs
+		}, projectExtrasIntegrationSlug)
 		t.Logf("Deleted group integration %q", projectExtrasIntegrationSlug)
 	})
 
@@ -480,6 +499,10 @@ func TestMeta_ProjectPagesWrite(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "pages_domain_delete")
+		requireGoneOn(ctx, t, sess.meta, "Pages domain after delete", "gitlab_project", map[string]any{
+			"action": "pages_domain_get",
+			"params": map[string]any{"project_id": proj.pidStr(), "domain": domain},
+		})
 		t.Logf("Deleted Pages domain %q", domain)
 	})
 

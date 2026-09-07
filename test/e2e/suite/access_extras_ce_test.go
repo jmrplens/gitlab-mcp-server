@@ -134,6 +134,9 @@ func TestIndividual_GroupDeployTokens(t *testing.T) {
 			DeployTokenID: tokenID,
 		})
 		requireNoError(t, err, "delete group deploy token")
+		requireNotListedOn(ctx, t, sess.individual, "group deploy tokens after delete", "gitlab_deploy_token_list_group",
+			deploytokens.ListGroupInput{GroupID: groupID},
+			deployTokenIDs, tokenID)
 		t.Logf("Deleted group deploy token %d", tokenID)
 	})
 }

@@ -87,6 +87,8 @@ func TestIndividual_Tags(t *testing.T) {
 			TagName:   tagName,
 		})
 		requireNoError(t, err, "delete tag")
+		requireGoneOn(ctx, t, sess.individual, "tag "+tagName+" after delete", "gitlab_tag_get",
+			tags.GetInput{ProjectID: proj.pidOf(), TagName: tagName})
 		t.Logf("Deleted tag %s", tagName)
 	})
 }
@@ -177,6 +179,10 @@ func TestMeta_Tags(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta tag delete")
+		requireGoneOn(ctx, t, sess.meta, "tag "+tagName+" after delete", "gitlab_tag", map[string]any{
+			"action": "get",
+			"params": map[string]any{"project_id": proj.pidStr(), "tag_name": tagName},
+		})
 		t.Logf("Deleted tag %s", tagName)
 	})
 }

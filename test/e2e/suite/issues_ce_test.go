@@ -165,6 +165,8 @@ func TestIndividual_Issues(t *testing.T) {
 			IssueIID:  issueIID,
 		})
 		requireNoError(t, err, "delete issue")
+		requireGoneOn(ctx, t, sess.individual, "issue after delete", "gitlab_issue_get",
+			issues.GetInput{ProjectID: proj.pidOf(), IssueIID: issueIID})
 		t.Logf("Deleted issue #%d", issueIID)
 	})
 }
@@ -308,6 +310,10 @@ func TestMeta_Issues(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta issue delete")
+		requireGoneOn(ctx, t, sess.meta, "issue after delete", "gitlab_issue", map[string]any{
+			"action": "get",
+			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
+		})
 		t.Logf("Deleted issue #%d via meta-tool", issueIID)
 	})
 }

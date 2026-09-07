@@ -98,6 +98,16 @@ func TestMeta_FreezePeriods(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "freeze period delete")
+		requireNotListedOn(ctx, t, sess.meta, "freeze periods after delete", "gitlab_environment", map[string]any{
+			"action": "freeze_list",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, func(out freezeperiods.ListOutput) []int64 {
+			ids := make([]int64, 0, len(out.FreezePeriods))
+			for _, f := range out.FreezePeriods {
+				ids = append(ids, f.ID)
+			}
+			return ids
+		}, freezePeriodID)
 		t.Logf("Deleted freeze period %d", freezePeriodID)
 	})
 }
