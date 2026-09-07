@@ -101,29 +101,26 @@ func FormatRulesMarkdown(out RulesOutput) string {
 	return b.String()
 }
 
-// FormatConfigMarkdown renders the MR approval configuration as Markdown.
+// FormatConfigMarkdown renders a merge request's approvals as Markdown.
+//
+// The rows it used to print for approvals required, approvals left and whether
+// rules exist are gone with the fields behind them: GitLab answers none of them
+// at this endpoint, so every one of those rows printed a zero. What answers
+// those questions is action 'approval_state', which the hints point at.
 func FormatConfigMarkdown(c ConfigOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## MR Approval Configuration\n\n")
+	fmt.Fprintf(&b, "## MR Approvals\n\n")
 	fmt.Fprintf(&b, "| Field | Value |\n| ----- | ----- |\n")
-	fmt.Fprintf(&b, "| MR | !%d |\n", c.IID)
-	//gitlab:allow-unescaped c.State: a merge request state, one of GitLab's fixed set (opened, closed, locked, merged).
-	fmt.Fprintf(&b, "| State | %s |\n", c.State)
 	fmt.Fprintf(&b, "| Approved | %v |\n", c.Approved)
-	fmt.Fprintf(&b, "| Approvals Required | %d |\n", c.ApprovalsRequired)
-	fmt.Fprintf(&b, "| Approvals Left | %d |\n", c.ApprovalsLeft)
-	fmt.Fprintf(&b, "| Has Approval Rules | %v |\n", c.HasApprovalRules)
 	fmt.Fprintf(&b, "| User Has Approved | %v |\n", c.UserHasApproved)
 	fmt.Fprintf(&b, "| User Can Approve | %v |\n", c.UserCanApprove)
 	if names := approverNames(c.ApprovedBy); len(names) > 0 {
 		fmt.Fprintf(&b, "\n**Approved by**: %s\n", strings.Join(names, ", "))
 	}
-	if names := userNames(c.SuggestedApprovers); len(names) > 0 {
-		fmt.Fprintf(&b, "\n**Suggested approvers**: %s\n", strings.Join(names, ", "))
-	}
 	toolutil.WriteHints(
 		&b,
 		"Use action 'approve' or 'unapprove' to change approval status",
+		"Use action 'approval_state' for how many approvals are required and left",
 		"Use action 'approval_rules' to see all configured rules",
 	)
 	return b.String()

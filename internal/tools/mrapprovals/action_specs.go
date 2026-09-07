@@ -158,14 +158,14 @@ var approvalActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "List the approval rules of a merge request. Returns: each rule with its type, required count, approved flag, eligible approvers, users, groups, and source rule. See also: gitlab_mr_approval_rule_create, gitlab_mr_approval_rule_update, gitlab_mr_approval_state.",
 	},
 	"gitlab_mr_approval_config": {
-		Usage:   "Read the approval configuration of a merge request: approvals required and left, current approvers, suggested approvers, and approver groups. Use for a configuration overview rather than the per-rule state.",
-		Aliases: []string{"mr approval configuration", "merge request approvals required", "who has approved this mr"},
+		Usage:   "Read who has approved a merge request and whether the calling user can and has. Available on every tier. For how many approvals are required and left, use the approval state instead.",
+		Aliases: []string{"who has approved this mr", "mr approvals", "merge request approved by"},
 		Related: []string{actionApprovalState, actionApprovalRules, actionMRApprove},
 		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id":        projectScopeGuidance,
 			"merge_request_iid": mrIIDGuidance,
 		},
-		Description: "Get the approval configuration of a merge request. Returns: approvals required and left, approved-by users with timestamps, suggested approvers, approver groups, and the remaining approval rules. See also: gitlab_mr_approval_state, gitlab_mr_approval_rules, gitlab_mr_approve.",
+		Description: "Get the approvals of a merge request. Returns: whether it is approved, the approved-by users with timestamps, and whether the calling user has approved and may approve. For approvals required and left, use the approval state. See also: gitlab_mr_approval_state, gitlab_mr_approval_rules, gitlab_mr_approve.",
 	},
 	"gitlab_mr_approval_reset": {
 		Usage:   "Reset (clear) all existing approvals on a merge request. Requires a project or group access token (bot user). Personal access tokens are rejected. Use when approvals must be re-collected after changes.",

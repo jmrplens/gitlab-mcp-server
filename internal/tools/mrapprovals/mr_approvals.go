@@ -110,36 +110,26 @@ type RulesOutput struct {
 	Rules []RuleOutput `json:"rules"`
 }
 
-// ConfigOutput holds the approval configuration for a merge request. It mirrors
-// gl.MergeRequestApprovals, surfacing every SDK field including the full
-// approver/suggested-approver/approver-group objects and the per-rule
-// approval_rules_left list on their canonical keys.
+// ConfigOutput holds what GitLab answers at
+// GET /projects/:id/merge_requests/:merge_request_iid/approvals, which is four
+// fields on every tier.
+//
+// It used to carry all twenty-four of gl.MergeRequestApprovals, because the 1:1
+// norm mirrors the SDK type and that type models the response of the POST at
+// the same path, deprecated in GitLab 16.0, which this action does not call.
+// GitLab's own generated OpenAPI document separates the two: the GET declares
+// approved, approved_by, user_can_approve and user_has_approved, and every one
+// of the other twenty appears only under the POST. So a model was told to
+// expect an id, a title, a state and an approvals_required it would never
+// receive, and thirteen of those arrived in the payload as zeroes because they
+// carry no omitempty. Mirroring the SDK is mirroring a second model of the API,
+// not the API, which is the whole reason cmd/gen_api_shapes exists.
 type ConfigOutput struct {
 	toolutil.HintableOutput
-	ID                             int64                              `json:"id"`
-	IID                            int64                              `json:"iid"`
-	ProjectID                      int64                              `json:"project_id"`
-	Title                          string                             `json:"title"`
-	Description                    string                             `json:"description,omitempty"`
-	State                          string                             `json:"state"`
-	CreatedAt                      string                             `json:"created_at,omitempty"`
-	UpdatedAt                      string                             `json:"updated_at,omitempty"`
-	MergeStatus                    string                             `json:"merge_status,omitempty"`
-	Approved                       bool                               `json:"approved"`
-	ApprovalsRequired              int64                              `json:"approvals_required" tier:"premium"`
-	ApprovalsLeft                  int64                              `json:"approvals_left" tier:"premium"`
-	ApprovalsBeforeMerge           int64                              `json:"approvals_before_merge" tier:"premium"`
-	RequirePasswordToApprove       bool                               `json:"require_password_to_approve" tier:"premium"`
-	HasApprovalRules               bool                               `json:"has_approval_rules" tier:"premium"`
-	UserHasApproved                bool                               `json:"user_has_approved"`
-	UserCanApprove                 bool                               `json:"user_can_approve"`
-	MergeRequestApproversAvailable bool                               `json:"merge_request_approvers_available" tier:"premium"`
-	MultipleApprovalRulesAvailable bool                               `json:"multiple_approval_rules_available" tier:"premium"`
-	ApprovedBy                     []*MergeRequestApproverUserOutput  `json:"approved_by,omitempty"`
-	SuggestedApprovers             []*BasicUserOutput                 `json:"suggested_approvers,omitempty" tier:"premium"`
-	Approvers                      []*MergeRequestApproverUserOutput  `json:"approvers,omitempty" tier:"premium"`
-	ApproverGroups                 []*MergeRequestApproverGroupOutput `json:"approver_groups,omitempty" tier:"premium"`
-	ApprovalRulesLeft              []RuleOutput                       `json:"approval_rules_left,omitempty" tier:"premium"`
+	Approved        bool                              `json:"approved"`
+	UserHasApproved bool                              `json:"user_has_approved"`
+	UserCanApprove  bool                              `json:"user_can_approve"`
+	ApprovedBy      []*MergeRequestApproverUserOutput `json:"approved_by,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -231,40 +221,19 @@ func rawMutateApprovalRule(ctx context.Context, client *gitlabclient.Client, met
 }
 
 // configToOutput converts a client-go MergeRequestApprovals to ConfigOutput,
-// surfacing every SDK field including the full approver, suggested-approver,
-// approver-group, and per-rule approval_rules_left objects.
+// taking the four fields the GET actually answers with.
+//
+// The SDK type carries twenty more, and they are deliberately dropped rather
+// than forwarded: they belong to the deprecated POST at the same path, so on a
+// GET they are the zero value whatever the tier, and publishing a zero is worse
+// than publishing nothing. [ConfigOutput] records the whole reasoning.
 func configToOutput(c *gl.MergeRequestApprovals) ConfigOutput {
-	out := ConfigOutput{
-		ID:                             c.ID,
-		IID:                            c.IID,
-		ProjectID:                      c.ProjectID,
-		Title:                          c.Title,
-		Description:                    c.Description,
-		State:                          c.State,
-		CreatedAt:                      toolutil.FormatTimePtr(c.CreatedAt),
-		UpdatedAt:                      toolutil.FormatTimePtr(c.UpdatedAt),
-		MergeStatus:                    c.MergeStatus,
-		Approved:                       c.Approved,
-		ApprovalsRequired:              c.ApprovalsRequired,
-		ApprovalsLeft:                  c.ApprovalsLeft,
-		ApprovalsBeforeMerge:           c.ApprovalsBeforeMerge,
-		RequirePasswordToApprove:       c.RequirePasswordToApprove,
-		HasApprovalRules:               c.HasApprovalRules,
-		UserHasApproved:                c.UserHasApproved,
-		UserCanApprove:                 c.UserCanApprove,
-		MergeRequestApproversAvailable: c.MergeRequestApproversAvailable,
-		MultipleApprovalRulesAvailable: c.MultipleApprovalRulesAvailable,
-		ApprovedBy:                     approverUserOutputs(c.ApprovedBy),
-		SuggestedApprovers:             basicUserOutputs(c.SuggestedApprovers),
-		Approvers:                      approverUserOutputs(c.Approvers),
-		ApproverGroups:                 approverGroupOutputs(c.ApproverGroups),
+	return ConfigOutput{
+		Approved:        c.Approved,
+		UserHasApproved: c.UserHasApproved,
+		UserCanApprove:  c.UserCanApprove,
+		ApprovedBy:      approverUserOutputs(c.ApprovedBy),
 	}
-	for _, r := range c.ApprovalRulesLeft {
-		if r != nil {
-			out.ApprovalRulesLeft = append(out.ApprovalRulesLeft, RuleToOutput(r))
-		}
-	}
-	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -333,8 +302,12 @@ func Rules(ctx context.Context, client *gitlabclient.Client, input RulesInput) (
 	return out, nil
 }
 
-// Config retrieves the approval configuration (approvals required, current
-// approvers, suggested approvers) for a merge request.
+// Config reports who has approved a merge request and whether the calling user
+// can and has.
+//
+// It is not a Premium action, though it long said so: GitLab answers this
+// endpoint on Community Edition, and the approval *rules* that do need Premium
+// are [Rules] and [State].
 func Config(ctx context.Context, client *gitlabclient.Client, input ConfigInput) (ConfigOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ConfigOutput{}, err
@@ -348,10 +321,11 @@ func Config(ctx context.Context, client *gitlabclient.Client, input ConfigInput)
 	cfg, _, err := client.GL().MergeRequestApprovals.GetConfiguration(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsNotFound(err) {
-			return ConfigOutput{}, fmt.Errorf("mrApprovalConfig: merge request approval configuration requires GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
+			return ConfigOutput{}, toolutil.WrapErrWithHint("mrApprovalConfig", err,
+				"verify project_id + merge_request_iid with gitlab_mr_list; this endpoint is available on every tier, so a 404 is a wrong identifier rather than a missing license")
 		}
 		return ConfigOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalConfig", err, http.StatusForbidden,
-			"requires Maintainer role; approvals_required is deprecated. Prefer approval rules; verify project_id + merge_request_iid")
+			"the caller must be able to see the merge request; verify project_id + merge_request_iid")
 	}
 	return configToOutput(cfg), nil
 }

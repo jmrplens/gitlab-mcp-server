@@ -1082,7 +1082,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1091 tools, one per operation
 - gitlab_milestone_update: Update an existing milestone's title, description, start/due dates, or state (state_event close/activate) by milestone IID.
 - gitlab_modify_user: Modify an existing user.
 - gitlab_mr_add_spent_time: Add spent time to a merge request. Returns: the updated time tracking stats (estimate and spent time, seconds and human-readable).
-- gitlab_mr_approval_config: Get the approval configuration of a merge request. Returns: approvals required and left, approved-by users with timestamps, suggested approvers, approver groups...
+- gitlab_mr_approval_config: Get the approvals of a merge request. Returns: whether it is approved, the approved-by users with timestamps, and whether the calling user has approved and may ...
 - gitlab_mr_approval_reset: Reset all approvals on a merge request. Returns: a success confirmation.
 - gitlab_mr_approval_rule_create: Create an approval rule on a merge request. Returns: the created rule with its type, required count, eligible approvers, users, and groups.
 - gitlab_mr_approval_rule_delete: Delete an approval rule from a merge request. Returns: a success confirmation.

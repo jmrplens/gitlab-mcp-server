@@ -246,13 +246,14 @@ func approvalActionHandler() http.Handler {
 			}`)
 		case r.Method == http.MethodDelete && strings.Contains(path, "/approval_rules/"):
 			w.WriteHeader(http.StatusNoContent)
+		// The four fields GitLab answers this GET with. The wider body this
+		// used to send belongs to the POST at the same path, deprecated in
+		// GitLab 16.0 and never called here.
 		case r.Method == http.MethodGet && strings.HasSuffix(path, "/approvals"):
 			testutil.RespondJSON(w, http.StatusOK, `{
-				"id":1,"iid":1,"project_id":42,"title":"MR","state":"opened",
-				"approved":false,"approvals_required":1,"approvals_left":1,
-				"approvals_before_merge":0,"has_approval_rules":true,
+				"approved":false,
 				"user_has_approved":false,"user_can_approve":true,
-				"approved_by":[],"suggested_approvers":[]
+				"approved_by":[]
 			}`)
 		case r.Method == http.MethodPut && strings.HasSuffix(path, "/reset_approvals"):
 			w.WriteHeader(http.StatusAccepted)
