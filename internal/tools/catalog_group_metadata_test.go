@@ -2,8 +2,6 @@ package tools
 
 import (
 	"testing"
-
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestLoadCatalogMetaToolDescriptions_SkipsIncompleteSnapshots verifies meta
@@ -69,9 +67,8 @@ func TestCatalogGroupDescription_StripsStoredMetaPrefix(t *testing.T) {
 	catalogMetaToolDescriptions = map[string]string{
 		"gitlab_widget": "Use {\"action\":\"archive\",\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_widget.<action>.\n\nDetailed widget actions.",
 	}
-	routes := toolutil.ActionMap{"create": toolutil.Route(nil), "archive": toolutil.Route(nil)}
 
-	if got := catalogGroupDescription("gitlab_widget", routes); got != "Detailed widget actions." {
+	if got := catalogGroupDescription("gitlab_widget"); got != "Detailed widget actions." {
 		t.Fatalf("catalogGroupDescription() = %q, want stored base description", got)
 	}
 }

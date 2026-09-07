@@ -379,11 +379,7 @@ func groupFromActionSpecGroup(specGroup ActionSpecGroup) (actioncatalog.Group, e
 		specGroup.ReadOnly = catalogGroupReadOnly(specGroup.Actions)
 	}
 	if specGroup.Description == "" {
-		routes, err := toolutil.ActionSpecsToMapWithError(specGroup.Actions)
-		if err != nil {
-			return actioncatalog.Group{}, err
-		}
-		specGroup.Description = catalogGroupDescription(specGroup.ToolName, routes)
+		specGroup.Description = catalogGroupDescription(specGroup.ToolName)
 	}
 	if err := specGroup.Validate(); err != nil {
 		return actioncatalog.Group{}, err

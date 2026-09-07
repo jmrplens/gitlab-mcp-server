@@ -12,6 +12,7 @@
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	audit-md-escaping check-md-escaping \
 	check-readonly-graphql audit-readonly-graphql \
+	audit-meta-descriptions check-meta-descriptions \
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live \
 	gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
@@ -615,19 +616,20 @@ analyze:
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo "Enterprise e2e analysis: $(GO_ANALYSIS_ENTERPRISE_PKGS) with $(GO_ANALYSIS_ENTERPRISE_TAGS)"; \
 	echo ""; \
-	run_check "[1/13] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/13] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/13] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/13] golangci-lint run (Enterprise e2e half)" golangci-lint run --build-tags $(GO_ANALYSIS_ENTERPRISE_TAGS) $(GO_ANALYSIS_ENTERPRISE_PKGS); \
-	run_check "[5/13] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/13] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[7/13] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/13] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/13] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/13] Markdown escaping" go run ./cmd/audit_md_escaping --check; \
-	run_check "[11/13] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[12/13] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[13/13] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[1/14] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/14] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/14] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/14] golangci-lint run (Enterprise e2e half)" golangci-lint run --build-tags $(GO_ANALYSIS_ENTERPRISE_TAGS) $(GO_ANALYSIS_ENTERPRISE_PKGS); \
+	run_check "[5/14] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/14] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[7/14] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/14] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/14] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/14] Markdown escaping" go run ./cmd/audit_md_escaping --check; \
+	run_check "[11/14] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[12/14] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[13/14] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[14/14] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1312,6 +1314,18 @@ audit-gateway-chars:
 ## character, so a rejection at a gateway's door cannot ship silently.
 check-gateway-chars:
 	go run ./cmd/audit_gateway_chars/ -check
+
+## audit-meta-descriptions: report every parameter or enum value a served
+## meta-tool description offers that its actions do not accept.
+audit-meta-descriptions:
+	go run ./cmd/audit_meta_descriptions/
+
+## check-meta-descriptions: fail when a served description and the schemas
+## disagree. The description is read out of the same snapshot the regenerator
+## writes from it, so regeneration can never notice one going stale: this is
+## the third party.
+check-meta-descriptions:
+	go run ./cmd/audit_meta_descriptions/ -check
 
 ## check-readonly-graphql: fail when an action classified ReadOnly can reach a
 ## GraphQL mutation. --read-only and the surface served to a read_api token

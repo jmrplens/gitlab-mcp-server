@@ -311,7 +311,7 @@ func TestBuildActionCatalog_DuplicateMCPGroupReturnsContext(t *testing.T) {
 }
 
 // TestBuildActionCatalog_ActionSpecMapErrorReturnsContext verifies invalid
-// explicit actions fail while deriving a generated group description.
+// explicit actions fail with the group context that names them.
 func TestBuildActionCatalog_ActionSpecMapErrorReturnsContext(t *testing.T) {
 	_, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{{
 		ToolName: "gitlab_invalid",

@@ -256,6 +256,73 @@ func TestDecorateGroupMemberMeta_UnknownTool(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_BillableMembersSortEnum verifies the schema
+// gitlab_list_billable_group_members serves publishes the combined
+// field_direction tokens GitLab documents for the billable members endpoint,
+// and neither half of the asc/desc pair.
+//
+// The pair is what toolutil injects into any string sort carrying no enum of
+// its own, and this endpoint accepts neither value, so without the override
+// the server would advertise two values GitLab rejects while refusing the ten
+// it accepts. The sibling memberships action is asserted alongside because its
+// sort really is the plain direction pair: the override belongs to one action
+// and a test that only looked at that one could not say so.
+//
+// GitLab API docs: https://docs.gitlab.com/api/members/#list-all-billable-members-of-a-group
+func TestActionSpecs_BillableMembersSortEnum(t *testing.T) {
+	byTool := groupMemberSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+
+	t.Run(toolBillableMembers, func(t *testing.T) {
+		served := servedEnum(t, byTool[toolBillableMembers].Route.InputSchema, "sort")
+		want := []string{
+			"access_level_asc", "access_level_desc",
+			"last_activity_on_asc", "last_activity_on_desc",
+			"last_joined", "name_asc", "name_desc",
+			"oldest_joined", "oldest_sign_in", "recent_sign_in",
+		}
+		slices.Sort(served)
+		if !slices.Equal(served, want) {
+			t.Errorf("served sort enum = %v, want the documented billable members values %v", served, want)
+		}
+	})
+
+	t.Run(toolBillableMemberMemberships, func(t *testing.T) {
+		served := servedEnum(t, byTool[toolBillableMemberMemberships].Route.InputSchema, "sort")
+		slices.Sort(served)
+		if !slices.Equal(served, []string{"asc", "desc"}) {
+			t.Errorf("served sort enum = %v, want the plain direction pair this endpoint really takes", served)
+		}
+	})
+}
+
+// servedEnum returns the enum values a built input schema publishes for one
+// top-level property, which is what a client is offered after the action's
+// overrides and the canonical parameter enums have both been applied.
+func servedEnum(t *testing.T, schema map[string]any, property string) []string {
+	t.Helper()
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("input schema has no properties: %v", schema)
+	}
+	field, ok := properties[property].(map[string]any)
+	if !ok {
+		t.Fatalf("input schema has no %q property", property)
+	}
+	enum, ok := field["enum"].([]any)
+	if !ok {
+		t.Fatalf("%q publishes no enum: %v", property, field)
+	}
+	values := make([]string, 0, len(enum))
+	for _, value := range enum {
+		text, isText := value.(string)
+		if !isText {
+			t.Fatalf("%q enum carries a non-string value %v", property, value)
+		}
+		values = append(values, text)
+	}
+	return values
+}
+
 func groupMemberSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))
