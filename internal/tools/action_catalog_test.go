@@ -500,19 +500,12 @@ func TestBuildActionCatalog_CrossGroupAliasCollisionReturnsValidateContext(t *te
 // catalog, the same default NewGroup applies to ordinary domain-collected
 // groups.
 //
-// Note: this does NOT exercise the `if specGroup.SurfaceKind == ""`
-// assignment at action_catalog.go's groupFromActionSpecGroup (the
-// SurfaceKindMetaGroup fallback next to the SurfaceKind check) — that
-// branch is unreachable. groupFromActionSpecGroup's first statement clones
-// specGroup through actioncatalog.CloneCatalogGroupSpec, which already
-// defaults an empty SurfaceKind to SurfaceKindMetaGroup (group_spec.go);
-// by the time groupFromActionSpecGroup's own check runs, SurfaceKind can
-// never be empty. This mirrors the dead-branch pattern documented by
-// TestCatalogGroupSpec_Validate_DeadBranches and
-// TestActionsFromSpecs_SeenGuardIsUnreachable in the actioncatalog
-// package: a defensive check made redundant by an earlier layer. We keep
-// this test for the observable contract (the default reaches the built
-// catalog) even though the specific redundant line cannot be covered.
+// The default is applied one layer down, in actioncatalog.CloneCatalogGroupSpec,
+// which groupFromActionSpecGroup's first statement calls; the second check that
+// used to sit beside it there could never fire and has been removed rather than
+// left as a guard that guards nothing. What this test pins is the observable
+// contract, which is where it belongs: a spec group that names no surface kind
+// reaches the built catalog as a meta group.
 func TestGroupFromActionSpecGroup_DefaultsSurfaceKindToMetaGroup(t *testing.T) {
 	spec := toolutil.NewActionSpec("get", testCatalogActionRoute(), toolutil.ActionSpecOptions{ReadOnly: true, Idempotent: true})
 

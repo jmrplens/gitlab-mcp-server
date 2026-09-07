@@ -1315,10 +1315,12 @@ audit-gateway-chars:
 check-gateway-chars:
 	go run ./cmd/audit_gateway_chars/ -check
 
-## audit-meta-descriptions: report every parameter or enum value a served
-## meta-tool description offers that its actions do not accept.
+## audit-meta-descriptions: report every parameter or value a served meta-tool
+## description offers that its actions do not accept, and name every line
+## describing an action's parameters that the extraction rule could not read,
+## since a line outside the check is where a stale parameter hides.
 audit-meta-descriptions:
-	go run ./cmd/audit_meta_descriptions/
+	go run ./cmd/audit_meta_descriptions/ -uncovered
 
 ## check-meta-descriptions: fail when a served description and the schemas
 ## disagree. The description is read out of the same snapshot the regenerator

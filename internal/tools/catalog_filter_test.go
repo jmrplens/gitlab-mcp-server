@@ -203,3 +203,27 @@ func TestExcludeFromCatalog_NothingToExclude_ReturnsTheSameCatalog(t *testing.T)
 		t.Error("ExcludeFromCatalog with no patterns returned a different catalog")
 	}
 }
+
+// TestFilterActionCatalog_ScopeFilterFails_ReturnsTheErrorAndNoCatalog covers
+// the one path out of the filter that is not a narrowed catalog.
+//
+// A half-filtered catalog is worse than none: the caller would register a
+// surface missing whichever domain the rebuild stopped at, with nothing said
+// about it. So the error is returned and the catalog is not, and the withheld
+// bookkeeping is empty rather than partial.
+func TestFilterActionCatalog_ScopeFilterFails_ReturnsTheErrorAndNoCatalog(t *testing.T) {
+	restore := failAddFilteredGroup(t)
+	defer restore()
+
+	catalog, withheld, err := FilterActionCatalog(scopeFilterTestCatalog(t), &config.ServerConfig{TokenScopes: []string{"api"}})
+
+	if err == nil {
+		t.Fatal("FilterActionCatalog() error = nil, want the rebuild failure")
+	}
+	if catalog != nil {
+		t.Errorf("catalog = %+v, want none when the rebuild failed", catalog)
+	}
+	if len(withheld.ByTokenScope) != 0 || len(withheld.ByOperator) != 0 || len(withheld.ExcludedByName) != 0 {
+		t.Errorf("withheld = %+v, want nothing recorded when the rebuild failed", withheld)
+	}
+}

@@ -17,8 +17,18 @@
 //     accepts;
 //   - an enum value the description spells for a parameter whose routes publish
 //     an enum that does not carry it;
+//   - a value the description spells for a parameter that publishes no enum but
+//     whose own schema description spells a value set of its own;
 //   - a "Parameter guidance:" line written for a parameter the action it names
 //     does not accept.
+//
+// The third rule exists because a schema enum is a closed set of strings, so a
+// numeric value set cannot be one. gitlab_member_role's base_access_level
+// offered 5 in the prose while the schema description said 10 to 50, and
+// doc/api/member_roles.md agrees with the schema: GitLab refuses 5. Both sides
+// of that comparison are read by one function, so the description's own
+// "10=Guest, 20=Reporter" list is the oracle and a set nothing spells is not
+// judged at all.
 //
 // # The extraction rule
 //
@@ -52,8 +62,22 @@
 // The trailing item is prose that no sentence break separates from the
 // parameters, so the whole line is skipped. Reading it would mean guessing
 // which words are parameters, and a guess in an audit is a false failure that
-// teaches people to ignore it. The cost of skipping is coverage, which the
-// report states: it prints how many description lines it read.
+// teaches people to ignore it.
+//
+// # Coverage
+//
+// The cost of skipping is coverage, so the report names it. Every line read is
+// counted, and so is every line the rule refused, which -uncovered then prints
+// one by one. A refusal counts only when the line's head names an action of the
+// group: "- Destructive: …" and "- HTTPS: …" open the same way and name no
+// action, and the bullets under a "Returns:" heading say what an action answers
+// with rather than what it accepts, so that block is bounded and skipped whole.
+// What is left is the honest work list, and the served descriptions carry none:
+// the forty lines that ended in prose were rewritten to end at a sentence
+// break instead, which is what turned "- hook_edit: group_id*, hook_id*, same
+// params as hook_add" into "- hook_edit: group_id*, hook_id*. Same params as
+// hook_add." One of them was hiding a defect: bulk_import_start offered a flat
+// url and access_token, and the action takes a nested configuration object.
 //
 // The "Parameter guidance:" block is generated per action from a hand-written
 // map keyed by parameter name, and is read by its own rule, since its shape is

@@ -42,15 +42,21 @@ var parameterItem = regexp.MustCompile(`^([a-z][a-z0-9_]*)(\*?)(?:\s*\(([^()]*)\
 // which names two values, from "(max 100)" or "(ID or path)", which are prose.
 var bareToken = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*$`)
 
+// labeledPair matches one item of a labeled value list: a bare value, an
+// equals sign, and the label that says what it means. The label must open with
+// a letter, so "x=5" is not read as a value named x.
+var labeledPair = regexp.MustCompile(`^([A-Za-z0-9_]+)\s*=\s*[A-Za-z]`)
+
 // guidanceHead matches one line of the served "Parameter guidance:" block,
 // which is generated per action from a hand-written map keyed by parameter
 // name: "- <action>.<parameter>: <role>. Source: …".
 var guidanceHead = regexp.MustCompile(`^- ([a-z0-9_]+)\.([a-z0-9_]+):`)
 
-// findingKind names the three disagreements this audit reports.
+// findingKind names the four disagreements this audit reports.
 const (
 	kindParameter = "parameter"
 	kindEnumValue = "enum value"
+	kindDocValue  = "doc value"
 	kindGuidance  = "guidance"
 )
 
@@ -70,13 +76,24 @@ type finding struct {
 	line   string
 }
 
+// skipped is one line whose head reads as a parameter enumeration but whose
+// body the rule refused, so nothing on it was judged. It is the coverage the
+// summary counts and -uncovered names: a line outside the check is a line where
+// a stale parameter can hide.
+type skipped struct {
+	tool string
+	line string
+}
+
 // accepted is what the schemas on the other side of the comparison allow: every
-// parameter name, and the union of published enum values per name. A name with
-// no entry in values publishes no enum anywhere, and its spelled values are not
-// judged.
+// parameter name, the union of published enum values per name, and the union of
+// the values the property descriptions spell where the value set is closed but
+// carries no enum. A name with no entry in either map publishes no value set
+// anywhere, and its spelled values are not judged.
 type accepted struct {
-	names  map[string]bool
-	values map[string]map[string]bool
+	names      map[string]bool
+	values     map[string]map[string]bool
+	documented map[string]map[string]bool
 }
 
 // schemas is one served tool's accepted parameters, both pooled and per action.
@@ -90,21 +107,22 @@ type schemas struct {
 
 func main() {
 	check := flag.Bool("check", false, "exit non-zero when a served description disagrees with the schemas")
+	uncovered := flag.Bool("uncovered", false, "name the enumeration lines the extraction rule refused instead of only counting them")
 	flag.Parse()
 
 	// os.Exit lives here, not in run: run holds the stub client's deferred
 	// cleanup, and an exit inside it would skip that defer.
-	os.Exit(run(*check))
+	os.Exit(run(*check, *uncovered))
 }
 
 // run performs the audit and returns the process exit code.
-func run(check bool) int {
+func run(check, uncovered bool) int {
 	client, cleanup := mcpsurface.NewStubClient()
 	defer cleanup()
 
 	catalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true}))
-	findings, lines := audit(metaTools(client), catalog)
-	return report(findings, lines, check)
+	findings, lines, refused := audit(metaTools(client), catalog)
+	return report(findings, lines, refused, check, uncovered)
 }
 
 // metaTools lists the meta surface at the widest tier over a real tools/list
@@ -127,16 +145,23 @@ func metaTools(client *gitlabclient.Client) []*mcp.Tool {
 }
 
 // audit compares every served description with what its actions accept and
-// returns the findings plus the number of enumeration lines it read. The count
-// is reported because the extraction rule skips a line it cannot parse whole:
-// a rule that suddenly reads nothing is a silent pass, and the number is what
-// makes that visible.
-func audit(served []*mcp.Tool, catalog *actioncatalog.Catalog) (findings []finding, lines int) {
+// returns the findings, the number of description lines it read, and the
+// enumeration lines the extraction rule refused. Both counts are reported
+// because the rule skips a line it cannot parse whole: a rule that suddenly
+// reads nothing is a silent pass, and the numbers are what make that visible.
+func audit(served []*mcp.Tool, catalog *actioncatalog.Catalog) (findings []finding, lines int, refused []skipped) {
 	for _, tool := range served {
 		allowed := acceptedFor(tool, catalog)
-		for _, enumeration := range parseEnumerations(tool.Description) {
+		read, unread := parseEnumerations(tool.Description)
+		for _, enumeration := range read {
 			lines++
 			findings = append(findings, judge(tool.Name, enumeration, allowed.union)...)
+		}
+		for _, line := range unread {
+			if !allowed.describesAnAction(line.actions) {
+				continue
+			}
+			refused = append(refused, skipped{tool: tool.Name, line: line.text})
 		}
 		for _, mentioned := range parseGuidance(tool.Description) {
 			lines++
@@ -158,10 +183,16 @@ func audit(served []*mcp.Tool, catalog *actioncatalog.Catalog) (findings []findi
 		}
 		return findings[i].line < findings[j].line
 	})
-	return findings, lines
+	return findings, lines, refused
 }
 
 // judge reports what one enumeration line offers that the schemas do not.
+//
+// A spelled value is judged against the property's published enum where there
+// is one, and otherwise against the value set the property's own description
+// spells. The second half exists because a numeric value set cannot be an enum
+// of strings: gitlab_member_role's base_access_level offered 5 in the prose
+// while its description said 10 to 50, and GitLab refuses 5.
 func judge(toolName string, line enumeration, allowed accepted) []finding {
 	var found []finding
 	for _, param := range line.params {
@@ -169,7 +200,10 @@ func judge(toolName string, line enumeration, allowed accepted) []finding {
 			found = append(found, finding{tool: toolName, kind: kindParameter, detail: param.name, line: line.text})
 			continue
 		}
-		published := allowed.values[param.name]
+		published, kind := allowed.values[param.name], kindEnumValue
+		if len(published) == 0 {
+			published, kind = allowed.documented[param.name], kindDocValue
+		}
 		if len(published) == 0 {
 			continue
 		}
@@ -177,7 +211,7 @@ func judge(toolName string, line enumeration, allowed accepted) []finding {
 			if !published[value] {
 				found = append(found, finding{
 					tool:   toolName,
-					kind:   kindEnumValue,
+					kind:   kind,
 					detail: param.name + "=" + value,
 					line:   line.text,
 				})
@@ -206,16 +240,23 @@ func judgeGuidance(toolName string, mentioned guidance, allowed schemas) []findi
 }
 
 // report prints the findings and returns the exit code: 1 when check is set and
-// anything disagrees, 0 otherwise.
-func report(findings []finding, lines int, check bool) int {
+// anything disagrees, 0 otherwise. The refused lines are counted always and
+// named under -uncovered, because coverage is the one thing a clean run cannot
+// speak for on its own.
+func report(findings []finding, lines int, refused []skipped, check, uncovered bool) int {
 	for _, f := range findings {
 		fmt.Fprintf(stdout, "%-28s %-10s %-24s %s\n", f.tool, f.kind, f.detail, f.line)
 	}
+	if uncovered {
+		for _, s := range refused {
+			fmt.Fprintf(stdout, "%-28s %-10s %s\n", s.tool, "uncovered", s.line)
+		}
+	}
 	if len(findings) == 0 {
-		fmt.Fprintf(stdout, "meta description audit: %d description line(s) read, every parameter and value they offer exists\n", lines)
+		fmt.Fprintf(stdout, "meta description audit: %d description line(s) read, %d refused, every parameter and value they offer exists\n", lines, len(refused))
 		return 0
 	}
-	fmt.Fprintf(stdout, "meta description audit: %d description line(s) read, %d disagree with the schemas\n", lines, len(findings))
+	fmt.Fprintf(stdout, "meta description audit: %d description line(s) read, %d refused, %d disagree with the schemas\n", lines, len(refused), len(findings))
 	if check {
 		return 1
 	}
@@ -241,9 +282,24 @@ func acceptedFor(tool *mcp.Tool, catalog *actioncatalog.Catalog) schemas {
 	return allowed
 }
 
+// describesAnAction reports whether a refused line's head names an action of
+// this group, which is what separates a parameter line the rule could not read
+// from a bullet that merely opens like one. "- Destructive: …" and "- HTTPS: …"
+// name no action and are prose by construction; "- hook_edit: …" is a line
+// about a real action's parameters, and one the check cannot see is coverage
+// the report has to admit to.
+func (s schemas) describesAnAction(actions []string) bool {
+	for _, action := range actions {
+		if _, known := s.byAction[action]; known {
+			return true
+		}
+	}
+	return false
+}
+
 // newAccepted returns an empty accepted set.
 func newAccepted() accepted {
-	return accepted{names: map[string]bool{}, values: map[string]map[string]bool{}}
+	return accepted{names: map[string]bool{}, values: map[string]map[string]bool{}, documented: map[string]map[string]bool{}}
 }
 
 // add folds one input schema's top-level properties into the accepted set.
@@ -261,20 +317,35 @@ func (a accepted) add(schema map[string]any) {
 		if !isMap {
 			continue
 		}
-		enum, hasEnum := property["enum"].([]any)
-		if !hasEnum {
-			continue
+		a.addEnum(name, property)
+		description, _ := property["description"].(string)
+		record(a.documented, name, labeledValues(description))
+	}
+}
+
+// addEnum folds one property's published enum into the accepted set, keeping
+// only its string values: a schema enum is a closed set of strings, and a
+// number in one is not a value any description spells.
+func (a accepted) addEnum(name string, property map[string]any) {
+	enum, ok := property["enum"].([]any)
+	if !ok {
+		return
+	}
+	for _, value := range enum {
+		if text, isText := value.(string); isText {
+			record(a.values, name, []string{text})
 		}
-		for _, value := range enum {
-			text, isText := value.(string)
-			if !isText {
-				continue
-			}
-			if a.values[name] == nil {
-				a.values[name] = map[string]bool{}
-			}
-			a.values[name][text] = true
+	}
+}
+
+// record folds values into the set held under name, creating it on first use so
+// a name with no value set has no entry at all and is left unjudged.
+func record(into map[string]map[string]bool, name string, values []string) {
+	for _, value := range values {
+		if into[name] == nil {
+			into[name] = map[string]bool{}
 		}
+		into[name][value] = true
 	}
 }
 
@@ -302,20 +373,55 @@ type enumeration struct {
 	params []mention
 }
 
-// parseEnumerations returns every parameter enumeration a description carries.
-// The usage preamble and the action guidance are removed first, so only the
-// curated body is read, and a line is returned only when it parses whole. The
-// rule and its shapes are written out in this command's package comment.
-func parseEnumerations(description string) []enumeration {
-	var found []enumeration
+// refusal is one line that opens like a parameter enumeration and that the rule
+// refused, carrying the action names its head spells so the caller can tell a
+// stale parameter line from a bullet that only looks like one.
+type refusal struct {
+	actions []string
+	text    string
+}
+
+// parseEnumerations returns every parameter enumeration a description carries,
+// and beside it every line that opens like one and was refused. The usage
+// preamble and the action guidance are removed first, so only the curated body
+// is read; the "Returns:" block is bounded and skipped, since its bullets name
+// actions and then describe what they answer with rather than what they accept.
+// A line is returned as parsed only when it parses whole. The rule and its
+// shapes are written out in this command's package comment.
+func parseEnumerations(description string) (found []enumeration, refused []refusal) {
+	inReturns := false
 	for line := range strings.SplitSeq(toolutil.StripMetaToolDescriptionPrefix(description), "\n") {
-		params, ok := parseEnumerationLine(line)
-		if !ok {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "Returns:" {
+			inReturns = true
 			continue
 		}
-		found = append(found, enumeration{text: strings.TrimSpace(line), params: params})
+		if inReturns {
+			if strings.HasPrefix(trimmed, "- ") {
+				continue
+			}
+			inReturns = false
+		}
+		params, ok := parseEnumerationLine(line)
+		if !ok {
+			if head := enumerationHead.FindStringSubmatch(trimmed); head != nil {
+				refused = append(refused, refusal{actions: headActions(head[1]), text: trimmed})
+			}
+			continue
+		}
+		found = append(found, enumeration{text: trimmed, params: params})
 	}
-	return found
+	return found, refused
+}
+
+// headActions splits an enumeration head into the action names it spells, so a
+// line shared by several actions is attributed to each of them.
+func headActions(head string) []string {
+	names := strings.Split(head, "/")
+	for index, name := range names {
+		names[index] = strings.TrimSpace(name)
+	}
+	return names
 }
 
 // guidance is one parsed line of the served "Parameter guidance:" block.
@@ -377,24 +483,85 @@ func parseEnumerationLine(line string) (params []mention, ok bool) {
 	return params, true
 }
 
-// annotationValues reads an item's parenthesised annotation as a list of enum
-// values, which it is only when it holds several slash-separated bare tokens.
-// "(ALL/NAMESPACES)" is a value set; "(max 100)", "(bool)" and "(ID or path)"
-// are prose about the parameter and name no value.
+// annotationValues reads an item's parenthesised annotation as a list of the
+// values the parameter accepts, in the two shapes the descriptions use: several
+// slash-separated bare tokens, "(ALL/NAMESPACES)", or a labeled list,
+// "(10=Guest, 20=Reporter)". "(max 100)", "(bool)" and "(ID or path)" are prose
+// about the parameter and name no value.
 func annotationValues(annotation string) []string {
 	parts := strings.Split(annotation, "/")
 	if len(parts) < 2 {
-		return nil
+		return labeledValues(annotation)
 	}
 	values := make([]string, 0, len(parts))
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if !bareToken.MatchString(part) {
-			return nil
+			return labeledValues(annotation)
 		}
 		values = append(values, part)
 	}
 	return values
+}
+
+// labeledValues reads a "<value>=<label>" list as the values it names: the
+// longest run of comma-separated items, each naming a value and what it means,
+// that the text opens with or that one of its parentheticals holds. A schema
+// enum is a closed set of strings, so a numeric set such as an access level can
+// only be written this way, on both sides of the comparison: it is how a
+// description spells the set and how the prose offers it.
+//
+// The run ends at the first sentence break and at the first item that is not
+// such a pair, so "10=Guest, 50=Owner. 60=Admin is not valid" names the levels
+// the sentence offers and not the one it denies. Reading the denial as an
+// offered value would be a false failure, which is the one thing this audit
+// must not produce.
+func labeledValues(text string) []string {
+	head := sentenceHead(strings.TrimSpace(text))
+	for _, region := range append([]string{head}, parentheticals(head)...) {
+		if values := leadingPairs(region); len(values) > 1 {
+			return values
+		}
+	}
+	return nil
+}
+
+// leadingPairs returns the values of the comma-separated "<value>=<label>"
+// items a region opens with, stopping at the first item that is not one.
+func leadingPairs(region string) []string {
+	var values []string
+	for _, item := range splitTopLevel(region, ",") {
+		pair := labeledPair.FindStringSubmatch(item)
+		if pair == nil {
+			return values
+		}
+		values = append(values, pair[1])
+	}
+	return values
+}
+
+// parentheticals returns the contents of every top-level parenthetical in text,
+// which is where a description keeps its value set: "Base access level
+// (10=Guest, 20=Reporter)" spells the set inside the brackets and the sentence
+// around them is prose.
+func parentheticals(text string) []string {
+	var found []string
+	depth, start := 0, 0
+	for index, char := range text {
+		switch char {
+		case '(':
+			if depth == 0 {
+				start = index + 1
+			}
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				found = append(found, text[start:index])
+			}
+		}
+	}
+	return found
 }
 
 // sentenceHead returns the text before the first sentence-ending period outside

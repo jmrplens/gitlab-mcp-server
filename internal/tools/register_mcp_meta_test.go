@@ -9,6 +9,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -81,6 +83,63 @@ func TestBuildMCPActionGroup_EveryRouteIsReachable(t *testing.T) {
 			route, ok := routes[name]
 			if !ok {
 				t.Errorf("action %q is missing from the group", name)
+				return
+			}
+			if route.Handler == nil {
+				t.Errorf("action %q has no handler and could never run", name)
+			}
+		})
+	}
+}
+
+// TestRegisterMCPMeta_RejectedGroup_RegistersNothing covers the guard that
+// answers a catalog refusing the group: nothing is registered, so a client sees
+// no gitlab_server rather than one whose actions were dropped on the way in.
+//
+// The real builder returns one fixed group the catalog always accepts, so the
+// seam is the only way to reach the branch. A group with no tool name is what a
+// catalog refuses.
+func TestRegisterMCPMeta_RejectedGroup_RegistersNothing(t *testing.T) {
+	original := mcpActionGroup
+	t.Cleanup(func() { mcpActionGroup = original })
+	mcpActionGroup = func(*gitlabclient.Client) actioncatalog.Group {
+		return actioncatalog.NewGroup(actioncatalog.GroupOptions{Description: "no tool name"})
+	}
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	RegisterMCPMeta(server, nil)
+
+	tools, err := toolutil.ListRegisteredTools(t.Context(), server, "test")
+	if err != nil {
+		t.Fatalf("ListRegisteredTools() error = %v", err)
+	}
+	if len(tools) != 0 {
+		t.Errorf("registered %d tool(s), want none when the catalog refused the group", len(tools))
+	}
+}
+
+// TestBuildMCPActionGroup_UnprojectableSpecs_FallBackToTheRouteMap covers the
+// other half of the group builder: when the health specs do not project, the
+// group is still assembled from the route map alone, so the diagnostics tool
+// keeps working with generic metadata rather than disappearing.
+//
+// That fallback is the reason the route map exists beside the specs at all, and
+// nothing else can reach it: the compiled specs always project.
+func TestBuildMCPActionGroup_UnprojectableSpecs_FallBackToTheRouteMap(t *testing.T) {
+	original := mcpHealthActionSpecs
+	t.Cleanup(func() { mcpHealthActionSpecs = original })
+	mcpHealthActionSpecs = func(*gitlabclient.Client) []toolutil.ActionSpec {
+		return []toolutil.ActionSpec{{}}
+	}
+
+	group := BuildMCPActionGroup(nil)
+
+	routes := group.ActionMap()
+	for _, name := range []string{"status", "health_check"} {
+		t.Run(name, func(t *testing.T) {
+			route, ok := routes[name]
+			if !ok {
+				t.Errorf("action %q is missing, so the route-map fallback did not run", name)
 				return
 			}
 			if route.Handler == nil {
