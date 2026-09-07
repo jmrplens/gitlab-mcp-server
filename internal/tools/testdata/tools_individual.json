@@ -17009,7 +17009,7 @@
   },
   {
     "name": "gitlab_create_work_item",
-    "description": "Create a new work item under a namespace. Returns: the created work item with id, iid, type, state, title, description, assignees, labels, linked items, child work items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_list_work_items, gitlab_list_work_item_types.",
+    "description": "Create a new work item under a namespace. Returns: the created work item with id, iid, type, state, title, description, assignees, labels, linked items, parent and child work items, milestone, iteration, weight, health status, color, start and due dates, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_list_work_items, gitlab_list_work_item_types.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -17034,6 +17034,25 @@
             "boolean"
           ]
         },
+        "create_source": {
+          "description": "Name of whatever triggered the creation. Recorded for tracking and changes nothing about the work item",
+          "type": "string"
+        },
+        "created_at": {
+          "description": "Creation timestamp to record instead of now. ISO 8601 date-time such as 2025-01-01T00:00:00Z. GitLab accepts it from instance administrators and project owners only",
+          "format": "date-time",
+          "type": "string"
+        },
+        "crm_contact_ids": {
+          "description": "CRM contact IDs to attach to the new work item",
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "description": {
           "description": "Description of the work item",
           "type": "string"
@@ -17055,6 +17074,13 @@
             "atRisk"
           ],
           "type": "string"
+        },
+        "iteration_id": {
+          "description": "Global ID of the iteration",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "label_ids": {
           "description": "Global IDs of labels",
@@ -17101,6 +17127,13 @@
         },
         "milestone_id": {
           "description": "Global ID of the milestone",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "parent_id": {
+          "description": "Global ID of the parent work item. Creates the item already under its parent, which otherwise takes a create followed by an update",
           "type": [
             "null",
             "integer"
@@ -17161,8 +17194,44 @@
           "additionalProperties": false,
           "properties": {
             "assignees": {
+              "description": "Users assigned to the work item",
               "items": {
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "type": [
                 "null",
@@ -17170,7 +17239,43 @@
               ]
             },
             "author": {
-              "type": "string"
+              "additionalProperties": false,
+              "description": "User who created the work item",
+              "properties": {
+                "avatar_url": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "username",
+                "name",
+                "state",
+                "avatar_url",
+                "web_url"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
             },
             "children": {
               "description": "Child work items in the hierarchy (each with namespace path and IID)",
@@ -17199,6 +17304,10 @@
             "closed_at": {
               "type": "string"
             },
+            "color": {
+              "description": "Color of the work item as a hex code (e.g. #fefefe)",
+              "type": "string"
+            },
             "confidential": {
               "type": "boolean"
             },
@@ -17208,15 +17317,60 @@
             "description": {
               "type": "string"
             },
+            "due_date": {
+              "description": "Due date (YYYY-MM-DD)",
+              "type": "string"
+            },
+            "health_status": {
+              "description": "Health status (onTrack/needsAttention/atRisk)",
+              "type": "string"
+            },
             "id": {
               "type": "integer"
             },
             "iid": {
               "type": "integer"
             },
+            "iteration_id": {
+              "description": "Numeric ID of the iteration the work item belongs to",
+              "type": "integer"
+            },
             "labels": {
+              "description": "Labels applied to the work item, each with its id, name, color, description and text color",
               "items": {
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "color": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "description_html": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "text_color": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "color",
+                  "description",
+                  "description_html",
+                  "text_color"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "type": [
                 "null",
@@ -17248,10 +17402,40 @@
                 "array"
               ]
             },
+            "milestone_id": {
+              "description": "Numeric ID of the milestone the work item belongs to",
+              "type": "integer"
+            },
+            "parent": {
+              "additionalProperties": false,
+              "description": "Parent work item in the hierarchy (namespace path and IID)",
+              "properties": {
+                "iid": {
+                  "description": "Internal ID (IID) of the child work item",
+                  "type": "integer"
+                },
+                "path": {
+                  "description": "Namespace full path of the child work item",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "iid"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "start_date": {
+              "description": "Start date (YYYY-MM-DD)",
+              "type": "string"
+            },
             "state": {
               "type": "string"
             },
             "status": {
+              "description": "Name of the work item status in the namespace's lifecycle",
               "type": "string"
             },
             "title": {
@@ -17265,6 +17449,13 @@
             },
             "web_url": {
               "type": "string"
+            },
+            "weight": {
+              "description": "Weight of the work item",
+              "type": [
+                "null",
+                "integer"
+              ]
             }
           },
           "required": [
@@ -27889,7 +28080,7 @@
   },
   {
     "name": "gitlab_epic_create",
-    "description": "Create a new epic in a group. Returns: the created epic with IID, state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_update.",
+    "description": "Create a new epic in a group, optionally under a parent epic and already linked to others. Returns: the created epic with IID, state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -27913,6 +28104,15 @@
             "null",
             "boolean"
           ]
+        },
+        "create_source": {
+          "description": "Free-text label recording what triggered the creation. Used by GitLab for tracking only and never shown on the epic",
+          "type": "string"
+        },
+        "created_at": {
+          "description": "Creation timestamp to record instead of now (ISO 8601, e.g. 2025-01-01T00:00:00Z). Honored for group owners and administrators only, and ignored when it cannot be parsed",
+          "format": "date-time",
+          "type": "string"
         },
         "description": {
           "description": "Epic description (Markdown supported)",
@@ -27946,6 +28146,53 @@
             "array"
           ]
         },
+        "linked_items": {
+          "additionalProperties": false,
+          "description": "Epics to link to the new one, all with the same link type",
+          "properties": {
+            "link_type": {
+              "description": "Link type: BLOCKS, BLOCKED_BY, or RELATED",
+              "enum": [
+                "BLOCKED_BY",
+                "BLOCKS",
+                "RELATED"
+              ],
+              "type": "string"
+            },
+            "work_item_ids": {
+              "description": "Global IDs of epics or work items to link",
+              "items": {
+                "type": "integer"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            }
+          },
+          "required": [
+            "work_item_ids",
+            "link_type"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "milestone_id": {
+          "description": "Global ID of the milestone to assign to the epic",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "parent_id": {
+          "description": "Global ID of the parent epic, which makes this one a sub-epic in the same call",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "start_date": {
           "description": "Start date (YYYY-MM-DD)",
           "format": "date",
@@ -27972,6 +28219,27 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "epic_issues": {
+              "type": "string"
+            },
+            "group": {
+              "type": "string"
+            },
+            "parent": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "assignees": {
           "items": {
             "additionalProperties": false,
@@ -27985,7 +28253,13 @@
               "id": {
                 "type": "integer"
               },
+              "locked": {
+                "type": "boolean"
+              },
               "name": {
+                "type": "string"
+              },
+              "public_email": {
                 "type": "string"
               },
               "state": {
@@ -28024,7 +28298,13 @@
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -28044,6 +28324,29 @@
           "type": [
             "null",
             "object"
+          ]
+        },
+        "children": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "iid": {
+                "description": "Internal ID (IID) of the child epic",
+                "type": "integer"
+              },
+              "path": {
+                "description": "Namespace full path of the child epic",
+                "type": "string"
+              }
+            },
+            "required": [
+              "iid"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
           ]
         },
         "closed_at": {
@@ -28070,11 +28373,17 @@
         "due_date_fixed": {
           "type": "string"
         },
+        "due_date_from_inherited_source": {
+          "type": "string"
+        },
         "due_date_from_milestones": {
           "type": "string"
         },
         "due_date_is_fixed": {
           "type": "boolean"
+        },
+        "end_date": {
+          "type": "string"
         },
         "group_id": {
           "type": "integer"
@@ -28087,6 +28396,53 @@
         },
         "iid": {
           "type": "integer"
+        },
+        "imported": {
+          "type": "boolean"
+        },
+        "imported_from": {
+          "type": "string"
+        },
+        "label_details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "description_html": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color",
+              "description",
+              "description_html",
+              "text_color"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "labels": {
           "items": {
@@ -28122,6 +28478,12 @@
             "array"
           ]
         },
+        "milestone_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "next_steps": {
           "items": {
             "type": "string"
@@ -28140,10 +28502,36 @@
         "parent_path": {
           "type": "string"
         },
+        "references": {
+          "additionalProperties": false,
+          "properties": {
+            "full": {
+              "type": "string"
+            },
+            "relative": {
+              "type": "string"
+            },
+            "short": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "short",
+            "relative",
+            "full"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "start_date": {
           "type": "string"
         },
         "start_date_fixed": {
+          "type": "string"
+        },
+        "start_date_from_inherited_source": {
           "type": "string"
         },
         "start_date_from_milestones": {
@@ -28155,7 +28543,7 @@
         "state": {
           "type": "string"
         },
-        "status": {
+        "text_color": {
           "type": "string"
         },
         "title": {
@@ -28170,11 +28558,8 @@
         "upvotes": {
           "type": "integer"
         },
-        "url": {
+        "web_edit_url": {
           "type": "string"
-        },
-        "user_notes_count": {
-          "type": "integer"
         },
         "web_url": {
           "type": "string"
@@ -28184,6 +28569,9 @@
             "null",
             "integer"
           ]
+        },
+        "work_item_id": {
+          "type": "integer"
         }
       },
       "required": [
@@ -28284,6 +28672,27 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "epic_issues": {
+              "type": "string"
+            },
+            "group": {
+              "type": "string"
+            },
+            "parent": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "assignees": {
           "items": {
             "additionalProperties": false,
@@ -28297,7 +28706,13 @@
               "id": {
                 "type": "integer"
               },
+              "locked": {
+                "type": "boolean"
+              },
               "name": {
+                "type": "string"
+              },
+              "public_email": {
                 "type": "string"
               },
               "state": {
@@ -28336,7 +28751,13 @@
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -28356,6 +28777,29 @@
           "type": [
             "null",
             "object"
+          ]
+        },
+        "children": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "iid": {
+                "description": "Internal ID (IID) of the child epic",
+                "type": "integer"
+              },
+              "path": {
+                "description": "Namespace full path of the child epic",
+                "type": "string"
+              }
+            },
+            "required": [
+              "iid"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
           ]
         },
         "closed_at": {
@@ -28382,11 +28826,17 @@
         "due_date_fixed": {
           "type": "string"
         },
+        "due_date_from_inherited_source": {
+          "type": "string"
+        },
         "due_date_from_milestones": {
           "type": "string"
         },
         "due_date_is_fixed": {
           "type": "boolean"
+        },
+        "end_date": {
+          "type": "string"
         },
         "group_id": {
           "type": "integer"
@@ -28399,6 +28849,53 @@
         },
         "iid": {
           "type": "integer"
+        },
+        "imported": {
+          "type": "boolean"
+        },
+        "imported_from": {
+          "type": "string"
+        },
+        "label_details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "description_html": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color",
+              "description",
+              "description_html",
+              "text_color"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "labels": {
           "items": {
@@ -28434,6 +28931,12 @@
             "array"
           ]
         },
+        "milestone_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "next_steps": {
           "items": {
             "type": "string"
@@ -28452,10 +28955,36 @@
         "parent_path": {
           "type": "string"
         },
+        "references": {
+          "additionalProperties": false,
+          "properties": {
+            "full": {
+              "type": "string"
+            },
+            "relative": {
+              "type": "string"
+            },
+            "short": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "short",
+            "relative",
+            "full"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "start_date": {
           "type": "string"
         },
         "start_date_fixed": {
+          "type": "string"
+        },
+        "start_date_from_inherited_source": {
           "type": "string"
         },
         "start_date_from_milestones": {
@@ -28467,7 +28996,7 @@
         "state": {
           "type": "string"
         },
-        "status": {
+        "text_color": {
           "type": "string"
         },
         "title": {
@@ -28482,11 +29011,8 @@
         "upvotes": {
           "type": "integer"
         },
-        "url": {
+        "web_edit_url": {
           "type": "string"
-        },
-        "user_notes_count": {
-          "type": "integer"
         },
         "web_url": {
           "type": "string"
@@ -28496,6 +29022,9 @@
             "null",
             "integer"
           ]
+        },
+        "work_item_id": {
+          "type": "integer"
         }
       },
       "required": [
@@ -28542,6 +29071,27 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "_links": {
+                "additionalProperties": false,
+                "properties": {
+                  "epic_issues": {
+                    "type": "string"
+                  },
+                  "group": {
+                    "type": "string"
+                  },
+                  "parent": {
+                    "type": "string"
+                  },
+                  "self": {
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "author": {
                 "additionalProperties": false,
                 "properties": {
@@ -28554,7 +29104,13 @@
                   "id": {
                     "type": "integer"
                   },
+                  "locked": {
+                    "type": "boolean"
+                  },
                   "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
                     "type": "string"
                   },
                   "state": {
@@ -28579,6 +29135,9 @@
               "closed_at": {
                 "type": "string"
               },
+              "color": {
+                "type": "string"
+              },
               "confidential": {
                 "type": "boolean"
               },
@@ -28597,11 +29156,17 @@
               "due_date_fixed": {
                 "type": "string"
               },
+              "due_date_from_inherited_source": {
+                "type": "string"
+              },
               "due_date_from_milestones": {
                 "type": "string"
               },
               "due_date_is_fixed": {
                 "type": "boolean"
+              },
+              "end_date": {
+                "type": "string"
               },
               "group_id": {
                 "type": "integer"
@@ -28611,6 +29176,12 @@
               },
               "iid": {
                 "type": "integer"
+              },
+              "imported": {
+                "type": "boolean"
+              },
+              "imported_from": {
+                "type": "string"
               },
               "labels": {
                 "items": {
@@ -28624,10 +29195,39 @@
               "parent_id": {
                 "type": "integer"
               },
+              "parent_iid": {
+                "type": "integer"
+              },
+              "references": {
+                "additionalProperties": false,
+                "properties": {
+                  "full": {
+                    "type": "string"
+                  },
+                  "relative": {
+                    "type": "string"
+                  },
+                  "short": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "short",
+                  "relative",
+                  "full"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "start_date": {
                 "type": "string"
               },
               "start_date_fixed": {
+                "type": "string"
+              },
+              "start_date_from_inherited_source": {
                 "type": "string"
               },
               "start_date_from_milestones": {
@@ -28639,6 +29239,9 @@
               "state": {
                 "type": "string"
               },
+              "text_color": {
+                "type": "string"
+              },
               "title": {
                 "type": "string"
               },
@@ -28648,14 +29251,14 @@
               "upvotes": {
                 "type": "integer"
               },
-              "url": {
+              "web_edit_url": {
                 "type": "string"
-              },
-              "user_notes_count": {
-                "type": "integer"
               },
               "web_url": {
                 "type": "string"
+              },
+              "work_item_id": {
+                "type": "integer"
               }
             },
             "required": [
@@ -29105,16 +29708,35 @@
   },
   {
     "name": "gitlab_epic_list",
-    "description": "List epics in a group with filtering and pagination. Returns: matching epics with state, labels, author, assignees, dates, and pagination cursors. See also: gitlab_epic_get, gitlab_epic_create, gitlab_epic_get_links.",
+    "description": "List epics in a group with filtering and pagination. Returns: matching epics with state, labels, author, assignees, dates, children, and the pagination block of whichever API answered. See also: gitlab_epic_get, gitlab_epic_create, gitlab_epic_get_links.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "after": {
-          "description": "Cursor for forward pagination",
+          "description": "Cursor for forward pagination (from previous response end_cursor)",
+          "type": "string"
+        },
+        "assignee_usernames": {
+          "description": "Filter by assignee usernames",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "assignee_wildcard_id": {
+          "description": "Filter by assignment state rather than by user: ANY, ME, or NONE",
+          "enum": [
+            "ANY",
+            "ME",
+            "NONE"
+          ],
           "type": "string"
         },
         "author_id": {
-          "description": "Filter by author user ID",
+          "description": "Filter by author user ID. Accepted by the REST epics endpoint only, so it is dropped when another filter routes the request through the Work Items API, where author_username is the equivalent",
           "type": [
             "null",
             "integer"
@@ -29122,6 +29744,20 @@
         },
         "author_username": {
           "description": "Filter by author username",
+          "type": "string"
+        },
+        "before": {
+          "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
+          "type": "string"
+        },
+        "closed_after": {
+          "description": "Return epics closed on or after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "format": "date-time",
+          "type": "string"
+        },
+        "closed_before": {
+          "description": "Return epics closed on or before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "format": "date-time",
           "type": "string"
         },
         "confidential": {
@@ -29141,8 +29777,18 @@
           "format": "date-time",
           "type": "string"
         },
+        "due_after": {
+          "description": "Return epics due on or after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
+          "format": "date-time",
+          "type": "string"
+        },
+        "due_before": {
+          "description": "Return epics due on or before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)",
+          "format": "date-time",
+          "type": "string"
+        },
         "first": {
-          "description": "Number of items to return (cursor-based pagination)",
+          "description": "Number of items to return (default 20, max 100)",
           "type": [
             "null",
             "integer"
@@ -29151,6 +29797,51 @@
         "full_path": {
           "description": "Full path of the group (e.g. my-group or my-group/sub-group)",
           "type": "string"
+        },
+        "health_status_filter": {
+          "description": "Filter by health status: onTrack, needsAttention, atRisk, or the wildcards ANY and NONE",
+          "enum": [
+            "ANY",
+            "NONE",
+            "atRisk",
+            "needsAttention",
+            "onTrack"
+          ],
+          "type": "string"
+        },
+        "ids": {
+          "description": "Fetch only these epics by global ID, in full gid://gitlab/WorkItem/123 form. Unlike every other id input here this is not a bare number",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "iids": {
+          "description": "Fetch only these epic IIDs, each as a decimal string (e.g. [\"12\", \"34\"])",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "in": {
+          "description": "Fields the search term is matched against: TITLE, DESCRIPTION, or both. Both are searched when omitted",
+          "items": {
+            "enum": [
+              "TITLE",
+              "DESCRIPTION"
+            ],
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "include_ancestors": {
           "description": "Include epics from ancestor groups",
@@ -29176,12 +29867,39 @@
             "array"
           ]
         },
+        "last": {
+          "description": "Number of items to return from the end of the range (backward pagination). Cannot be combined with first",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "milestone_title": {
+          "description": "Filter by the titles of the milestones assigned to the epic",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "milestone_wildcard_id": {
+          "description": "Filter by milestone assignment rather than by title: ANY, NONE, STARTED, or UPCOMING",
+          "enum": [
+            "ANY",
+            "NONE",
+            "STARTED",
+            "UPCOMING"
+          ],
+          "type": "string"
+        },
         "my_reaction_emoji": {
           "description": "Filter by reaction emoji the authenticated user awarded (e.g. thumbsup or None/Any)",
           "type": "string"
         },
         "order_by": {
-          "description": "Order epics by field (created_at, updated_at, title)",
+          "description": "Order epics by field (created_at, updated_at, title). Defaults to created_at",
           "enum": [
             "created_at",
             "updated_at",
@@ -29202,6 +29920,16 @@
           "description": "Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.",
           "type": "string"
         },
+        "parent_ids": {
+          "description": "Return only epics whose parent is one of these global IDs, in full gid://gitlab/WorkItem/123 form",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "per_page": {
           "description": "Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.",
           "maximum": 100,
@@ -29213,7 +29941,7 @@
           "type": "string"
         },
         "sort": {
-          "description": "Sort order (asc or desc)",
+          "description": "Sort order (asc or desc). Defaults to desc",
           "enum": [
             "asc",
             "desc"
@@ -29229,6 +29957,14 @@
           ],
           "type": "string"
         },
+        "subscribed": {
+          "description": "Filter by the authenticated user's subscription: EXPLICITLY_SUBSCRIBED or EXPLICITLY_UNSUBSCRIBED",
+          "enum": [
+            "EXPLICITLY_SUBSCRIBED",
+            "EXPLICITLY_UNSUBSCRIBED"
+          ],
+          "type": "string"
+        },
         "updated_after": {
           "description": "Return epics updated on or after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)",
           "format": "date-time",
@@ -29239,8 +29975,20 @@
           "format": "date-time",
           "type": "string"
         },
+        "weight": {
+          "description": "Filter by weight, as a decimal string (e.g. \"5\")",
+          "type": "string"
+        },
+        "weight_wildcard_id": {
+          "description": "Filter by whether a weight is set rather than by its value: ANY or NONE",
+          "enum": [
+            "ANY",
+            "NONE"
+          ],
+          "type": "string"
+        },
         "with_labels_details": {
-          "description": "If true, return more details (name, color, description) for each label in the labels field",
+          "description": "If true, return more details (name, color, description) for each label in the labels field. Accepted by the REST epics endpoint only, so it is dropped when another filter routes the request through the Work Items API",
           "type": [
             "null",
             "boolean"
@@ -29259,6 +30007,27 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "_links": {
+                "additionalProperties": false,
+                "properties": {
+                  "epic_issues": {
+                    "type": "string"
+                  },
+                  "group": {
+                    "type": "string"
+                  },
+                  "parent": {
+                    "type": "string"
+                  },
+                  "self": {
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "assignees": {
                 "items": {
                   "additionalProperties": false,
@@ -29272,7 +30041,13 @@
                     "id": {
                       "type": "integer"
                     },
+                    "locked": {
+                      "type": "boolean"
+                    },
                     "name": {
+                      "type": "string"
+                    },
+                    "public_email": {
                       "type": "string"
                     },
                     "state": {
@@ -29311,7 +30086,13 @@
                   "id": {
                     "type": "integer"
                   },
+                  "locked": {
+                    "type": "boolean"
+                  },
                   "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
                     "type": "string"
                   },
                   "state": {
@@ -29331,6 +30112,29 @@
                 "type": [
                   "null",
                   "object"
+                ]
+              },
+              "children": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "iid": {
+                      "description": "Internal ID (IID) of the child epic",
+                      "type": "integer"
+                    },
+                    "path": {
+                      "description": "Namespace full path of the child epic",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "iid"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
                 ]
               },
               "closed_at": {
@@ -29357,11 +30161,17 @@
               "due_date_fixed": {
                 "type": "string"
               },
+              "due_date_from_inherited_source": {
+                "type": "string"
+              },
               "due_date_from_milestones": {
                 "type": "string"
               },
               "due_date_is_fixed": {
                 "type": "boolean"
+              },
+              "end_date": {
+                "type": "string"
               },
               "group_id": {
                 "type": "integer"
@@ -29374,6 +30184,53 @@
               },
               "iid": {
                 "type": "integer"
+              },
+              "imported": {
+                "type": "boolean"
+              },
+              "imported_from": {
+                "type": "string"
+              },
+              "label_details": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "color": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "description_html": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "text_color": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "color",
+                    "description",
+                    "description_html",
+                    "text_color"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "labels": {
                 "items": {
@@ -29409,6 +30266,12 @@
                   "array"
                 ]
               },
+              "milestone_id": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
               "next_steps": {
                 "items": {
                   "type": "string"
@@ -29427,10 +30290,36 @@
               "parent_path": {
                 "type": "string"
               },
+              "references": {
+                "additionalProperties": false,
+                "properties": {
+                  "full": {
+                    "type": "string"
+                  },
+                  "relative": {
+                    "type": "string"
+                  },
+                  "short": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "short",
+                  "relative",
+                  "full"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "start_date": {
                 "type": "string"
               },
               "start_date_fixed": {
+                "type": "string"
+              },
+              "start_date_from_inherited_source": {
                 "type": "string"
               },
               "start_date_from_milestones": {
@@ -29442,7 +30331,7 @@
               "state": {
                 "type": "string"
               },
-              "status": {
+              "text_color": {
                 "type": "string"
               },
               "title": {
@@ -29457,11 +30346,8 @@
               "upvotes": {
                 "type": "integer"
               },
-              "url": {
+              "web_edit_url": {
                 "type": "string"
-              },
-              "user_notes_count": {
-                "type": "integer"
               },
               "web_url": {
                 "type": "string"
@@ -29471,6 +30357,9 @@
                   "null",
                   "integer"
                 ]
+              },
+              "work_item_id": {
+                "type": "integer"
               }
             },
             "required": [
@@ -29494,6 +30383,70 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "offset_pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "has_more": {
+              "type": "boolean"
+            },
+            "next_page": {
+              "type": "integer"
+            },
+            "page": {
+              "type": "integer"
+            },
+            "per_page": {
+              "type": "integer"
+            },
+            "prev_page": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
+            },
+            "total_pages": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "page",
+            "per_page",
+            "total_items",
+            "total_pages",
+            "next_page",
+            "prev_page",
+            "has_more"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "end_cursor": {
+              "type": "string"
+            },
+            "has_next_page": {
+              "type": "boolean"
+            },
+            "has_previous_page": {
+              "type": "boolean"
+            },
+            "start_cursor": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "has_next_page",
+            "has_previous_page"
+          ],
+          "type": [
+            "null",
+            "object"
           ]
         }
       },
@@ -30067,6 +31020,13 @@
           ],
           "type": "string"
         },
+        "milestone_id": {
+          "description": "Global ID of the milestone to assign to the epic",
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "parent_id": {
           "description": "Global ID of the parent epic work item",
           "type": [
@@ -30097,17 +31057,6 @@
           ],
           "type": "string"
         },
-        "status": {
-          "description": "Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE",
-          "enum": [
-            "TODO",
-            "IN_PROGRESS",
-            "DONE",
-            "WONT_DO",
-            "DUPLICATE"
-          ],
-          "type": "string"
-        },
         "title": {
           "description": "Updated epic title",
           "type": "string"
@@ -30129,6 +31078,27 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "_links": {
+          "additionalProperties": false,
+          "properties": {
+            "epic_issues": {
+              "type": "string"
+            },
+            "group": {
+              "type": "string"
+            },
+            "parent": {
+              "type": "string"
+            },
+            "self": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "assignees": {
           "items": {
             "additionalProperties": false,
@@ -30142,7 +31112,13 @@
               "id": {
                 "type": "integer"
               },
+              "locked": {
+                "type": "boolean"
+              },
               "name": {
+                "type": "string"
+              },
+              "public_email": {
                 "type": "string"
               },
               "state": {
@@ -30181,7 +31157,13 @@
             "id": {
               "type": "integer"
             },
+            "locked": {
+              "type": "boolean"
+            },
             "name": {
+              "type": "string"
+            },
+            "public_email": {
               "type": "string"
             },
             "state": {
@@ -30201,6 +31183,29 @@
           "type": [
             "null",
             "object"
+          ]
+        },
+        "children": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "iid": {
+                "description": "Internal ID (IID) of the child epic",
+                "type": "integer"
+              },
+              "path": {
+                "description": "Namespace full path of the child epic",
+                "type": "string"
+              }
+            },
+            "required": [
+              "iid"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
           ]
         },
         "closed_at": {
@@ -30227,11 +31232,17 @@
         "due_date_fixed": {
           "type": "string"
         },
+        "due_date_from_inherited_source": {
+          "type": "string"
+        },
         "due_date_from_milestones": {
           "type": "string"
         },
         "due_date_is_fixed": {
           "type": "boolean"
+        },
+        "end_date": {
+          "type": "string"
         },
         "group_id": {
           "type": "integer"
@@ -30244,6 +31255,53 @@
         },
         "iid": {
           "type": "integer"
+        },
+        "imported": {
+          "type": "boolean"
+        },
+        "imported_from": {
+          "type": "string"
+        },
+        "label_details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "description_html": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text_color": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color",
+              "description",
+              "description_html",
+              "text_color"
+            ],
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "labels": {
           "items": {
@@ -30279,6 +31337,12 @@
             "array"
           ]
         },
+        "milestone_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "next_steps": {
           "items": {
             "type": "string"
@@ -30297,10 +31361,36 @@
         "parent_path": {
           "type": "string"
         },
+        "references": {
+          "additionalProperties": false,
+          "properties": {
+            "full": {
+              "type": "string"
+            },
+            "relative": {
+              "type": "string"
+            },
+            "short": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "short",
+            "relative",
+            "full"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "start_date": {
           "type": "string"
         },
         "start_date_fixed": {
+          "type": "string"
+        },
+        "start_date_from_inherited_source": {
           "type": "string"
         },
         "start_date_from_milestones": {
@@ -30312,7 +31402,7 @@
         "state": {
           "type": "string"
         },
-        "status": {
+        "text_color": {
           "type": "string"
         },
         "title": {
@@ -30327,11 +31417,8 @@
         "upvotes": {
           "type": "integer"
         },
-        "url": {
+        "web_edit_url": {
           "type": "string"
-        },
-        "user_notes_count": {
-          "type": "integer"
         },
         "web_url": {
           "type": "string"
@@ -30341,6 +31428,9 @@
             "null",
             "integer"
           ]
+        },
+        "work_item_id": {
+          "type": "integer"
         }
       },
       "required": [
@@ -43102,7 +44192,7 @@
   },
   {
     "name": "gitlab_get_work_item",
-    "description": "Get a single work item by namespace path and IID. Returns: id, iid, type, state, status, title, description, author, assignees, labels, linked items, child work items, confidentiality, timestamps, and web URL. Experimental. See also: gitlab_list_work_items, gitlab_update_work_item, gitlab_delete_work_item.",
+    "description": "Get a single work item by namespace path and IID. Returns: id, iid, type, state, status, title, description, author, assignees, labels, linked items, parent and child work items, milestone, iteration, weight, health status, color, start and due dates, confidentiality, timestamps, and web URL. Experimental. See also: gitlab_list_work_items, gitlab_update_work_item, gitlab_delete_work_item.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -43137,8 +44227,44 @@
           "additionalProperties": false,
           "properties": {
             "assignees": {
+              "description": "Users assigned to the work item",
               "items": {
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "type": [
                 "null",
@@ -43146,7 +44272,43 @@
               ]
             },
             "author": {
-              "type": "string"
+              "additionalProperties": false,
+              "description": "User who created the work item",
+              "properties": {
+                "avatar_url": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "username",
+                "name",
+                "state",
+                "avatar_url",
+                "web_url"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
             },
             "children": {
               "description": "Child work items in the hierarchy (each with namespace path and IID)",
@@ -43175,6 +44337,10 @@
             "closed_at": {
               "type": "string"
             },
+            "color": {
+              "description": "Color of the work item as a hex code (e.g. #fefefe)",
+              "type": "string"
+            },
             "confidential": {
               "type": "boolean"
             },
@@ -43184,15 +44350,60 @@
             "description": {
               "type": "string"
             },
+            "due_date": {
+              "description": "Due date (YYYY-MM-DD)",
+              "type": "string"
+            },
+            "health_status": {
+              "description": "Health status (onTrack/needsAttention/atRisk)",
+              "type": "string"
+            },
             "id": {
               "type": "integer"
             },
             "iid": {
               "type": "integer"
             },
+            "iteration_id": {
+              "description": "Numeric ID of the iteration the work item belongs to",
+              "type": "integer"
+            },
             "labels": {
+              "description": "Labels applied to the work item, each with its id, name, color, description and text color",
               "items": {
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "color": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "description_html": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "text_color": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "color",
+                  "description",
+                  "description_html",
+                  "text_color"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "type": [
                 "null",
@@ -43224,10 +44435,40 @@
                 "array"
               ]
             },
+            "milestone_id": {
+              "description": "Numeric ID of the milestone the work item belongs to",
+              "type": "integer"
+            },
+            "parent": {
+              "additionalProperties": false,
+              "description": "Parent work item in the hierarchy (namespace path and IID)",
+              "properties": {
+                "iid": {
+                  "description": "Internal ID (IID) of the child work item",
+                  "type": "integer"
+                },
+                "path": {
+                  "description": "Namespace full path of the child work item",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "iid"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "start_date": {
+              "description": "Start date (YYYY-MM-DD)",
+              "type": "string"
+            },
             "state": {
               "type": "string"
             },
             "status": {
+              "description": "Name of the work item status in the namespace's lifecycle",
               "type": "string"
             },
             "title": {
@@ -43241,6 +44482,13 @@
             },
             "web_url": {
               "type": "string"
+            },
+            "weight": {
+              "description": "Weight of the work item",
+              "type": [
+                "null",
+                "integer"
+              ]
             }
           },
           "required": [
@@ -111417,12 +112665,31 @@
   },
   {
     "name": "gitlab_list_work_items",
-    "description": "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, child work items, timestamps, and the cursors for the next and previous pages. Pages in both directions: first with after walks forward, last with before walks back. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types.",
+    "description": "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, parent and child work items, milestone, start and due dates, timestamps, and the cursors for the next and previous pages. On Premium and Ultimate instances the status, weight, health status, iteration and color of each item come back too. returned_fields narrows that set to the fields named, which shrinks a large page without changing which work items match. Pages in both directions: first with after walks forward, last with before walks back. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "after": {
           "description": "Cursor for forward pagination (from previous response end_cursor)",
+          "type": "string"
+        },
+        "assignee_usernames": {
+          "description": "Filter by assignee usernames",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "assignee_wildcard_id": {
+          "description": "Assignee wildcard filter: ANY, ME or NONE",
+          "enum": [
+            "ANY",
+            "ME",
+            "NONE"
+          ],
           "type": "string"
         },
         "author_username": {
@@ -111433,12 +112700,50 @@
           "description": "Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted",
           "type": "string"
         },
+        "closed_after": {
+          "description": "Match work items closed after this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC",
+          "format": "date-time",
+          "type": "string"
+        },
+        "closed_before": {
+          "description": "Match work items closed before this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC",
+          "format": "date-time",
+          "type": "string"
+        },
         "confidential": {
           "description": "Filter by confidentiality",
           "type": [
             "null",
             "boolean"
           ]
+        },
+        "created_after": {
+          "description": "Match work items created after this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC",
+          "format": "date-time",
+          "type": "string"
+        },
+        "created_before": {
+          "description": "Match work items created before this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC",
+          "format": "date-time",
+          "type": "string"
+        },
+        "crm_contact_id": {
+          "description": "Filter by CRM contact numeric ID as a string, e.g. 1. Not a global ID",
+          "type": "string"
+        },
+        "crm_organization_id": {
+          "description": "Filter by CRM organization numeric ID as a string, e.g. 1. Not a global ID",
+          "type": "string"
+        },
+        "due_after": {
+          "description": "Match work items due after this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC",
+          "format": "date-time",
+          "type": "string"
+        },
+        "due_before": {
+          "description": "Match work items due before this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC",
+          "format": "date-time",
+          "type": "string"
         },
         "first": {
           "description": "Number of items to return (default 20, max 100)",
@@ -111450,6 +112755,51 @@
         "full_path": {
           "description": "Full path of the project or group",
           "type": "string"
+        },
+        "health_status_filter": {
+          "description": "Filter by health status: onTrack, needsAttention, atRisk, ANY or NONE. Case sensitive",
+          "enum": [
+            "ANY",
+            "NONE",
+            "atRisk",
+            "needsAttention",
+            "onTrack"
+          ],
+          "type": "string"
+        },
+        "ids": {
+          "description": "Filter by work item global IDs, each the full gid://gitlab/WorkItem/\u003cid\u003e form",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "iids": {
+          "description": "Filter by work item internal IDs (IIDs) as strings, e.g. 12",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "in": {
+          "description": "Fields the search term is matched against: TITLE or DESCRIPTION. Only meaningful together with search",
+          "items": {
+            "enum": [
+              "DESCRIPTION",
+              "TITLE"
+            ],
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "include_ancestors": {
           "description": "Include ancestor work items",
@@ -111464,6 +112814,35 @@
             "null",
             "boolean"
           ]
+        },
+        "iteration_cadence_id": {
+          "description": "Filter by iteration cadence global IDs, each the full gid://gitlab/Iterations::Cadence/\u003cid\u003e form",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "iteration_id": {
+          "description": "Filter by iteration global IDs, each the full gid://gitlab/Iteration/\u003cid\u003e form. Unlike the iteration_id create and update take, this one is a list of global IDs rather than a single numeric ID",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "iteration_wildcard_id": {
+          "description": "Iteration wildcard filter: ANY, CURRENT or NONE",
+          "enum": [
+            "ANY",
+            "CURRENT",
+            "NONE"
+          ],
+          "type": "string"
         },
         "label_name": {
           "description": "Filter by label names",
@@ -111480,6 +112859,93 @@
           "type": [
             "null",
             "integer"
+          ]
+        },
+        "milestone_title": {
+          "description": "Filter by milestone titles. Titles, not the milestone_id that create and update take",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "milestone_wildcard_id": {
+          "description": "Milestone wildcard filter: ANY, NONE, STARTED or UPCOMING",
+          "enum": [
+            "ANY",
+            "NONE",
+            "STARTED",
+            "UPCOMING"
+          ],
+          "type": "string"
+        },
+        "my_reaction_emoji": {
+          "description": "Filter by the emoji the authenticated user reacted with",
+          "type": "string"
+        },
+        "parent_ids": {
+          "description": "Filter by parent work item global IDs, each the full gid://gitlab/WorkItem/\u003cid\u003e form. Pairs with include_descendants",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "release_tag": {
+          "description": "Filter by release tags",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "release_tag_wildcard_id": {
+          "description": "Release tag wildcard filter: ANY or NONE",
+          "enum": [
+            "ANY",
+            "NONE"
+          ],
+          "type": "string"
+        },
+        "returned_fields": {
+          "description": "Fields of each work item the query asks for. Selects what comes back, not which work items match: an unselected field is absent from every item rather than empty. Omit for the default set, which is every Community Edition field plus the five Enterprise ones on a Premium or Ultimate instance. Naming color, healthStatus, iteration, status or weight against a Community Edition instance fails the whole query, since its schema does not define those widgets",
+          "items": {
+            "enum": [
+              "assignees",
+              "author",
+              "closedAt",
+              "color",
+              "confidential",
+              "createdAt",
+              "description",
+              "healthStatus",
+              "hierarchy",
+              "id",
+              "iid",
+              "iteration",
+              "labels",
+              "linkedItems",
+              "milestone",
+              "startAndDueDate",
+              "state",
+              "status",
+              "title",
+              "type",
+              "updatedAt",
+              "webUrl",
+              "weight"
+            ],
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
           ]
         },
         "search": {
@@ -111534,6 +113000,14 @@
           ],
           "type": "string"
         },
+        "subscribed": {
+          "description": "Filter by the authenticated user's subscription: EXPLICITLY_SUBSCRIBED or EXPLICITLY_UNSUBSCRIBED",
+          "enum": [
+            "EXPLICITLY_SUBSCRIBED",
+            "EXPLICITLY_UNSUBSCRIBED"
+          ],
+          "type": "string"
+        },
         "types": {
           "description": "Filter by work item types, IssueType enum values such as ISSUE or TASK",
           "items": {
@@ -111554,6 +113028,28 @@
             "null",
             "array"
           ]
+        },
+        "updated_after": {
+          "description": "Match work items updated after this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC",
+          "format": "date-time",
+          "type": "string"
+        },
+        "updated_before": {
+          "description": "Match work items updated before this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC",
+          "format": "date-time",
+          "type": "string"
+        },
+        "weight": {
+          "description": "Filter by weight. GitLab types this filter as a string, so send 3 quoted rather than as a number",
+          "type": "string"
+        },
+        "weight_wildcard_id": {
+          "description": "Weight wildcard filter: ANY or NONE",
+          "enum": [
+            "ANY",
+            "NONE"
+          ],
+          "type": "string"
         }
       },
       "required": [
@@ -111600,8 +113096,44 @@
             "additionalProperties": false,
             "properties": {
               "assignees": {
+                "description": "Users assigned to the work item",
                 "items": {
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "web_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "username",
+                    "name",
+                    "state",
+                    "avatar_url",
+                    "web_url"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "type": [
                   "null",
@@ -111609,7 +113141,43 @@
                 ]
               },
               "author": {
-                "type": "string"
+                "additionalProperties": false,
+                "description": "User who created the work item",
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "children": {
                 "description": "Child work items in the hierarchy (each with namespace path and IID)",
@@ -111638,6 +113206,10 @@
               "closed_at": {
                 "type": "string"
               },
+              "color": {
+                "description": "Color of the work item as a hex code (e.g. #fefefe)",
+                "type": "string"
+              },
               "confidential": {
                 "type": "boolean"
               },
@@ -111647,15 +113219,60 @@
               "description": {
                 "type": "string"
               },
+              "due_date": {
+                "description": "Due date (YYYY-MM-DD)",
+                "type": "string"
+              },
+              "health_status": {
+                "description": "Health status (onTrack/needsAttention/atRisk)",
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
               },
               "iid": {
                 "type": "integer"
               },
+              "iteration_id": {
+                "description": "Numeric ID of the iteration the work item belongs to",
+                "type": "integer"
+              },
               "labels": {
+                "description": "Labels applied to the work item, each with its id, name, color, description and text color",
                 "items": {
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "color": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "description_html": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "text_color": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "color",
+                    "description",
+                    "description_html",
+                    "text_color"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
                 },
                 "type": [
                   "null",
@@ -111687,10 +113304,40 @@
                   "array"
                 ]
               },
+              "milestone_id": {
+                "description": "Numeric ID of the milestone the work item belongs to",
+                "type": "integer"
+              },
+              "parent": {
+                "additionalProperties": false,
+                "description": "Parent work item in the hierarchy (namespace path and IID)",
+                "properties": {
+                  "iid": {
+                    "description": "Internal ID (IID) of the child work item",
+                    "type": "integer"
+                  },
+                  "path": {
+                    "description": "Namespace full path of the child work item",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "iid"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "start_date": {
+                "description": "Start date (YYYY-MM-DD)",
+                "type": "string"
+              },
               "state": {
                 "type": "string"
               },
               "status": {
+                "description": "Name of the work item status in the namespace's lifecycle",
                 "type": "string"
               },
               "title": {
@@ -111704,6 +113351,13 @@
               },
               "web_url": {
                 "type": "string"
+              },
+              "weight": {
+                "description": "Weight of the work item",
+                "type": [
+                  "null",
+                  "integer"
+                ]
               }
             },
             "required": [
@@ -207292,7 +208946,7 @@
   },
   {
     "name": "gitlab_update_work_item",
-    "description": "Update an existing work item by namespace path and IID. Returns: the updated work item with id, iid, type, state, status, title, description, assignees, labels, linked items, child work items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_delete_work_item, gitlab_list_work_items.",
+    "description": "Update an existing work item by namespace path and IID. Returns: the updated work item with id, iid, type, state, status, title, description, assignees, labels, linked items, parent and child work items, milestone, iteration, weight, health status, color, start and due dates, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_delete_work_item, gitlab_list_work_items.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -207449,8 +209103,44 @@
           "additionalProperties": false,
           "properties": {
             "assignees": {
+              "description": "Users assigned to the work item",
               "items": {
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "type": [
                 "null",
@@ -207458,7 +209148,43 @@
               ]
             },
             "author": {
-              "type": "string"
+              "additionalProperties": false,
+              "description": "User who created the work item",
+              "properties": {
+                "avatar_url": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "username",
+                "name",
+                "state",
+                "avatar_url",
+                "web_url"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
             },
             "children": {
               "description": "Child work items in the hierarchy (each with namespace path and IID)",
@@ -207487,6 +209213,10 @@
             "closed_at": {
               "type": "string"
             },
+            "color": {
+              "description": "Color of the work item as a hex code (e.g. #fefefe)",
+              "type": "string"
+            },
             "confidential": {
               "type": "boolean"
             },
@@ -207496,15 +209226,60 @@
             "description": {
               "type": "string"
             },
+            "due_date": {
+              "description": "Due date (YYYY-MM-DD)",
+              "type": "string"
+            },
+            "health_status": {
+              "description": "Health status (onTrack/needsAttention/atRisk)",
+              "type": "string"
+            },
             "id": {
               "type": "integer"
             },
             "iid": {
               "type": "integer"
             },
+            "iteration_id": {
+              "description": "Numeric ID of the iteration the work item belongs to",
+              "type": "integer"
+            },
             "labels": {
+              "description": "Labels applied to the work item, each with its id, name, color, description and text color",
               "items": {
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "color": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "description_html": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "text_color": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "color",
+                  "description",
+                  "description_html",
+                  "text_color"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "type": [
                 "null",
@@ -207536,10 +209311,40 @@
                 "array"
               ]
             },
+            "milestone_id": {
+              "description": "Numeric ID of the milestone the work item belongs to",
+              "type": "integer"
+            },
+            "parent": {
+              "additionalProperties": false,
+              "description": "Parent work item in the hierarchy (namespace path and IID)",
+              "properties": {
+                "iid": {
+                  "description": "Internal ID (IID) of the child work item",
+                  "type": "integer"
+                },
+                "path": {
+                  "description": "Namespace full path of the child work item",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "iid"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "start_date": {
+              "description": "Start date (YYYY-MM-DD)",
+              "type": "string"
+            },
             "state": {
               "type": "string"
             },
             "status": {
+              "description": "Name of the work item status in the namespace's lifecycle",
               "type": "string"
             },
             "title": {
@@ -207553,6 +209358,13 @@
             },
             "web_url": {
               "type": "string"
+            },
+            "weight": {
+              "description": "Weight of the work item",
+              "type": [
+                "null",
+                "integer"
+              ]
             }
           },
           "required": [

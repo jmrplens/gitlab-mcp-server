@@ -1670,20 +1670,25 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_create_work_item
 
-Create a new work item under a namespace. Returns: the created work item with id, iid, type, state, title, description, assignees, labels, linked items, child work items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_list_work_items, gitlab_list_work_item_types.
+Create a new work item under a namespace. Returns: the created work item with id, iid, type, state, title, description, assignees, labels, linked items, parent and child work items, milestone, iteration, weight, health status, color, start and due dates, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_list_work_items, gitlab_list_work_item_types.
 
 **Parameters:**
 
 - `assignee_ids` (array of integers): Global IDs of assignees
 - `color` (string): Color hex code (e.g. #fefefe)
 - `confidential` (boolean): Whether the work item is confidential
+- `create_source` (string): Name of whatever triggered the creation. Recorded for tracking and changes nothing about the work item
+- `created_at` (string): Creation timestamp to record instead of now. ISO 8601 date-time such as 2025-01-01T00:00:00Z. GitLab accepts it from instance administrators and project owners only
+- `crm_contact_ids` (array of integers): CRM contact IDs to attach to the new work item
 - `description` (string): Description of the work item
 - `due_date` (string): Due date (YYYY-MM-DD)
 - `full_path` (string) (required): Full path of the project or group
 - `health_status` (string): Health status (onTrack/needsAttention/atRisk)
+- `iteration_id` (integer): Global ID of the iteration
 - `label_ids` (array of integers): Global IDs of labels
 - `linked_items` (object): Linked work items to add on creation
 - `milestone_id` (integer): Global ID of the milestone
+- `parent_id` (integer): Global ID of the parent work item. Creates the item already under its parent, which otherwise takes a create followed by an update
 - `start_date` (string): Start date (YYYY-MM-DD)
 - `status` (string): Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE
 - `title` (string) (required): Title of the work item
@@ -2959,18 +2964,23 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_create
 
-Create a new epic in a group. Returns: the created epic with IID, state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_update.
+Create a new epic in a group, optionally under a parent epic and already linked to others. Returns: the created epic with IID, state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_update.
 
 **Parameters:**
 
 - `assignee_ids` (array of integers): Global IDs of assignees
 - `color` (string): Epic color (hex format, e.g. #FF0000)
 - `confidential` (boolean): Whether the epic is confidential
+- `create_source` (string): Free-text label recording what triggered the creation. Used by GitLab for tracking only and never shown on the epic
+- `created_at` (string): Creation timestamp to record instead of now (ISO 8601, e.g. 2025-01-01T00:00:00Z). Honored for group owners and administrators only, and ignored when it cannot be parsed
 - `description` (string): Epic description (Markdown supported)
 - `due_date` (string): Due date (YYYY-MM-DD)
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
 - `health_status` (string): Health status (onTrack/needsAttention/atRisk)
 - `label_ids` (array of integers): Global IDs of labels
+- `linked_items` (object): Epics to link to the new one, all with the same link type
+- `milestone_id` (integer): Global ID of the milestone to assign to the epic
+- `parent_id` (integer): Global ID of the parent epic, which makes this one a sub-epic in the same call
 - `start_date` (string): Start date (YYYY-MM-DD)
 - `title` (string) (required): Epic title
 - `weight` (integer): Weight of the epic
@@ -3069,33 +3079,51 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_list
 
-List epics in a group with filtering and pagination. Returns: matching epics with state, labels, author, assignees, dates, and pagination cursors. See also: gitlab_epic_get, gitlab_epic_create, gitlab_epic_get_links.
+List epics in a group with filtering and pagination. Returns: matching epics with state, labels, author, assignees, dates, children, and the pagination block of whichever API answered. See also: gitlab_epic_get, gitlab_epic_create, gitlab_epic_get_links.
 
 **Parameters:**
 
-- `after` (string): Cursor for forward pagination
-- `author_id` (integer): Filter by author user ID
+- `after` (string): Cursor for forward pagination (from previous response end_cursor)
+- `assignee_usernames` (array of strings): Filter by assignee usernames
+- `assignee_wildcard_id` (string): Filter by assignment state rather than by user: ANY, ME, or NONE
+- `author_id` (integer): Filter by author user ID. Accepted by the REST epics endpoint only, so it is dropped when another filter routes the request through the Work Items API, where author_username is the equivalent
 - `author_username` (string): Filter by author username
+- `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
+- `closed_after` (string): Return epics closed on or after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)
+- `closed_before` (string): Return epics closed on or before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)
 - `confidential` (boolean): Filter by confidentiality
 - `created_after` (string): Return epics created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)
 - `created_before` (string): Return epics created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)
-- `first` (integer): Number of items to return (cursor-based pagination)
+- `due_after` (string): Return epics due on or after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)
+- `due_before` (string): Return epics due on or before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)
+- `first` (integer): Number of items to return (default 20, max 100)
 - `full_path` (string) (required): Full path of the group (e.g. my-group or my-group/sub-group)
+- `health_status_filter` (string): Filter by health status: onTrack, needsAttention, atRisk, or the wildcards ANY and NONE
+- `ids` (array of strings): Fetch only these epics by global ID, in full gid://gitlab/WorkItem/123 form. Unlike every other id input here this is not a bare number
+- `iids` (array of strings): Fetch only these epic IIDs, each as a decimal string (e.g. ["12", "34"])
+- `in` (array of strings): Fields the search term is matched against: TITLE, DESCRIPTION, or both. Both are searched when omitted
 - `include_ancestors` (boolean): Include epics from ancestor groups
 - `include_descendants` (boolean): Include epics from descendant groups
 - `label_name` (array of strings): Filter by label names
+- `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
+- `milestone_title` (array of strings): Filter by the titles of the milestones assigned to the epic
+- `milestone_wildcard_id` (string): Filter by milestone assignment rather than by title: ANY, NONE, STARTED, or UPCOMING
 - `my_reaction_emoji` (string): Filter by reaction emoji the authenticated user awarded (e.g. thumbsup or None/Any)
-- `order_by` (string): Order epics by field (created_at, updated_at, title)
+- `order_by` (string): Order epics by field (created_at, updated_at, title). Defaults to created_at
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `page_token` (string): Keyset pagination cursor: record id at which to fetch the next page, taken from the previous keyset response. Only used when pagination='keyset'.
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.
+- `parent_ids` (array of strings): Return only epics whose parent is one of these global IDs, in full gid://gitlab/WorkItem/123 form
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `search` (string): Search in title and description
-- `sort` (string): Sort order (asc or desc)
+- `sort` (string): Sort order (asc or desc). Defaults to desc
 - `state` (string): Filter by state (opened/closed/all)
+- `subscribed` (string): Filter by the authenticated user's subscription: EXPLICITLY_SUBSCRIBED or EXPLICITLY_UNSUBSCRIBED
 - `updated_after` (string): Return epics updated on or after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)
 - `updated_before` (string): Return epics updated on or before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)
-- `with_labels_details` (boolean): If true, return more details (name, color, description) for each label in the labels field
+- `weight` (string): Filter by weight, as a decimal string (e.g. "5")
+- `weight_wildcard_id` (string): Filter by whether a weight is set rather than by its value: ANY or NONE
+- `with_labels_details` (boolean): If true, return more details (name, color, description) for each label in the labels field. Accepted by the REST epics endpoint only, so it is dropped when another filter routes the request through the Work Items API
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -3176,11 +3204,11 @@ Update an existing epic. Supports close/reopen via state_event. Returns: the upd
 - `epic_iid` (integer) (required): Epic IID within the group
 - `full_path` (string) (required): Full path of the group (e.g. my-group)
 - `health_status` (string): Health status (onTrack/needsAttention/atRisk)
+- `milestone_id` (integer): Global ID of the milestone to assign to the epic
 - `parent_id` (integer): Global ID of the parent epic work item
 - `remove_label_ids` (array of integers): Global IDs of labels to remove
 - `start_date` (string): Start date (YYYY-MM-DD)
 - `state_event` (string): State event: CLOSE or REOPEN
-- `status` (string): Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE
 - `title` (string): Updated epic title
 - `weight` (integer): Weight of the epic
 
@@ -4431,7 +4459,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_work_item
 
-Get a single work item by namespace path and IID. Returns: id, iid, type, state, status, title, description, author, assignees, labels, linked items, child work items, confidentiality, timestamps, and web URL. Experimental. See also: gitlab_list_work_items, gitlab_update_work_item, gitlab_delete_work_item.
+Get a single work item by namespace path and IID. Returns: id, iid, type, state, status, title, description, author, assignees, labels, linked items, parent and child work items, milestone, iteration, weight, health status, color, start and due dates, confidentiality, timestamps, and web URL. Experimental. See also: gitlab_list_work_items, gitlab_update_work_item, gitlab_delete_work_item.
 
 **Parameters:**
 
@@ -8851,24 +8879,53 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_work_items
 
-List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, child work items, timestamps, and the cursors for the next and previous pages. Pages in both directions: first with after walks forward, last with before walks back. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types.
+List work items in a project or group namespace with filtering and cursor pagination.
 
 **Parameters:**
 
 - `after` (string): Cursor for forward pagination (from previous response end_cursor)
+- `assignee_usernames` (array of strings): Filter by assignee usernames
+- `assignee_wildcard_id` (string): Assignee wildcard filter: ANY, ME or NONE
 - `author_username` (string): Filter by author username
 - `before` (string): Cursor for backward pagination (from previous response start_cursor). The page size comes from last, or from first when last is omitted
+- `closed_after` (string): Match work items closed after this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC
+- `closed_before` (string): Match work items closed before this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC
 - `confidential` (boolean): Filter by confidentiality
+- `created_after` (string): Match work items created after this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC
+- `created_before` (string): Match work items created before this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC
+- `crm_contact_id` (string): Filter by CRM contact numeric ID as a string, e.g. 1. Not a global ID
+- `crm_organization_id` (string): Filter by CRM organization numeric ID as a string, e.g. 1. Not a global ID
+- `due_after` (string): Match work items due after this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC
+- `due_before` (string): Match work items due before this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC
 - `first` (integer): Number of items to return (default 20, max 100)
 - `full_path` (string) (required): Full path of the project or group
+- `health_status_filter` (string): Filter by health status: onTrack, needsAttention, atRisk, ANY or NONE. Case sensitive
+- `ids` (array of strings): Filter by work item global IDs, each the full gid://gitlab/WorkItem/<id> form
+- `iids` (array of strings): Filter by work item internal IDs (IIDs) as strings, e.g. 12
+- `in` (array of strings): Fields the search term is matched against: TITLE or DESCRIPTION. Only meaningful together with search
 - `include_ancestors` (boolean): Include ancestor work items
 - `include_descendants` (boolean): Include descendant work items
+- `iteration_cadence_id` (array of strings): Filter by iteration cadence global IDs, each the full gid://gitlab/Iterations::Cadence/<id> form
+- `iteration_id` (array of strings): Filter by iteration global IDs, each the full gid://gitlab/Iteration/<id> form. Unlike the iteration_id create and update take, this one is a list of global IDs rather than a single numeric ID
+- `iteration_wildcard_id` (string): Iteration wildcard filter: ANY, CURRENT or NONE
 - `label_name` (array of strings): Filter by label names
 - `last` (integer): Number of items to return from the end of the range (backward pagination). Cannot be combined with first
+- `milestone_title` (array of strings): Filter by milestone titles. Titles, not the milestone_id that create and update take
+- `milestone_wildcard_id` (string): Milestone wildcard filter: ANY, NONE, STARTED or UPCOMING
+- `my_reaction_emoji` (string): Filter by the emoji the authenticated user reacted with
+- `parent_ids` (array of strings): Filter by parent work item global IDs, each the full gid://gitlab/WorkItem/<id> form. Pairs with include_descendants
+- `release_tag` (array of strings): Filter by release tags
+- `release_tag_wildcard_id` (string): Release tag wildcard filter: ANY or NONE
+- `returned_fields` (array of strings): Fields of each work item the query asks for. Selects what comes back, not which work items match: an unselected field is absent from every item rather than empty. Omit for the default set, which is every Community Edition field plus the five Enterprise ones on a Premium or Ultimate instance. Naming color, healthStatus, iteration, status or weight against a Community Edition instance fails the whole query, since its schema does not define those widgets
 - `search` (string): Search in title and description
 - `sort` (string): Sort order, a WorkItemSort enum value such as CREATED_DESC or TITLE_ASC
 - `state` (string): Filter by state (opened/closed/all)
+- `subscribed` (string): Filter by the authenticated user's subscription: EXPLICITLY_SUBSCRIBED or EXPLICITLY_UNSUBSCRIBED
 - `types` (array of strings): Filter by work item types, IssueType enum values such as ISSUE or TASK
+- `updated_after` (string): Match work items updated after this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC
+- `updated_before` (string): Match work items updated before this timestamp. ISO 8601 date-time such as 2025-01-01T00:00:00Z. A bare date is read as midnight UTC
+- `weight` (string): Filter by weight. GitLab types this filter as a string, so send 3 quoted rather than as a number
+- `weight_wildcard_id` (string): Weight wildcard filter: ANY or NONE
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -15643,7 +15700,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_update_work_item
 
-Update an existing work item by namespace path and IID. Returns: the updated work item with id, iid, type, state, status, title, description, assignees, labels, linked items, child work items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_delete_work_item, gitlab_list_work_items.
+Update an existing work item by namespace path and IID. Returns: the updated work item with id, iid, type, state, status, title, description, assignees, labels, linked items, parent and child work items, milestone, iteration, weight, health status, color, start and due dates, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_delete_work_item, gitlab_list_work_items.
 
 **Parameters:**
 

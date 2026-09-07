@@ -194,6 +194,94 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	t.Error("expected text content in cancellation result")
 }
 
+// TestActionSpecs_PublishedVocabularies verifies that every fixed-vocabulary
+// filter and every timestamp reaches the served input schema at the property
+// the model reads.
+//
+// A GraphQL enum coercion failure comes back as HTTP 200 carrying a GraphQL
+// error, so a value a model guessed is refused by GitLab and never reaches the
+// status-keyed hint. An unpublished vocabulary is therefore a failure with no
+// diagnosis, and an enum published on an array instead of on its items is a
+// schema no value can satisfy.
+func TestActionSpecs_PublishedVocabularies(t *testing.T) {
+	byTool := epicSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NotFoundHandler())))
+	cases := []struct {
+		name     string
+		tool     string
+		property string
+		key      string
+		want     []any
+	}{
+		{"assignee wildcard", "gitlab_epic_list", "assignee_wildcard_id", "enum", []any{"ANY", "ME", "NONE"}},
+		{"milestone wildcard", "gitlab_epic_list", "milestone_wildcard_id", "enum", []any{"ANY", "NONE", "STARTED", "UPCOMING"}},
+		{"weight wildcard", "gitlab_epic_list", "weight_wildcard_id", "enum", []any{"ANY", "NONE"}},
+		{"subscription status", "gitlab_epic_list", "subscribed", "enum", []any{"EXPLICITLY_SUBSCRIBED", "EXPLICITLY_UNSUBSCRIBED"}},
+		{"health status filter", "gitlab_epic_list", "health_status_filter", "enum", []any{"ANY", "NONE", "atRisk", "needsAttention", "onTrack"}},
+		{"searchable fields on the array items", "gitlab_epic_list", "in.", "enum", []any{"TITLE", "DESCRIPTION"}},
+		{"link type nested in linked_items", "gitlab_epic_create", "linked_items.link_type", "enum", []any{"BLOCKED_BY", "BLOCKS", "RELATED"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := epicSchemaValue(t, byTool[tc.tool].Route.InputSchema, tc.property, tc.key)
+			values, isSlice := got.([]any)
+			if !isSlice || len(values) != len(tc.want) {
+				t.Fatalf("%s.%s %s = %v, want %v", tc.tool, tc.property, tc.key, got, tc.want)
+			}
+			for i, want := range tc.want {
+				if values[i] != want {
+					t.Errorf("%s.%s %s[%d] = %v, want %v", tc.tool, tc.property, tc.key, i, values[i], want)
+				}
+			}
+		})
+	}
+	formats := []struct {
+		tool     string
+		property string
+	}{
+		{"gitlab_epic_list", "closed_after"},
+		{"gitlab_epic_list", "closed_before"},
+		{"gitlab_epic_list", "due_after"},
+		{"gitlab_epic_list", "due_before"},
+		{"gitlab_epic_list", "created_after"},
+		{"gitlab_epic_list", "updated_before"},
+		{"gitlab_epic_create", "created_at"},
+	}
+	for _, tc := range formats {
+		t.Run(tc.tool+" "+tc.property+" is a date-time", func(t *testing.T) {
+			if got := epicSchemaValue(t, byTool[tc.tool].Route.InputSchema, tc.property, "format"); got != "date-time" {
+				t.Errorf("%s.%s format = %v, want date-time", tc.tool, tc.property, got)
+			}
+		})
+	}
+}
+
+// epicSchemaValue reads one key of one property out of a built input schema. A
+// property path ending in "." reads the array's items instead of the array.
+func epicSchemaValue(t *testing.T, schema map[string]any, propertyPath, key string) any {
+	t.Helper()
+	node := schema
+	for segment := range strings.SplitSeq(propertyPath, ".") {
+		if segment == "" {
+			items, isObject := node["items"].(map[string]any)
+			if !isObject {
+				t.Fatalf("property %q has no items object: %v", propertyPath, node)
+			}
+			node = items
+			continue
+		}
+		properties, isObject := node["properties"].(map[string]any)
+		if !isObject {
+			t.Fatalf("property %q: no properties at %q", propertyPath, segment)
+		}
+		child, isObject := properties[segment].(map[string]any)
+		if !isObject {
+			t.Fatalf("property %q: %q is not an object", propertyPath, segment)
+		}
+		node = child
+	}
+	return node[key]
+}
+
 func epicSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

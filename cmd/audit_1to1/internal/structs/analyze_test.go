@@ -1048,6 +1048,23 @@ func TestFlattenFields_AStructThatTagsNothing_IsKeyedByFieldName(t *testing.T) {
 	}
 }
 
+// TestFlattenFields_UntaggedStruct_SkipsUnexportedFields verifies the
+// name-keyed fallback used for a struct that tags nothing reports only the
+// fields a caller can see. An unexported field is not serialized and has no
+// counterpart to pair with, so counting it would invent a gap in every
+// comparison against such a struct.
+func TestFlattenFields_UntaggedStruct_SkipsUnexportedFields(t *testing.T) {
+	untagged := types.NewStruct([]*types.Var{
+		types.NewField(token.NoPos, nil, "Weight", tInt, false),
+		types.NewField(token.NoPos, nil, "cursor", tString, false),
+	}, []string{"", ""})
+
+	got := flattenFields(untagged, []string{tagKeyJSON})
+	if len(got) != 1 || got["weight"] == "" {
+		t.Errorf("flattenFields = %v, want only the exported Weight field", got)
+	}
+}
+
 // TestDiffPair_URLTagNotation_MatchesTheSnakeCaseMCPName verifies the input
 // diff's fallback tag match: an SDK url tag written in array or negation
 // notation (iids[], not[author_id]) is matched to the snake_case MCP json name

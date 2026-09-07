@@ -36,11 +36,6 @@ func FormatOutputMarkdown(e Output) string {
 	fmt.Fprintf(&b, "## Epic &%d: %s\n\n", e.IID, toolutil.EscapeMdTableCell(e.Title))
 	//gitlab:allow-unescaped e.State: an epic state GitLab writes, opened or closed on the REST epic and OPEN or CLOSED on the work item.
 	fmt.Fprintf(&b, toolutil.FmtMdState, e.State)
-	if e.Status != "" {
-		// The status widget carries the display name of a status in the
-		// namespace's lifecycle, which a group owner can create and rename.
-		fmt.Fprintf(&b, "- **Status**: %s\n", toolutil.EscapeMdTableCell(e.Status))
-	}
 	fmt.Fprintf(&b, toolutil.FmtMdAuthor, toolutil.EscapeMdTableCell(userName(e.Author)))
 	if len(e.Assignees) > 0 {
 		fmt.Fprintf(&b, "- **Assignees**: %s\n", toolutil.EscapeMdTableCell(strings.Join(userNames(e.Assignees), ", ")))
@@ -59,6 +54,9 @@ func FormatOutputMarkdown(e Output) string {
 	}
 	if e.Weight != nil {
 		fmt.Fprintf(&b, "- **Weight**: %d\n", *e.Weight)
+	}
+	if e.MilestoneID != nil {
+		fmt.Fprintf(&b, "- **Milestone ID**: %d\n", *e.MilestoneID)
 	}
 	if e.StartDate != "" {
 		//gitlab:allow-unescaped e.StartDate: a date this package wrote itself, with time.Format on the DateOnly layout.
@@ -89,6 +87,14 @@ func FormatOutputMarkdown(e Output) string {
 		for _, li := range e.LinkedItems {
 			//gitlab:allow-unescaped li.LinkType: a link type the Work Items API documents, one of blocks, is_blocked_by and relates_to.
 			fmt.Fprintf(&b, "| %d | %s | %s |\n", li.IID, li.LinkType, toolutil.EscapeMdTableCell(li.Path))
+		}
+	}
+	if len(e.Children) > 0 {
+		b.WriteString("\n### Child Epics\n\n")
+		b.WriteString("| IID | Path |\n")
+		b.WriteString("| --- | --- |\n")
+		for _, child := range e.Children {
+			fmt.Fprintf(&b, "| &%d | %s |\n", child.IID, toolutil.EscapeMdTableCell(child.Path))
 		}
 	}
 	if e.Description != "" {
@@ -128,6 +134,15 @@ func FormatListMarkdown(out ListOutput) string {
 			toolutil.EscapeMdTableCell(labels),
 			toolutil.FormatTime(e.CreatedAt),
 		)
+	}
+	// Exactly one block is ever set, and which one says which API answered:
+	// the cursor pair belongs to the Work Items query, the page numbers to the
+	// REST epics endpoint.
+	if out.Pagination != nil {
+		fmt.Fprintf(&b, toolutil.FmtMdSectionText, toolutil.FormatGraphQLPagination(*out.Pagination, len(out.Epics)))
+	}
+	if out.OffsetPagination != nil {
+		toolutil.WritePagination(&b, *out.OffsetPagination)
 	}
 	toolutil.WriteHints(
 		&b,

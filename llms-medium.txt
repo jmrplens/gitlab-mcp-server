@@ -656,7 +656,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1091 tools, one per operation
 - gitlab_environment_list: List environments for a GitLab project.
 - gitlab_environment_stop: Stop a running environment in a GitLab project.
 - gitlab_environment_update: Update an existing environment in a project.
-- gitlab_epic_create: Create a new epic in a group.
+- gitlab_epic_create: Create a new epic in a group, optionally under a parent epic and already linked to others.
 - gitlab_epic_delete: Permanently delete an epic from a group.
 - gitlab_epic_get: Get a single epic from a group by epic IID.
 - gitlab_epic_get_links: List child epics linked to a parent epic.
