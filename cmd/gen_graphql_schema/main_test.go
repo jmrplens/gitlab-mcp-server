@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
 
@@ -52,8 +54,16 @@ func TestRun_AgainstAnInstance_WritesBothArtifacts(t *testing.T) {
 			}
 		})
 	}
-	if _, _, err := readArtifacts(dir); err != nil {
-		t.Errorf("the artifacts it wrote do not read back: %v", err)
+	types, source, err := readArtifacts(dir)
+	if err != nil {
+		t.Fatalf("the artifacts it wrote do not read back: %v", err)
+	}
+	// The record's count is the loaded one, so that --check can recompute it
+	// from the schema on disk and refuse a record beside a schema it did not
+	// come from. Recording the introspected count instead would pass a whole
+	// schema and fail every synthetic one, and bind nothing either way.
+	if types != source.Types {
+		t.Errorf("the record says %d types and the schema loads with %d: the two files it wrote disagree", source.Types, types)
 	}
 }
 
@@ -124,7 +134,7 @@ func TestRun_GenerationFailures_ExitNonZeroAndSayWhy(t *testing.T) {
 // gate that fails when gitlab.com does.
 func TestRun_CheckMode_JudgesTheCommittedFilesWithoutNetwork(t *testing.T) {
 	sound := filepath.Join(t.TempDir(), "sound")
-	if err := writeArtifacts(sound, minimalSDL, canonicalSource); err != nil {
+	if err := writeArtifacts(sound, wholeSDL, canonicalSource); err != nil {
 		t.Fatalf("prepare the fixture: %v", err)
 	}
 
@@ -163,15 +173,34 @@ func TestRun_CheckMode_JudgesTheCommittedFilesWithoutNetwork(t *testing.T) {
 	})
 }
 
+// wholeSDL is a schema large enough to clear the floor --check holds a pin to,
+// so a check-mode test is refused only for the reason it is about. Its types
+// are trivial because the floor counts them and reads nothing else.
+var wholeSDL = func() string {
+	var sdl strings.Builder
+	sdl.WriteString("type Query {\n  ok: Boolean\n}\n\n")
+	for i := range minimumTypes {
+		fmt.Fprintf(&sdl, "type Padding%d {\n  ok: Boolean\n}\n\n", i)
+	}
+	sdl.WriteString("schema {\n  query: Query\n}\n")
+	return sdl.String()
+}()
+
 // canonicalSource is a provenance record that satisfies every requirement
 // [pinProblems] enforces, so a test about something else is not tripped by the
-// identity checks.
+// identity checks. Its count is the one wholeSDL loads with, because --check
+// holds the record to the schema beside it.
 var canonicalSource = graphqlschema.Source{
 	Instance:       defaultEndpoint,
 	GitLabVersion:  "19.4.0",
 	GitLabRevision: "abc1234",
 	RetrievedAt:    "2026-09-06",
-	Types:          minimumTypes + 1,
+	Types:          loadedTypes(wholeSDL),
+}
+
+// loadedTypes is the count --check recomputes for a schema on disk.
+func loadedTypes(sdl string) int {
+	return len(cmdutil.Must(graphqlschema.Load([]byte(sdl))).Types)
 }
 
 // TestRun_CheckMode_RefusesAPinOfSomethingElse verifies the checks that ask
@@ -204,6 +233,11 @@ func TestRun_CheckMode_RefusesAPinOfSomethingElse(t *testing.T) {
 			want:   "records no GitLab version",
 		},
 		{
+			name:   "an introspection whose record was emptied by hand",
+			source: withSource(func(s *graphqlschema.Source) { s.GitLabVersion = "" }),
+			want:   "records no GitLab version",
+		},
+		{
 			name:   "a pin past the window",
 			source: withSource(func(s *graphqlschema.Source) { s.RetrievedAt = "2020-01-01" }),
 			want:   "days old and the window is",
@@ -211,27 +245,28 @@ func TestRun_CheckMode_RefusesAPinOfSomethingElse(t *testing.T) {
 		{
 			name:   "a date nothing can read",
 			source: withSource(func(s *graphqlschema.Source) { s.RetrievedAt = "one tuesday" }),
-			want:   "",
+			want:   "is not a date",
+		},
+		{
+			name:   "a date that has not happened",
+			source: withSource(func(s *graphqlschema.Source) { s.RetrievedAt = "2026-09-07" }),
+			want:   "has not happened yet",
+		},
+		{
+			name:   "a record beside a schema it did not come from",
+			source: withSource(func(s *graphqlschema.Source) { s.Types++ }),
+			want:   "were not written by one regeneration",
 		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), "pinned")
-			if err := writeArtifacts(dir, minimalSDL, testCase.source); err != nil {
+			if err := writeArtifacts(dir, wholeSDL, testCase.source); err != nil {
 				t.Fatalf("prepare the fixture: %v", err)
 			}
 
 			status, _, errOut := runCommand(t, genRun{dir: dir, check: true, now: fixedClock})
 
-			if testCase.want == "" {
-				// An unreadable date is left to the record's own decoding, which
-				// has already accepted it, rather than becoming a second
-				// complaint about the same field.
-				if status != 0 {
-					t.Fatalf("exit status %d, want 0 for a date the age check cannot read:\n%s", status, errOut)
-				}
-				return
-			}
 			if status != 1 {
 				t.Fatalf("exit status %d, want 1. stderr:\n%s", status, errOut)
 			}

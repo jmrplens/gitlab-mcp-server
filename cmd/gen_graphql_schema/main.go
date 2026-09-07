@@ -98,6 +98,18 @@ func checkArtifacts(cfg genRun, out, errOut io.Writer) int {
 	}
 
 	problems := pinProblems(source, cfg.clock())
+	// The record and the schema are two files, and everything above judges
+	// the record alone. Holding the record's count to the count the file
+	// beside it loads with is what makes them one pin rather than a record
+	// vouching for whatever happens to sit next to it: a truncated schema
+	// that still parses, committed beside a record from a whole one, passed
+	// every check here until this existed.
+	if types != source.Types {
+		problems = append(problems, fmt.Sprintf(
+			"%s records %d types and %s loads with %d: the two files were not written by one regeneration",
+			graphqlschema.SourceFileName, source.Types, graphqlschema.SDLFileName, types,
+		))
+	}
 	if len(problems) > 0 {
 		for _, problem := range problems {
 			fmt.Fprintln(errOut, prefix, problem)
@@ -134,11 +146,25 @@ func pinProblems(source graphqlschema.Source, now time.Time) []string {
 			source.Types, minimumTypes,
 		))
 	}
-	if source.GitLabVersion == unknownVersion {
+	// A blank version is refused alongside the recorded "unknown": the
+	// decoder accepts any string here, so a record with the field emptied by
+	// hand would otherwise pass the one check that asks about it.
+	if source.GitLabVersion == "" || source.GitLabVersion == unknownVersion {
 		problems = append(problems,
 			"the pin records no GitLab version, which is what an introspection without GITLAB_TOKEN produces: nothing can then say which release the gate speaks for")
 	}
-	if age, ok := pinAge(source, now); ok && age > maxPinAge {
+	switch age, err := pinAge(source, now); {
+	case err != nil:
+		problems = append(problems, fmt.Sprintf(
+			"the pin records %q as the day it was taken, which is not a date: nothing can then say how old the gate is",
+			source.RetrievedAt,
+		))
+	case age < 0:
+		problems = append(problems, fmt.Sprintf(
+			"the pin says it was taken on %s, which has not happened yet: no regeneration writes a day in the future",
+			source.RetrievedAt,
+		))
+	case age > maxPinAge:
 		problems = append(problems, fmt.Sprintf(
 			"the pin is %d days old and the window is %d: GitLab narrows fields in place, so a pin this old can no longer report a document that broke since",
 			int(age.Hours()/24), int(maxPinAge.Hours()/24),
@@ -147,15 +173,17 @@ func pinProblems(source graphqlschema.Source, now time.Time) []string {
 	return problems
 }
 
-// pinAge reports how long ago the pin was taken. An unparseable date is left to
-// the record's own decoding, which has already accepted it, rather than turned
-// into a second complaint about the same field.
-func pinAge(source graphqlschema.Source, now time.Time) (time.Duration, bool) {
+// pinAge reports how long ago the pin was taken, or the reason the record's
+// date cannot say. The decoder accepts any string in that field, so this is
+// the only place a date nobody can read is noticed, and a date the age check
+// cannot read is a pin whose age nobody knows, which is exactly what the
+// window exists to refuse.
+func pinAge(source graphqlschema.Source, now time.Time) (time.Duration, error) {
 	retrieved, err := time.Parse(time.DateOnly, source.RetrievedAt)
 	if err != nil {
-		return 0, false
+		return 0, err
 	}
-	return now.UTC().Sub(retrieved), true
+	return now.UTC().Sub(retrieved), nil
 }
 
 // generate is the network half: introspect, convert, and write.
@@ -184,12 +212,18 @@ func generate(cfg genRun, out, errOut io.Writer) int {
 		return 1
 	}
 
+	// The record carries the count the loaded schema has, not the one the
+	// introspection had, because the loaded count is the one --check can
+	// recompute from the file on disk and hold the record to. The two agree
+	// for a whole GitLab schema anyway: the renderer omits the built-in
+	// scalars and the __ types, and the loader's prelude puts the same
+	// thirteen back.
 	source := graphqlschema.Source{
 		Instance:       cfg.endpoint,
 		GitLabVersion:  version,
 		GitLabRevision: revision,
 		RetrievedAt:    cfg.now().UTC().Format(time.DateOnly),
-		Types:          len(schema.Types),
+		Types:          len(loaded.Types),
 	}
 	if err = writeArtifacts(cfg.dir, sdl, source); err != nil {
 		fmt.Fprintln(errOut, prefix, err)

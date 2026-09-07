@@ -81,7 +81,7 @@ gitlab-mcp-server/
 │   ├── gen_action_catalog_manifest/ # Generates audited action catalog manifest
 │   ├── gen_brand/               # Emits every vector brand asset from one parametric geometry (mark, favicon, banner/OG/social cards, in-binary svgBrand)
 │   ├── gen_docker_tools/        # Generates Docker-related tool metadata
-│   ├── gen_graphql_schema/      # Pins a GitLab GraphQL schema by introspecting a live instance, writing internal/graphqlschema/gitlab-schema.graphql (SDL as text, so a re-pin is a readable diff) and source.json (make gen-graphql-schema); --check gates the committed pair without network, refusing a pin of another instance, a truncated answer, an unrecorded version or one over 180 days old (make check-graphql-schema)
+│   ├── gen_graphql_schema/      # Pins a GitLab GraphQL schema by introspecting a live instance, writing internal/graphqlschema/gitlab-schema.graphql (SDL as text, so a re-pin is a readable diff) and source.json (make gen-graphql-schema); --check gates the committed pair without network, refusing a pin of another instance, a truncated answer, a record whose type count is not what the schema beside it loads with, an unrecorded version, a retrieval date nothing can read or that has not happened, or a pin over 180 days old (make check-graphql-schema)
 │   ├── gen_icon_webp/           # Regenerates light/dark WebP icon fallbacks from icons.go (maintainer-only, requires rsvg-convert + cwebp)
 │   ├── gen_lhm_manifest/        # Generates the capability arrays in lhm.plugin.json (LobeHub)
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt for LLM discovery

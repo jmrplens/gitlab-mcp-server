@@ -27,9 +27,12 @@ type Source struct {
 	GitLabRevision string `json:"gitlab_revision,omitempty"`
 	// RetrievedAt is the UTC day the instance answered, as YYYY-MM-DD.
 	RetrievedAt string `json:"retrieved_at"`
-	// Types is how many types the introspection carried, which is the one
-	// number that says at a glance whether a regeneration got the whole
-	// schema or a truncated answer.
+	// Types is how many types the schema beside this record loads with. It
+	// is the one number that says at a glance whether a regeneration got the
+	// whole schema or a truncated answer, and the loaded count rather than
+	// the introspected one because the check recomputes it from the file on
+	// disk and holds the record to it: the two files are one pin only while
+	// they agree.
 	Types int `json:"types"`
 }
 
