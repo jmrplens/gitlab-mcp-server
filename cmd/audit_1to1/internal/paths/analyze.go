@@ -77,6 +77,15 @@ type Summary struct {
 	TypedNoRoute          int `json:"typed_types_without_route"`
 	TypedNoSchema         int `json:"typed_types_without_schema"`
 	TypedUnpublishedField int `json:"typed_unpublished_fields"`
+	// TypedUndeclaredFields counts the typed findings no declaration in
+	// shape_declarations.go accounts for, which is the half a reader is being
+	// asked to act on.
+	TypedUndeclaredFields int `json:"typed_undeclared_fields"`
+	// TypedNestedCompared and TypedNestedUnpublished are the same comparison
+	// one level down: a nested output type held against the properties GitLab's
+	// document gives the object it sits under. See [TypedShapeCheck.Nested].
+	TypedNestedCompared    int `json:"typed_nested_types_compared"`
+	TypedNestedUnpublished int `json:"typed_nested_unpublished_fields"`
 }
 
 // observedGrain is what [Summary.Grain] says, spelled once.
@@ -168,10 +177,11 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 		}
 	}
 
-	stale = append(stale, endpoints.staleDeclarations()...)
-	sort.Strings(stale)
-
 	shapes := shapeCheck(root, inventory.Requests, publishedTypes(root))
+
+	stale = append(stale, endpoints.staleDeclarations()...)
+	stale = append(stale, shapes.Typed.staleDeclarations()...)
+	sort.Strings(stale)
 
 	report := Report{
 		SchemaVersion:     shared.SchemaVersion,
@@ -182,27 +192,30 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 		Endpoints:         endpoints,
 		Shapes:            shapes,
 		Summary: Summary{
-			InventoryRows:         len(inventory.Requests),
-			GraphQLDocuments:      len(documents.Documents),
-			GraphQLRefused:        len(documents.Refusals),
-			CatalogActions:        coverage.Total,
-			ActionsObserved:       coverage.Covered,
-			Grain:                 observedGrain,
-			ActionsSilent:         coverage.Silent,
-			ActionsUnmapped:       coverage.Unmapped,
-			SilentPackages:        len(coverage.SilentOwners),
-			UndeclaredSilent:      undeclaredPackages,
-			UndeclaredActions:     undeclaredActions,
-			StaleDeclarations:     len(stale),
-			UndocumentedEndpoints: len(endpoints.Undocumented),
-			UndeclaredEndpoints:   endpoints.undeclared(),
-			UntemplatedSegments:   len(shapes.Untemplated),
-			UnpublishedFields:     len(shapes.Unpublished),
-			TypedCompared:         shapes.Typed.Compared,
-			TypedNoPairing:        shapes.Typed.SkippedNoPairing,
-			TypedNoRoute:          shapes.Typed.SkippedNoRoute,
-			TypedNoSchema:         shapes.Typed.SkippedNoSchema,
-			TypedUnpublishedField: len(shapes.Typed.Unpublished),
+			InventoryRows:          len(inventory.Requests),
+			GraphQLDocuments:       len(documents.Documents),
+			GraphQLRefused:         len(documents.Refusals),
+			CatalogActions:         coverage.Total,
+			ActionsObserved:        coverage.Covered,
+			Grain:                  observedGrain,
+			ActionsSilent:          coverage.Silent,
+			ActionsUnmapped:        coverage.Unmapped,
+			SilentPackages:         len(coverage.SilentOwners),
+			UndeclaredSilent:       undeclaredPackages,
+			UndeclaredActions:      undeclaredActions,
+			StaleDeclarations:      len(stale),
+			UndocumentedEndpoints:  len(endpoints.Undocumented),
+			UndeclaredEndpoints:    endpoints.undeclared(),
+			UntemplatedSegments:    len(shapes.Untemplated),
+			UnpublishedFields:      len(shapes.Unpublished),
+			TypedCompared:          shapes.Typed.Compared,
+			TypedNoPairing:         shapes.Typed.SkippedNoPairing,
+			TypedNoRoute:           shapes.Typed.SkippedNoRoute,
+			TypedNoSchema:          shapes.Typed.SkippedNoSchema,
+			TypedUnpublishedField:  len(shapes.Typed.Unpublished),
+			TypedUndeclaredFields:  shapes.Typed.undeclared(),
+			TypedNestedCompared:    shapes.Typed.NestedCompared,
+			TypedNestedUnpublished: len(shapes.Typed.Nested),
 		},
 	}
 	if gapsOnly {

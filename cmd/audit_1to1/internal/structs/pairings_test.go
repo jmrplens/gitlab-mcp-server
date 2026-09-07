@@ -33,8 +33,15 @@ func TestCollectOutputPairings_Repository_NamesTheSDKStructBehindEachOutput(t *t
 	if pairings.ClientGoDir == "" {
 		t.Fatal("no client-go directory found in the import graph the handlers compile against")
 	}
-	if _, statErr := filepath.Glob(filepath.Join(pairings.ClientGoDir, "*.go")); statErr != nil {
-		t.Errorf("client-go directory %q does not read: %v", pairings.ClientGoDir, statErr)
+	// What says the directory reads is the list, not the error: filepath.Glob
+	// returns one only for a malformed pattern, and "*.go" is not one, so an
+	// assertion on the error was true of a path that does not exist.
+	sources, globErr := filepath.Glob(filepath.Join(pairings.ClientGoDir, "*.go"))
+	if globErr != nil {
+		t.Errorf("glob the client-go directory %q: %v", pairings.ClientGoDir, globErr)
+	}
+	if len(sources) == 0 {
+		t.Errorf("client-go directory %q holds no Go source, so no service method could be read from it", pairings.ClientGoDir)
 	}
 	if len(pairings.Outputs) < 100 {
 		t.Fatalf("collected %d pairing(s), want the converters across the whole tree", len(pairings.Outputs))
@@ -80,12 +87,12 @@ func clientGoPackage(t *testing.T, path string, files []string) *packages.Packag
 	return &packages.Package{PkgPath: path, Types: typed, GoFiles: files}
 }
 
-// TestClientGoDir_FindsTheRootByItsClientStruct verifies how the SDK source is
+// TestClientGoDir_AnImportGraph_IsResolvedToTheModuleRoot verifies how the SDK source is
 // located. The import path carries a major-version suffix that moves with every
 // major release and several client-go packages share its prefix, so the root is
 // identified by the one declaration only it has. A wrong directory here parses
 // no routes at all, which the join reads as an SDK nothing routes through.
-func TestClientGoDir_FindsTheRootByItsClientStruct(t *testing.T) {
+func TestClientGoDir_AnImportGraph_IsResolvedToTheModuleRoot(t *testing.T) {
 	const rootPath = shared.ClientGoPkgPath + "/v2"
 	other := types.NewPackage(shared.ClientGoPkgPath+"/v2/testing", "testing")
 	other.MarkComplete()

@@ -93,7 +93,7 @@
 // recorded calling and holds each of that package's top-level output types
 // against the union. It is exact for a package with one endpoint and weaker as
 // the package grows, which is the honest shape available while the inventory
-// records a package and never an action. It finds 611 fields across 130
+// records a package and never an action. It finds 610 fields across 130
 // packages, and most of them are not phantoms: our own wrappers around a JSON
 // array, our own answers to a 204 and to a not-found, and an endpoint the
 // document gives no schema for sitting in a package where another endpoint has
@@ -107,12 +107,28 @@
 // the SDK source the handlers compile against; and the document says what those
 // endpoints send. Nothing in it consults the inventory, which is the point: the
 // inventory cannot be sharpened, because it records a package by construction.
-// Of 433 top-level output types it compares 25 and reports 5 fields, skipping
+// Of 432 top-level output types it compares 24 and reports 3 fields, skipping
 // 394 that no converter pairs, 1 that no method answers with, and 13 whose
 // endpoints the document describes no response for. mrapprovals.ConfigOutput,
-// the one confirmed phantom this repository has found, is the case the join was
+// the first confirmed phantom this repository found, is the case the join was
 // built against: its old shape produces exactly the twenty findings the fix
 // removed, and its current one produces none.
+//
+// It asks the same question one level down, since schema version 2 of the
+// record carries the properties of each object a response nests. A nested
+// output type is held against the properties the document gives the response
+// property it sits under, and only when the document describes an object there
+// at all: 11 nested types compared, 25 fields reported. The reticence is what
+// makes that level usable, since it is the level whose first, unguarded attempt
+// produced 1418 findings.
+//
+// A finding at type grain can be answered rather than fixed, because the oracle
+// is generated and is not always complete: an endpoint rendering a bare hash
+// gets no useful schema, and a nested property can be given a narrower entity
+// than the one the endpoint renders. shape_declarations.go is where such a
+// finding is written down with its category and its evidence, on the terms
+// every other declaration table here works on: a declaration that stops
+// matching is itself a finding.
 //
 // # Where the report goes
 //

@@ -348,10 +348,16 @@ func protectedBranchRefsOutput(branches []*gl.ProtectedBranch) []*ProtectedBranc
 }
 
 // ApproverUserOutput mirrors gl.MergeRequestApproverUser, an element of the
-// project approvals approvers array (a user plus its approved_at timestamp).
+// project approvals approvers array.
+//
+// It does not carry the SDK type's ApprovedAt. client-go writes one struct for
+// two responses: merge_request_approvals.md shows approved_at on the merge
+// request's approved_by elements, and the project-level approvers array it
+// spells `"approvers": []  // Deprecated in GitLab 12.3, always returns empty`.
+// GitLab's own record agrees, giving that element the single property `user`
+// (docs/development/gitlab-api-shapes.json, GET and POST /projects/{id}/approvals).
 type ApproverUserOutput struct {
-	User       *toolutil.BasicUserOutput `json:"user"`
-	ApprovedAt string                    `json:"approved_at,omitempty"`
+	User *toolutil.BasicUserOutput `json:"user"`
 }
 
 func approverUsersOutput(approvers []*gl.MergeRequestApproverUser) []*ApproverUserOutput {
@@ -363,10 +369,7 @@ func approverUsersOutput(approvers []*gl.MergeRequestApproverUser) []*ApproverUs
 		if a == nil {
 			continue
 		}
-		out = append(out, &ApproverUserOutput{
-			User:       toolutil.NewBasicUserOutput(a.User),
-			ApprovedAt: toolutil.FormatTimePtr(a.ApprovedAt),
-		})
+		out = append(out, &ApproverUserOutput{User: toolutil.NewBasicUserOutput(a.User)})
 	}
 	if len(out) == 0 {
 		return nil

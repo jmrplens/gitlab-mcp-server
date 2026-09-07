@@ -65,6 +65,14 @@ type RunnerDetailsGroupOutput struct {
 // gl.RunnerDetails one-to-one, including the deprecated
 // Active/Architecture/Platform/Revision/Version/IPAddress fields and the full
 // Groups/Projects sub-object arrays.
+//
+// The one field of gl.RunnerDetails it does not carry is Token. GitLab mints a
+// runner's authentication token once, at registration, and answers with it
+// there and nowhere else: the responses of GET /runners/:id and PUT /runners/:id
+// name every field below and no token (docs/development/gitlab-api-shapes.json),
+// while POST /runners answers with id, token and token_expires_at, which is what
+// [Output] carries. Publishing it here promised a secret the endpoint never
+// sends, so a model was told to read a value that is always empty.
 type DetailsOutput struct {
 	toolutil.HintableOutput
 	ID              int64                        `json:"id"`
@@ -82,7 +90,6 @@ type DetailsOutput struct {
 	Locked          bool                         `json:"locked"`
 	AccessLevel     string                       `json:"access_level"`
 	MaximumTimeout  int64                        `json:"maximum_timeout,omitempty"`
-	Token           string                       `json:"token,omitempty"`
 	Groups          []RunnerDetailsGroupOutput   `json:"groups,omitempty"`
 	Projects        []RunnerDetailsProjectOutput `json:"projects,omitempty"`
 	// Active mirrors the deprecated gl.RunnerDetails.Active flag.
@@ -166,7 +173,6 @@ func toDetailsOutput(d *gl.RunnerDetails) DetailsOutput {
 		Locked:          d.Locked,
 		AccessLevel:     d.AccessLevel,
 		MaximumTimeout:  d.MaximumTimeout,
-		Token:           d.Token,
 		Active:          d.Active,
 		Architecture:    d.Architecture,
 		Platform:        d.Platform,

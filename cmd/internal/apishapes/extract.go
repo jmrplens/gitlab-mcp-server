@@ -95,11 +95,15 @@ func Extract(document []byte) (operations map[string]Operation, openAPIVersion, 
 			if decodeErr := node.Decode(&op); decodeErr != nil {
 				return nil, "", "", fmt.Errorf("read %s %s: %w", strings.ToUpper(method), path, decodeErr)
 			}
-			operations[Key(method, path)] = Operation{
-				Response: resolver.responseProperties(op),
-				Params:   parameterNames(op),
-				Body:     resolver.bodyProperties(op),
+			extracted := Operation{
+				Params: parameterNames(op),
+				Body:   resolver.bodyProperties(op),
 			}
+			if object, ok := resolver.responseObject(op); ok {
+				extracted.Response = propertyNames(object)
+				extracted.Nested = resolver.nestedProperties(object)
+			}
+			operations[Key(method, path)] = extracted
 		}
 	}
 	return operations, parsed.OpenAPI, parsed.Info.Version, nil
@@ -108,51 +112,94 @@ func Extract(document []byte) (operations map[string]Operation, openAPIVersion, 
 // resolver follows $ref into the component schemas.
 type resolver struct{ schemas map[string]schema }
 
-// properties returns the property names one schema describes, following a
-// reference and unwrapping a list, so a collection endpoint is described by the
-// element it returns rather than by the array around it.
-//
-// depth stops a schema that refers to itself, which several of GitLab's do
-// (a namespace holds a parent namespace), from walking forever.
-func (r *resolver) properties(s schema, depth int) []string {
-	if depth > 4 {
-		return nil
+// maxSchemaDepth stops a schema that refers to itself, which several of
+// GitLab's do (a namespace holds a parent namespace), from walking forever.
+const maxSchemaDepth = 4
+
+// object unwraps a schema to the object at its core, following a reference and
+// looking through a list, so a collection endpoint is described by the element
+// it returns rather than by the array around it. The second result is false for
+// a scalar, an unresolvable reference, and a walk that ran out of depth.
+func (r *resolver) object(s schema, depth int) (schema, bool) {
+	if depth > maxSchemaDepth {
+		return schema{}, false
 	}
 	switch {
 	case s.Ref != "":
 		name := s.Ref[strings.LastIndexByte(s.Ref, '/')+1:]
 		target, ok := r.schemas[name]
 		if !ok {
-			return nil
+			return schema{}, false
 		}
-		return r.properties(target, depth+1)
+		return r.object(target, depth+1)
 	case s.Items != nil:
-		return r.properties(*s.Items, depth+1)
+		return r.object(*s.Items, depth+1)
 	case len(s.Properties) > 0:
-		names := make([]string, 0, len(s.Properties))
-		for name := range s.Properties {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		return names
+		return s, true
 	default:
-		return nil
+		return schema{}, false
 	}
 }
 
-func (r *resolver) responseProperties(op operation) []string {
+// properties returns the property names one schema describes.
+func (r *resolver) properties(s schema, depth int) []string {
+	object, ok := r.object(s, depth)
+	if !ok {
+		return nil
+	}
+	return propertyNames(object)
+}
+
+// propertyNames returns the names an already-resolved object declares, sorted.
+func propertyNames(object schema) []string {
+	names := make([]string, 0, len(object.Properties))
+	for name := range object.Properties {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// nestedProperties returns, per property of one response object, the property
+// names of the object that property carries. A property carrying a scalar, or
+// an object the document does not describe, is left out rather than recorded
+// empty: the two mean different things to a reader and only one of them is
+// knowable here.
+//
+// It takes the response object already resolved, rather than the schema naming
+// it, so that the one question "does the document describe an object here" is
+// asked once, by [resolver.responseObject], instead of once per caller with a
+// second answer nothing could reach.
+func (r *resolver) nestedProperties(object schema) map[string][]string {
+	nested := map[string][]string{}
+	for name, property := range object.Properties {
+		if names := r.properties(property, 1); len(names) > 0 {
+			nested[name] = names
+		}
+	}
+	if len(nested) == 0 {
+		return nil
+	}
+	return nested
+}
+
+// responseObject resolves the success response to the object it describes,
+// reading the codes in the order a caller would meet them.
+func (r *resolver) responseObject(op operation) (schema, bool) {
 	for _, code := range successCodes {
 		response, ok := op.Responses[code]
 		if !ok {
 			continue
 		}
-		if body, hasJSON := response.Content["application/json"]; hasJSON {
-			if names := r.properties(body.Schema, 0); len(names) > 0 {
-				return names
-			}
+		body, hasJSON := response.Content["application/json"]
+		if !hasJSON {
+			continue
+		}
+		if object, resolved := r.object(body.Schema, 0); resolved {
+			return object, true
 		}
 	}
-	return nil
+	return schema{}, false
 }
 
 func (r *resolver) bodyProperties(op operation) []string {

@@ -1817,12 +1817,12 @@ func TestProjectHookCustomHeadersToOutput_SkipsNilEntries(t *testing.T) {
 	}
 }
 
-// TestDoProjectHookRequest_NewRequestError verifies request construction errors
+// TestDoProjectRequest_NewRequestError verifies request construction errors
 // are returned before the GitLab client attempts an HTTP call.
-func TestDoProjectHookRequest_NewRequestError(t *testing.T) {
+func TestDoProjectRequest_NewRequestError(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
-	_, resp, err := doProjectHookRequest[projectHookAPI](context.Background(), client, "bad method", pathProject42Hooks, nil)
+	_, resp, err := doProjectRequest[projectHookAPI](context.Background(), client, "bad method", pathProject42Hooks, nil)
 	if err == nil {
 		t.Fatal("expected request construction error")
 	}
@@ -5790,7 +5790,9 @@ const (
 	testValueHdr   = "header-value"
 	testValueVar   = "var-value"
 
-	forkRelationJSON = `{"id":1,"forked_to_project_id":42,"forked_from_project_id":99,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`
+	// forkRelationJSON is the body GitLab answers the fork-relation POST with:
+	// the downstream project, forked_from_project and all.
+	forkRelationJSON = `{"id":42,"name":"forked","path_with_namespace":"group/forked","web_url":"https://gl/group/forked","forked_from_project":{"id":99,"path_with_namespace":"group/upstream"}}`
 
 	repoStorageJSON = `{
 		"project_id":42,
@@ -6081,10 +6083,14 @@ func TestDeleteWebhookURLVariable_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestCreateForkRelation_Success verifies CreateForkRelation succeeds when the GitLab API accepts the fork-from relationship creation.
+// TestCreateForkRelation_Success verifies CreateForkRelation issues the POST at
+// the documented path and publishes the project GitLab answers with, including
+// the forked_from_project the relation was created for.
 func TestCreateForkRelation_Success(t *testing.T) {
+	var seen string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, pathProject42ForkRelation) {
+			seen = r.URL.Path
 			testutil.RespondJSON(w, http.StatusCreated, forkRelationJSON)
 			return
 		}
@@ -6096,43 +6102,17 @@ func TestCreateForkRelation_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.ID != 1 {
-		t.Errorf("ID = %d, want 1", out.ID)
+	if seen != "/api/v4/projects/42/fork/99" {
+		t.Errorf("request path = %q, want /api/v4/projects/42/fork/99", seen)
 	}
-	if out.ForkedFromProjectID != 99 {
-		t.Errorf("ForkedFromProjectID = %d, want 99", out.ForkedFromProjectID)
+	if out.ID != 42 {
+		t.Errorf("ID = %d, want 42", out.ID)
 	}
-	if out.ForkedToProjectID != 42 {
-		t.Errorf("ForkedToProjectID = %d, want 42", out.ForkedToProjectID)
+	if out.PathWithNamespace != "group/forked" {
+		t.Errorf("PathWithNamespace = %q, want group/forked", out.PathWithNamespace)
 	}
-	if len(out.NextSteps) != 0 {
-		t.Errorf("NextSteps = %v, want none when relation IDs are present", out.NextSteps)
-	}
-}
-
-// TestCreateForkRelation_GitLab19ProjectBody_SetsRecoveryHint verifies that
-// when GitLab 19 answers the fork-relation POST with the full project body
-// (so both relation IDs decode to zero), the output carries a next-steps hint
-// confirming success and pointing at gitlab_project_get for verification.
-func TestCreateForkRelation_GitLab19ProjectBody_SetsRecoveryHint(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, pathProject42ForkRelation) {
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":42,"name":"forked","path_with_namespace":"group/forked","forked_from_project":{"id":99}}`)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	out, err := CreateForkRelation(context.Background(), client, CreateForkRelationInput{
-		ProjectID: "42", ForkedFromID: 99,
-	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if out.ForkedFromProjectID != 0 || out.ForkedToProjectID != 0 {
-		t.Fatalf("expected zero relation IDs from project-body response, got %+v", out)
-	}
-	if len(out.NextSteps) != 1 || !strings.Contains(out.NextSteps[0], "gitlab_project_get") {
-		t.Errorf("NextSteps = %v, want one hint pointing at gitlab_project_get", out.NextSteps)
+	if out.ForkedFromProject == nil || out.ForkedFromProject.ID != 99 {
+		t.Errorf("ForkedFromProject = %+v, want the upstream project 99", out.ForkedFromProject)
 	}
 }
 
@@ -6394,6 +6374,31 @@ func TestDownloadAvatar_Success(t *testing.T) {
 	expectedB64 := base64.StdEncoding.EncodeToString(rawBytes)
 	if out.ContentBase64 != expectedB64 {
 		t.Errorf("ContentBase64 mismatch")
+	}
+}
+
+// TestDownloadAvatar_ResponseOverTheClientCeiling_NamesTheWayOut verifies the
+// other ceiling: the client-wide response bound stops the read before this
+// action's own limit is reached, and the refusal still tells the caller to
+// fetch the avatar from GitLab instead of reporting a transport failure.
+func TestDownloadAvatar_ResponseOverTheClientCeiling_NamesTheWayOut(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathProject42Avatar {
+			w.Header().Set("Content-Type", "image/png")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(make([]byte, 64))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	client.SetMaxResponseBytes(8)
+
+	_, err := DownloadAvatar(context.Background(), client, DownloadAvatarInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected a refusal for a response over the client ceiling")
+	}
+	if !strings.Contains(err.Error(), "download it from GitLab directly") {
+		t.Errorf("error = %v, want it to name the way out", err)
 	}
 }
 
@@ -6694,20 +6699,6 @@ func TestCreateForUser_ContextCancelled(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal(errExpectedCtxErr)
-	}
-}
-
-// TestFormatForkRelationMarkdown_NonEmpty verifies the fork-relation markdown formatter produces non-empty output containing the expected fields.
-func TestFormatForkRelationMarkdown_NonEmpty(t *testing.T) {
-	md := FormatForkRelationMarkdown(ForkRelationOutput{
-		ID: 1, ForkedToProjectID: 42, ForkedFromProjectID: 99,
-		CreatedAt: "2026-01-01T00:00:00Z",
-	})
-	if md == "" {
-		t.Fatal(errExpectedNonEmptyMD)
-	}
-	if !strings.Contains(md, "42") {
-		t.Error("markdown missing ForkedToProjectID")
 	}
 }
 

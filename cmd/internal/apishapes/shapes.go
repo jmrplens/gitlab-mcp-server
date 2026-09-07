@@ -22,7 +22,9 @@ const (
 	// SchemaVersion is the artifact's shape. A reader that does not recognize
 	// it must refuse rather than guess, since every field here is a list of
 	// names a comparison acts on.
-	SchemaVersion = 1
+	//
+	// Version 2 added [Operation.Nested].
+	SchemaVersion = 2
 	// SpecPath is where GitLab commits the generated document in its own
 	// repository.
 	SpecPath = "doc/api/openapi/openapi_v3.yaml"
@@ -71,6 +73,16 @@ type Operation struct {
 	// an empty list, and an empty list therefore means "GitLab does not say"
 	// rather than "GitLab sends nothing".
 	Response []string `json:"response,omitempty"`
+	// Nested holds, for each property of the success response that carries an
+	// object of its own, that object's property names, sorted. It is one level
+	// deep and stays that way: the record is diffed by hand on every
+	// regeneration, and each further level multiplies its size by the branching
+	// of GitLab's schemas rather than adding to it.
+	//
+	// A property absent from this map either carries no object or carries one
+	// the document does not describe, which is the same "GitLab does not say"
+	// an empty [Operation.Response] means.
+	Nested map[string][]string `json:"nested,omitempty"`
 	// Params holds the path and query parameter names, sorted.
 	Params []string `json:"params,omitempty"`
 	// Body holds the request body's property names, sorted.

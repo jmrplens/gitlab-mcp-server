@@ -422,14 +422,14 @@ List all pending invitations for a group. Supports filtering by query and pagina
 
 ### `gitlab_project_invite`
 
-Invite a user to a project by email or user ID. Requires access_level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner).
+Invite a user to a project by email or user ID. Requires access_level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). Optional `expires_at` (YYYY-MM-DD), `invite_source`, and `member_role_id` (Ultimate). Answers with `status`, a per-invitee `message` map when any invitation failed, and `queued_users` when the instance queues promotions for administrator approval.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ### `gitlab_group_invite`
 
-Invite a user to a group by email or user ID. Requires access_level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner).
+Invite a user to a group by email or user ID. Requires access_level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner). Optional `expires_at` (YYYY-MM-DD), `invite_source`, and `member_role_id` (Ultimate). Answers with `status`, a per-invitee `message` map when any invitation failed, and `queued_users` when the instance queues promotions for administrator approval.
 
 | Annotation | **Create** |
 | ---------- | ---------- |

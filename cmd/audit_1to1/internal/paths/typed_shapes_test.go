@@ -4,6 +4,7 @@ import (
 	"errors"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/structs"
@@ -18,12 +19,21 @@ func indexOf(operations map[string]apishapes.Operation) *operationIndex {
 // stubTypeGrainInputs replaces the two loaders the real tree resolves: the
 // typed package load that costs twenty seconds and the client-go source in a
 // module cache.
+//
+// It empties the declaration table with them. The real entries are about the
+// real tree, so against a synthetic one every last one of them is unused, and a
+// test of what the join counts would be asserting on this repository's
+// adjudications instead. [TestClassifyShapeFindings_ADeclaration_AnswersItsOwnFinding]
+// is where the table itself is exercised.
 func stubTypeGrainInputs(t *testing.T, pairings structs.Pairings, loadErr error, routes map[string][]sdkRoute) {
 	t.Helper()
-	previousPairings, previousRoutes := collectPairings, readRoutes
+	previousPairings, previousRoutes, previousDeclarations := collectPairings, readRoutes, declaredShapeFields
 	collectPairings = func(string) (structs.Pairings, error) { return pairings, loadErr }
 	readRoutes = func(string) map[string][]sdkRoute { return routes }
-	t.Cleanup(func() { collectPairings, readRoutes = previousPairings, previousRoutes })
+	declaredShapeFields = nil
+	t.Cleanup(func() {
+		collectPairings, readRoutes, declaredShapeFields = previousPairings, previousRoutes, previousDeclarations
+	})
 }
 
 // approvalOperations is what GitLab's document says about the two endpoints
@@ -341,5 +351,178 @@ func TestShapeCheck_BothGrains_AreReportedTogether(t *testing.T) {
 	}
 	if len(check.Typed.Unpublished) != 1 || check.Typed.Unpublished[0].Grain != grainType {
 		t.Errorf("typed = %+v, want the one type-grain finding", check.Typed)
+	}
+}
+
+// approvedByOperations is the same GET, with the properties GitLab's record
+// gives the object under approved_by. It is the shape the nested level was
+// added for: approved_by carries a user and a timestamp, and holding the type
+// that models it against the top-level names would condemn both.
+var approvedByOperations = map[string]apishapes.Operation{
+	"GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals": {
+		Response: []string{"approved", "approved_by", "user_can_approve", "user_has_approved"},
+		Nested:   map[string][]string{"approved_by": {"approved_at", "user"}},
+	},
+}
+
+// approvalConfigWithApprovers is ConfigOutput as it stands, with the nested
+// type its approved_by field carries.
+var approvalConfigWithApprovers = publishedType{
+	Package: "internal/tools/mrapprovals",
+	Name:    "ConfigOutput",
+	Fields:  []string{"approved", "approved_by", "user_can_approve", "user_has_approved"},
+	Nested: map[string]nestedType{
+		"approved_by": {Name: "ApproverOutput", Fields: []string{"approved_at", "user"}},
+	},
+}
+
+// TestTypedShapeCheck_ANestedType_IsJudgedUnderItsOwnProperty verifies the
+// level the record's schema version 2 made possible. The fields of a nested
+// type are the properties of the object it sits under, never of the response,
+// so the same list that is right under approved_by is wrong at the top: a
+// nested type judged against the response names is the 1418-finding run that
+// made this level uncomparable before the record carried it.
+func TestTypedShapeCheck_ANestedType_IsJudgedUnderItsOwnProperty(t *testing.T) {
+	stubTypeGrainInputs(t, approvalPairing, nil, approvalRoutes)
+
+	check := typedShapeCheck("", indexOf(approvedByOperations), []publishedType{approvalConfigWithApprovers})
+
+	if check.NestedCompared != 1 {
+		t.Errorf("NestedCompared = %d, want the one nested type held against approved_by", check.NestedCompared)
+	}
+	if len(check.Nested) != 0 {
+		t.Errorf("nested findings = %+v, want none: the record gives approved_by both names", check.Nested)
+	}
+}
+
+// TestTypedShapeCheck_ANestedFieldTheObjectDoesNotCarry_IsReportedUnderIt
+// verifies that a nested finding says which property it belongs to. Two nested
+// types can publish the same tag under different properties, so a finding that
+// named only the type and the field would send a reader to the wrong object.
+func TestTypedShapeCheck_ANestedFieldTheObjectDoesNotCarry_IsReportedUnderIt(t *testing.T) {
+	stubTypeGrainInputs(t, approvalPairing, nil, approvalRoutes)
+	candidate := approvalConfigWithApprovers
+	candidate.Nested = map[string]nestedType{
+		"approved_by": {Name: "ApproverOutput", Fields: []string{"approved_at", "invented", "user"}},
+	}
+
+	check := typedShapeCheck("", indexOf(approvedByOperations), []publishedType{candidate})
+
+	want := []UnpublishedField{{
+		Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ApproverOutput",
+		Under: "approved_by", Field: "invented", SDKType: "MergeRequestApprovals", Endpoints: 1,
+		Operations: []string{"GET /projects/:/merge_requests/:/approvals"},
+	}}
+	if !reflect.DeepEqual(check.Nested, want) {
+		t.Errorf("nested findings = %+v, want %+v", check.Nested, want)
+	}
+}
+
+// TestTypedShapeCheck_ANestedPropertyTheRecordDescribesNoObjectFor_IsNotJudged
+// verifies the reticence that makes the nested level usable at all. An empty
+// nested list means the document does not describe an object there, which is
+// the same thing an empty response list means one level up, and judging against
+// one would report every field of the type.
+func TestTypedShapeCheck_ANestedPropertyTheRecordDescribesNoObjectFor_IsNotJudged(t *testing.T) {
+	stubTypeGrainInputs(t, approvalPairing, nil, approvalRoutes)
+
+	check := typedShapeCheck("", indexOf(approvalOperations), []publishedType{approvalConfigWithApprovers})
+
+	if check.Compared != 1 {
+		t.Errorf("Compared = %d, want the top-level type still judged", check.Compared)
+	}
+	if check.NestedCompared != 0 || len(check.Nested) != 0 {
+		t.Errorf("nested = %d compared, %+v reported; want the property left alone", check.NestedCompared, check.Nested)
+	}
+}
+
+// TestTypedShapeCheck_TwoOperationsSharingAShape_UnionTheirNestedProperties
+// verifies the merge the shape index performs. Two operations can collapse to
+// one shape, and taking either one's nested map alone would report the other's
+// nested fields as unpublished, which is the same defect the response-name
+// union was written to avoid.
+func TestTypedShapeCheck_TwoOperationsSharingAShape_UnionTheirNestedProperties(t *testing.T) {
+	stubTypeGrainInputs(t, approvalPairing, nil, approvalRoutes)
+	operations := map[string]apishapes.Operation{
+		"GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals": {
+			Response: []string{"approved_by"},
+			Nested:   map[string][]string{"approved_by": {"user"}},
+		},
+		"GET /api/v4/projects/{other}/merge_requests/{iid}/approvals": {
+			Response: []string{"approved_by"},
+			Nested:   map[string][]string{"approved_by": {"approved_at"}},
+		},
+	}
+	candidate := approvalConfigWithApprovers
+	candidate.Fields = []string{"approved_by"}
+
+	check := typedShapeCheck("", indexOf(operations), []publishedType{candidate})
+
+	if len(check.Nested) != 0 {
+		t.Errorf("nested findings = %+v, want none: between them the two operations name both properties", check.Nested)
+	}
+}
+
+// TestClassifyShapeFindings_ADeclaration_AnswersItsOwnFinding verifies the
+// table the type grain answers a finding with, at both levels and in both
+// directions: a declaration that matches annotates its finding and is not
+// stale, and one that matches nothing is reported so the excuse cannot outlive
+// the thing it excused.
+func TestClassifyShapeFindings_ADeclaration_AnswersItsOwnFinding(t *testing.T) {
+	previous := declaredShapeFields
+	declaredShapeFields = []shapeDeclaration{
+		{Package: "internal/tools/one", Type: "Output", Field: declaredSegment, Category: categoryRecordSilent, Reason: "whole type"},
+		{Package: "internal/tools/two", Type: "NestedOutput", Field: "named", Category: categoryRecordSilent, Reason: "one field"},
+		{Package: "internal/tools/gone", Type: "Output", Field: "vanished", Category: categoryRecordSilent, Reason: "matches nothing"},
+	}
+	t.Cleanup(func() { declaredShapeFields = previous })
+
+	topLevel, nested, unused := classifyShapeFindings(
+		[]UnpublishedField{
+			{Package: "internal/tools/one", Type: "Output", Field: "anything"},
+			{Package: "internal/tools/one", Type: "OtherOutput", Field: "anything"},
+		},
+		[]UnpublishedField{
+			{Package: "internal/tools/two", Type: "NestedOutput", Under: "parent", Field: "named"},
+			{Package: "internal/tools/two", Type: "NestedOutput", Under: "parent", Field: "other"},
+		},
+	)
+
+	if topLevel[0].Reason != "whole type" || topLevel[1].declared() {
+		t.Errorf("top-level = %+v, want only the declared type answered", topLevel)
+	}
+	if nested[0].Reason != "one field" || nested[1].declared() {
+		t.Errorf("nested = %+v, want only the declared field answered", nested)
+	}
+	if !reflect.DeepEqual(unused, []string{"internal/tools/gone.Output.vanished"}) {
+		t.Errorf("unused = %v, want the declaration that matched nothing", unused)
+	}
+}
+
+// TestTypedShapeCheck_StaleDeclarations_AreSilentUntilTheCheckRuns verifies
+// that a check that compared nothing says nothing about its declarations. Every
+// one of them would look unused, and the loudest wrong answer this could give
+// is that they are all stale.
+func TestTypedShapeCheck_StaleDeclarations_AreSilentUntilTheCheckRuns(t *testing.T) {
+	stale := TypedShapeCheck{Ran: true, UnusedDeclarations: []string{"internal/tools/one.Output.field"}}
+	if lines := stale.staleDeclarations(); len(lines) != 1 || !strings.Contains(lines[0], "internal/tools/one.Output.field") {
+		t.Errorf("staleDeclarations() = %v, want the one declaration named", lines)
+	}
+	if lines := (TypedShapeCheck{UnusedDeclarations: stale.UnusedDeclarations}).staleDeclarations(); lines != nil {
+		t.Errorf("staleDeclarations() = %v on a check that did not run, want nothing", lines)
+	}
+}
+
+// TestTypedShapeCheck_UndeclaredFindings_AreCountedAtBothLevels verifies the
+// number the report leads with, which is what a reader is being asked to act
+// on: an answered finding is context, and one at either level that nothing
+// answers is work.
+func TestTypedShapeCheck_UndeclaredFindings_AreCountedAtBothLevels(t *testing.T) {
+	check := TypedShapeCheck{
+		Unpublished: []UnpublishedField{{Field: "answered", Category: categoryRecordSilent}, {Field: "open"}},
+		Nested:      []UnpublishedField{{Field: "open too"}},
+	}
+	if got := check.undeclared(); got != 2 {
+		t.Errorf("undeclared() = %d, want the two findings nothing answers", got)
 	}
 }

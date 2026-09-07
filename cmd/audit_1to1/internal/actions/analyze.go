@@ -185,6 +185,7 @@ var acceptedMissingMethods = map[string]string{
 	"GroupIssueBoards.ListGroupIssueBoards":    "COVERED_RAW. gitlab_group_board_list",
 	"GroupIssueBoards.UpdateIssueBoard":        "COVERED_RAW. gitlab_group_board_update",
 	"Projects.AddProjectHook":                  "COVERED_RAW. gitlab_project_hook_add",
+	"Projects.CreateProjectForkRelation":       "COVERED_RAW. gitlab_project_create_fork_relation issues the same POST directly because the wrapper declares ProjectForkRelation, a five-field pair GitLab's response (a Project) fills none of. Tracked in docs/development/upstream-bugs.md",
 	"Projects.EditProjectHook":                 "COVERED_RAW. gitlab_project_hook_edit",
 	"Projects.GetProjectHook":                  "COVERED_RAW. gitlab_project_hook_get",
 	"Projects.ListProjectHooks":                "COVERED_RAW. gitlab_project_hook_list",
@@ -194,6 +195,8 @@ var acceptedMissingMethods = map[string]string{
 	"ProjectImportExport.ImportFromFile":       "COVERED_RAW. gitlab_import_project_from_file",
 	"ProjectImportExport.ImportStatus":         "COVERED_RAW. gitlab_get_project_import_status",
 	"Features.SetFeatureFlag":                  "COVERED_RAW. gitlab_set_feature_flag (raw POST)",
+	"Invites.GroupInvites":                     "COVERED_RAW. gitlab_group_invite; InvitesOptions models neither invite_source nor member_role_id, and InvitesResult models no queued_users. Tracked in docs/development/upstream-bugs.md",
+	"Invites.ProjectInvites":                   "COVERED_RAW. gitlab_project_invite, for the same three fields",
 	"Repositories.Archive":                     "COVERED_RAW. gitlab_repository_archive (URL-built)",
 	"GenericPackages.DownloadPackageFile":      "COVERED_RAW. gitlab_package_download (streamed)",
 

@@ -1,6 +1,7 @@
 package paths
 
 import (
+	"maps"
 	"sort"
 	"strings"
 
@@ -23,7 +24,7 @@ import (
 // are unioned and every top-level output type of that package is held against
 // the union. It is lossy in a way that can only produce a missing finding,
 // never a false one (see [ShapeCheck.Join] and [unpublishedFields]), and it
-// finds 611 fields across 130 packages, most of which are not phantoms. Three
+// finds 610 fields across 130 packages, most of which are not phantoms. Three
 // shapes dominate: our own wrappers around a JSON array, whose keys no endpoint
 // can send because the document describes the element; our own answers to a 204
 // and to a not-found; and an endpoint the document gives no schema for in a
@@ -93,6 +94,10 @@ type UnpublishedField struct {
 	Type string `json:"type"`
 	// Field is the json tag.
 	Field string `json:"field"`
+	// Under is the response property this type sits under, set on a nested
+	// finding only: at the top level a type is the response and sits under
+	// nothing.
+	Under string `json:"under,omitempty"`
 	// SDKType is the client-go struct a converter fills the type from, which is
 	// what named the operations searched. Type grain only.
 	SDKType string `json:"sdk_type,omitempty"`
@@ -107,7 +112,17 @@ type UnpublishedField struct {
 	// at package grain there are up to thirty of them and the count is what a
 	// reader wants.
 	Operations []string `json:"operations,omitempty"`
+	// Category and Reason are the declaration accounting for GitLab's document
+	// not listing a field GitLab does send, and are empty for a finding nothing
+	// accounts for. Type grain only: the package grain unions thirty responses
+	// and cannot say which of them a field belongs to, so a declaration written
+	// against it would excuse more than it read. See [shapeDeclaration].
+	Category string `json:"category,omitempty"`
+	Reason   string `json:"reason,omitempty"`
 }
+
+// declared reports whether a declaration accounts for this finding.
+func (f UnpublishedField) declared() bool { return f.Category != "" }
 
 // shapeCheck compares the recorded inventory with GitLab's OpenAPI record.
 //
@@ -280,6 +295,7 @@ func newOperationIndex(record apishapes.Document) *operationIndex {
 		merged.Response = union(merged.Response, operation.Response)
 		merged.Params = union(merged.Params, operation.Params)
 		merged.Body = union(merged.Body, operation.Body)
+		merged.Nested = unionNested(merged.Nested, operation.Nested)
 		index.byShape[shapeKey] = merged
 	}
 	return index
@@ -325,6 +341,22 @@ func pathShape(path string) string {
 		}
 	}
 	return strings.Join(segments, "/")
+}
+
+// unionNested merges two operations' nested property maps, property by
+// property, for the same reason the name lists are unioned: two operations can
+// share a shape, and taking one arbitrarily would report the other's nested
+// fields as unpublished.
+func unionNested(a, b map[string][]string) map[string][]string {
+	if len(a) == 0 {
+		return b
+	}
+	out := make(map[string][]string, len(a)+len(b))
+	maps.Copy(out, a)
+	for property, names := range b {
+		out[property] = union(out[property], names)
+	}
+	return out
 }
 
 // union merges two sorted name lists without duplicates.

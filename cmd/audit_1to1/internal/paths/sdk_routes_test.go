@@ -26,13 +26,13 @@ func sdkSourceIn(t *testing.T, files map[string]string) string {
 	return dir
 }
 
-// TestReadSDKRoutes_ReadsTheShapeEveryServiceMethodIsWrittenIn verifies the
+// TestReadSDKRoutes_TheShapeEveryServiceMethodIsWrittenIn_IsRead verifies the
 // second link of the type-grain join. Every endpoint client-go reaches is named
 // by a route template and, when it is not a GET, by a withMethod option, so a
 // method's result type plus those two calls are what say which operations may
 // answer with a struct. Getting this wrong loses a type's routes silently,
 // which reads as a type nothing routes to rather than as a parse that failed.
-func TestReadSDKRoutes_ReadsTheShapeEveryServiceMethodIsWrittenIn(t *testing.T) {
+func TestReadSDKRoutes_TheShapeEveryServiceMethodIsWrittenIn_IsRead(t *testing.T) {
 	dir := sdkSourceIn(t, map[string]string{
 		"routes.go": `package gitlab
 
@@ -267,12 +267,12 @@ func TestReadSDKRoutes_NothingToRead_IsNoRoutes(t *testing.T) {
 	}
 }
 
-// TestRouteShape_MirrorsClientGosOwnNormalizer verifies the spelling both sides
+// TestRouteShape_ATemplateWithPlaceholders_IsSpelledAsClientGoSpellsIt verifies the spelling both sides
 // of the join have to meet in. client-go registers a template by replacing a
 // segment that is nothing but a format verb, and by dropping a verb embedded in
 // a longer segment; reproducing that rather than inventing one is what keeps a
 // template such as "archive%s" meeting the path GitLab documents.
-func TestRouteShape_MirrorsClientGosOwnNormalizer(t *testing.T) {
+func TestRouteShape_ATemplateWithPlaceholders_IsSpelledAsClientGoSpellsIt(t *testing.T) {
 	cases := []struct {
 		name     string
 		template string
