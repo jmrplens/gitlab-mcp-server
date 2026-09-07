@@ -16,9 +16,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
 )
 
-// RateLimiter enforces a token-bucket rate limit on `tools/call` requests.
-// A zero RPS disables the limiter (the constructor returns nil and the
-// resulting middleware is a no-op).
+// RateLimiter enforces a token-bucket rate limit on the methods that cost a
+// deployment something: those reaching GitLab with the caller's credential,
+// plus `completion/complete` and `tools/list`, each on the bucket
+// [AttachRateLimit] describes. A zero RPS disables the limiter (the
+// constructor returns nil and the resulting middleware is a no-op).
 //
 // Limits are advisory; the primary defense remains GitLab's own per-token
 // rate limits. The local limiter exists to soften bursts (typical LLM
@@ -59,6 +61,12 @@ type RateLimiter struct {
 	// arrive full every time and meter nothing.
 	completionOnce sync.Once
 	completion     *RateLimiter
+
+	// catalogOnce guards the slower-refilling bucket tools/list draws on, kept
+	// for the same reason the completion one is: derived per request it would
+	// arrive full on every call and meter nothing.
+	catalogOnce sync.Once
+	catalog     *RateLimiter
 }
 
 // defaultThrottleWindow is the reporting interval for refusals.
@@ -82,6 +90,11 @@ const (
 	methodSubscriptionsListen = "subscriptions/listen"
 	methodPromptsGet          = "prompts/get"
 )
+
+// methodToolsList is the catalog listing, metered on a bucket of its own for a
+// reason none of the methods above share: it reaches no upstream at all, and
+// spends instead the processor every tenant of this process is waiting for.
+const methodToolsList = "tools/list"
 
 // rateLimitedErrorCode is the JSON-RPC code a refused resource or prompt
 // request carries. It mirrors HTTP 429 the way the transport gates' code
@@ -172,9 +185,46 @@ func (r *RateLimiter) allow() bool {
 // same one or none at all.
 const completionBurstFactor = 10
 
+// catalogDivisor sizes the tools/list bucket relative to the tool-call one.
+//
+// Listing is the mirror image of completion, in the refill and only there.
+// Completion arrives ten times as often as a tool call and costs almost nothing
+// to answer, so its bucket refills ten times as fast; a listing arrives once at
+// connect and again when the catalog changes, and on the individual surface it
+// marshals about 3.2 MB and is the majority of that surface's processor time,
+// so its bucket refills a tenth as fast. That is what bounds a client listing
+// in a loop, which is the whole reason the bucket exists.
+//
+// The burst is deliberately not divided with it. What the burst decides is how
+// many listings a credential may make at once, and a credential is shared by
+// however many clients an operator pointed at one token: a gateway holding one
+// credential for a whole population is a deployment shape this project
+// documents, and those clients reconnect together after a restart or a deploy.
+// Dividing the burst as well would make discovery the tightest budget in the
+// deployment (four listings in hand on the HTTP defaults, against forty tool
+// calls) and refuse one of those clients its very first listing, which is worse
+// than a refused tool call because no model is in the loop to read the message
+// and back off. The sustained cost is bounded by the refill either way.
+//
+// The figures the divisor is sized against are the individual surface's, the
+// expensive one; on the default dynamic surface a listing is two tools, so
+// there the bucket is conservative rather than tight.
+const catalogDivisor = 10
+
+// CatalogListingRPS is the refill rate a listing draws on when the tool-call
+// bucket is configured at rps.
+//
+// Exported so the entrypoint can announce both figures at startup: the listing
+// rate is the other number an operator can meet in a refusal, and the divisor
+// that produces it belongs here rather than copied into a log statement. The
+// burst is the configured one, unchanged; [catalogDivisor] records why.
+func CatalogListingRPS(rps float64) float64 {
+	return rps / catalogDivisor
+}
+
 // AttachRateLimit registers a receiving middleware that gates every method
-// that reaches GitLab with the caller's credential, and `completion/complete`,
-// when their buckets are empty.
+// that reaches GitLab with the caller's credential, plus `completion/complete`
+// and `tools/list`, when their buckets are empty.
 //
 // `tools/call`, `resources/read`, `resources/subscribe`, `subscriptions/listen`
 // and `prompts/get` draw on one bucket: each is a request to GitLab on the
@@ -189,8 +239,24 @@ const completionBurstFactor = 10
 // contract for this surface is that autocomplete is never blocked, and an
 // error in a completion popup is worse than no suggestions.
 //
-// Every other method (initialize, tools/list, resources/list, prompts/list)
-// bypasses the limiter: none of them reaches GitLab. If limiter is nil, this
+// `tools/list` draws on a third bucket, refilled a tenth as fast as the
+// tool-call one and holding the same burst (see [catalogDivisor]), and it is
+// metered for a reason none of the others share: it reaches no upstream, it
+// spends the processor of a process many tenants share. On the individual
+// surface one listing marshals about 3.2 MB and is the majority of that
+// surface's processor time, so a client listing in a loop takes the processor
+// its co-tenants are waiting for while the shared bucket, which counts requests
+// to GitLab, sees nothing at all. Keeping the two apart is also what preserves
+// the property the old exemption provided: draining the tool-call bucket never
+// refuses a client's discovery. It is refused like the flagless methods above,
+// with the code that mirrors HTTP 429, because ListToolsResult carries no error
+// flag either. One token is one JSON-RPC request, so a catalog split over
+// several pages costs one per page; the server keeps its whole catalog in one
+// page, for a different reason recorded where PageSize is set.
+//
+// Every other method (initialize, resources/list, prompts/list) bypasses the
+// limiter: they reach no upstream and cost little to answer, and metering
+// something cheap buys nothing and costs a concept. If limiter is nil, this
 // function is a no-op.
 func AttachRateLimit(server *mcp.Server, limiter *RateLimiter) {
 	if limiter == nil {
@@ -217,6 +283,7 @@ func AttachRateLimitFunc(server *mcp.Server, resolve func(context.Context) *Rate
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			limiter := resolve(ctx)
 			completions := limiter.forCompletions()
+			catalog := limiter.forCatalog()
 			switch method {
 			case methodToolsCall:
 				if !limiter.allow() {
@@ -229,6 +296,14 @@ func AttachRateLimitFunc(server *mcp.Server, resolve func(context.Context) *Rate
 					limiter.reportRefusal(ctx, method)
 					return nil, rateLimitedError(method)
 				}
+			case methodToolsList:
+				if !isInternalInspection(ctx) && !catalog.allow() {
+					// Reported on the bucket that refused, so the line carries
+					// the rate that actually applied rather than the tool-call
+					// one, which refills ten times as fast.
+					catalog.reportRefusal(ctx, method)
+					return nil, rateLimitedError(method)
+				}
 			case "completion/complete":
 				if !completions.allow() {
 					return &mcp.CompleteResult{Completion: mcp.CompletionResultDetails{Values: []string{}}}, nil
@@ -237,6 +312,36 @@ func AttachRateLimitFunc(server *mcp.Server, resolve func(context.Context) *Rate
 			return next(ctx, method, req)
 		}
 	})
+}
+
+// inspectionKey marks a context as the server's own in-memory session.
+type inspectionKey struct{}
+
+// WithInternalInspection marks ctx as belonging to a session the server opens
+// against itself, so what it asks for is not charged to a caller's bucket.
+//
+// The server lists its own tools several times while it starts: to count them,
+// to drop the excluded ones, to learn which survived the read-only and
+// safe-mode passes, to build the gitlab://tools manifest, and to write the
+// server card. Those requests travel the same receiving middlewares a client's
+// do, so metering tools/list charged them to the deployment's own bucket, and
+// on a server started with --rate-limit-burst=1 the second one was refused and
+// the tool manifest resource failed to build. Pass this to the server's
+// [mcp.Server.Connect]: the handler context descends from that one, and no
+// header or parameter a caller controls reaches it.
+//
+// Only the catalog bucket consults the mark, because only listings are asked
+// for this way. A method that reached GitLab would be spending the credential
+// whether the server or a client asked for it, and should still be charged.
+func WithInternalInspection(ctx context.Context) context.Context {
+	return context.WithValue(ctx, inspectionKey{}, true)
+}
+
+// isInternalInspection reports whether ctx carries [WithInternalInspection]'s
+// mark.
+func isInternalInspection(ctx context.Context) bool {
+	marked, _ := ctx.Value(inspectionKey{}).(bool)
+	return marked
 }
 
 // forCompletions returns the looser bucket completion/complete draws on,
@@ -255,15 +360,53 @@ func (r *RateLimiter) forCompletions() *RateLimiter {
 	return r.completion
 }
 
+// forCatalog returns the slower-refilling bucket tools/list draws on, deriving
+// it once per limiter and keeping it.
+//
+// Memoized for the reason [RateLimiter.forCompletions] is: with the bucket
+// resolved per request, a copy built per call would arrive full every time,
+// which is not a slower limit but no limit at all.
+func (r *RateLimiter) forCatalog() *RateLimiter {
+	if r == nil {
+		return nil
+	}
+	r.catalogOnce.Do(func() { r.catalog = r.slowed(catalogDivisor) })
+	return r.catalog
+}
+
+// slowed returns a limiter that refills divisor times more slowly than the
+// receiver and holds the same burst, for a method that arrives far less often
+// than a tool call and costs far more to answer. [catalogDivisor] records why
+// the burst is left alone.
+//
+// A disabled receiver, or a divisor below one, yields nil rather than the
+// receiver. Nil is the disabled bucket the middleware already understands,
+// while handing back the receiver would alias the listing bucket onto the
+// tool-call one, and a drained tool-call bucket would then refuse a client's
+// discovery, which is the one thing this design forbids.
+func (r *RateLimiter) slowed(divisor int) *RateLimiter {
+	if r == nil || r.limiter == nil || divisor < 1 {
+		return nil
+	}
+	return &RateLimiter{
+		limiter:        rate.NewLimiter(r.limiter.Limit()/rate.Limit(divisor), r.limiter.Burst()),
+		throttleWindow: r.throttleWindow,
+	}
+}
+
 // scaled returns a limiter with the same rate and burst multiplied by factor,
 // for a method that legitimately arrives far more often than a tool call.
 // A nil receiver stays nil, which the middleware treats as disabled.
+//
+// The reporting window comes along, so that a window set on a limiter governs
+// every bucket derived from it rather than only the one it was set on.
 func (r *RateLimiter) scaled(factor int) *RateLimiter {
 	if r == nil || r.limiter == nil || factor < 1 {
 		return r
 	}
 	return &RateLimiter{
-		limiter: rate.NewLimiter(r.limiter.Limit()*rate.Limit(factor), r.limiter.Burst()*factor),
+		limiter:        rate.NewLimiter(r.limiter.Limit()*rate.Limit(factor), r.limiter.Burst()*factor),
+		throttleWindow: r.throttleWindow,
 	}
 }
 

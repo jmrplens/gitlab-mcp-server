@@ -3086,7 +3086,7 @@ func TestNewServerShell_RateLimitAndProgressNotifications(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newServerShell: %v", err)
 	}
-	if !logged("tools/call rate limit enabled") {
+	if !logged("rate limit enabled") {
 		t.Error("the rate limit was attached without being announced")
 	}
 
@@ -3100,6 +3100,61 @@ func TestNewServerShell_RateLimitAndProgressNotifications(t *testing.T) {
 			t.Fatal("the client's progress notification was never recorded")
 		}
 		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// TestCreateServer_StartupInspectionIsNotChargedToTheCatalogBucket pins the
+// mark on the hook every startup goes through.
+//
+// Registration speaks MCP to the server it is building: it counts the
+// registered tools, applies the exclusion and visibility passes, filters the
+// meta routes and builds the gitlab://tools manifest, each over an in-memory
+// session that travels the same receiving middlewares a client's requests do.
+// Once tools/list is metered, those listings are charged to the deployment's
+// own bucket unless connectInspectionServer marks them, and on the tightest
+// configuration an operator can pass the second one is refused: the manifest
+// resource then fails to build, before any client has connected, and the
+// server comes up missing gitlab://tools.
+//
+// The equivalent assertion in internal/toolutil covers ListRegisteredTools,
+// which only a read-only or safe-mode startup reaches. This one covers the
+// path every startup takes, so removing the mark from that hook fails here.
+func TestCreateServer_StartupInspectionIsNotChargedToTheCatalogBucket(t *testing.T) {
+	logged := captureLogMessages(t)
+	client := newMockGitLabClient(t)
+
+	// The tightest limit the flags allow: one token per bucket, refilled once
+	// per thousand seconds. createServer rather than mustCreateServer, whose
+	// cache key does not carry the rate limit and would hand back a server
+	// built without one.
+	server, err := createServer(t.Context(), client, &config.ServerConfig{
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+		RateLimitRPS:      0.001,
+		RateLimitBurst:    1,
+	})
+	if err != nil {
+		t.Fatalf("createServer() error: %v", err)
+	}
+	for _, message := range []string{
+		"failed to build tool manifest resource",
+		"failed to count registered tools",
+		"failed to filter meta-schema routes to visible tools",
+	} {
+		t.Run(message, func(t *testing.T) {
+			if logged(message) {
+				t.Errorf("startup logged %q; its own listings are being charged to the catalog bucket", message)
+			}
+		})
+	}
+
+	session := newInMemorySession(t, server)
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"})
+	if err != nil {
+		t.Fatalf("read gitlab://tools: %v", err)
+	}
+	if len(result.Contents) == 0 || !strings.Contains(result.Contents[0].Text, "entries") {
+		t.Error("gitlab://tools came back empty, so the manifest was built from a refused listing")
 	}
 }
 

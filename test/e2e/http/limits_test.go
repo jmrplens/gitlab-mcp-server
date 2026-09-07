@@ -322,7 +322,7 @@ func TestLimit_RateLimitRPS(t *testing.T) {
 		// The claim the previous version of this case got wrong. Asserted from
 		// the server's own startup line, because fifteen served calls are
 		// equally consistent with a limiter of ten and with no limiter at all.
-		if awaitLog(t, srv, "tools/call rate limit enabled") == "" {
+		if awaitLog(t, srv, "rate limit enabled") == "" {
 			t.Errorf("HTTP mode started with no rate limit; the default is 10 rps, burst 40:\n%s", srv.logs())
 		}
 	})
@@ -388,6 +388,64 @@ func TestLimit_RateLimitCoversTheSubscriptionMethods(t *testing.T) {
 				t.Errorf("the refusal does not name %s: %s", tc.method, truncate(got.body))
 			}
 		})
+	}
+}
+
+// TestLimit_RateLimitMetersTheCatalogListing verifies on the wire that
+// tools/list draws on a bucket of its own: an empty tool-call bucket answers a
+// listing anyway, and a client listing in a loop is refused with the code that
+// mirrors HTTP 429.
+//
+// This one is charged for a reason none of the other metered methods share. It
+// reaches no GitLab at all. It marshals the whole catalog, about 3.2 MB on the
+// individual surface, which is the majority of that surface's processor time,
+// so in a process serving many tenants one of them listing in a loop spends the
+// processor the others are waiting for.
+//
+// Both halves have to be asserted here rather than in a unit test. The unit
+// test drives a server it builds itself; this one drives the binary with the
+// flags an operator passes, which is where the burst of one that the divided
+// bucket has to survive comes from.
+func TestLimit_RateLimitMetersTheCatalogListing(t *testing.T) {
+	gitlab := acceptingGitLab(t)
+	srv := startServer(t, nil,
+		"--gitlab-url="+gitlab.url,
+		"--rate-limit-rps=0.001",
+		"--rate-limit-burst=1",
+	)
+
+	// One token in each bucket and a refill of one per thousand seconds, so
+	// whichever bucket is emptied here stays empty for the rest of the test.
+	var drained bool
+	for range 15 {
+		if strings.Contains(strings.ToLower(rateLimitedCall(t, srv).body), "rate limit") {
+			drained = true
+			break
+		}
+	}
+	if !drained {
+		t.Fatal("15 tool calls against a bucket of one that does not refill were never limited")
+	}
+
+	// Discovery is still answered with the tool-call bucket empty. That is the
+	// property the exemption used to provide, and the separate bucket keeps it.
+	if body := listTools(t, srv); countTools(body) == 0 {
+		t.Fatalf("a listing was refused by the bucket the tool calls emptied: %s", truncate(body))
+	}
+
+	// And the listing bucket is a bucket: the next listing finds it empty.
+	got := srv.do(t, request{
+		method: http.MethodPost, path: "/mcp", body: toolsListBody,
+		headers: map[string]string{
+			"PRIVATE-TOKEN": "glpat-x",
+			"Mcp-Method":    "tools/list",
+		},
+	})
+	if !strings.Contains(got.body, "-42900") || !strings.Contains(strings.ToLower(got.body), "rate limit") {
+		t.Fatalf("a second listing against an empty catalog bucket was not refused (status %d): %s", got.status, truncate(got.body))
+	}
+	if !strings.Contains(got.body, "tools/list") {
+		t.Errorf("the refusal does not name tools/list: %s", truncate(got.body))
 	}
 }
 
