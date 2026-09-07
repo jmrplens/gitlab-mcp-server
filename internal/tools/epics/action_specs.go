@@ -68,8 +68,11 @@ func epicDeleteSpec(name string, route toolutil.ActionRoute, individualTool stri
 }
 
 // epicListEnumOverrides constrains the fixed-vocabulary filter fields on the
-// epic list action. state and order_by are accepted by both the REST epics
-// endpoint and the Work Items API path (IssuableState / WorkItemSort).
+// epic list action. state is accepted by both the REST epics endpoint and the
+// Work Items API path. order_by is published in the REST endpoint's spelling
+// on both, because the Work Items query takes the order_by and sort pair as a
+// single WorkItemSort value that [workItemsSort] assembles; publishing that
+// enum instead would leave the REST path with a vocabulary it refuses.
 //
 // The wildcard and searchable-field vocabularies are published because a
 // GraphQL enum coercion failure arrives as HTTP 200 carrying a GraphQL error,
@@ -79,8 +82,9 @@ func epicDeleteSpec(name string, route toolutil.ActionRoute, individualTool stri
 // the upper-case wildcards ANY and NONE beside the lower-camel values.
 //
 // The four new date filters take their format here rather than from
-// toolutil's canonical map, which knows created_after/created_before and
-// updated_after/updated_before only. All eight parse through
+// toolutil's canonical map, which carries the created, updated, last_used,
+// last_activity, started, finished, deployed and expires pairs and none of
+// these four. All eight parse through
 // toolutil.ParseOptionalTime, which accepts RFC 3339 and silently ignores
 // anything else, so the schema has to say date-time for all eight or the four
 // new ones read as free text beside four siblings that do not.

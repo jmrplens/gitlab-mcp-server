@@ -128,8 +128,8 @@ type ListInput struct {
 	HealthStatusFilter  string   `json:"health_status_filter,omitempty" tier:"ultimate" jsonschema:"Filter by health status: onTrack, needsAttention, atRisk, or the wildcards ANY and NONE"`
 	Weight              string   `json:"weight,omitempty" tier:"premium" jsonschema:"Filter by weight, as a decimal string (e.g. \"5\")"`
 	WeightWildcardID    string   `json:"weight_wildcard_id,omitempty" tier:"premium" jsonschema:"Filter by whether a weight is set rather than by its value: ANY or NONE"`
-	OrderBy             string   `json:"order_by,omitempty" jsonschema:"Order epics by field (created_at, updated_at, title). Accepted by the REST epics endpoint only, so it is dropped when another filter routes the request through the Work Items API, where sort is the equivalent"`
-	Sort                string   `json:"sort,omitempty" jsonschema:"Sort order (asc or desc)"`
+	OrderBy             string   `json:"order_by,omitempty" jsonschema:"Order epics by field (created_at, updated_at, title). Defaults to created_at"`
+	Sort                string   `json:"sort,omitempty" jsonschema:"Sort order (asc or desc). Defaults to desc"`
 	CreatedAfter        string   `json:"created_after,omitempty" jsonschema:"Return epics created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
 	CreatedBefore       string   `json:"created_before,omitempty" jsonschema:"Return epics created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
 	UpdatedAfter        string   `json:"updated_after,omitempty" jsonschema:"Return epics updated on or after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
@@ -159,6 +159,10 @@ func usesWorkItemsPath(in ListInput) bool {
 
 // namesWorkItemsIdentity covers the filters that name epics, people or a page
 // position outright.
+//
+// author_username and confidential are here although GitLab's REST epics
+// endpoint documents both: client-go's ListGroupEpicsOptions declares neither,
+// so the Work Items query is the only way either one reaches GitLab from here.
 func namesWorkItemsIdentity(in ListInput) bool {
 	return in.AuthorUsername != "" || in.Confidential != nil ||
 		in.After != "" || in.Before != "" || in.Last != nil ||
@@ -176,6 +180,70 @@ func namesWorkItemsAttribute(in ListInput) bool {
 		in.HealthStatusFilter != "" ||
 		in.Weight != "" || in.WeightWildcardID != "" ||
 		in.Subscribed != ""
+}
+
+// The two directions order_by and sort accept, spelled the way the REST epics
+// endpoint spells them and the way this action publishes them.
+const (
+	sortAscending  = "asc"
+	sortDescending = "desc"
+)
+
+// epicOrderByFields maps the order_by vocabulary this action publishes onto
+// the field half of a WorkItemSort value.
+//
+// The REST endpoint takes the ordering as two parameters and the Work Items
+// query takes it as one enum, so the pair is translated here rather than at
+// either call site.
+var epicOrderByFields = map[string]string{
+	"created_at": "CREATED",
+	"updated_at": "UPDATED",
+	"title":      "TITLE",
+}
+
+// validateListOrdering refuses an ordering value outside the published
+// vocabulary before either API is asked for a page.
+//
+// Neither path diagnoses one on its own. The REST endpoint answers 400 naming
+// a parameter, and the Work Items query answers HTTP 200 carrying a GraphQL
+// coercion error, which the status-keyed hint on this handler never fires for.
+func validateListOrdering(input ListInput) error {
+	if input.OrderBy != "" {
+		if _, ok := epicOrderByFields[input.OrderBy]; !ok {
+			return fmt.Errorf("epicList: order_by must be created_at, updated_at or title, got %q", input.OrderBy)
+		}
+	}
+	switch input.Sort {
+	case "", sortAscending, sortDescending:
+		return nil
+	default:
+		return fmt.Errorf("epicList: sort must be %s or %s, got %q", sortAscending, sortDescending, input.Sort)
+	}
+}
+
+// workItemsSort renders the order_by and sort pair as the single WorkItemSort
+// value the Work Items query takes.
+//
+// The vocabulary this action publishes for sort is the REST endpoint's (asc,
+// desc), and WorkItemSort has neither member: forwarding it verbatim asked
+// GitLab to coerce "desc" into an enum of CREATED_DESC, TITLE_ASC and the
+// rest, so no value of sort was valid on both the schema and this path. An
+// omitted half falls back to what the REST endpoint defaults to, created_at
+// descending, so the two paths order a page the same way.
+func workItemsSort(orderBy, sort string) *string {
+	if orderBy == "" && sort == "" {
+		return nil
+	}
+	field, ok := epicOrderByFields[orderBy]
+	if !ok {
+		field = epicOrderByFields["created_at"]
+	}
+	direction := "DESC"
+	if sort == sortAscending {
+		direction = "ASC"
+	}
+	value := field + "_" + direction
+	return &value
 }
 
 // GetInput defines parameters for getting a single epic.
@@ -562,6 +630,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.FullPath == "" {
 		return ListOutput{}, errors.New("epicList: full_path is required. Use gitlab_group_list to find the group path first")
 	}
+	if err := validateListOrdering(input); err != nil {
+		return ListOutput{}, err
+	}
 	if usesWorkItemsPath(input) {
 		return listWithWorkItems(ctx, client, input)
 	}
@@ -716,9 +787,7 @@ func applyWorkItemsAttributeFilters(opts *gl.ListWorkItemsOptions, input ListInp
 	if input.Subscribed != "" {
 		opts.Subscribed = &input.Subscribed
 	}
-	if input.Sort != "" {
-		opts.Sort = &input.Sort
-	}
+	opts.Sort = workItemsSort(input.OrderBy, input.Sort)
 	if input.IncludeAncestors != nil {
 		opts.IncludeAncestors = input.IncludeAncestors
 	}

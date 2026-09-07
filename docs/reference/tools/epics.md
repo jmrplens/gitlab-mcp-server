@@ -56,7 +56,7 @@ List epics for a GitLab group. Filters by state, search text (with `in` choosing
 | Annotation | **Read** |
 | ---------- | -------- |
 
-> **Two APIs answer this action.** A request naming only what the REST epics endpoint accepts is served by it and reports `offset_pagination` (page numbers). Any filter only the Work Items GraphQL query can express routes the whole request through that query instead, and it reports `pagination` (cursors). Exactly one block comes back, which is how a caller knows which answered. `author_id`, `order_by` and `with_labels_details` are REST-only and are dropped when another filter takes the Work Items path; use `author_username` and `sort` there.
+> **Two APIs answer this action.** A request naming only what the REST epics endpoint accepts is served by it and reports `offset_pagination` (page numbers). Any filter only the Work Items GraphQL query can express routes the whole request through that query instead, and it reports `pagination` (cursors). Exactly one block comes back, which is how a caller knows which answered. `order_by` and `sort` apply on either path: the Work Items query takes the pair as one value and the server assembles it. `author_id` and `with_labels_details` are REST-only and are dropped when another filter takes the Work Items path; use `author_username` there.
 
 ### `gitlab_epic_get`
 

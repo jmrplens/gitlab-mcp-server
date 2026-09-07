@@ -196,7 +196,7 @@ func TestList_RESTFilterOptions(t *testing.T) {
 		LabelName:          []string{"urgent"},
 		MyReactionEmoji:    "thumbsup",
 		OrderBy:            "created_at",
-		Sort:               "created_desc",
+		Sort:               "desc",
 		CreatedAfter:       "2026-01-01T00:00:00Z",
 		CreatedBefore:      "2026-12-31T23:59:59Z",
 		UpdatedAfter:       "2026-02-01T00:00:00Z",
@@ -955,7 +955,8 @@ func everyWorkItemsFilter() ListInput {
 		HealthStatusFilter:  "onTrack",
 		Weight:              "5",
 		WeightWildcardID:    "ANY",
-		Sort:                "CREATED_DESC",
+		OrderBy:             "created_at",
+		Sort:                sortDescending,
 		CreatedAfter:        "2026-01-01T00:00:00Z",
 		CreatedBefore:       "2026-12-31T23:59:59Z",
 		UpdatedAfter:        "2026-02-01T00:00:00Z",
@@ -968,6 +969,80 @@ func everyWorkItemsFilter() ListInput {
 		IncludeDescendants:  &boolTrue,
 		First:               &first,
 		After:               "abc123",
+	}
+}
+
+// TestList_WorkItemsPath_TranslatesTheOrderingPair verifies the order_by and
+// sort pair reaches the Work Items query as one WorkItemSort value.
+//
+// The served schema publishes the REST endpoint's vocabulary for sort (asc,
+// desc) and WorkItemSort carries neither member, so forwarding it verbatim
+// left no value of sort valid on both the schema and this path. The schema
+// gate in the test transport is half the assertion here: it coerces the
+// variable against WorkItemSort and refuses "desc".
+func TestList_WorkItemsPath_TranslatesTheOrderingPair(t *testing.T) {
+	cases := []struct {
+		name    string
+		orderBy string
+		sort    string
+		want    string
+	}{
+		{"created_at descending", "created_at", sortDescending, "CREATED_DESC"},
+		{"created_at ascending", "created_at", sortAscending, "CREATED_ASC"},
+		{"updated_at ascending", "updated_at", sortAscending, "UPDATED_ASC"},
+		{"title descending", "title", sortDescending, "TITLE_DESC"},
+		{"order_by alone defaults to descending", "title", "", "TITLE_DESC"},
+		{"sort alone defaults to created_at", "", sortAscending, "CREATED_ASC"},
+		{"neither sends no ordering", "", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				vars, err := testutil.ParseGraphQLVariables(r)
+				if err != nil {
+					t.Errorf("ParseGraphQLVariables: %v", err)
+					http.Error(w, "ParseGraphQLVariables", http.StatusInternalServerError)
+					return
+				}
+				got, ok := vars["sort"]
+				switch {
+				case tc.want == "" && ok:
+					t.Errorf("sort = %v, want no sort variable at all", got)
+				case tc.want != "" && got != tc.want:
+					t.Errorf("sort = %v, want %q", got, tc.want)
+				}
+				testutil.RespondJSON(w, http.StatusOK, listResponseJSON)
+			}))
+			input := ListInput{FullPath: testFullPath, AuthorUsername: "alice", OrderBy: tc.orderBy, Sort: tc.sort}
+			if _, err := List(t.Context(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestList_OrderingOutsideTheVocabulary_IsRefused verifies an ordering value
+// the published enums do not carry is refused here rather than sent.
+//
+// Neither path reports one usefully: the REST endpoint answers 400 about a
+// parameter and the Work Items query answers HTTP 200 carrying a GraphQL
+// coercion error, which the status-keyed hint on this handler never sees.
+func TestList_OrderingOutsideTheVocabulary_IsRefused(t *testing.T) {
+	cases := []struct {
+		name  string
+		input ListInput
+	}{
+		{"order_by GitLab does not accept", ListInput{FullPath: testFullPath, OrderBy: "weight"}},
+		{"sort spelled as a WorkItemSort value", ListInput{FullPath: testFullPath, Sort: "CREATED_DESC"}},
+		{"invalid ordering on the work items path", ListInput{FullPath: testFullPath, AuthorUsername: "alice", Sort: "newest"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			if _, err := List(t.Context(), client, tc.input); err == nil {
+				t.Fatal("List() accepted an ordering value outside the published vocabulary")
+			}
+		})
 	}
 }
 
