@@ -103,9 +103,12 @@ func TestClientGoDir_AnImportGraph_IsResolvedToTheModuleRoot(t *testing.T) {
 		want    string
 	}{
 		{
+			// The fixture is spelled the way the host spells a path, since the
+			// answer comes back through filepath.Dir and Windows separates with
+			// a backslash.
 			name:    "the root, among its siblings",
-			imports: map[string]*packages.Package{rootPath: clientGoPackage(t, rootPath, []string{"/cache/client-go/projects.go"})},
-			want:    "/cache/client-go",
+			imports: map[string]*packages.Package{rootPath: clientGoPackage(t, rootPath, []string{filepath.FromSlash("/cache/client-go/projects.go")})},
+			want:    filepath.FromSlash("/cache/client-go"),
 		},
 		{name: "no imports at all"},
 		{
