@@ -126,8 +126,8 @@ ordinary pass: the CE and EE halves of the suite exclude each other, so one
 run sees one half and never the other). Between the day the first
 `_ee_test.go` was written and that change, nothing had compiled those 41 files
 except a person running `make test-e2e-docker-enterprise` by hand, which is
-how nineteen helpers and four constants only CE tests use came to be unused
-under the Enterprise tag without anyone knowing.
+how nineteen helpers and four constants used only by CE tests came to be
+unused under the Enterprise tag without anyone knowing.
 
 The licensed run is still where the behaviour is checked, and that is
 unchanged. What changed is that the code it compiles is known to compile, and
