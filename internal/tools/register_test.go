@@ -3020,10 +3020,29 @@ func buildSnapshots(t *testing.T, tools []*mcp.Tool) []toolSnapshot {
 	return snaps
 }
 
+// snapshotParityEnv is the harness setting that defers the golden comparison.
+// CI sets it to "deferred" on a stacked pull request, one whose base is another
+// feature branch, because the generated artifacts are refreshed once at the top
+// of a stack and every layer below would fail on drift the top overwrites; on
+// a pull request to main and on a push to main the comparison runs. Test-only,
+// like GITLAB_MCP_TEST_INVENTORY_DIR, and read by nothing in the server.
+const snapshotParityEnv = "GITLAB_MCP_TEST_SNAPSHOT_PARITY"
+
+// skipDeferredSnapshotParity skips the calling test when the harness defers
+// golden comparisons, and says why, so a reader of the log knows the artifact
+// is checked where it lands rather than never.
+func skipDeferredSnapshotParity(t *testing.T) {
+	t.Helper()
+	if os.Getenv(snapshotParityEnv) == "deferred" {
+		t.Skip("snapshot parity is deferred on a stacked pull request: the generated artifacts are refreshed once at the top of the stack and compared on the pull request to main")
+	}
+}
+
 // compareOrUpdate either updates the golden file or compares current
 // output against it, reporting a clear diff on mismatch.
 func compareOrUpdate(t *testing.T, goldenPath string, current []toolSnapshot) {
 	t.Helper()
+	skipDeferredSnapshotParity(t)
 
 	got, err := json.MarshalIndent(current, "", "  ")
 	if err != nil {
@@ -3069,6 +3088,41 @@ func compareOrUpdate(t *testing.T, goldenPath string, current []toolSnapshot) {
 			"This happens when serialization changes without changing meaning — for example a dependency dropping omitempty, so a field that was omitted is now written as an explicit zero value.\n\n"+
 			"Run with UPDATE_TOOLSNAPS=true to update golden files.", goldenPath)
 	}
+}
+
+// TestSkipDeferredSnapshotParity_DefersOnlyWhenAsked verifies the harness
+// switch in both directions: with the variable set, a comparison is skipped
+// before it reads the golden file, which a missing file would otherwise turn
+// into a failure; without it, the helper lets the comparison run, which every
+// other test in this file then proves.
+func TestSkipDeferredSnapshotParity_DefersOnlyWhenAsked(t *testing.T) {
+	var skipped bool
+	t.Run("deferred", func(t *testing.T) {
+		t.Setenv(snapshotParityEnv, "deferred")
+		defer func() { skipped = t.Skipped() }()
+		compareOrUpdate(t, filepath.Join(t.TempDir(), "never-written.json"), nil)
+	})
+	if !skipped {
+		t.Error("compareOrUpdate() read a golden file the harness asked it to leave alone")
+	}
+
+	skipped = false
+	t.Run("deferred projection", func(t *testing.T) {
+		t.Setenv(snapshotParityEnv, "deferred")
+		defer func() { skipped = t.Skipped() }()
+		compareSnapshotSlices(t, filepath.Join(t.TempDir(), "never-written.json"), nil, []toolSnapshot{{Name: "only-on-one-side"}})
+	})
+	if !skipped {
+		t.Error("compareSnapshotSlices() compared what the harness asked it to leave alone")
+	}
+
+	t.Run("checked", func(t *testing.T) {
+		t.Setenv(snapshotParityEnv, "")
+		skipDeferredSnapshotParity(t)
+		if t.Skipped() {
+			t.Error("skipDeferredSnapshotParity() skipped without being asked to")
+		}
+	})
 }
 
 // snapshotComparison classifies how a golden file relates to the freshly
