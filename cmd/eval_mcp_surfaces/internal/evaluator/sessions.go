@@ -420,6 +420,16 @@ func evalServerConfig(client *gitlabclient.Client, serverMode string) *config.Se
 	}
 }
 
+// Test seams, the pair cmd/server keeps for the same two assemblers. Neither
+// can fail from any input the evaluator takes: both assemble the ActionSpecs
+// compiled into this binary, and the filter they apply adds groups the base
+// catalog already validated. The branches reporting their failure exist for
+// the day one of those facts changes, and would otherwise never run.
+var (
+	buildDynamicCatalog = dynamiccatalog.Build    //nolint:gochecknoglobals // test seam
+	sharedMetaCatalog   = tools.SharedMetaCatalog //nolint:gochecknoglobals // test seam
+)
+
 // buildCatalogSession constructs the request parameters from the input.
 func buildCatalogSession(client *gitlabclient.Client, toolSurface, serverMode string) (session *mcp.ClientSession, closeSession func(), mcpTools []*mcp.Tool, routes map[string]toolutil.ActionMap, err error) {
 	completionHandler := completions.NewHandler(client)
@@ -450,7 +460,7 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface, serverMode st
 		// any other. Assembling an equivalent catalog here was what the e2e
 		// suite did before this package existed, and a test that builds its
 		// own copy of the thing under test is testing the copy.
-		actionCatalog, withheld, catalogErr := dynamiccatalog.Build(client, cfg)
+		actionCatalog, withheld, catalogErr := buildDynamicCatalog(client, cfg)
 		if catalogErr != nil {
 			return nil, nil, nil, nil, fmt.Errorf(errBuildActionCatalog, catalogErr)
 		}
@@ -462,7 +472,7 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface, serverMode st
 			dynamictools.WithWithheldActions(withheld.ByTokenScope, withheld.ByOperator))
 		routes = dynamicValidationRoutes(actionCatalog.ActionMaps())
 	case config.ToolSurfaceMeta:
-		filteredCatalog, _, catalogErr := tools.SharedMetaCatalog(client, cfg)
+		filteredCatalog, _, catalogErr := sharedMetaCatalog(client, cfg)
 		if catalogErr != nil {
 			return nil, nil, nil, nil, fmt.Errorf(errBuildActionCatalog, catalogErr)
 		}
