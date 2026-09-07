@@ -17,6 +17,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobtokenscope"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestMeta_JobTokenScope exercises job token scope actions via gitlab_job.
@@ -50,7 +51,9 @@ func TestMeta_JobTokenScope(t *testing.T) {
 	}()
 
 	t.Run("TokenScopePatch", func(t *testing.T) {
-		out, err := callToolOn[jobtokenscope.AccessSettingsOutput](ctx, sess.meta, "gitlab_job", map[string]any{
+		// The action answers with a status rather than the settings it wrote,
+		// so the effect has to be read back rather than taken from the reply.
+		out, err := callToolOn[toolutil.DeleteOutput](ctx, sess.meta, "gitlab_job", map[string]any{
 			"action": "token_scope_patch",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
@@ -58,7 +61,15 @@ func TestMeta_JobTokenScope(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "token_scope_patch")
-		t.Logf("Token scope patched: inbound_enabled=%v", out.InboundEnabled)
+		requireTruef(t, out.Status == "updated", "token_scope_patch status = %q, want %q", out.Status, "updated")
+
+		settings, err := callToolOn[jobtokenscope.AccessSettingsOutput](ctx, sess.meta, "gitlab_job", map[string]any{
+			"action": "token_scope_get",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		})
+		requireNoError(t, err, "token_scope_get after patch")
+		requireTruef(t, settings.InboundEnabled, "inbound_enabled = false after asking for true")
+		t.Logf("Token scope patched and read back: inbound_enabled=%v", settings.InboundEnabled)
 	})
 
 	t.Run("TokenScopeListInbound", func(t *testing.T) {

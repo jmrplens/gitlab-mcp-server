@@ -155,6 +155,21 @@ func TestMeta_GroupServiceAccounts(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "service_account_pat_revoke")
+			requireNotListedOn(ctx, t, sess.meta, "active service account PATs after revoke", "gitlab_group", map[string]any{
+				"action": "service_account_pat_list",
+				"params": map[string]any{
+					"group_id":           groupIDStr,
+					"service_account_id": saID,
+				},
+			}, func(out groupserviceaccounts.ListPATOutput) []int64 {
+				ids := make([]int64, 0, len(out.Tokens))
+				for _, tok := range out.Tokens {
+					if tok.Active && !tok.Revoked {
+						ids = append(ids, tok.ID)
+					}
+				}
+				return ids
+			}, patID)
 			t.Logf("Revoked PAT %d", patID)
 		})
 
@@ -170,6 +185,8 @@ func TestMeta_GroupServiceAccounts(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "service_account_delete")
+			// A hard delete schedules the user's removal rather than performing
+			// it, so the account can still be listed for a while afterwards.
 			t.Logf("Deleted service account %d", saID)
 		})
 	}

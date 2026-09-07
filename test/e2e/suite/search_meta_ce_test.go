@@ -7,9 +7,12 @@ package suite
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/search"
 )
 
@@ -71,6 +74,12 @@ func TestMeta_SearchExtended(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "search commits")
+		// The fixture's own commit message carries this word, and project commit
+		// search reads the repository through Gitaly rather than an index, so
+		// the match needs nothing beyond the commit existing.
+		requireTruef(t, slices.ContainsFunc(out.Commits, func(c commits.Output) bool {
+			return strings.Contains(c.Title, "searchable") || strings.Contains(c.Message, "searchable")
+		}), "commit search did not return the fixture's own commit: %+v", out.Commits)
 		t.Logf("Search commits: %d results", len(out.Commits))
 	})
 
@@ -110,13 +119,18 @@ func TestMeta_SearchExtended(t *testing.T) {
 	})
 
 	t.Run("SearchUsers", func(t *testing.T) {
+		// Search for the account this run authenticates as: it certainly exists,
+		// where the instance's other users are not this fixture's to assume.
 		out, err := callToolOn[search.UsersOutput](ctx, sess.meta, "gitlab_search", map[string]any{
 			"action": "users",
 			"params": map[string]any{
-				"query": "root",
+				"query": sess.username,
 			},
 		})
 		requireNoError(t, err, "search users")
+		requireTruef(t, slices.ContainsFunc(out.Users, func(u search.UserOutput) bool {
+			return u.Username == sess.username
+		}), "user search for %q did not return that account: %+v", sess.username, out.Users)
 		t.Logf("Search users: %d results", len(out.Users))
 	})
 

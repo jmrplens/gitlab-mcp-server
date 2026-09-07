@@ -94,6 +94,9 @@ func TestIndividual_MRDraftNotes(t *testing.T) {
 			NoteID:    deleteNoteID,
 		})
 		requireNoError(t, err, "delete draft note")
+		requireNotListedOn(ctx, t, sess.individual, "MR draft notes after delete", "gitlab_mr_draft_note_list",
+			mrdraftnotes.ListInput{ProjectID: proj.pidOf(), MRIID: mr.IID},
+			draftNoteIDs, deleteNoteID)
 		t.Logf("Deleted draft note %d", deleteNoteID)
 	})
 
@@ -205,6 +208,13 @@ func TestMeta_MRDraftNotes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "delete draft note meta")
+		requireNotListedOn(ctx, t, sess.meta, "MR draft notes after delete", "gitlab_mr_review", map[string]any{
+			"action": "draft_note_list",
+			"params": map[string]any{
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+			},
+		}, draftNoteIDs, deleteNoteID)
 		t.Logf("Deleted draft note (meta) %d", deleteNoteID)
 	})
 

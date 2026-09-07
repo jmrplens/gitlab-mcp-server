@@ -122,6 +122,16 @@ func TestMeta_GroupBoardListColumns(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group_board_delete_list")
+		requireNotListedOn(ctx, t, sess.meta, "group board lists after delete", "gitlab_group", map[string]any{
+			"action": "group_board_list_lists",
+			"params": map[string]any{"group_id": grp.gidStr(), "board_id": boardID},
+		}, func(out groupboards.ListBoardListsOutput) []int64 {
+			ids := make([]int64, 0, len(out.Lists))
+			for _, l := range out.Lists {
+				ids = append(ids, l.ID)
+			}
+			return ids
+		}, listID)
 		t.Logf("Deleted board list %d", listID)
 	})
 }

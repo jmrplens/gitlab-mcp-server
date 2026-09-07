@@ -86,6 +86,10 @@ func TestMeta_ProtectedTags(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "unprotect tag")
+		requireGoneOn(ctx, t, sess.meta, "protected tag after unprotect", "gitlab_tag", map[string]any{
+			"action": "get_protected",
+			"params": map[string]any{"project_id": proj.pidStr(), "tag_name": tagName},
+		})
 		t.Logf("Unprotected tag %q", tagName)
 	})
 }

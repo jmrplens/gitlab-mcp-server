@@ -7,6 +7,7 @@ package suite
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrchanges"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrdraftnotes"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrnotes"
 )
 
 // TestMeta_MRReviewChanges exercises changes_get, diff_versions_list, and
@@ -60,11 +62,19 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 	mrIID := strconv.FormatInt(mrOut.IID, 10)
 
 	t.Run("ChangesGet", func(t *testing.T) {
+		// GitLab reports no changes while it is still preparing the diff, so the
+		// wait has to happen before the assertion rather than in the sibling
+		// subtest that already does it.
+		waitForMRReady(ctx, t, sess.glClient, proj.ID, mrOut.IID)
 		out, err := callToolOn[mrchanges.Output](ctx, sess.meta, "gitlab_mr_review", map[string]any{
 			"action": "changes_get",
 			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "changes_get")
+		// The source branch adds exactly one file over the target.
+		requireTruef(t, slices.ContainsFunc(out.Changes, func(c mrchanges.FileDiffOutput) bool {
+			return c.NewPath == "new.txt"
+		}), "changes do not include the file the branch added: %+v", out.Changes)
 		t.Logf("Changes: %d files, truncated: %d", len(out.Changes), len(out.TruncatedFiles))
 	})
 
@@ -245,5 +255,27 @@ func TestMeta_DraftNotePublish(t *testing.T) {
 		},
 	})
 	requireNoError(t, err, "draft_note_publish")
+	// Publishing moves the draft out of the draft list and into the merge
+	// request's notes, so both halves are observable.
+	requireNotListedOn(ctx, t, sess.meta, "MR draft notes after publish", "gitlab_mr_review", map[string]any{
+		"action": "draft_note_list",
+		"params": map[string]any{
+			"project_id":        proj.pidStr(),
+			"merge_request_iid": mrIID,
+		},
+	}, draftNoteIDs, draftOut.ID)
+	requireListedOn(ctx, t, sess.meta, "MR notes after publish", "gitlab_mr_review", map[string]any{
+		"action": "note_list",
+		"params": map[string]any{
+			"project_id":        proj.pidStr(),
+			"merge_request_iid": mrIID,
+		},
+	}, func(list mrnotes.ListOutput) []string {
+		bodies := make([]string, 0, len(list.Notes))
+		for _, n := range list.Notes {
+			bodies = append(bodies, n.Body)
+		}
+		return bodies
+	}, "Draft to publish individually")
 	t.Logf("Published draft note %s", draftID)
 }

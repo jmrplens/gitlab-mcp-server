@@ -89,6 +89,8 @@ func TestIndividual_Snippets(t *testing.T) {
 			SnippetID: snippetID,
 		})
 		requireNoError(t, err, "delete snippet")
+		requireGoneOn(ctx, t, sess.individual, "snippet after delete", "gitlab_snippet_get",
+			snippets.GetInput{SnippetID: snippetID})
 		t.Log("Deleted snippet")
 	})
 }
@@ -177,6 +179,10 @@ func TestMeta_Snippets(t *testing.T) {
 			"params": map[string]any{"snippet_id": snippetID},
 		})
 		requireNoError(t, err, "meta delete snippet")
+		requireGoneOn(ctx, t, sess.meta, "snippet after delete", "gitlab_snippet", map[string]any{
+			"action": "get",
+			"params": map[string]any{"snippet_id": snippetID},
+		})
 		t.Log("Deleted snippet via meta-tool")
 	})
 }

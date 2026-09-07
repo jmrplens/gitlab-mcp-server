@@ -89,6 +89,10 @@ func TestMeta_CIVariablesInstance(t *testing.T) {
 			"params": map[string]any{"key": varKey},
 		})
 		requireNoError(t, err, "instance variable delete")
+		requireGoneOn(ctx, t, sess.meta, "instance variable "+varKey+" after delete", "gitlab_ci_variable", map[string]any{
+			"action": "instance_get",
+			"params": map[string]any{"key": varKey},
+		})
 		t.Logf("Deleted instance variable %s", varKey)
 	})
 }

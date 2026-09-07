@@ -41,6 +41,9 @@ func TestMeta_Notifications(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "project notification get")
+			// The project was created moments ago and carries no per-project
+			// override, so GitLab reports it as following the account default.
+			requireTruef(t, out.Level == "global", "fresh project notification level = %q, want %q", out.Level, "global")
 			t.Logf("Project notification level: %s", out.Level)
 		})
 	})

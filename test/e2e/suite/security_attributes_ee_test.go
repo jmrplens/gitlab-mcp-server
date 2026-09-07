@@ -115,6 +115,8 @@ func TestMeta_SecurityAttributes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "security_attribute_delete")
+		// The catalog exposes no read for security attributes, so the removal
+		// has nothing to be observed through.
 		t.Logf("Deleted security attribute %d", attributeID)
 	})
 
@@ -127,6 +129,8 @@ func TestMeta_SecurityAttributes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "teardown category")
+		// Security categories have no read either, so this teardown is as
+		// unobservable as the attribute delete above.
 		t.Logf("Tore down category %d", categoryID)
 	})
 }
