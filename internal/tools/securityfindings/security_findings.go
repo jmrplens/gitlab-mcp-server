@@ -183,6 +183,15 @@ func lineNumber(s string) int {
 	return n
 }
 
+// lowercased spells filter values the way GitLab's finder looks them up.
+func lowercased(values []string) []string {
+	out := make([]string, len(values))
+	for i, v := range values {
+		out[i] = strings.ToLower(strings.TrimSpace(v))
+	}
+	return out
+}
+
 // gqlVulnerabilityRef holds a reference to a vulnerability.
 type gqlVulnerabilityRef struct {
 	ID    string `json:"id"`
@@ -325,14 +334,19 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 			"pipelineIID": input.PipelineIID,
 		},
 	)
+	// severity and reportType are plain String arguments on this field, not
+	// the enums the vulnerability queries take, and GitLab looks the values up
+	// in its own lowercase enums (Security::Finding.severities.fetch_values,
+	// Security::Scan.by_scan_types): CRITICAL or SAST as spelled everywhere
+	// else in this server is a KeyError there and comes back as a 500.
 	if len(input.Severity) > 0 {
-		vars["severity"] = input.Severity
+		vars["severity"] = lowercased(input.Severity)
 	}
 	if len(input.Scanner) > 0 {
 		vars["scanner"] = input.Scanner
 	}
 	if len(input.ReportType) > 0 {
-		vars["reportType"] = input.ReportType
+		vars["reportType"] = lowercased(input.ReportType)
 	}
 	if len(input.State) > 0 {
 		vars["state"] = input.State

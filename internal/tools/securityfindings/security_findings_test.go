@@ -179,6 +179,7 @@ func TestList_WithFilters(t *testing.T) {
 					}
 				})
 			}
+			assertLowercasedOnTheWire(t, vars)
 			testutil.RespondGraphQL(w, http.StatusOK, `{
 				"project": {
 					"pipeline": {
@@ -207,6 +208,34 @@ func TestList_WithFilters(t *testing.T) {
 	}
 	if len(out.Findings) != 0 {
 		t.Errorf("expected 0 findings, got %d", len(out.Findings))
+	}
+}
+
+// assertLowercasedOnTheWire pins that severity and reportType reach GitLab in
+// lowercase: they are String arguments GitLab looks up in its own lowercase
+// enums, and the licensed run met a 500 for CRITICAL and SAST. It runs on the
+// mock's goroutine, so it reports and never aborts.
+func assertLowercasedOnTheWire(t *testing.T, vars map[string]any) {
+	t.Helper()
+	for _, tc := range []struct {
+		key  string
+		want []string
+	}{
+		{key: "severity", want: []string{"high", "critical"}},
+		{key: "reportType", want: []string{"sast"}},
+	} {
+		t.Run(tc.key+" is lowercased on the wire", func(t *testing.T) {
+			got, _ := vars[tc.key].([]any)
+			if len(got) != len(tc.want) {
+				t.Errorf("%s = %v, want %v", tc.key, vars[tc.key], tc.want)
+				return
+			}
+			for i := range tc.want {
+				if got[i] != tc.want[i] {
+					t.Errorf("%s[%d] = %v, want %q", tc.key, i, got[i], tc.want[i])
+				}
+			}
+		})
 	}
 }
 
