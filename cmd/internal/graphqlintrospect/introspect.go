@@ -40,7 +40,10 @@ type Target struct {
 	Endpoint string
 	// Token is sent as a bearer credential when it is not empty. GitLab answers
 	// introspection to anyone, so this is only needed for [InstanceVersion],
-	// which it refuses to tell an anonymous caller.
+	// which it refuses to tell an anonymous caller. Fill it through
+	// [CredentialFor] rather than from the environment directly: both commands
+	// take an endpoint from a flag, and a credential must not follow one to a
+	// host nobody said it belonged to.
 	Token string
 	// Client performs the request. A caller supplies its own so the timeout,
 	// and a test's transport, stay the caller's business.

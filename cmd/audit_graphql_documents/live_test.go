@@ -56,7 +56,7 @@ func answeringInstance(t *testing.T, body string) string {
 func TestLiveSchema_AnInstanceThatAnswersInFull_IsWhatJudgesTheDocuments(t *testing.T) {
 	endpoint := answeringInstance(t, introspectionAnswer(queryOnly))
 
-	schema, provenance, err := liveSchema(context.Background(), endpoint, "")
+	schema, provenance, err := liveSchema(context.Background(), endpoint, "", "")
 	if err != nil {
 		t.Fatalf("liveSchema() error = %v, want nil", err)
 	}
@@ -104,7 +104,7 @@ func TestLiveSchema_AnInstanceThatCannotBeJudgedBy_IsRefused(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			schema, provenance, err := liveSchema(context.Background(), answeringInstance(t, testCase.body), "")
+			schema, provenance, err := liveSchema(context.Background(), answeringInstance(t, testCase.body), "", "")
 
 			if err == nil {
 				t.Fatalf("liveSchema() error = nil, want one naming %q", testCase.want)
@@ -137,7 +137,7 @@ func TestLiveSchema_ATokenIsOffered_ReachesTheInstance(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	_, provenance, err := liveSchema(context.Background(), server.URL, "secret")
+	_, provenance, err := liveSchema(context.Background(), server.URL, "secret", "")
 	if err != nil {
 		t.Fatalf("liveSchema() error = %v, want nil", err)
 	}
@@ -147,5 +147,45 @@ func TestLiveSchema_ATokenIsOffered_ReachesTheInstance(t *testing.T) {
 	}
 	if !strings.Contains(provenance, "GitLab 19.4.0-ee") {
 		t.Errorf("the provenance line %q does not name the version the instance reported", provenance)
+	}
+}
+
+// TestLiveSchema_ATokenIsWithheld_ReachesNobodyAndIsExplained verifies the
+// other half of that decision. `-live` takes an arbitrary endpoint, so a token
+// resolved away by [graphqlintrospect.CredentialFor] must reach no request at
+// all, and the report must say the version is unknown because this run
+// declined to hand over a credential rather than because the instance would
+// not answer. Those two look identical in a report that only prints
+// "GitLab unknown", and the first is the one somebody has to act on.
+func TestLiveSchema_ATokenIsWithheld_ReachesNobodyAndIsExplained(t *testing.T) {
+	var authorized bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			authorized = true
+		}
+		payload := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(payload)
+		if strings.Contains(string(payload), "metadata") {
+			_, _ = w.Write([]byte(`{"data":{"metadata":null}}`))
+			return
+		}
+		_, _ = w.Write([]byte(introspectionAnswer(queryOnly)))
+	}))
+	t.Cleanup(server.Close)
+
+	const reason = "GITLAB_TOKEN belongs to https://gitlab.com and this run asks elsewhere"
+	_, provenance, err := liveSchema(context.Background(), server.URL, "", reason)
+	if err != nil {
+		t.Fatalf("liveSchema() error = %v, want nil: a withheld token must not stop the judgement", err)
+	}
+
+	if authorized {
+		t.Error("the instance received an Authorization header for a run that withheld the token")
+	}
+	if !strings.Contains(provenance, "GitLab unknown") {
+		t.Errorf("the provenance line %q does not report the version as unknown", provenance)
+	}
+	if !strings.Contains(provenance, reason) {
+		t.Errorf("the provenance line %q does not say why the token was withheld", provenance)
 	}
 }

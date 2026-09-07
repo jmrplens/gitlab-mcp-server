@@ -137,6 +137,46 @@ func TestRun_GenerationFailures_ExitNonZeroAndSayWhy(t *testing.T) {
 	}
 }
 
+// TestRun_Generation_ATruncatedAnswer_DoesNotReplaceAWholePin verifies that a
+// regeneration cannot destroy the committed pin and report success.
+//
+// The floor alone cannot tell a truncation from a narrower edition, so probing
+// such an instance into an empty directory stays allowed: the SDL it writes is
+// what `-schema` reads. What must not happen is the same answer overwriting a
+// pin that already cleared the floor, which is a working tree that has lost its
+// guarantee for a command that exited 0. `--check` would refuse the result, but
+// only after the good pin was already gone.
+func TestRun_Generation_ATruncatedAnswer_DoesNotReplaceAWholePin(t *testing.T) {
+	truncated := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(tinySchema))
+	}))
+	t.Cleanup(truncated.Close)
+
+	dir := filepath.Join(t.TempDir(), "pinned")
+	if err := writeArtifacts(dir, minimalSDL, canonicalSource); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+
+	status, _, errOut := runCommand(t, genRun{
+		endpoint: truncated.URL, dir: dir, client: truncated.Client(), now: fixedClock,
+	})
+
+	if status != 1 {
+		t.Fatalf("exit status %d, want 1 for an answer that would replace a whole pin:\n%s", status, errOut)
+	}
+	if !strings.Contains(errOut, "refusing to replace a whole schema with a truncated answer") {
+		t.Errorf("stderr does not say what it refused:\n%s", errOut)
+	}
+
+	_, source, err := readArtifacts(dir)
+	if err != nil {
+		t.Fatalf("the pin is no longer readable after a refused generation: %v", err)
+	}
+	if source.Types != canonicalSource.Types {
+		t.Errorf("the pin was replaced anyway: %d types, want the %d it had", source.Types, canonicalSource.Types)
+	}
+}
+
 // TestRun_CheckMode_JudgesTheCommittedFilesWithoutNetwork verifies the CI half.
 // It must need no instance at all, because a gate that reaches gitlab.com is a
 // gate that fails when gitlab.com does.
@@ -187,7 +227,7 @@ func TestRun_CheckMode_JudgesTheCommittedFilesWithoutNetwork(t *testing.T) {
 var wholeSDL = func() string {
 	var sdl strings.Builder
 	sdl.WriteString("type Query {\n  ok: Boolean\n}\n\n")
-	for i := range minimumTypes {
+	for i := range graphqlintrospect.MinimumTypes {
 		fmt.Fprintf(&sdl, "type Padding%d {\n  ok: Boolean\n}\n\n", i)
 	}
 	sdl.WriteString("schema {\n  query: Query\n}\n")

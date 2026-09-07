@@ -22,7 +22,7 @@ import (
 // quirks (the canned payload, the deprecation arguments an older release
 // refuses) that must be understood the same way on both sides or the two
 // commands stop speaking about the same schema.
-func liveSchema(ctx context.Context, endpoint, token string) (*ast.Schema, string, error) {
+func liveSchema(ctx context.Context, endpoint, token, tokenWithheld string) (*ast.Schema, string, error) {
 	target := graphqlintrospect.Target{
 		Endpoint: endpoint,
 		Token:    token,
@@ -56,6 +56,13 @@ func liveSchema(ctx context.Context, endpoint, token string) (*ast.Schema, strin
 	if err != nil {
 		return nil, "", fmt.Errorf("%s: the converted schema does not parse: %w", endpoint, err)
 	}
-	return schema, fmt.Sprintf("%d types from %s (GitLab %s), fetched now, not the pinned schema",
-		len(introspected.Types), endpoint, version), nil
+	provenance := fmt.Sprintf("%d types from %s (GitLab %s), fetched now, not the pinned schema",
+		len(introspected.Types), endpoint, version)
+	// An unknown version has two causes and they are not equally interesting.
+	// Saying which one this was keeps somebody from concluding the instance is
+	// unhelpful when the run simply declined to hand it a credential.
+	if tokenWithheld != "" {
+		provenance += "; " + tokenWithheld
+	}
+	return schema, provenance, nil
 }
