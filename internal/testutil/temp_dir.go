@@ -34,14 +34,35 @@ func IsolateTempDir(t *testing.T, dir string) {
 	for _, name := range tempDirVars {
 		t.Setenv(name, dir)
 	}
-	// Verified rather than assumed, because the whole failure being fixed here
-	// is an isolation that quietly did nothing. If some platform grows another
-	// variable, this says so instead of letting a containment test pass while
-	// asserting nothing.
-	// os.TempDir is the subject of the assertion, not an alternative to
-	// t.TempDir: what is being checked is that this process's temporary
-	// directory is now dir.
-	if got, want := filepath.Clean(os.TempDir()), filepath.Clean(dir); got != want { //nolint:usetesting // see above
+	verifyTempDir(t, dir)
+}
+
+// tempDirReporter is the part of [testing.T] the verification uses. It is an
+// interface because the failure it reports is one no supported platform
+// produces: the loop above sets every variable [os.TempDir] reads, so the
+// mismatch belongs to a platform that has grown another one, and a recorder is
+// the only way to see what such a platform would be told.
+type tempDirReporter interface {
+	Helper()
+	Fatalf(format string, args ...any)
+}
+
+// processTempDir is a variable for the same reason, so a test can answer as a
+// platform this helper does not yet cover would.
+//
+// os.TempDir is the subject of the assertion, not an alternative to t.TempDir:
+// what is being checked is that this process's temporary directory is now dir.
+var processTempDir = os.TempDir
+
+// verifyTempDir checks that the isolation took effect.
+//
+// Verified rather than assumed, because the whole failure being fixed here is
+// an isolation that quietly did nothing. If some platform grows another
+// variable, this says so instead of letting a containment test pass while
+// asserting nothing.
+func verifyTempDir(t tempDirReporter, dir string) {
+	t.Helper()
+	if got, want := filepath.Clean(processTempDir()), filepath.Clean(dir); got != want {
 		t.Fatalf("os.TempDir() = %q after isolating it to %q; this platform reads a variable %v does not cover", got, want, tempDirVars)
 	}
 }

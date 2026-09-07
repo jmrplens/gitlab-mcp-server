@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"sync"
@@ -81,17 +83,78 @@ func validateGraphQLRequest(reporter graphQLReporter, r *http.Request) {
 		return
 	}
 
-	var request graphqlRequest
-	if json.Unmarshal(body, &request) != nil || strings.TrimSpace(request.Query) == "" {
-		// Not the JSON envelope: a query carrying an upload is multipart, and
-		// a test posting anything else to this path is testing the transport
-		// rather than a document. Neither is this gate's business.
+	request, carriesDocument := graphQLDocument(r.Header.Get("Content-Type"), body)
+	if !carriesDocument {
+		// A test posting something else to this path is testing the transport
+		// rather than a document, which is not this gate's business.
 		return
 	}
 
 	if err = graphqlschema.Validate(request.Query, request.Variables); err != nil {
 		reporter.Errorf("GitLab would refuse this GraphQL request\n  operation: %s\n%s\n%s",
 			documentLabel(request.Query), reasonLines(err), verdictProvenance())
+	}
+}
+
+// multipartOperationsField is the part the GraphQL multipart request
+// specification (https://github.com/jaydenseric/graphql-multipart-request-spec)
+// puts the document in, and the name client-go writes.
+const multipartOperationsField = "operations"
+
+// graphQLDocument reads the document out of a request body, which carries it in
+// one of two encodings: the JSON envelope, or, when a variable holds a file, a
+// multipart form whose operations part is that same envelope.
+//
+// Uploads used to be waved through. An achievement's avatar was the first one
+// this repository sends, so the single operation nobody judged was also the
+// only one whose variables the SDK rewrites on the way out, replacing each
+// upload with null and moving the bytes into parts of their own. Reading the
+// operations part judges what GitLab is actually asked, null included.
+func graphQLDocument(contentType string, body []byte) (graphqlRequest, bool) {
+	if request, ok := graphQLEnvelope(body); ok {
+		return request, true
+	}
+	operations, ok := multipartOperations(contentType, body)
+	if !ok {
+		return graphqlRequest{}, false
+	}
+	return graphQLEnvelope(operations)
+}
+
+// graphQLEnvelope decodes the JSON envelope, reporting whether it carries a
+// document at all.
+func graphQLEnvelope(body []byte) (graphqlRequest, bool) {
+	var request graphqlRequest
+	if json.Unmarshal(body, &request) != nil || strings.TrimSpace(request.Query) == "" {
+		return graphqlRequest{}, false
+	}
+	return request, true
+}
+
+// multipartOperations returns the operations part of a multipart body.
+//
+// The body is parsed from the copy the caller already read rather than through
+// [http.Request.ParseMultipartForm], which would consume the request and leave
+// the mock behind it nothing to answer with.
+func multipartOperations(contentType string, body []byte) ([]byte, bool) {
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	if err != nil || !strings.HasPrefix(mediaType, "multipart/") || params["boundary"] == "" {
+		return nil, false
+	}
+	parts := multipart.NewReader(bytes.NewReader(body), params["boundary"])
+	for {
+		part, partErr := parts.NextPart()
+		if partErr != nil {
+			return nil, false
+		}
+		if part.FormName() != multipartOperationsField {
+			continue
+		}
+		operations, readErr := io.ReadAll(part)
+		if readErr != nil {
+			return nil, false
+		}
+		return operations, true
 	}
 }
 

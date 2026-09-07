@@ -37,6 +37,38 @@ type LegacyClientOptions struct {
 // ElicitHandlerFunc handles one server-initiated elicitation request.
 type ElicitHandlerFunc func(context.Context, *mcp.ElicitParams) (*mcp.ElicitResult, error)
 
+// legacyReporter is the part of [testing.TB] this client uses.
+//
+// It is an interface for the reason the GraphQL gate's reporter is one: every
+// failure below belongs to a transport that is a [net.Pipe] in the same
+// process, so none of them happens in a passing run and none of them could be
+// exercised by a test that fails when they fire. A recorder reaches them
+// instead.
+type legacyReporter interface {
+	Helper()
+	Cleanup(func())
+	Error(args ...any)
+	Fatalf(format string, args ...any)
+}
+
+// The connection, the encoding and the wait below are variables for the same
+// reason the reporter is an interface: an in-memory transport does not fail to
+// connect, a map of strings does not fail to marshal, an id made from a string
+// literal is always valid, and a serve goroutine reading a closed connection
+// always returns. Each failure is still handled, so each is reachable only by
+// replacing the call that cannot fail.
+var (
+	connectSession = func(ctx context.Context, server *mcp.Server, transport mcp.Transport) (*mcp.ServerSession, error) {
+		return server.Connect(ctx, transport, nil)
+	}
+	connectClient = func(ctx context.Context, transport mcp.Transport) (mcp.Connection, error) {
+		return transport.Connect(ctx)
+	}
+	marshalInitParams = json.Marshal
+	makeRequestID     = jsonrpc.MakeID
+	serveExitTimeout  = 5 * time.Second
+)
+
 // ConnectLegacyElicitationClient connects a minimal legacy MCP client
 // (protocol 2025-11-25, elicitation capability advertised) to server and
 // returns the resulting server session. Server-initiated elicitation/create
@@ -50,46 +82,37 @@ type ElicitHandlerFunc func(context.Context, *mcp.ElicitParams) (*mcp.ElicitResu
 // calling goroutine).
 func ConnectLegacyElicitationClient(ctx context.Context, t *testing.T, server *mcp.Server, handler ElicitHandlerFunc, opts LegacyClientOptions) *mcp.ServerSession {
 	t.Helper()
+	return connectLegacyElicitationClient(ctx, t, server, handler, opts)
+}
+
+// connectLegacyElicitationClient is the body of
+// [ConnectLegacyElicitationClient], reporting through [legacyReporter] rather
+// than *testing.T. Each failure returns as well as reporting: a recorder's
+// Fatalf does not abort the goroutine the way [testing.T.Fatalf] does, and
+// without the return the next line would run on a connection that was never
+// made.
+func connectLegacyElicitationClient(ctx context.Context, t legacyReporter, server *mcp.Server, handler ElicitHandlerFunc, opts LegacyClientOptions) *mcp.ServerSession {
+	t.Helper()
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	ss, err := server.Connect(ctx, serverTransport, nil)
+	ss, err := connectSession(ctx, server, serverTransport)
 	if err != nil {
 		t.Fatalf("legacy client: server connect: %v", err)
+		return nil
 	}
-	conn, err := clientTransport.Connect(ctx)
+	conn, err := connectClient(ctx, clientTransport)
 	if err != nil {
 		_ = ss.Close()
 		t.Fatalf("legacy client: transport connect: %v", err)
+		return nil
 	}
 	t.Cleanup(func() {
 		_ = conn.Close()
 		_ = ss.Close()
 	})
 
-	capabilities := map[string]any{
-		"elicitation": elicitationCapability(opts),
-		"roots":       map[string]any{"listChanged": true},
-	}
-	initParams, err := json.Marshal(map[string]any{
-		"protocolVersion": legacyProtocolVersion,
-		"capabilities":    capabilities,
-		"clientInfo":      map[string]any{"name": "legacy-test-client", "version": "1.0.0"},
-	})
-	if err != nil {
-		t.Fatalf("legacy client: marshal initialize params: %v", err)
-	}
-	initID, err := jsonrpc.MakeID("legacy-init")
-	if err != nil {
-		t.Fatalf("legacy client: make id: %v", err)
-	}
-	if writeErr := conn.Write(ctx, &jsonrpc.Request{ID: initID, Method: "initialize", Params: initParams}); writeErr != nil {
-		t.Fatalf("legacy client: write initialize: %v", writeErr)
-	}
-	if handshakeErr := awaitLegacyInitializeResponse(ctx, conn, handler); handshakeErr != nil {
-		t.Fatalf("legacy client: %v", handshakeErr)
-	}
-	if notifyErr := conn.Write(ctx, &jsonrpc.Request{Method: "notifications/initialized", Params: json.RawMessage("{}")}); notifyErr != nil {
-		t.Fatalf("legacy client: write initialized notification: %v", notifyErr)
+	if !legacyHandshake(ctx, t, conn, handler, opts) {
+		return nil
 	}
 
 	served := make(chan struct{})
@@ -105,13 +128,59 @@ func ConnectLegacyElicitationClient(ctx context.Context, t *testing.T, server *m
 	// others. It also stops the goroutine from leaking into later tests.
 	t.Cleanup(func() {
 		_ = conn.Close()
-		select {
-		case <-served:
-		case <-time.After(5 * time.Second):
-			t.Error("legacy client: serve goroutine did not exit after connection close")
-		}
+		awaitServeExit(t, served)
 	})
 	return ss
+}
+
+// legacyHandshake performs the initialize exchange, reporting whether it got
+// far enough for the caller to start serving.
+func legacyHandshake(ctx context.Context, t legacyReporter, conn mcp.Connection, handler ElicitHandlerFunc, opts LegacyClientOptions) bool {
+	t.Helper()
+
+	capabilities := map[string]any{
+		"elicitation": elicitationCapability(opts),
+		"roots":       map[string]any{"listChanged": true},
+	}
+	initParams, err := marshalInitParams(map[string]any{
+		"protocolVersion": legacyProtocolVersion,
+		"capabilities":    capabilities,
+		"clientInfo":      map[string]any{"name": "legacy-test-client", "version": "1.0.0"},
+	})
+	if err != nil {
+		t.Fatalf("legacy client: marshal initialize params: %v", err)
+		return false
+	}
+	initID, err := makeRequestID("legacy-init")
+	if err != nil {
+		t.Fatalf("legacy client: make id: %v", err)
+		return false
+	}
+	if writeErr := conn.Write(ctx, &jsonrpc.Request{ID: initID, Method: "initialize", Params: initParams}); writeErr != nil {
+		t.Fatalf("legacy client: write initialize: %v", writeErr)
+		return false
+	}
+	if handshakeErr := awaitLegacyInitializeResponse(ctx, conn, handler); handshakeErr != nil {
+		t.Fatalf("legacy client: %v", handshakeErr)
+		return false
+	}
+	if notifyErr := conn.Write(ctx, &jsonrpc.Request{Method: "notifications/initialized", Params: json.RawMessage("{}")}); notifyErr != nil {
+		t.Fatalf("legacy client: write initialized notification: %v", notifyErr)
+		return false
+	}
+	return true
+}
+
+// awaitServeExit waits for the serve goroutine to return, reporting the wait
+// that did not end. A goroutine still reading a closed connection would
+// otherwise be carried silently into whatever test runs next.
+func awaitServeExit(t legacyReporter, served <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-served:
+	case <-time.After(serveExitTimeout):
+		t.Error("legacy client: serve goroutine did not exit after connection close")
+	}
 }
 
 // elicitationCapability builds the advertised elicitation capability object.

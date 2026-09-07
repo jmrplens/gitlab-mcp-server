@@ -2,6 +2,8 @@ package testutil
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -53,6 +55,147 @@ func TestAssertEmbeddedResource_TogglesEmbeddedContent(t *testing.T) {
 		t.Fatal("AssertEmbeddedResource did not restore embedded resources to enabled")
 	}
 }
+
+// TestAssertEmbeddedResource_ToolThatAnswersWrongly_IsReported covers what the
+// helper says when the tool under it does not do what the toggle promises.
+//
+// These are the paths a passing suite never takes, and they are the only reason
+// the helper exists: a missing embed, an embed that should have been suppressed,
+// a tool that answered with an error, and a session that is no longer there.
+// Each is driven with a recorder, since a real *testing.T would fail this test
+// for reporting exactly what it is meant to report.
+func TestAssertEmbeddedResource_ToolThatAnswersWrongly_IsReported(t *testing.T) {
+	session := connectEmbedTestSession(t)
+
+	cases := []struct {
+		name   string
+		assert func(embedReporter)
+		want   string
+	}{
+		{
+			name: "no embed where one was expected",
+			assert: func(reporter embedReporter) {
+				assertResourceEmbedded(t.Context(), reporter, session, "plain", map[string]any{}, "gitlab://test/resources/1")
+			},
+			want: "expected EmbeddedResource for plain",
+		},
+		{
+			name: "an embed where none was expected",
+			assert: func(reporter embedReporter) {
+				assertResourceNotEmbedded(t.Context(), reporter, session, "embeds", map[string]any{})
+			},
+			want: "expected no EmbeddedResource when disabled",
+		},
+		{
+			name: "a tool that answered with an error",
+			assert: func(reporter embedReporter) {
+				assertResourceEmbedded(t.Context(), reporter, session, "failing", map[string]any{}, "gitlab://test/resources/1")
+			},
+			want: "expected successful result, got IsError=true",
+		},
+		{
+			name: "a tool that answered with an error while the embed was off",
+			assert: func(reporter embedReporter) {
+				assertResourceNotEmbedded(t.Context(), reporter, session, "failing", map[string]any{})
+			},
+			want: "expected successful result, got IsError=true",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			reporter := &recordingEmbedReporter{}
+
+			testCase.assert(reporter)
+
+			if !strings.Contains(reporter.joined(), testCase.want) {
+				t.Errorf("report = %q, want it to contain %q", reporter.joined(), testCase.want)
+			}
+		})
+	}
+}
+
+// TestCallToolSuccessfully_ClosedSession_IsReported covers the transport half
+// of the same guard: a call that never reached the server is reported as the
+// call it was, rather than as a nil result the assertions would trip over.
+func TestCallToolSuccessfully_ClosedSession_IsReported(t *testing.T) {
+	session := connectEmbedTestSession(t)
+	session.Close()
+	reporter := &recordingEmbedReporter{}
+
+	if result := callToolSuccessfully(t.Context(), reporter, session, "embeds", map[string]any{}); result != nil {
+		t.Errorf("callToolSuccessfully() = %v, want nil after a transport failure", result)
+	}
+	if !strings.Contains(reporter.joined(), "CallTool(embeds)") {
+		t.Errorf("report = %q, want it to name the call", reporter.joined())
+	}
+}
+
+// connectEmbedTestSession serves the three answers these assertions have to
+// tell apart: a tool that embeds a resource, one that does not, and one that
+// fails.
+func connectEmbedTestSession(t *testing.T) *mcp.ClientSession {
+	t.Helper()
+	server := mcp.NewServer(&mcp.Implementation{Name: "embed-test-server", Version: "0.0.1"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "embeds", Description: "Returns an embedded resource."},
+		func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
+			result := &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}
+			toolutil.EmbedResourceJSON(result, "gitlab://test/resources/1", map[string]any{"id": 1})
+			return result, nil, nil
+		})
+	mcp.AddTool(server, &mcp.Tool{Name: "plain", Description: "Returns text only."},
+		func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+		})
+	mcp.AddTool(server, &mcp.Tool{Name: "failing", Description: "Answers with an error result."},
+		func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "no"}}}, nil, nil
+		})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "embed-test-client", Version: "0.0.1"}, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		clientSession.Close()
+		_ = serverSession.Wait()
+	})
+	return clientSession
+}
+
+// recordingEmbedReporter stands in for *testing.T so a reported failure is
+// collected rather than failing the test that provoked it.
+type recordingEmbedReporter struct {
+	messages []string
+}
+
+// Helper satisfies the reporter and does nothing.
+func (*recordingEmbedReporter) Helper() {}
+
+// Error records what would have been reported.
+func (r *recordingEmbedReporter) Error(args ...any) {
+	r.messages = append(r.messages, fmt.Sprint(args...))
+}
+
+// Errorf records what would have been reported.
+func (r *recordingEmbedReporter) Errorf(format string, args ...any) {
+	r.messages = append(r.messages, fmt.Sprintf(format, args...))
+}
+
+// Fatalf records what would have been reported.
+func (r *recordingEmbedReporter) Fatalf(format string, args ...any) {
+	r.messages = append(r.messages, fmt.Sprintf(format, args...))
+}
+
+// joined returns every recorded message as one string for substring assertions.
+func (r *recordingEmbedReporter) joined() string { return strings.Join(r.messages, "\n") }
 
 // TestFirstEmbeddedResource_Found confirms that [firstEmbeddedResource]
 // returns the first [*mcp.EmbeddedResource] in the content slice when one is
