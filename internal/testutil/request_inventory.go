@@ -181,6 +181,36 @@ func inventoryRecorder() *recorder {
 	return created
 }
 
+// releaseRecorders closes every open shard and forgets it, so a later run
+// against the same directory opens a new one.
+//
+// Nothing in a real run needs this: one shard belongs to one test process, and
+// the operating system flushes and closes it at exit. Windows needs it in a
+// test. A directory holding an open file cannot be removed there, so a test
+// recording into t.TempDir() fails in cleanup with "the process cannot access
+// the file because it is being used by another process", after every one of its
+// own assertions has passed.
+func releaseRecorders() {
+	recordersMu.Lock()
+	defer recordersMu.Unlock()
+	for dir, rec := range recorders {
+		rec.release()
+		delete(recorders, dir)
+	}
+}
+
+// release closes this recorder's shard. A recorder that never opened one, or
+// that already stopped, has nothing to close.
+func (rec *recorder) release() {
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if rec.file == nil {
+		return
+	}
+	_ = rec.file.Close()
+	rec.file = nil
+}
+
 // recordingHandler wraps next so every request reaching the mock is recorded,
 // and returns next unchanged when recording is off.
 //
