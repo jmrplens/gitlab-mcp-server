@@ -25,8 +25,9 @@ import (
 // searched only the right responses.
 type TypedShapeCheck struct {
 	// Ran is false when the tool packages could not be loaded or their import
-	// graph named no client-go to read, which are the only ways this join is
-	// skipped.
+	// graph named no client-go to read. It is also false, with the whole check
+	// off beside it, when GitLab's record could not be read at all, since the
+	// package-grain join is what reads it.
 	Ran bool `json:"ran"`
 	// Compared counts the output types held against the response of the
 	// operations their client-go struct models.
@@ -83,9 +84,9 @@ func typedShapeCheck(root string, index *operationIndex, published []publishedTy
 			check.SkippedNoPairing++
 			continue
 		}
-		operations, known := describedRoutes(paired, routes, index)
+		routed, operations, known := describedRoutes(paired, routes, index)
 		switch {
-		case len(operations) == 0:
+		case !routed:
 			check.SkippedNoRoute++
 		case len(known) == 0:
 			check.SkippedNoSchema++
@@ -114,26 +115,35 @@ func pairedSDKTypes(pairings []structs.OutputPairing) map[[2]string][]string {
 }
 
 // describedRoutes collects the endpoints every paired client-go struct is
-// answered from and the union of the response names the document gives them.
+// answered from whose response the document actually spells, and the union of
+// the names it gives them.
 //
-// An empty operations list is a type nothing routes to; an empty union is a
-// type whose routes the document says nothing about. The caller keeps those two
-// apart, because only the second is a statement about GitLab's record.
-func describedRoutes(paired []string, routes map[string][]sdkRoute, index *operationIndex) (operations []string, known map[string]bool) {
+// Whether the struct routes anywhere at all is returned separately from that
+// list, because the two answer different questions: routed false is a type no
+// service method answers with, an empty list with routed true is a type whose
+// routes GitLab's record says nothing about. Only the second is a statement
+// about the record, and folding them would hide a parser regression as a
+// document gap.
+//
+// A route is listed only when it was searched, so the count a finding carries
+// is the number of responses that failed to name the field rather than the
+// number of endpoints the type touches.
+func describedRoutes(paired []string, routes map[string][]sdkRoute, index *operationIndex) (routed bool, operations []string, known map[string]bool) {
 	seen := map[string]bool{}
 	known = map[string]bool{}
 	for _, sdkType := range paired {
 		for _, route := range routes[sdkType] {
-			if name := route.operation(); !seen[name] {
-				seen[name] = true
-				operations = append(operations, name)
-			}
+			routed = true
 			// Only an exact match: a loose one accepts a literal segment of
 			// ours where GitLab has a placeholder, which is evidence about a
 			// fixture value in the inventory and would be a guess here.
 			operation, quality, _ := index.lookup(route.Method, route.Path)
-			if quality != matchExact {
+			if quality != matchExact || len(operation.Response) == 0 {
 				continue
+			}
+			if name := route.operation(); !seen[name] {
+				seen[name] = true
+				operations = append(operations, name)
 			}
 			for _, name := range operation.Response {
 				known[name] = true
@@ -141,7 +151,7 @@ func describedRoutes(paired []string, routes map[string][]sdkRoute, index *opera
 		}
 	}
 	sort.Strings(operations)
-	return operations, known
+	return routed, operations, known
 }
 
 // unpublishedAtTypeGrain reports every field of one type that no operation it

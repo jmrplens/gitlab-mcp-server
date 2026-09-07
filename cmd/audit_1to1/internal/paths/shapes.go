@@ -96,8 +96,10 @@ type UnpublishedField struct {
 	// SDKType is the client-go struct a converter fills the type from, which is
 	// what named the operations searched. Type grain only.
 	SDKType string `json:"sdk_type,omitempty"`
-	// Endpoints is how many operations' responses were searched. A field absent
-	// from every one of them is a field a model is told to expect and will not
+	// Endpoints is how many operations' responses were searched, counted the
+	// same way at both grains: an operation the document leaves without a
+	// response was not searched and is not among them. A field absent from
+	// every one of them is a field a model is told to expect and will not
 	// receive.
 	Endpoints int `json:"endpoints_searched"`
 	// Operations names those operations, in the collapsed spelling both sides
@@ -144,6 +146,13 @@ func shapeCheck(root string, requests []requestinventory.Row, published []publis
 			segment.Count++
 		default:
 			check.Join.Unmatched++
+			continue
+		}
+
+		// An operation the document gives no response is nothing to search: it
+		// names no field, so counting it would inflate the number a finding
+		// reports as the responses it was held against.
+		if len(operation.Response) == 0 {
 			continue
 		}
 

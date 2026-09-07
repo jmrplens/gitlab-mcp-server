@@ -218,6 +218,40 @@ func TestTypedShapeCheck_ALooseMatch_IsNotAccepted(t *testing.T) {
 	}
 }
 
+// TestTypedShapeCheck_ARouteNothingWasSearchedIn_IsNotNamed verifies that a
+// finding names the responses it was really held against. A route the document
+// does not carry, and one it carries without a response, contribute no names to
+// the union, so naming them would tell a reader the field was looked for in
+// three endpoints when it was looked for in one, and the count would mean
+// something different here than it does at package grain.
+func TestTypedShapeCheck_ARouteNothingWasSearchedIn_IsNotNamed(t *testing.T) {
+	stubTypeGrainInputs(t, approvalPairing, nil, map[string][]sdkRoute{"MergeRequestApprovals": {
+		{Method: "GET", Path: "/projects/:/merge_requests/:/approvals"},
+		{Method: "POST", Path: "/projects/:/merge_requests/:/approve"},
+		{Method: "GET", Path: "/projects/:/merge_requests/:/approval_state"},
+	}})
+
+	check := typedShapeCheck("", indexOf(map[string]apishapes.Operation{
+		"GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals": {Response: []string{"approved"}},
+		"POST /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approve":  {},
+	}), []publishedType{{
+		Package: "internal/tools/mrapprovals", Name: "ConfigOutput", Fields: []string{"title"},
+	}})
+
+	want := []UnpublishedField{{
+		Grain:      grainType,
+		Package:    "internal/tools/mrapprovals",
+		Type:       "ConfigOutput",
+		Field:      "title",
+		SDKType:    "MergeRequestApprovals",
+		Endpoints:  1,
+		Operations: []string{"GET /projects/:/merge_requests/:/approvals"},
+	}}
+	if check.Compared != 1 || !reflect.DeepEqual(check.Unpublished, want) {
+		t.Errorf("check = %+v, want the one operation whose response was searched", check)
+	}
+}
+
 // TestTypedShapeCheck_OneTypeFromSeveralSDKStructs_UnionsTheirOperations
 // verifies the shape a domain that serves a group and a project scope from one
 // output type takes: labels are filled from both gl.Label and gl.GroupLabel, so
