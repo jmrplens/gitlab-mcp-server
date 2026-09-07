@@ -8,7 +8,7 @@ services:
     environment:
       GITLAB_ACTIVATION_CODE: ${GITLAB_ACTIVATION_CODE:-}
       GITLAB_OMNIBUS_CONFIG: |
-        external_url 'http://localhost:8929'
+        external_url '${E2E_GITLAB_EXTERNAL_URL:-http://localhost:8929}'
         nginx['listen_port'] = 80
         nginx['listen_https'] = false
         gitlab_rails['monitoring_whitelist'] = ['0.0.0.0/0', '::/0']
@@ -33,7 +33,7 @@ services:
         # (gitlab_registry_tag_protection_*) can be exercised end-to-end instead
         # of skipped. The protection-rules API is DB-backed and does not require
         # pushing images, so no TLS or client access to :5050 is needed.
-        registry_external_url 'http://localhost:5050'
+        registry_external_url '${E2E_REGISTRY_EXTERNAL_URL:-http://localhost:5050}'
         registry['enable'] = true
         gitlab_rails['registry_enabled'] = true
         registry_nginx['listen_port'] = 5050
@@ -115,7 +115,10 @@ services:
     container_name: e2e-bitbucket
     profiles: ["bitbucket"]
     ports:
-      - "127.0.0.1:7990:7990"
+      # Loopback by default: nothing but the setup script and the import test
+      # on this machine should reach it. A fixture running on another host is
+      # bound to that host's LAN address instead (E2E_BITBUCKET_BIND=0.0.0.0).
+      - "${E2E_BITBUCKET_BIND:-127.0.0.1}:7990:7990"
     environment:
       SEARCH_ENABLED: "false"
       JVM_MAXIMUM_MEMORY: "1024m"
