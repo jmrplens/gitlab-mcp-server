@@ -151,11 +151,18 @@ type shutdownServer struct {
 
 // shutdownStartServer launches the binary with the given flags and waits for
 // /health, leaving the process reachable by signal.
+//
+// The port is the kernel's choice and read back from the server's own log,
+// the way startServer does it. This file used to reserve one with freePort
+// and hand the number over, and on Windows the port a listener has just
+// released is not always free again by the time the next bind asks for it:
+// the server died with "Only one usage of each socket address" and the test
+// reported that it never became healthy.
 func shutdownStartServer(t *testing.T, flags ...string) *shutdownServer {
 	t.Helper()
 
 	bin := serverBinary(t)
-	addr := "127.0.0.1:" + itoa(freePort(t))
+	addr := "127.0.0.1:" + itoa(ephemeralPort)
 
 	args := append([]string{"--http", "--http-addr=" + addr}, flags...)
 	// Not exec.CommandContext: its cancellation is a kill, and this file needs
@@ -181,11 +188,7 @@ func shutdownStartServer(t *testing.T, flags ...string) *shutdownServer {
 		defer mu.Unlock()
 		return out.String()
 	}
-	srv := &shutdownServer{
-		probe: &server{baseURL: "http://" + addr, logs: logs},
-		cmd:   cmd,
-		logs:  logs,
-	}
+	srv := &shutdownServer{cmd: cmd, logs: logs}
 
 	t.Cleanup(func() {
 		// Whatever the test concluded, nothing is left running: a server that
@@ -194,6 +197,20 @@ func shutdownStartServer(t *testing.T, flags ...string) *shutdownServer {
 		_ = cmd.Process.Kill()
 		_ = srv.wait()
 	})
+
+	// The reaping is once-guarded, so the goroutine that publishes the exit
+	// for the address wait and the test's own terminateAndWait share one
+	// Wait and both see its result.
+	exited := make(chan struct{})
+	go func() {
+		_ = srv.wait()
+		close(exited)
+	}()
+	bound, err := awaitListenAddr(logs, exited)
+	if err != nil {
+		t.Fatalf("starting the server: %v", err)
+	}
+	srv.probe = &server{baseURL: "http://" + bound, logs: logs}
 
 	waitHealthy(t, srv.probe)
 	return srv
