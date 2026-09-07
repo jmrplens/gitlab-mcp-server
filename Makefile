@@ -1302,15 +1302,18 @@ audit-graphql-documents:
 	go run ./cmd/audit_graphql_documents/ -v
 
 ## check-graphql-documents-live: judge every document against a schema fetched
-## from gitlab.com right now rather than the pinned one. Needs the network, so
-## it is not a CI gate; it is the only thing that reports a field GitLab has
-## narrowed since the pin, which is how every defect the pin was built for
-## arose. Run it beside the other live suites (make test-e2e-gitlab-com).
+## from a live instance right now rather than the pinned one, and report where
+## the pin and that instance disagree about a type or field the documents touch.
+## Needs the network, so it is not a CI gate; it is the only thing that reports
+## a field GitLab has narrowed since the pin, which is how every defect the pin
+## was built for arose. Run it beside the other live suites
+## (make test-e2e-gitlab-com). GRAPHQL_LIVE_URL points it somewhere else: the
+## scheduled ee-schema workflow points it at an unlicensed GitLab EE, which
+## serves the whole Enterprise schema because GitLab builds the schema at boot,
+## before any license is applied.
+GRAPHQL_LIVE_URL ?= https://gitlab.com/api/graphql
 check-graphql-documents-live:
-	@tmp=$$(mktemp -d) && \
-		go run ./cmd/gen_graphql_schema/ -dir "$$tmp" && \
-		go run ./cmd/audit_graphql_documents/ -schema "$$tmp/gitlab-schema.graphql"; \
-		status=$$?; rm -rf "$$tmp"; exit $$status
+	go run ./cmd/audit_graphql_documents/ -live "$(GRAPHQL_LIVE_URL)"
 
 ## audit-test-names: audit test function naming convention compliance.
 audit-test-names:

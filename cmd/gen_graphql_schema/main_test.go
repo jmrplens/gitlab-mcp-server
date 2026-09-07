@@ -10,8 +10,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqlintrospect"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
+
+// tinySchema is the smallest introspection payload that renders to loadable
+// SDL: one object type that is also the query root.
+const tinySchema = `{"data":{"__schema":{
+  "queryType":{"name":"Query"},
+  "types":[{"kind":"OBJECT","name":"Query","fields":[{"name":"ok","args":[],"type":{"kind":"SCALAR","name":"Boolean"}}]}]
+}}}`
 
 // fixedClock is the day a generated provenance record is asserted against.
 func fixedClock() time.Time { return time.Date(2026, 9, 6, 11, 30, 0, 0, time.UTC) }
@@ -171,7 +179,7 @@ var canonicalSource = graphqlschema.Source{
 	GitLabVersion:  "19.4.0",
 	GitLabRevision: "abc1234",
 	RetrievedAt:    "2026-09-06",
-	Types:          minimumTypes + 1,
+	Types:          graphqlintrospect.MinimumTypes + 1,
 }
 
 // TestRun_CheckMode_RefusesAPinOfSomethingElse verifies the checks that ask
@@ -195,12 +203,12 @@ func TestRun_CheckMode_RefusesAPinOfSomethingElse(t *testing.T) {
 		},
 		{
 			name:   "a truncated or narrower answer",
-			source: withSource(func(s *graphqlschema.Source) { s.Types = minimumTypes - 1 }),
+			source: withSource(func(s *graphqlschema.Source) { s.Types = graphqlintrospect.MinimumTypes - 1 }),
 			want:   "truncated or the instance was a narrower edition",
 		},
 		{
 			name:   "an introspection with no token",
-			source: withSource(func(s *graphqlschema.Source) { s.GitLabVersion = unknownVersion }),
+			source: withSource(func(s *graphqlschema.Source) { s.GitLabVersion = graphqlintrospect.UnknownVersion }),
 			want:   "records no GitLab version",
 		},
 		{
