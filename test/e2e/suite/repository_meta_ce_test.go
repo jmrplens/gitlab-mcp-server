@@ -9,6 +9,7 @@ package suite
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -212,6 +213,11 @@ func TestMeta_CommitExtended(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "sha": sha},
 		})
 		requireNoError(t, err, "commit_refs")
+		// The SHA came from the tip of main, so main is one of the refs that
+		// reaches it.
+		requireTruef(t, slices.ContainsFunc(out.Refs, func(r commits.RefOutput) bool {
+			return r.Name == defaultBranch
+		}), "commit %s refs do not include %q: %+v", sha, defaultBranch, out.Refs)
 		t.Logf("Commit refs: %d", len(out.Refs))
 	})
 

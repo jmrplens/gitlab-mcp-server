@@ -74,6 +74,9 @@ func TestIndividual_CustomEmoji(t *testing.T) {
 			ID: emojiGID,
 		})
 		requireNoError(t, err, "delete custom emoji")
+		requireNotListedOn(ctx, t, sess.individual, "group custom emoji after delete", "gitlab_list_custom_emoji",
+			customemoji.ListInput{GroupPath: groupOut.Path},
+			customEmojiIDs, emojiGID)
 		t.Logf("Deleted custom emoji %s", emojiGID)
 	})
 }
@@ -146,6 +149,10 @@ func TestMeta_CustomEmoji(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta custom emoji delete")
+		requireNotListedOn(ctx, t, sess.meta, "group custom emoji after delete", "gitlab_custom_emoji", map[string]any{
+			"action": "list",
+			"params": map[string]any{"group_path": groupOut.Path},
+		}, customEmojiIDs, emojiGID)
 		t.Logf("Deleted custom emoji (meta) %s", emojiGID)
 	})
 }

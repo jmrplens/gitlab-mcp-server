@@ -7,6 +7,7 @@ package suite
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -174,6 +175,12 @@ func TestMeta_TemplatesLicense(t *testing.T) {
 	})
 }
 
+// templatePageBudget bounds how many pages of a hundred a template listing is
+// walked for. GitLab's largest template family is well under a thousand
+// entries, so exhausting the budget means the pagination is not advancing
+// rather than that the family is long.
+const templatePageBudget = 10
+
 // TestMeta_TemplatesProject exercises project template list and get actions
 // through the gitlab_template meta-tool against a live GitLab instance.
 //
@@ -194,15 +201,34 @@ func TestMeta_TemplatesProject(t *testing.T) {
 	proj := createProjectMeta(ctx, t, sess.meta)
 
 	t.Run("ProjectTemplateList", func(t *testing.T) {
-		out, err := callToolOn[projecttemplates.ListOutput](ctx, sess.meta, "gitlab_template", map[string]any{
-			"action": "project_template_list",
-			"params": map[string]any{
-				"project_id":    proj.pidStr(),
-				"template_type": "gitignores",
-			},
-		})
-		requireNoError(t, err, "project_template_list")
-		t.Logf("Project templates (gitignores): %d", len(out.Templates))
+		// GitLab ships around two hundred gitignore templates and serves them
+		// in alphabetical order, so Go is nowhere near the first default page
+		// of twenty: the listing has to be walked for the assertion below to be
+		// an assertion rather than a coin toss. The walk is bounded so a
+		// pagination defect ends the subtest instead of spinning it.
+		var keys []string
+		for page := 1; page <= templatePageBudget; page++ {
+			out, err := callToolOn[projecttemplates.ListOutput](ctx, sess.meta, "gitlab_template", map[string]any{
+				"action": "project_template_list",
+				"params": map[string]any{
+					"project_id":    proj.pidStr(),
+					"template_type": "gitignores",
+					"per_page":      100,
+					"page":          page,
+				},
+			})
+			requireNoError(t, err, "project_template_list")
+			for _, tpl := range out.Templates {
+				keys = append(keys, tpl.Key)
+			}
+			if !out.Pagination.HasMore {
+				break
+			}
+		}
+		// The gitignore templates ship with GitLab, so the sibling subtest can
+		// ask for Go by key only because this listing really carries it.
+		requireTruef(t, slices.Contains(keys, "Go"), "gitignore templates do not include Go: %v", keys)
+		t.Logf("Project templates (gitignores): %d", len(keys))
 	})
 
 	t.Run("ProjectTemplateGet", func(t *testing.T) {
@@ -215,6 +241,8 @@ func TestMeta_TemplatesProject(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "project_template_get")
+		requireTruef(t, out.Name == "Go", "template name = %q, want %q", out.Name, "Go")
+		requireTruef(t, out.Content != "", "template %q came back with no content", out.Name)
 		t.Logf("Got project template: %s", out.Name)
 	})
 }

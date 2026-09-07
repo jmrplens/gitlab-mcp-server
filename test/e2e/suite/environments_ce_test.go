@@ -89,6 +89,10 @@ func TestIndividual_Environments(t *testing.T) {
 			EnvironmentID: envID,
 		})
 		requireNoError(t, err, "stop environment")
+		requireTruef(t, out.ID == envID, "stop answered for environment %d, want %d", out.ID, envID)
+		// The fixture environment has no stop action job, so GitLab completes the
+		// stop in the request rather than leaving it "stopping".
+		requireTruef(t, out.State == "stopped", "environment %d state = %q after stopping, want %q", envID, out.State, "stopped")
 		t.Logf("Stopped environment %s (state=%s)", out.Name, out.State)
 	})
 
@@ -99,6 +103,8 @@ func TestIndividual_Environments(t *testing.T) {
 			EnvironmentID: envID,
 		})
 		requireNoError(t, err, "delete environment")
+		requireGoneOn(ctx, t, sess.individual, "environment after delete", "gitlab_environment_get",
+			environments.GetInput{ProjectID: proj.pidOf(), EnvironmentID: envID})
 		t.Log("Deleted environment")
 	})
 }
@@ -164,6 +170,9 @@ func TestMeta_Environments(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "environment_id": envID, "external_url": "https://meta-staging.example.com"},
 		})
 		requireNoError(t, err, "meta update environment")
+		requireTruef(t, out.ID == envID, "update answered for environment %d, want %d", out.ID, envID)
+		requireTruef(t, out.ExternalURL == "https://meta-staging.example.com",
+			"environment external_url = %q, want the updated one", out.ExternalURL)
 		t.Logf("Updated environment %s via meta-tool", out.Name)
 	})
 
@@ -174,6 +183,7 @@ func TestMeta_Environments(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "environment_id": envID},
 		})
 		requireNoError(t, err, "meta stop environment")
+		requireTruef(t, out.State == "stopped", "environment %d state = %q after stopping, want %q", envID, out.State, "stopped")
 		t.Logf("Stopped environment %s via meta-tool", out.Name)
 	})
 
@@ -184,6 +194,10 @@ func TestMeta_Environments(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "environment_id": envID},
 		})
 		requireNoError(t, err, "meta delete environment")
+		requireGoneOn(ctx, t, sess.meta, "environment after delete", "gitlab_environment", map[string]any{
+			"action": "get",
+			"params": map[string]any{"project_id": proj.pidStr(), "environment_id": envID},
+		})
 		t.Log("Deleted environment via meta-tool")
 	})
 }

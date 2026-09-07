@@ -228,6 +228,8 @@ func TestIndividual_Files(t *testing.T) {
 			CommitMessage: "delete crud test file",
 		})
 		requireNoError(t, err, "delete file")
+		requireGoneOn(ctx, t, sess.individual, "file "+crudPath+" after delete", "gitlab_file_get",
+			files.GetInput{ProjectID: proj.pidOf(), FilePath: crudPath, Ref: defaultBranch})
 		t.Logf("FileDelete: %s", crudPath)
 	})
 
@@ -410,6 +412,14 @@ func TestMeta_Files(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta file delete")
+		requireGoneOn(ctx, t, sess.meta, "file "+crudPath+" after delete", "gitlab_repository", map[string]any{
+			"action": "file_get",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+				"file_path":  crudPath,
+				"ref":        defaultBranch,
+			},
+		})
 		t.Logf("Meta FileDelete: %s", crudPath)
 	})
 

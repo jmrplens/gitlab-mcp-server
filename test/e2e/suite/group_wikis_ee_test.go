@@ -114,6 +114,16 @@ func TestMeta_GroupWikis(t *testing.T) {
 			"params": map[string]any{"group_id": grp.gidStr(), "slug": wikiSlug},
 		})
 		requireNoError(t, err, "wiki_delete")
+		requireNotListedOn(ctx, t, sess.meta, "group wiki pages after delete", "gitlab_group", map[string]any{
+			"action": "wiki_list",
+			"params": map[string]any{"group_id": grp.gidStr()},
+		}, func(out groupwikis.ListOutput) []string {
+			slugs := make([]string, 0, len(out.WikiPages))
+			for _, p := range out.WikiPages {
+				slugs = append(slugs, p.Slug)
+			}
+			return slugs
+		}, wikiSlug)
 		t.Logf("Deleted group wiki page %s", wikiSlug)
 	})
 }

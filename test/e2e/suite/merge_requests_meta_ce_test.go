@@ -10,6 +10,7 @@ package suite
 import (
 	"context"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -129,6 +130,8 @@ func TestMeta_MRDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "subscribe")
+		requireTruef(t, out.IID == mrIID, "subscribe answered for MR !%d, want !%d", out.IID, mrIID)
+		requireTruef(t, out.Subscribed, "MR !%d reports subscribed=false right after subscribing", mrIID)
 		t.Logf("Subscribed to MR !%d", out.IID)
 	})
 
@@ -139,6 +142,8 @@ func TestMeta_MRDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "unsubscribe")
+		requireTruef(t, out.IID == mrIID, "unsubscribe answered for MR !%d, want !%d", out.IID, mrIID)
+		requireTruef(t, !out.Subscribed, "MR !%d still reports subscribed=true after unsubscribing", mrIID)
 		t.Logf("Unsubscribed from MR !%d", out.IID)
 	})
 
@@ -154,6 +159,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "time_estimate_set")
+		requireTruef(t, out.TimeEstimate == threeHoursSeconds, "time_estimate = %ds, want %ds", out.TimeEstimate, threeHoursSeconds)
 		t.Logf("Time estimate set: %ds", out.TimeEstimate)
 	})
 
@@ -164,6 +170,8 @@ func TestMeta_MRDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "time_stats")
+		requireTruef(t, out.TimeEstimate == threeHoursSeconds, "time_estimate = %ds, want the %ds the previous subtest set", out.TimeEstimate, threeHoursSeconds)
+		requireTruef(t, out.TotalTimeSpent == 0, "total_time_spent = %ds, want 0 before any time is added", out.TotalTimeSpent)
 		t.Logf("Time stats: estimate=%ds, spent=%ds", out.TimeEstimate, out.TotalTimeSpent)
 	})
 
@@ -178,6 +186,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "spent_time_add")
+		requireTruef(t, out.TotalTimeSpent == oneHourSeconds, "total_time_spent = %ds, want %ds", out.TotalTimeSpent, oneHourSeconds)
 		t.Logf("Spent time added: %ds total", out.TotalTimeSpent)
 	})
 
@@ -188,6 +197,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "spent_time_reset")
+		requireTruef(t, out.TotalTimeSpent == 0, "total_time_spent = %ds after reset, want 0", out.TotalTimeSpent)
 		t.Logf("Spent time reset: %ds", out.TotalTimeSpent)
 	})
 
@@ -198,6 +208,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "time_estimate_reset")
+		requireTruef(t, out.TimeEstimate == 0, "time_estimate = %ds after reset, want 0", out.TimeEstimate)
 		t.Logf("Time estimate reset: %ds", out.TimeEstimate)
 	})
 
@@ -235,7 +246,16 @@ func TestMeta_MRDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "approval_config")
-		t.Logf("Approval config for MR %d (project_id=%d)", out.IID, out.ProjectID)
+		// The identity of the merge request is not assertable here. GitLab CE
+		// answers this endpoint with four fields, `approved`, `approved_by`,
+		// `user_can_approve` and `user_has_approved`, and none of the merge
+		// request's own fields the SDK type declares; I checked against a live
+		// 19.3 instance. What the fixture does guarantee is that nobody has
+		// approved the merge request it just created.
+		requireTruef(t, !out.Approved, "a freshly created MR reports approved = true")
+		requireTruef(t, len(out.ApprovedBy) == 0,
+			"a freshly created MR reports %d approvers, want none", len(out.ApprovedBy))
+		t.Logf("Approval config for MR !%d: approved=%v", mrIID, out.Approved)
 	})
 
 	var approvalRuleID int64
@@ -273,6 +293,9 @@ func TestMeta_MRDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "approval_rule_update")
+		requireTruef(t, out.ID == approvalRuleID, "approval_rule_update answered for rule %d, want %d", out.ID, approvalRuleID)
+		requireTruef(t, out.Name == "updated-rule", "approval rule name = %q, want %q", out.Name, "updated-rule")
+		requireTruef(t, out.ApprovalsRequired == 2, "approvals_required = %d, want 2", out.ApprovalsRequired)
 		t.Logf("Updated approval rule %d: %s", out.ID, out.Name)
 	})
 
@@ -289,6 +312,16 @@ func TestMeta_MRDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "approval_rule_delete")
+		requireNotListedOn(ctx, t, sess.meta, "MR approval rules after delete", "gitlab_merge_request", map[string]any{
+			"action": "approval_rules",
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
+		}, func(out mrapprovals.RulesOutput) []int64 {
+			ids := make([]int64, 0, len(out.Rules))
+			for _, r := range out.Rules {
+				ids = append(ids, r.ID)
+			}
+			return ids
+		}, approvalRuleID)
 		t.Logf("Deleted approval rule %d", approvalRuleID)
 	})
 
@@ -361,6 +394,10 @@ func TestMeta_MRDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "emoji_mr_delete")
+		requireNotListedOn(ctx, t, sess.meta, "MR award emoji after delete", "gitlab_merge_request", map[string]any{
+			"action": "emoji_mr_list",
+			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
+		}, awardEmojiIDs, mrEmojiID)
 		t.Logf("Deleted MR emoji %d", mrEmojiID)
 	})
 
@@ -441,32 +478,47 @@ func TestMeta_MRDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "emoji_mr_note_delete")
+		requireNotListedOn(ctx, t, sess.meta, "MR note award emoji after delete", "gitlab_merge_request", map[string]any{
+			"action": "emoji_mr_note_list",
+			"params": map[string]any{
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+				"note_id":           mrNoteID,
+			},
+		}, awardEmojiIDs, mrNoteEmojiID)
 		t.Logf("Deleted MR note emoji %d", mrNoteEmojiID)
 	})
 
 	// ── Setup for resource event tests ───────────────────────────────────
+	const (
+		mrEventLabelName      = "e2e-mr-event-label"
+		mrEventMilestoneTitle = "e2e-mr-event-milestone"
+	)
 	t.Run("SetupLabelEvent", func(t *testing.T) {
 		requireTruef(t, mrIID > 0, "mrIID not set")
 		lbl, err := callToolOn[labels.Output](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "label_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"name":       "e2e-mr-event-label",
+				"name":       mrEventLabelName,
 				"color":      "#0033cc",
 			},
 		})
 		requireNoError(t, err, "label_create for MR event setup")
+		requireTruef(t, lbl.Name == mrEventLabelName, "label name = %q, want %q", lbl.Name, mrEventLabelName)
 		t.Logf("Created label %q (ID=%d)", lbl.Name, lbl.ID)
 
-		_, err = callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
+		updated, err := callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "update",
 			"params": map[string]any{
 				"project_id":        proj.pidStr(),
 				"merge_request_iid": mrIID,
-				"add_labels":        []string{"e2e-mr-event-label"},
+				"add_labels":        []string{mrEventLabelName},
 			},
 		})
 		requireNoError(t, err, "add label to MR")
+		requireTruef(t, slices.Contains(updated.Labels, mrEventLabelName),
+			"MR !%d labels = %v, want them to contain %q", mrIID, updated.Labels, mrEventLabelName)
 		t.Log("Added label to MR")
 	})
 
@@ -476,13 +528,14 @@ func TestMeta_MRDeep(t *testing.T) {
 			"action": "milestone_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"title":      "e2e-mr-event-milestone",
+				"title":      mrEventMilestoneTitle,
 			},
 		})
 		requireNoError(t, err, "milestone_create for MR event setup")
+		requireTruef(t, ms.Title == mrEventMilestoneTitle, "milestone title = %q, want %q", ms.Title, mrEventMilestoneTitle)
 		t.Logf("Created milestone %q (ID=%d)", ms.Title, ms.ID)
 
-		_, err = callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
+		updated, err := callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "update",
 			"params": map[string]any{
 				"project_id":        proj.pidStr(),
@@ -491,6 +544,8 @@ func TestMeta_MRDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "set milestone on MR")
+		requireTruef(t, updated.Milestone != nil && updated.Milestone.ID == ms.ID,
+			"MR !%d milestone = %+v, want ID %d", mrIID, updated.Milestone, ms.ID)
 		t.Log("Set milestone on MR")
 	})
 
@@ -506,7 +561,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		})
 		requireNoError(t, err, "close MR for state event")
 
-		_, err = callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
+		reopened, err := callToolOn[mergerequests.Output](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "update",
 			"params": map[string]any{
 				"project_id":        proj.pidStr(),
@@ -515,6 +570,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "reopen MR for state event")
+		requireTruef(t, reopened.State == "opened", "MR !%d state = %q after reopen, want %q", mrIID, reopened.State, "opened")
 		t.Log("Closed and reopened MR to generate state events")
 	})
 
@@ -526,6 +582,10 @@ func TestMeta_MRDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "event_mr_label_list")
+		// SetupLabelEvent added this exact label to this exact merge request.
+		requireTruef(t, slices.ContainsFunc(out.Events, func(e resourceevents.LabelEventOutput) bool {
+			return e.Label != nil && e.Label.Name == mrEventLabelName
+		}), "no label event names %q among %d events", mrEventLabelName, len(out.Events))
 		t.Logf("Listed %d MR label events", len(out.Events))
 	})
 
@@ -537,7 +597,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		})
 		requireNoError(t, err, "list label events for get")
 		requireTruef(t, len(list.Events) > 0, "expected at least 1 MR label event after adding label")
-		_, err = callToolOn[resourceevents.LabelEventOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
+		out, err := callToolOn[resourceevents.LabelEventOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "event_mr_label_get",
 			"params": map[string]any{
 				"project_id":        proj.pidStr(),
@@ -546,6 +606,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "event_mr_label_get")
+		requireTruef(t, out.ID == list.Events[0].ID, "label event ID = %d, want the listed %d", out.ID, list.Events[0].ID)
 		t.Log("Got MR label event")
 	})
 
@@ -556,6 +617,10 @@ func TestMeta_MRDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "event_mr_milestone_list")
+		// SetupMilestoneEvent put this exact milestone on this exact merge request.
+		requireTruef(t, slices.ContainsFunc(out.Events, func(e resourceevents.MilestoneEventOutput) bool {
+			return e.Milestone != nil && e.Milestone.Title == mrEventMilestoneTitle
+		}), "no milestone event names %q among %d events", mrEventMilestoneTitle, len(out.Events))
 		t.Logf("Listed %d MR milestone events", len(out.Events))
 	})
 
@@ -567,7 +632,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		})
 		requireNoError(t, err, "list milestone events for get")
 		requireTruef(t, len(list.Events) > 0, "expected at least 1 MR milestone event after setting milestone")
-		_, err = callToolOn[resourceevents.MilestoneEventOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
+		out, err := callToolOn[resourceevents.MilestoneEventOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
 			"action": "event_mr_milestone_get",
 			"params": map[string]any{
 				"project_id":         proj.pidStr(),
@@ -576,6 +641,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "event_mr_milestone_get")
+		requireTruef(t, out.ID == list.Events[0].ID, "milestone event ID = %d, want the listed %d", out.ID, list.Events[0].ID)
 		t.Log("Got MR milestone event")
 	})
 
@@ -596,6 +662,7 @@ func TestMeta_MRDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "event_mr_state_get")
+		requireTruef(t, out.ID == list.Events[0].ID, "state event ID = %d, want the listed %d", out.ID, list.Events[0].ID)
 		t.Logf("Got MR state event %d: %s", out.ID, out.State)
 	})
 
@@ -607,7 +674,11 @@ func TestMeta_MRDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
 		})
 		requireNoError(t, err, "cancel_auto_merge")
-		t.Log("cancel_auto_merge completed")
+		// The response is not assertable: this fixture never enabled auto-merge,
+		// because doing so needs a pipeline, so the call is a no-op and GitLab
+		// answers it with a body it does not promise the shape of. A live 19.3
+		// instance returned one carrying no IID at all.
+		t.Logf("cancel_auto_merge completed for MR !%d (auto-merge was never enabled)", mrIID)
 	})
 }
 

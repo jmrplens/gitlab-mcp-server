@@ -88,6 +88,9 @@ func TestIndividual_Badges(t *testing.T) {
 			BadgeID:   badgeID,
 		})
 		requireNoError(t, err, "delete badge")
+		requireNotListedOn(ctx, t, sess.individual, "project badges after delete", "gitlab_list_project_badges",
+			badges.ListProjectInput{ProjectID: proj.pidOf()},
+			projectBadgeIDs, badgeID)
 		t.Log("Deleted badge")
 	})
 }
@@ -162,6 +165,10 @@ func TestMeta_Badges(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "badge_id": badgeID},
 		})
 		requireNoError(t, err, "meta delete badge")
+		requireNotListedOn(ctx, t, sess.meta, "project badges after delete", "gitlab_project", map[string]any{
+			"action": "badge_list",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, projectBadgeIDs, badgeID)
 		t.Log("Deleted badge via meta-tool")
 	})
 }

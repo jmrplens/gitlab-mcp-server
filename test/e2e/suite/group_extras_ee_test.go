@@ -124,6 +124,10 @@ func TestMeta_GroupPushRules(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta group push rule delete")
+		requireGoneOn(ctx, t, sess.meta, "group push rules after delete", "gitlab_group", map[string]any{
+			"action": "push_rule_get",
+			"params": map[string]any{"group_id": grp.gidStr()},
+		})
 		t.Log("Deleted group push rules")
 	})
 }
@@ -474,6 +478,26 @@ func groupExtrasAddHook(ctx context.Context, t *testing.T, grp GroupFixture) int
 	return out.ID
 }
 
+// groupHookCustomHeaderKeys maps a group webhook to the custom header keys it
+// carries. As with a project hook, GitLab masks the value and keeps the key.
+func groupHookCustomHeaderKeys(out groups.HookOutput) []string {
+	keys := make([]string, 0, len(out.CustomHeaders))
+	for _, h := range out.CustomHeaders {
+		keys = append(keys, h.Key)
+	}
+	return keys
+}
+
+// groupHookURLVariableKeys maps a group webhook to the URL variable keys it
+// carries; GitLab masks those values on read the same way.
+func groupHookURLVariableKeys(out groups.HookOutput) []string {
+	keys := make([]string, 0, len(out.URLVariables))
+	for _, v := range out.URLVariables {
+		keys = append(keys, v.Key)
+	}
+	return keys
+}
+
 // runGroupExtrasHookHeaderOps drives hook_set_custom_header and
 // hook_delete_custom_header; both are expected to succeed on a fresh hook.
 func runGroupExtrasHookHeaderOps(t *testing.T, ctx context.Context, grp GroupFixture, hookID int64) {
@@ -491,6 +515,11 @@ func runGroupExtrasHookHeaderOps(t *testing.T, ctx context.Context, grp GroupFix
 			},
 		})
 		requireNoError(t, err, "group hook_set_custom_header")
+		// GitLab masks a custom header's value on read but keeps its key.
+		requireListedOn(ctx, t, sess.meta, "group hook custom headers after set", "gitlab_group", map[string]any{
+			"action": "hook_get",
+			"params": map[string]any{"group_id": grp.gidStr(), "hook_id": hookID},
+		}, groupHookCustomHeaderKeys, "X-E2E-Group")
 		t.Log("Set custom header on group hook")
 	})
 
@@ -505,6 +534,10 @@ func runGroupExtrasHookHeaderOps(t *testing.T, ctx context.Context, grp GroupFix
 			},
 		})
 		requireNoError(t, err, "group hook_delete_custom_header")
+		requireNotListedOn(ctx, t, sess.meta, "group hook custom headers after delete", "gitlab_group", map[string]any{
+			"action": "hook_get",
+			"params": map[string]any{"group_id": grp.gidStr(), "hook_id": hookID},
+		}, groupHookCustomHeaderKeys, "X-E2E-Group")
 		t.Log("Deleted custom header from group hook")
 	})
 }
@@ -544,6 +577,10 @@ func runGroupExtrasHookURLVariableOps(t *testing.T, ctx context.Context, grp Gro
 		})
 		if variableSet {
 			requireNoError(t, err, "delete URL variable that was set")
+			requireNotListedOn(ctx, t, sess.meta, "group hook URL variables after delete", "gitlab_group", map[string]any{
+				"action": "hook_get",
+				"params": map[string]any{"group_id": grp.gidStr(), "hook_id": hookID},
+			}, groupHookURLVariableKeys, "e2e_var")
 			t.Log("Deleted URL variable from group hook")
 			return
 		}

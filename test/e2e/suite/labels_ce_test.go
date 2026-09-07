@@ -79,6 +79,9 @@ func TestIndividual_Labels(t *testing.T) {
 			LabelID:   toolutil.StringOrInt(strconv.FormatInt(labelID, 10)),
 		})
 		requireNoError(t, err, "label delete")
+		requireNotListedOn(ctx, t, sess.individual, "project labels after delete", "gitlab_label_list",
+			labels.ListInput{ProjectID: proj.pidOf()},
+			projectLabelIDs, labelID)
 		t.Log("Deleted label")
 	})
 }
@@ -156,6 +159,10 @@ func TestMeta_Labels(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "meta label delete")
+		requireNotListedOn(ctx, t, sess.meta, "project labels after delete", "gitlab_project", map[string]any{
+			"action": "label_list",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, projectLabelIDs, labelID)
 		t.Logf("Deleted label ID=%d", labelID)
 	})
 }

@@ -92,6 +92,8 @@ func TestMeta_SecurityCategories(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "security_category_delete")
+		// The catalog exposes no read for security categories, so the removal
+		// has nothing to be observed through.
 		t.Logf("Deleted security category %d", categoryID)
 	})
 }

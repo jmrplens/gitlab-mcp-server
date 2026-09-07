@@ -8,6 +8,7 @@ package suite
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -75,6 +76,8 @@ func TestMeta_UserSelf(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "set_status")
+			requireTruef(t, out.Emoji == "coffee", "status emoji = %q, want %q", out.Emoji, "coffee")
+			requireTruef(t, out.Message == "e2e-testing", "status message = %q, want %q", out.Message, "e2e-testing")
 			t.Logf("Set status: emoji=%s message=%s", out.Emoji, out.Message)
 
 			// Get status back
@@ -84,6 +87,10 @@ func TestMeta_UserSelf(t *testing.T) {
 				"params": map[string]any{"user_id": currentUserID},
 			})
 			requireNoError(t, err, "get_status")
+			// The status was set on this same account a moment ago, and the test
+			// holds CapabilityCurrentUserState so nothing else writes it.
+			requireTruef(t, got.Emoji == "coffee", "read-back status emoji = %q, want %q", got.Emoji, "coffee")
+			requireTruef(t, got.Message == "e2e-testing", "read-back status message = %q, want %q", got.Message, "e2e-testing")
 			t.Logf("Got status: emoji=%s message=%s", got.Emoji, got.Message)
 
 			// Clear status
@@ -246,6 +253,10 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 				"params": map[string]any{"query": username},
 			})
 			requireNoError(t, err, "namespace_search")
+			// Every account owns a personal namespace whose path is its username.
+			requireTruef(t, slices.ContainsFunc(out.Namespaces, func(n namespaces.Output) bool {
+				return n.Path == username
+			}), "namespace search for %q did not return the account's own namespace: %+v", username, out.Namespaces)
 			t.Logf("Namespace search '%s': %d results", username, len(out.Namespaces))
 		})
 
@@ -256,6 +267,9 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 				"params": map[string]any{"id": username},
 			})
 			requireNoError(t, err, "namespace_exists")
+			// The account's own namespace path is taken, which is what this
+			// endpoint reports.
+			requireTruef(t, out.Exists, "namespace %q reported as free, but it is the account's own", username)
 			t.Logf("Namespace exists: %v", out.Exists)
 		})
 
@@ -292,6 +306,7 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 				})
 			})
 			requireNoError(t, err, "notification_global_update")
+			requireTruef(t, out.Level == "participating", "global notification level = %q, want %q", out.Level, "participating")
 			t.Logf("Updated global notification level: %s", out.Level)
 		})
 
@@ -302,6 +317,9 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 				"params": map[string]any{"project_id": proj.pidStr()},
 			})
 			requireNoError(t, err, "notification_project_get")
+			// A project created moments ago carries no per-project override, so
+			// GitLab reports it as following the account default.
+			requireTruef(t, out.Level == "global", "fresh project notification level = %q, want %q", out.Level, "global")
 			t.Logf("Project notification level: %s", out.Level)
 
 			upd, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
@@ -309,6 +327,7 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 				"params": map[string]any{"project_id": proj.pidStr(), "level": "watch"},
 			})
 			requireNoError(t, err, "notification_project_update")
+			requireTruef(t, upd.Level == "watch", "project notification level = %q, want %q", upd.Level, "watch")
 			t.Logf("Updated project notification level: %s", upd.Level)
 		})
 
@@ -320,6 +339,8 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 				"params": map[string]any{"group_id": grp.gidStr()},
 			})
 			requireNoError(t, err, "notification_group_get")
+			// The group was created moments ago and carries no override either.
+			requireTruef(t, out.Level == "global", "fresh group notification level = %q, want %q", out.Level, "global")
 			t.Logf("Group notification level: %s", out.Level)
 
 			upd, err := callToolOn[notifications.Output](ctx, sess.meta, "gitlab_user", map[string]any{
@@ -327,6 +348,7 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 				"params": map[string]any{"group_id": grp.gidStr(), "level": "watch"},
 			})
 			requireNoError(t, err, "notification_group_update")
+			requireTruef(t, upd.Level == "watch", "group notification level = %q, want %q", upd.Level, "watch")
 			t.Logf("Updated group notification level: %s", upd.Level)
 		})
 
@@ -412,6 +434,10 @@ func TestMeta_UserSSHKeyLifecycle(t *testing.T) {
 				"params": map[string]any{"key_id": keyID},
 			})
 			requireNoError(t, err, "delete_ssh_key")
+			requireNotListedOn(ctx, t, sess.meta, "account SSH keys after delete", "gitlab_user", map[string]any{
+				"action": "ssh_keys",
+				"params": map[string]any{},
+			}, sshKeyIDs, keyID)
 			t.Logf("Deleted SSH key %d", keyID)
 		})
 	})
@@ -596,6 +622,10 @@ func TestMeta_UserAdmin(t *testing.T) {
 				"params": map[string]any{"user_id": testUserID, "key_id": userKeyID},
 			})
 			requireNoError(t, err, "delete_ssh_key_for_user")
+			requireNotListedOn(ctx, t, sess.meta, "user SSH keys after delete", "gitlab_user", map[string]any{
+				"action": "ssh_keys_for_user",
+				"params": map[string]any{"user_id": testUserID},
+			}, sshKeyIDs, userKeyID)
 			t.Logf("Deleted SSH key %d for user %d", userKeyID, testUserID)
 		})
 
@@ -645,6 +675,16 @@ func TestMeta_UserAdmin(t *testing.T) {
 				"params": map[string]any{"user_id": testUserID, "email_id": emailID},
 			})
 			requireNoError(t, err, "delete_email_for_user")
+			requireNotListedOn(ctx, t, sess.meta, "user emails after delete", "gitlab_user", map[string]any{
+				"action": "emails_for_user",
+				"params": map[string]any{"user_id": testUserID},
+			}, func(out useremails.ListOutput) []int64 {
+				ids := make([]int64, 0, len(out.Emails))
+				for _, e := range out.Emails {
+					ids = append(ids, e.ID)
+				}
+				return ids
+			}, emailID)
 			t.Logf("Deleted email %d for user %d", emailID, testUserID)
 		})
 
@@ -705,6 +745,18 @@ func TestMeta_UserAdmin(t *testing.T) {
 				"params": map[string]any{"user_id": testUserID, "token_id": impTokenID},
 			})
 			requireNoError(t, err, "revoke_impersonation_token")
+			// A revoked token stays listed under state=all, so the active
+			// listing is what observes the revocation.
+			requireNotListedOn(ctx, t, sess.meta, "active impersonation tokens after revoke", "gitlab_user", map[string]any{
+				"action": "list_impersonation_tokens",
+				"params": map[string]any{"user_id": testUserID, "state": "active"},
+			}, func(out impersonationtokens.ListOutput) []int64 {
+				ids := make([]int64, 0, len(out.Tokens))
+				for _, tok := range out.Tokens {
+					ids = append(ids, tok.ID)
+				}
+				return ids
+			}, impTokenID)
 			t.Logf("Revoked impersonation token %d", impTokenID)
 		})
 

@@ -87,6 +87,8 @@ func TestIndividual_CIVariables(t *testing.T) {
 			Key:       varKey,
 		})
 		requireNoError(t, err, "delete CI variable")
+		requireGoneOn(ctx, t, sess.individual, "CI variable "+varKey+" after delete", "gitlab_ci_variable_get",
+			civariables.GetInput{ProjectID: proj.pidOf(), Key: varKey})
 		t.Log("Deleted CI variable")
 	})
 }
@@ -160,6 +162,10 @@ func TestMeta_CIVariables(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "key": varKey},
 		})
 		requireNoError(t, err, "meta delete CI variable")
+		requireGoneOn(ctx, t, sess.meta, "CI variable "+varKey+" after delete", "gitlab_ci_variable", map[string]any{
+			"action": "get",
+			"params": map[string]any{"project_id": proj.pidStr(), "key": varKey},
+		})
 		t.Log("Deleted CI variable via meta-tool")
 	})
 }

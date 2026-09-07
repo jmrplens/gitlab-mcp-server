@@ -115,6 +115,15 @@ func TestIndividual_ClusterAgents(t *testing.T) {
 			TokenID:   tokenID,
 		})
 		requireNoError(t, err, "revoke agent token")
+		// A revoked token is gone rather than readable with a revoked status:
+		// GitLab 19.3 answers the re-read with 404, which I checked against a
+		// live instance after this test asserted the status and failed.
+		requireGoneOn(ctx, t, sess.individual, "revoked agent token", "gitlab_get_cluster_agent_token",
+			clusteragents.GetAgentTokenInput{
+				ProjectID: proj.pidOf(),
+				AgentID:   agentID,
+				TokenID:   tokenID,
+			})
 		t.Logf("Revoked agent token %d", tokenID)
 	})
 
@@ -125,6 +134,9 @@ func TestIndividual_ClusterAgents(t *testing.T) {
 			AgentID:   agentID,
 		})
 		requireNoError(t, err, "delete cluster agent")
+		requireNotListedOn(ctx, t, sess.individual, "cluster agents after delete", "gitlab_list_cluster_agents",
+			clusteragents.ListAgentsInput{ProjectID: proj.pidOf()},
+			clusterAgentIDs, agentID)
 		t.Logf("Deleted cluster agent %d", agentID)
 	})
 }
@@ -250,6 +262,15 @@ func TestMeta_ClusterAgents(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "revoke agent token meta")
+		// Gone rather than revoked, the same as its individual twin above.
+		requireGoneOn(ctx, t, sess.meta, "revoked agent token (meta)", "gitlab_admin", map[string]any{
+			"action": "cluster_agent_token_get",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+				"agent_id":   agentID,
+				"token_id":   tokenID,
+			},
+		})
 		t.Logf("Revoked agent token (meta) %d", tokenID)
 	})
 
@@ -263,6 +284,10 @@ func TestMeta_ClusterAgents(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "delete cluster agent meta")
+		requireNotListedOn(ctx, t, sess.meta, "cluster agents after delete", "gitlab_admin", map[string]any{
+			"action": "cluster_agent_list",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, clusterAgentIDs, agentID)
 		t.Logf("Deleted cluster agent (meta) %d", agentID)
 	})
 }

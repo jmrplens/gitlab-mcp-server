@@ -145,6 +145,7 @@ func TestMeta_AdminSettingsAppearance(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "appearance_update")
+			requireTruef(t, out.Appearance.Title == "E2E GitLab", "appearance title = %q, want %q", out.Appearance.Title, "E2E GitLab")
 			t.Logf("Updated appearance: title=%s", out.Appearance.Title)
 		})
 	})
@@ -261,6 +262,9 @@ func TestMeta_AdminFeatures(t *testing.T) {
 				"params": map[string]any{},
 			})
 			requireNoError(t, err, "feature_list_definitions")
+			// Feature flag definitions ship with GitLab, so an empty list means
+			// the read did not reach them rather than that there are none.
+			requireTruef(t, len(out.Definitions) > 0, "instance reports no feature flag definitions at all")
 			t.Logf("Feature definitions: %d", len(out.Definitions))
 		})
 
@@ -562,6 +566,8 @@ func TestMeta_AdminCustomAttributes(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "custom_attr_set")
+			requireTruef(t, out.Key == attrKey, "custom attribute key = %q, want %q", out.Key, attrKey)
+			requireTruef(t, out.Value == "test-value", "custom attribute value = %q, want %q", out.Value, "test-value")
 			t.Logf("Set custom attr: key=%s", out.Key)
 		})
 		defer func() {
@@ -585,6 +591,8 @@ func TestMeta_AdminCustomAttributes(t *testing.T) {
 				},
 			})
 			requireNoError(t, err, "custom_attr_get")
+			requireTruef(t, out.Key == attrKey, "custom attribute key = %q, want %q", out.Key, attrKey)
+			requireTruef(t, out.Value == "test-value", "read-back custom attribute value = %q, want the %q just set", out.Value, "test-value")
 			t.Logf("Got custom attr: key=%s value=%s", out.Key, out.Value)
 		})
 

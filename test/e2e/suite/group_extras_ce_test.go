@@ -96,6 +96,12 @@ func runGroupExtrasArchiveOps(t *testing.T, ctx context.Context, grp GroupFixtur
 			"params": map[string]any{"group_id": grp.gidStr()},
 		})
 		requireNoError(t, err, "group unarchive")
+		read, err := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "get",
+			"params": map[string]any{"group_id": grp.gidStr()},
+		})
+		requireNoError(t, err, "re-read group after unarchive")
+		requireTruef(t, !read.Archived, "group %d still reports archived after unarchiving", grp.ID)
 		t.Logf("Unarchived group %d", grp.ID)
 	})
 }
@@ -284,6 +290,10 @@ func TestMeta_GroupToGroupSharing(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group unshare_from_group")
+		requireNotListedOn(ctx, t, sess.meta, "host group shares after unshare", "gitlab_group", map[string]any{
+			"action": "get",
+			"params": map[string]any{"group_id": host.gidStr()},
+		}, sharedWithGroupIDs, guest.ID)
 		t.Logf("Unshared group %d from group %d", host.ID, guest.ID)
 	})
 
@@ -310,6 +320,10 @@ func TestMeta_GroupToGroupSharing(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group_member_unshare")
+		requireNotListedOn(ctx, t, sess.meta, "host group shares after member unshare", "gitlab_group", map[string]any{
+			"action": "get",
+			"params": map[string]any{"group_id": host.gidStr()},
+		}, sharedWithGroupIDs, guest.ID)
 		t.Logf("Unshared group %d from group %d via members surface", host.ID, guest.ID)
 	})
 }
@@ -380,6 +394,10 @@ func TestMeta_GroupMemberLifecycle(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group_member_remove")
+		requireNotListedOn(ctx, t, sess.meta, "group members after remove", "gitlab_group", map[string]any{
+			"action": "members",
+			"params": map[string]any{"group_id": grp.gidStr()},
+		}, groupMemberIDs, userID)
 		t.Logf("Removed user %d from group %d", userID, grp.ID)
 	})
 }

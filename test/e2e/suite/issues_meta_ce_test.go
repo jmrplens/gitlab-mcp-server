@@ -10,7 +10,9 @@ package suite
 
 import (
 	"context"
+	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -118,6 +120,8 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
 		})
 		requireNoError(t, err, "subscribe")
+		requireTruef(t, out.IID == issueIID, "subscribe answered for issue !%d, want !%d", out.IID, issueIID)
+		requireTruef(t, out.Subscribed, "issue !%d reports subscribed=false right after subscribing", issueIID)
 		t.Logf("Subscribed to issue !%d", out.IID)
 	})
 
@@ -128,6 +132,8 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
 		})
 		requireNoError(t, err, "issue unsubscribe")
+		requireTruef(t, out.IID == issueIID, "unsubscribe answered for issue !%d, want !%d", out.IID, issueIID)
+		requireTruef(t, !out.Subscribed, "issue !%d still reports subscribed=true after unsubscribing", issueIID)
 		t.Logf("Unsubscribed from issue !%d", out.IID)
 	})
 
@@ -163,6 +169,11 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
 		})
 		requireNoError(t, err, "issue participants")
+		// The fixture's own user opened the issue, and GitLab counts an author
+		// among the participants.
+		requireTruef(t, slices.ContainsFunc(out.Participants, func(p issues.ParticipantOutput) bool {
+			return p.Username == sess.username
+		}), "participants do not include the issue author %q: %+v", sess.username, out.Participants)
 		t.Logf("Issue has %d participants", len(out.Participants))
 	})
 
@@ -198,6 +209,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "time_estimate_set")
+		requireTruef(t, out.TimeEstimate == twoHoursSeconds, "time_estimate = %ds, want %ds", out.TimeEstimate, twoHoursSeconds)
 		t.Logf("Time estimate set: %ds", out.TimeEstimate)
 	})
 
@@ -208,6 +220,8 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
 		})
 		requireNoError(t, err, "time_stats_get")
+		requireTruef(t, out.TimeEstimate == twoHoursSeconds, "time_estimate = %ds, want the %ds the previous subtest set", out.TimeEstimate, twoHoursSeconds)
+		requireTruef(t, out.TotalTimeSpent == 0, "total_time_spent = %ds, want 0 before any time is added", out.TotalTimeSpent)
 		t.Logf("Time stats: estimate=%ds, spent=%ds", out.TimeEstimate, out.TotalTimeSpent)
 	})
 
@@ -222,6 +236,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "spent_time_add")
+		requireTruef(t, out.TotalTimeSpent == thirtyMinutesSeconds, "total_time_spent = %ds, want %ds", out.TotalTimeSpent, thirtyMinutesSeconds)
 		t.Logf("Spent time added: %ds total", out.TotalTimeSpent)
 	})
 
@@ -232,6 +247,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
 		})
 		requireNoError(t, err, "spent_time_reset")
+		requireTruef(t, out.TotalTimeSpent == 0, "total_time_spent = %ds after reset, want 0", out.TotalTimeSpent)
 		t.Logf("Spent time reset: %ds", out.TotalTimeSpent)
 	})
 
@@ -242,6 +258,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
 		})
 		requireNoError(t, err, "time_estimate_reset")
+		requireTruef(t, out.TimeEstimate == 0, "time_estimate = %ds after reset, want 0", out.TimeEstimate)
 		t.Logf("Time estimate reset: %ds", out.TimeEstimate)
 	})
 
@@ -277,6 +294,10 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "link_get")
+		requireTruef(t, got.ID == link.ID, "link_get returned link %d, want %d", got.ID, link.ID)
+		requireTruef(t, got.TargetIssue != nil, "link %d carries no target issue", link.ID)
+		requireTruef(t, got.TargetIssue.IID == issue2.IID,
+			"link %d points at issue !%d, want !%d", link.ID, got.TargetIssue.IID, issue2.IID)
 		t.Logf("Got issue link %d", got.ID)
 	})
 
@@ -296,6 +317,8 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
 		requireNoError(t, err, "statistics_get_project")
+		// This fixture's issues live in this project and none has been closed yet.
+		requireTruef(t, out.Statistics.Counts.Opened >= 1, "project reports %d open issues, want at least the fixture's own", out.Statistics.Counts.Opened)
 		t.Logf("Project issue statistics: open=%d", out.Statistics.Counts.Opened)
 	})
 
@@ -396,32 +419,49 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "emoji_issue_note_delete")
+		requireNotListedOn(ctx, t, sess.meta, "note award emoji after delete", "gitlab_issue", map[string]any{
+			"action": "emoji_issue_note_list",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+				"issue_iid":  issueIID,
+				"note_id":    noteID,
+			},
+		}, awardEmojiIDs, noteEmojiID)
 		t.Logf("Deleted note emoji %d", noteEmojiID)
 	})
 
 	// ── Resource event setup: generate label, milestone, and state events ──
+	const (
+		eventLabelName      = "e2e-event-label"
+		eventLabelColor     = "#FF0000"
+		eventMilestoneTitle = "e2e-event-milestone"
+	)
 	t.Run("SetupLabelEvent", func(t *testing.T) {
 		requireTruef(t, issueIID > 0, "issueIID not set")
 		lbl, err := callToolOn[labels.Output](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "label_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"name":       "e2e-event-label",
-				"color":      "#FF0000",
+				"name":       eventLabelName,
+				"color":      eventLabelColor,
 			},
 		})
 		requireNoError(t, err, "label_create for event setup")
+		requireTruef(t, lbl.Name == eventLabelName, "label name = %q, want %q", lbl.Name, eventLabelName)
+		requireTruef(t, strings.EqualFold(lbl.Color, eventLabelColor), "label color = %q, want %q", lbl.Color, eventLabelColor)
 		t.Logf("Created label %q (ID=%d)", lbl.Name, lbl.ID)
 
-		_, err = callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
+		updated, err := callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "update",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 				"issue_iid":  issueIID,
-				"add_labels": "e2e-event-label",
+				"add_labels": eventLabelName,
 			},
 		})
 		requireNoError(t, err, "add label to issue")
+		requireTruef(t, slices.Contains(updated.Labels, eventLabelName),
+			"issue !%d labels = %v, want them to contain %q", issueIID, updated.Labels, eventLabelName)
 		t.Log("Added label to issue")
 	})
 
@@ -431,13 +471,14 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"action": "milestone_create",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"title":      "e2e-event-milestone",
+				"title":      eventMilestoneTitle,
 			},
 		})
 		requireNoError(t, err, "milestone_create for event setup")
+		requireTruef(t, ms.Title == eventMilestoneTitle, "milestone title = %q, want %q", ms.Title, eventMilestoneTitle)
 		t.Logf("Created milestone %q (ID=%d)", ms.Title, ms.ID)
 
-		_, err = callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
+		updated, err := callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "update",
 			"params": map[string]any{
 				"project_id":   proj.pidStr(),
@@ -446,6 +487,9 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "set milestone on issue")
+		requireTruef(t, updated.Milestone != nil, "issue !%d carries no milestone after the update", issueIID)
+		requireTruef(t, updated.Milestone.ID == ms.ID,
+			"issue !%d milestone = %d, want %d", issueIID, updated.Milestone.ID, ms.ID)
 		t.Log("Set milestone on issue")
 	})
 
@@ -461,7 +505,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 		})
 		requireNoError(t, err, "close issue for state event")
 
-		_, err = callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
+		reopened, err := callToolOn[issues.Output](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "update",
 			"params": map[string]any{
 				"project_id":  proj.pidStr(),
@@ -470,6 +514,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "reopen issue for state event")
+		requireTruef(t, reopened.State == "opened", "issue !%d state = %q after reopen, want %q", issueIID, reopened.State, "opened")
 		t.Log("Closed and reopened issue to generate state events")
 	})
 
@@ -481,6 +526,9 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
 		})
 		requireNoError(t, err, "event_issue_label_list")
+		// SetupLabelEvent added this exact label to this exact issue.
+		requireTruef(t, slices.Contains(labelEventNames(out), eventLabelName),
+			"no label event names %q among %d events", eventLabelName, len(out.Events))
 		t.Logf("Listed %d label events", len(out.Events))
 	})
 
@@ -491,6 +539,9 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			"params": map[string]any{"project_id": proj.pidStr(), "issue_iid": issueIID},
 		})
 		requireNoError(t, err, "event_issue_milestone_list")
+		// SetupMilestoneEvent put this exact milestone on this exact issue.
+		requireTruef(t, slices.Contains(milestoneEventTitles(out), eventMilestoneTitle),
+			"no milestone event names %q among %d events", eventMilestoneTitle, len(out.Events))
 		t.Logf("Listed %d milestone events", len(out.Events))
 	})
 
@@ -512,6 +563,9 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "event_issue_state_get")
+		requireTruef(t, out.ID == list.Events[0].ID, "state event ID = %d, want the listed %d", out.ID, list.Events[0].ID)
+		requireTruef(t, slices.Contains([]string{"closed", "reopened"}, out.State),
+			"state event %d has state %q, want closed or reopened", out.ID, out.State)
 		t.Logf("Got state event %d: %s", out.ID, out.State)
 	})
 
@@ -523,7 +577,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 		})
 		requireNoError(t, err, "list label events")
 		requireTruef(t, len(list.Events) > 0, "expected at least 1 label event after adding label")
-		_, err = callToolOn[resourceevents.LabelEventOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
+		out, err := callToolOn[resourceevents.LabelEventOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "event_issue_label_get",
 			"params": map[string]any{
 				"project_id":     proj.pidStr(),
@@ -532,6 +586,10 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "event_issue_label_get")
+		requireTruef(t, out.ID == list.Events[0].ID, "label event ID = %d, want the listed %d", out.ID, list.Events[0].ID)
+		requireTruef(t, out.Label != nil, "label event %d carries no label", out.ID)
+		requireTruef(t, out.Label.Name == eventLabelName,
+			"label event %d names %q, want %q", out.ID, out.Label.Name, eventLabelName)
 		t.Log("Got label event")
 	})
 
@@ -543,7 +601,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 		})
 		requireNoError(t, err, "list milestone events")
 		requireTruef(t, len(list.Events) > 0, "expected at least 1 milestone event after setting milestone")
-		_, err = callToolOn[resourceevents.MilestoneEventOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
+		out, err := callToolOn[resourceevents.MilestoneEventOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "event_issue_milestone_get",
 			"params": map[string]any{
 				"project_id":         proj.pidStr(),
@@ -552,6 +610,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "event_issue_milestone_get")
+		requireTruef(t, out.ID == list.Events[0].ID, "milestone event ID = %d, want the listed %d", out.ID, list.Events[0].ID)
 		t.Log("Got milestone event")
 	})
 
@@ -652,7 +711,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 		})
 		requireNoError(t, err, "list iteration events for get")
 		requireTruef(t, len(list.Events) > 0, "expected at least 1 iteration event for get")
-		_, err = callToolOn[resourceevents.IterationEventOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
+		out, err := callToolOn[resourceevents.IterationEventOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "event_issue_iteration_get",
 			"params": map[string]any{
 				"project_id":         iterProj.pidStr(),
@@ -661,6 +720,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "event_issue_iteration_get")
+		requireTruef(t, out.ID == list.Events[0].ID, "iteration event ID = %d, want the listed %d", out.ID, list.Events[0].ID)
 		t.Log("Got iteration event")
 	})
 
@@ -678,6 +738,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "issue move")
+		requireTruef(t, out.ProjectID == proj2.ID, "moved issue reports project %d, want %d", out.ProjectID, proj2.ID)
 		t.Logf("Moved issue to project %s → IID %d", proj2.pidStr(), out.IID)
 	})
 }

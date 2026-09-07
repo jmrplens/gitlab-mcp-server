@@ -83,6 +83,16 @@ func TestMeta_Boards(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "board delete")
+		requireNotListedOn(ctx, t, sess.meta, "project boards after delete", "gitlab_project", map[string]any{
+			"action": "board_list",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		}, func(out boards.ListBoardsOutput) []int64 {
+			ids := make([]int64, 0, len(out.Boards))
+			for _, b := range out.Boards {
+				ids = append(ids, b.ID)
+			}
+			return ids
+		}, boardID)
 		t.Logf("Deleted board %d", boardID)
 	})
 }

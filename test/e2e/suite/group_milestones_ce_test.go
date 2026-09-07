@@ -110,6 +110,16 @@ func TestMeta_GroupMilestones(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group milestone delete")
+		requireNotListedOn(ctx, t, sess.meta, "group milestones after delete", "gitlab_group", map[string]any{
+			"action": "group_milestone_list",
+			"params": map[string]any{"group_id": gid},
+		}, func(out groupmilestones.ListOutput) []int64 {
+			iids := make([]int64, 0, len(out.Milestones))
+			for _, m := range out.Milestones {
+				iids = append(iids, m.IID)
+			}
+			return iids
+		}, milestoneIID)
 		t.Logf("Deleted group milestone IID=%d", milestoneIID)
 	})
 }

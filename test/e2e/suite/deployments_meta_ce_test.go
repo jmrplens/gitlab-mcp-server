@@ -115,6 +115,8 @@ func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "deployment update")
+		requireTruef(t, out.ID == createOut.ID, "update answered for deployment %d, want %d", out.ID, createOut.ID)
+		requireTruef(t, out.Status == "success", "deployment status = %q, want %q", out.Status, "success")
 		t.Logf("Updated deployment %d: status=%s", out.ID, out.Status)
 	})
 
