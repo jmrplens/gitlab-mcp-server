@@ -104,14 +104,24 @@ func AssertQueryParam(t *testing.T, r *http.Request, key, expected string) {
 // wiring [httptest.NewServer] to gitlabclient.NewClient by hand. A handful of
 // tests still do the latter, none of them sending GraphQL today, and any
 // GraphQL written against one of those seams would be judged by nobody, which
-// is the state this helper exists to end.
+// is the state this helper exists to end. The same goes for the recording
+// below: a client built by hand is a request nothing observes.
+//
+// Every request is also recorded, when [InventoryDirEnv] names a directory to
+// record into, so the suite can answer what this server actually sends GitLab.
+// Recording is off in an ordinary run.
 //
 // The returned client is safe for concurrent use; the httptest.Server that
 // backs it is goroutine-safe by construction.
 func NewTestClient(tb testing.TB, handler http.Handler) *gitlabclient.Client {
 	tb.Helper()
 
-	srv := httptest.NewServer(validatingHandler(tb, handler))
+	// The two wrappers read the request body separately, and each puts it
+	// back, rather than sharing one read. They answer different questions and
+	// one of them is a gate, so keeping them independent means neither can
+	// break the other; a body a test sends is small enough that reading it
+	// twice costs nothing worth this coupling.
+	srv := httptest.NewServer(recordingHandler(tb, validatingHandler(tb, handler)))
 	tb.Cleanup(srv.Close)
 
 	cfg := &config.Config{
