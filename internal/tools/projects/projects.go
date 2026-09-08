@@ -3228,7 +3228,15 @@ type PushRuleOutput struct {
 }
 
 // pushRuleOutputFromGL maps push rule output from gl between API and evaluator models.
+//
+// A nil rule maps to the zero output rather than a dereference: GitLab answers
+// a project whose rules were deleted with a body of null and a 200, which
+// client-go hands back as a nil rule and no error, and the get handler used
+// to take the whole process down on it.
 func pushRuleOutputFromGL(r *gl.ProjectPushRules) PushRuleOutput {
+	if r == nil {
+		return PushRuleOutput{}
+	}
 	out := PushRuleOutput{
 		ID:                         r.ID,
 		ProjectID:                  r.ProjectID,
@@ -3270,6 +3278,13 @@ func GetPushRules(ctx context.Context, client *gitlabclient.Client, input GetPus
 		}
 		return PushRuleOutput{}, toolutil.WrapErrWithStatusHint("projectGetPushRules", err, http.StatusForbidden,
 			"reading push rules requires Premium/Ultimate licensing and at least Maintainer role on the project")
+	}
+	// A project whose rules were deleted is answered with null and a 200, not
+	// a 404, so it arrives here as no rule and no error. It is reported as a
+	// not-found, which is what it is and what a caller polling for the delete
+	// to land looks for.
+	if rule == nil {
+		return PushRuleOutput{}, errors.New("projectGetPushRules: push rules not found: none are configured on this project. Use gitlab_project_add_push_rule to create one")
 	}
 	return pushRuleOutputFromGL(rule), nil
 }

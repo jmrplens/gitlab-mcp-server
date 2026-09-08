@@ -2720,6 +2720,39 @@ func TestGetPushRules_NotFound(t *testing.T) {
 	}
 }
 
+// TestGetPushRules_NoRulesConfigured_SaysSoInsteadOfPanicking pins the answer
+// to a project whose push rules were deleted. GitLab answers that GET with a
+// body of null and a 200, which client-go hands back as a nil rule and no
+// error; the handler used to dereference it, and in the in-process e2e suite
+// that took the whole test binary down with every test running beside it.
+func TestGetPushRules_NoRulesConfigured_SaysSoInsteadOfPanicking(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathPushRules42 {
+			testutil.RespondJSON(w, http.StatusOK, `null`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := GetPushRules(context.Background(), client, GetPushRulesInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected an error for a project with no push rules, got nil")
+	}
+	if !strings.Contains(err.Error(), "push rules not found") {
+		t.Errorf("error = %q, want it to say the push rules were not found", err)
+	}
+}
+
+// TestPushRuleOutputFromGL_Nil_MapsToTheZeroOutput covers the mapper's own
+// guard, reachable from the add and edit handlers should GitLab ever answer
+// one of them with null as it does the get.
+func TestPushRuleOutputFromGL_Nil_MapsToTheZeroOutput(t *testing.T) {
+	out := pushRuleOutputFromGL(nil)
+	if out.ID != 0 || out.ProjectID != 0 || out.CommitMessageRegex != "" || out.MaxFileSize != 0 || out.CreatedAt != "" {
+		t.Errorf("pushRuleOutputFromGL(nil) = %+v, want the zero output", out)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // FormatPushRuleMarkdown test
 // ---------------------------------------------------------------------------.
