@@ -23,6 +23,61 @@
 // finding, and neither is a mutation reached from an action already classified
 // as mutating.
 //
+// # Where the documents come from
+//
+// The inventory is cmd/internal/graphqldocs, the same reading the schema gate
+// judges, and only the operation-type rule is this command's own. It used to
+// have a document walk of its own that read string constants and package-level
+// variables, which is every document this repository writes today and not every
+// document it may write tomorrow: a document moved into a .graphql file and
+// pulled in with an embed directive folds to nothing for the type checker, so
+// that walk saw none of it while the schema gate read it straight off disk. Two
+// detectors of the same thing disagreeing is how a gate ends up answering a
+// narrower question than the one it prints.
+//
+// What one shared inventory does not fix is attribution. This audit places a
+// document through the object that declares it, or through the body that writes
+// it inline; a .graphql file belongs to no function and no object, so it can be
+// read and still not be tied to the handler that sends it. Rather than pass
+// what it cannot classify, the run reports every such document as a finding and
+// exits non-zero, which is the same answer it gives to a read-only action whose
+// handler it cannot resolve.
+//
+// # Where the two rules disagree
+//
+// The inventory has a pre-filter of its own, and it is not this command's
+// operation-type rule, so the two part company in both directions on shapes
+// nothing in this repository writes today.
+//
+// The pre-filter is the narrower one: it wants the operation keyword at the
+// very start of the comment-stripped text, where the rule here accepts it at
+// the start of any line. A string that only the looser rule reads as a
+// document, such as a sentence of prose above a mutation, is not in the
+// inventory at all and so is neither indexed nor reported. That is a narrowing
+// of what this gate sees, and it is deliberate: every document this repository
+// sends opens with its keyword, including the four assembled from a shared
+// fragment, and a string that does not is not a document GitLab would accept.
+//
+// The keyword's position is not the only place the pre-filter is narrower. It
+// also refuses a brace-wrapped single word with no space in it, the shape an
+// OpenTelemetry unit annotation is written in, and a brace whose first entry
+// binds a name to a quoted string, which is a JSON object and never GraphQL.
+// Both guards exist because without them a metric unit and a mocked API
+// response are reported as broken documents, and both cost this rule a shape it
+// would have accepted: `{__typename}` is a legal one-field document, and
+// written without spaces it never reaches the inventory. Nothing in this
+// repository writes one, and nothing here would say so if something started to,
+// so the pre-filter is what to read when a document is written in a shape none
+// of the others use.
+//
+// The pre-filter is also the looser one, for a literal written inside a
+// function body: it may read one as a document that classifyDocument then
+// classifies as none, in which case the body walk places nothing at its
+// position and the document is reported as unattributed. That is a false alarm
+// rather than a silence, which is the trade this gate makes everywhere else
+// too, and it is a reviewable line rather than a clean run over a string
+// nobody judged.
+//
 // Usage:
 //
 //	go run ./cmd/audit_readonly_graphql/

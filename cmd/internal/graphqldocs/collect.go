@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/constant"
 	"go/token"
+	"go/types"
 	"io/fs"
 	"os"
 	"path"
@@ -32,9 +33,21 @@ func DefaultPatterns() []string { return []string{"./internal/..."} }
 type Document struct {
 	// Package is the import path of the package that declares it.
 	Package string
-	// Name is the constant or variable it is declared as, or "" when it is
-	// written inline at the point of use.
+	// Name is the constant or variable it is declared as, the file name when
+	// it is a standalone .graphql document, or "" when it is written inline at
+	// the point of use.
 	Name string
+	// Object is the constant or variable the document is declared as, and nil
+	// for the two shapes no declaration names: a standalone .graphql file and a
+	// document written inline where it is used.
+	//
+	// It is here for a caller that reasons about the source through the type
+	// checker rather than about the text: cmd/audit_readonly_graphql resolves a
+	// handler's call graph and asks what each object it names holds, so the
+	// object is the only thing that joins this inventory to that walk. A
+	// document with none cannot be attributed to the handler that sends it,
+	// which is a fact that audit reports rather than one it can work around.
+	Object types.Object
 	// Position is where a reader will find it.
 	Position token.Position
 	// Text is the folded value, with any shared fragment already spliced in.
@@ -72,7 +85,7 @@ func Collect(dir string, patterns []string, overlay map[string][]byte) ([]Docume
 	// The standalone files are read first because it costs milliseconds and
 	// type-checking the tree costs seconds: a run that cannot read one of its
 	// own documents should say so before paying for the rest.
-	standalone, err := collectFiles(dir, patterns)
+	standalone, err := Standalone(dir, patterns)
 	if err != nil {
 		return nil, err
 	}
@@ -82,14 +95,30 @@ func Collect(dir string, patterns []string, overlay map[string][]byte) ([]Docume
 		return nil, err
 	}
 
+	documents := append(FromPackages(loaded), standalone...)
+	sortDocuments(documents)
+	return documents, nil
+}
+
+// FromPackages gathers the documents declared in packages that are already
+// loaded, which is the half of the inventory that lives in Go source.
+//
+// It is separate from [Collect] for the caller that has done the load itself:
+// cmd/audit_readonly_graphql type-checks the same tree to build a call graph,
+// and loading it twice would double the seconds a gate costs for an inventory
+// it already holds in memory. The positions come from the packages' own file
+// set, so a caller that mixes these documents with its own walk of the same
+// packages compares positions that mean the same thing.
+func FromPackages(loaded []*packages.Package) []Document {
+	if len(loaded) == 0 {
+		return nil
+	}
 	gatherer := &collector{fset: loaded[0].Fset, claimed: map[token.Pos]bool{}}
 	for _, pkg := range loaded {
 		gatherer.walk(pkg)
 	}
-
-	gatherer.documents = append(gatherer.documents, standalone...)
 	sortDocuments(gatherer.documents)
-	return gatherer.documents, nil
+	return gatherer.documents
 }
 
 // sortDocuments puts the findings in the order a reader walks a repository:
@@ -110,7 +139,7 @@ func sortDocuments(documents []Document) {
 	})
 }
 
-// collectFiles gathers the documents that live in .graphql files rather than in
+// Standalone gathers the documents that live in .graphql files rather than in
 // Go constants.
 //
 // A constant is the only shape this repository uses today, and it is not the
@@ -128,7 +157,7 @@ func sortDocuments(documents []Document) {
 // The walk goes through [os.Root], as cmd/format_md_tables does, so a read is
 // scoped to the tree being audited rather than to whatever a symlink in it
 // points at.
-func collectFiles(dir string, patterns []string) ([]Document, error) {
+func Standalone(dir string, patterns []string) ([]Document, error) {
 	var found []Document
 	for _, base := range walkRoots(dir, patterns) {
 		root, err := os.OpenRoot(base)
@@ -226,24 +255,59 @@ func (c *collector) visit(pkg *packages.Package, node ast.Node) bool {
 
 // recordNamed records every document a declaration gives a name to, covering
 // a constant and a variable at package level and inside a function alike.
+//
+// The defining object is carried with it, which is what lets a caller join this
+// inventory to a walk of the same type-checked source.
 func (c *collector) recordNamed(pkg *packages.Package, spec *ast.ValueSpec) {
-	if len(spec.Names) != len(spec.Values) {
-		return
-	}
 	for i, name := range spec.Names {
-		value := spec.Values[i]
-		text, ok := constantDocument(pkg, value)
+		object := pkg.TypesInfo.Defs[name]
+		text, ok := c.namedDocument(pkg, spec, i, object)
 		if !ok {
 			continue
 		}
-		c.claimed[value.Pos()] = true
 		c.documents = append(c.documents, Document{
 			Package:  pkg.PkgPath,
 			Name:     name.Name,
+			Object:   object,
 			Position: c.fset.Position(name.Pos()),
 			Text:     text,
 		})
 	}
+}
+
+// namedDocument returns the document the i-th name of a declaration holds,
+// from the expression written beside it when there is one and from the folded
+// value on the object when there is not.
+//
+// A grouped const block repeats the previous line's expression implicitly, so
+// a line that is nothing but a name declares a constant whose ValueSpec has no
+// value at all while the type checker has already folded the text onto the
+// object. Reading only the expressions drops such a document out of the
+// inventory entirely, and because its object is one no document carries, a
+// caller that joins on the object cannot report it as unattributed either: it
+// is simply gone. A name whose declaration lists fewer values than names for
+// any other reason initializes from something that is not a constant, and the
+// fold answers no for it as well.
+func (c *collector) namedDocument(pkg *packages.Package, spec *ast.ValueSpec, i int, object types.Object) (string, bool) {
+	if i >= len(spec.Values) {
+		return repeatedConstant(object)
+	}
+	value := spec.Values[i]
+	text, ok := constantDocument(pkg, value)
+	if ok {
+		c.claimed[value.Pos()] = true
+	}
+	return text, ok
+}
+
+// repeatedConstant returns the document a constant holds when its declaration
+// writes no expression of its own.
+func repeatedConstant(object types.Object) (string, bool) {
+	declared, ok := object.(*types.Const)
+	if !ok {
+		return "", false
+	}
+	return documentText(declared.Val())
 }
 
 // recordInline records a document written where it is used rather than
@@ -267,12 +331,20 @@ func (c *collector) recordInline(pkg *packages.Package, expr ast.Expr) bool {
 
 // constantDocument returns the folded string value of expr when it is a
 // GraphQL document.
+// An expression the type checker recorded nothing for indexes to the zero
+// TypeAndValue, whose value is nil, which is the answer that expression
+// deserves anyway.
 func constantDocument(pkg *packages.Package, expr ast.Expr) (string, bool) {
-	typed, ok := pkg.TypesInfo.Types[expr]
-	if !ok || typed.Value == nil || typed.Value.Kind() != constant.String {
+	return documentText(pkg.TypesInfo.Types[expr].Value)
+}
+
+// documentText returns a folded constant value when it is a GraphQL document,
+// which is the one question both ways into the inventory ask of a value.
+func documentText(value constant.Value) (string, bool) {
+	if value == nil || value.Kind() != constant.String {
 		return "", false
 	}
-	text := constant.StringVal(typed.Value)
+	text := constant.StringVal(value)
 	if !looksLikeDocument(text) {
 		return "", false
 	}

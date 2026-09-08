@@ -400,6 +400,151 @@ func TestLoadProgram_PackageLevelVariables_IndexesOnlyConstantDocuments(t *testi
 	}
 }
 
+// TestLoadProgram_ADocumentNoDeclarationNames_IsLeftUnattributed verifies the
+// tripwire the shared inventory made possible.
+//
+// The index resolves a document through the object that declares it, so a
+// document assembled in a package-level initializer belongs to no object and
+// sits in no function body: nothing in the reachability walk can ever reach it,
+// and a mutation written that way would leave the gate reporting a clean run.
+// It is recorded as unattributed instead, which is what the audit reports.
+func TestLoadProgram_ADocumentNoDeclarationNames_IsLeftUnattributed(t *testing.T) {
+	prog := loadFixture(t, map[string]string{"unplaced": unplacedFixture})
+
+	if len(prog.unattributed) != 1 {
+		t.Fatalf("loadProgram() left %d document(s) unattributed, want 1: %+v", len(prog.unattributed), prog.unattributed)
+	}
+	document := prog.unattributed[0]
+	t.Run("it is the assembled document", func(t *testing.T) {
+		if got := document.Label(); got != "an inline document" {
+			t.Errorf("the unattributed document is labeled %q, want an inline one", got)
+		}
+		if !strings.Contains(document.Text, "thing { errors }") {
+			t.Errorf("the unattributed document reads %q, want the assembled mutation", document.Text)
+		}
+		if !strings.HasSuffix(filepath.ToSlash(document.Position.Filename), "/unplaced/unplaced.go") {
+			t.Errorf("the unattributed document is positioned at %q, want the fixture file", document.Position.Filename)
+		}
+	})
+	t.Run("the audit reports it", func(t *testing.T) {
+		result := audit(prog, nil, repoRoot(t))
+
+		if len(result.findings) != 1 {
+			t.Fatalf("audit() reported %d finding(s), want the unattributed document: %+v", len(result.findings), result.findings)
+		}
+		if !strings.Contains(result.findings[0].message, "unplaced/unplaced.go") {
+			t.Errorf("the finding does not name the file:\n%s", result.findings[0].message)
+		}
+	})
+}
+
+// TestLoadProgram_AnInlineDocumentInAFunctionBody_IsAttributed verifies the
+// other half of that rule, which is what keeps the tripwire from firing on a
+// shape this audit does classify. An inline document written in a body is
+// recorded by the body walk at the position of its literal, so the inventory
+// entry at that position is placed and reported by nobody.
+func TestLoadProgram_AnInlineDocumentInAFunctionBody_IsAttributed(t *testing.T) {
+	prog := loadFixture(t, vulnSources())
+
+	if len(prog.unattributed) != 0 {
+		t.Errorf("loadProgram() left %+v unattributed, want nothing: the fixture's inline document is in a body",
+			prog.unattributed)
+	}
+}
+
+// TestLoadProgram_AStandaloneTreeItCannotRead_Fails verifies the run stops when
+// the .graphql half of the inventory cannot be read. Continuing would audit the
+// documents in Go source and silently none of the others, which is the silence
+// reading them was added to remove.
+func TestLoadProgram_AStandaloneTreeItCannotRead_Fails(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "internal"), []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+
+	_, err := loadProgram(dir, []string{"./internal/..."}, nil)
+
+	if err == nil {
+		t.Fatal("loadProgram() error = nil, want the unreadable tree")
+	}
+	if !strings.Contains(err.Error(), "open ") {
+		t.Errorf("loadProgram() error = %q, want it to name the tree it could not open", err)
+	}
+}
+
+// standaloneModule writes a throwaway module holding one Go package and one
+// standalone GraphQL document beside it, and returns its root.
+//
+// A real directory is needed rather than a loader overlay: the .graphql half of
+// the inventory is read off disk by [graphqldocs.Standalone], which no overlay
+// reaches. The module is minimal and imports nothing, so type-checking it costs
+// no network and no dependency tree.
+func standaloneModule(t *testing.T, document string) string {
+	t.Helper()
+	dir := t.TempDir()
+	pkg := filepath.Join(dir, "internal", "probe")
+	if err := os.MkdirAll(pkg, 0o750); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	files := map[string]string{
+		filepath.Join(dir, "go.mod"):        "module standalone.example\n\ngo 1.24\n",
+		filepath.Join(pkg, "probe.go"):      "package probe\n",
+		filepath.Join(pkg, "probe.graphql"): document,
+	}
+	for path, content := range files {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatalf("prepare the fixture: %v", err)
+		}
+	}
+	return dir
+}
+
+// TestLoadProgram_ADocumentInAFileOfItsOwn_IsReadAndLeftUnattributed verifies
+// the .graphql half of the tripwire end to end.
+//
+// This is the shape the shared inventory was adopted for: a document that folds
+// to nothing for the type checker, is bound to no object, and sits in no
+// function body. Read but not indexed, it has to reach the report as an
+// unattributed document; dropped from the inventory instead, a mutation in a
+// file of its own would leave the gate printing a clean run. Nothing else in
+// this package can see that, because an overlay never reaches the disk the
+// standalone half reads.
+func TestLoadProgram_ADocumentInAFileOfItsOwn_IsReadAndLeftUnattributed(t *testing.T) {
+	dir := standaloneModule(t, "mutation($id: ID!) {\n  thing(input: {id: $id}) { errors }\n}\n")
+
+	prog, err := loadProgram(dir, []string{"./internal/..."}, nil)
+	if err != nil {
+		t.Fatalf("loadProgram: %v", err)
+	}
+
+	if len(prog.unattributed) != 1 {
+		t.Fatalf("loadProgram() left %d document(s) unattributed, want the .graphql file: %+v",
+			len(prog.unattributed), prog.unattributed)
+	}
+	document := prog.unattributed[0]
+	t.Run("it is the standalone document", func(t *testing.T) {
+		if document.Name != "probe.graphql" {
+			t.Errorf("the unattributed document is named %q, want probe.graphql", document.Name)
+		}
+		if document.Object != nil {
+			t.Errorf("the unattributed document carries object %v, want none: no declaration names it", document.Object)
+		}
+		if !strings.HasSuffix(filepath.ToSlash(document.Position.Filename), "/internal/probe/probe.graphql") {
+			t.Errorf("the unattributed document is positioned at %q, want the fixture file", document.Position.Filename)
+		}
+	})
+	t.Run("the audit reports it", func(t *testing.T) {
+		result := audit(prog, nil, dir)
+
+		if len(result.findings) != 1 {
+			t.Fatalf("audit() reported %d finding(s), want the standalone document: %+v", len(result.findings), result.findings)
+		}
+		if !strings.Contains(result.findings[0].message, "probe.graphql") {
+			t.Errorf("the finding does not name the document:\n%s", result.findings[0].message)
+		}
+	})
+}
+
 // varFixture declares GraphQL documents as package-level variables rather than
 // constants, plus the two variable shapes that carry no knowable value.
 const varFixture = `package vars
@@ -416,6 +561,98 @@ var undeclared string
 
 func build() string {
 	return "mutation { thing { errors } }"
+}
+`
+
+// disagreeFixture writes the two shapes the shared pre-filter and this audit's
+// own operation-type rule judge differently, one in each direction.
+//
+// prose carries a mutation on a line of its own but opens with something that
+// is not an operation keyword, so the inventory does not consider it a document
+// at all while classifyDocument's per-line regex would call it a mutation.
+// send returns a literal the inventory does consider a document, the keyword
+// being the first token, while classifyDocument refuses it because the keyword
+// is not followed on its own line by a name, a brace or a paren.
+const disagreeFixture = `package disagree
+
+const prose = @@
+Sent to GitLab:
+mutation { thing { errors } }
+@@
+
+func send() string {
+	return @@query
+{ thing { id } }@@
+}
+`
+
+// TestLoadProgram_ADocumentThePreFilterRefuses_IsNotIndexed pins the narrowing
+// the shared inventory brings with it.
+//
+// The inventory asks for the operation keyword at the very start of the
+// comment-stripped text, where this audit's own rule accepts it at the start of
+// any line. A string that only satisfies the looser rule therefore leaves the
+// inventory and is neither indexed nor reported. Every document this repository
+// sends opens with its keyword, so nothing is lost today; the test is here so
+// that the day the difference matters, it is a failing assertion rather than a
+// gate that quietly stopped looking.
+func TestLoadProgram_ADocumentThePreFilterRefuses_IsNotIndexed(t *testing.T) {
+	prog := loadFixture(t, map[string]string{"disagree": disagreeFixture})
+
+	if got := classifyDocument("\nSent to GitLab:\nmutation { thing { errors } }\n"); got != writeDocument {
+		t.Fatalf("classifyDocument() = %v for the fixture's prose, want %v: the test would not be about the "+
+			"narrowing if this audit's own rule refused it too", got, writeDocument)
+	}
+	for obj := range prog.documents {
+		if obj.Pkg() != nil && obj.Pkg().Name() == "disagree" && obj.Name() == "prose" {
+			t.Errorf("prose is indexed as a document, want it left out: the inventory does not read it as one")
+		}
+	}
+	for _, document := range prog.unattributed {
+		if strings.Contains(document.Text, "Sent to GitLab") {
+			t.Errorf("prose is reported as unattributed, want it left out entirely: %+v", document)
+		}
+	}
+}
+
+// TestLoadProgram_ALiteralOnlyTheInventoryReadsAsADocument_IsReported pins the
+// other direction, which is a false alarm rather than a silence.
+//
+// The inventory reads such a literal as a document; the body walk classifies it
+// as none and so places nothing at its position, which leaves it unattributed
+// and fails the run. That is the trade this gate makes everywhere else too: a
+// reviewable finding over a string it never classified, since the alternative is
+// a clean report over a document nobody judged.
+func TestLoadProgram_ALiteralOnlyTheInventoryReadsAsADocument_IsReported(t *testing.T) {
+	prog := loadFixture(t, map[string]string{"disagree": disagreeFixture})
+
+	if len(prog.unattributed) != 1 {
+		t.Fatalf("loadProgram() left %d document(s) unattributed, want the literal the two rules disagree about: %+v",
+			len(prog.unattributed), prog.unattributed)
+	}
+	document := prog.unattributed[0]
+	if !strings.Contains(document.Text, "thing { id }") {
+		t.Errorf("the unattributed document reads %q, want the literal in send()", document.Text)
+	}
+	if got := classifyDocument(document.Text); got != notADocument {
+		t.Errorf("classifyDocument() = %v for the literal, want %v: it is unattributed precisely because this "+
+			"audit's own rule reads it as no document", got, notADocument)
+	}
+	if !strings.HasSuffix(filepath.ToSlash(document.Position.Filename), "/disagree/disagree.go") {
+		t.Errorf("the unattributed document is positioned at %q, want the fixture file", document.Position.Filename)
+	}
+}
+
+// unplacedFixture writes a document in the one shape no walk in this audit can
+// place: assembled where it is used, in a package-level initializer, so it is
+// bound to no object and sits in no function body. It is a package of its own
+// because it fails every audit run that loads it, which is the point.
+const unplacedFixture = `package unplaced
+
+var sent = pass("mutation {" + " thing { errors } }")
+
+func pass(document string) string {
+	return document
 }
 `
 

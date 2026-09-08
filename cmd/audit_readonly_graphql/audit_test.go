@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqldocs"
 )
 
 // excusedFixture is a read-only action that really does reach a mutation and
@@ -375,6 +377,61 @@ func TestAudit_TwoFindingsForOneAction_AreOrderedByMessage(t *testing.T) {
 	}
 	if messages[0] >= messages[1] {
 		t.Errorf("findings for one action are not ordered by message:\n%s\n%s", messages[0], messages[1])
+	}
+}
+
+// TestAudit_DocumentsNothingCanBeHeldTo_AreReported verifies the tripwire is
+// part of the report rather than a note somewhere.
+//
+// A document in a file of its own and one assembled where it is used are both
+// read by the shared inventory and placed by nothing this audit walks. Reported
+// as findings, they fail the run and name the file; skipped, the run would end
+// with the same sentence it prints when every document really was classified.
+func TestAudit_DocumentsNothingCanBeHeldTo_AreReported(t *testing.T) {
+	prog := &program{unattributed: []graphqldocs.Document{
+		{
+			Package:  "internal/tools/customemoji",
+			Name:     "create.graphql",
+			Position: token.Position{Filename: "/repo/internal/tools/customemoji/create.graphql", Line: 1},
+			Text:     "mutation { createCustomEmoji { errors } }",
+		},
+		{
+			Package:  "internal/tools/widgets",
+			Position: token.Position{Filename: "/repo/internal/tools/widgets/widgets.go", Line: 42},
+			Text:     "mutation { widgetDelete { errors } }",
+		},
+	}}
+
+	findings := unattributedFindings(prog, "/repo")
+
+	if len(findings) != 2 {
+		t.Fatalf("unattributedFindings() returned %d finding(s), want one per document", len(findings))
+	}
+	cases := []struct {
+		name  string
+		index int
+		want  []string
+	}{
+		{
+			name:  "a document in a file of its own",
+			index: 0,
+			want:  []string{"create.graphql", "internal/tools/customemoji/create.graphql:1", "no handler can be held responsible"},
+		},
+		{
+			name:  "a document assembled where it is used",
+			index: 1,
+			want:  []string{"an inline document", "internal/tools/widgets/widgets.go:42", "Declare it as a constant"},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			message := findings[testCase.index].message
+			for _, want := range testCase.want {
+				if !strings.Contains(message, want) {
+					t.Errorf("finding does not mention %q:\n%s", want, message)
+				}
+			}
+		})
 	}
 }
 

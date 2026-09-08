@@ -42,7 +42,11 @@ type exception struct {
 
 // finding is one reason the audit fails.
 type finding struct {
-	// action is the catalog action ID the finding is about.
+	// action is the catalog action ID the finding is about, or, for a finding
+	// about a document no action can be tied to, the package or directory it
+	// lives in. It is never printed: it is the first sort key, so the findings
+	// of one action stay together and a CI log diff shows a changed finding
+	// rather than a reshuffled report.
 	action string
 	// message is the whole explanation, already formatted.
 	message string
@@ -115,6 +119,7 @@ func audit(prog *program, actions []action, root string) auditResult {
 	}
 
 	result.findings = append(result.findings, staleExceptions(prog, exceptions, used, root)...)
+	result.findings = append(result.findings, unattributedFindings(prog, root)...)
 	sort.Slice(result.findings, func(i, j int) bool {
 		if result.findings[i].action != result.findings[j].action {
 			return result.findings[i].action < result.findings[j].action
@@ -288,6 +293,35 @@ func staleExceptions(prog *program, exceptions map[string]exception, used map[st
 			action: key,
 			message: fmt.Sprintf("%s at %s excuses a read-only action that no longer sends a mutation. Remove it.",
 				exceptionDirective, relative(prog.position(declared.pos), root)),
+		})
+	}
+	return findings
+}
+
+// unattributedFindings reports every GraphQL document in the shared inventory
+// that this audit cannot tie to a handler.
+//
+// It is the gate's own tripwire. The reachability walk resolves a document
+// through the object that declares it, so a document written in a .graphql
+// file of its own, or built inline in a shape the body walk does not fold, is
+// judged by nothing here: the run would still end with "no read-only action
+// reaches a mutation" while a mutation sat in a file the walk never opened.
+// The repository writes every document as a named constant today, so this is
+// silent, and the day one moves it says so instead of going quiet.
+//
+// These findings belong to no action, by construction: not being able to name
+// the handler is what they report. The package the document lives in stands in
+// as their sort key, which is all the field is used for.
+func unattributedFindings(prog *program, root string) []finding {
+	findings := make([]finding, 0, len(prog.unattributed))
+	for _, document := range prog.unattributed {
+		findings = append(findings, finding{
+			action: document.Package,
+			message: fmt.Sprintf("%s at %s is a GraphQL document no handler can be held responsible for.\n"+
+				"    This gate resolves a document through the constant that declares it, so one written in a file\n"+
+				"    of its own or assembled where it is used is classified by nothing and could be a mutation a\n"+
+				"    read-only action sends. Declare it as a constant in the package that sends it.",
+				document.Label(), relative(document.Position, root)),
 		})
 	}
 	return findings
