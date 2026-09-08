@@ -2,12 +2,10 @@ package mcpsurface
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"sort"
 	"sync"
 
@@ -371,19 +369,22 @@ func Prompts(client *gitlabclient.Client) []*mcp.Prompt {
 
 // ProjectRoot walks up from the working directory to the directory holding
 // go.mod, so a generator works from anywhere in the repository.
+//
+// The walk itself is [cmdutil.RepositoryRoot]: this used to be a second copy
+// of the same loop, differing only in its error text, and a command that
+// wanted nothing but the root had to import this package and with it the whole
+// tool catalog. What stays here is the wording its callers report, which their
+// tests assert on: the working directory is resolved here rather than passed
+// as "." so that failure still names the step, and a walk that reaches the
+// filesystem root is still reported as a missing project root.
 func ProjectRoot() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("get working directory: %w", err)
 	}
-	for {
-		if _, statErr := os.Stat(filepath.Join(dir, "go.mod")); statErr == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", errors.New("could not find project root (no go.mod found)")
-		}
-		dir = parent
+	root, err := cmdutil.RepositoryRoot(dir)
+	if err != nil {
+		return "", fmt.Errorf("could not find project root: %w", err)
 	}
+	return root, nil
 }

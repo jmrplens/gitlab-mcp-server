@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
 // Default output locations, all relative to the module root. The record lives
@@ -215,8 +215,15 @@ var getwd = os.Getwd
 // in a mode that renders nothing: the mode returns before the record is read
 // or a chart is drawn. What it still needs is a binary, since building one is
 // the one thing here that does read the checkout.
+//
+// The walk comes from [cmdutil.RepositoryRoot] rather than from
+// cmd/internal/mcpsurface, whose ProjectRoot is the same loop: this harness
+// measures the shipped binary as a black box and lists no surface of its own,
+// so taking the walk from the surface reader would compile the whole tool
+// catalog into it for fifteen lines of directory walking, and every catalog
+// change would rebuild a command that never asks the catalog anything.
 func locateRoot(opts options) (string, error) {
-	root, err := mcpsurface.ProjectRoot()
+	root, err := cmdutil.RepositoryRoot(".")
 	if err == nil {
 		return root, nil
 	}
