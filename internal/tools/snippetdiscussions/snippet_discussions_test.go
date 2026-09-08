@@ -494,7 +494,7 @@ func TestNoteToOutput_NilUpdatedAt(t *testing.T) {
 		CreatedAt: new(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
 		UpdatedAt: nil,
 	}
-	out := toolutil.DiscussionNoteOutputFromGitLab(n)
+	out := toolutil.DiscussionThreadNoteOutputFromGitLab(n, toolutil.NoteExtra{})
 	if out.UpdatedAt != "" {
 		t.Errorf("expected empty UpdatedAt, got %q", out.UpdatedAt)
 	}
@@ -510,23 +510,22 @@ func TestNoteToOutput_EmptyAuthor(t *testing.T) {
 		Body:      "test",
 		CreatedAt: new(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
 	}
-	out := toolutil.DiscussionNoteOutputFromGitLab(n)
-	if out.Author != "" {
-		t.Errorf("expected empty Author, got %q", out.Author)
+	out := toolutil.DiscussionThreadNoteOutputFromGitLab(n, toolutil.NoteExtra{})
+	if out.Author == nil || out.Author.Username != "" {
+		t.Errorf("expected an empty author object, got %+v", out.Author)
 	}
 }
 
-// TestNoteToOutput_ZeroCreatedAt verifies NoteToOutput when zero created at.
-func TestNoteToOutput_ZeroCreatedAt(t *testing.T) {
-	zero := time.Time{}
+// TestNoteToOutput_NoCreatedAt verifies that a note GitLab sends without a
+// created_at, which the SDK decodes as a nil time, renders it empty.
+func TestNoteToOutput_NoCreatedAt(t *testing.T) {
 	n := &gl.Note{
-		ID:        1,
-		Body:      "test",
-		CreatedAt: &zero,
+		ID:   1,
+		Body: "test",
 	}
-	out := toolutil.DiscussionNoteOutputFromGitLab(n)
+	out := toolutil.DiscussionThreadNoteOutputFromGitLab(n, toolutil.NoteExtra{})
 	if out.CreatedAt != "" {
-		t.Errorf("expected empty CreatedAt for zero time, got %q", out.CreatedAt)
+		t.Errorf("expected empty CreatedAt for a nil time, got %q", out.CreatedAt)
 	}
 }
 
@@ -537,7 +536,7 @@ func TestToOutput_NoNotes(t *testing.T) {
 		IndividualNote: true,
 		Notes:          nil,
 	}
-	out := toolutil.DiscussionOutputFromGitLab(d)
+	out := toolutil.DiscussionThreadOutputFromGitLab(d, toolutil.DiscussionExtra{})
 	if out.ID != "d1" {
 		t.Errorf("expected d1, got %q", out.ID)
 	}
@@ -546,11 +545,18 @@ func TestToOutput_NoNotes(t *testing.T) {
 	}
 }
 
-// TestToListOutput_Empty verifies ToListOutput when empty.
-func TestToListOutput_Empty(t *testing.T) {
-	out := toListOutput(nil, nil)
-	if len(out.Discussions) != 0 {
-		t.Errorf("expected 0 discussions, got %d", len(out.Discussions))
+// TestList_Empty verifies an empty list answer converts to an output with no
+// discussions rather than a nil-dereference, now that the list handler builds
+// its output from the shared thread converter.
+func TestList_Empty(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+
+	out, err := List(t.Context(), client, ListInput{ProjectID: "42", SnippetID: 10})
+
+	if err != nil || len(out.Discussions) != 0 {
+		t.Errorf("List() = %+v, %v; want no discussions and no error", out, err)
 	}
 }
 
@@ -564,8 +570,8 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 		Discussions: []Output{
 			{
 				ID: "d1",
-				Notes: []NoteOutput{
-					{ID: 1, Author: "alice", CreatedAt: "2026-01-01T00:00:00Z", Body: "note body"},
+				Notes: []*NoteOutput{
+					{ID: 1, Author: &toolutil.NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z", Body: "note body"},
 				},
 			},
 		},
@@ -591,8 +597,8 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatMarkdown_WithNotes(t *testing.T) {
 	out := Output{
 		ID: "d1",
-		Notes: []NoteOutput{
-			{ID: 1, Author: "bob", CreatedAt: "2026-01-01T00:00:00Z", Body: "hello"},
+		Notes: []*NoteOutput{
+			{ID: 1, Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-01T00:00:00Z", Body: "hello"},
 		},
 	}
 	s := FormatMarkdownString(out)
@@ -608,7 +614,7 @@ func TestFormatMarkdown_WithNotes(t *testing.T) {
 func TestFormatNoteMarkdown_AllFields(t *testing.T) {
 	out := NoteOutput{
 		ID:        1,
-		Author:    "carol",
+		Author:    &toolutil.NoteUserOutput{Username: "carol"},
 		Body:      "test body",
 		CreatedAt: "2026-01-01T00:00:00Z",
 	}
@@ -626,8 +632,51 @@ func TestFormatNoteMarkdown_AllFields(t *testing.T) {
 
 // TestFormatNoteMarkdown_NoCreatedAt verifies FormatNoteMarkdown when no created at.
 func TestFormatNoteMarkdown_NoCreatedAt(t *testing.T) {
-	s := FormatNoteMarkdownString(NoteOutput{ID: 1, Author: "x", Body: "y"})
+	s := FormatNoteMarkdownString(NoteOutput{ID: 1, Author: &toolutil.NoteUserOutput{Username: "x"}, Body: "y"})
 	if strings.Contains(s, "Created") {
 		t.Error("should not include Created when empty")
 	}
+}
+
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler here: GitLab's answer
+// decodes for the SDK and not for the fields this package reads beside it,
+// which is a fault in the type naming them and is reported rather than
+// swallowed. A string where a note's `imported` is a bool is the shape, on
+// a note alone, inside a thread, and inside a list of threads.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		note := `{"id":1,"body":"x","author":{"id":1,"username":"u"},"imported":"not-a-bool"}`
+		thread := `{"id":"d1","individual_note":false,"notes":[` + note + `]}`
+		body := thread
+		switch {
+		case strings.Contains(r.URL.Path, "/notes"):
+			body = note
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/discussions"):
+			body = "[" + thread + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := List(t.Context(), client, ListInput{ProjectID: "42", SnippetID: 10})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			_, err := Get(t.Context(), client, GetInput{ProjectID: "42", SnippetID: 10, DiscussionID: "d1"})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", SnippetID: 10, Body: "x"})
+			return err
+		}},
+		{Name: "add note", Call: func() error {
+			_, err := AddNote(t.Context(), client, AddNoteInput{ProjectID: "42", SnippetID: 10, DiscussionID: "d1", Body: "x"})
+			return err
+		}},
+		{Name: "update note", Call: func() error {
+			_, err := UpdateNote(t.Context(), client, UpdateNoteInput{ProjectID: "42", SnippetID: 10, DiscussionID: "d1", NoteID: 1, Body: "x"})
+			return err
+		}},
+	})
 }

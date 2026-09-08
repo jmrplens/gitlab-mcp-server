@@ -486,43 +486,6 @@ type DiscussionNoteMarkdown struct {
 	CreatedAt string
 }
 
-// DiscussionNoteOutput carries the common JSON fields returned by REST
-// discussion note tools.
-type DiscussionNoteOutput struct {
-	HintableOutput
-	ID        int64  `json:"id"`
-	Body      string `json:"body"`
-	Author    string `json:"author"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-	System    bool   `json:"system"`
-}
-
-// MarkdownNote returns the shared Markdown view model for a discussion note.
-func (note DiscussionNoteOutput) MarkdownNote() DiscussionNoteMarkdown {
-	return NewDiscussionNoteMarkdown(note.ID, note.Body, note.Author, note.CreatedAt)
-}
-
-// DiscussionOutput carries the common JSON fields returned by REST discussion
-// tools.
-type DiscussionOutput struct {
-	HintableOutput
-	ID             string                 `json:"id"`
-	IndividualNote bool                   `json:"individual_note"`
-	Notes          []DiscussionNoteOutput `json:"notes"`
-}
-
-// MarkdownDiscussion returns the shared Markdown view model for a discussion.
-func (discussion DiscussionOutput) MarkdownDiscussion() DiscussionMarkdown {
-	return NewDiscussionMarkdown(discussion.ID, DiscussionNoteMarkdowns(discussion.Notes, DiscussionNoteOutput.MarkdownNote))
-}
-
-// DiscussionOutputMarkdowns maps shared REST discussion outputs to Markdown
-// view models.
-func DiscussionOutputMarkdowns(discussions []DiscussionOutput) []DiscussionMarkdown {
-	return DiscussionMarkdowns(discussions, DiscussionOutput.MarkdownDiscussion)
-}
-
 // NewDiscussionNoteMarkdown builds a shared Markdown view model for discussion
 // notes.
 func NewDiscussionNoteMarkdown(id int64, body, author, createdAt string) DiscussionNoteMarkdown {

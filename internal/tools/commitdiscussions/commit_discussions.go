@@ -130,12 +130,17 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		OrderBy: input.OrderBy, Sort: input.Sort,
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	discussions, resp, err := client.GL().Discussions.ListCommitDiscussions(string(input.ProjectID), input.CommitSHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("commit_discussion_list", err, http.StatusNotFound,
 			"verify project_id and commit_sha with gitlab_commit_get")
 	}
-	return toListOutput(discussions, resp), nil
+	extras, err := toolutil.CapturedDiscussions(captured, len(discussions))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("commit_discussion_list", err)
+	}
+	return toListOutput(discussions, extras, resp), nil
 }
 
 // Get gets a single commit discussion.
@@ -143,12 +148,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Discussions.GetCommitDiscussion(string(input.ProjectID), input.CommitSHA, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("commit_discussion_get", err, http.StatusNotFound,
 			"verify discussion_id with gitlab_list_commit_discussions")
 	}
-	return ToOutput(d), nil
+	extra, err := toolutil.CapturedDiscussion(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("commit_discussion_get", err)
+	}
+	return ToOutput(d, extra), nil
 }
 
 // Create creates a new commit discussion thread.
@@ -163,12 +173,17 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Position != nil {
 		opts.Position = buildNotePosition(input.Position)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Discussions.CreateCommitDiscussion(string(input.ProjectID), input.CommitSHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("commit_discussion_create", err, http.StatusBadRequest,
 			"for inline diff comments, position requires base_sha, head_sha, start_sha, position_type=text, and a valid old_path/new_path with line numbers; verify the commit_sha exists in the project")
 	}
-	return ToOutput(d), nil
+	extra, err := toolutil.CapturedDiscussion(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("commit_discussion_create", err)
+	}
+	return ToOutput(d, extra), nil
 }
 
 // AddNote adds a note to an existing commit discussion.
@@ -180,12 +195,17 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 		Body:      new(toolutil.NormalizeText(input.Body)),
 		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	note, _, err := client.GL().Discussions.AddCommitDiscussionNote(string(input.ProjectID), input.CommitSHA, input.DiscussionID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("commit_discussion_add_note", err, http.StatusNotFound,
 			"verify discussion_id with gitlab_list_commit_discussions")
 	}
-	return NoteToOutput(note), nil
+	extra, err := toolutil.CapturedNote(captured)
+	if err != nil {
+		return NoteOutput{}, toolutil.WrapErr("commit_discussion_add_note", err)
+	}
+	return NoteToOutput(note, extra), nil
 }
 
 // UpdateNote updates an existing commit discussion note.
@@ -200,12 +220,17 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 		Body:      new(toolutil.NormalizeText(input.Body)),
 		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	note, _, err := client.GL().Discussions.UpdateCommitDiscussionNote(string(input.ProjectID), input.CommitSHA, input.DiscussionID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("commit_discussion_update_note", err, http.StatusForbidden,
 			"only the note author can edit a discussion note")
 	}
-	return NoteToOutput(note), nil
+	extra, err := toolutil.CapturedNote(captured)
+	if err != nil {
+		return NoteOutput{}, toolutil.WrapErr("commit_discussion_update_note", err)
+	}
+	return NoteToOutput(note, extra), nil
 }
 
 // DeleteNote deletes a commit discussion note.
@@ -226,14 +251,11 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 
 // Converters.
 
-// toListOutput converts the GitLab API response to the tool output format.
-func toListOutput(discussions []*gl.Discussion, resp *gl.Response) ListOutput {
-	out := make([]Output, len(discussions))
-	for i, d := range discussions {
-		out[i] = ToOutput(d)
-	}
+// toListOutput converts the GitLab API response, and what the captured
+// answer adds to each discussion, to the tool output format.
+func toListOutput(discussions []*gl.Discussion, extras []toolutil.DiscussionExtra, resp *gl.Response) ListOutput {
 	return ListOutput{
-		Discussions: out,
+		Discussions: toolutil.DiscussionThreadOutputsFromGitLab(discussions, extras),
 		Pagination:  toolutil.PaginationFromResponse(resp),
 	}
 }

@@ -229,7 +229,7 @@ func TestToOutput_ResolvedByAndTimestamps(t *testing.T) {
 		CreatedAt:  &now,
 		UpdatedAt:  &now,
 	}
-	out := ToOutput(note)
+	out := ToOutput(note, toolutil.NoteExtra{})
 	if out.ResolvedBy == nil || out.ResolvedBy.Username != "resolver" {
 		t.Errorf("ResolvedBy = %+v, want username %q", out.ResolvedBy, "resolver")
 	}

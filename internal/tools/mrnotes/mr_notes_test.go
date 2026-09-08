@@ -381,15 +381,6 @@ func TestToOutput_ExpiresAtSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if out.ExpiresAt == "" {
-		t.Error("ExpiresAt should be set, got empty")
-	}
-	if out.Attachment != "file.txt" {
-		t.Errorf("Attachment = %q, want %q", out.Attachment, "file.txt")
-	}
-	if out.FileName != "file.txt" {
-		t.Errorf("FileName = %q, want %q", out.FileName, "file.txt")
-	}
 	if out.NoteableID != 99 {
 		t.Errorf("NoteableID = %d, want 99", out.NoteableID)
 	}
@@ -885,16 +876,16 @@ func TestToOutput_NestedObjects(t *testing.T) {
 		},
 	}
 
-	out := ToOutput(n)
+	out := ToOutput(n, toolutil.NoteExtra{
+		Imported: true, ImportedFrom: "github", Suggestions: []toolutil.SuggestionOutput{{ID: 5, ToContent: "fixed"}},
+		Author: toolutil.NoteUserExtra{PublicEmail: "alice@public.example", Locked: true},
+	})
 
-	if out.Author == nil || out.Author.ID != 7 || out.Author.Email != "alice@example.com" {
+	if out.Author == nil || out.Author.ID != 7 || out.Author.PublicEmail != "alice@public.example" || !out.Author.Locked {
 		t.Fatalf("Author = %+v", out.Author)
 	}
-	if out.Attachment != "attach.png" || out.Title != "note title" || out.FileName != "note.txt" {
-		t.Errorf("string fields = %q/%q/%q", out.Attachment, out.Title, out.FileName)
-	}
-	if out.ExpiresAt != "2026-04-01T00:00:00Z" {
-		t.Errorf("ExpiresAt = %q", out.ExpiresAt)
+	if !out.Imported || out.ImportedFrom != "github" || len(out.Suggestions) != 1 || out.Suggestions[0].ToContent != "fixed" {
+		t.Errorf("captured fields = %v/%q/%+v", out.Imported, out.ImportedFrom, out.Suggestions)
 	}
 	if out.ResolvedAt != "2026-03-02T08:00:00Z" {
 		t.Errorf("ResolvedAt = %q", out.ResolvedAt)
@@ -926,11 +917,44 @@ func assertFullLineRange(t *testing.T, lr *toolutil.LineRangeOutput) {
 	}
 }
 
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler here: GitLab's answer
+// decodes for the SDK and not for the fields this package reads beside it,
+// which is a fault in the type naming them and is reported rather than
+// swallowed. A string where `imported` is a bool is the shape.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		note := `{"id":1,"body":"x","author":{"id":1,"username":"u"},"imported":"not-a-bool"}`
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/notes") {
+			note = "[" + note + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, note)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "create", Call: func() error {
+			_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", MRIID: 1, Body: "x"})
+			return err
+		}},
+		{Name: "list", Call: func() error {
+			_, err := List(t.Context(), client, ListInput{ProjectID: "42", MRIID: 1})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			_, err := GetNote(t.Context(), client, GetInput{ProjectID: "42", MRIID: 1, NoteID: 1})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 1, Body: "x"})
+			return err
+		}},
+	})
+}
+
 // TestToOutput_EmptyNestedObjects verifies nil/empty nested sources produce nil
 // sub-objects (resolved_by absent, position absent) while the always-present
 // author object is still populated.
 func TestToOutput_EmptyNestedObjects(t *testing.T) {
-	out := ToOutput(&gl.Note{ID: 1, Author: gl.NoteAuthor{Username: "u"}})
+	out := ToOutput(&gl.Note{ID: 1, Author: gl.NoteAuthor{Username: "u"}}, toolutil.NoteExtra{})
 	if out.Author == nil || out.Author.Username != "u" {
 		t.Errorf("Author = %+v, want non-nil with username u", out.Author)
 	}

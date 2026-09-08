@@ -16,55 +16,17 @@ type NoteOutput = toolutil.DiscussionThreadNoteOutput
 // thread shape with full note payloads, shared with mrdiscussions.
 type Output = toolutil.DiscussionThreadOutput
 
-// NoteToOutput converts a GitLab API [gl.Note] to a [NoteOutput]. Per the 1:1
-// audit policy it surfaces the full author object on the canonical `author`
-// key, additively surfaces the resolved_by / position sub-objects, and mirrors
-// every other gl.Note field. Timestamps are formatted as RFC 3339 strings.
-func NoteToOutput(n *gl.Note) NoteOutput {
-	if n == nil {
-		return NoteOutput{}
-	}
-	return NoteOutput{
-		ID:           n.ID,
-		Body:         n.Body,
-		Author:       toolutil.NewNoteUserOutputFromAuthor(n.Author),
-		Attachment:   n.Attachment,
-		Title:        n.Title,
-		FileName:     n.FileName,
-		CreatedAt:    toolutil.FormatTimePtr(n.CreatedAt),
-		UpdatedAt:    toolutil.FormatTimePtr(n.UpdatedAt),
-		ExpiresAt:    toolutil.FormatTimePtr(n.ExpiresAt),
-		Resolved:     n.Resolved,
-		Resolvable:   n.Resolvable,
-		ResolvedAt:   toolutil.FormatTimePtr(n.ResolvedAt),
-		ResolvedBy:   toolutil.NewNoteUserOutputFromResolvedBy(n.ResolvedBy),
-		System:       n.System,
-		Internal:     n.Internal,
-		Confidential: n.Confidential, //nolint:staticcheck // 1:1 audit: mirror the SDK's deprecated Confidential field verbatim.
-		Type:         string(n.Type),
-		NoteableType: n.NoteableType,
-		NoteableID:   n.NoteableID,
-		NoteableIID:  n.NoteableIID,
-		CommitID:     n.CommitID,
-		Position:     toolutil.NewNotePositionOutput(n.Position),
-		ProjectID:    n.ProjectID,
-	}
+// NoteToOutput converts a GitLab API [gl.Note], and what the captured
+// response adds to it, to a [NoteOutput]: the shared conversion in
+// [toolutil.DiscussionThreadNoteOutputFromGitLab], kept under the package's
+// name for its callers and tests.
+func NoteToOutput(n *gl.Note, extra toolutil.NoteExtra) NoteOutput {
+	return toolutil.DiscussionThreadNoteOutputFromGitLab(n, extra)
 }
 
-// ToOutput converts a GitLab API [gl.Discussion] to an [Output], including all
-// notes within the thread.
-func ToOutput(d *gl.Discussion) Output {
-	if d == nil {
-		return Output{}
-	}
-	notes := make([]*NoteOutput, len(d.Notes))
-	for i, n := range d.Notes {
-		note := NoteToOutput(n)
-		notes[i] = &note
-	}
-	return Output{
-		ID:             d.ID,
-		IndividualNote: d.IndividualNote,
-		Notes:          notes,
-	}
+// ToOutput converts a GitLab API [gl.Discussion], and what the captured
+// response adds to it, to an [Output], including all notes within the
+// thread.
+func ToOutput(d *gl.Discussion, extra toolutil.DiscussionExtra) Output {
+	return toolutil.DiscussionThreadOutputFromGitLab(d, extra)
 }

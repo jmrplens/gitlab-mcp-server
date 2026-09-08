@@ -58,7 +58,10 @@ func TestNoteToOutput_FullMapping(t *testing.T) {
 		},
 	}
 
-	out := NoteToOutput(n)
+	out := NoteToOutput(n, toolutil.NoteExtra{
+		Confidential: true, Imported: true, ImportedFrom: "github",
+		Author: toolutil.NoteUserExtra{PublicEmail: "a@public.io", Locked: true},
+	})
 	assertNoteScalars(t, out)
 	assertNoteUsers(t, out)
 	assertNoteTimestamps(t, out)
@@ -74,12 +77,15 @@ func assertNoteScalars(t *testing.T, out NoteOutput) {
 	if !out.Internal || !out.Confidential || !out.System || !out.Resolved || !out.Resolvable {
 		t.Fatalf("flag mapping wrong: %+v", out)
 	}
+	if !out.Imported || out.ImportedFrom != "github" {
+		t.Fatalf("captured mapping wrong: %+v", out)
+	}
 }
 
 // assertNoteUsers checks the author and resolved_by sub-objects.
 func assertNoteUsers(t *testing.T, out NoteOutput) {
 	t.Helper()
-	if out.Author == nil || out.Author.Username != "alice" || out.Author.Email != "a@x.io" {
+	if out.Author == nil || out.Author.Username != "alice" || out.Author.PublicEmail != "a@public.io" || !out.Author.Locked {
 		t.Fatalf("author mapping wrong: %+v", out.Author)
 	}
 	if out.ResolvedBy == nil || out.ResolvedBy.Username != "bob" {
@@ -91,7 +97,7 @@ func assertNoteUsers(t *testing.T, out NoteOutput) {
 func assertNoteTimestamps(t *testing.T, out NoteOutput) {
 	t.Helper()
 	if out.CreatedAt != "2026-01-01T00:00:00Z" || out.UpdatedAt != "2026-01-02T00:00:00Z" ||
-		out.ExpiresAt != "2026-02-01T00:00:00Z" || out.ResolvedAt != "2026-01-03T00:00:00Z" {
+		out.ResolvedAt != "2026-01-03T00:00:00Z" {
 		t.Fatalf("timestamp mapping wrong: %+v", out)
 	}
 }
@@ -114,10 +120,10 @@ func assertNotePosition(t *testing.T, out NoteOutput) {
 // zero value, a note with no resolved_by user and no position omits those
 // sub-objects, and nil timestamps render as empty strings.
 func TestNoteToOutput_Minimal(t *testing.T) {
-	if got := NoteToOutput(nil); got.ID != 0 || got.Author != nil {
+	if got := NoteToOutput(nil, toolutil.NoteExtra{}); got.ID != 0 || got.Author != nil {
 		t.Fatalf("nil note should produce zero value, got: %+v", got)
 	}
-	out := NoteToOutput(&gl.Note{ID: 1, Body: "hi"})
+	out := NoteToOutput(&gl.Note{ID: 1, Body: "hi"}, toolutil.NoteExtra{})
 	if out.ResolvedBy != nil {
 		t.Errorf("expected nil resolved_by, got %+v", out.ResolvedBy)
 	}
@@ -153,7 +159,7 @@ func TestNotePositionOutput_LineRangeEmpty(t *testing.T) {
 // TestToOutput verifies discussion conversion, including the nil-discussion
 // guard and per-note conversion.
 func TestToOutput(t *testing.T) {
-	if got := ToOutput(nil); got.ID != "" || got.Notes != nil {
+	if got := ToOutput(nil, toolutil.DiscussionExtra{}); got.ID != "" || got.Notes != nil {
 		t.Fatalf("nil discussion should produce zero value, got: %+v", got)
 	}
 	d := &gl.Discussion{
@@ -161,8 +167,8 @@ func TestToOutput(t *testing.T) {
 		IndividualNote: true,
 		Notes:          []*gl.Note{{ID: 1, Author: gl.NoteAuthor{Username: "alice"}}},
 	}
-	out := ToOutput(d)
-	if out.ID != "d1" || !out.IndividualNote || len(out.Notes) != 1 {
+	out := ToOutput(d, toolutil.DiscussionExtra{Resolvable: true, Notes: []toolutil.NoteExtra{{Imported: true}}})
+	if out.ID != "d1" || !out.IndividualNote || !out.Resolvable || out.Resolved || len(out.Notes) != 1 || !out.Notes[0].Imported {
 		t.Fatalf("discussion mapping wrong: %+v", out)
 	}
 	if out.Notes[0].Author == nil || out.Notes[0].Author.Username != "alice" {

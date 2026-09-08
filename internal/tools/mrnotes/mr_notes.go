@@ -66,11 +66,12 @@ type GetInput struct {
 	NoteID    int64                `json:"note_id"    jsonschema:"ID of the note to retrieve,required"`
 }
 
-// ToOutput converts a GitLab API [gl.Note] to the MCP tool [Output] shape.
-// Delegates to [toolutil.NoteOutputFromGitLab] which owns the 1:1 audit
-// field mapping and timestamp formatting.
-func ToOutput(n *gl.Note) Output {
-	return toolutil.NoteOutputFromGitLab(n)
+// ToOutput converts a GitLab API [gl.Note], and what the captured response
+// adds to it, to the MCP tool [Output] shape. Delegates to
+// [toolutil.NoteOutputFromGitLab] which owns the 1:1 audit field mapping
+// and timestamp formatting.
+func ToOutput(n *gl.Note, extra toolutil.NoteExtra) Output {
+	return toolutil.NoteOutputFromGitLab(n, extra)
 }
 
 // Create adds a new general comment to a merge request.
@@ -97,12 +98,17 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.MergeRequestDiffHeadSHA != "" {
 		opts.MergeRequestDiffHeadSHA = new(input.MergeRequestDiffHeadSHA)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	n, _, err := client.GL().Notes.CreateMergeRequestNote(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrNoteCreate", err, http.StatusNotFound,
 			"verify project_id and merge_request_iid with gitlab_mr_get; creating notes requires Reporter role or higher")
 	}
-	return ToOutput(n), nil
+	extra, err := toolutil.CapturedNote(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("mrNoteCreate", err)
+	}
+	return ToOutput(n, extra), nil
 }
 
 // List returns a paginated list of notes for a merge request.
@@ -126,14 +132,19 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.Sort = new(input.Sort)
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	notes, resp, err := client.GL().Notes.ListMergeRequestNotes(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrNotesList", err, http.StatusNotFound,
 			"verify project_id and merge_request_iid with gitlab_mr_get")
 	}
+	extras, err := toolutil.CapturedNotes(captured, len(notes))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("mrNotesList", err)
+	}
 	out := make([]Output, len(notes))
 	for i, n := range notes {
-		out[i] = ToOutput(n)
+		out[i] = ToOutput(n, extras[i])
 	}
 	return ListOutput{Notes: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -153,6 +164,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrNoteUpdate", "note_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	n, _, err := client.GL().Notes.UpdateMergeRequestNote(string(input.ProjectID), input.MRIID, input.NoteID, &gl.UpdateMergeRequestNoteOptions{
 		Body: new(toolutil.NormalizeText(input.Body)),
 	}, gl.WithContext(ctx))
@@ -160,7 +172,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.WrapErrWithStatusHint("mrNoteUpdate", err, http.StatusForbidden,
 			"only the note author can edit a note. System notes cannot be edited")
 	}
-	return ToOutput(n), nil
+	extra, err := toolutil.CapturedNote(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("mrNoteUpdate", err)
+	}
+	return ToOutput(n, extra), nil
 }
 
 // GetNote retrieves a single note from a merge request by note ID.
@@ -177,12 +193,17 @@ func GetNote(ctx context.Context, client *gitlabclient.Client, input GetInput) (
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrNoteGet", "note_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	n, _, err := client.GL().Notes.GetMergeRequestNote(string(input.ProjectID), input.MRIID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrNoteGet", err, http.StatusNotFound,
 			"verify note_id with gitlab_mr_notes_list")
 	}
-	return ToOutput(n), nil
+	extra, err := toolutil.CapturedNote(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("mrNoteGet", err)
+	}
+	return ToOutput(n, extra), nil
 }
 
 // Delete removes a note from a merge request. Returns an error if the

@@ -73,10 +73,13 @@ type DeleteNoteInput struct {
 // Output types.
 
 // NoteOutput represents a single note within a discussion.
-type NoteOutput = toolutil.DiscussionNoteOutput
+type NoteOutput = toolutil.DiscussionThreadNoteOutput
 
-// Output represents a discussion thread.
-type Output = toolutil.DiscussionOutput
+// Output is an alias of [toolutil.DiscussionThreadOutput], the discussion
+// thread shape with full note payloads and the thread's own resolution
+// state. Until 2.8.0 this package published a six-field note with the
+// author's username as a string.
+type Output = toolutil.DiscussionThreadOutput
 
 // ListOutput holds a list of snippet discussions.
 type ListOutput struct {
@@ -102,12 +105,17 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		OrderBy: input.OrderBy, Sort: input.Sort,
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	discussions, resp, err := client.GL().Discussions.ListSnippetDiscussions(string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_list", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get and snippet_id with gitlab_project_snippet_list")
 	}
-	return toListOutput(discussions, resp), nil
+	threads, err := toolutil.CapturedThreads("snippet_discussion_list", discussions, captured)
+	if err != nil {
+		return ListOutput{}, err
+	}
+	return ListOutput{Discussions: threads, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // Get gets a single snippet discussion.
@@ -124,12 +132,13 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.DiscussionID == "" {
 		return Output{}, errors.New("snippet_discussion_get: discussion_id is required")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Discussions.GetSnippetDiscussion(string(input.ProjectID), input.SnippetID, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_discussion_get", err, http.StatusNotFound,
 			"verify discussion_id with gitlab_list_snippet_discussions (discussion IDs are 40-char hex strings)")
 	}
-	return toolutil.DiscussionOutputFromGitLab(d), nil
+	return toolutil.CapturedThread("snippet_discussion_get", d, captured)
 }
 
 // Create creates a new snippet discussion thread.
@@ -147,12 +156,13 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		Body:      new(input.Body),
 		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Discussions.CreateSnippetDiscussion(string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_discussion_create", err, http.StatusBadRequest,
 			"body is required and cannot be empty; commenting requires Reporter role or being the snippet author")
 	}
-	return toolutil.DiscussionOutputFromGitLab(d), nil
+	return toolutil.CapturedThread("snippet_discussion_create", d, captured)
 }
 
 // AddNote adds a note to an existing snippet discussion.
@@ -173,12 +183,13 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 		Body:      new(input.Body),
 		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	note, _, err := client.GL().Discussions.AddSnippetDiscussionNote(string(input.ProjectID), input.SnippetID, input.DiscussionID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_add_note", err, http.StatusNotFound,
 			"verify discussion_id with gitlab_list_snippet_discussions; the discussion must exist on this snippet")
 	}
-	return toolutil.DiscussionNoteOutputFromGitLab(note), nil
+	return toolutil.CapturedThreadNote("snippet_discussion_add_note", note, captured)
 }
 
 // UpdateNote updates an existing snippet discussion note.
@@ -202,12 +213,13 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 		Body:      new(input.Body),
 		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	note, _, err := client.GL().Discussions.UpdateSnippetDiscussionNote(string(input.ProjectID), input.SnippetID, input.DiscussionID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_update_note", err, http.StatusForbidden,
 			"updating a note requires being the note author; system notes cannot be modified")
 	}
-	return toolutil.DiscussionNoteOutputFromGitLab(note), nil
+	return toolutil.CapturedThreadNote("snippet_discussion_update_note", note, captured)
 }
 
 // DeleteNote deletes a snippet discussion note.
@@ -233,16 +245,6 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 			"deleting a note requires being the note author or Maintainer role; system notes cannot be deleted")
 	}
 	return nil
-}
-
-// Converters.
-
-// toListOutput converts the GitLab API response to the tool output format.
-func toListOutput(discussions []*gl.Discussion, resp *gl.Response) ListOutput {
-	return ListOutput{
-		Discussions: toolutil.DiscussionOutputsFromGitLab(discussions),
-		Pagination:  toolutil.PaginationFromResponse(resp),
-	}
 }
 
 // Formatters.

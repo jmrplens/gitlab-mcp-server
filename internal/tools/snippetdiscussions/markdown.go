@@ -6,7 +6,7 @@ var markdownRenderer = toolutil.NewDiscussionRenderer("Snippet Discussions", "No
 
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {
-	discussions := toolutil.DiscussionOutputMarkdowns(out.Discussions)
+	discussions := toolutil.DiscussionThreadOutputMarkdowns(out.Discussions)
 	return markdownRenderer.FormatRESTList(discussions, out.Pagination)
 }
 

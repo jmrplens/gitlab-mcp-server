@@ -106,52 +106,19 @@ type ListOutput struct {
 	Pagination  toolutil.PaginationOutput `json:"pagination"`
 }
 
-// NoteToOutput converts a GitLab API [gl.Note] to a [NoteOutput]. Per the 1:1
-// audit policy it surfaces the full author object on the canonical `author`
-// key, additively surfaces the resolved_by / position sub-objects, and mirrors
-// every other gl.Note field. Timestamps are formatted as RFC 3339 strings.
-func NoteToOutput(n *gl.Note) NoteOutput {
-	out := NoteOutput{
-		ID:           n.ID,
-		Body:         n.Body,
-		Author:       toolutil.NewNoteUserOutputFromAuthor(n.Author),
-		Attachment:   n.Attachment,
-		Title:        n.Title,
-		FileName:     n.FileName,
-		Resolved:     n.Resolved,
-		Resolvable:   n.Resolvable,
-		ResolvedBy:   toolutil.NewNoteUserOutputFromResolvedBy(n.ResolvedBy),
-		System:       n.System,
-		Internal:     n.Internal,
-		Confidential: n.Internal,
-		Type:         string(n.Type),
-		NoteableType: n.NoteableType,
-		NoteableID:   n.NoteableID,
-		NoteableIID:  n.NoteableIID,
-		CommitID:     n.CommitID,
-		Position:     toolutil.NewNotePositionOutput(n.Position),
-		ProjectID:    n.ProjectID,
-	}
-	out.CreatedAt = toolutil.FormatTimePtr(n.CreatedAt)
-	out.UpdatedAt = toolutil.FormatTimePtr(n.UpdatedAt)
-	out.ExpiresAt = toolutil.FormatTimePtr(n.ExpiresAt)
-	out.ResolvedAt = toolutil.FormatTimePtr(n.ResolvedAt)
-	return out
+// NoteToOutput converts a GitLab API [gl.Note], and what the captured
+// response adds to it, to a [NoteOutput]: the shared conversion in
+// [toolutil.DiscussionThreadNoteOutputFromGitLab], kept under the package's
+// name for its callers and tests.
+func NoteToOutput(n *gl.Note, extra toolutil.NoteExtra) NoteOutput {
+	return toolutil.DiscussionThreadNoteOutputFromGitLab(n, extra)
 }
 
-// ToOutput converts a GitLab API [gl.Discussion] to an
-// [Output], including all notes within the thread.
-func ToOutput(d *gl.Discussion) Output {
-	notes := make([]*NoteOutput, len(d.Notes))
-	for i, n := range d.Notes {
-		note := NoteToOutput(n)
-		notes[i] = &note
-	}
-	return Output{
-		ID:             d.ID,
-		IndividualNote: d.IndividualNote,
-		Notes:          notes,
-	}
+// ToOutput converts a GitLab API [gl.Discussion], and what the captured
+// response adds to it, to an [Output], including all notes within the
+// thread.
+func ToOutput(d *gl.Discussion, extra toolutil.DiscussionExtra) Output {
+	return toolutil.DiscussionThreadOutputFromGitLab(d, extra)
 }
 
 // Create creates a new discussion on a merge request. When a
@@ -182,12 +149,17 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Position != nil {
 		opts.Position = buildPositionOptions(input.Position)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Discussions.CreateMergeRequestDiscussion(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrDiscussionCreate", err, http.StatusBadRequest,
 			"for inline diff comments, position requires base_sha, head_sha, start_sha, position_type=text, and a valid old_path/new_path with line numbers; use gitlab_mr_changes_get to fetch the diff context")
 	}
-	return ToOutput(d), nil
+	extra, err := toolutil.CapturedDiscussion(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("mrDiscussionCreate", err)
+	}
+	return ToOutput(d, extra), nil
 }
 
 // Resolve resolves or unresolves a discussion thread on a merge
@@ -202,6 +174,7 @@ func Resolve(ctx context.Context, client *gitlabclient.Client, input ResolveInpu
 	if input.MRIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrDiscussionResolve", "merge_request_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Discussions.ResolveMergeRequestDiscussion(string(input.ProjectID), input.MRIID, input.DiscussionID, &gl.ResolveMergeRequestDiscussionOptions{
 		Resolved: new(input.Resolved),
 	}, gl.WithContext(ctx))
@@ -209,7 +182,11 @@ func Resolve(ctx context.Context, client *gitlabclient.Client, input ResolveInpu
 		return Output{}, toolutil.WrapErrWithStatusHint("mrDiscussionResolve", err, http.StatusNotFound,
 			"verify discussion_id with gitlab_mr_discussion_list; only thread (resolvable) discussions can be resolved")
 	}
-	return ToOutput(d), nil
+	extra, err := toolutil.CapturedDiscussion(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("mrDiscussionResolve", err)
+	}
+	return ToOutput(d, extra), nil
 }
 
 // Reply adds a reply note to an existing discussion thread on a
@@ -224,6 +201,7 @@ func Reply(ctx context.Context, client *gitlabclient.Client, input ReplyInput) (
 	if input.MRIID <= 0 {
 		return NoteOutput{}, toolutil.ErrRequiredInt64("mrDiscussionReply", "merge_request_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	n, _, err := client.GL().Discussions.AddMergeRequestDiscussionNote(string(input.ProjectID), input.MRIID, input.DiscussionID, &gl.AddMergeRequestDiscussionNoteOptions{
 		Body:      new(toolutil.NormalizeText(input.Body)),
 		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
@@ -232,7 +210,11 @@ func Reply(ctx context.Context, client *gitlabclient.Client, input ReplyInput) (
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionReply", err, http.StatusNotFound,
 			"verify discussion_id with gitlab_mr_discussion_list")
 	}
-	return NoteToOutput(n), nil
+	extra, err := toolutil.CapturedNote(captured)
+	if err != nil {
+		return NoteOutput{}, toolutil.WrapErr("mrDiscussionReply", err)
+	}
+	return NoteToOutput(n, extra), nil
 }
 
 // List returns a paginated list of discussion threads for a merge
@@ -251,16 +233,17 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		OrderBy: input.OrderBy, Sort: input.Sort,
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	discussions, resp, err := client.GL().Discussions.ListMergeRequestDiscussions(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionList", err, http.StatusNotFound,
 			"verify project_id and merge_request_iid with gitlab_mr_get")
 	}
-	out := make([]Output, len(discussions))
-	for i, d := range discussions {
-		out[i] = ToOutput(d)
+	extras, err := toolutil.CapturedDiscussions(captured, len(discussions))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("mrDiscussionList", err)
 	}
-	return ListOutput{Discussions: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return ListOutput{Discussions: toolutil.DiscussionThreadOutputsFromGitLab(discussions, extras), Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // GetInput defines parameters for getting a single discussion.
@@ -301,12 +284,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.MRIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrDiscussionGet", "merge_request_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Discussions.GetMergeRequestDiscussion(string(input.ProjectID), input.MRIID, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrDiscussionGet", err, http.StatusNotFound,
 			"verify discussion_id with gitlab_mr_discussion_list")
 	}
-	return ToOutput(d), nil
+	extra, err := toolutil.CapturedDiscussion(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("mrDiscussionGet", err)
+	}
+	return ToOutput(d, extra), nil
 }
 
 // UpdateNote modifies an existing note within a discussion thread.
@@ -332,6 +320,7 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 	if input.Resolved != nil {
 		opts.Resolved = input.Resolved
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	n, _, err := client.GL().Discussions.UpdateMergeRequestDiscussionNote(string(input.ProjectID), input.MRIID, input.DiscussionID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -341,7 +330,11 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionNoteUpdate", err, http.StatusNotFound,
 			"verify note_id with gitlab_mr_discussion_get")
 	}
-	return NoteToOutput(n), nil
+	extra, err := toolutil.CapturedNote(captured)
+	if err != nil {
+		return NoteOutput{}, toolutil.WrapErr("mrDiscussionNoteUpdate", err)
+	}
+	return NoteToOutput(n, extra), nil
 }
 
 // DeleteNote removes a note from a discussion thread.

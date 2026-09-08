@@ -617,6 +617,49 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler here: GitLab's answer
+// decodes for the SDK and not for the fields this package reads beside it,
+// which is a fault in the type naming them and is reported rather than
+// swallowed. A string where a note's `imported` is a bool is the shape, on
+// a note alone, inside a thread, and inside a list of threads.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		note := `{"id":1,"body":"x","author":{"id":1,"username":"u"},"imported":"not-a-bool"}`
+		thread := `{"id":"d1","individual_note":false,"notes":[` + note + `]}`
+		body := thread
+		switch {
+		case strings.Contains(r.URL.Path, "/notes"):
+			body = note
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/discussions"):
+			body = "[" + thread + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := List(t.Context(), client, ListInput{ProjectID: testProjectID, CommitSHA: testCommitSHA})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			_, err := Get(t.Context(), client, GetInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, DiscussionID: testDiscussionID})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			_, err := Create(t.Context(), client, CreateInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, Body: "x"})
+			return err
+		}},
+		{Name: "add note", Call: func() error {
+			_, err := AddNote(t.Context(), client, AddNoteInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, DiscussionID: testDiscussionID, Body: "x"})
+			return err
+		}},
+		{Name: "update note", Call: func() error {
+			_, err := UpdateNote(t.Context(), client, UpdateNoteInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, DiscussionID: testDiscussionID, NoteID: 1, Body: "x"})
+			return err
+		}},
+	})
+}
+
 // TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.

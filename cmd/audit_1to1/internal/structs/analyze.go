@@ -34,6 +34,13 @@ const (
 	docPipelineTriggers = "pipeline_triggers.md"
 	docMRApprovals      = "merge_request_approvals.md"
 	docEpics            = "epics.md#list-all-group-epics"
+	// The notes page prints imported and imported_from on every note example
+	// and commands_changes on the wiki note examples alone, though
+	// lib/api/entities/note.rb exposes all three on every note; the
+	// discussions page prints suggestions in the merge request field table.
+	docNotesIssueList    = "notes.md#list-all-issue-notes"
+	docNotesWikiRetrieve = "notes.md#retrieve-a-wiki-page-note"
+	docDiscussionsMRList = "discussions.md#list-all-merge-request-discussion-items"
 	// The dual-shape labels array cannot be two types under one key in a typed
 	// schema, so the object half is published beside the names the way issues
 	// and merge requests publish theirs.
@@ -447,6 +454,39 @@ var docAddedFields = map[string]string{
 	// SDK gl.ImportStatus tags its timestamp `create_at` (upstream typo); we surface the
 	// documented `created_at` via a raw-decode superset (importStatusAPI).
 	"projectimportexport.ImportStatusOutput.created_at": "project_import_export.md",
+
+	// notes and discussions — four fields lib/api/entities/note.rb exposes that
+	// gl.Note does not declare, and the two resolution flags
+	// lib/api/entities/discussion.rb exposes that gl.Discussion does not. Read
+	// from the captured response beside the SDK's own decode (ADR-0021,
+	// toolutil.CapturedNote and CapturedDiscussion) rather than a raw fetch, so
+	// the route, the options and the pagination stay client-go's. The entities
+	// are the evidence; the pages print each field somewhere, and are cited for
+	// where. Recorded in docs/development/upstream-bugs.md.
+	"issuenotes.Output.imported":                    docNotesIssueList,
+	"issuenotes.Output.imported_from":               docNotesIssueList,
+	"issuenotes.Output.commands_changes":            docNotesWikiRetrieve,
+	"issuenotes.Output.suggestions":                 docDiscussionsMRList,
+	"mrnotes.Output.imported":                       docNotesIssueList,
+	"mrnotes.Output.imported_from":                  docNotesIssueList,
+	"mrnotes.Output.commands_changes":               docNotesWikiRetrieve,
+	"mrnotes.Output.suggestions":                    docDiscussionsMRList,
+	"snippetnotes.Output.imported":                  docNotesIssueList,
+	"snippetnotes.Output.imported_from":             docNotesIssueList,
+	"snippetnotes.Output.commands_changes":          docNotesWikiRetrieve,
+	"snippetnotes.Output.suggestions":               docDiscussionsMRList,
+	"commitdiscussions.NoteOutput.imported":         docNotesIssueList,
+	"commitdiscussions.NoteOutput.imported_from":    docNotesIssueList,
+	"commitdiscussions.NoteOutput.commands_changes": docNotesWikiRetrieve,
+	"commitdiscussions.NoteOutput.suggestions":      docDiscussionsMRList,
+	"commitdiscussions.Output.resolvable":           docDiscussionsMRList,
+	"commitdiscussions.Output.resolved":             docDiscussionsMRList,
+	"mrdiscussions.NoteOutput.imported":             docNotesIssueList,
+	"mrdiscussions.NoteOutput.imported_from":        docNotesIssueList,
+	"mrdiscussions.NoteOutput.commands_changes":     docNotesWikiRetrieve,
+	"mrdiscussions.NoteOutput.suggestions":          docDiscussionsMRList,
+	"mrdiscussions.Output.resolvable":               docDiscussionsMRList,
+	"mrdiscussions.Output.resolved":                 docDiscussionsMRList,
 }
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we

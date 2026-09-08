@@ -1280,11 +1280,8 @@ func assertNoteScalars(t *testing.T, n *NoteOutput) {
 	if n.ResolvedBy == nil || n.ResolvedBy.Username != "maintainer" {
 		t.Fatalf("ResolvedBy = %+v, want maintainer", n.ResolvedBy)
 	}
-	if n.ResolvedAt == "" || n.ExpiresAt == "" {
-		t.Errorf("expected resolved_at and expires_at populated, got %q / %q", n.ResolvedAt, n.ExpiresAt)
-	}
-	if n.Attachment != "file.png" || n.Title != "a title" || n.FileName != "snippet.go" {
-		t.Errorf("attachment/title/file_name not mapped: %q / %q / %q", n.Attachment, n.Title, n.FileName)
+	if n.ResolvedAt == "" {
+		t.Errorf("expected resolved_at populated, got %q", n.ResolvedAt)
 	}
 }
 
@@ -1317,9 +1314,56 @@ func TestNoteAuthorUsername_NilAuthor(t *testing.T) {
 // TestNoteResolvedByOutput_Empty verifies noteResolvedByOutput returns nil when
 // no user has resolved the note.
 func TestNoteResolvedByOutput_Empty(t *testing.T) {
-	if got := toolutil.NewNoteUserOutputFromResolvedBy(gl.NoteResolvedBy{}); got != nil {
+	if got := toolutil.NewNoteUserOutputFromResolvedBy(gl.NoteResolvedBy{}, toolutil.NoteUserExtra{}); got != nil {
 		t.Errorf("expected nil resolved_by for zero user, got %+v", got)
 	}
+}
+
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler here: GitLab's answer
+// decodes for the SDK and not for the fields this package reads beside it,
+// which is a fault in the type naming them and is reported rather than
+// swallowed. A string where a note's `imported` is a bool is the shape, on
+// a note alone, inside a thread, and inside a list of threads.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		note := `{"id":1,"body":"x","author":{"id":1,"username":"u"},"imported":"not-a-bool"}`
+		thread := `{"id":"d1","individual_note":false,"notes":[` + note + `]}`
+		body := thread
+		switch {
+		case strings.Contains(r.URL.Path, "/notes"):
+			body = note
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/discussions"):
+			body = "[" + thread + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "create", Call: func() error {
+			_, err := Create(t.Context(), client, CreateInput{ProjectID: testProjectID, MRIID: 1, Body: "x"})
+			return err
+		}},
+		{Name: "resolve", Call: func() error {
+			_, err := Resolve(t.Context(), client, ResolveInput{ProjectID: testProjectID, MRIID: 1, DiscussionID: "d1", Resolved: true})
+			return err
+		}},
+		{Name: "reply", Call: func() error {
+			_, err := Reply(t.Context(), client, ReplyInput{ProjectID: testProjectID, MRIID: 1, DiscussionID: "d1", Body: "x"})
+			return err
+		}},
+		{Name: "list", Call: func() error {
+			_, err := List(t.Context(), client, ListInput{ProjectID: testProjectID, MRIID: 1})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			_, err := Get(t.Context(), client, GetInput{ProjectID: testProjectID, MRIID: 1, DiscussionID: "d1"})
+			return err
+		}},
+		{Name: "update note", Call: func() error {
+			_, err := UpdateNote(t.Context(), client, UpdateNoteInput{ProjectID: testProjectID, MRIID: 1, DiscussionID: "d1", NoteID: 1, Body: "x"})
+			return err
+		}},
+	})
 }
 
 // TestDecorateMRDiscussionMeta_DefaultFallback covers the defensive default

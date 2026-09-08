@@ -50,6 +50,15 @@ func WithResponseCapture(ctx context.Context) (context.Context, *ResponseCapture
 	return context.WithValue(ctx, captureKey{}, capture), capture
 }
 
+// CapturedBody returns a capture already holding body, as if a request made
+// under it had been answered with it. It is for a test of a reader that
+// decodes captures, which would otherwise need a transport to hand it one.
+func CapturedBody(body []byte) *ResponseCapture {
+	capture := &ResponseCapture{}
+	capture.record(body)
+	return capture
+}
+
 // record keeps a body, replacing whatever an earlier attempt of the same
 // request recorded.
 func (c *ResponseCapture) record(body []byte) {
