@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
 )
 
@@ -104,13 +106,17 @@ func run(checkOnly bool) error {
 		return err
 	}
 	// The manifest is addressed relative to an os.Root rooted at the project
-	// directory, so the command can only ever read and write that one file.
+	// directory, so the command can only ever read that one file; the write
+	// goes through docgen.WriteOrCheck, which contains itself the same way.
 	root, err := os.OpenRoot(rootDir)
 	if err != nil {
 		return fmt.Errorf("open project root: %w", err)
 	}
 	defer func() { _ = root.Close() }()
 
+	// The current manifest is not read to compare with: every field the
+	// generator does not own is carried over from it, so it is the input the
+	// regenerated manifest is built from.
 	current, err := root.ReadFile(manifestFileName)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", manifestFileName, err)
@@ -121,16 +127,12 @@ func run(checkOnly bool) error {
 		return err
 	}
 
+	if writeErr := docgen.WriteOrCheck(filepath.Join(rootDir, manifestFileName), generated, checkOnly, "make gen-lhm-manifest"); writeErr != nil {
+		return writeErr
+	}
 	if checkOnly {
-		if !bytes.Equal(current, generated) {
-			return fmt.Errorf("%s is stale: run `make gen-lhm-manifest` and commit the result", manifestFileName)
-		}
 		fmt.Printf("%s is current (%s)\n", manifestFileName, counts)
 		return nil
-	}
-
-	if writeErr := root.WriteFile(manifestFileName, generated, 0o600); writeErr != nil {
-		return fmt.Errorf("write %s: %w", manifestFileName, writeErr)
 	}
 	fmt.Printf("Generated %s (%s)\n", manifestFileName, counts)
 	return nil

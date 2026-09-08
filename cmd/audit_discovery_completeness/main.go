@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"hash/fnv"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -185,7 +185,7 @@ func main() {
 		cmdutil.Fatalf("marshal report: %v", err)
 	}
 	content = append(content, '\n')
-	if writeErr := writeReport(*outputPath, content); writeErr != nil {
+	if writeErr := docgen.WriteReport(*outputPath, content); writeErr != nil {
 		cmdutil.Fatalf("write report: %v", writeErr)
 	}
 }
@@ -1076,17 +1076,6 @@ func summarize(packages []packageReport) reportSummary {
 		}
 	}
 	return s
-}
-
-func writeReport(outputPath string, content []byte) error {
-	if outputPath == "-" {
-		_, err := os.Stdout.Write(content)
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0o750); err != nil {
-		return err
-	}
-	return os.WriteFile(outputPath, content, 0o600)
 }
 
 // needsMarkdownFormatter reports whether the spec represents list/detail

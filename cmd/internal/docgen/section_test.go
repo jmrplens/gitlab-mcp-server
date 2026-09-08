@@ -62,3 +62,22 @@ func TestReplaceSection_MissingFileErrors(t *testing.T) {
 		t.Fatal("ReplaceSection on missing file: error = nil, want read error")
 	}
 }
+
+// TestReplaceSection_AbsentMarkerErrors verifies a file that carries neither
+// marker is refused rather than rewritten, so a generator pointed at the wrong
+// document fails instead of replacing somebody's prose.
+func TestReplaceSection_AbsentMarkerErrors(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "unmarked.md")
+	if err := os.WriteFile(path, []byte("# Nothing managed here\n"), 0o600); err != nil {
+		t.Fatalf("write unmarked file: %v", err)
+	}
+
+	err := ReplaceSection(path, "<!-- S -->", "<!-- E -->", "NEW")
+	if err == nil || !strings.Contains(err.Error(), "start marker") {
+		t.Fatalf("ReplaceSection() error = %v, want the missing start marker", err)
+	}
+	got, readErr := os.ReadFile(path) //#nosec G304 -- a path this test built
+	if readErr != nil || string(got) != "# Nothing managed here\n" {
+		t.Errorf("file = %q, %v; want it untouched", got, readErr)
+	}
+}

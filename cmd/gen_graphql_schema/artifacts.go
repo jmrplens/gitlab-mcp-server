@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
@@ -23,25 +24,19 @@ import (
 // be grepped by anybody verifying a repair. Nothing weighs against that: the
 // schema never reaches a released binary, since cmd/server does not depend on
 // internal/graphqlschema at all.
+// The directory, the mode and the trailing newline both files end with are
+// docgen.WriteOrCheck's decisions, taken in write mode: this pin's freshness is
+// judged by its own age window rather than by comparing it with a fresh
+// introspection, which needs an instance.
 func writeArtifacts(dir, sdl string, source graphqlschema.Source) error {
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return fmt.Errorf("create %s: %w", dir, err)
+	if err := docgen.WriteOrCheck(filepath.Join(dir, graphqlschema.SDLFileName),
+		[]byte(sdl), false, "make gen-graphql-schema"); err != nil {
+		return err
 	}
-
-	schemaPath := filepath.Join(dir, graphqlschema.SDLFileName)
-	if err := os.WriteFile(schemaPath, []byte(sdl), 0o600); err != nil {
-		return fmt.Errorf("write %s: %w", schemaPath, err)
-	}
-
-	// Marshaling a struct built one line earlier cannot fail, and the trailing
-	// newline is what keeps the file from being the one text file in the
-	// repository without one.
-	record := append(cmdutil.Must(json.MarshalIndent(source, "", "  ")), '\n')
-	recordPath := filepath.Join(dir, graphqlschema.SourceFileName)
-	if err := os.WriteFile(recordPath, record, 0o600); err != nil {
-		return fmt.Errorf("write %s: %w", recordPath, err)
-	}
-	return nil
+	// Marshaling a struct built one line earlier cannot fail.
+	record := cmdutil.Must(json.MarshalIndent(source, "", "  "))
+	return docgen.WriteOrCheck(filepath.Join(dir, graphqlschema.SourceFileName),
+		record, false, "make gen-graphql-schema")
 }
 
 // readArtifacts loads the committed schema and record from dir. This is what

@@ -63,46 +63,6 @@ func TestGenerateManifest_IsDeterministic(t *testing.T) {
 	}
 }
 
-// TestCheckManifest_DetectsStaleOutput verifies CheckManifest detects stale output.
-func TestCheckManifest_DetectsStaleOutput(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "action_specs_manifest_gen.go")
-	writeTestFile(t, path, "old")
-	if err := checkManifest(path, []byte("new")); err == nil {
-		t.Fatal("checkManifest() error = nil, want stale manifest error")
-	}
-}
-
-// TestCheckManifest_Scenarios_ComparesCommittedFile verifies the check
-// accepts a byte-identical manifest and reports a missing one by path.
-func TestCheckManifest_Scenarios_ComparesCommittedFile(t *testing.T) {
-	tests := []struct {
-		name    string
-		write   bool
-		wantErr string
-	}{
-		{name: "identical manifest passes", write: true},
-		{name: "missing manifest is a read error", write: false, wantErr: "read "},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "action_specs_manifest_gen.go")
-			if tt.write {
-				writeTestFile(t, path, "same")
-			}
-			err := checkManifest(path, []byte("same"))
-			if tt.wantErr == "" {
-				if err != nil {
-					t.Fatalf("checkManifest() error = %v, want nil", err)
-				}
-				return
-			}
-			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("checkManifest() error = %v, want containing %q", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 // TestGenerateManifest_InvalidBuilderName_ReturnsFormatError verifies a
 // builder name that is not a Go identifier makes gofmt reject the rendered
 // source, so a corrupt discovery result never lands in the manifest.
@@ -141,9 +101,10 @@ func TestRun_Scenarios_WritesOrVerifiesManifest(t *testing.T) {
 	tests := []manifestRunCase{
 		{name: "write run creates the manifest", source: source},
 		{name: "check run accepts a current manifest", source: source, manifest: string(want), check: true},
-		{name: "check run rejects a stale manifest", source: source, manifest: "package tools\n", check: true, wantErr: "check manifest: "},
+		{name: "check run rejects a stale manifest", source: source, manifest: "package tools\n", check: true, wantErr: "manifest_gen.go is stale; run go run ./cmd/gen_action_catalog_manifest/"},
+		{name: "check run reports a missing manifest", source: source, check: true, wantErr: "action spec manifest: read "},
 		{name: "no builders in the source tree", source: "package tools\n", wantErr: "discover action spec group builders: no action spec group builders found"},
-		{name: "unwritable target path", source: source, blockOut: true, wantErr: "write "},
+		{name: "unwritable target path", source: source, blockOut: true, wantErr: "action spec manifest: write "},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -366,69 +366,6 @@ func TestIsMergedScope_Combinations_MatchOnlyTheMergedSet(t *testing.T) {
 	}
 }
 
-// TestWriteOutput_Destinations_WriteOrFail verifies the output writer: "-"
-// goes to stdout, a nested path is created with its parents, a parent that is
-// a file cannot be created, and a path that is a directory cannot be written.
-func TestWriteOutput_Destinations_WriteOrFail(t *testing.T) {
-	cases := []struct {
-		name    string
-		path    func(t *testing.T) string
-		wantErr bool
-		verify  func(t *testing.T, path string)
-	}{
-		{
-			name: "stdout",
-			path: func(_ *testing.T) string { return "-" },
-		},
-		{
-			name: "nested_file_is_created",
-			path: func(t *testing.T) string {
-				t.Helper()
-				return filepath.Join(t.TempDir(), "plan", "nested", "out.json")
-			},
-			verify: func(t *testing.T, path string) {
-				t.Helper()
-				data, err := os.ReadFile(path)
-				if err != nil || string(data) != "{}\n" {
-					t.Errorf("written file = %q, %v; want {} and a newline", data, err)
-				}
-			},
-		},
-		{
-			name: "parent_is_a_file",
-			path: func(t *testing.T) string {
-				t.Helper()
-				file := filepath.Join(t.TempDir(), "file")
-				if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
-					t.Fatal(err)
-				}
-				return filepath.Join(file, "out.json")
-			},
-			wantErr: true,
-		},
-		{
-			name: "path_is_a_directory",
-			path: func(t *testing.T) string {
-				t.Helper()
-				return t.TempDir()
-			},
-			wantErr: true,
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			path := tc.path(t)
-			err := writeOutput(path, []byte("{}\n"))
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("writeOutput(%q) error = %v, wantErr %v", path, err, tc.wantErr)
-			}
-			if tc.verify != nil {
-				tc.verify(t, path)
-			}
-		})
-	}
-}
-
 // readJSONFile decodes the JSON document at path into a generic map.
 func readJSONFile(t *testing.T, path string) map[string]any {
 	t.Helper()

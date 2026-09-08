@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
@@ -142,21 +143,17 @@ func NormalizePath(path string) string {
 	return b.String()
 }
 
-// Write commits the document to dir.
+// Write commits the document to dir. The directory, the mode and the trailing
+// newline are docgen.WriteOrCheck's decisions, taken in write mode: this
+// record's freshness is judged by its own age window rather than by comparing
+// it with a fresh extraction, which needs the network.
 func Write(dir string, doc Document) error {
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return fmt.Errorf("create %s: %w", dir, err)
-	}
 	doc.SchemaVersion = SchemaVersion
 	// Marshaling a struct of strings and string slices cannot fail, and the
 	// repository's rule for that is to say so at the leaf rather than carry a
 	// branch no test can reach.
 	encoded := cmdutil.Must(json.MarshalIndent(doc, "", " "))
-	path := filepath.Join(dir, FileName)
-	if err := os.WriteFile(path, append(encoded, '\n'), 0o600); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-	return nil
+	return docgen.WriteOrCheck(filepath.Join(dir, FileName), encoded, false, "make gen-api-shapes")
 }
 
 // Read loads the committed document from dir.

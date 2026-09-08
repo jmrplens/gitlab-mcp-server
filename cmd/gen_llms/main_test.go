@@ -416,9 +416,9 @@ func TestRun_CheckModeReportsDrift(t *testing.T) {
 		remove  bool
 		wantErr string
 	}{
-		{name: "stale llms.txt", file: llmsFileName, wantErr: "write llms.txt: llms.txt is out of date; run go run ./cmd/gen_llms/"},
-		{name: "stale llms-full.txt", file: llmsFullFileName, wantErr: "write llms-full.txt: llms-full.txt is out of date"},
-		{name: "stale medium companion", file: llmsMediumFileName, wantErr: "write llms-medium.txt: llms-medium.txt is out of date"},
+		{name: "stale llms.txt", file: llmsFileName, wantErr: "llms.txt is stale; run go run ./cmd/gen_llms/"},
+		{name: "stale llms-full.txt", file: llmsFullFileName, wantErr: "llms-full.txt is stale"},
+		{name: "stale medium companion", file: llmsMediumFileName, wantErr: "llms-medium.txt is stale"},
 		{name: "missing individual companion", file: llmsFullIndividualFileName, remove: true, wantErr: "write llms-full-individual-tools.txt: "},
 	}
 
@@ -482,6 +482,12 @@ func TestRun_RequiresProjectRoot(t *testing.T) {
 	if c.closed {
 		t.Error("run() opened the stub client before locating the project root")
 	}
+}
+
+// normalizeLineEndings makes a comparison of generated text line-ending
+// agnostic, the way docgen.WriteOrCheck makes the freshness check itself.
+func normalizeLineEndings(s string) string {
+	return strings.ReplaceAll(s, "\r\n", "\n")
 }
 
 // TestRun_RealSurfaceReproducesCommittedFiles builds the real surface once and
@@ -937,7 +943,7 @@ func TestWriteGeneratedFile_CheckModeReportsMissingAndStaleFiles(t *testing.T) {
 		wantNotExist bool
 	}{
 		{name: "missing file", wantNotExist: true},
-		{name: "stale file", existing: "# stale\n", wantErr: "llms.txt is out of date; run go run ./cmd/gen_llms/"},
+		{name: "stale file", existing: "# stale\n", wantErr: "llms.txt is stale; run go run ./cmd/gen_llms/"},
 	}
 
 	for _, tt := range tests {

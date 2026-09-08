@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
@@ -136,7 +137,7 @@ func main() {
 	}
 	content = append(content, '\n')
 
-	if writeErr := writeReport(resolveOutputPath(repoRoot, flags.outputPath), content); writeErr != nil {
+	if writeErr := docgen.WriteReport(resolveOutputPath(repoRoot, flags.outputPath), content); writeErr != nil {
 		cmdutil.Fatalf("write report: %v", writeErr)
 	}
 }
@@ -436,22 +437,6 @@ func summarize(files []fileFinding) reportSummary {
 		}
 	}
 	return s
-}
-
-// writeReport writes content to outputPath, creating parent
-// directories as needed. The sentinel "-" writes to stdout, matching the
-// -output convention of audit_1to1 and audit_discovery_completeness.
-func writeReport(outputPath string, content []byte) error {
-	if outputPath == "-" {
-		_, err := os.Stdout.Write(content)
-		return err
-	}
-	if dir := filepath.Dir(outputPath); dir != "" {
-		if err := os.MkdirAll(dir, 0o750); err != nil {
-			return err
-		}
-	}
-	return os.WriteFile(outputPath, content, 0o600)
 }
 
 // stringSet returns set membership for a slice of strings.
