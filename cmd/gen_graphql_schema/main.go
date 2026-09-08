@@ -148,7 +148,7 @@ func pinProblems(source graphqlschema.Source, now time.Time) []string {
 	}
 	return append(problems, provenance.Problems(provenance.Subject{
 		Noun:        "pin",
-		Consequence: "GitLab narrows fields in place, so one this old can no longer report a document that broke since",
+		Consequence: "GitLab narrows fields in place, so a pin this old can no longer report a document that broke since",
 	}, source.RetrievedAt, now)...)
 }
 
@@ -203,7 +203,7 @@ func generate(cfg genRun, out, errOut io.Writer) int {
 		Instance:       cfg.endpoint,
 		GitLabVersion:  version,
 		GitLabRevision: revision,
-		RetrievedAt:    cfg.now().UTC().Format(time.DateOnly),
+		RetrievedAt:    provenance.Clock(cfg.now).UTC().Format(time.DateOnly),
 		Types:          len(loaded.Types),
 	}
 	if err = writeArtifacts(cfg.dir, sdl, source); err != nil {
