@@ -244,17 +244,6 @@ func verifyNestedDatadogItem(nestedSrc *gl.GroupDatadogIntegration) func(t *test
 				t.Fatalf("groupDatadogToItem dropped event flag %s: %+v", name, got)
 			}
 		}
-		if got.APIURL != nestedSrc.Properties.APIURL || got.DatadogEnv != nestedSrc.Properties.DatadogEnv ||
-			got.DatadogService != nestedSrc.Properties.DatadogService || got.DatadogSite != nestedSrc.Properties.DatadogSite ||
-			got.DatadogTags != nestedSrc.Properties.DatadogTags {
-			t.Fatalf("groupDatadogToItem dropped a Datadog field: %+v", got)
-		}
-		if got.DatadogCIVisibility == nil || !*got.DatadogCIVisibility {
-			t.Fatalf("groupDatadogToItem DatadogCIVisibility = %v, want true", got.DatadogCIVisibility)
-		}
-		if got.ArchiveTraceEvents == nil || !*got.ArchiveTraceEvents {
-			t.Fatalf("groupDatadogToItem ArchiveTraceEvents = %v, want true", got.ArchiveTraceEvents)
-		}
 		if got.Properties == nil {
 			t.Fatal("groupDatadogToItem dropped the canonical nested Properties object")
 		}
@@ -274,23 +263,23 @@ func verifyNestedDatadogItem(nestedSrc *gl.GroupDatadogIntegration) func(t *test
 }
 
 // verifyLegacyDatadogItem asserts the fallback for servers that omit the
-// nested "properties" object: flat fields carry the deprecated SDK values,
-// Properties stays nil, and datadog_ci_visibility is never fabricated.
+// nested "properties" object: the deprecated flat SDK values are read into the
+// one key this type publishes, and datadog_ci_visibility reads false because
+// such a payload never carries it.
 func verifyLegacyDatadogItem(t *testing.T, got GroupDatadogItem) {
 	t.Helper()
-	if got.Properties != nil {
-		t.Fatalf("Properties = %+v, want nil for a legacy flat payload", got.Properties)
+	if got.Properties == nil {
+		t.Fatalf("Properties = nil, want the legacy flat payload read into it: %+v", got)
 	}
-	if got.APIURL != "https://legacy.example" || got.DatadogEnv != "staging" ||
-		got.DatadogService != "legacy-svc" || got.DatadogSite != "datadoghq.eu" ||
-		got.DatadogTags != "team:legacy" {
-		t.Fatalf("flat fallback dropped a Datadog field: %+v", got)
+	want := GroupDatadogProperties{
+		APIURL:         "https://legacy.example",
+		DatadogEnv:     "staging",
+		DatadogService: "legacy-svc",
+		DatadogSite:    "datadoghq.eu",
+		DatadogTags:    "team:legacy",
 	}
-	if got.DatadogCIVisibility != nil {
-		t.Fatalf("DatadogCIVisibility = %v, want nil (never fabricated for legacy payloads)", got.DatadogCIVisibility)
-	}
-	if got.ArchiveTraceEvents == nil || *got.ArchiveTraceEvents {
-		t.Fatalf("ArchiveTraceEvents = %v, want explicit false from the legacy flat field", got.ArchiveTraceEvents)
+	if *got.Properties != want {
+		t.Fatalf("legacy flat fallback:\n got %+v\nwant %+v", *got.Properties, want)
 	}
 }
 

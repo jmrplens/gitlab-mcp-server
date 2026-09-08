@@ -48,11 +48,8 @@ func writeGroupDatadogStringField(sb *strings.Builder, label, value string) {
 
 // writeGroupDatadogBoolField emits a single label-bool line when the
 // pointer is non-nil.
-func writeGroupDatadogBoolField(sb *strings.Builder, label string, value *bool) {
-	if value == nil {
-		return
-	}
-	fmt.Fprintf(sb, groupDatadogBoolLineFmt, label, *value)
+func writeGroupDatadogBoolField(sb *strings.Builder, label string, value bool) {
+	fmt.Fprintf(sb, groupDatadogBoolLineFmt, label, value)
 }
 
 // writeGroupDatadogTimestamp emits a Created/Updated-style line when the
@@ -82,13 +79,15 @@ func formatGroupDatadogItem(i GroupDatadogItem, headingSuffix string, includeTim
 	fmt.Fprintf(&sb, toolutil.FmtMdID, i.ID)
 	writeGroupDatadogSlugLine(&sb, i.Slug)
 	writeGroupDatadogActiveLine(&sb, i.Active)
-	writeGroupDatadogStringField(&sb, "API URL", i.APIURL)
-	writeGroupDatadogStringField(&sb, "Datadog Env", i.DatadogEnv)
-	writeGroupDatadogStringField(&sb, "Datadog Service", i.DatadogService)
-	writeGroupDatadogStringField(&sb, "Datadog Site", i.DatadogSite)
-	writeGroupDatadogStringField(&sb, "Datadog Tags", i.DatadogTags)
-	writeGroupDatadogBoolField(&sb, "Datadog CI Visibility", i.DatadogCIVisibility)
-	writeGroupDatadogBoolField(&sb, "Archive Trace Events", i.ArchiveTraceEvents)
+	if p := i.Properties; p != nil {
+		writeGroupDatadogStringField(&sb, "API URL", p.APIURL)
+		writeGroupDatadogStringField(&sb, "Datadog Env", p.DatadogEnv)
+		writeGroupDatadogStringField(&sb, "Datadog Service", p.DatadogService)
+		writeGroupDatadogStringField(&sb, "Datadog Site", p.DatadogSite)
+		writeGroupDatadogStringField(&sb, "Datadog Tags", p.DatadogTags)
+		writeGroupDatadogBoolField(&sb, "Datadog CI Visibility", p.DatadogCIVisibility)
+		writeGroupDatadogBoolField(&sb, "Archive Trace Events", p.ArchiveTraceEvents)
+	}
 	if includeTimestamps {
 		writeGroupDatadogTimestamp(&sb, "Created", i.CreatedAt)
 		writeGroupDatadogTimestamp(&sb, "Updated", i.UpdatedAt)
