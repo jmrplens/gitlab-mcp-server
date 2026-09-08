@@ -59,6 +59,16 @@ const (
 	docGroupLabelsList = "group_labels.md#list-group-labels"
 	docPipelinesGet    = "pipelines.md#retrieve-a-single-pipeline"
 	docTriggersRun     = "pipeline_triggers.md#trigger-a-pipeline-with-a-token"
+	// The personal access tokens page prints granular_scopes and
+	// last_used_ips in its list example and names both in its notes;
+	// granular, impersonation and the resource pair are exposed by the
+	// entities and printed on no page, which is why the entity is cited in
+	// the comment beside each block below.
+	docPATList            = "personal_access_tokens.md#list-all-personal-access-tokens"
+	docProjectTokensList  = "project_access_tokens.md#list-all-project-access-tokens"
+	docGroupTokensList    = "group_access_tokens.md"
+	docImpersonationPage  = "user_tokens.md#list-all-impersonation-tokens-for-a-user"
+	docServiceAccountPATs = "group_service_accounts.md"
 	// The dual-shape labels array cannot be two types under one key in a typed
 	// schema, so the object half is published beside the names the way issues
 	// and merge requests publish theirs.
@@ -550,6 +560,39 @@ var docAddedFields = map[string]string{
 	"grouplabels.Output.description_html":        docGroupLabelsList,
 	"pipelines.DetailOutput.archived":            docPipelinesGet,
 	"pipelinetriggers.RunOutput.archived":        docTriggersRun,
+
+	// tokens — lib/api/entities/personal_access_token.rb exposes granular on
+	// every token, and the entities inheriting it add granular_scopes and
+	// last_used_ips under a condition; an impersonation token adds its own
+	// flag and the description and user_id gl.ImpersonationToken does not
+	// model, and a project or group token adds the resource pair of
+	// lib/api/entities/resource_access_token.rb. All are read from the
+	// captured response (ADR-0021, the token readers in
+	// toolutil/sent_shapes.go). Recorded in
+	// docs/development/upstream-bugs.md.
+	"users.CurrentUserPATOutput.granular":              docPATList,
+	"users.CurrentUserPATOutput.granular_scopes":       docPATList,
+	"users.CurrentUserPATOutput.last_used_ips":         docPATList,
+	"impersonationtokens.PATOutput.granular":           docPATList,
+	"impersonationtokens.PATOutput.granular_scopes":    docPATList,
+	"impersonationtokens.PATOutput.last_used_ips":      docPATList,
+	"impersonationtokens.Output.granular":              docImpersonationPage,
+	"impersonationtokens.Output.granular_scopes":       docImpersonationPage,
+	"impersonationtokens.Output.last_used_ips":         docImpersonationPage,
+	"impersonationtokens.Output.impersonation":         docImpersonationPage,
+	"impersonationtokens.Output.description":           docImpersonationPage,
+	"impersonationtokens.Output.user_id":               docImpersonationPage,
+	"groupserviceaccounts.PATOutput.granular":          docServiceAccountPATs,
+	"groupserviceaccounts.PATOutput.granular_scopes":   docServiceAccountPATs,
+	"groupserviceaccounts.PATOutput.last_used_ips":     docServiceAccountPATs,
+	"projectserviceaccounts.PATOutput.granular":        docServiceAccountPATs,
+	"projectserviceaccounts.PATOutput.granular_scopes": docServiceAccountPATs,
+	"projectserviceaccounts.PATOutput.last_used_ips":   docServiceAccountPATs,
+	"accesstokens.Output.granular":                     docProjectTokensList,
+	"accesstokens.Output.granular_scopes":              docProjectTokensList,
+	"accesstokens.Output.last_used_ips":                docProjectTokensList,
+	"accesstokens.Output.resource_type":                docGroupTokensList,
+	"accesstokens.Output.resource_id":                  docGroupTokensList,
 }
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we

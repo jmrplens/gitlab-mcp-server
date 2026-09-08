@@ -28,20 +28,26 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// PATOutput represents a personal access token for a service account.
+// PATOutput represents a personal access token for a service account: what
+// [gl.PersonalAccessToken] decodes, plus what
+// lib/api/entities/personal_access_token.rb sends and the SDK struct does not
+// carry, read from the captured response (ADR-0021).
 type PATOutput struct {
 	toolutil.HintableOutput
-	ID          int64    `json:"id"`
-	Name        string   `json:"name"`
-	Revoked     bool     `json:"revoked"`
-	CreatedAt   string   `json:"created_at,omitempty"`
-	Description string   `json:"description,omitempty"`
-	Scopes      []string `json:"scopes"`
-	UserID      int64    `json:"user_id"`
-	LastUsedAt  string   `json:"last_used_at,omitempty"`
-	Active      bool     `json:"active"`
-	ExpiresAt   string   `json:"expires_at,omitempty"`
-	Token       string   `json:"token,omitempty"`
+	ID             int64                               `json:"id"`
+	Name           string                              `json:"name"`
+	Revoked        bool                                `json:"revoked"`
+	CreatedAt      string                              `json:"created_at,omitempty"`
+	Description    string                              `json:"description,omitempty"`
+	Scopes         []string                            `json:"scopes"`
+	Granular       bool                                `json:"granular"`
+	GranularScopes []toolutil.TokenGranularScopeOutput `json:"granular_scopes,omitempty"`
+	UserID         int64                               `json:"user_id"`
+	LastUsedAt     string                              `json:"last_used_at,omitempty"`
+	LastUsedIPs    []string                            `json:"last_used_ips,omitempty"`
+	Active         bool                                `json:"active"`
+	ExpiresAt      string                              `json:"expires_at,omitempty"`
+	Token          string                              `json:"token,omitempty"`
 }
 
 // ListPATOutput holds a paginated list of service account PATs.
@@ -63,16 +69,19 @@ func toOutput(sa *gl.GroupServiceAccount) Output {
 	}
 }
 
-func toPATOutput(pat *gl.PersonalAccessToken) PATOutput {
+func toPATOutput(pat *gl.PersonalAccessToken, extra toolutil.TokenExtra) PATOutput {
 	out := PATOutput{
-		ID:          pat.ID,
-		Name:        pat.Name,
-		Revoked:     pat.Revoked,
-		Description: pat.Description,
-		Scopes:      pat.Scopes,
-		UserID:      pat.UserID,
-		Active:      pat.Active,
-		Token:       pat.Token,
+		ID:             pat.ID,
+		Name:           pat.Name,
+		Revoked:        pat.Revoked,
+		Description:    pat.Description,
+		Scopes:         pat.Scopes,
+		Granular:       extra.Granular,
+		GranularScopes: extra.GranularScopes,
+		UserID:         pat.UserID,
+		LastUsedIPs:    extra.LastUsedIPs,
+		Active:         pat.Active,
+		Token:          pat.Token,
 	}
 	if pat.CreatedAt != nil {
 		out.CreatedAt = pat.CreatedAt.Format("2006-01-02T15:04:05Z")
@@ -280,13 +289,18 @@ func ListPATs(ctx context.Context, client *gitlabclient.Client, input ListPATInp
 		iso := gl.ISOTime(t)
 		opts.ExpiresBefore = &iso
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	tokens, resp, err := client.GL().Groups.ListServiceAccountPersonalAccessTokens(input.GroupID, input.ServiceAccountID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListPATOutput{}, fmt.Errorf("list service account PATs: %w", err)
 	}
+	extras, err := toolutil.CapturedTokens(captured, len(tokens))
+	if err != nil {
+		return ListPATOutput{}, toolutil.WrapErr("list service account PATs", err)
+	}
 	out := make([]PATOutput, len(tokens))
 	for i, t := range tokens {
-		out[i] = toPATOutput(t)
+		out[i] = toPATOutput(t, extras[i])
 	}
 	return ListPATOutput{
 		Tokens:     out,
@@ -333,11 +347,22 @@ func CreatePAT(ctx context.Context, client *gitlabclient.Client, input CreatePAT
 		isoT := gl.ISOTime(t)
 		opts.ExpiresAt = &isoT
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	pat, _, err := client.GL().Groups.CreateServiceAccountPersonalAccessToken(input.GroupID, input.ServiceAccountID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return PATOutput{}, fmt.Errorf("create service account PAT: %w", err)
 	}
-	return toPATOutput(pat), nil
+	return capturedPATOutput("create service account PAT", pat, captured)
+}
+
+// capturedPATOutput converts one token with what its captured answer carries
+// beside the SDK's decode, or reports the answer the type cannot hold.
+func capturedPATOutput(op string, pat *gl.PersonalAccessToken, captured *gitlabclient.ResponseCapture) (PATOutput, error) {
+	extra, err := toolutil.CapturedToken(captured)
+	if err != nil {
+		return PATOutput{}, toolutil.WrapErr(op, err)
+	}
+	return toPATOutput(pat, extra), nil
 }
 
 // RevokePATInput holds parameters for revoking a service account PAT.
@@ -394,11 +419,12 @@ func RotatePAT(ctx context.Context, client *gitlabclient.Client, input RotatePAT
 		isoT := gl.ISOTime(t)
 		opts.ExpiresAt = &isoT
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	pat, _, err := client.GL().Groups.RotateServiceAccountPersonalAccessToken(input.GroupID, input.ServiceAccountID, input.TokenID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return PATOutput{}, fmt.Errorf("rotate service account PAT: %w", err)
 	}
-	return toPATOutput(pat), nil
+	return capturedPATOutput("rotate service account PAT", pat, captured)
 }
 
 // FormatOutputMarkdown renders a single service account as Markdown.

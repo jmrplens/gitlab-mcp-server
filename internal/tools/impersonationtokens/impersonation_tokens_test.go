@@ -1,5 +1,6 @@
 // impersonation_tokens_test.go contains unit tests for GitLab impersonation
-// token operations. Tests use httptest to mock the GitLab API.
+// token operations. Tests use httptest to mock the GitLab API, including the
+// fields GitLab sends that client-go's token structs do not carry.
 package impersonationtokens
 
 import (
@@ -38,6 +39,13 @@ const (
 		"created_at":"2026-02-20T12:00:00Z"
 	}]`
 
+	// capturedTokenJSON is what GitLab sends beside the fields the SDK
+	// decodes: the impersonation flag and the personal access token fields
+	// gl.ImpersonationToken does not model.
+	capturedTokenJSON = `{"id":1,"name":"test-token","active":true,"scopes":["api"],"impersonation":true,
+		"description":"acting as","user_id":42,"granular":true,"last_used_ips":["192.0.2.10"],
+		"granular_scopes":[{"access":"personal_projects","permissions":["read_job"],"project_id":3}]}`
+
 	patJSON = `{
 		"id":10,
 		"name":"my-pat",
@@ -51,6 +59,75 @@ const (
 		"expires_at":"2026-01-15"
 	}`
 )
+
+// TestGet_ReadsWhatTheSDKDoesNotModel verifies an impersonation token carries,
+// beside what client-go decoded, the fields
+// lib/api/entities/impersonation_token.rb sends and gl.ImpersonationToken does
+// not: its impersonation flag, and the description, user_id, granular,
+// granular_scopes and last_used_ips of the personal access token entity it
+// inherits.
+func TestGet_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, capturedTokenJSON)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{UserID: 42, TokenID: 1})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if !out.Impersonation || out.Description != "acting as" || out.UserID != 42 || !out.Granular ||
+		len(out.GranularScopes) != 1 || out.GranularScopes[0].ProjectID != 3 || len(out.LastUsedIPs) != 1 {
+		t.Errorf("Get() = %+v, want the captured fields", out)
+	}
+}
+
+// TestCreatePAT_ReadsWhatTheSDKDoesNotModel verifies the personal access
+// token this package creates carries the three fields
+// lib/api/entities/personal_access_token.rb sends and the SDK struct lacks.
+func TestCreatePAT_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"name":"my-pat","active":true,"scopes":["api"],`+
+			`"granular":true,"last_used_ips":["192.0.2.10"],"granular_scopes":[{"access":"group","permissions":["read_job"],"group_id":5}]}`)
+	}))
+
+	out, err := CreatePAT(context.Background(), client, CreatePATInput{UserID: 42, Name: "my-pat", Scopes: []string{"api"}})
+	if err != nil {
+		t.Fatalf("CreatePAT() unexpected error: %v", err)
+	}
+	if !out.Granular || len(out.GranularScopes) != 1 || out.GranularScopes[0].GroupID != 5 || len(out.LastUsedIPs) != 1 {
+		t.Errorf("CreatePAT() = %+v, want the captured fields", out)
+	}
+}
+
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler that presents a token:
+// GitLab's answer decodes for the SDK and not for the fields read beside it,
+// and the handler reports it rather than swallowing it, on a token alone and
+// on a list of them.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := `{"id":1,"name":"test-token","granular":"not-a-bool"}`
+		if r.Method == http.MethodGet && r.URL.Path == pathListTokens {
+			body = "[" + body + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error { _, err := List(context.Background(), client, ListInput{UserID: 42}); return err }},
+		{Name: "get", Call: func() error {
+			_, err := Get(context.Background(), client, GetInput{UserID: 42, TokenID: 1})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			_, err := Create(context.Background(), client, CreateInput{UserID: 42, Name: "t", Scopes: []string{"api"}})
+			return err
+		}},
+		{Name: "create personal access token", Call: func() error {
+			_, err := CreatePAT(context.Background(), client, CreatePATInput{UserID: 42, Name: "t", Scopes: []string{"api"}})
+			return err
+		}},
+	})
+}
 
 // TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
 // The test exercises the GET path of the underlying GitLab API call.

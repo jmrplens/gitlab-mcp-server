@@ -11,6 +11,40 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
+// TestCreateCurrentUserPAT_ReadsWhatTheSDKDoesNotModel verifies the token
+// carries, beside what client-go decoded, the three fields
+// lib/api/entities/personal_access_token.rb sends and the SDK struct does not.
+func TestCreateCurrentUserPAT_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":5,"name":"mine","active":true,"scopes":["api"],`+
+			`"granular":true,"last_used_ips":["192.0.2.10"],"granular_scopes":[{"access":"personal_projects","permissions":["read_job"],"project_id":3}]}`)
+	}))
+
+	out, err := CreateCurrentUserPAT(context.Background(), client, CreateCurrentUserPATInput{Name: "mine", Scopes: []string{"api"}})
+	if err != nil {
+		t.Fatalf("CreateCurrentUserPAT() unexpected error: %v", err)
+	}
+	if !out.Granular || len(out.GranularScopes) != 1 || out.GranularScopes[0].ProjectID != 3 || len(out.LastUsedIPs) != 1 {
+		t.Errorf("CreateCurrentUserPAT() = %+v, want the captured fields", out)
+	}
+}
+
+// TestCreateCurrentUserPAT_ACapturedFieldTheTypeCannotHold_IsReported
+// verifies the one failure the captured response adds: GitLab's answer
+// decodes for the SDK and not for the fields read beside it, and the handler
+// reports it rather than swallowing it.
+func TestCreateCurrentUserPAT_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":5,"name":"mine","granular":"not-a-bool"}`)
+	}))
+
+	_, err := CreateCurrentUserPAT(context.Background(), client, CreateCurrentUserPATInput{Name: "mine", Scopes: []string{"api"}})
+
+	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("CreateCurrentUserPAT() error = %v, want the capture's decode failure", err)
+	}
+}
+
 // TestCreateServiceAccount_Success verifies CreateServiceAccount returns the
 // new service account when POST /service_accounts responds 201 Created.
 func TestCreateServiceAccount_Success(t *testing.T) {

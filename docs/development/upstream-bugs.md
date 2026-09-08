@@ -97,6 +97,7 @@ readable without opening the tracker:
 | 29 | client-go | [The note and discussion structs miss what GitLab sends and declare what it does not](#the-note-and-discussion-structs-miss-what-gitlab-sends-and-declare-what-it-does-not) | No | No | No | No | Yes |
 | 30 | client-go | [The member structs, options and services miss what GitLab sends, accepts and serves](#the-member-structs-options-and-services-miss-what-gitlab-sends-accepts-and-serves) | No | No | No | No | Partial |
 | 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | No | No | No | No | Yes |
+| 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-05.
 
@@ -723,6 +724,62 @@ the entity condition on each field), during the field-by-field review.
 **Effort**: small. Every field is an additive struct member with a `json`
 tag; the lint jobs need one type for the job object, and the runner's creator
 can reuse whichever basic-user struct the wrapper settles on.
+
+### No token struct carries the granular fields, and the impersonation and resource ones carry less still
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. The fields are read from the captured response beside
+  the SDK's decode ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
+  through the three token readers in `internal/toolutil/sent_shapes.go`, in
+  every package that presents a token: `accesstokens`,
+  `impersonationtokens`, `users`, `groupserviceaccounts` and
+  `projectserviceaccounts`. They retire when the structs carry the fields.
+
+**What**: `PersonalAccessToken` in `personal_access_tokens.go` and the three
+types built on it, held against the entities that render them at the pinned
+commit `1c8ac034` of gitlab-org/gitlab
+(`docs/development/gitlab-api-exposes.json`).
+
+- **Every token is missing three fields.**
+  `lib/api/entities/personal_access_token.rb` exposes `granular` on every
+  token, and the two entities inheriting it add `granular_scopes`, the
+  array of `{access, permissions, project_id, group_id}` objects a granular
+  token carries, and `last_used_ips`, the addresses the token authenticated
+  from. `PersonalAccessToken` declares none of the three, so a caller
+  cannot tell a granular token from a classic one, cannot read the scopes a
+  granular one actually holds, and cannot see where a token has been used.
+  The granular scopes are not a nicety: `lib/api/personal_access_tokens.rb`
+  passes `with_granular_scopes: true` on list, get and rotate, so GitLab
+  sends them and the decode drops them.
+- **`ImpersonationToken` is missing six.** It renders through
+  `lib/api/entities/impersonation_token.rb`, which inherits the personal
+  access token entity and adds `impersonation`. The struct declares neither
+  that flag nor the `description` and `user_id` the parent entity sends,
+  which `PersonalAccessToken` does model, so the impersonation type is the
+  personal one minus two fields for no reason in GitLab, plus the three
+  above.
+- **The resource token is missing five.** `ProjectAccessToken` and
+  `GroupAccessToken` are both the unexported `resourceAccessToken`, which
+  embeds `PersonalAccessToken` and adds `access_level` alone, while
+  `lib/api/entities/resource_access_token.rb` also exposes `resource_type`
+  (`project` or `group`) and `resource_id`. A caller listing tokens across
+  scopes cannot tell which resource each belongs to.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` and `shapes.sent.unsurfaced` in
+`go run ./cmd/audit_1to1/ -scope=paths`) reported the granular trio on the
+shared shape; reading the four entities beside it during the field-by-field
+review turned up the impersonation and resource fields, which the generated
+OpenAPI record does not list because the entity exposes them through blocks
+rather than documented attributes.
+
+**Effort**: small for the fields, additive struct members with `json` tags
+plus one type for the granular scope object. The `granular_scopes` field on
+`resourceAccessToken` comes free with the embed once
+`PersonalAccessToken` carries it.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

@@ -16,18 +16,31 @@ import (
 
 const errUserIDPositive = "user_id must be a positive integer"
 
-// Output represents an impersonation token.
+// Output represents an impersonation token: what [gl.ImpersonationToken]
+// decodes, plus what lib/api/entities/impersonation_token.rb sends and the
+// SDK struct does not carry, read from the captured response (ADR-0021). The
+// description and user_id come from the personal access token entity it
+// inherits, which the SDK models on PersonalAccessToken alone; impersonation
+// and granular are on every impersonation token, granular_scopes on a
+// granular one the endpoint asked them for, and last_used_ips while the
+// instance exposes them.
 type Output struct {
 	toolutil.HintableOutput
-	ID         int64    `json:"id"`
-	Name       string   `json:"name"`
-	Active     bool     `json:"active"`
-	Token      string   `json:"token,omitempty"`
-	Scopes     []string `json:"scopes"`
-	Revoked    bool     `json:"revoked"`
-	CreatedAt  string   `json:"created_at,omitempty"`
-	ExpiresAt  string   `json:"expires_at,omitempty"`
-	LastUsedAt string   `json:"last_used_at,omitempty"`
+	ID             int64                               `json:"id"`
+	Name           string                              `json:"name"`
+	Active         bool                                `json:"active"`
+	Token          string                              `json:"token,omitempty"`
+	Scopes         []string                            `json:"scopes"`
+	Granular       bool                                `json:"granular"`
+	GranularScopes []toolutil.TokenGranularScopeOutput `json:"granular_scopes,omitempty"`
+	Revoked        bool                                `json:"revoked"`
+	Description    string                              `json:"description,omitempty"`
+	UserID         int64                               `json:"user_id"`
+	Impersonation  bool                                `json:"impersonation"`
+	CreatedAt      string                              `json:"created_at,omitempty"`
+	ExpiresAt      string                              `json:"expires_at,omitempty"`
+	LastUsedAt     string                              `json:"last_used_at,omitempty"`
+	LastUsedIPs    []string                            `json:"last_used_ips,omitempty"`
 }
 
 // ListOutput holds a list of impersonation tokens.
@@ -95,14 +108,20 @@ type CreatePATInput struct {
 
 // --- Conversion helpers ---.
 
-func toOutput(t *gl.ImpersonationToken) Output {
+func toOutput(t *gl.ImpersonationToken, extra toolutil.ImpersonationTokenExtra) Output {
 	o := Output{
-		ID:      t.ID,
-		Name:    t.Name,
-		Active:  t.Active,
-		Token:   t.Token,
-		Scopes:  t.Scopes,
-		Revoked: t.Revoked,
+		ID:             t.ID,
+		Name:           t.Name,
+		Active:         t.Active,
+		Token:          t.Token,
+		Scopes:         t.Scopes,
+		Granular:       extra.Granular,
+		GranularScopes: extra.GranularScopes,
+		Revoked:        t.Revoked,
+		Description:    extra.Description,
+		UserID:         extra.UserID,
+		Impersonation:  extra.Impersonation,
+		LastUsedIPs:    extra.LastUsedIPs,
 	}
 	if t.CreatedAt != nil {
 		o.CreatedAt = t.CreatedAt.Format(time.RFC3339)
@@ -116,8 +135,8 @@ func toOutput(t *gl.ImpersonationToken) Output {
 	return o
 }
 
-func toPATOutput(t *gl.PersonalAccessToken) PATOutput {
-	return PATOutput{PersonalTokenOutput: toolutil.NewPersonalTokenOutput(t)}
+func toPATOutput(t *gl.PersonalAccessToken, extra toolutil.TokenExtra) PATOutput {
+	return PATOutput{PersonalTokenOutput: toolutil.NewPersonalTokenOutput(t, extra)}
 }
 
 // --- Handlers ---.
@@ -138,14 +157,19 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	tokens, _, err := client.GL().Users.GetAllImpersonationTokens(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_impersonation_tokens", err, http.StatusForbidden,
 			"impersonation tokens require admin token; verify user_id with gitlab_get_user; state must be one of {all, active, inactive}")
 	}
+	extras, err := toolutil.CapturedImpersonationTokens(captured, len(tokens))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("list_impersonation_tokens", err)
+	}
 	out := make([]Output, 0, len(tokens))
-	for _, t := range tokens {
-		out = append(out, toOutput(t))
+	for i, t := range tokens {
+		out = append(out, toOutput(t, extras[i]))
 	}
 	return ListOutput{Tokens: out}, nil
 }
@@ -158,12 +182,24 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.TokenID <= 0 {
 		return Output{}, errors.New("token_id must be a positive integer")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Users.GetImpersonationToken(input.UserID, input.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get_impersonation_token", err, http.StatusNotFound,
 			"verify token_id with gitlab_list_impersonation_tokens; admin token required; the token may have been revoked")
 	}
-	return toOutput(token), nil
+	return capturedOutput("get_impersonation_token", token, captured)
+}
+
+// capturedOutput converts one impersonation token with what its captured
+// answer carries beside the SDK's decode, or reports the answer the type
+// cannot hold.
+func capturedOutput(op string, token *gl.ImpersonationToken, captured *gitlabclient.ResponseCapture) (Output, error) {
+	extra, err := toolutil.CapturedImpersonationToken(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(op, err)
+	}
+	return toOutput(token, extra), nil
 }
 
 // Create creates an impersonation token for a user.
@@ -188,12 +224,13 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		}
 		opts.ExpiresAt = &t
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Users.CreateImpersonationToken(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("create_impersonation_token", err, http.StatusForbidden,
 			"creating impersonation tokens requires admin token; scopes must be from {api, read_user, read_api, read_repository, write_repository, read_registry, write_registry, sudo, admin_mode, create_runner, manage_runner, ai_features, k8s_proxy}; expires_at format YYYY-MM-DD")
 	}
-	return toOutput(token), nil
+	return capturedOutput("create_impersonation_token", token, captured)
 }
 
 // Revoke revokes an impersonation token.
@@ -238,12 +275,17 @@ func CreatePAT(ctx context.Context, client *gitlabclient.Client, input CreatePAT
 		isoT := gl.ISOTime(t)
 		opts.ExpiresAt = &isoT
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Users.CreatePersonalAccessToken(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return PATOutput{}, toolutil.WrapErrWithStatusHint("create_personal_access_token", err, http.StatusForbidden,
 			"creating PAT for another user requires admin token; scopes must include valid PAT scopes; expires_at format YYYY-MM-DD")
 	}
-	return toPATOutput(token), nil
+	extra, err := toolutil.CapturedToken(captured)
+	if err != nil {
+		return PATOutput{}, toolutil.WrapErr("create_personal_access_token", err)
+	}
+	return toPATOutput(token, extra), nil
 }
 
 // --- Markdown formatters ---.

@@ -17,6 +17,55 @@ const (
 	pathServiceAccount42PAT = "/api/v4/groups/mygroup/service_accounts/42/personal_access_tokens"
 )
 
+// TestListPATs_ReadsWhatTheSDKDoesNotModel verifies a service account's
+// tokens carry, beside what client-go decoded, the three fields
+// lib/api/entities/personal_access_token.rb sends and gl.PersonalAccessToken
+// does not, each paired with its token by position.
+func TestListPATs_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"a","granular":true,"last_used_ips":["192.0.2.10"],`+
+			`"granular_scopes":[{"access":"group","permissions":["read_job"],"group_id":5}]},{"id":2,"name":"b"}]`)
+	}))
+
+	out, err := ListPATs(context.Background(), client, ListPATInput{GroupID: "mygroup", ServiceAccountID: 42})
+	if err != nil {
+		t.Fatalf("ListPATs() unexpected error: %v", err)
+	}
+	if len(out.Tokens) != 2 || !out.Tokens[0].Granular || len(out.Tokens[0].GranularScopes) != 1 ||
+		out.Tokens[0].GranularScopes[0].GroupID != 5 || len(out.Tokens[0].LastUsedIPs) != 1 ||
+		out.Tokens[1].Granular || out.Tokens[1].GranularScopes != nil {
+		t.Errorf("ListPATs() tokens = %+v, want each paired with its captured fields", out.Tokens)
+	}
+}
+
+// TestPATHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler that presents a token:
+// GitLab's answer decodes for the SDK and not for the fields read beside it,
+// and the handler reports it rather than swallowing it.
+func TestPATHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := `{"id":1,"name":"a","granular":"not-a-bool"}`
+		if r.Method == http.MethodGet {
+			body = "[" + body + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := ListPATs(context.Background(), client, ListPATInput{GroupID: "mygroup", ServiceAccountID: 42})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			_, err := CreatePAT(context.Background(), client, CreatePATInput{GroupID: "mygroup", ServiceAccountID: 42, Name: "a", Scopes: []string{"api"}})
+			return err
+		}},
+		{Name: "rotate", Call: func() error {
+			_, err := RotatePAT(context.Background(), client, RotatePATInput{GroupID: "mygroup", ServiceAccountID: 42, TokenID: 1})
+			return err
+		}},
+	})
+}
+
 // TestList verifies the List handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.

@@ -14174,11 +14174,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -14207,6 +14253,7 @@
         "name",
         "active",
         "scopes",
+        "granular",
         "revoked",
         "user_id"
       ],
@@ -15285,14 +15332,66 @@
         "created_at": {
           "type": "string"
         },
+        "description": {
+          "type": "string"
+        },
         "expires_at": {
           "type": "string"
+        },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "id": {
           "type": "integer"
         },
+        "impersonation": {
+          "type": "boolean"
+        },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -15320,6 +15419,9 @@
         },
         "token": {
           "type": "string"
+        },
+        "user_id": {
+          "type": "integer"
         }
       },
       "required": [
@@ -15327,7 +15429,10 @@
         "name",
         "active",
         "scopes",
-        "revoked"
+        "granular",
+        "revoked",
+        "user_id",
+        "impersonation"
       ],
       "type": "object"
     },
@@ -16282,11 +16387,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -16324,6 +16475,7 @@
         "name",
         "active",
         "scopes",
+        "granular",
         "revoked",
         "user_id"
       ],
@@ -39062,14 +39214,66 @@
         "created_at": {
           "type": "string"
         },
+        "description": {
+          "type": "string"
+        },
         "expires_at": {
           "type": "string"
+        },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "id": {
           "type": "integer"
         },
+        "impersonation": {
+          "type": "boolean"
+        },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -39097,6 +39301,9 @@
         },
         "token": {
           "type": "string"
+        },
+        "user_id": {
+          "type": "integer"
         }
       },
       "required": [
@@ -39104,7 +39311,10 @@
         "name",
         "active",
         "scopes",
-        "revoked"
+        "granular",
+        "revoked",
+        "user_id",
+        "impersonation"
       ],
       "type": "object"
     },
@@ -46431,11 +46641,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -46448,6 +46704,12 @@
             "null",
             "array"
           ]
+        },
+        "resource_id": {
+          "type": "integer"
+        },
+        "resource_type": {
+          "type": "string"
         },
         "revoked": {
           "type": "boolean"
@@ -46472,7 +46734,8 @@
         "id",
         "name",
         "revoked",
-        "active"
+        "active",
+        "granular"
       ],
       "type": "object"
     },
@@ -46522,11 +46785,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -46539,6 +46848,12 @@
             "null",
             "array"
           ]
+        },
+        "resource_id": {
+          "type": "integer"
+        },
+        "resource_type": {
+          "type": "string"
         },
         "revoked": {
           "type": "boolean"
@@ -46563,7 +46878,8 @@
         "id",
         "name",
         "revoked",
-        "active"
+        "active",
+        "granular"
       ],
       "type": "object"
     },
@@ -46743,11 +47059,57 @@
               "expires_at": {
                 "type": "string"
               },
+              "granular": {
+                "type": "boolean"
+              },
+              "granular_scopes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "access": {
+                      "type": "string"
+                    },
+                    "group_id": {
+                      "type": "integer"
+                    },
+                    "permissions": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "project_id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "access",
+                    "permissions"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "id": {
                 "type": "integer"
               },
               "last_used_at": {
                 "type": "string"
+              },
+              "last_used_ips": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "name": {
                 "type": "string"
@@ -46760,6 +47122,12 @@
                   "null",
                   "array"
                 ]
+              },
+              "resource_id": {
+                "type": "integer"
+              },
+              "resource_type": {
+                "type": "string"
               },
               "revoked": {
                 "type": "boolean"
@@ -46784,7 +47152,8 @@
               "id",
               "name",
               "revoked",
-              "active"
+              "active",
+              "granular"
             ],
             "type": "object"
           },
@@ -46909,11 +47278,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -46926,6 +47341,12 @@
             "null",
             "array"
           ]
+        },
+        "resource_id": {
+          "type": "integer"
+        },
+        "resource_type": {
+          "type": "string"
         },
         "revoked": {
           "type": "boolean"
@@ -46950,7 +47371,8 @@
         "id",
         "name",
         "revoked",
-        "active"
+        "active",
+        "granular"
       ],
       "type": "object"
     },
@@ -47000,11 +47422,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -47017,6 +47485,12 @@
             "null",
             "array"
           ]
+        },
+        "resource_id": {
+          "type": "integer"
+        },
+        "resource_type": {
+          "type": "string"
         },
         "revoked": {
           "type": "boolean"
@@ -47041,7 +47515,8 @@
         "id",
         "name",
         "revoked",
-        "active"
+        "active",
+        "granular"
       ],
       "type": "object"
     },
@@ -65219,11 +65694,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -65261,6 +65782,7 @@
         "name",
         "revoked",
         "scopes",
+        "granular",
         "user_id",
         "active"
       ],
@@ -65442,11 +65964,57 @@
               "expires_at": {
                 "type": "string"
               },
+              "granular": {
+                "type": "boolean"
+              },
+              "granular_scopes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "access": {
+                      "type": "string"
+                    },
+                    "group_id": {
+                      "type": "integer"
+                    },
+                    "permissions": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "project_id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "access",
+                    "permissions"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "id": {
                 "type": "integer"
               },
               "last_used_at": {
                 "type": "string"
+              },
+              "last_used_ips": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "name": {
                 "type": "string"
@@ -65484,6 +66052,7 @@
               "name",
               "revoked",
               "scopes",
+              "granular",
               "user_id",
               "active"
             ],
@@ -65617,11 +66186,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -65659,6 +66274,7 @@
         "name",
         "revoked",
         "scopes",
+        "granular",
         "user_id",
         "active"
       ],
@@ -106962,14 +107578,66 @@
               "created_at": {
                 "type": "string"
               },
+              "description": {
+                "type": "string"
+              },
               "expires_at": {
                 "type": "string"
+              },
+              "granular": {
+                "type": "boolean"
+              },
+              "granular_scopes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "access": {
+                      "type": "string"
+                    },
+                    "group_id": {
+                      "type": "integer"
+                    },
+                    "permissions": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "project_id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "access",
+                    "permissions"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "id": {
                 "type": "integer"
               },
+              "impersonation": {
+                "type": "boolean"
+              },
               "last_used_at": {
                 "type": "string"
+              },
+              "last_used_ips": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "name": {
                 "type": "string"
@@ -106997,6 +107665,9 @@
               },
               "token": {
                 "type": "string"
+              },
+              "user_id": {
+                "type": "integer"
               }
             },
             "required": [
@@ -107004,7 +107675,10 @@
               "name",
               "active",
               "scopes",
-              "revoked"
+              "granular",
+              "revoked",
+              "user_id",
+              "impersonation"
             ],
             "type": "object"
           },
@@ -146350,11 +147024,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -146367,6 +147087,12 @@
             "null",
             "array"
           ]
+        },
+        "resource_id": {
+          "type": "integer"
+        },
+        "resource_type": {
+          "type": "string"
         },
         "revoked": {
           "type": "boolean"
@@ -146391,7 +147117,8 @@
         "id",
         "name",
         "revoked",
-        "active"
+        "active",
+        "granular"
       ],
       "type": "object"
     },
@@ -146568,11 +147295,57 @@
               "expires_at": {
                 "type": "string"
               },
+              "granular": {
+                "type": "boolean"
+              },
+              "granular_scopes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "access": {
+                      "type": "string"
+                    },
+                    "group_id": {
+                      "type": "integer"
+                    },
+                    "permissions": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "project_id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "access",
+                    "permissions"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "id": {
                 "type": "integer"
               },
               "last_used_at": {
                 "type": "string"
+              },
+              "last_used_ips": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "name": {
                 "type": "string"
@@ -146585,6 +147358,12 @@
                   "null",
                   "array"
                 ]
+              },
+              "resource_id": {
+                "type": "integer"
+              },
+              "resource_type": {
+                "type": "string"
               },
               "revoked": {
                 "type": "boolean"
@@ -146609,7 +147388,8 @@
               "id",
               "name",
               "revoked",
-              "active"
+              "active",
+              "granular"
             ],
             "type": "object"
           },
@@ -146770,11 +147550,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -146787,6 +147613,12 @@
             "null",
             "array"
           ]
+        },
+        "resource_id": {
+          "type": "integer"
+        },
+        "resource_type": {
+          "type": "string"
         },
         "revoked": {
           "type": "boolean"
@@ -146811,7 +147643,8 @@
         "id",
         "name",
         "revoked",
-        "active"
+        "active",
+        "granular"
       ],
       "type": "object"
     },
@@ -146854,11 +147687,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -146871,6 +147750,12 @@
             "null",
             "array"
           ]
+        },
+        "resource_id": {
+          "type": "integer"
+        },
+        "resource_type": {
+          "type": "string"
         },
         "revoked": {
           "type": "boolean"
@@ -146895,7 +147780,8 @@
         "id",
         "name",
         "revoked",
-        "active"
+        "active",
+        "granular"
       ],
       "type": "object"
     },
@@ -152388,11 +153274,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -152405,6 +153337,12 @@
             "null",
             "array"
           ]
+        },
+        "resource_id": {
+          "type": "integer"
+        },
+        "resource_type": {
+          "type": "string"
         },
         "revoked": {
           "type": "boolean"
@@ -152429,7 +153367,8 @@
         "id",
         "name",
         "revoked",
-        "active"
+        "active",
+        "granular"
       ],
       "type": "object"
     },
@@ -152479,11 +153418,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -152496,6 +153481,12 @@
             "null",
             "array"
           ]
+        },
+        "resource_id": {
+          "type": "integer"
+        },
+        "resource_type": {
+          "type": "string"
         },
         "revoked": {
           "type": "boolean"
@@ -152520,7 +153511,8 @@
         "id",
         "name",
         "revoked",
-        "active"
+        "active",
+        "granular"
       ],
       "type": "object"
     },
@@ -152659,11 +153651,57 @@
               "expires_at": {
                 "type": "string"
               },
+              "granular": {
+                "type": "boolean"
+              },
+              "granular_scopes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "access": {
+                      "type": "string"
+                    },
+                    "group_id": {
+                      "type": "integer"
+                    },
+                    "permissions": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "project_id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "access",
+                    "permissions"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "id": {
                 "type": "integer"
               },
               "last_used_at": {
                 "type": "string"
+              },
+              "last_used_ips": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "name": {
                 "type": "string"
@@ -152676,6 +153714,12 @@
                   "null",
                   "array"
                 ]
+              },
+              "resource_id": {
+                "type": "integer"
+              },
+              "resource_type": {
+                "type": "string"
               },
               "revoked": {
                 "type": "boolean"
@@ -152700,7 +153744,8 @@
               "id",
               "name",
               "revoked",
-              "active"
+              "active",
+              "granular"
             ],
             "type": "object"
           },
@@ -152825,11 +153870,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -152842,6 +153933,12 @@
             "null",
             "array"
           ]
+        },
+        "resource_id": {
+          "type": "integer"
+        },
+        "resource_type": {
+          "type": "string"
         },
         "revoked": {
           "type": "boolean"
@@ -152866,7 +153963,8 @@
         "id",
         "name",
         "revoked",
-        "active"
+        "active",
+        "granular"
       ],
       "type": "object"
     },
@@ -152916,11 +154014,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -152933,6 +154077,12 @@
             "null",
             "array"
           ]
+        },
+        "resource_id": {
+          "type": "integer"
+        },
+        "resource_type": {
+          "type": "string"
         },
         "revoked": {
           "type": "boolean"
@@ -152957,7 +154107,8 @@
         "id",
         "name",
         "revoked",
-        "active"
+        "active",
+        "granular"
       ],
       "type": "object"
     },
@@ -174846,11 +175997,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -174888,6 +176085,7 @@
         "name",
         "revoked",
         "scopes",
+        "granular",
         "user_id",
         "active"
       ],
@@ -175069,11 +176267,57 @@
               "expires_at": {
                 "type": "string"
               },
+              "granular": {
+                "type": "boolean"
+              },
+              "granular_scopes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "access": {
+                      "type": "string"
+                    },
+                    "group_id": {
+                      "type": "integer"
+                    },
+                    "permissions": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "project_id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "access",
+                    "permissions"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "id": {
                 "type": "integer"
               },
               "last_used_at": {
                 "type": "string"
+              },
+              "last_used_ips": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "name": {
                 "type": "string"
@@ -175111,6 +176355,7 @@
               "name",
               "revoked",
               "scopes",
+              "granular",
               "user_id",
               "active"
             ],
@@ -175244,11 +176489,57 @@
         "expires_at": {
           "type": "string"
         },
+        "granular": {
+          "type": "boolean"
+        },
+        "granular_scopes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "access": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "project_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "access",
+              "permissions"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "last_used_at": {
           "type": "string"
+        },
+        "last_used_ips": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "name": {
           "type": "string"
@@ -175286,6 +176577,7 @@
         "name",
         "revoked",
         "scopes",
+        "granular",
         "user_id",
         "active"
       ],

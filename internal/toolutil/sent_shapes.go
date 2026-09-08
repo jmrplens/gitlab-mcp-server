@@ -131,6 +131,101 @@ func CapturedLabels(capture *gitlabclient.ResponseCapture, decoded int) ([]Label
 	return capturedList[LabelExtra](capture, decoded, "labels")
 }
 
+// TokenGranularScopeOutput mirrors
+// lib/api/entities/personal_access_token_granular_scope.rb, one entry of the
+// granular_scopes array a granular token carries. project_id is set only when
+// the scope's namespace is a project and group_id only when it is a group, so
+// each is absent rather than zero on the other kind.
+type TokenGranularScopeOutput struct {
+	Access      string   `json:"access"`
+	Permissions []string `json:"permissions"`
+	ProjectID   int64    `json:"project_id,omitempty"`
+	GroupID     int64    `json:"group_id,omitempty"`
+}
+
+// TokenExtra is what lib/api/entities/personal_access_token.rb and the
+// entities inheriting it send on a token that client-go's
+// PersonalAccessToken does not carry: granular on every token,
+// granular_scopes when the token is granular and the endpoint asked for them,
+// and last_used_ips while the instance has the feature flag on.
+type TokenExtra struct {
+	Granular       bool                       `json:"granular"`
+	GranularScopes []TokenGranularScopeOutput `json:"granular_scopes"`
+	LastUsedIPs    []string                   `json:"last_used_ips"`
+}
+
+// CapturedToken reads, off the captured answer to a request for one token,
+// the fields client-go's PersonalAccessToken does not model.
+func CapturedToken(capture *gitlabclient.ResponseCapture) (TokenExtra, error) {
+	var extra TokenExtra
+	if err := capture.Decode(&extra); err != nil {
+		return TokenExtra{}, err
+	}
+	return extra, nil
+}
+
+// CapturedTokens reads the same off a list answer, one extra per token in
+// order, the count held to what the SDK decoded.
+func CapturedTokens(capture *gitlabclient.ResponseCapture, decoded int) ([]TokenExtra, error) {
+	return capturedList[TokenExtra](capture, decoded, "tokens")
+}
+
+// ImpersonationTokenExtra is what lib/api/entities/impersonation_token.rb
+// sends beyond [TokenExtra] that client-go's ImpersonationToken does not
+// carry. Its impersonation flag is its own; description and user_id come from
+// the personal access token entity it inherits, which the SDK models on
+// PersonalAccessToken and not on ImpersonationToken.
+type ImpersonationTokenExtra struct {
+	TokenExtra
+	Impersonation bool   `json:"impersonation"`
+	Description   string `json:"description"`
+	UserID        int64  `json:"user_id"`
+}
+
+// CapturedImpersonationToken reads, off the captured answer to a request for
+// one impersonation token, the fields client-go's ImpersonationToken does not
+// model.
+func CapturedImpersonationToken(capture *gitlabclient.ResponseCapture) (ImpersonationTokenExtra, error) {
+	var extra ImpersonationTokenExtra
+	if err := capture.Decode(&extra); err != nil {
+		return ImpersonationTokenExtra{}, err
+	}
+	return extra, nil
+}
+
+// CapturedImpersonationTokens reads the same off a list answer, one extra per
+// token in order, the count held to what the SDK decoded.
+func CapturedImpersonationTokens(capture *gitlabclient.ResponseCapture, decoded int) ([]ImpersonationTokenExtra, error) {
+	return capturedList[ImpersonationTokenExtra](capture, decoded, "impersonation tokens")
+}
+
+// ResourceTokenExtra is what lib/api/entities/resource_access_token.rb sends
+// beyond [TokenExtra] on a project or group access token: which kind of
+// resource the token belongs to and its id, the second absent when the bot
+// user has no namespace.
+type ResourceTokenExtra struct {
+	TokenExtra
+	ResourceType string `json:"resource_type"`
+	ResourceID   int64  `json:"resource_id"`
+}
+
+// CapturedResourceToken reads, off the captured answer to a request for one
+// project or group access token, the fields the SDK's resource access token
+// does not model.
+func CapturedResourceToken(capture *gitlabclient.ResponseCapture) (ResourceTokenExtra, error) {
+	var extra ResourceTokenExtra
+	if err := capture.Decode(&extra); err != nil {
+		return ResourceTokenExtra{}, err
+	}
+	return extra, nil
+}
+
+// CapturedResourceTokens reads the same off a list answer, one extra per
+// token in order, the count held to what the SDK decoded.
+func CapturedResourceTokens(capture *gitlabclient.ResponseCapture, decoded int) ([]ResourceTokenExtra, error) {
+	return capturedList[ResourceTokenExtra](capture, decoded, "resource access tokens")
+}
+
 // PipelineExtra is what lib/api/entities/ci/pipeline.rb sends on a pipeline
 // that client-go's Pipeline does not carry: whether it is archived, sent on
 // every pipeline rendered whole.
