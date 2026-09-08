@@ -31,6 +31,57 @@ const (
 	labelJSON = `{"id":1,"name":"bug","color":"#d9534f","text_color":"#FFFFFF","description":"Bug report","open_issues_count":5,"closed_issues_count":2,"open_merge_requests_count":1,"priority":1,"is_project_label":false,"subscribed":false}`
 )
 
+// TestGet_ReadsDescriptionHTML verifies a group label carries, beside what
+// client-go decoded, the rendered description lib/api/entities/label.rb
+// sends on every label and gl.GroupLabel does not.
+func TestGet_ReadsDescriptionHTML(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"bug","color":"#d9534f","description":"Bug report","description_html":"<p>Bug report</p>"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{GroupID: "10", LabelID: "1"})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if out.DescriptionHTML != "<p>Bug report</p>" {
+		t.Errorf("description_html = %q, want the captured rendering", out.DescriptionHTML)
+	}
+}
+
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler that presents a
+// label: GitLab's answer decodes for the SDK and not for the field read
+// beside it, and the handler reports it rather than swallowing it, on a
+// label alone and on a list of them.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := `{"id":1,"name":"bug","color":"#d9534f","description_html":7}`
+		if r.Method == http.MethodGet && r.URL.Path == pathGroupLabels {
+			body = "[" + body + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error { _, err := List(context.Background(), client, ListInput{GroupID: "10"}); return err }},
+		{Name: "get", Call: func() error {
+			_, err := Get(context.Background(), client, GetInput{GroupID: "10", LabelID: "1"})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			_, err := Create(context.Background(), client, CreateInput{GroupID: "10", Name: "bug", Color: "#d9534f"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			_, err := Update(context.Background(), client, UpdateInput{GroupID: "10", LabelID: "1", NewName: "defect"})
+			return err
+		}},
+		{Name: "subscribe", Call: func() error {
+			_, err := Subscribe(context.Background(), client, SubscribeInput{GroupID: "10", LabelID: "1"})
+			return err
+		}},
+	})
+}
+
 // TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.

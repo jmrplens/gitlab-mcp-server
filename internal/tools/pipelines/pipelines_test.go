@@ -29,6 +29,87 @@ const (
 	fmtIDWant10 = "ID = %d, want 10"
 )
 
+// TestPipelineGet_ReadsArchived verifies a pipeline carries, beside what
+// client-go decoded, the archived flag lib/api/entities/ci/pipeline.rb sends
+// on every pipeline rendered whole and gl.Pipeline does not.
+func TestPipelineGet_ReadsArchived(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"iid":10,"project_id":42,"status":"success","ref":"main","sha":"abc","archived":true}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", PipelineID: 10})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if !out.Archived {
+		t.Errorf("Get() = %+v, want archived read off the captured answer", out)
+	}
+}
+
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler that presents a
+// pipeline whole: GitLab's answer decodes for the SDK and not for the field
+// read beside it, and the handler reports it rather than swallowing it,
+// the latest-pipeline fallback and the wait's poll included.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/pipelines/latest"):
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+		case r.Method == http.MethodGet && r.URL.Path == pathProjectPipelines:
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"status":"success"}]`)
+		default:
+			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"status":"success","archived":"not-a-bool"}`)
+		}
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "get", Call: func() error {
+			_, err := Get(context.Background(), client, GetInput{ProjectID: "42", PipelineID: 10})
+			return err
+		}},
+		{Name: "cancel", Call: func() error {
+			_, err := Cancel(context.Background(), client, ActionInput{ProjectID: "42", PipelineID: 10})
+			return err
+		}},
+		{Name: "retry", Call: func() error {
+			_, err := Retry(context.Background(), client, ActionInput{ProjectID: "42", PipelineID: 10})
+			return err
+		}},
+		{Name: "get latest through the fallback", Call: func() error {
+			_, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Ref: "main"})
+			return err
+		}},
+		{Name: "update metadata", Call: func() error {
+			_, err := UpdateMetadata(context.Background(), client, UpdateMetadataInput{ProjectID: "42", PipelineID: 10, Name: "Build"})
+			return err
+		}},
+		{Name: "wait", Call: func() error {
+			_, err := Wait(context.Background(), nil, client, WaitInput{ProjectID: "42", PipelineID: 10, IntervalSeconds: 1, TimeoutSeconds: 5})
+			return err
+		}},
+	})
+}
+
+// TestPipelineGetLatest_ReadsArchived verifies the latest pipeline, which
+// GitLab renders whole, carries the archived flag off the captured answer.
+func TestPipelineGetLatest_ReadsArchived(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"status":"success","archived":true}`)
+	}))
+
+	out, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf("GetLatest() unexpected error: %v", err)
+	}
+	if !out.Archived {
+		t.Errorf("GetLatest() = %+v, want archived read off the captured answer", out)
+	}
+}
+
 // TestPipelineList_Success verifies PipelineList when success.
 func TestPipelineList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

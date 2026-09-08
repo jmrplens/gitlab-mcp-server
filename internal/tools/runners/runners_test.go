@@ -37,6 +37,83 @@ const (
 	pathRunner10 = "/api/v4/runners/10"
 )
 
+// TestGet_ReadsWhatTheSDKDoesNotModel verifies a runner carries, beside what
+// client-go decoded, the three fields lib/api/entities/ci/runner.rb sends and
+// gl.RunnerDetails does not: when it was created, who created it and the job
+// execution status.
+func TestGet_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"description":"my-runner","runner_type":"project_type","status":"online",`+
+			`"created_at":"2025-05-03T00:00:00.000Z","created_by":{"id":2,"username":"owner","name":"Owner","locked":false},"job_execution_status":"idle"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{RunnerID: 10})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if out.CreatedAt != "2025-05-03T00:00:00Z" || out.CreatedBy == nil || out.CreatedBy.Username != "owner" || out.JobExecutionStatus != "idle" {
+		t.Errorf("Get() = %+v, want the captured fields", out)
+	}
+}
+
+// TestList_ReadsWhatTheSDKDoesNotModel verifies a runner list pairs each row
+// with the captured fields by position, and leaves created_by nil on a row
+// GitLab sent without it.
+func TestList_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"job_execution_status":"running","created_by":{"id":2,"username":"owner"}},{"id":2,"job_execution_status":"idle"}]`)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Runners) != 2 || out.Runners[0].JobExecutionStatus != "running" || out.Runners[0].CreatedBy == nil ||
+		out.Runners[1].JobExecutionStatus != "idle" || out.Runners[1].CreatedBy != nil {
+		t.Errorf("List() runners = %+v, want each paired with its captured fields", out.Runners)
+	}
+}
+
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler that presents a
+// runner: GitLab's answer decodes for the SDK and not for the fields read
+// beside it, and the handler reports it rather than swallowing it, on a
+// runner alone and on each list of them.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := `{"id":10,"description":"my-runner","created_at":"not-a-time"}`
+		if r.Method == http.MethodGet && !strings.HasSuffix(r.URL.Path, "/runners/10") {
+			body = "[" + body + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error { _, err := List(context.Background(), client, ListInput{}); return err }},
+		{Name: "list all", Call: func() error { _, err := ListAll(context.Background(), client, ListAllInput{}); return err }},
+		{Name: "list project", Call: func() error {
+			_, err := ListProject(context.Background(), client, ListProjectInput{ProjectID: "1"})
+			return err
+		}},
+		{Name: "list group", Call: func() error {
+			_, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: "1"})
+			return err
+		}},
+		{Name: "get", Call: func() error { _, err := Get(context.Background(), client, GetInput{RunnerID: 10}); return err }},
+		{Name: "update", Call: func() error {
+			_, err := Update(context.Background(), client, UpdateInput{RunnerID: 10, Description: "x"})
+			return err
+		}},
+		{Name: "enable project", Call: func() error {
+			_, err := EnableProject(context.Background(), client, EnableProjectInput{ProjectID: "1", RunnerID: 10})
+			return err
+		}},
+		{Name: "register", Call: func() error {
+			_, err := Register(context.Background(), client, RegisterInput{Token: "glrt-tok"})
+			return err
+		}},
+	})
+}
+
 // ---------------------------------------------------------------------------
 // List
 // ---------------------------------------------------------------------------.

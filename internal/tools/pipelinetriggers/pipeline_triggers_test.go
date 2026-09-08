@@ -20,6 +20,39 @@ const errExpMissingProjectID = "expected error for missing project_id"
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// TestRunTrigger_ReadsArchived verifies the triggered pipeline carries, beside
+// what client-go decoded, the archived flag lib/api/entities/ci/pipeline.rb
+// sends and gl.Pipeline does not.
+func TestRunTrigger_ReadsArchived(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":99,"sha":"abc","ref":"main","status":"created","archived":true}`)
+	}))
+
+	out, err := RunTrigger(context.Background(), client, RunInput{ProjectID: "1", Ref: "main", Token: "tok123"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !out.Archived {
+		t.Errorf("RunTrigger() = %+v, want archived read off the captured answer", out)
+	}
+}
+
+// TestRunTrigger_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds: GitLab's answer decodes for the SDK
+// and not for the field read beside it, and the handler reports it rather
+// than swallowing it.
+func TestRunTrigger_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":99,"sha":"abc","ref":"main","status":"created","archived":"not-a-bool"}`)
+	}))
+
+	_, err := RunTrigger(context.Background(), client, RunInput{ProjectID: "1", Ref: "main", Token: "tok123"})
+
+	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("RunTrigger() error = %v, want the capture's decode failure", err)
+	}
+}
+
 // ----------------------------------------------
 // ListTriggers
 // ----------------------------------------------.

@@ -47,6 +47,18 @@ const (
 	// lib/api/entities/member.rb and printed on neither page.
 	docGroupMembersList   = "group_members.md#list-all-group-members"
 	docProjectMembersList = "project_members.md#list-all-members-of-a-project"
+	// The pages for the six structs the review found short by a field each
+	// print that field in their example bodies, except that the lint page
+	// prints the jobs array on the existing-configuration example alone and
+	// the runner pages print job_execution_status and never created_by.
+	docKeysByID        = "keys.md#retrieve-user-by-ssh-key-id"
+	docRunnersList     = "runners.md#list-all-runners"
+	docRunnersDetails  = "runners.md#retrieve-runners-details"
+	docLintExisting    = "lint.md#validate-existing-cicd-configuration"
+	docLabelsList      = "labels.md#list-all-project-labels"
+	docGroupLabelsList = "group_labels.md#list-group-labels"
+	docPipelinesGet    = "pipelines.md#retrieve-a-single-pipeline"
+	docTriggersRun     = "pipeline_triggers.md#trigger-a-pipeline-with-a-token"
 	// The dual-shape labels array cannot be two types under one key in a typed
 	// schema, so the object half is published beside the names the way issues
 	// and merge requests publish theirs.
@@ -517,6 +529,27 @@ var docAddedFields = map[string]string{
 	"members.Output.group_saml_identity":      docProjectMembersList,
 	"members.Output.group_scim_identity":      docProjectMembersList,
 	"members.Output.override":                 docProjectMembersList,
+
+	// keys, runners, cilint, labels, pipelines — one field each (three on a
+	// key and on a runner) that the entity sends on every object and the
+	// client-go struct does not declare, read from the captured response
+	// (ADR-0021, the readers in toolutil/sent_shapes.go). Recorded in
+	// docs/development/upstream-bugs.md.
+	"keys.Output.expires_at":                     docKeysByID,
+	"keys.Output.last_used_at":                   docKeysByID,
+	"keys.Output.usage_type":                     docKeysByID,
+	"runners.Output.created_at":                  docRunnersList,
+	"runners.Output.created_by":                  docRunnersList,
+	"runners.Output.job_execution_status":        docRunnersList,
+	"runners.DetailsOutput.created_at":           docRunnersDetails,
+	"runners.DetailsOutput.created_by":           docRunnersDetails,
+	"runners.DetailsOutput.job_execution_status": docRunnersDetails,
+	"cilint.Output.jobs":                         docLintExisting,
+	"labeldata.Output.description_html":          docLabelsList,
+	"labels.Output.description_html":             docLabelsList,
+	"grouplabels.Output.description_html":        docGroupLabelsList,
+	"pipelines.DetailOutput.archived":            docPipelinesGet,
+	"pipelinetriggers.RunOutput.archived":        docTriggersRun,
 }
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we

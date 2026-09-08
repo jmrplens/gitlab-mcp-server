@@ -38,6 +38,45 @@ func TestGetKeyWithUser_Success(t *testing.T) {
 	}
 }
 
+// TestGetKeyWithUser_ReadsWhatTheSDKDoesNotModel verifies a key carries,
+// beside what client-go decoded, the expiry, last use and usage type
+// lib/api/entities/ssh_key.rb sends on every key and gl.Key does not.
+func TestGetKeyWithUser_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":42,"title":"My Key","key":"ssh-rsa AAAA...","created_at":"2026-01-01T00:00:00Z",`+
+			`"expires_at":"2026-05-05T00:00:00.000Z","last_used_at":"2026-04-07T00:00:00.000Z","usage_type":"auth_and_signing",`+
+			`"user":{"id":1,"username":"admin","name":"Admin"}}`)
+	}))
+
+	out, err := GetKeyWithUser(t.Context(), client, GetByIDInput{KeyID: 42})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.ExpiresAt != "2026-05-05T00:00:00Z" || out.LastUsedAt != "2026-04-07T00:00:00Z" || out.UsageType != "auth_and_signing" {
+		t.Errorf("GetKeyWithUser() = %+v, want the captured fields", out)
+	}
+}
+
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to both handlers: GitLab's answer
+// decodes for the SDK and not for the fields read beside it, and the
+// handler reports it rather than swallowing it.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":42,"title":"My Key","key":"ssh-rsa AAAA...","usage_type":7,"user":{"id":1}}`)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "by id", Call: func() error {
+			_, err := GetKeyWithUser(t.Context(), client, GetByIDInput{KeyID: 42})
+			return err
+		}},
+		{Name: "by fingerprint", Call: func() error {
+			_, err := GetKeyByFingerprint(t.Context(), client, GetByFingerprintInput{Fingerprint: "SHA256:abc123"})
+			return err
+		}},
+	})
+}
+
 // TestGetKeyWithUser_MissingID verifies GetKeyWithUser when missing ID.
 func TestGetKeyWithUser_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -144,7 +183,7 @@ func TestToOutput_WithCreatedAt(t *testing.T) {
 		},
 	}
 
-	out := toOutput(key)
+	out := toOutput(key, toolutil.KeyExtra{})
 
 	if out.CreatedAt == "" {
 		t.Fatal("expected non-empty CreatedAt")
@@ -173,7 +212,7 @@ func TestToOutput_NilCreatedAt(t *testing.T) {
 		},
 	}
 
-	out := toOutput(key)
+	out := toOutput(key, toolutil.KeyExtra{})
 
 	if out.CreatedAt != "" {
 		t.Errorf("expected empty CreatedAt, got %q", out.CreatedAt)

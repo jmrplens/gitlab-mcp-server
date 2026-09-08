@@ -102,15 +102,20 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.Sort = input.Sort
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	labels, resp, err := client.GL().Labels.ListLabels(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("labelList", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get")
 	}
+	extras, err := toolutil.CapturedLabels(captured, len(labels))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("labelList", err)
+	}
 
 	out := make([]Output, len(labels))
 	for i, l := range labels {
-		out[i] = toOutput(l)
+		out[i] = toOutput(l, extras[i])
 	}
 	return ListOutput{Labels: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -124,12 +129,13 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.ProjectID == "" {
 		return Output{}, errors.New("labelGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().Labels.GetLabel(string(input.ProjectID), string(input.LabelID), gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("labelGet", err, http.StatusNotFound,
 			"verify label_id (numeric ID or name) with gitlab_label_list; label names are case-sensitive")
 	}
-	return toOutput(l), nil
+	return capturedOutput("labelGet", l, captured)
 }
 
 // Create creates a new label in a GitLab project via the GitLab Labels
@@ -155,6 +161,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Archived != nil {
 		opts.Archived = input.Archived
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().Labels.CreateLabel(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		switch {
@@ -166,7 +173,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 			return Output{}, toolutil.WrapErrWithMessage("labelCreate", err)
 		}
 	}
-	return toOutput(l), nil
+	return capturedOutput("labelCreate", l, captured)
 }
 
 // Update modifies an existing project label via the GitLab Labels API
@@ -198,12 +205,13 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Archived != nil {
 		opts.Archived = input.Archived
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().Labels.UpdateLabel(string(input.ProjectID), string(input.LabelID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("labelUpdate", err, http.StatusBadRequest,
 			"verify label_id (numeric ID or name) with gitlab_label_list; new_name must be unique; color must be 6-digit hex (e.g. #FF0000)")
 	}
-	return toOutput(l), nil
+	return capturedOutput("labelUpdate", l, captured)
 }
 
 // Delete removes a label from a GitLab project via the GitLab Labels
@@ -239,12 +247,13 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input Subscribe
 	if input.ProjectID == "" {
 		return Output{}, errors.New("labelSubscribe: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().Labels.SubscribeToLabel(string(input.ProjectID), string(input.LabelID), gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("labelSubscribe", err, http.StatusNotModified,
 			"the user is already subscribed to this label")
 	}
-	return toOutput(l), nil
+	return capturedOutput("labelSubscribe", l, captured)
 }
 
 // Unsubscribe removes the authenticated user's subscription from a
@@ -289,7 +298,18 @@ func Promote(ctx context.Context, client *gitlabclient.Client, input PromoteInpu
 }
 
 // toOutput delegates to [labeldata.ProjectOutput] so the package shares
-// the same [Output] shape with the [labeldata] sub-package.
-func toOutput(label *gl.Label) Output {
-	return labeldata.ProjectOutput(label)
+// the same [Output] shape with the [labeldata] sub-package, and passes on
+// the field the capture read beside the SDK.
+func toOutput(label *gl.Label, extra toolutil.LabelExtra) Output {
+	return labeldata.ProjectOutput(label, extra)
+}
+
+// capturedOutput converts one label with what its captured answer carries
+// beside the SDK's decode, or reports the answer the type cannot hold.
+func capturedOutput(op string, label *gl.Label, captured *gitlabclient.ResponseCapture) (Output, error) {
+	extra, err := toolutil.CapturedLabel(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(op, err)
+	}
+	return toOutput(label, extra), nil
 }

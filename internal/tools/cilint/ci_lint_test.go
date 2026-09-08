@@ -16,6 +16,55 @@ import (
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// TestLintProject_IncludeJobs_ReadsTheJobs verifies a lint answer carrying
+// the jobs array include_jobs asks for, which gl.ProjectLintResult does not
+// decode, reaches the output with each job's fields, and that the keys a
+// static check spells as the configuration did keep GitLab's shape.
+func TestLintProject_IncludeJobs_ReadsTheJobs(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("include_jobs") != "true" {
+			t.Errorf("include_jobs = %q, want true", r.URL.Query().Get("include_jobs"))
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"valid":true,"errors":[],"warnings":[],"merged_yaml":"---\n","includes":[],`+
+			`"jobs":[{"name":"job","stage":"test","before_script":[],"script":["echo \"A test job\""],"after_script":[],"tag_list":["docker"],`+
+			`"only":{"refs":["branches","tags"]},"except":null,"environment":null,"when":"on_success","allow_failure":false,"needs":null}]}`)
+	}))
+
+	out, err := LintProject(context.Background(), client, ProjectInput{ProjectID: "123", IncludeJobs: new(true)})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Jobs) != 1 {
+		t.Fatalf("jobs = %+v, want one", out.Jobs)
+	}
+	job := out.Jobs[0]
+	only, _ := job.Only.(map[string]any)
+	if job.Name != "job" || job.Stage != "test" || len(job.Script) != 1 || job.TagList[0] != "docker" || job.When != "on_success" ||
+		job.AllowFailure || only == nil || job.Except != nil || job.Needs != nil {
+		t.Errorf("job = %+v, want every field of the lint answer", job)
+	}
+}
+
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to both lint handlers: GitLab's answer
+// decodes for the SDK and not for the jobs read beside it, and the handler
+// reports it rather than swallowing it.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"valid":true,"jobs":"not-a-list"}`)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "project", Call: func() error {
+			_, err := LintProject(context.Background(), client, ProjectInput{ProjectID: "123"})
+			return err
+		}},
+		{Name: "content", Call: func() error {
+			_, err := LintContent(context.Background(), client, ContentInput{ProjectID: "123", Content: "job:\n  script: ls"})
+			return err
+		}},
+	})
+}
+
 // ---------------------------------------------------------------------------
 // CI Lint Project
 // ---------------------------------------------------------------------------.
