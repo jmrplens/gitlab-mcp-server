@@ -1,0 +1,138 @@
+package testsource
+
+import (
+	"io/fs"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"unicode"
+	"unicode/utf8"
+)
+
+// FileSuffix is what makes a Go file a test file.
+const FileSuffix = "_test.go"
+
+// goFileSuffix is the extension every Go source file carries; a test file is
+// the subset of those whose name ends in FileSuffix.
+const goFileSuffix = ".go"
+
+// testPrefix is the prefix Go requires of a test entry point.
+const testPrefix = "Test"
+
+// mainTestName is the framework entry point for a test binary. It is spelled
+// exactly, never as a prefix: TestMain_Something is an ordinary test.
+const mainTestName = "TestMain"
+
+// The naming buckets ClassifyTestName sorts a test name into. The convention
+// this repository holds tests to is TestThing_Scenario_Outcome, so a 3-part
+// name is compliant, a 2-part one is tolerated, and the other two are the
+// legacy shapes the naming auditor offers to rewrite.
+const (
+	Pattern3Part        = "3-part"
+	Pattern2Part        = "2-part"
+	PatternNoUnderscore = "no-underscore"
+	PatternTestCov      = "TestCov"
+)
+
+// covPattern matches the TestCovThing coverage-helper shape, which predates the
+// naming convention and is classified apart so it can be counted and rewritten.
+var covPattern = regexp.MustCompile(`^TestCov[A-Z]`)
+
+// IsTestFunction reports whether name is a Go test entry point, by the rule the
+// testing package itself applies: the prefix "Test" followed by a rune that is
+// not lower case, or by nothing at all. "TestMain" is excluded because it is
+// the framework's entry point rather than a test; a longer name that merely
+// starts with those letters, such as TestMain_Flags_Parse, is a test.
+func IsTestFunction(name string) bool {
+	if name == mainTestName || !strings.HasPrefix(name, testPrefix) {
+		return false
+	}
+	rest := name[len(testPrefix):]
+	if rest == "" {
+		return true
+	}
+	r, _ := utf8.DecodeRuneInString(rest)
+	return !unicode.IsLower(r)
+}
+
+// ClassifyTestName returns the naming bucket name falls in. It classifies the
+// name it is given and asks nothing about whether that name is a test, so a
+// caller filters with IsTestFunction first.
+func ClassifyTestName(name string) string {
+	if covPattern.MatchString(name) {
+		return PatternTestCov
+	}
+	switch parts := strings.Split(name, "_"); {
+	case len(parts) >= 3:
+		return Pattern3Part
+	case len(parts) == 2:
+		return Pattern2Part
+	default:
+		return PatternNoUnderscore
+	}
+}
+
+// Policy names the files a walk hands to its visitor.
+type Policy int
+
+const (
+	// TestFiles selects Go test files.
+	TestFiles Policy = iota
+	// NonTestGoFiles selects the Go source files that are not test files.
+	NonTestGoFiles
+)
+
+// selects reports whether a regular file of this base name is in the corpus.
+func (p Policy) selects(name string) bool {
+	if !strings.HasSuffix(name, goFileSuffix) {
+		return false
+	}
+	if p == NonTestGoFiles {
+		return !strings.HasSuffix(name, FileSuffix)
+	}
+	return strings.HasSuffix(name, FileSuffix)
+}
+
+// SkipDir reports whether a directory of this base name is left out of every
+// walk: a generated or vendored tree, a tool's own fixtures, or a dot
+// directory. The walk root itself is never skipped, which is what the "." case
+// covers — filepath.WalkDir names the root by its own path, and a scan asked
+// for the current directory must still run.
+func SkipDir(name string) bool {
+	switch name {
+	case "node_modules", "dist", "testdata":
+		return true
+	case ".", "..":
+		return false
+	default:
+		return strings.HasPrefix(name, ".")
+	}
+}
+
+// WalkFiles calls visit once for every file under each root that policy
+// selects, in lexical order, entering no directory SkipDir names. It stops at
+// the first error, whether the walk raised it or visit returned it, so a caller
+// that cannot parse a file reports that rather than a partial corpus.
+func WalkFiles(roots []string, policy Policy, visit func(path string) error) error {
+	for _, root := range roots {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				if SkipDir(d.Name()) {
+					return fs.SkipDir
+				}
+				return nil
+			}
+			if !policy.selects(d.Name()) {
+				return nil
+			}
+			return visit(path)
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

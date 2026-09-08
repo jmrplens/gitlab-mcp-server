@@ -13,14 +13,19 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
 )
 
-// Pattern classifications for test function names.
+// Pattern classifications for test function names. The four buckets a name is
+// classified into are cmd/internal/testsource's, shared with the generators
+// that count the same names; "other" and "skip" are reported here and produced
+// by no classification.
 const (
-	Pattern3Part        = "3-part"
-	Pattern2Part        = "2-part"
-	PatternNoUnderscore = "no-underscore"
-	PatternTestCov      = "TestCov"
+	Pattern3Part        = testsource.Pattern3Part
+	Pattern2Part        = testsource.Pattern2Part
+	PatternNoUnderscore = testsource.PatternNoUnderscore
+	PatternTestCov      = testsource.PatternTestCov
 	PatternOther        = "other"
 	PatternSkip         = "skip"
 )
@@ -37,12 +42,6 @@ type testEntry struct {
 	Pattern       string
 	SuggestedName string
 }
-
-// Test name regular expressions used to classify known naming patterns.
-var (
-	// covPattern matches TestCov* prefixed tests.
-	covPattern = regexp.MustCompile(`^TestCov[A-Z]`)
-)
 
 // main audits test function naming convention compliance across the project.
 func main() {
@@ -113,25 +112,17 @@ func run(args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-// scanDir recursively scans a directory for test files and classifies test names.
+// scanDir scans a directory tree for test files and classifies test names.
+// A tree it cannot read is reported and skipped rather than aborting the audit,
+// which is what makes the command usable against a partly-checked-out tree.
 func scanDir(dir string) []testEntry {
-	cleanDir := filepath.Clean(dir)
-	entries, err := os.ReadDir(cleanDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "readdir %s: %v\n", cleanDir, err)
-		return nil
-	}
-
 	var results []testEntry
-	for _, e := range entries {
-		path := filepath.Join(cleanDir, e.Name())
-		if e.IsDir() {
-			results = append(results, scanDir(path)...)
-			continue
-		}
-		if strings.HasSuffix(e.Name(), testFileSuffix) {
-			results = append(results, scanFile(path)...)
-		}
+	err := testsource.WalkFiles([]string{filepath.Clean(dir)}, testsource.TestFiles, func(path string) error {
+		results = append(results, scanFile(path)...)
+		return nil
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "walk %s: %v\n", filepath.Clean(dir), err)
 	}
 	return results
 }
@@ -156,17 +147,7 @@ func scanFile(path string) []testEntry {
 			continue
 		}
 		name := fn.Name.Name
-
-		// Only Test* functions (exported, starts with Test).
-		if !strings.HasPrefix(name, "Test") {
-			continue
-		}
-		// Skip lowercase test helpers (e.g., testCreateProject).
-		if len(name) > 4 && unicode.IsLower(rune(name[4])) {
-			continue
-		}
-		// Skip Benchmark*, Fuzz*, Example*.
-		if strings.HasPrefix(name, "TestMain") {
+		if !testsource.IsTestFunction(name) {
 			continue
 		}
 
@@ -183,22 +164,14 @@ func scanFile(path string) []testEntry {
 
 // classify determines the naming pattern and suggests a corrected name.
 func classify(name string) (pattern, suggested string) {
-	// TestCov* prefix tests.
-	if covPattern.MatchString(name) {
-		suggested = renameCov(name)
-		return PatternTestCov, suggested
-	}
-
-	parts := strings.Split(name, "_")
-	switch {
-	case len(parts) >= 3:
-		return Pattern3Part, name
-	case len(parts) == 2:
-		return Pattern2Part, name
-	default:
+	switch pattern = testsource.ClassifyTestName(name); pattern {
+	case PatternTestCov:
+		return pattern, renameCov(name)
+	case PatternNoUnderscore:
 		// Single part — no underscores at all.
-		suggested = splitCamelCase(name)
-		return PatternNoUnderscore, suggested
+		return pattern, splitCamelCase(name)
+	default:
+		return pattern, name
 	}
 }
 
@@ -311,35 +284,24 @@ func runApply(dirs []string, stdout, stderr io.Writer, dryRun bool) (ok bool) {
 	return ok
 }
 
-// applyDir recursively walks a directory applying renames to test files. ok is
-// false when readdir or any descended file/dir failed.
+// applyDir walks a directory tree applying renames to test files. It walks the
+// same corpus the audit reads, so -apply cannot reach a file the report never
+// judged. ok is false when the walk or any file failed.
 func applyDir(dir string, stdout, stderr io.Writer, dryRun bool) (renames, files int, ok bool) {
 	cleanDir := filepath.Clean(dir)
-	entries, err := os.ReadDir(cleanDir)
-	if err != nil {
-		fmt.Fprintf(stderr, "readdir %s: %v\n", cleanDir, err)
-		return 0, 0, false
-	}
-	totalRenames := 0
-	totalFiles := 0
 	ok = true
-	for _, e := range entries {
-		path := filepath.Join(cleanDir, e.Name())
-		if e.IsDir() {
-			r, f, sub := applyDir(path, stdout, stderr, dryRun)
-			totalRenames += r
-			totalFiles += f
-			ok = ok && sub
-			continue
-		}
-		if strings.HasSuffix(e.Name(), testFileSuffix) {
-			totalFiles++
-			r, fileOK := applyFile(path, stdout, stderr, dryRun)
-			totalRenames += r
-			ok = ok && fileOK
-		}
+	err := testsource.WalkFiles([]string{cleanDir}, testsource.TestFiles, func(path string) error {
+		files++
+		r, fileOK := applyFile(path, stdout, stderr, dryRun)
+		renames += r
+		ok = ok && fileOK
+		return nil
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "walk %s: %v\n", cleanDir, err)
+		return renames, files, false
 	}
-	return totalRenames, totalFiles, ok
+	return renames, files, ok
 }
 
 // collectRenames builds a map of old→new names for test functions that need
@@ -361,8 +323,7 @@ func collectRenames(node *ast.File, cleanPath string, stderr io.Writer) map[stri
 			continue
 		}
 		name := fn.Name.Name
-		runes := []rune(name)
-		if !strings.HasPrefix(name, "Test") || (len(runes) > 4 && unicode.IsLower(runes[4])) || strings.HasPrefix(name, "TestMain") {
+		if !testsource.IsTestFunction(name) {
 			continue
 		}
 		pattern, suggested := classify(name)

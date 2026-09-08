@@ -32,11 +32,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
 )
 
 // testFileSuffix is the suffix that makes a Go file a test file, and the
 // part the naming convention leaves aside when matching a module.
-const testFileSuffix = "_test.go"
+const testFileSuffix = testsource.FileSuffix
 
 // fileViolation is one test file whose name matches no module.
 type fileViolation struct {

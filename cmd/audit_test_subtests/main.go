@@ -10,11 +10,11 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
-	"io/fs"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
 )
 
 // Finding is one case loop that asserts without a subtest.
@@ -138,10 +138,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 func scan(dirs []string) (*Report, error) {
 	report := &Report{}
 	files := map[string]bool{}
-	for _, dir := range dirs {
-		if err := filepath.WalkDir(dir, visitTestFiles(report, files)); err != nil {
-			return nil, err
-		}
+	if err := testsource.WalkFiles(dirs, testsource.TestFiles, visitTestFiles(report, files)); err != nil {
+		return nil, err
 	}
 	sortFindings(report.Findings)
 	sortFindings(report.Sequential)
@@ -153,22 +151,10 @@ func scan(dirs []string) (*Report, error) {
 	return report, nil
 }
 
-// visitTestFiles is the WalkDir callback that parses each test file and
-// records its sites in the report.
-func visitTestFiles(report *Report, files map[string]bool) fs.WalkDirFunc {
-	return func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			if skipDir(d.Name()) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
+// visitTestFiles is the walk callback that parses each test file and records
+// its sites in the report.
+func visitTestFiles(report *Report, files map[string]bool) func(string) error {
+	return func(path string) error {
 		fset := token.NewFileSet()
 		file, parseErr := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if parseErr != nil {
@@ -180,11 +166,6 @@ func visitTestFiles(report *Report, files map[string]bool) fs.WalkDirFunc {
 		}
 		return nil
 	}
-}
-
-// skipDir reports directories the walk never enters.
-func skipDir(name string) bool {
-	return name == "node_modules" || name == "dist" || (strings.HasPrefix(name, ".") && name != ".")
 }
 
 // recordSite files one site under the report list its classification names.
@@ -591,29 +572,12 @@ func fixable(fix string) bool {
 // fixAll rewrites every fixable site under dirs and returns how many.
 func fixAll(dirs []string) (int, error) {
 	total := 0
-	for _, dir := range dirs {
-		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				if skipDir(d.Name()) {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if !strings.HasSuffix(path, "_test.go") {
-				return nil
-			}
-			n, fixErr := fixFile(path)
-			total += n
-			return fixErr
-		})
-		if err != nil {
-			return total, err
-		}
-	}
-	return total, nil
+	err := testsource.WalkFiles(dirs, testsource.TestFiles, func(path string) error {
+		n, fixErr := fixFile(path)
+		total += n
+		return fixErr
+	})
+	return total, err
 }
 
 // fixFile rewrites the fixable sites of one file in place.

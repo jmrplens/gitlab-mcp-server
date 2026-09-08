@@ -577,26 +577,34 @@ func TestScan_SkippedDirectories_AreNeverEntered(t *testing.T) {
 	}
 }
 
-// TestSkipDir_Names_PruneVendoredAndHiddenTrees verifies the directory
-// names the walk prunes and that the current directory itself is kept.
-func TestSkipDir_Names_PruneVendoredAndHiddenTrees(t *testing.T) {
-	cases := []struct {
-		name string
-		want bool
-	}{
-		{name: "node_modules", want: true},
-		{name: "dist", want: true},
-		{name: ".hidden", want: true},
-		{name: ".", want: false},
-		{name: "internal", want: false},
-		{name: "distribution", want: false},
+// TestScan_PrunedTrees_AreNotAudited verifies that the shared walk keeps this
+// auditor out of the trees nobody holds to the convention: a vendored one, a
+// build output, a tool's own fixtures and a dot directory each carry a
+// non-compliant loop and none of them is reported.
+func TestScan_PrunedTrees_AreNotAudited(t *testing.T) {
+	dir := t.TempDir()
+	// sequential: setup steps building one tree, asserted by the scan below
+	for _, rel := range []string{
+		"node_modules/vendored_test.go",
+		"dist/built_test.go",
+		"testdata/fixture_test.go",
+		".cache/hidden_test.go",
+	} {
+		writeFile(t, dir, rel, fixtureSource)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := skipDir(tc.name); got != tc.want {
-				t.Errorf("skipDir(%q) = %v, want %v", tc.name, got, tc.want)
-			}
-		})
+	writeFile(t, dir, "real_test.go", fixtureSource)
+
+	report, err := scan([]string{dir})
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if report.Summary.Files != 1 {
+		t.Fatalf("summary.Files = %d, want only real_test.go: %+v", report.Summary.Files, report.Findings)
+	}
+	for _, f := range report.Findings {
+		if filepath.Base(f.File) != "real_test.go" {
+			t.Errorf("finding in %q, want only real_test.go", f.File)
+		}
 	}
 }
 

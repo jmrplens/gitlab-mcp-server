@@ -99,7 +99,11 @@ func TestMergeIntoSegments_GroupsResultWords(t *testing.T) {
 	}
 }
 
-// TestScanDir_RecursesAndClassifiesTestFunctions verifies scanDir reads nested test files and skips non-test helpers.
+// TestScanDir_RecursesAndClassifiesTestFunctions verifies scanDir reads nested
+// test files and skips non-test helpers. TestMain_Flags_Parse is in the fixture
+// on purpose: the framework entry point is exactly TestMain, and a name that
+// merely starts with those letters is an ordinary test, which is what both
+// generators have always counted and this auditor used to skip.
 func TestScanDir_RecursesAndClassifiesTestFunctions(t *testing.T) {
 	root := t.TempDir()
 	nested := filepath.Join(root, "nested")
@@ -113,6 +117,7 @@ import "testing"
 func TestCreateIssueReturnsIssue(t *testing.T) {}
 func TestCreateIssue_ReturnsIssue(t *testing.T) {}
 func TestCovBuildCatalogError(t *testing.T) {}
+func TestMain_Flags_Parse(t *testing.T) {}
 func TestMain(m *testing.M) {}
 func Testhelper(t *testing.T) {}
 func BenchmarkCreateIssue(b *testing.B) {}
@@ -125,8 +130,8 @@ func BenchmarkCreateIssue(b *testing.B) {}
 	}
 
 	entries := scanDir(root)
-	if len(entries) != 3 {
-		t.Fatalf("scanDir() len = %d, want 3 entries: %+v", len(entries), entries)
+	if len(entries) != 4 {
+		t.Fatalf("scanDir() len = %d, want 4 entries: %+v", len(entries), entries)
 	}
 	patterns := map[string]string{}
 	for _, entry := range entries {
@@ -140,6 +145,9 @@ func BenchmarkCreateIssue(b *testing.B) {}
 	}
 	if patterns["TestCovBuildCatalogError"] != PatternTestCov {
 		t.Fatalf("patterns = %+v, want TestCovBuildCatalogError as TestCov", patterns)
+	}
+	if patterns["TestMain_Flags_Parse"] != Pattern3Part {
+		t.Fatalf("patterns = %+v, want TestMain_Flags_Parse as 3-part", patterns)
 	}
 }
 
@@ -388,7 +396,7 @@ func TestRunApply_Failures_ReturnFalse(t *testing.T) {
 		{
 			name:          "missing directory",
 			dirs:          func(root string) []string { return []string{filepath.Join(root, "absent")} },
-			wantStderrPre: func(root string) string { return "readdir " + filepath.Join(root, "absent") + ": " },
+			wantStderrPre: func(root string) string { return "walk " + filepath.Join(root, "absent") + ": " },
 			wantSummary:   "\n=== Rename Summary (applied) ===\nFiles scanned: 0\nRenames: 0\n",
 		},
 		{

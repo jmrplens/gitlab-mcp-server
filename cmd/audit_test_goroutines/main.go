@@ -8,11 +8,11 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
-	"io/fs"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
 )
 
 // Finding describes one abort or missing-return site inside a non-test
@@ -111,10 +111,8 @@ func scan(dirs []string) (*Report, error) {
 	files := map[string]bool{}
 	fset := token.NewFileSet()
 
-	for _, dir := range dirs {
-		if walkErr := filepath.WalkDir(dir, collectFindings(fset, report, files)); walkErr != nil {
-			return nil, walkErr
-		}
+	if walkErr := testsource.WalkFiles(dirs, testsource.TestFiles, collectFindings(fset, report, files)); walkErr != nil {
+		return nil, walkErr
 	}
 
 	sortFindings(report.Fatal)
@@ -134,22 +132,10 @@ func scan(dirs []string) (*Report, error) {
 	return report, nil
 }
 
-// collectFindings returns the WalkDir callback that parses each _test.go
-// file and appends its findings to the report.
-func collectFindings(fset *token.FileSet, report *Report, files map[string]bool) fs.WalkDirFunc {
-	return func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			if name := d.Name(); name == "node_modules" || name == "testdata" || strings.HasPrefix(name, ".") {
-				return fs.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
+// collectFindings returns the walk callback that parses each _test.go file and
+// appends its findings to the report.
+func collectFindings(fset *token.FileSet, report *Report, files map[string]bool) func(string) error {
+	return func(path string) error {
 		file, parseErr := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
 		if parseErr != nil {
 			return fmt.Errorf("parse %s: %w", path, parseErr)

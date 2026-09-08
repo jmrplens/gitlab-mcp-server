@@ -1602,7 +1602,7 @@ The main `gitlab-mcp-server` MCP binary — the runtime entry point and the only
 
 ## Shared packages
 
-Neither of these is a command. They are the libraries under `cmd/internal/` that the commands above share, documented here because a generator's output is decided as much by them as by its own flags.
+None of these is a command. They are the libraries under `cmd/internal/` that the commands above share, documented here because a generator's output is decided as much by them as by its own flags.
 
 ### cmd/internal/mcpsurface
 
@@ -1619,6 +1619,14 @@ Listings are memoized on (client, surface, tier, meta parameter-schema mode), si
 ### cmd/internal/auditshared
 
 The analysis helpers shared by the auditors: the projected individual-tool descriptions (a projection over `mcpsurface.IndividualTools`), owner-package resolution, the usage and description quality checks that `cmd/audit_1to1` R-META and `cmd/audit_discovery_completeness` both apply, and `NewStubGitLabClient`, the offline client the eight audit commands construct — a thin delegation to `mcpsurface.NewStubClientWithToken` so that the audits and the generators share one definition of what "no instance, no credentials" means.
+
+### cmd/internal/testsource
+
+The three questions every command that reads `_test.go` files used to answer for itself: whether a function name is a Go test entry point (`IsTestFunction`), which naming bucket it falls in (`ClassifyTestName`, with the four `Pattern*` constants), and which files a scan of the tree may look at (`WalkFiles`, with one `SkipDir` list).
+
+All three had drifted, and the drift was not theoretical. `gen_stats` required an upper-case rune after `Test` while `gen_testing_docs` required a non-lower-case one, under a comment claiming the two agreed; `audit_test_names` skipped every name starting with the `TestMain` prefix, so the nine tests named `TestMain_Something` were counted by both generators and invisible to the auditor. Go's own rule decides for all of them, which makes the reconciliation a fix to the auditor rather than a change to either published count. The walks disagreed the same way: three skip lists and one command that recursed into everything, so whether `testdata` is part of the corpus had two answers and no recorded reason. `SkipDir` is that answer, written down once.
+
+What the package deliberately does **not** own is discovery. `gen_stats` keeps asking git (`git ls-files`) so `check-stats` stays a function of what is committed, and `gen_testing_docs` keeps enumerating packages through `go list` because it describes packages; sharing the input universe would break both.
 
 ## CI gate targets
 

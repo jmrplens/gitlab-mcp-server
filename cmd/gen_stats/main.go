@@ -16,6 +16,7 @@ import (
 	"unicode"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
 )
 
 // Marker constants for the stats section of README.md, plus generator paths.
@@ -379,9 +380,9 @@ func countStructType(spec ast.Spec, s *repoStats) {
 
 func updateFunctionStats(name string, isE2E, isTest bool, s *repoStats) {
 	switch {
-	case isE2E && isTestFunctionName(name):
+	case isE2E && testsource.IsTestFunction(name):
 		s.E2ETestFuncs++
-	case isTest && isTestFunctionName(name):
+	case isTest && testsource.IsTestFunction(name):
 		s.TestFuncs++
 		if len(name) > len(s.LongestTestName) {
 			s.LongestTestName = name
@@ -405,25 +406,6 @@ func updateSourceLineStats(line, trimmed string, s *repoStats) {
 	if strings.Contains(strings.ToLower(line), "gitlab") {
 		s.GitlabLines++
 	}
-}
-
-// isTestFunctionName reports whether name follows Go's Test* entry-point
-// rules: starts with "Test" and the next rune is uppercase (or there is no
-// next rune). It excludes "TestMain", which is the framework entry point
-// for _test.go packages and is not itself a test. This matches the
-// behavior of cmd/gen_testing_docs so the two generators report the
-// same counts.
-func isTestFunctionName(name string) bool {
-	if name == "TestMain" {
-		return false
-	}
-	if !strings.HasPrefix(name, "Test") {
-		return false
-	}
-	if len(name) == len("Test") {
-		return true
-	}
-	return unicode.IsUpper(rune(name[len("Test")]))
 }
 
 // isTODOComment reports whether trimmed is a task-annotation comment.

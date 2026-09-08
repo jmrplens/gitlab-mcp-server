@@ -8,10 +8,11 @@ import (
 	"go/token"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
 )
 
 // main finds duplicated string literals that should be extracted to constants.
@@ -40,17 +41,17 @@ func run(args []string, stdout, stderr io.Writer, threshold, minLength int) int 
 			fmt.Fprintf(stderr, "stat error %s: %v\n", arg, err)
 			continue
 		}
+		// A file named on the command line is audited whatever it is called;
+		// only a directory argument is filtered down to the non-test sources.
 		if !info.IsDir() {
 			files = append(files, arg)
 			continue
 		}
-		_ = filepath.Walk(arg, func(path string, fi os.FileInfo, err error) error { // #nosec G703 -- CLI tool: user provides paths intentionally
-			if err != nil || fi.IsDir() {
-				return err
-			}
-			if strings.HasSuffix(fi.Name(), ".go") && !strings.HasSuffix(fi.Name(), "_test.go") {
-				files = append(files, path)
-			}
+		// An entry the walk cannot read is left out rather than failing the
+		// audit, which is what makes the command usable against a tree being
+		// edited underneath it.
+		_ = testsource.WalkFiles([]string{arg}, testsource.NonTestGoFiles, func(path string) error {
+			files = append(files, path)
 			return nil
 		})
 	}
