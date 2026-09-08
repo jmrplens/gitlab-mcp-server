@@ -651,7 +651,9 @@ func findAction(t *testing.T, d domainReport, id string) actionDetail {
 // TestRun_OutputModes_WriteFilteredReport verifies the run seam: the report
 // goes to stdout as JSON followed by a newline, or to the output file with a
 // trailing newline; -gaps-only drops the green domains and keeps the ones
-// needing work; and an unwritable output path is reported as a write error.
+// needing work; a parent directory that does not exist yet is created, the
+// way every other report writer in cmd/ creates it; and a path nothing can be
+// written to is reported as a write error.
 func TestRun_OutputModes_WriteFilteredReport(t *testing.T) {
 	ctx := context.Background()
 
@@ -663,9 +665,22 @@ func TestRun_OutputModes_WriteFilteredReport(t *testing.T) {
 		assertFileGapsOnly(t, ctx)
 	})
 
-	t.Run("unwritable_output_path", func(t *testing.T) {
+	t.Run("missing_parent_directory_is_created", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "missing", "edition-tier.json")
-		err := run(ctx, seededResolver(t), false, path, &bytes.Buffer{})
+		if err := run(ctx, seededResolver(t), false, path, &bytes.Buffer{}); err != nil {
+			t.Fatalf("run to a path whose directory does not exist yet: %v", err)
+		}
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("report not written: %v", err)
+		}
+	})
+
+	t.Run("unwritable_output_path", func(t *testing.T) {
+		blocker := filepath.Join(t.TempDir(), "file")
+		if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+			t.Fatalf("prepare: %v", err)
+		}
+		err := run(ctx, seededResolver(t), false, filepath.Join(blocker, "edition-tier.json"), &bytes.Buffer{})
 		if err == nil || !strings.HasPrefix(err.Error(), "write report: ") {
 			t.Fatalf("run to an unwritable path = %v, want a write report error", err)
 		}

@@ -1765,7 +1765,7 @@ Merging the two behind one signature with a mode flag is the one way to make thi
 
 `NormalizeNewlines` is exported for one reason: the commands whose artifacts `WriteOrCheck` writes hold the same bytes to the same rule in their own tests (`gen_llms` against the six committed files, `audit_metrics` against the committed `stats.json`), and private copies of that one line in each test file are the drift this package exists to stop.
 
-One `-` writer stays where it is. [`audit_edition_tier`](#audit_edition_tier) writes its report to a writer the caller injects, which is how its tests read the stdout branch back without swapping `os.Stdout`; folding it in would mean giving up that seam or giving `WriteReport` a writer parameter no other caller has a use for. Everything else about it already agrees with the shared helper: indented JSON, a trailing newline, mode `0o600`.
+Half of one `-` writer stays where it is. [`audit_edition_tier`](#audit_edition_tier) writes its stdout branch to a writer the caller injects, which is how its tests read that branch back without swapping `os.Stdout`; folding it in would mean giving up that seam or giving `WriteReport` a writer parameter no other caller has a use for. Its file branch is the shared helper's, which also gave it the missing parent directory it did not create before.
 
 ## CI gate targets
 
