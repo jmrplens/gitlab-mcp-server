@@ -73,6 +73,103 @@ func TestCapturedReaders_ReadWhatTheSDKDoesNotModel(t *testing.T) {
 	}
 }
 
+// TestCapturedTokenReaders_ReadEachTokenEntity verifies the three token
+// readers: the fields every personal access token entity sends, the
+// impersonation token's own three, and the resource token's two, each read
+// off the key GitLab spells.
+func TestCapturedTokenReaders_ReadEachTokenEntity(t *testing.T) {
+	body := `{"id":1,"granular":true,"last_used_ips":["192.0.2.10"],` +
+		`"granular_scopes":[{"access":"personal_projects","permissions":["read_job"],"project_id":3,"group_id":0}],` +
+		`"impersonation":true,"description":"acting as","user_id":9,"resource_type":"project","resource_id":77}`
+
+	plain, err := CapturedToken(gitlabclient.CapturedBody([]byte(body)))
+	if err != nil || !plain.Granular || len(plain.GranularScopes) != 1 || plain.GranularScopes[0].Access != "personal_projects" ||
+		plain.GranularScopes[0].ProjectID != 3 || len(plain.LastUsedIPs) != 1 {
+		t.Errorf("CapturedToken() = %+v, %v; want the three shared fields", plain, err)
+	}
+
+	impersonation, err := CapturedImpersonationToken(gitlabclient.CapturedBody([]byte(body)))
+	if err != nil || !impersonation.Impersonation || impersonation.Description != "acting as" || impersonation.UserID != 9 || !impersonation.Granular {
+		t.Errorf("CapturedImpersonationToken() = %+v, %v; want its own three beside the shared ones", impersonation, err)
+	}
+
+	resource, err := CapturedResourceToken(gitlabclient.CapturedBody([]byte(body)))
+	if err != nil || resource.ResourceType != "project" || resource.ResourceID != 77 || !resource.Granular {
+		t.Errorf("CapturedResourceToken() = %+v, %v; want the resource pair beside the shared ones", resource, err)
+	}
+}
+
+// TestCapturedTokenReaders_ACaptureNothingRanUnder verifies each of the three
+// token readers reports the empty capture rather than answering with a zero
+// token.
+func TestCapturedTokenReaders_ACaptureNothingRanUnder(t *testing.T) {
+	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+	reads := []struct {
+		name string
+		call func() error
+	}{
+		{name: "token", call: func() error { _, readErr := CapturedToken(untouched); return readErr }},
+		{name: "impersonation token", call: func() error { _, readErr := CapturedImpersonationToken(untouched); return readErr }},
+		{name: "resource access token", call: func() error { _, readErr := CapturedResourceToken(untouched); return readErr }},
+	}
+	for _, read := range reads {
+		t.Run(read.name, func(t *testing.T) {
+			if err := read.call(); !errors.Is(err, gitlabclient.ErrNoResponseCaptured) {
+				t.Errorf("read = %v, want ErrNoResponseCaptured", err)
+			}
+		})
+	}
+}
+
+// TestCapturedTokenListReaders_HoldTheCountToTheSDKs verifies the three token
+// list readers pair by position and refuse a count other than the SDK's with
+// both numbers.
+func TestCapturedTokenListReaders_HoldTheCountToTheSDKs(t *testing.T) {
+	cases := []struct {
+		name string
+		read func(*gitlabclient.ResponseCapture, int) (int, error)
+		want string
+	}{
+		{
+			name: "tokens",
+			read: func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+				got, err := CapturedTokens(c, n)
+				return len(got), err
+			},
+			want: "holds 2 tokens and the SDK decoded 1",
+		},
+		{
+			name: "impersonation tokens",
+			read: func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+				got, err := CapturedImpersonationTokens(c, n)
+				return len(got), err
+			},
+			want: "holds 2 impersonation tokens and the SDK decoded 1",
+		},
+		{
+			name: "resource access tokens",
+			read: func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+				got, err := CapturedResourceTokens(c, n)
+				return len(got), err
+			},
+			want: "holds 2 resource access tokens and the SDK decoded 1",
+		},
+	}
+	body := []byte(`[{"id":1,"granular":true},{"id":2}]`)
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			count, err := testCase.read(gitlabclient.CapturedBody(body), 2)
+			if err != nil || count != 2 {
+				t.Errorf("read of two = %d, %v; want two extras", count, err)
+			}
+			_, err = testCase.read(gitlabclient.CapturedBody(body), 1)
+			if err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Errorf("read with another count = %v, want %q", err, testCase.want)
+			}
+		})
+	}
+}
+
 // TestCapturedListReaders_HoldTheCountToTheSDKs verifies the two list
 // readers here pair extras by position and refuse a count other than the
 // SDK's with both numbers.

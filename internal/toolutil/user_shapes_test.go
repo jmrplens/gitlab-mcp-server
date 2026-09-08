@@ -101,10 +101,18 @@ func TestNewPersonalTokenOutput(t *testing.T) {
 		ID: 7, Name: "ci-token", Active: true, Token: "glpat-x",
 		Scopes: []string{"api"}, Revoked: false, Description: "ci", UserID: 42,
 		CreatedAt: &created, ExpiresAt: &expires,
+	}, TokenExtra{
+		Granular:       true,
+		GranularScopes: []TokenGranularScopeOutput{{Access: "personal_projects", Permissions: []string{"read_job"}, ProjectID: 3}},
+		LastUsedIPs:    []string{"192.0.2.10"},
 	})
 	if got.ID != 7 || got.Name != "ci-token" || !got.Active || got.Token != "glpat-x" ||
 		len(got.Scopes) != 1 || got.UserID != 42 {
 		t.Errorf("NewPersonalTokenOutput identity fields = %+v, want mirror", got)
+	}
+	if !got.Granular || len(got.GranularScopes) != 1 || got.GranularScopes[0].ProjectID != 3 ||
+		len(got.LastUsedIPs) != 1 || got.LastUsedIPs[0] != "192.0.2.10" {
+		t.Errorf("NewPersonalTokenOutput captured fields = %+v, want the capture's half", got)
 	}
 	if got.CreatedAt != created.Format(time.RFC3339) {
 		t.Errorf("CreatedAt = %q, want RFC3339", got.CreatedAt)
@@ -114,5 +122,9 @@ func TestNewPersonalTokenOutput(t *testing.T) {
 	}
 	if got.LastUsedAt != "" {
 		t.Errorf("LastUsedAt = %q, want empty for nil source", got.LastUsedAt)
+	}
+	used := time.Date(2026, 6, 1, 8, 0, 0, 0, time.UTC)
+	if withUse := NewPersonalTokenOutput(&gl.PersonalAccessToken{LastUsedAt: &used}, TokenExtra{}); withUse.LastUsedAt != used.Format(time.RFC3339) {
+		t.Errorf("LastUsedAt = %q, want RFC3339 for a token that has been used", withUse.LastUsedAt)
 	}
 }

@@ -50,13 +50,139 @@ const (
 	// shared API paths.
 	pathProjectTokens = "/api/v4/projects/42/access_tokens"
 	pathGroupTokens   = "/api/v4/groups/10/access_tokens"
-	testFullToken     = "full-token"
-	testExpiresDate   = "2027-12-31"
+	// capturedTokenJSON is what GitLab sends beside the fields the SDK
+	// decodes: the granular trio every token entity carries and the
+	// resource pair a project or group token adds.
+	capturedTokenJSON = `{"id":1,"name":"my-token","granular":true,"last_used_ips":["192.0.2.10"],` +
+		`"granular_scopes":[{"access":"personal_projects","permissions":["read_job"],"project_id":42}],` +
+		`"resource_type":"project","resource_id":42}`
+	// undecodableTokenJSON decodes for the SDK and not for the fields read
+	// beside it.
+	undecodableTokenJSON = `{"id":1,"name":"my-token","granular":"not-a-bool"}`
+	testFullToken        = "full-token"
+	testExpiresDate      = "2027-12-31"
 )
 
 // ---------------------------------------------------------------------------
 // Project Access Tokens
 // ---------------------------------------------------------------------------.
+
+// TestProjectGet_ReadsWhatTheSDKDoesNotModel verifies a project access token
+// carries, beside what client-go decoded, the fields
+// lib/api/entities/resource_access_token.rb sends and the SDK struct does
+// not: the granular trio every token entity carries and the resource pair a
+// project or group token adds.
+func TestProjectGet_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, capturedTokenJSON)
+	}))
+
+	out, err := ProjectGet(context.Background(), client, ProjectGetInput{ProjectID: "42", TokenID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !out.Granular || len(out.GranularScopes) != 1 || out.GranularScopes[0].ProjectID != 42 ||
+		len(out.LastUsedIPs) != 1 || out.ResourceType != "project" || out.ResourceID != 42 {
+		t.Errorf("ProjectGet() = %+v, want the captured fields", out)
+	}
+}
+
+// TestPersonalGet_ReadsWhatTheSDKDoesNotModel verifies a personal access
+// token carries the granular trio and no resource, which is what
+// lib/api/entities/personal_access_token.rb sends for one.
+func TestPersonalGet_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"my-token","granular":true,"last_used_ips":["192.0.2.10"],`+
+			`"granular_scopes":[{"access":"group","permissions":["read_job"],"group_id":5}]}`)
+	}))
+
+	out, err := PersonalGet(context.Background(), client, PersonalGetInput{TokenID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !out.Granular || len(out.GranularScopes) != 1 || out.GranularScopes[0].GroupID != 5 ||
+		len(out.LastUsedIPs) != 1 || out.ResourceType != "" || out.ResourceID != 0 {
+		t.Errorf("PersonalGet() = %+v, want the captured fields and no resource", out)
+	}
+}
+
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler that presents a token:
+// GitLab's answer decodes for the SDK and not for the fields read beside it,
+// and the handler reports it rather than swallowing it, across the project,
+// group and personal families and on a list as on a single token.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := undecodableTokenJSON
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "access_tokens") {
+			body = "[" + body + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	scopes := []string{"api"}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "project list", Call: func() error {
+			_, err := ProjectList(context.Background(), client, ProjectListInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "project get", Call: func() error {
+			_, err := ProjectGet(context.Background(), client, ProjectGetInput{ProjectID: "42", TokenID: 1})
+			return err
+		}},
+		{Name: "project create", Call: func() error {
+			_, err := ProjectCreate(context.Background(), client, ProjectCreateInput{ProjectID: "42", Name: testTokenName, Scopes: scopes})
+			return err
+		}},
+		{Name: "project rotate", Call: func() error {
+			_, err := ProjectRotate(context.Background(), client, ProjectRotateInput{ProjectID: "42", TokenID: 1})
+			return err
+		}},
+		{Name: "project self-rotate", Call: func() error {
+			_, err := ProjectRotateSelf(context.Background(), client, ProjectRotateSelfInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "group list", Call: func() error {
+			_, err := GroupList(context.Background(), client, GroupListInput{GroupID: "10"})
+			return err
+		}},
+		{Name: "group get", Call: func() error {
+			_, err := GroupGet(context.Background(), client, GroupGetInput{GroupID: "10", TokenID: 1})
+			return err
+		}},
+		{Name: "group create", Call: func() error {
+			_, err := GroupCreate(context.Background(), client, GroupCreateInput{GroupID: "10", Name: testTokenName, Scopes: scopes})
+			return err
+		}},
+		{Name: "group rotate", Call: func() error {
+			_, err := GroupRotate(context.Background(), client, GroupRotateInput{GroupID: "10", TokenID: 1})
+			return err
+		}},
+		{Name: "group self-rotate", Call: func() error {
+			_, err := GroupRotateSelf(context.Background(), client, GroupRotateSelfInput{GroupID: "10"})
+			return err
+		}},
+		{Name: "personal list", Call: func() error {
+			_, err := PersonalList(context.Background(), client, PersonalListInput{})
+			return err
+		}},
+		{Name: "personal get", Call: func() error {
+			_, err := PersonalGet(context.Background(), client, PersonalGetInput{TokenID: 1})
+			return err
+		}},
+		{Name: "personal get self", Call: func() error {
+			_, err := PersonalGet(context.Background(), client, PersonalGetInput{})
+			return err
+		}},
+		{Name: "personal rotate", Call: func() error {
+			_, err := PersonalRotate(context.Background(), client, PersonalRotateInput{TokenID: 1})
+			return err
+		}},
+		{Name: "personal self-rotate", Call: func() error {
+			_, err := PersonalRotateSelf(context.Background(), client, PersonalRotateSelfInput{})
+			return err
+		}},
+	})
+}
 
 // TestProjectList_Success verifies that ProjectList succeeds when the GitLab API returns a valid response.
 // The test exercises the GET path of the underlying GitLab API call.

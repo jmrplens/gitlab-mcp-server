@@ -31,20 +31,26 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// PATOutput represents a personal access token for a project service account.
+// PATOutput represents a personal access token for a project service
+// account: what [gl.PersonalAccessToken] decodes, plus what
+// lib/api/entities/personal_access_token.rb sends and the SDK struct does not
+// carry, read from the captured response (ADR-0021).
 type PATOutput struct {
 	toolutil.HintableOutput
-	ID          int64    `json:"id"`
-	Name        string   `json:"name"`
-	Revoked     bool     `json:"revoked"`
-	CreatedAt   string   `json:"created_at,omitempty"`
-	LastUsedAt  string   `json:"last_used_at,omitempty"`
-	Description string   `json:"description,omitempty"`
-	Scopes      []string `json:"scopes"`
-	UserID      int64    `json:"user_id"`
-	Active      bool     `json:"active"`
-	ExpiresAt   string   `json:"expires_at,omitempty"`
-	Token       string   `json:"token,omitempty"`
+	ID             int64                               `json:"id"`
+	Name           string                              `json:"name"`
+	Revoked        bool                                `json:"revoked"`
+	CreatedAt      string                              `json:"created_at,omitempty"`
+	LastUsedAt     string                              `json:"last_used_at,omitempty"`
+	LastUsedIPs    []string                            `json:"last_used_ips,omitempty"`
+	Description    string                              `json:"description,omitempty"`
+	Scopes         []string                            `json:"scopes"`
+	Granular       bool                                `json:"granular"`
+	GranularScopes []toolutil.TokenGranularScopeOutput `json:"granular_scopes,omitempty"`
+	UserID         int64                               `json:"user_id"`
+	Active         bool                                `json:"active"`
+	ExpiresAt      string                              `json:"expires_at,omitempty"`
+	Token          string                              `json:"token,omitempty"`
 }
 
 // ListPATOutput holds a paginated list of project service account PATs.
@@ -64,16 +70,19 @@ func toOutput(account *gl.ProjectServiceAccount) Output {
 	}
 }
 
-func toPATOutput(token *gl.PersonalAccessToken) PATOutput {
+func toPATOutput(token *gl.PersonalAccessToken, extra toolutil.TokenExtra) PATOutput {
 	out := PATOutput{
-		ID:          token.ID,
-		Name:        token.Name,
-		Revoked:     token.Revoked,
-		Description: token.Description,
-		Scopes:      token.Scopes,
-		UserID:      token.UserID,
-		Active:      token.Active,
-		Token:       token.Token,
+		ID:             token.ID,
+		Name:           token.Name,
+		Revoked:        token.Revoked,
+		LastUsedIPs:    extra.LastUsedIPs,
+		Description:    token.Description,
+		Scopes:         token.Scopes,
+		Granular:       extra.Granular,
+		GranularScopes: extra.GranularScopes,
+		UserID:         token.UserID,
+		Active:         token.Active,
+		Token:          token.Token,
 	}
 	if token.CreatedAt != nil {
 		out.CreatedAt = token.CreatedAt.Format(time.RFC3339)
@@ -260,13 +269,18 @@ func ListPATs(ctx context.Context, client *gitlabclient.Client, input ListPATInp
 	if err != nil {
 		return ListPATOutput{}, err
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	tokens, resp, err := client.GL().Projects.ListProjectServiceAccountPersonalAccessTokens(input.ProjectID.String(), input.ServiceAccountID, opts, gl.WithContext(ctx))
+	if err != nil {
+		return ListPATOutput{}, toolutil.WrapErr("list project service account PATs", err)
+	}
+	extras, err := toolutil.CapturedTokens(captured, len(tokens))
 	if err != nil {
 		return ListPATOutput{}, toolutil.WrapErr("list project service account PATs", err)
 	}
 	out := make([]PATOutput, len(tokens))
 	for i, token := range tokens {
-		out[i] = toPATOutput(token)
+		out[i] = toPATOutput(token, extras[i])
 	}
 	return ListPATOutput{Tokens: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -313,11 +327,22 @@ func CreatePAT(ctx context.Context, client *gitlabclient.Client, input CreatePAT
 	if input.Description != "" {
 		opts.Description = &input.Description
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Projects.CreateProjectServiceAccountPersonalAccessToken(input.ProjectID.String(), input.ServiceAccountID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return PATOutput{}, toolutil.WrapErrWithMessage("create project service account PAT", err)
 	}
-	return toPATOutput(token), nil
+	return capturedPATOutput("create project service account PAT", token, captured)
+}
+
+// capturedPATOutput converts one token with what its captured answer carries
+// beside the SDK's decode, or reports the answer the type cannot hold.
+func capturedPATOutput(op string, token *gl.PersonalAccessToken, captured *gitlabclient.ResponseCapture) (PATOutput, error) {
+	extra, err := toolutil.CapturedToken(captured)
+	if err != nil {
+		return PATOutput{}, toolutil.WrapErr(op, err)
+	}
+	return toPATOutput(token, extra), nil
 }
 
 // RevokePATInput holds parameters for revoking a project service account PAT.
@@ -383,6 +408,7 @@ func RotatePAT(ctx context.Context, client *gitlabclient.Client, input RotatePAT
 	if hasExpiresAt {
 		opts.ExpiresAt = expiresAt
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Projects.RotateProjectServiceAccountPersonalAccessToken(input.ProjectID.String(), input.ServiceAccountID, input.TokenID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) || toolutil.IsHTTPStatus(err, http.StatusNotFound) || toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
@@ -390,7 +416,7 @@ func RotatePAT(ctx context.Context, client *gitlabclient.Client, input RotatePAT
 		}
 		return PATOutput{}, toolutil.WrapErrWithMessage("rotate project service account PAT", err)
 	}
-	return toPATOutput(token), nil
+	return capturedPATOutput("rotate project service account PAT", token, captured)
 }
 
 func listPATOptions(input ListPATInput) (*gl.ListProjectServiceAccountPersonalAccessTokensOptions, error) {

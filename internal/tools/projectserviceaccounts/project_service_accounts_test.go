@@ -22,6 +22,55 @@ const (
 	projectServiceAccountPATsJSON = `[{"id":11,"name":"tok","scopes":["api"],"active":true,"revoked":false,"user_id":7,"expires_at":"2026-12-31","created_at":"2026-01-01T02:03:04Z","last_used_at":"2026-01-02T03:04:05Z","description":"deploy token"}]`
 )
 
+// TestListPATs_ReadsWhatTheSDKDoesNotModel verifies a project service
+// account's tokens carry, beside what client-go decoded, the three fields
+// lib/api/entities/personal_access_token.rb sends and gl.PersonalAccessToken
+// does not, each paired with its token by position.
+func TestListPATs_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":11,"name":"tok","granular":true,"last_used_ips":["192.0.2.10"],`+
+			`"granular_scopes":[{"access":"personal_projects","permissions":["read_job"],"project_id":42}]},{"id":12,"name":"other"}]`)
+	}))
+
+	out, err := ListPATs(context.Background(), client, ListPATInput{ProjectID: "42", ServiceAccountID: 7})
+	if err != nil {
+		t.Fatalf("ListPATs() unexpected error: %v", err)
+	}
+	if len(out.Tokens) != 2 || !out.Tokens[0].Granular || len(out.Tokens[0].GranularScopes) != 1 ||
+		out.Tokens[0].GranularScopes[0].ProjectID != 42 || len(out.Tokens[0].LastUsedIPs) != 1 ||
+		out.Tokens[1].Granular || out.Tokens[1].GranularScopes != nil {
+		t.Errorf("ListPATs() tokens = %+v, want each paired with its captured fields", out.Tokens)
+	}
+}
+
+// TestPATHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler that presents a token:
+// GitLab's answer decodes for the SDK and not for the fields read beside it,
+// and the handler reports it rather than swallowing it.
+func TestPATHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := `{"id":11,"name":"tok","granular":"not-a-bool"}`
+		if r.Method == http.MethodGet {
+			body = "[" + body + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := ListPATs(context.Background(), client, ListPATInput{ProjectID: "42", ServiceAccountID: 7})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			_, err := CreatePAT(context.Background(), client, CreatePATInput{ProjectID: "42", ServiceAccountID: 7, Name: "tok", Scopes: []string{"api"}})
+			return err
+		}},
+		{Name: "rotate", Call: func() error {
+			_, err := RotatePAT(context.Background(), client, RotatePATInput{ProjectID: "42", ServiceAccountID: 7, TokenID: 11})
+			return err
+		}},
+	})
+}
+
 // TestList validates project service account listing, optional filters,
 // validation, and API error handling.
 func TestList(t *testing.T) {

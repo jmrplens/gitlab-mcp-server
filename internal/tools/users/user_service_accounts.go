@@ -171,12 +171,17 @@ func CreateCurrentUserPAT(ctx context.Context, client *gitlabclient.Client, inpu
 		isoT := gl.ISOTime(t)
 		opts.ExpiresAt = &isoT
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	token, _, err := client.GL().Users.CreatePersonalAccessTokenForCurrentUser(opts, gl.WithContext(ctx))
 	if err != nil {
 		return CurrentUserPATOutput{}, toolutil.WrapErrWithStatusHint("create_personal_access_token_for_current_user", err, http.StatusBadRequest,
 			"name is required; scopes must include valid PAT scopes (e.g. api, read_user, read_repository, write_repository); expires_at format YYYY-MM-DD")
 	}
-	return toCurrentUserPATOutput(token), nil
+	extra, err := toolutil.CapturedToken(captured)
+	if err != nil {
+		return CurrentUserPATOutput{}, toolutil.WrapErr("create_personal_access_token_for_current_user", err)
+	}
+	return toCurrentUserPATOutput(token, extra), nil
 }
 
 // --- Markdown formatters ---.
@@ -236,7 +241,7 @@ func FormatCurrentUserPATMarkdownString(out CurrentUserPATOutput) string {
 }
 
 // toCurrentUserPATOutput converts a gl.PersonalAccessToken into the shared
-// output shape.
-func toCurrentUserPATOutput(t *gl.PersonalAccessToken) CurrentUserPATOutput {
-	return toolutil.NewPersonalTokenOutput(t)
+// output shape, with the fields the capture read beside the SDK.
+func toCurrentUserPATOutput(t *gl.PersonalAccessToken, extra toolutil.TokenExtra) CurrentUserPATOutput {
+	return toolutil.NewPersonalTokenOutput(t, extra)
 }
