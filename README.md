@@ -467,10 +467,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,219 |     255,701 |
-| Unit tests (`_test.go`)  |       714 |     417,951 |
+| Source (`.go`, non-test) |     1,219 |     255,716 |
+| Unit tests (`_test.go`)  |       714 |     417,969 |
 | End-to-end tests         |       246 |      66,271 |
-| **Total**                | **2,179** | **739,923** |
+| **Total**                | **2,179** | **739,956** |
 
 ### Functions
 
@@ -490,7 +490,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.63× more tests than code |
 | Average source file length         |                 ~210 lines |
 | Average test file length           |                 ~585 lines |
-| Comment lines in source            |  45,679 (~17.9% of source) |
+| Comment lines in source            |  45,686 (~17.9% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns

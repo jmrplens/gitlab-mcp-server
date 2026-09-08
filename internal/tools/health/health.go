@@ -76,18 +76,33 @@ func publicBaseURL(base *url.URL) string {
 // verbatim, the *url.Error net/http returns replaces the password with ***,
 // and url.URL.Redacted replaces it with xxxxx. Only the password is hidden by
 // any of them, so the username reaches the caller unless it is stripped here.
-// The forms are removed longest first so a shorter one cannot match inside a
-// longer one, and an empty one is skipped rather than turning into a stray
-// "@" that would eat every at-sign in the message.
+//
+// The username itself comes in two spellings, and a name needing no escaping
+// hides that: net/http's mask is built from Userinfo.Username, which is
+// decoded, while Redacted rebuilds the userinfo through url.UserPassword and
+// so escapes it. A proxy user called "proxy@corp" is "proxy@corp:***" in one
+// message and "proxy%40corp:xxxxx" in the other, so both are stripped.
+//
+// The forms are ordered longest first so a shorter one cannot match inside a
+// longer one, and an empty or repeated one is skipped: the empty one would
+// otherwise turn into a stray "@" that eats every at-sign in the message.
 func withoutUserinfo(text string, user *url.Userinfo) string {
 	if user == nil {
 		return text
 	}
-	name := user.Username()
-	for _, form := range []string{user.String(), name + ":***", name + ":xxxxx", name} {
-		if form == "" {
+	decoded := user.Username()
+	escaped := url.User(decoded).String()
+	seen := make(map[string]bool, 7)
+	for _, form := range []string{
+		user.String(),
+		escaped + ":***", decoded + ":***",
+		escaped + ":xxxxx", decoded + ":xxxxx",
+		escaped, decoded,
+	} {
+		if form == "" || seen[form] {
 			continue
 		}
+		seen[form] = true
 		text = strings.ReplaceAll(text, form+"@", "")
 	}
 	return text

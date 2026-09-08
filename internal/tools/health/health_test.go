@@ -658,6 +658,24 @@ func TestWithoutUserinfo_EveryStandardRendering_RemovesTheCredential(t *testing.
 			text: `Get "https://gitlab.example.com/api/v4/version": alice@example.com refused`,
 			want: `Get "https://gitlab.example.com/api/v4/version": alice@example.com refused`,
 		},
+		{
+			name: "escaped username in the redacted mask",
+			user: url.UserPassword("proxy@corp", "s3cret"),
+			text: `Get "https://proxy%40corp:xxxxx@gitlab.example.com/api/v4/version": refused`,
+			want: `Get "https://gitlab.example.com/api/v4/version": refused`,
+		},
+		{
+			name: "decoded username in the net http mask",
+			user: url.UserPassword("proxy@corp", "s3cret"),
+			text: `Get "https://proxy@corp:***@gitlab.example.com/api/v4/version": refused`,
+			want: `Get "https://gitlab.example.com/api/v4/version": refused`,
+		},
+		{
+			name: "escaped username without a password",
+			user: url.User("proxy@corp"),
+			text: `Get "https://proxy%40corp@gitlab.example.com/api/v4/version": refused`,
+			want: `Get "https://gitlab.example.com/api/v4/version": refused`,
+		},
 	}
 
 	for _, tc := range cases {
