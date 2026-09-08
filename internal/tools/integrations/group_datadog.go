@@ -13,21 +13,19 @@ import (
 )
 
 // GroupDatadogItem is a JSON-serializable view of [gl.GroupDatadogIntegration]
-// returned by the group-level Datadog integration tools. Like the SDK struct
-// itself, it is dual-shape: the canonical Datadog configuration lives in the
-// nested Properties object (present whenever the server returns one), and the
-// flat Datadog fields are deprecated convenience copies that mirror
-// client-go's own deprecated flat fields — both sets retire together when the
-// dependency moves to client-go v3, which drops them. The embedded
-// [gl.Integration] base fields (identity, lifecycle, and the full set of
-// event trigger flags) stay flattened; event flags are plain bool in
-// client-go and are surfaced unconditionally (no omitempty) so a false value
-// is explicit in the output. On older GitLab servers that omit the nested
-// "properties" object, Properties stays nil and the flat fields carry the
-// data from the SDK's deprecated flat fields; the flat DatadogCIVisibility
-// and ArchiveTraceEvents are *bool so they stay absent when the server does
-// not report them (legacy payloads never carried datadog_ci_visibility, and
-// the output never fabricates false).
+// returned by the group-level Datadog integration tools.
+//
+// The Datadog configuration has one home here, the nested Properties object,
+// which is what GitLab's own record says the endpoint sends
+// (APIEntitiesIntegration carries `properties` and no flat Datadog field).
+// The flat copies this type published beside it during v2 are gone in v3;
+// client-go still declares its own deprecated flat fields, and they are read
+// only as the fallback below.
+//
+// The embedded [gl.Integration] base fields (identity, lifecycle, and the
+// full set of event trigger flags) stay flattened; event flags are plain bool
+// in client-go and are surfaced unconditionally (no omitempty) so a false
+// value is explicit in the output.
 type GroupDatadogItem struct {
 	ID                             int64  `json:"id"`
 	Title                          string `json:"title"`
@@ -54,21 +52,14 @@ type GroupDatadogItem struct {
 	WikiPageEvents                 bool   `json:"wiki_page_events"`
 	CommentOnEventEnabled          bool   `json:"comment_on_event_enabled"`
 	Inherited                      bool   `json:"inherited"`
-	APIURL                         string `json:"api_url,omitempty"`
-	DatadogEnv                     string `json:"datadog_env,omitempty"`
-	DatadogService                 string `json:"datadog_service,omitempty"`
-	DatadogSite                    string `json:"datadog_site,omitempty"`
-	DatadogTags                    string `json:"datadog_tags,omitempty"`
-	DatadogCIVisibility            *bool  `json:"datadog_ci_visibility,omitempty"`
-	ArchiveTraceEvents             *bool  `json:"archive_trace_events,omitempty"`
 
-	Properties *GroupDatadogProperties `json:"properties,omitempty" jsonschema:"Canonical Datadog configuration object. Prefer these values over the deprecated flat copies"`
+	Properties *GroupDatadogProperties `json:"properties,omitempty" jsonschema:"The Datadog configuration GitLab returns for the integration"`
 }
 
 // GroupDatadogProperties mirrors [gl.GroupDatadogIntegrationProperties]
 // field for field (same plain types): the nested "properties" object GitLab
 // returns with the group Datadog integration. It is the canonical home of the
-// Datadog configuration; the flat copies on [GroupDatadogItem] are deprecated.
+// Datadog configuration, and the only one [GroupDatadogItem] publishes.
 type GroupDatadogProperties struct {
 	APIURL              string `json:"api_url"`
 	DatadogEnv          string `json:"datadog_env"`
@@ -124,26 +115,23 @@ func groupDatadogToItem(g *gl.GroupDatadogIntegration) GroupDatadogItem {
 			DatadogCIVisibility: p.DatadogCIVisibility,
 			ArchiveTraceEvents:  p.ArchiveTraceEvents,
 		}
-		item.APIURL = p.APIURL
-		item.DatadogEnv = p.DatadogEnv
-		item.DatadogService = p.DatadogService
-		item.DatadogSite = p.DatadogSite
-		item.DatadogTags = p.DatadogTags
-		item.DatadogCIVisibility = &p.DatadogCIVisibility
-		item.ArchiveTraceEvents = &p.ArchiveTraceEvents
 		return item
 	}
-	// When the server omits "properties" (older GitLab), Properties stays nil
-	// — the same state the SDK struct itself is in for those payloads.
-	// Older GitLab servers omit the nested "properties" object; fall back to
-	// the deprecated flat fields (kept in client-go until 3.0).
-	// DatadogCIVisibility stays nil so the output never fabricates false.
-	item.APIURL = g.APIURL                         //nolint:staticcheck // SA1019: fallback when Properties is absent.
-	item.DatadogEnv = g.DatadogEnv                 //nolint:staticcheck // SA1019: fallback when Properties is absent.
-	item.DatadogService = g.DatadogService         //nolint:staticcheck // SA1019: fallback when Properties is absent.
-	item.DatadogSite = g.DatadogSite               //nolint:staticcheck // SA1019: fallback when Properties is absent.
-	item.DatadogTags = g.DatadogTags               //nolint:staticcheck // SA1019: fallback when Properties is absent.
-	item.ArchiveTraceEvents = g.ArchiveTraceEvents //nolint:staticcheck // SA1019: fallback when Properties is absent.
+	// An older GitLab omits the nested object and sends the configuration
+	// flat, which is what client-go's own deprecated fields decode. Reading
+	// them here is what lets this type publish one shape without losing an
+	// old server's answer. Such a payload never carried datadog_ci_visibility,
+	// so that field reads false because the server said nothing about it.
+	item.Properties = &GroupDatadogProperties{
+		APIURL:         g.APIURL,         //nolint:staticcheck // SA1019: the flat fields are what an older server sends.
+		DatadogEnv:     g.DatadogEnv,     //nolint:staticcheck // SA1019: the flat fields are what an older server sends.
+		DatadogService: g.DatadogService, //nolint:staticcheck // SA1019: the flat fields are what an older server sends.
+		DatadogSite:    g.DatadogSite,    //nolint:staticcheck // SA1019: the flat fields are what an older server sends.
+		DatadogTags:    g.DatadogTags,    //nolint:staticcheck // SA1019: the flat fields are what an older server sends.
+	}
+	if g.ArchiveTraceEvents != nil { //nolint:staticcheck // SA1019: the flat fields are what an older server sends.
+		item.Properties.ArchiveTraceEvents = *g.ArchiveTraceEvents //nolint:staticcheck // SA1019: the flat fields are what an older server sends.
+	}
 	return item
 }
 
