@@ -914,6 +914,8 @@ Findings grouped by package, each naming the file, line, formatter, construct, v
 
 Scans non-test Go source for string literals appearing often enough (default: three or more times) and long enough (default: three or more characters) that are not already `const`/`var` values.
 
+A directory argument is walked through `cmd/internal/testsource`, so the corpus is the shared one: the two tracked non-test Go files under `testdata` (`cmd/bench_resources/testdata/standin/main.go` and `cmd/server/testdata/peer/main.go`) are fixtures rather than source this repository holds to its conventions, and their literals are no longer reported. A file named directly is always scanned.
+
 #### Usage
 
 ```bash
@@ -1625,6 +1627,8 @@ The analysis helpers shared by the auditors: the projected individual-tool descr
 The three questions every command that reads `_test.go` files used to answer for itself: whether a function name is a Go test entry point (`IsTestFunction`), which naming bucket it falls in (`ClassifyTestName`, with the four `Pattern*` constants), and which files a scan of the tree may look at (`WalkFiles`, with one `SkipDir` list).
 
 All three had drifted, and the drift was not theoretical. `gen_stats` required an upper-case rune after `Test` while `gen_testing_docs` required a non-lower-case one, under a comment claiming the two agreed; `audit_test_names` skipped every name starting with the `TestMain` prefix, so the nine tests named `TestMain_Something` were counted by both generators and invisible to the auditor. Go's own rule decides for all of them, which makes the reconciliation a fix to the auditor rather than a change to either published count. The walks disagreed the same way: two skip lists and two descents that skipped nothing, so whether `testdata` is part of the corpus had two answers and no recorded reason. `SkipDir` is that answer, written down once, and `audit_test_names` applies it in its `-check-files` gate as well as its report, so the gate certifies the corpus the report describes.
+
+A root is entered whatever it is called, so a scan pointed straight at a fixtures or dot directory scans it, and whatever it is: `filepath.WalkDir` lstats its root, so `WalkFiles` resolves a root that is a symlink to a directory before walking it and reports every path back under the name the caller gave. Without that, a tree named through a link is handed to the callback as a plain file, a report comes back empty and `-check-files` certifies it clean. Below the root nothing is resolved; a link that resolves to nothing is a read error rather than an empty corpus.
 
 What the package deliberately does **not** own is discovery. `gen_stats` keeps asking git (`git ls-files`) so `check-stats` stays a function of what is committed, and `gen_testing_docs` keeps enumerating packages through `go list` because it describes packages; sharing the input universe would break both.
 
