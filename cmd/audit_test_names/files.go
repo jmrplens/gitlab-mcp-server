@@ -20,7 +20,10 @@
 //     internal sibling the external tests take the plain name themselves.
 //
 // test/e2e is exempt as a tree: its files have no source modules to be named
-// after.
+// after. The trees cmd/internal/testsource prunes are exempt for the reason
+// recorded there — a tool's own fixtures and vendored or generated output are
+// not source this repository holds to its conventions — and the gate judges
+// the same corpus the audit reports on because it walks it the same way.
 
 package main
 
@@ -64,31 +67,36 @@ func runFileCheck(dirs []string, stdout io.Writer) bool {
 	return false
 }
 
-// checkFileNamesInDir walks one directory tree collecting violations.
+// checkFileNamesInDir walks one directory tree collecting violations. It reads
+// the corpus through testsource.WalkFiles, the walk the CSV audit and -apply
+// read, so this command has one answer to "which files are test sources"
+// rather than one per mode.
+//
+// A tree it cannot read is itself a violation: a gate that cannot read what it
+// was asked to certify must fail, not report clean. The walk stops at the
+// first read error instead of skipping that subtree, which is the right end
+// for a gate — the verdict is already "not certified" — so only the first
+// unreadable directory of a root is named.
 func checkFileNamesInDir(dir string) []fileViolation {
-	if isE2ETree(dir) {
-		return nil
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		// An unreadable directory is itself a violation: a gate that cannot
-		// read what it was asked to certify must fail, not report clean.
-		return []fileViolation{{path: filepath.ToSlash(dir), reason: "unreadable: " + err.Error()}}
+	// filepath.WalkDir walks a plain file without complaint, so a root that is
+	// not a directory is the one unreadable input the walk cannot report.
+	if info, statErr := os.Stat(dir); statErr == nil && !info.IsDir() {
+		return []fileViolation{{path: filepath.ToSlash(dir), reason: "unreadable: not a directory"}}
 	}
 
 	var violations []fileViolation
-	for _, e := range entries {
-		path := filepath.Join(dir, e.Name())
-		if e.IsDir() {
-			violations = append(violations, checkFileNamesInDir(path)...)
-			continue
+	err := testsource.WalkFiles([]string{dir}, testsource.TestFiles, func(path string) error {
+		fileDir := filepath.Dir(path)
+		if isE2ETree(fileDir) {
+			return nil
 		}
-		if !strings.HasSuffix(e.Name(), testFileSuffix) {
-			continue
-		}
-		if reason, ok := classifyTestFileName(dir, e.Name()); !ok {
+		if reason, ok := classifyTestFileName(fileDir, filepath.Base(path)); !ok {
 			violations = append(violations, fileViolation{path: filepath.ToSlash(path), reason: reason})
 		}
+		return nil
+	})
+	if err != nil {
+		violations = append(violations, fileViolation{path: filepath.ToSlash(dir), reason: "unreadable: " + err.Error()})
 	}
 	return violations
 }
