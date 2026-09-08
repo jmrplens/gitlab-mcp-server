@@ -9728,6 +9728,11 @@ func TestRequireInstanceAllowList(t *testing.T) {
 			wantErr: "--http-addr",
 		},
 		{
+			name:    "the_escape_hatch_is_refused_on_a_routable_ipv6_host",
+			hcfg:    httpConfig{allowAnyGitLabURL: true, addr: "[2001:db8::1]:8080"},
+			wantErr: "--http-addr",
+		},
+		{
 			name: "one_instance",
 			hcfg: httpConfig{gitlabURLs: repeatedFlag{"https://gitlab.example.com"}, addr: "0.0.0.0:8080"},
 		},
@@ -9757,6 +9762,56 @@ func TestRequireInstanceAllowList(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), "--allow-any-gitlab-url") {
 				t.Errorf("error = %q, want it to name the escape hatch", err)
+			}
+		})
+	}
+}
+
+// TestListenerIsHostLocal_AName_IsJudgedByWhatItResolvesTo verifies that the
+// hatch's precondition is decided by resolution rather than by spelling.
+//
+// `localhost` is loopback by convention, not by rule. A host whose /etc/hosts
+// maps it to a routable interface binds there, and a check that accepted the
+// name would open a request-forgery proxy to the network under a name that
+// reads local. net.Listen resolves the same string a moment later, so this
+// asks the question the bind answers, and every address the name resolves to
+// has to be loopback. A name that resolves to nothing is refused: the answer
+// decides whether to serve any caller's chosen host, so not knowing is a no.
+func TestListenerIsHostLocal_AName_IsJudgedByWhatItResolvesTo(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		addr      string
+		resolveTo []string
+		resolveNo bool
+		want      bool
+	}{
+		{name: "a name resolving to loopback", addr: "localhost:8080", resolveTo: []string{"127.0.0.1", "::1"}, want: true},
+		{name: "a name resolving off the machine", addr: "localhost:8080", resolveTo: []string{"10.0.0.7"}},
+		{name: "a name resolving to loopback and one routable address", addr: "localhost:8080", resolveTo: []string{"127.0.0.1", "10.0.0.7"}},
+		{name: "a name resolving to nothing", addr: "mcp.internal:8080", resolveTo: []string{}},
+		{name: "a name that does not resolve", addr: "mcp.internal:8080", resolveNo: true},
+		// A literal is not resolved at all: it is already the answer, and
+		// asking a resolver about it would only add a way to be wrong.
+		{name: "a loopback literal", addr: "127.0.0.2:8080", resolveNo: true, want: true},
+		{name: "an ipv6 loopback literal", addr: "[::1]:8080", resolveNo: true, want: true},
+		{name: "a routable literal", addr: "10.0.0.7:8080", resolveNo: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			previous := lookupHost
+			lookupHost = func(string) ([]net.IP, error) {
+				if tc.resolveNo {
+					return nil, errors.New("no such host")
+				}
+				addresses := make([]net.IP, 0, len(tc.resolveTo))
+				for _, literal := range tc.resolveTo {
+					addresses = append(addresses, net.ParseIP(literal))
+				}
+				return addresses, nil
+			}
+			t.Cleanup(func() { lookupHost = previous })
+
+			if got := listenerIsHostLocal(tc.addr); got != tc.want {
+				t.Errorf("listenerIsHostLocal(%q) = %t, want %t", tc.addr, got, tc.want)
 			}
 		})
 	}

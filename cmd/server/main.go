@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"os/signal"
@@ -951,6 +952,15 @@ func requireInstanceAllowList(hcfg *httpConfig) error {
 // local principals may. A wildcard bind is the one that matters here, because
 // it is what the container CMD does and what the flag's own warning was about.
 //
+// A name is judged by what it resolves to and never by the name itself.
+// `localhost` is loopback by convention rather than by rule: a host whose
+// /etc/hosts maps it elsewhere binds elsewhere, and the hatch would then be
+// open to the network under a name that reads local. Resolving is what
+// net.Listen does with the same string a moment later, so this asks the
+// question the bind will answer. Every address it resolves to must be
+// loopback, and a name that resolves to none is refused: this decides whether
+// to open a request-forgery proxy, so not knowing is a no.
+//
 // It cannot see a port publication. A container binding 0.0.0.0 and published
 // with `-p 127.0.0.1:8080:8080` is host-local in fact and is refused anyway,
 // since nothing inside the process distinguishes it from the same container
@@ -961,11 +971,27 @@ func listenerIsHostLocal(addr string) bool {
 		return true
 	}
 	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
+	if err != nil || host == "" {
 		return false
 	}
-	return isLoopbackHost(strings.ToLower(host))
+	if parsed, parseErr := netip.ParseAddr(host); parseErr == nil {
+		return parsed.IsLoopback()
+	}
+	resolved, lookupErr := lookupHost(host)
+	if lookupErr != nil || len(resolved) == 0 {
+		return false
+	}
+	for _, address := range resolved {
+		if !address.IsLoopback() {
+			return false
+		}
+	}
+	return true
 }
+
+// lookupHost is the resolver [listenerIsHostLocal] asks, as a variable so a
+// test can answer for a name without depending on the machine's /etc/hosts.
+var lookupHost = net.LookupIP
 
 // validateFixedGitLabURL rejects a --gitlab-url value with a message naming
 // the flag the operator actually typed.

@@ -467,10 +467,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,244 |     261,479 |
-| Unit tests (`_test.go`)  |       731 |     425,181 |
+| Source (`.go`, non-test) |     1,244 |     261,505 |
+| Unit tests (`_test.go`)  |       731 |     425,236 |
 | End-to-end tests         |       246 |      66,322 |
-| **Total**                | **2,221** | **752,982** |
+| **Total**                | **2,221** | **753,063** |
 
 ### Functions
 
@@ -479,8 +479,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                |  9,628 |
 | . Exported (public)             |  2,990 |
 | . Unexported (private)          |  6,638 |
-| Unit test functions (`TestXxx`) | 14,448 |
-| Subtests (`t.Run(...)`)         |  5,760 |
+| Unit test functions (`TestXxx`) | 14,449 |
+| Subtests (`t.Run(...)`)         |  5,761 |
 | End-to-end test functions       |    605 |
 
 ### Ratios worth noting
@@ -490,7 +490,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.63× more tests than code |
 | Average source file length         |                 ~210 lines |
 | Average test file length           |                 ~582 lines |
-| Comment lines in source            |  47,707 (~18.2% of source) |
+| Comment lines in source            |  47,718 (~18.2% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
@@ -515,8 +515,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Record              | File                                    |
 | ------------------- | --------------------------------------- |
-| Longest source file | `cmd/server/main.go`. 4,634 lines       |
-| Longest test file   | `cmd/server/main_test.go`. 10,520 lines |
+| Longest source file | `cmd/server/main.go`. 4,660 lines       |
+| Longest test file   | `cmd/server/main_test.go`. 10,575 lines |
 
 ### Because why not
 
