@@ -209,6 +209,29 @@ func TestCheckFileNamesInDir_PrunedTrees_AreOutsideTheCorpus(t *testing.T) {
 	}
 }
 
+// TestCheckFileNamesInDir_SymlinkedRoot_IsStillJudged verifies the gate reads
+// the tree behind a root that is a symlink to a directory, which is how a
+// developer checkout or a worktree layout can name it. A walk that stopped at
+// the link would find no test file and certify the tree clean.
+func TestCheckFileNamesInDir_SymlinkedRoot_IsStillJudged(t *testing.T) {
+	base := t.TempDir()
+	writeFixtureDir(t, base, []string{"real"}, []fileSpec{
+		{"real/theme_test.go", "package real\n"},
+	})
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(filepath.Join(base, "real"), link); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
+
+	got := checkFileNamesInDir(link)
+	want := []fileViolation{
+		{path: filepath.ToSlash(filepath.Join(link, "theme_test.go")), reason: "no module file matches this name"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("violations = %+v\nwant %+v", got, want)
+	}
+}
+
 // TestCheckFileNamesInDir_UnreadableDirectoryIsAViolation verifies a
 // directory the gate cannot read is reported as a violation rather than
 // certified clean.

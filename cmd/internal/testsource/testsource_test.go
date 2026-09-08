@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -186,6 +187,94 @@ func TestWalkFiles_PrunedRoot_IsStillWalked(t *testing.T) {
 				if got[i] != want {
 					t.Errorf("visit %d = %q, want %q", i, got[i], want)
 				}
+			}
+		})
+	}
+}
+
+// TestWalkFiles_SymlinkedRoot_IsFollowedAndReportedUnderItsOwnName verifies
+// that a root which is a symlink to a directory is walked as that directory,
+// with every path reported under the name the caller gave. filepath.WalkDir
+// lstats its root, so without resolving it the walk would visit the link name
+// alone and hand back an empty corpus, which a gate would read as a clean
+// tree.
+func TestWalkFiles_SymlinkedRoot_IsFollowedAndReportedUnderItsOwnName(t *testing.T) {
+	base := t.TempDir()
+	// sequential: setup steps building one tree, asserted by the walk below
+	writeFile(t, base, "real/widget_test.go")
+	writeFile(t, base, "real/sub/nested_test.go")
+	writeFile(t, base, "real/testdata/fixture_test.go")
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(filepath.Join(base, "real"), link); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	var got []string
+	if err := WalkFiles([]string{link}, TestFiles, func(path string) error {
+		got = append(got, filepath.ToSlash(path))
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkFiles: %v", err)
+	}
+
+	want := []string{
+		filepath.ToSlash(filepath.Join(link, "sub", "nested_test.go")),
+		filepath.ToSlash(filepath.Join(link, "widget_test.go")),
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("WalkFiles visited %v, want %v", got, want)
+	}
+}
+
+// TestWalkFiles_SymlinkedRootTargets_DecideWhatIsWalked verifies the two
+// remaining shapes a symlinked root can take: a link to a regular file is
+// walked as the file it is, so a link named after a test file is visited and
+// one named otherwise is not, and a link that resolves to nothing is an error
+// rather than an empty corpus.
+func TestWalkFiles_SymlinkedRootTargets_DecideWhatIsWalked(t *testing.T) {
+	base := t.TempDir()
+	// sequential: setup steps building one tree, asserted by the walks below
+	writeFile(t, base, "widget_test.go")
+	links := map[string]string{
+		"file_test.go": filepath.Join(base, "widget_test.go"),
+		"plain.go":     filepath.Join(base, "widget_test.go"),
+		"broken":       filepath.Join(base, "absent"),
+	}
+	// sequential: setup steps building one tree, asserted by the walks below
+	for name, target := range links {
+		if err := os.Symlink(target, filepath.Join(base, name)); err != nil {
+			t.Fatalf("symlink %s: %v", name, err)
+		}
+	}
+
+	cases := []struct {
+		name    string
+		root    string
+		want    int
+		wantErr error
+	}{
+		{name: "link to a test file", root: "file_test.go", want: 1},
+		{name: "link to a file under another name", root: "plain.go"},
+		{name: "broken link", root: "broken", wantErr: os.ErrNotExist},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			visits := 0
+			err := WalkFiles([]string{filepath.Join(base, tc.root)}, TestFiles, func(string) error {
+				visits++
+				return nil
+			})
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("WalkFiles error = %v, want %v", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("WalkFiles: %v", err)
+			}
+			if visits != tc.want {
+				t.Errorf("WalkFiles visited %d file(s), want %d", visits, tc.want)
 			}
 		})
 	}

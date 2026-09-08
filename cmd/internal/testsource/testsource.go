@@ -2,6 +2,7 @@ package testsource
 
 import (
 	"io/fs"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -114,30 +115,73 @@ func SkipDir(name string) bool {
 
 // WalkFiles calls visit once for every file under each root that policy
 // selects, in lexical order, entering no directory below a root that SkipDir
-// names. A root is always entered, whatever it is called, so a scan asked for
-// one of those directories by name still runs. It stops at the first error,
+// names. A root is always entered, whatever it is called and whether it is a
+// directory or a symlink to one, so a scan asked for one of those directories
+// by name, or through a link, still runs. It stops at the first error,
 // whether the walk raised it or visit returned it, so a caller that cannot
 // parse a file reports that rather than a partial corpus.
 func WalkFiles(roots []string, policy Policy, visit func(path string) error) error {
 	for _, root := range roots {
-		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				if path != root && SkipDir(d.Name()) {
-					return fs.SkipDir
-				}
-				return nil
-			}
-			if !policy.selects(d.Name()) {
-				return nil
-			}
-			return visit(path)
-		})
-		if err != nil {
+		if err := walkRoot(root, policy, visit); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// walkRoot walks one root of WalkFiles.
+//
+// filepath.WalkDir lstats the root it is given, so a root that is a symlink to
+// a directory arrives at the callback as a plain file and the tree below it is
+// never read — a scan pointed at such a path would report an empty corpus and
+// a gate would certify it clean. A root is named by the caller rather than
+// found by the walk, so it is resolved first and every visited path is
+// reported back under the name the caller gave, which keeps the paths in a
+// report the ones the caller can act on. Below the root nothing is resolved:
+// WalkDir does not follow symlinks it finds, and neither does this.
+func walkRoot(root string, policy Policy, visit func(path string) error) error {
+	target, err := resolveRoot(root)
+	if err != nil {
+		return err
+	}
+	return filepath.WalkDir(target, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		atRoot := path == target
+		if target != root && !atRoot {
+			// WalkDir builds every path below the root by joining it onto the
+			// root it was given, so trimming that prefix is exact.
+			path = filepath.Join(root, strings.TrimPrefix(path, target))
+		}
+		if d.IsDir() {
+			if !atRoot && SkipDir(d.Name()) {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if !policy.selects(d.Name()) {
+			return nil
+		}
+		return visit(path)
+	})
+}
+
+// resolveRoot returns the path to walk for root: the directory root points at
+// when it is a symlink to one, and root itself otherwise. A symlink that
+// cannot be resolved is an error rather than an empty walk, because a caller
+// asked for that tree and must hear that it was not read.
+func resolveRoot(root string) (string, error) {
+	info, err := os.Lstat(root)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		return root, nil //nolint:nilerr // an absent root is WalkDir's error to report, with its own path in it
+	}
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", err
+	}
+	if target, statErr := os.Stat(resolved); statErr != nil || !target.IsDir() {
+		return root, nil //nolint:nilerr // a link to a non-directory is walked as the file it is
+	}
+	return resolved, nil
 }
