@@ -214,7 +214,7 @@ Use this flow when startup context or visible tool count matters. It reaches the
 
 ## Meta-Tool Discovery
 
-With `GITLAB_MCP_TOOL_SURFACE=meta`, 34 meta-tools (40 on Premium, 51 on self-managed Ultimate, 52 on GitLab.com Ultimate, where `gitlab_orbit` is added on Premium and Ultimate alike) provide domain dispatcher tools:
+With `GITLAB_MCP_TOOL_SURFACE=meta`, 34 meta-tools on Free/CE provide domain dispatcher tools. The rest of the catalog is tiered: 40 on self-managed Premium and 51 on self-managed Ultimate, and one more of each on GitLab.com, where `gitlab_orbit` is served from Premium up — 41 on GitLab.com Premium, 52 on GitLab.com Ultimate.
 
 ```text
 Resource: gitlab://tools/gitlab_project
