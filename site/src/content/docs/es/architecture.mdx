@@ -162,7 +162,7 @@ El modo dinámico es la superficie predeterminada de bajo consumo de tokens y es
 
 ### Modo meta-herramientas
 
-Con `GITLAB_MCP_TOOL_SURFACE=meta`, el servidor expone una base de **{stats.meta.base} meta-herramientas por dominio** en lugar del catálogo individual. El nivel Premium añade 6 meta-herramientas para un total de 40, Ultimate 11 más para un total de {stats.meta.self_managed_enterprise} en una instancia autoalojada, y GitLab.com en Premium o Ultimate añade `gitlab_orbit` (la funcionalidad Knowledge Graph de GitLab.com) para un total de {stats.meta.gitlab_com}. Cada meta-herramienta agrupa operaciones relacionadas:
+Con `GITLAB_MCP_TOOL_SURFACE=meta`, el servidor expone una base de **{stats.meta.base} meta-herramientas** en lugar del catálogo individual: 29 respaldadas por el catálogo (28 despachadores de dominio de GitLab más `gitlab_server`), `gitlab_discover_project` y los cuatro flujos interactivos de creación. El nivel Premium añade 6 meta-herramientas para un total de 40, Ultimate 11 más para un total de {stats.meta.self_managed_enterprise} en una instancia autoalojada, y GitLab.com añade `gitlab_orbit` (la funcionalidad Knowledge Graph de GitLab.com) tanto en Premium como en Ultimate, para un total de {stats.meta.gitlab_com} en GitLab.com Ultimate. Cada meta-herramienta agrupa operaciones relacionadas:
 
 ```mermaid
 graph TD
@@ -196,7 +196,7 @@ Esto reduce el uso de tokens y mejora la precisión de selección de herramienta
 
 ### Modo de herramientas individuales
 
-Con `GITLAB_MCP_TOOL_SURFACE=individual`, se exponen todas las herramientas individuales (p. ej., `gitlab_issue_list`, `gitlab_issue_create`): {stats.tools.ultimate_self_managed} en Enterprise/Premium autoalojado, o {stats.tools.gitlab_com} en GitLab.com Enterprise/Premium con Orbit. Esto puede ser útil para pruebas pero no se recomienda para producción.
+Con `GITLAB_MCP_TOOL_SURFACE=individual`, se exponen todas las herramientas individuales (p. ej., `gitlab_issue_list`, `gitlab_issue_create`): {stats.tools.ultimate_self_managed} en Ultimate autoalojado, o {stats.tools.gitlab_com} en GitLab.com Ultimate con Orbit. Esto puede ser útil para pruebas pero no se recomienda para producción.
 
 ## Componentes opcionales
 

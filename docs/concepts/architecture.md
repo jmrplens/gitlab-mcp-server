@@ -168,7 +168,7 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 ### Tools (`internal/tools`)
 
-The largest package family — contains 1085 self-managed Ultimate MCP tool implementations (866 on Free/CE, 1019 on Premium), plus 6 GitLab.com-only Orbit handlers for 1091 total in the GitLab.com Ultimate catalog, organized across 178 packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`.
+The largest package family — contains 1085 self-managed Ultimate MCP tool implementations (866 on Free/CE, 1019 on Premium), plus 6 GitLab.com-only Orbit handlers for 1091 total in the GitLab.com Ultimate catalog, organized across 178 sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`, which lists 179 — the 178 sub-packages plus the `internal/tools` root package itself.
 
 For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](../development/tool-surfaces-and-action-core.md).
 
@@ -187,7 +187,7 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 | `scope_filter.go`   | `MetaToolScopes` and the PAT scope filters for registered tools and catalogs                                                                                                           |
 | `safe_mode.go`      | Safe-mode preview wrappers for the individual surface                                                                                                                                  |
 
-**Representative `internal/tools` package groups** (177 packages total):
+**Representative `internal/tools` package groups** (178 sub-packages total):
 
 | Category          | Representative packages                                                                    |
 | ----------------- | ------------------------------------------------------------------------------------------ |
