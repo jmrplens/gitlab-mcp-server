@@ -11,12 +11,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
 // projectRootForTest resolves the module root for tests that read committed
-// files.
-func projectRootForTest() (string, error) { return mcpsurface.ProjectRoot() }
+// files, through the same walker the command uses.
+func projectRootForTest() (string, error) { return cmdutil.RepositoryRoot(".") }
 
 // TestWriteCharts_WritesAPairPerFigure verifies every figure is written in
 // both schemes, named so the Markdown page's <picture> can find them, and that
