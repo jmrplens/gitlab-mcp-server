@@ -216,11 +216,11 @@ func TestCreateFeatureFlag_WithStrategies(t *testing.T) {
 	out, err := CreateFeatureFlag(context.Background(), client, CreateInput{
 		ProjectID: "1",
 		Name:      "my-flag",
-		Strategies: []StrategyInput{
+		Strategies: []CreateStrategyInput{
 			{
 				Name:       "gradualRolloutUserId",
 				Parameters: &StrategyParameterInput{Percentage: "50"},
-				Scopes:     []ScopeInput{{EnvironmentScope: "production"}},
+				Scopes:     []CreateScopeInput{{EnvironmentScope: "production"}},
 			},
 		},
 	})
@@ -250,7 +250,7 @@ func TestCreateFeatureFlag_MissingParams(t *testing.T) {
 // TestCreateFeatureFlag_InvalidStrategyRejected verifies that CreateFeatureFlag
 // rejects a strategy that is neither a valid removal (_destroy with an id)
 // nor a valid addition (a name) before any HTTP request is sent. This
-// exercises the validateStrategies error-propagation branch in
+// exercises the validateCreateStrategies error-propagation branch in
 // CreateFeatureFlag; if that branch regressed to swallow the validation
 // error, a malformed strategy would reach the GitLab API and either fail
 // with a confusing 400 or, worse, silently create a flag with unexpected
@@ -265,7 +265,7 @@ func TestCreateFeatureFlag_InvalidStrategyRejected(t *testing.T) {
 	_, err := CreateFeatureFlag(context.Background(), client, CreateInput{
 		ProjectID:  "1",
 		Name:       "my-flag",
-		Strategies: []StrategyInput{{}}, // no name, no _destroy
+		Strategies: []CreateStrategyInput{{}}, // no name
 	})
 	if err == nil {
 		t.Fatal("expected error for invalid strategy, got nil")
@@ -666,12 +666,12 @@ func TestUpdateFeatureFlag_AllOptionalFields(t *testing.T) {
 		NewName:     "cov-flag-renamed",
 		Description: "updated desc",
 		Active:      &active,
-		Strategies: []StrategyInput{
+		Strategies: []UpdateStrategyInput{
 			{
 				ID:         1,
 				Name:       "default",
 				Parameters: &StrategyParameterInput{Percentage: "100"},
-				Scopes:     []ScopeInput{{EnvironmentScope: "staging"}},
+				Scopes:     []UpdateScopeInput{{EnvironmentScope: "staging"}},
 			},
 		},
 	})
@@ -1037,7 +1037,7 @@ func TestUpdateFeatureFlag_StrategyUserListAndDestroy_RoundTrip(t *testing.T) {
 	out, err := UpdateFeatureFlag(t.Context(), client, UpdateInput{
 		ProjectID: "1",
 		Name:      "flag",
-		Strategies: []StrategyInput{
+		Strategies: []UpdateStrategyInput{
 			{Name: "gitlabUserList", UserListID: &userListID},
 			{ID: 42, Destroy: &destroy},
 		},
@@ -1081,7 +1081,7 @@ func TestUpdateFeatureFlag_DestroyOnlyStrategyOmitsName(t *testing.T) {
 	if _, err := UpdateFeatureFlag(t.Context(), client, UpdateInput{
 		ProjectID:  "1",
 		Name:       "flag",
-		Strategies: []StrategyInput{{ID: 42, Destroy: &destroy}},
+		Strategies: []UpdateStrategyInput{{ID: 42, Destroy: &destroy}},
 	}); err != nil {
 		t.Fatalf("UpdateFeatureFlag() error = %v", err)
 	}
@@ -1090,6 +1090,45 @@ func TestUpdateFeatureFlag_DestroyOnlyStrategyOmitsName(t *testing.T) {
 	}
 	if !strings.Contains(gotBody, `"id":42`) || !strings.Contains(gotBody, `"_destroy":true`) {
 		t.Errorf("destroy-only strategy lost its id or _destroy: %s", gotBody)
+	}
+}
+
+// TestUpdateFeatureFlag_ScopeRemoval_SendsScopeIDAndDestroy verifies that a
+// scope addressed by id travels as GitLab's documented strategies:scopes:id
+// and strategies:scopes:_destroy pair, and that a scope carrying no
+// environment name does not serialize an empty one. Those two fields are
+// reachable only through the update shape: the create shape has no scope
+// identity, so a converter that reused it would silently drop the removal.
+func TestUpdateFeatureFlag_ScopeRemoval_SendsScopeIDAndDestroy(t *testing.T) {
+	var gotBody string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("reading request body: %v", err)
+		}
+		gotBody = string(body)
+		testutil.RespondJSON(w, http.StatusOK, `{"name":"flag","description":"","active":true,"version":"new_version_flag","strategies":[]}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	scopeID := int64(40)
+	destroy := true
+	if _, err := UpdateFeatureFlag(t.Context(), client, UpdateInput{
+		ProjectID: "1",
+		Name:      "flag",
+		Strategies: []UpdateStrategyInput{
+			{ID: 7, Name: "default", Scopes: []UpdateScopeInput{{ID: &scopeID, Destroy: &destroy}}},
+		},
+	}); err != nil {
+		t.Fatalf("UpdateFeatureFlag() error = %v", err)
+	}
+	for _, want := range []string{`"id":40`, `"_destroy":true`} {
+		if !strings.Contains(gotBody, want) {
+			t.Errorf("request body missing %s: %s", want, gotBody)
+		}
+	}
+	if strings.Contains(gotBody, `"environment_scope":""`) {
+		t.Errorf("scope removal serialized an empty environment_scope: %s", gotBody)
 	}
 }
 
@@ -1104,20 +1143,36 @@ func TestUpdateFeatureFlag_InvalidStrategyCombinationsRejected(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 	destroy := true
 
+	zero := int64(0)
 	tests := []struct {
 		name     string
-		strategy StrategyInput
+		strategy UpdateStrategyInput
 		want     string
 	}{
-		{"destroy without id", StrategyInput{Destroy: &destroy}, "_destroy requires the id"},
-		{"no name and no destroy", StrategyInput{}, "name is required"},
+		{"destroy without id", UpdateStrategyInput{Destroy: &destroy}, "_destroy requires the id"},
+		{"no name and no destroy", UpdateStrategyInput{}, "name is required"},
+		{
+			"scope destroy without id",
+			UpdateStrategyInput{Name: "default", Scopes: []UpdateScopeInput{{Destroy: &destroy}}},
+			"scopes[0]: _destroy requires the id",
+		},
+		{
+			"scope destroy with a zero id",
+			UpdateStrategyInput{Name: "default", Scopes: []UpdateScopeInput{{ID: &zero, Destroy: &destroy}}},
+			"scopes[0]: _destroy requires the id",
+		},
+		{
+			"scope with neither id nor environment",
+			UpdateStrategyInput{Name: "default", Scopes: []UpdateScopeInput{{}}},
+			"scopes[0]: environment_scope is required",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := UpdateFeatureFlag(t.Context(), client, UpdateInput{
 				ProjectID:  "1",
 				Name:       "flag",
-				Strategies: []StrategyInput{tt.strategy},
+				Strategies: []UpdateStrategyInput{tt.strategy},
 			})
 			if err == nil {
 				t.Fatal("invalid strategy was accepted")

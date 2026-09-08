@@ -69,7 +69,7 @@ readable without opening the tracker:
 | 1 | gitlab-org/gitlab | [403 carries no `WWW-Authenticate`](#403-responses-carry-no-www-authenticate-header) | No | No | No | No | Yes |
 | 2 | gitlab-org/gitlab | [No `resource_indicators_supported`](#no-resource_indicators_supported-in-authorization-server-metadata) | No | No | No | No | Yes |
 | 3 | client-go | [Panic unmarshalling an issue](#panic-unmarshalling-an-issue-with-no-id) | Yes | Yes | **Yes, v2.59.1** | Was yes | Retired |
-| 4 | client-go | [`UpdateIssueBoardList` cannot decode its own response](#updateissueboardlist-cannot-decode-a-successful-response) | Yes | Yes | **Yes, `release-client-3.0` branch (untagged)** | No | Yes |
+| 4 | client-go | [`UpdateIssueBoardList` cannot decode its own response](#updateissueboardlist-cannot-decode-a-successful-response) | Yes | Yes | **Yes, v3.0.0** | No | Retired |
 | 5 | client-go | [`GetNamespace` breaks on a path lookup](#getnamespace-cannot-decode-a-path-based-lookup) | No | No | No | No | Yes |
 | 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | No | No | No | No | Yes |
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | No | No | No | No | Yes |
@@ -213,23 +213,20 @@ Kept here as the record: this is what the round trip looks like when it works.
 - **In review**: yes,
   [gitlab-org/api/client-go!2996](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/2996),
   targeting `release-client-3.0`.
-- **Merged**: **yes**, on 2026-09-02 into `release-client-3.0`. That branch
-  carries no tag yet, and it is the v3 line, so no v2 release will contain it.
+- **Merged**: **yes**, on 2026-09-02 into `release-client-3.0`, and released in
+  v3.0.0 on 2026-09-07.
 - **Blocking**: no.
-- **Workaround**: yes. `internal/tools/groupboards.UpdateGroupBoardList` issues
-  the `PUT` directly instead of calling the wrapper. Retire it, and the
-  `acceptedMissingMethods` entry in `cmd/audit_1to1/internal/actions/analyze.go`,
-  once the client-go version this project depends on actually contains the fix,
-  not merely when the v3 bump happens: check that the v3 release being adopted
-  really descends from the merge before removing either.
+- **Workaround**: retired. The check the entry asked for was made against the
+  release actually adopted rather than against the bump: v3.0.0 declares
+  `UpdateIssueBoardList(gid any, board, list int64, opt *UpdateGroupIssueBoardListOptions, ...) (*BoardList, *Response, error)`,
+  so `internal/tools/groupboards.UpdateGroupBoardList` calls the wrapper again
+  and the `acceptedMissingMethods` entry in
+  `cmd/audit_1to1/internal/actions/analyze.go` is gone with it.
 
-**What**: the group-level wrapper declares `[]*BoardList`, while GitLab returns
-the single updated list object, so the wrapper can never unmarshal a successful
-response. The project-level equivalent already returns `*BoardList`.
-
-**Note**: the major-version policy in `CLAUDE.md` ties this project's major to
-client-go's, so the v3 bump is the moment to *check*. The condition is the fix
-being present, not the bump having happened.
+**What**: the group-level wrapper declared `[]*BoardList`, while GitLab returns
+the single updated list object, so the wrapper could never unmarshal a
+successful response. The project-level equivalent already returned
+`*BoardList`.
 
 ### GetNamespace cannot decode a path-based lookup
 

@@ -22,7 +22,6 @@ type ListInput struct {
 	State                  string                     `json:"state,omitempty"           jsonschema:"Filter by state: opened, closed, locked, merged, or all (default all)"`
 	OrderBy                string                     `json:"order_by,omitempty"        jsonschema:"Order by: created_at, updated_at, merged_at, label_priority, priority, milestone_due, popularity, or title (default created_at)"`
 	Sort                   string                     `json:"sort,omitempty"            jsonschema:"Sort order: asc or desc"`
-	Approved               string                     `json:"approved,omitempty"        jsonschema:"Filter by approval status: yes or no"`
 	ApprovedByIDs          toolutil.ApproverIDsFilter `json:"approved_by_ids,omitempty" jsonschema:"Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)"`
 	ApprovedByUsernames    []string                   `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
 	ApproverIDs            toolutil.ApproverIDsFilter `json:"approver_ids,omitempty"    jsonschema:"Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)"`
@@ -132,7 +131,6 @@ func applyStringFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
 		{input.State, &opts.State},
 		{input.OrderBy, &opts.OrderBy},
 		{input.Sort, &opts.Sort},
-		{input.Approved, &opts.Approved}, //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; prefer approved_by_ids
 		{input.AuthorUsername, &opts.AuthorUsername},
 		{input.NotAuthorUsername, &opts.NotAuthorUsername},
 		{input.ReviewerUsername, &opts.ReviewerUsername},
