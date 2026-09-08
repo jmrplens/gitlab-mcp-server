@@ -11,11 +11,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/golist"
 )
 
 var errUnexpectedSuccess = errors.New("expected command to fail")
@@ -279,7 +280,7 @@ func TestRun_UnsupportedFormat_ReturnsError(t *testing.T) {
 	}
 }
 
-func writePackageFixture(t *testing.T, packageName string, files map[string]string) packageInfo {
+func writePackageFixture(t *testing.T, packageName string, files map[string]string) golist.PackageInfo {
 	t.Helper()
 	dir := t.TempDir()
 	for name, content := range files {
@@ -288,7 +289,7 @@ func writePackageFixture(t *testing.T, packageName string, files map[string]stri
 			t.Fatalf("write fixture %s: %v", name, err)
 		}
 	}
-	return packageInfo{Dir: dir, ImportPath: "example.com/" + packageName, Name: packageName}
+	return golist.PackageInfo{Dir: dir, ImportPath: "example.com/" + packageName, Name: packageName}
 }
 
 func hasCategory(findings []finding, category string) bool {
@@ -556,7 +557,7 @@ func TestAuditPackage_ParseFailures(t *testing.T) {
 	t.Run("unreadable directory", func(t *testing.T) {
 		t.Parallel()
 		missing := filepath.Join(t.TempDir(), "missing")
-		_, err := auditPackage(packageInfo{Dir: missing, ImportPath: "example.com/x", Name: "x"}, false)
+		_, err := auditPackage(golist.PackageInfo{Dir: missing, ImportPath: "example.com/x", Name: "x"}, false)
 		if err == nil || !strings.HasPrefix(err.Error(), "read package dir ") {
 			t.Fatalf("auditPackage() error = %v, want read package dir error", err)
 		}
@@ -937,44 +938,12 @@ func TestRelativePath_CleansRelativePathsAndKeepsAbsoluteOnes(t *testing.T) {
 	}
 }
 
-// TestGoExecutable_PointsAtTheRunningToolchain verifies the resolved Go tool
-// path is an existing file inside the active GOROOT, which is what keeps the
-// audit off the PATH.
-func TestGoExecutable_PointsAtTheRunningToolchain(t *testing.T) {
-	t.Parallel()
-
-	got := goExecutable()
-	if !filepath.IsAbs(got) {
-		t.Fatalf("goExecutable() = %q, want an absolute path", got)
-	}
-	if want := filepath.Join(runtime.GOROOT(), "bin"); filepath.Dir(got) != want { //nolint:staticcheck // The audited helper resolves the same GOROOT.
-		t.Fatalf("goExecutable() = %q, want it under %q", got, want)
-	}
-	info, err := os.Stat(got)
-	if err != nil || info.IsDir() {
-		t.Fatalf("goExecutable() = %q, want an existing file (stat error %v)", got, err)
-	}
-}
-
-// TestGoExecutable_WindowsGOOS_AppendsExeSuffix verifies the Windows branch of
-// goExecutable, which appends the .exe suffix. It drives the runtimeGOOS seam
-// because the tests run on a non-Windows host that never takes the branch on
-// its own. The test is serial so its global override never overlaps the
-// parallel TestGoExecutable_PointsAtTheRunningToolchain.
-func TestGoExecutable_WindowsGOOS_AppendsExeSuffix(t *testing.T) {
-	original := runtimeGOOS
-	runtimeGOOS = "windows"
-	t.Cleanup(func() { runtimeGOOS = original })
-
-	if got := filepath.Base(goExecutable()); got != "go.exe" {
-		t.Fatalf("goExecutable() base = %q, want go.exe", got)
-	}
-}
-
 // TestListPackages_MalformedGoListRows verifies the three rows a real
 // toolchain never emits: a blank interior line is skipped, and a row missing
 // either tab is rejected. It drives the goListOutput seam to feed listPackages
-// output the toolchain would never produce.
+// output the toolchain would never produce. The refusal itself belongs to
+// cmd/internal/golist, which both listings parse through; what this asserts is
+// that the audit reports it rather than auditing a package nothing has.
 func TestListPackages_MalformedGoListRows(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -1076,7 +1045,7 @@ func TestRun_StdoutWriteError_IsReported(t *testing.T) {
 func TestCheckValueDoc_UnexportedAndSingleValidDoc(t *testing.T) {
 	t.Parallel()
 
-	pkg := packageInfo{ImportPath: "example.com/x", Name: "x"}
+	pkg := golist.PackageInfo{ImportPath: "example.com/x", Name: "x"}
 	testCases := []struct {
 		name  string
 		names []string

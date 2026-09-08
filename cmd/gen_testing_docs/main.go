@@ -13,13 +13,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/golist"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
@@ -216,17 +216,6 @@ type recordedCoverageValues struct {
 	Overall        coverageValue
 	Internal       coverageValue
 	AveragePackage coverageValue
-}
-
-// packageInfo identifies one Go package returned by go list.
-//
-// ImportPath is the module path. Dir is the absolute directory containing
-// the package source. Name is the short package identifier from the
-// package clause.
-type packageInfo struct {
-	ImportPath string
-	Dir        string
-	Name       string
 }
 
 func main() {
@@ -540,24 +529,19 @@ func coverageTableKey(pkg packageMetrics) string {
 }
 
 // listPackages returns all packages covered by the testing reference document.
-func listPackages(ctx context.Context) ([]packageInfo, error) {
-	output, err := runGo(ctx, []string{"list", "-tags", e2eTags, "-f", "{{.ImportPath}}\t{{.Dir}}\t{{.Name}}", cmdPattern, internalPattern, e2ePattern})
+//
+// The three patterns and the e2e build tags are this generator's own: it
+// documents cmd, internal and the tagged e2e suites, and a suite whose tag is
+// missing from e2eTags reports no Go files and drops out of the listing
+// entirely. runGo merges the toolchain's stderr into the output, so a warning
+// arrives in the same stream as the rows and is refused by the row parser
+// rather than counted as a package.
+func listPackages(ctx context.Context) ([]golist.PackageInfo, error) {
+	output, err := runGo(ctx, []string{"list", "-tags", e2eTags, "-f", golist.Format, cmdPattern, internalPattern, e2ePattern})
 	if err != nil {
 		return nil, fmt.Errorf("list packages: %w", err)
 	}
-
-	infos := []packageInfo{}
-	for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
-		if line == "" {
-			continue
-		}
-		parts := strings.Split(line, "\t")
-		if len(parts) != 3 {
-			return nil, fmt.Errorf("unexpected go list row: %q", line)
-		}
-		infos = append(infos, packageInfo{ImportPath: parts[0], Dir: parts[1], Name: parts[2]})
-	}
-	return infos, nil
+	return golist.ParseRows(output)
 }
 
 // runUnitCoverage executes coverage once and derives combined and internal totals.
@@ -1416,22 +1400,13 @@ func runGo(ctx context.Context, args []string) ([]byte, error) {
 	// #nosec G204,G702 -- args are built by this generator from fixed Go subcommands plus its own
 	// flags: a duration rendered by time.Duration.String and a path it created. No shell is involved,
 	// and this is developer tooling a person runs on a checkout they already own.
-	cmd := exec.CommandContext(ctx, goExecutable(), args...)
+	cmd := exec.CommandContext(ctx, golist.Executable(), args...)
 	cmd.Env = goEnvironment()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return output, fmt.Errorf("go %s: %w\n%s", strings.Join(args, " "), err, tailLines(string(output), 80))
 	}
 	return output, nil
-}
-
-// goExecutable returns the absolute Go tool path from the runtime installation.
-func goExecutable() string {
-	name := "go"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
-	return filepath.Join(runtime.GOROOT(), "bin", name) //nolint:staticcheck // Avoid PATH lookup for Sonar go:S4036.
 }
 
 // goEnvironment returns the process environment with GOTOOLCHAIN pinned to go.mod.
