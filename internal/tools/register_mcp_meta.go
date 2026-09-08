@@ -3,8 +3,6 @@ package tools
 import (
 	"log/slog"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncompat"
@@ -12,28 +10,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// mcpActionGroup builds the gitlab_server group. It is a variable so a test can
-// hand [RegisterMCPMeta] a group the catalog rejects: the real builder produces
-// one fixed, valid group, so the failure the guard below exists for cannot be
-// provoked through any input this package takes.
-var mcpActionGroup = BuildMCPActionGroup
-
-// mcpHealthActionSpecs is the health domain's action specs, as a variable for
-// the same reason: the specs are compiled in and always project cleanly, so
-// only a test can exercise what happens when they do not.
+// mcpHealthActionSpecs is the health domain's action specs, as a variable so a
+// test can reach the fallback below: the specs are compiled in and always
+// project cleanly, so only a test can exercise what happens when they do not.
 var mcpHealthActionSpecs = health.ActionSpecs
-
-// RegisterMCPMeta registers the gitlab_server meta-tool carrying MCP server
-// health and status. Catalog construction failures are logged and the
-// function returns without registering.
-func RegisterMCPMeta(server *mcp.Server, client *gitlabclient.Client) {
-	catalog := actioncatalog.NewCatalog()
-	if err := catalog.AddGroup(mcpActionGroup(client)); err != nil {
-		slog.Error("failed to add MCP meta action group", "error", err)
-		return
-	}
-	RegisterMetaCatalog(server, catalog)
-}
 
 // BuildMCPActionGroup builds the registry group backing the gitlab_server
 // meta-tool. The custom description documents the available actions and their
