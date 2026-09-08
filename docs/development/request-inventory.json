@@ -3350,7 +3350,6 @@
       "method": "GET",
       "path": "/projects/:project_id/deployments/:deployment_id/merge_requests",
       "query": [
-        "approved",
         "approved_by_ids[]",
         "approved_by_usernames",
         "approver_ids[]",
@@ -8658,7 +8657,6 @@
       "method": "GET",
       "path": "/merge_requests",
       "query": [
-        "approved",
         "approved_by_ids[]",
         "approver_ids[]",
         "assignee_id",
