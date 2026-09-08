@@ -97,6 +97,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Project'
+  /api/v4/scalar_body:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+      responses:
+        '204':
+          description: none
 components:
   schemas:
     Approvals:
@@ -107,6 +117,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Approver'
+        inline:
+          type: object
+          properties:
+            reason: {type: string}
         user_can_approve: {type: boolean}
         user_has_approved: {type: boolean}
     Approver:
@@ -127,6 +141,33 @@ components:
     SelfReferring:
       $ref: '#/components/schemas/SelfReferring'
 `
+
+// assertEntities checks the components an operation's response and nested
+// properties were resolved through.
+func assertEntities(t *testing.T, op apishapes.Operation, entity, nestedEntity string) {
+	t.Helper()
+	if op.Entity != entity {
+		t.Errorf("entity = %q, want %q", op.Entity, entity)
+	}
+	if got := renderNestedEntities(op.NestedEntity); got != nestedEntity {
+		t.Errorf("nested entity = %q, want %q", got, nestedEntity)
+	}
+}
+
+// renderNestedEntities spells a nested-entity map as
+// "property=component;property=component", sorted.
+func renderNestedEntities(entities map[string]string) string {
+	properties := make([]string, 0, len(entities))
+	for property := range entities {
+		properties = append(properties, property)
+	}
+	sort.Strings(properties)
+	rendered := make([]string, 0, len(properties))
+	for _, property := range properties {
+		rendered = append(rendered, property+"="+entities[property])
+	}
+	return strings.Join(rendered, ";")
+}
 
 // renderNested spells a nested map as "property=names;property=names", sorted,
 // so a case table can state one in a line.
@@ -165,34 +206,51 @@ func TestExtract_EveryShapeTheDocumentUses_BecomesThreeListsOfNames(t *testing.T
 		// nested is the one property carrying an object, spelled
 		// "property=names", and empty when the response carries none.
 		nested string
+		// entity is the component the response resolves to, and
+		// nestedEntity the one the nested property resolves to, spelled
+		// "property=component".
+		entity       string
+		nestedEntity string
 	}{
 		{
 			name:     "a response named through a ref",
 			key:      "GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals",
-			response: "approved,approved_by,user_can_approve,user_has_approved",
+			response: "approved,approved_by,inline,user_can_approve,user_has_approved",
 			// The header parameter is deliberately absent: it is not something
 			// an action's input struct carries.
 			params: "id,merge_request_iid",
 			// approved_by is an array of a ref, so the object under it is the
-			// element. The other three carry scalars and are left out, since a
-			// property with no object is not a property with an empty one.
-			nested: "approved_by=approved_at,user",
+			// element, and it alone names a component: inline is described
+			// where it sits. The other three carry scalars and are left out,
+			// since a property with no object is not a property with an empty
+			// one.
+			nested:       "approved_by=approved_at,user;inline=reason",
+			entity:       "Approvals",
+			nestedEntity: "approved_by=Approver",
 		},
 		{
 			name:     "a collection is described by its element",
 			key:      "GET /api/v4/projects",
 			response: "id,name",
 			params:   "search",
+			entity:   "Project",
 		},
 		{
 			name:     "a body under multipart rather than json",
 			key:      "POST /api/v4/projects",
 			response: "id,name",
 			body:     "name,path",
+			entity:   "Project",
 		},
 		{
 			name: "an operation documenting no schema",
 			key:  "DELETE /api/v4/nothing",
+		},
+		{
+			// A body that is one scalar names no property, and is recorded
+			// the way a body the document does not describe is.
+			name: "a body that is not an object",
+			key:  "PUT /api/v4/scalar_body",
 		},
 		{
 			name: "a schema that refers to itself",
@@ -210,6 +268,7 @@ func TestExtract_EveryShapeTheDocumentUses_BecomesThreeListsOfNames(t *testing.T
 			name:     "a success code whose only content is not json",
 			key:      "POST /api/v4/plain",
 			response: "id,name",
+			entity:   "Project",
 		},
 	}
 	for _, testCase := range cases {
@@ -230,6 +289,7 @@ func TestExtract_EveryShapeTheDocumentUses_BecomesThreeListsOfNames(t *testing.T
 			if got := renderNested(op.Nested); got != testCase.nested {
 				t.Errorf("nested = %q, want %q", got, testCase.nested)
 			}
+			assertEntities(t, op, testCase.entity, testCase.nestedEntity)
 		})
 	}
 

@@ -23,8 +23,9 @@ const (
 	// it must refuse rather than guess, since every field here is a list of
 	// names a comparison acts on.
 	//
-	// Version 2 added [Operation.Nested].
-	SchemaVersion = 2
+	// Version 2 added [Operation.Nested]; version 3 added [Operation.Entity]
+	// and [Operation.NestedEntity], the join into the conditions record.
+	SchemaVersion = 3
 	// SpecPath is where GitLab commits the generated document in its own
 	// repository.
 	SpecPath = "doc/api/openapi/openapi_v3.yaml"
@@ -83,6 +84,16 @@ type Operation struct {
 	// the document does not describe, which is the same "GitLab does not say"
 	// an empty [Operation.Response] means.
 	Nested map[string][]string `json:"nested,omitempty"`
+	// Entity names the component the success response resolves to, as the
+	// document names it (APIEntitiesProject), for a response that is one
+	// component or a list of one; "" for a response described inline or not
+	// at all. It is the key into the conditions record, which says under what
+	// condition each of the entity's fields is sent (cmd/internal/apiexposes).
+	Entity string `json:"entity,omitempty"`
+	// NestedEntity names, per property of the response carrying an object the
+	// document reached through a component, that component, so a nested
+	// object joins the conditions record the same way.
+	NestedEntity map[string]string `json:"nested_entity,omitempty"`
 	// Params holds the path and query parameter names, sorted.
 	Params []string `json:"params,omitempty"`
 	// Body holds the request body's property names, sorted.
