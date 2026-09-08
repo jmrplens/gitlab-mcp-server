@@ -31,14 +31,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// Token audit constants define the in-memory MCP session identity and the
-// byte-to-token conversion heuristic used by the report.
-const (
-	serverName = "audit-tokens"
-	clientName = "audit-tokens-client"
-	auditVer   = "0.0.1"
-)
-
 // toolTokenInfo stores the serialized size estimate for one MCP tool.
 //
 // Name is the MCP tool name. Domain is the GitLab API domain parsed from
@@ -401,32 +393,6 @@ func buildMetaActionMaps(client *gitlabclient.Client, enterprise bool) map[strin
 	return cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})).ActionMaps()
 }
 
-// withSession pairs an in-memory client session with server, runs fn against
-// it, and returns fn's result. Both sessions are torn down before it returns,
-// the client's first.
-//
-// It replaces a pair of helpers, one handing the session back and one taking a
-// callback, that had come to differ only in the wording of failures neither
-// could produce. So did the four measurement passes layered on them.
-//
-// Every step of the handshake is a [cmdutil.Must]: an in-memory transport has
-// no peer to be unreachable, no address to be taken and no wire to be cut, so
-// there is nothing here for a caller to recover from and nothing for a report
-// to say beyond what the panic already carries.
-func withSession[T any](server *mcp.Server, fn func(context.Context, *mcp.ClientSession) T) T {
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	serverSession := cmdutil.Must(server.Connect(ctx, st, nil))
-	defer func() { cmdutil.MustDo(serverSession.Close()) }()
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
-	session := cmdutil.Must(mcpClient.Connect(ctx, ct, nil))
-	defer func() { cmdutil.MustDo(session.Close()) }()
-
-	return fn(ctx, session)
-}
-
 // measureTools serializes each tool definition to JSON and estimates its token
 // cost using the audit's byte-based heuristic.
 func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
@@ -470,33 +436,42 @@ func measureResources(client *gitlabclient.Client, metaRoutes map[string]tooluti
 	})
 }
 
+// measureResourcesWithOptions registers the resource families opts selects on a
+// server of its own and estimates the token cost of the definitions a client
+// would be listed.
+//
+// The listing runs through [mcpsurface.Session], the one reader of the served
+// surface, rather than a handshake of this command's own: its setup hook takes
+// an arbitrary registration, so a selective one fits it unchanged, and the two
+// schema middlewares it applies are no-ops on a server carrying no tools.
 func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[string]toolutil.ActionMap, opts resourceRegistrationOptions) int {
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
-	if opts.Core {
-		resources.Register(server, client)
-	}
-	if opts.ToolManifest {
-		resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
-			Surface:    opts.ToolSurface,
-			Tools:      opts.ToolList,
-			Catalog:    opts.ToolCatalog,
-			MetaRoutes: metaRoutes,
-		})
-	}
-	if opts.WorkflowGuides {
-		resources.RegisterWorkflowGuides(server)
-	}
-
-	return withSession(server, func(ctx context.Context, session *mcp.ClientSession) int {
-		totalTokens := 0
-		for _, r := range cmdutil.Must(session.ListResources(ctx, nil)).Resources {
-			totalTokens += countTokens(mustMarshalModelFacing(r))
+	session, cleanup := mcpsurface.Session(func(server *mcp.Server) {
+		if opts.Core {
+			resources.Register(server, client)
 		}
-		for _, t := range cmdutil.Must(session.ListResourceTemplates(ctx, nil)).ResourceTemplates {
-			totalTokens += countTokens(mustMarshalModelFacing(t))
+		if opts.ToolManifest {
+			resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
+				Surface:    opts.ToolSurface,
+				Tools:      opts.ToolList,
+				Catalog:    opts.ToolCatalog,
+				MetaRoutes: metaRoutes,
+			})
 		}
-		return totalTokens
+		if opts.WorkflowGuides {
+			resources.RegisterWorkflowGuides(server)
+		}
 	})
+	defer cleanup()
+
+	ctx := context.Background()
+	totalTokens := 0
+	for _, r := range cmdutil.Must(session.ListResources(ctx, nil)).Resources {
+		totalTokens += countTokens(mustMarshalModelFacing(r))
+	}
+	for _, t := range cmdutil.Must(session.ListResourceTemplates(ctx, nil)).ResourceTemplates {
+		totalTokens += countTokens(mustMarshalModelFacing(t))
+	}
+	return totalTokens
 }
 
 // countActions returns the number of actions in a route catalog.

@@ -26,11 +26,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// Audit server identity values used for in-memory MCP introspection sessions.
+// Report formatting constants: the per-tool line of a listing and the column
+// the metric values line up in.
 const (
-	auditServerName  = "audit-metrics"
-	auditClientName  = "audit-metrics-client"
-	auditVersion     = "0.0.1"
 	toolListFormat   = "  - %s\n"
 	metricLabelWidth = 48
 )
