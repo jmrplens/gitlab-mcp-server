@@ -1371,8 +1371,8 @@ gen-graphql-schema:
 ## check-graphql-schema: fail when the committed schema does not parse, its
 ## provenance record does not decode, or the pin is not of what this project
 ## claims to be pinned to: another instance, a truncated or narrower answer, no
-## recorded version, or older than the 180-day window. No network, so it is a
-## gate.
+## recorded version, or past the shared staleness window
+## (cmd/internal/provenance). No network, so it is a gate.
 check-graphql-schema:
 	go run ./cmd/gen_graphql_schema/ --check
 
@@ -1386,8 +1386,8 @@ gen-api-shapes:
 	go run ./cmd/gen_api_shapes/
 
 ## check-api-shapes: fail when the committed record is not one this build can
-## read, is too short to be GitLab's whole API, or is older than the 180-day
-## window. No network, so it is a gate. It cannot say whether the record still
+## read, is too short to be GitLab's whole API, or is past the shared staleness
+## window (cmd/internal/provenance). No network, so it is a gate. It cannot say whether the record still
 ## matches GitLab, which only a regeneration answers, and which is what the
 ## window is for.
 check-api-shapes:
@@ -1403,8 +1403,8 @@ gen-api-exposes:
 	go run ./cmd/gen_api_exposes/
 
 ## check-api-exposes: fail when the committed conditions record is not one this
-## build can read, is too short to be GitLab's whole entity tree, or is older
-## than the same 180-day window. No network, so it is a gate.
+## build can read, is too short to be GitLab's whole entity tree, or is past the
+## same shared staleness window (cmd/internal/provenance). No network, so it is a gate.
 check-api-exposes:
 	go run ./cmd/gen_api_exposes/ -check
 
