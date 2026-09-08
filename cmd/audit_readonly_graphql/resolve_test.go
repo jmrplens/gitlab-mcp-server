@@ -2,9 +2,11 @@ package main
 
 import (
 	"go/ast"
+	"go/constant"
 	"go/token"
 	"go/types"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -418,9 +420,12 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // The expressions the tests below hand it are built rather than parsed,
 // because they stand for shapes no source in this repository writes: a spec
 // held in a node kind the resolver does not follow, a call whose callee cannot
-// be named, a chain deeper than the bound. Each of them resolves to nothing on
-// purpose, which is what turns such an action into a reported failure instead
-// of a silent pass, and only a built expression can reach them.
+// be named, a spec reached past the depth bound. Each of them resolves to
+// nothing on purpose, which is what turns such an action into a reported
+// failure instead of a silent pass, and only a built expression can reach
+// them. The depth ones resolve to something at depth 0 as well, since a shape
+// that resolves to nothing everywhere would not tell the bound from its
+// absence.
 func synthResolver() *resolver {
 	return &resolver{prog: &program{funcs: map[*types.Func]*function{}}}
 }
@@ -439,35 +444,81 @@ func synthFrame(info *types.Info, decl *ast.FuncDecl) frame {
 	return frame{pkg: &packages.Package{Name: "synth", TypesInfo: info}, decl: decl}
 }
 
+// synthString is a string literal carrying its constant value, the way the
+// type information carries the value of a Name field written in source.
+func synthString(info *types.Info, value string) *ast.BasicLit {
+	lit := &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(value)}
+	info.Types[lit] = types.TypeAndValue{Type: types.Typ[types.String], Value: constant.MakeString(value)}
+	return lit
+}
+
+// synthRoute is an ActionRoute literal whose Handler field is a function
+// literal, which the resolver names without consulting any type information.
+func synthRoute() *ast.CompositeLit {
+	return &ast.CompositeLit{Elts: []ast.Expr{
+		&ast.KeyValueExpr{Key: ast.NewIdent("Handler"), Value: &ast.FuncLit{Type: &ast.FuncType{}, Body: &ast.BlockStmt{}}},
+	}}
+}
+
+// synthSpec is an ActionSpec literal declaring name and routing to one
+// function literal.
+func synthSpec(info *types.Info, name string) *ast.CompositeLit {
+	return &ast.CompositeLit{Elts: []ast.Expr{
+		&ast.KeyValueExpr{Key: ast.NewIdent("Name"), Value: synthString(info, name)},
+		&ast.KeyValueExpr{Key: ast.NewIdent("Route"), Value: synthRoute()},
+	}}
+}
+
 // TestResolver_DepthBeyondTheBound_ResolvesToNothing verifies the four
 // recursive resolvers stop at maxResolveDepth. The bound exists so a helper
 // that forwards to itself cannot hang the audit, and stopping has to mean
 // "resolved nothing", which the caller reports, rather than "resolved to
 // something partial", which it would trust.
+//
+// Each expression is resolved twice, at depth 0 and past the bound, because
+// only the pair discriminates: an expression that resolves to nothing at any
+// depth satisfies the second assertion whether the guard fires or not, so the
+// first is what makes removing the guard fail this test.
 func TestResolver_DepthBeyondTheBound_ResolvesToNothing(t *testing.T) {
+	info := synthInfo()
 	res := synthResolver()
-	at := synthFrame(synthInfo(), nil)
+	at := synthFrame(info, nil)
 	beyond := maxResolveDepth + 1
-	expr := &ast.Ident{Name: "anything"}
 
 	t.Run("spec", func(t *testing.T) {
+		expr := synthSpec(info, "deep.action")
+		if name, handlers := res.resolveSpec(expr, at, 0); name != "deep.action" || len(handlers) != 1 {
+			t.Fatalf("resolveSpec() at depth 0 = %q, %d handler(s), want the fixture spec and its handler", name, len(handlers))
+		}
 		if name, handlers := res.resolveSpec(expr, at, beyond); name != "" || handlers != nil {
-			t.Errorf("resolveSpec() = %q, %v, want the empty resolution", name, handlers)
+			t.Errorf("resolveSpec() past the bound = %q, %v, want the empty resolution", name, handlers)
 		}
 	})
 	t.Run("route", func(t *testing.T) {
+		expr := synthRoute()
+		if handlers := res.resolveRoute(expr, at, 0); len(handlers) != 1 {
+			t.Fatalf("resolveRoute() at depth 0 = %d handler(s), want the fixture handler", len(handlers))
+		}
 		if handlers := res.resolveRoute(expr, at, beyond); handlers != nil {
-			t.Errorf("resolveRoute() = %v, want the empty resolution", handlers)
+			t.Errorf("resolveRoute() past the bound = %v, want the empty resolution", handlers)
 		}
 	})
 	t.Run("handler", func(t *testing.T) {
+		expr := &ast.FuncLit{Type: &ast.FuncType{}, Body: &ast.BlockStmt{}}
+		if handlers := res.resolveHandler(expr, at, 0); len(handlers) != 1 {
+			t.Fatalf("resolveHandler() at depth 0 = %d handler(s), want the function literal", len(handlers))
+		}
 		if handlers := res.resolveHandler(expr, at, beyond); handlers != nil {
-			t.Errorf("resolveHandler() = %v, want the empty resolution", handlers)
+			t.Errorf("resolveHandler() past the bound = %v, want the empty resolution", handlers)
 		}
 	})
 	t.Run("string", func(t *testing.T) {
+		expr := synthString(info, "deep.action")
+		if name := res.resolveString(expr, at, 0); name != "deep.action" {
+			t.Fatalf("resolveString() at depth 0 = %q, want the fixture name", name)
+		}
 		if name := res.resolveString(expr, at, beyond); name != "" {
-			t.Errorf("resolveString() = %q, want the empty resolution", name)
+			t.Errorf("resolveString() past the bound = %q, want the empty resolution", name)
 		}
 	})
 }
