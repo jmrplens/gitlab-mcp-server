@@ -147,33 +147,77 @@ type judge struct {
 	document *ast.QueryDocument
 	pairing  *pairing
 	findings []finding
+	// operation names the operation being walked, since a document may
+	// define several and a sent finding says which one reached the object.
+	operation string
+	// sent are the fields the schema offers at an object this decoder reads
+	// that the document never selects.
+	sent []sentField
+	// selected records what this pairing did select at each object, keyed the
+	// way a finding is, so a sibling document of the same package cancels a
+	// finding this one raised.
+	selected map[string]bool
+	// asked records the schema types this pairing has already been asked
+	// about, which both bounds the recursion the real documents contain
+	// (a security attribute's category holds security attributes) and keeps
+	// one type from being reported once per position it is reached at.
+	asked map[string]bool
+	// coverage counts what became of every object position the walk entered,
+	// which is what says how much of the walk this dimension covers.
+	coverage sentCoverage
 }
 
 // judgePairing compares the document's selection set with the type it is
-// decoded into and returns every disagreement.
+// decoded into and returns every disagreement, together with the fields the
+// schema offers at the objects it reads that the document never selects.
 //
 // The response is client-go's whole body, so the struct is expected to carry a
 // data field for the selection set; the top-level errors field, and anything
 // else beside data, is not part of any selection and is left alone. Every
 // operation the document defines is walked, since a document with several
 // selects whichever GitLab is asked to run.
-func judgePairing(schema *ast.Schema, document *ast.QueryDocument, p *pairing) []finding {
-	j := &judge{schema: schema, document: document, pairing: p}
+func judgePairing(schema *ast.Schema, document *ast.QueryDocument, p *pairing) pairingJudgement {
+	j := &judge{schema: schema, document: document, pairing: p, asked: map[string]bool{}, selected: map[string]bool{}}
 	body, ok := p.Response.Underlying().(*types.Struct)
 	if !ok {
 		j.fail("data", "the decode target is "+typeString(p.Response)+", not a struct with a data field, so nothing GitLab answers is kept")
-		return j.findings
+		return pairingJudgement{findings: j.findings}
 	}
 	data := lookupField(jsonFields(body), "data")
 	if data == nil {
 		j.fail("data", "the decode target has no data field, so everything GitLab answers is dropped")
-		return j.findings
+		return pairingJudgement{findings: j.findings}
 	}
 	for _, operation := range document.Operations {
+		j.operation = operationName(operation)
 		root := &ast.Type{NamedType: j.rootType(operation).Name, NonNull: true}
 		j.judgeType(data.typ, root, operation.SelectionSet, "data", data.asString)
 	}
-	return j.findings
+	return pairingJudgement{findings: j.findings, sent: j.sent, selected: j.selected, coverage: j.coverage}
+}
+
+// pairingJudgement is everything one pairing answered: the disagreements and
+// notes, the fields the schema offered that it did not select, the fields it
+// did select, and what became of every position walked.
+//
+// The selections travel with the findings because they are the other half of
+// one answer: a field this pairing did not select is a gap only if no sibling
+// pairing of the same package selected it either, and that is decided once the
+// run has walked them all.
+type pairingJudgement struct {
+	findings []finding
+	sent     []sentField
+	selected map[string]bool
+	coverage sentCoverage
+}
+
+// operationName names the operation a finding was reached through: its kind,
+// and the name when one was written.
+func operationName(operation *ast.OperationDefinition) string {
+	if operation.Name == "" {
+		return string(operation.Operation)
+	}
+	return string(operation.Operation) + " " + operation.Name
 }
 
 // rootType is the object an operation selects from.
@@ -197,6 +241,7 @@ func (j *judge) judgeType(goType types.Type, gqlType *ast.Type, selections ast.S
 		return
 	}
 	if unmarshalsItself(goType) {
+		j.countSelfDecoding(gqlType)
 		return
 	}
 	if gqlType.Elem != nil {
@@ -252,9 +297,10 @@ func (j *judge) concrete(goType types.Type) (types.Type, bool) {
 func (j *judge) judgeObject(goType types.Type, gqlType *ast.Type, selections ast.SelectionSet, path string) {
 	switch under := goType.Underlying().(type) {
 	case *types.Struct:
-		j.judgeStruct(under, selections, path)
+		j.judgeStruct(under, gqlType, goType, selections, path)
 	case *types.Map:
 		if key, ok := under.Key().Underlying().(*types.Basic); ok && key.Info()&types.IsString != 0 {
+			j.countMap(gqlType)
 			for _, field := range j.merged(selections) {
 				j.judgeType(under.Elem(), fieldType(field), field.SelectionSet, path+"."+responseKey(field), false)
 			}
@@ -267,18 +313,43 @@ func (j *judge) judgeObject(goType types.Type, gqlType *ast.Type, selections ast
 }
 
 // judgeStruct matches every selected field to the Go field encoding/json
-// would fill, and reports the Go fields nothing selects.
-func (j *judge) judgeStruct(body *types.Struct, selections ast.SelectionSet, path string) {
+// would fill, reports the Go fields nothing selects, and asks the schema what
+// it offers here that nothing selected.
+//
+// The three questions belong in one walk because they are three legs of one
+// comparison, and this is the only place that holds all of what each needs:
+// the schema type, the selection set the validator resolved, and the struct
+// the answer lands in.
+func (j *judge) judgeStruct(body *types.Struct, gqlType *ast.Type, goType types.Type, selections ast.SelectionSet, path string) {
 	fields := jsonFields(body)
 	read := make(map[string]bool, len(fields))
+	selected := make(map[string]bool, len(selections))
+	// Kept apart from selected because the two answer different questions.
+	// selected suppresses a finding at THIS position, where asking about a
+	// field the document just named would be absurd. decoded is the evidence
+	// that cancels a SIBLING document's finding, and a value this document
+	// asks GitLab for and then throws away is no evidence that the package
+	// surfaces it: counting it would let one document's dead selection
+	// silence the whole package's gap, which is the same union-for-an-
+	// intersection error one level down.
+	decoded := make(map[string]bool, len(selections))
+	readsLeaf := false
 	for _, field := range j.merged(selections) {
 		key := responseKey(field)
+		selected[field.Name] = true
 		match := lookupField(fields, key)
 		if match == nil {
 			j.note(path+"."+key, "selected and never decoded")
+			j.countUndecoded(field)
 			continue
 		}
+		decoded[field.Name] = true
 		read[match.name] = true
+		// __typename is a meta field no schema declares, so decoding it says
+		// nothing about whether this object is read or merely traversed.
+		if field.Name != "__typename" && j.isLeafType(fieldType(field)) {
+			readsLeaf = true
+		}
 		j.judgeType(match.typ, fieldType(field), field.SelectionSet, path+"."+key, match.asString)
 	}
 	for _, field := range fields {
@@ -286,6 +357,7 @@ func (j *judge) judgeStruct(body *types.Struct, selections ast.SelectionSet, pat
 			j.fail(path+"."+field.name, "decoded from a field the document never selects, so it is always empty")
 		}
 	}
+	j.askSchema(gqlType, fields, selections, selected, decoded, readsLeaf, path, goType)
 }
 
 // merged flattens a selection set into one field per response key, with
