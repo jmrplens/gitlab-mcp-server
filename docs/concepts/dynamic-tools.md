@@ -44,7 +44,7 @@ For self-managed GitLab, add:
 GITLAB_URL=https://gitlab.example.com
 ```
 
-`GITLAB_MCP_META_TOOLS=dynamic` is also accepted as a legacy/convenience selector, but new configurations should use `GITLAB_MCP_TOOL_SURFACE` or omit it for the default dynamic mode. `GITLAB_MCP_TOOL_SURFACE` overrides `GITLAB_MCP_META_TOOLS` when both are set.
+`GITLAB_MCP_TOOL_SURFACE` is the only selector; omit it for the default dynamic mode. The `META_TOOLS` selector it replaced was removed in 3.0.0.
 
 ### HTTP Mode
 
