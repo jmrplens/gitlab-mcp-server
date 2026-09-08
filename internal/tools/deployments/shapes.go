@@ -1,9 +1,9 @@
 package deployments
 
 import (
-	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
+	gitlab "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Canonical output shapes reconciled 1:1 with the documented Deployments API

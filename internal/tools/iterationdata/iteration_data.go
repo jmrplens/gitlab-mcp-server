@@ -3,7 +3,7 @@ package iterationdata
 import (
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 const timestampLayout = "2006-01-02T15:04:05Z"

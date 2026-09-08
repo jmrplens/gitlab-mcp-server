@@ -4,7 +4,7 @@ import (
 	"go/types"
 	"sort"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 )
 
 // sdkService is one service the client-go Client struct declares, held against

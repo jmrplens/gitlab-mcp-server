@@ -1,8 +1,8 @@
 package snippetstoragemoves
 
 import (
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // snippetStorageMoveMeta carries the non-generic discovery metadata for one

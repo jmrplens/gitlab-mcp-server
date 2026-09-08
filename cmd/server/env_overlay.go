@@ -16,7 +16,7 @@ package main
 import (
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
 // applyHTTPEnvOverlay fills in every HTTP setting whose flag the operator did

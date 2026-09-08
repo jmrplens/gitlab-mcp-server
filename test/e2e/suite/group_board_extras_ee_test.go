@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupboards"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/grouplabels"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupboards"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/grouplabels"
 )
 
 // TestMeta_GroupBoardListColumns exercises group_board_create_list,

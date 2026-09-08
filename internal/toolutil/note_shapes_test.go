@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // TestNewNoteUserOutputFromAuthor pins the additive author conversion

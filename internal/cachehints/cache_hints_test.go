@@ -9,7 +9,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cachehints"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cachehints"
 )
 
 // stubHandler returns a canned result so the middleware's mutations are observable.

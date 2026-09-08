@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // TestNewAssetsOutput verifies the converter omits the assets object when

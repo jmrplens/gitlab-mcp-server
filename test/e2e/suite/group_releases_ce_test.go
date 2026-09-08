@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupreleases"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/releases"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/tags"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupreleases"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/releases"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/tags"
 )
 
 // TestMeta_GroupReleases exercises the release_list action for groups via the

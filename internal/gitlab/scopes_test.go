@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
 // TestDetectScopes_Success verifies that DetectScopes returns the scopes reported by the /personal_access_tokens/self endpoint.

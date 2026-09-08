@@ -7,8 +7,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 )
 
 // main audits default dynamic action aliases against canonical catalog routes.

@@ -18,7 +18,7 @@ import (
 // that also instruments this process. The specification asks for "the
 // instrumentation scope, such as the instrumentation library name", and a Go
 // import path is the unambiguous form of that.
-const scopeName = "github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
+const scopeName = "github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 
 // Options configure the middleware.
 type Options struct {

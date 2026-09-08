@@ -20,8 +20,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/oauth"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 )
 
 const testMetadataURL = "https://mcp.example.com/.well-known/oauth-protected-resource"

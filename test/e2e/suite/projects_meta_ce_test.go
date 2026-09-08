@@ -10,16 +10,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/badges"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/boards"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/integrations"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/labels"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/members"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/milestones"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pages"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectimportexport"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectstatistics"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/badges"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/boards"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/integrations"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/labels"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/members"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/milestones"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pages"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projectimportexport"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projectstatistics"
 )
 
 // TestMeta_ProjectCore exercises core project CRUD, fork, star, archive, and

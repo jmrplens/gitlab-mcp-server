@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/gatewaycompat"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/gatewaycompat"
 )
 
 // TestParseSubstitutions_ValidInputs_ReturnsPairs verifies the accepted

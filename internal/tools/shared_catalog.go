@@ -38,10 +38,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
 
 // sharedCatalogEntry is one cached catalog, built by the first caller for

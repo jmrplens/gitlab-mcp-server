@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/gatewaycompat"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/gatewaycompat"
 )
 
 // rewriteUpper is a visible, non-idempotent stand-in for a substitution.

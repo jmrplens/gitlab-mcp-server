@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"slices"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
 // DetectScopes queries the GitLab PAT self endpoint to retrieve the scopes

@@ -5,11 +5,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // genericUsageRe matches the placeholder Usage template ("Use to execute …

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
 // TestActionSpecs_DeleteError validates the DeleteError route through the catalog surface.

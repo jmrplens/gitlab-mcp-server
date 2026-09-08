@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/commits"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // hintVerifyMR is the 404 hint shared by MR tools.

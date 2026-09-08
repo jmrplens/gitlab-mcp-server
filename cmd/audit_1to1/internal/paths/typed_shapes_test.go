@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/structs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apishapes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apishapes"
 )
 
 // indexOf builds the operation index a type-grain comparison looks up in.

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/eval_mcp_surfaces/internal/evaluator"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/eval_mcp_surfaces/internal/evaluator"
 )
 
 func main() {

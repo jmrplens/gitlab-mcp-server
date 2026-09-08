@@ -24,7 +24,7 @@
 // What stays with each gate is everything above the load: its own indexers,
 // its own detectors, its own question and its own binary.
 //
-// [github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared.LoadToolPackages]
+// [github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared.LoadToolPackages]
 // is deliberately not folded in. It loads with NeedDeps, so it pays for the
 // dependency tree these four refuse to pay for, and it refuses more widely
 // than [Load] does: it collects every error of every loaded package, the

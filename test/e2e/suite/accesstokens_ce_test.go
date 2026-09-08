@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/accesstokens"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/accesstokens"
 )
 
 // expiresAtNextYear returns a date string ~1 year from now, formatted as

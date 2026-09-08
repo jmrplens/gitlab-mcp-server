@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runnercontrollers"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runnercontrollerscopes"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runnercontrollertokens"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/runnercontrollers"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/runnercontrollerscopes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/runnercontrollertokens"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Individual tool names that appear in multiple places (ActionSpecs

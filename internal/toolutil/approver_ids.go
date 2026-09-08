@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // ApproverIDsFilter mirrors GitLab's approver_ids and approved_by_ids merge

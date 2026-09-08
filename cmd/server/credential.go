@@ -6,9 +6,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // credentialState is everything one pooled credential owns on a server it
@@ -71,7 +71,7 @@ type credentialState struct {
 // turns eviction back into an ending the client is told about: each stream gets
 // its completion result and the next request re-initializes.
 //
-// [github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions.Manager.Close]
+// [github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions.Manager.Close]
 // waits for every watcher goroutine to unwind, so it must never run on the
 // caller's goroutine here: eviction happens under the pool's write lock, which
 // the callback contract forbids blocking. The streams are ended on that same
@@ -108,7 +108,7 @@ func (s *credentialState) close(orphaned []*mcp.ServerSession, end *watchEnd) {
 // request the client is holding rather than one it repeats, so neither refreshes
 // the pool entry that owns them. Idle eviction asks this before dropping an
 // entry, which is what stops a client that subscribed and then waited from being
-// evicted for waiting. See [github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool.WithInUse].
+// evicted for waiting. See [github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool.WithInUse].
 func (s *credentialState) busy() bool {
 	if s == nil {
 		return false
@@ -196,7 +196,7 @@ func (c *credentialStates) get(owner string) *credentialState {
 // own timestamp decides.
 //
 // It runs under the pool's write lock, so it reads two counters and nothing
-// more. See [github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool.WithInUse].
+// more. See [github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool.WithInUse].
 func (c *credentialStates) inUse(entry *serverpool.Entry) bool {
 	return c.get(entry.Owner()).busy()
 }

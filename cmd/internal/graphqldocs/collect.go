@@ -16,8 +16,8 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/goprogram"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 )
 
 // DefaultPatterns are the packages an audit loads. Every GraphQL document this

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestFormatPATMarkdown verifies the PATMarkdown Markdown formatter for a representative pat input.

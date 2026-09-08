@@ -12,11 +12,11 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestCollectedActionSpecs_ProjectIntoActionCatalog covers CollectedActionSpecs with table-driven subtests for project into action catalog.

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/tags"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/tags"
 )
 
 // TestMeta_TagsProtected exercises protected tag actions through the

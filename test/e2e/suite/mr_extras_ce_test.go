@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergerequests"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrcontextcommits"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mergerequests"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrcontextcommits"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
 )
 
 // mrExtrasCIYAML is a minimal CI configuration whose single job runs only for

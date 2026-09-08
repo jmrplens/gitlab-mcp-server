@@ -19,7 +19,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/users"
 )
 
 // TestIndividual_Users exercises user tools through individual MCP tools

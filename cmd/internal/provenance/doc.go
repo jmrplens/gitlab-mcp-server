@@ -1,7 +1,7 @@
 // Package provenance holds the one age verdict the commands that pin an
 // external truth pass on their committed record.
 //
-// Three of them do it. [github.com/jmrplens/gitlab-mcp-server/v2/cmd/gen_api_shapes]
+// Three of them do it. [github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_api_shapes]
 // commits what GitLab's own generated OpenAPI document says each REST
 // operation accepts and returns, cmd/gen_api_exposes commits the condition
 // under which each field a REST entity exposes is sent, and

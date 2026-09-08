@@ -3,7 +3,7 @@ package paths
 import (
 	"sort"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apiexposes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apiexposes"
 )
 
 // How GitLab sends an unsurfaced field, as far as the conditions record says.

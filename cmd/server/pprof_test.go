@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
 // TestValidatePprofAddr_AcceptsOnlyLoopback pins the one property the

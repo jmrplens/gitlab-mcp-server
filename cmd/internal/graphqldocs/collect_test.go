@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 )
 
 // fixtureDir is the directory the in-memory fixture packages pretend to live

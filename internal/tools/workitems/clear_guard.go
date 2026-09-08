@@ -10,11 +10,11 @@ import (
 	"fmt"
 	"strings"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/elicitation"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // clearListConfirmID identifies this confirmation inside a multi round-trip

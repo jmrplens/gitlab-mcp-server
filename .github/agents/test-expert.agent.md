@@ -383,7 +383,7 @@ When you need to verify Go testing patterns, check library APIs, or confirm best
 - Checking `httptest` patterns and `NewServer` / `NewRequest` APIs
 - Looking up the latest Go testing package features (e.g., `b.Loop()` in Go 1.24)
 - Confirming MCP SDK test patterns for `github.com/modelcontextprotocol/go-sdk`
-- Checking `gitlab.com/gitlab-org/api/client-go/v2` request/response types
+- Checking `gitlab.com/gitlab-org/api/client-go/v3` request/response types
 
 ## Edge Case Categories
 

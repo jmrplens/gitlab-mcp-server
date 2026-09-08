@@ -18,7 +18,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupldap"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupldap"
 )
 
 // TestMeta_GroupLDAPLinks exercises the group LDAP link lifecycle

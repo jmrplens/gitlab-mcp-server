@@ -1,7 +1,7 @@
 package projecttemplates
 
 import (
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // FormatListMarkdown formats a list of project templates as markdown.

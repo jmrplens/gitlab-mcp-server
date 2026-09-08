@@ -3,7 +3,7 @@ package groupstoragemoves
 import (
 	"fmt"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // FormatOutputMarkdown formats a single group storage move as a Markdown table.

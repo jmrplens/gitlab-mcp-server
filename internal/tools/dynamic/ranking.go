@@ -3,7 +3,7 @@ package dynamic
 import (
 	"fmt"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const (

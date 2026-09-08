@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
 // testSHA is a real 40-character commit SHA (actions/checkout v7), used

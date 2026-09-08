@@ -14,7 +14,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupprotectedbranches"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupprotectedbranches"
 )
 
 // TestMeta_GroupProtectedBranchesEE exercises the group protected

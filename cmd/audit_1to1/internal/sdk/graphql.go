@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 )
 
 // graphqlOperation is one handler (or helper) function that reaches GitLab

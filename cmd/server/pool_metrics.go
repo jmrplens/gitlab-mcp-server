@@ -3,8 +3,8 @@ package main
 import (
 	"log/slog"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 )
 
 // observePoolMetrics publishes the credential pool's occupancy and its eviction

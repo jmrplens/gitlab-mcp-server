@@ -10,7 +10,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/elicitation"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
 )
 
 // TestEvalElicitationHandler_DerivesNestedDefaults verifies elicitation schemas

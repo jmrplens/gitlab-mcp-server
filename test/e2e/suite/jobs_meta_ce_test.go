@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobtokenscope"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobtokenscope"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestMeta_JobTokenScope exercises job token scope actions via gitlab_job.

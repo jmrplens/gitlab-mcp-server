@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/golist"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/golist"
 )
 
 const (

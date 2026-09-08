@@ -8,9 +8,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
 
 // TestFilterActionCatalog_ReportsWhatItWithheldAndWhy pins that narrowing the

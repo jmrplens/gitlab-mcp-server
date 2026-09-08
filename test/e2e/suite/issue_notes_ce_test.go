@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issuenotes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issuenotes"
 )
 
 // TestIndividual_IssueNotes exercises issue note CRUD using individual

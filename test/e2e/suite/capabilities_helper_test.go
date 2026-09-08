@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // Capability identifies an E2E environment requirement or shared-state scope.

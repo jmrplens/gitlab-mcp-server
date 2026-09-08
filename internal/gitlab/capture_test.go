@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // TestCaptureTransport_CopiesTheBodyForARequestThatAsked verifies the whole

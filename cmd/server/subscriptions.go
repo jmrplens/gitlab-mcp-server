@@ -16,12 +16,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/resources"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // resourceReader reads a subscribed URI through the very handler the MCP
@@ -134,7 +134,7 @@ func (n *serverNotifier) ResourceUpdated(ctx context.Context, update subscriptio
 // forwards and puts it back afterwards, for the next session's turn. It is a
 // random per-entry token rather than anything derived from the credential,
 // precisely because a key that does leak one day should leak nothing (see
-// [github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool.Entry.Owner]).
+// [github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool.Entry.Owner]).
 //
 // The vendor prefix is this project's own, like [watchMetaKey]: MCP reserves
 // io.modelcontextprotocol/ for registered keys and defines nothing for this.
@@ -899,7 +899,7 @@ func (s *listenStreams) stoppedFor(owner, uri string, reason error) {
 //
 // It is what the pool's eviction calls, and it is the difference between a
 // client being told and a client going quiet. Stopping the watchers cannot do
-// it: [github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions.Manager.Close]
+// it: [github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions.Manager.Close]
 // is by contract the one stop path that fires no OnStop, so nothing reaches
 // [listenStreams.stoppedFor] and the stream stays open and silent for the rest
 // of its life. A stream carrying only list-changed subscriptions is ended too:
@@ -1237,7 +1237,7 @@ func (s *subscriptionShape) handlers(runtimeFor func(context.Context) *subscript
 // wrong with what the client asked for: the server failed to resolve which
 // pooled credential the request belongs to, which is a wiring defect on this
 // side. Failing here rather than watching with the unbound client is the same
-// fail-closed choice [github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab.NewUnboundClient]
+// fail-closed choice [github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab.NewUnboundClient]
 // makes for tool handlers.
 //
 // It keeps the noun ("subscription", because that is what was asked for) and

@@ -16,16 +16,16 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncompat"
-	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/surfaces"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncompat"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/surfaces"
 )
 
 const (

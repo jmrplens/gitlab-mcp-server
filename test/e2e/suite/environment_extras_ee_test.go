@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deployments"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/protectedenvs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/deployments"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/protectedenvs"
 )
 
 // envExtrasProtect protects envName on proj with a Maintainer deploy access

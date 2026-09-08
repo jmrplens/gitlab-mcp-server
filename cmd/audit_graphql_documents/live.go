@@ -7,8 +7,8 @@ import (
 
 	"github.com/vektah/gqlparser/v2/ast"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqlintrospect"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqlintrospect"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 )
 
 // liveSchema introspects endpoint right now and returns the schema it serves,

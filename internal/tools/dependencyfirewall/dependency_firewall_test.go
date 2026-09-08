@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
 // evaluatePath is the endpoint the request is asserted against. The project is

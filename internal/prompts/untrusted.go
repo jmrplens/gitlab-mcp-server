@@ -3,7 +3,7 @@ package prompts
 import (
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Rendering GitLab-authored text into a prompt message.

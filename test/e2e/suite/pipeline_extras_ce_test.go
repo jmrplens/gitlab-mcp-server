@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelinetriggers"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/resourcegroups"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelinetriggers"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/resourcegroups"
 )
 
 // pipelineExtrasResourceGroupKey is the resource group key declared in

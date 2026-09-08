@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/testsource"
 )
 
 // Finding describes one abort or missing-return site inside a non-test

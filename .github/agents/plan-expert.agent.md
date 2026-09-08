@@ -37,7 +37,7 @@ This project is a **Model Context Protocol (MCP) server** in Go exposing GitLab 
 | ------------------ | ------------------------------------------------------- |
 | Language           | Go 1.27.1                                               |
 | MCP SDK            | `github.com/modelcontextprotocol/go-sdk/mcp` v1.7.0    |
-| GitLab Client      | `gitlab.com/gitlab-org/api/client-go/v2` v2.62.0 (check `go.mod`, it moves with every dependency bump) |
+| GitLab Client      | `gitlab.com/gitlab-org/api/client-go/v3` v2.62.0 (check `go.mod`, it moves with every dependency bump) |
 | Transport          | stdio (primary), HTTP (optional)                        |
 | Architecture       | 177 packages under `internal/tools/` (168 with `action_specs.go`); canonical action catalog at `internal/tools/action_catalog.go` projects everything into meta, dynamic, `gitlab://tools`, audits, LLM files, and individual tool surfaces (ADR-0004) |
 | Test Infrastructure| `net/http/httptest` mocks, `testutil.NewTestClient`     |

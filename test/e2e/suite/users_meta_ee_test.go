@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/users"
 )
 
 // TestEE_MetaUserServiceAccounts exercises instance-level service account

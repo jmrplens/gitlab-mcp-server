@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // ciYAML is a minimal CI configuration for pipeline E2E tests.

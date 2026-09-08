@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commitdiscussions"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/files"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/repository"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/repositorysubmodules"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/commitdiscussions"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/commits"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/files"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/repository"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/repositorysubmodules"
 )
 
 // TestMeta_RepositoryFiles exercises file CRUD actions through the

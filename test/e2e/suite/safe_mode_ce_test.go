@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
 )
 
 // TestSafeMode exercises the GITLAB_MCP_SAFE_MODE feature through the safe-mode

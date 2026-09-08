@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
 // parseFlags parses flags from evaluator input. Each flag below is documented

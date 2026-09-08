@@ -15,8 +15,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 )
 
 // manifestFileName is the LobeHub manifest read by `lhm plugin publish`.

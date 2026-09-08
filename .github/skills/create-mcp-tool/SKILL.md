@@ -39,7 +39,7 @@ In `{domain}.go`:
 ```go
 package {domain}
 
-import "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 
 type ListInput struct {
     toolutil.PaginationInput
@@ -80,10 +80,10 @@ import (
     "context"
     "errors"
 
-    gl "gitlab.com/gitlab-org/api/client-go/v2"
+    gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-    gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-    "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+    gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+    "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
@@ -151,8 +151,8 @@ In `action_specs.go`, define the canonical route metadata once. Meta-tools, dyna
 package {domain}
 
 import (
-    gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-    "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+    gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+    "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // ActionSpecs returns canonical specs for {domain} actions.
@@ -210,7 +210,7 @@ import (
     "fmt"
     "strings"
 
-    "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+    "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // FormatOutputMarkdown renders a single {resource} as Markdown.
@@ -287,7 +287,7 @@ import (
     "strings"
     "testing"
 
-    "github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+    "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
 // TestList_Success verifies that List returns the items the mocked

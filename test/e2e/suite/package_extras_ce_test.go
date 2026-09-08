@@ -18,12 +18,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/containerregistry"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/packages"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/releases"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/containerregistry"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/packages"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/releases"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // pkgExtrasCreateGroupProject creates a group and a project inside it via

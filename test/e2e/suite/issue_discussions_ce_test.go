@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issuediscussions"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issuediscussions"
 )
 
 // TestIndividual_IssueDiscussions exercises the issue discussion lifecycle

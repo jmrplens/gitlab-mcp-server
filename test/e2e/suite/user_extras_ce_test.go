@@ -17,14 +17,14 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/keys"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/todos"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/useremails"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/usergpgkeys"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/keys"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/todos"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/useremails"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/usergpgkeys"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/users"
 )
 
 // userExtrasGPGKeyOne is a fixed, pre-generated ASCII-armored OpenPGP public

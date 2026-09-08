@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apishapes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apishapes"
 )
 
 // sampleSpec is GitLab's document in miniature, carrying every shape the

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/enums"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/enums"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 )
 
 // Service and operation statuses.

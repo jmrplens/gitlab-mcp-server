@@ -7,9 +7,9 @@ import (
 	"go/format"
 	"path/filepath"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
 const (

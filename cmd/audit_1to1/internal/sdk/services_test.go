@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 )
 
 // TestCollectSDKServices_NoClientStruct_Fails verifies the enumeration refuses

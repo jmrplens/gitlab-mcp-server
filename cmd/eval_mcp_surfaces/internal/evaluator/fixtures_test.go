@@ -14,10 +14,10 @@ import (
 	"sync"
 	"testing"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
 // TestApplyLiveFixtureState_RendersTypedPromptTemplates verifies fixture state

@@ -15,7 +15,7 @@ import (
 
 	yaml "go.yaml.in/yaml/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
 // A pinned reference is owner/repo[/subpath]@<40 hex>, optionally followed by a

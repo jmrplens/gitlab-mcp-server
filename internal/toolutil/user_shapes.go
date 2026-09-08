@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // CustomAttributeOutput mirrors gl.CustomAttribute, a key/value custom

@@ -18,10 +18,10 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // fixtureSDK is a stand-in for the client-go root package. Its import path
@@ -97,7 +97,7 @@ type Client struct {
 // the struct rule's finding, not this one's.
 const fixtureTool = `package widgets
 
-import gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v2"
+import gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
 
 type ListInput struct {
 	Color string ` + "`json:\"color\"`" + `
@@ -138,7 +138,7 @@ func fromDetail(w *gl.WidgetDetail) Output {
 
 const (
 	fixtureModulePath = "example.com/fixture"
-	fixtureSDKFile    = "gitlab.com/gitlab-org/api/client-go/v2/sdk.go"
+	fixtureSDKFile    = "gitlab.com/gitlab-org/api/client-go/v3/sdk.go"
 	fixtureInputKey   = fixtureModulePath + "/internal/tools/widgets.ListInput"
 	fixtureOutputKey  = fixtureModulePath + "/internal/tools/widgets.Output"
 	fixtureAction     = "widget.list"
@@ -265,7 +265,7 @@ type WidgetOutput struct {
 		"internal/tools/gadgets/gadgets.go": `package gadgets
 
 import (
-	gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v2"
+	gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
 
 	"example.com/fixture/internal/shapes"
 )

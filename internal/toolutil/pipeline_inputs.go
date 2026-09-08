@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/jsonschema-go/jsonschema"
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // BuildPipelineInputs converts a JSON-decoded inputs map into the SDK's

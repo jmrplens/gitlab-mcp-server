@@ -6,7 +6,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 )
 
 // OutputPairing names one MCP output struct and the client-go struct a

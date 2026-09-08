@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const (

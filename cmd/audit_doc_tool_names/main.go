@@ -12,9 +12,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 )
 
 // docRoots are the trees whose Markdown mentions are audited.

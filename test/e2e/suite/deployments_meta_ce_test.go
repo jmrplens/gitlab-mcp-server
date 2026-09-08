@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deployments"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/deployments"
 )
 
 // TestMeta_DeploymentsGetUpdateDelete exercises get, update, and delete

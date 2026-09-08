@@ -15,7 +15,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupsaml"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupsaml"
 )
 
 // TestMeta_GroupSAML exercises the group SAML actions on a fresh

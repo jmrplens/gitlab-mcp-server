@@ -9,7 +9,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
 type optionalIndividualInput struct {
@@ -534,7 +534,7 @@ func TestTypeIdentity_NamesTypesByPackagePath(t *testing.T) {
 		t.Errorf("TypeIdentity(nil) = %q, want empty", got)
 	}
 	got := TypeIdentity(reflect.TypeFor[testInput]())
-	if !strings.HasPrefix(got, "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil.") || !strings.HasSuffix(got, "toolutil.testInput") {
+	if !strings.HasPrefix(got, "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil.") || !strings.HasSuffix(got, "toolutil.testInput") {
 		t.Errorf("TypeIdentity(testInput) = %q, want the package path and the type", got)
 	}
 }

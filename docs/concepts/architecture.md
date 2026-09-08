@@ -159,7 +159,7 @@ Loads settings from environment variables, falling back to the file `GITLAB_MCP_
 
 ### GitLab Client (`internal/gitlab`)
 
-Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` library. Handles:
+Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v3` library. Handles:
 
 - Authentication via Personal Access Token
 - TLS configuration (skip verification for self-signed certificates)
@@ -670,6 +670,6 @@ Collection **resources** are a different case, and the difference is in the prot
 - [GitLab REST API v4](https://docs.gitlab.com/ee/api/rest/) — API documentation
 - [GitLab GraphQL API](https://docs.gitlab.com/ee/api/graphql/) — GraphQL API documentation
 - [GraphQL Integration](graphql.md) — project GraphQL patterns and utilities
-- [GitLab Go Client (pkg.go.dev)](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2) — client API reference
+- [GitLab Go Client (pkg.go.dev)](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v3) — client API reference
 - [GitLab Go Client Repository](https://gitlab.com/gitlab-org/api/client-go) — source
 - [C4 Model](https://c4model.com/) — architecture documentation model

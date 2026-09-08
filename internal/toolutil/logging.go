@@ -8,8 +8,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 )
 
 // wasCancelled reports whether a tool call ended because its caller went away

@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
 // benchToken is the credential prefix each client authenticates with. The

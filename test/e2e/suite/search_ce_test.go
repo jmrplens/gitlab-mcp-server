@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/search"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/search"
 )
 
 // TestIndividual_Search exercises code and project search through individual

@@ -13,7 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/time/rate"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 )
 
 // RateLimiter enforces a token-bucket rate limit on the methods that cost a

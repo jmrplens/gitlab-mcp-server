@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergerequests"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergetrains"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrapprovalsettings"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mergerequests"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mergetrains"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrapprovalsettings"
 )
 
 // TestMeta_GroupMRApprovalSettings exercises group-level MR approval settings

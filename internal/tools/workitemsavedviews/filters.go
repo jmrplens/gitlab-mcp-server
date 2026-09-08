@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // timeLayouts are the timestamp spellings accepted for the eight time filters.

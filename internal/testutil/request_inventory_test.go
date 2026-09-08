@@ -606,7 +606,7 @@ func TestShortPackage_ImportPath_IsRepositoryRelative(t *testing.T) {
 	}{
 		{"a package of this module", modulePath + "/internal/tools/issues", "internal/tools/issues"},
 		{"an external test package", modulePath + "/internal/tools/issues_test", "internal/tools/issues"},
-		{"a package of another module", "gitlab.com/gitlab-org/api/client-go/v2", "gitlab.com/gitlab-org/api/client-go/v2"},
+		{"a package of another module", "gitlab.com/gitlab-org/api/client-go/v3", "gitlab.com/gitlab-org/api/client-go/v3"},
 	}
 
 	for _, tt := range tests {

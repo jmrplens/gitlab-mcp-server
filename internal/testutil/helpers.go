@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
 // captureSlogMu serializes [CaptureSlog] calls so concurrent tests do not

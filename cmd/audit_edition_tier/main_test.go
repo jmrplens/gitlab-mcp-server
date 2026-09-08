@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 )
 
 // TestParseTierBadge_Values_MapToMinimumTier verifies that a doc `- Tier:`

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // fakeGraphQL is a stub gl.GraphQLInterface that either fails with err or

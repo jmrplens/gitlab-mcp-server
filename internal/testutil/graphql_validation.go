@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 )
 
 // graphQLPath is the endpoint client-go rewrites every GraphQL request onto.
