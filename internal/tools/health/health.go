@@ -58,8 +58,8 @@ func SetServerInfo(info ServerInfo) {
 // all this diagnostics field was ever meant to report.
 //
 // GITLAB_URL is validated for scheme and host only, so an operator may
-// configure any of the three — a proxy credential in the userinfo is the
-// realistic one — and this value is handed to whichever MCP client called the
+// configure any of the three (a proxy credential in the userinfo is the
+// realistic one), and this value is handed to whichever MCP client called the
 // tool and copied into whatever it logs. client-go builds its own error text
 // the same way, from scheme, host and path (gitlab.go, ErrorResponse.Error),
 // so this leaves the two agreeing rather than the field being the one place
