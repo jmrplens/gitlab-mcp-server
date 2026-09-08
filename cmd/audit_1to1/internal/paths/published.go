@@ -33,11 +33,22 @@ type publishedType struct {
 	// field is compared against nothing, so collecting it would only grow the
 	// walk.
 	Nested map[string]nestedType
-	// Inner is true for a type that is nobody's response on its own: one some
-	// struct of the package names as a field type, or one not named as an
-	// output type. It is compared with no operation and counted with none,
-	// and in the sent direction its fields still count as the package's, since
-	// the row of a list is inner and is what the list endpoint sends.
+	// Inner is true for a type some struct of the package names as a field
+	// type, or one not named as an output type at all.
+	//
+	// It says where the type appears in this repository's own shapes and
+	// nothing about GitLab. It used to be read as "nobody's response", and
+	// the type grain skipped every one of them on that reading, which was
+	// backwards: the convention here wraps a response in a one-key envelope,
+	// so the type that models what GitLab sends is named as the envelope's
+	// field and is precisely what this marks. What decides whether GitLab
+	// answers with the object is the converter pairing, so the type grain
+	// judges an inner type that has one and passes over an inner type that
+	// does not — see [TypedShapeCheck.ComparedInner].
+	//
+	// In the sent direction at package grain its fields count as the
+	// package's either way, since the row of a list is inner and is what the
+	// list endpoint sends.
 	Inner bool
 }
 
