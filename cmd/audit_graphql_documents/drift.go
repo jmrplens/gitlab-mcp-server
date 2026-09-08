@@ -216,7 +216,7 @@ func (w *coordinateWalker) inputType(name string) {
 
 // namedType records a type by name, without descending into it.
 func (w *coordinateWalker) namedType(name string) {
-	if definition := w.definition(name); definition != nil {
+	if w.definition(name) != nil {
 		w.record(coordinate{typeName: name})
 	}
 }

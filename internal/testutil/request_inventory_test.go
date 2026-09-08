@@ -281,7 +281,7 @@ func TestReleaseRecorders_AnOpenShard_IsClosedAndForgotten(t *testing.T) {
 	if rec.file != nil {
 		t.Error("releaseRecorders() left the shard open, so the directory holding it cannot be removed on Windows")
 	}
-	if again := inventoryRecorder(); again == rec {
+	if inventoryRecorder() == rec {
 		t.Error("releaseRecorders() left the released recorder in the registry, so a later run would write through a closed file")
 	}
 }
@@ -414,7 +414,7 @@ func TestInventoryRecorder_Environment_DecidesWhetherRecordingHappens(t *testing
 	if first == nil {
 		t.Fatal("inventoryRecorder() = nil with a directory set")
 	}
-	if second := inventoryRecorder(); second != first {
+	if inventoryRecorder() != first {
 		t.Error("inventoryRecorder() built a second recorder for the same directory")
 	}
 }
@@ -433,7 +433,7 @@ func TestRecordingHandler_RecordingOff_ReturnsTheHandlerUnchanged(t *testing.T) 
 	t.Setenv(InventoryDirEnv, "")
 	var handler http.Handler = inertHandler{}
 
-	if wrapped := recordingHandler(t, handler); wrapped != handler {
+	if recordingHandler(t, handler) != handler {
 		t.Error("recordingHandler wrapped the handler with recording off")
 	}
 }
