@@ -1123,9 +1123,11 @@ func TestUpdateFeatureFlag_ScopeRemoval_SendsScopeIDAndDestroy(t *testing.T) {
 		t.Fatalf("UpdateFeatureFlag() error = %v", err)
 	}
 	for _, want := range []string{`"id":40`, `"_destroy":true`} {
-		if !strings.Contains(gotBody, want) {
-			t.Errorf("request body missing %s: %s", want, gotBody)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotBody, want) {
+				t.Errorf("request body missing %s: %s", want, gotBody)
+			}
+		})
 	}
 	if strings.Contains(gotBody, `"environment_scope":""`) {
 		t.Errorf("scope removal serialized an empty environment_scope: %s", gotBody)
