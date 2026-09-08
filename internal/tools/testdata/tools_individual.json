@@ -57393,10 +57393,36 @@
             "object"
           ]
         },
+        "group_scim_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "extern_uid": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "group_id",
+            "active"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "is_using_seat": {
+          "type": "boolean"
+        },
+        "locked": {
           "type": "boolean"
         },
         "member_role": {
@@ -57489,6 +57515,9 @@
             "object"
           ]
         },
+        "membership_state": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -57501,11 +57530,23 @@
             "array"
           ]
         },
+        "override": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "public_email": {
           "type": "string"
         },
         "state": {
           "type": "string"
+        },
+        "two_factor_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "username": {
           "type": "string"
@@ -57519,6 +57560,7 @@
         "username",
         "name",
         "state",
+        "locked",
         "web_url",
         "access_level"
       ],
@@ -57639,10 +57681,36 @@
             "object"
           ]
         },
+        "group_scim_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "extern_uid": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "group_id",
+            "active"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "is_using_seat": {
+          "type": "boolean"
+        },
+        "locked": {
           "type": "boolean"
         },
         "member_role": {
@@ -57735,6 +57803,9 @@
             "object"
           ]
         },
+        "membership_state": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -57747,11 +57818,23 @@
             "array"
           ]
         },
+        "override": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "public_email": {
           "type": "string"
         },
         "state": {
           "type": "string"
+        },
+        "two_factor_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "username": {
           "type": "string"
@@ -57765,6 +57848,7 @@
         "username",
         "name",
         "state",
+        "locked",
         "web_url",
         "access_level"
       ],
@@ -57872,10 +57956,36 @@
             "object"
           ]
         },
+        "group_scim_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "extern_uid": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "group_id",
+            "active"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "is_using_seat": {
+          "type": "boolean"
+        },
+        "locked": {
           "type": "boolean"
         },
         "member_role": {
@@ -57968,6 +58078,9 @@
             "object"
           ]
         },
+        "membership_state": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -57980,11 +58093,23 @@
             "array"
           ]
         },
+        "override": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "public_email": {
           "type": "string"
         },
         "state": {
           "type": "string"
+        },
+        "two_factor_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "username": {
           "type": "string"
@@ -57998,6 +58123,7 @@
         "username",
         "name",
         "state",
+        "locked",
         "web_url",
         "access_level"
       ],
@@ -58105,10 +58231,36 @@
             "object"
           ]
         },
+        "group_scim_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "extern_uid": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "group_id",
+            "active"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "is_using_seat": {
+          "type": "boolean"
+        },
+        "locked": {
           "type": "boolean"
         },
         "member_role": {
@@ -58201,6 +58353,9 @@
             "object"
           ]
         },
+        "membership_state": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -58213,11 +58368,23 @@
             "array"
           ]
         },
+        "override": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "public_email": {
           "type": "string"
         },
         "state": {
           "type": "string"
+        },
+        "two_factor_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "username": {
           "type": "string"
@@ -58231,6 +58398,7 @@
         "username",
         "name",
         "state",
+        "locked",
         "web_url",
         "access_level"
       ],
@@ -58462,10 +58630,36 @@
                   "object"
                 ]
               },
+              "group_scim_identity": {
+                "additionalProperties": false,
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "extern_uid": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "extern_uid",
+                  "group_id",
+                  "active"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "id": {
                 "type": "integer"
               },
               "is_using_seat": {
+                "type": "boolean"
+              },
+              "locked": {
                 "type": "boolean"
               },
               "member_role": {
@@ -58558,14 +58752,29 @@
                   "object"
                 ]
               },
+              "membership_state": {
+                "type": "string"
+              },
               "name": {
                 "type": "string"
+              },
+              "override": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "public_email": {
                 "type": "string"
               },
               "state": {
                 "type": "string"
+              },
+              "two_factor_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "username": {
                 "type": "string"
@@ -58579,6 +58788,7 @@
               "username",
               "name",
               "state",
+              "locked",
               "access_level",
               "web_url"
             ],
@@ -171374,10 +171584,59 @@
         "expires_at": {
           "type": "string"
         },
+        "group_saml_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "extern_uid": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "saml_provider_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "provider",
+            "saml_provider_id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "group_scim_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "extern_uid": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "group_id",
+            "active"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "is_using_seat": {
+          "type": "boolean"
+        },
+        "locked": {
           "type": "boolean"
         },
         "member_role": {
@@ -171470,6 +171729,9 @@
             "object"
           ]
         },
+        "membership_state": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -171482,8 +171744,23 @@
             "array"
           ]
         },
+        "override": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "public_email": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
+        },
+        "two_factor_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "username": {
           "type": "string"
@@ -171497,6 +171774,7 @@
         "username",
         "name",
         "state",
+        "locked",
         "access_level",
         "web_url"
       ],
@@ -171653,10 +171931,59 @@
         "expires_at": {
           "type": "string"
         },
+        "group_saml_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "extern_uid": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "saml_provider_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "provider",
+            "saml_provider_id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "group_scim_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "extern_uid": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "group_id",
+            "active"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "is_using_seat": {
+          "type": "boolean"
+        },
+        "locked": {
           "type": "boolean"
         },
         "member_role": {
@@ -171749,6 +172076,9 @@
             "object"
           ]
         },
+        "membership_state": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -171761,8 +172091,23 @@
             "array"
           ]
         },
+        "override": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "public_email": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
+        },
+        "two_factor_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "username": {
           "type": "string"
@@ -171776,6 +172121,7 @@
         "username",
         "name",
         "state",
+        "locked",
         "access_level",
         "web_url"
       ],
@@ -171860,10 +172206,59 @@
         "expires_at": {
           "type": "string"
         },
+        "group_saml_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "extern_uid": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "saml_provider_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "provider",
+            "saml_provider_id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "group_scim_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "extern_uid": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "group_id",
+            "active"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "is_using_seat": {
+          "type": "boolean"
+        },
+        "locked": {
           "type": "boolean"
         },
         "member_role": {
@@ -171956,6 +172351,9 @@
             "object"
           ]
         },
+        "membership_state": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -171968,8 +172366,23 @@
             "array"
           ]
         },
+        "override": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "public_email": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
+        },
+        "two_factor_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "username": {
           "type": "string"
@@ -171983,6 +172396,7 @@
         "username",
         "name",
         "state",
+        "locked",
         "access_level",
         "web_url"
       ],
@@ -172067,10 +172481,59 @@
         "expires_at": {
           "type": "string"
         },
+        "group_saml_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "extern_uid": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "saml_provider_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "provider",
+            "saml_provider_id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "group_scim_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "extern_uid": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "group_id",
+            "active"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "id": {
           "type": "integer"
         },
         "is_using_seat": {
+          "type": "boolean"
+        },
+        "locked": {
           "type": "boolean"
         },
         "member_role": {
@@ -172163,6 +172626,9 @@
             "object"
           ]
         },
+        "membership_state": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -172175,8 +172641,23 @@
             "array"
           ]
         },
+        "override": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "public_email": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
+        },
+        "two_factor_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "username": {
           "type": "string"
@@ -172190,6 +172671,7 @@
         "username",
         "name",
         "state",
+        "locked",
         "access_level",
         "web_url"
       ],
@@ -172322,10 +172804,59 @@
               "expires_at": {
                 "type": "string"
               },
+              "group_saml_identity": {
+                "additionalProperties": false,
+                "properties": {
+                  "extern_uid": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "saml_provider_id": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "extern_uid",
+                  "provider",
+                  "saml_provider_id"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "group_scim_identity": {
+                "additionalProperties": false,
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "extern_uid": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "extern_uid",
+                  "group_id",
+                  "active"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "id": {
                 "type": "integer"
               },
               "is_using_seat": {
+                "type": "boolean"
+              },
+              "locked": {
                 "type": "boolean"
               },
               "member_role": {
@@ -172418,6 +172949,9 @@
                   "object"
                 ]
               },
+              "membership_state": {
+                "type": "string"
+              },
               "name": {
                 "type": "string"
               },
@@ -172430,8 +172964,23 @@
                   "array"
                 ]
               },
+              "override": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "public_email": {
+                "type": "string"
+              },
               "state": {
                 "type": "string"
+              },
+              "two_factor_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "username": {
                 "type": "string"
@@ -172445,6 +172994,7 @@
               "username",
               "name",
               "state",
+              "locked",
               "access_level",
               "web_url"
             ],

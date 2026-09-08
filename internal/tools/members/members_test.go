@@ -353,6 +353,96 @@ func TestMemberGet_Success(t *testing.T) {
 	}
 }
 
+// TestMemberGet_ReadsWhatTheSDKDoesNotModel verifies a project member
+// carries, beside what client-go decoded, the fields lib/api/entities/member.rb
+// sends and gl.ProjectMember does not: locked and public_email on every
+// member, membership_state on an Enterprise one, and two_factor_enabled,
+// group_saml_identity, group_scim_identity and override when the caller may
+// see them.
+func TestMemberGet_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathProjectMember10 {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"username":"alice","access_level":30,"locked":true,`+
+			`"public_email":"alice@public.example","membership_state":"active","two_factor_enabled":true,"override":false,`+
+			`"group_saml_identity":{"extern_uid":"u1","provider":"group_saml","saml_provider_id":3},`+
+			`"group_scim_identity":{"extern_uid":"s1","group_id":9,"active":true}}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, UserID: 10})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if !out.Locked || out.PublicEmail != "alice@public.example" || out.MembershipState != "active" ||
+		out.TwoFactorEnabled == nil || !*out.TwoFactorEnabled || out.Override == nil || *out.Override ||
+		out.GroupSAMLIdentity == nil || out.GroupSAMLIdentity.SAMLProviderID != 3 ||
+		out.GroupSCIMIdentity == nil || out.GroupSCIMIdentity.GroupID != 9 {
+		t.Errorf("Get() = %+v, want the captured fields", out)
+	}
+}
+
+// TestProjectMembersList_ReadsWhatTheSDKDoesNotModel verifies the list pairs
+// each member with the captured fields by position, and leaves the
+// conditional ones nil on a member GitLab sent without them.
+func TestProjectMembersList_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathProjectMembers {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"username":"jdoe","access_level":30,"locked":true,"two_factor_enabled":true},`+
+			`{"id":2,"username":"asmith","access_level":40,"locked":false}]`)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{ProjectID: testProjectID})
+	if err != nil {
+		t.Fatalf(fmtMembersListErr, err)
+	}
+	if len(out.Members) != 2 || !out.Members[0].Locked || out.Members[0].TwoFactorEnabled == nil || !*out.Members[0].TwoFactorEnabled ||
+		out.Members[1].Locked || out.Members[1].TwoFactorEnabled != nil {
+		t.Errorf("List() members = %+v, want each paired with its captured fields", out.Members)
+	}
+}
+
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler that presents a
+// member: GitLab's answer decodes for the SDK and not for the fields read
+// beside it, and the handler reports it rather than swallowing it, on a
+// member alone and on a list of them.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := `{"id":10,"username":"alice","access_level":30,"locked":"not-a-bool"}`
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/members/all") {
+			body = "[" + body + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := List(context.Background(), client, ListInput{ProjectID: testProjectID})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			_, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, UserID: 10})
+			return err
+		}},
+		{Name: "get inherited", Call: func() error {
+			_, err := GetInherited(context.Background(), client, GetInput{ProjectID: testProjectID, UserID: 10})
+			return err
+		}},
+		{Name: "add", Call: func() error {
+			_, err := Add(context.Background(), client, AddInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 30})
+			return err
+		}},
+		{Name: "edit", Call: func() error {
+			_, err := Edit(context.Background(), client, EditInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 30})
+			return err
+		}},
+	})
+}
+
 // TestMemberGet_MissingProjectID verifies MemberGet when missing project ID.
 func TestMemberGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

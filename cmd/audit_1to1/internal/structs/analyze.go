@@ -41,6 +41,12 @@ const (
 	docNotesIssueList    = "notes.md#list-all-issue-notes"
 	docNotesWikiRetrieve = "notes.md#retrieve-a-wiki-page-note"
 	docDiscussionsMRList = "discussions.md#list-all-merge-request-discussion-items"
+	// The member pages print two_factor_enabled in their example bodies and
+	// name the SAML and SCIM identities under their known issues; locked,
+	// public_email, membership_state and override are exposed by
+	// lib/api/entities/member.rb and printed on neither page.
+	docGroupMembersList   = "group_members.md#list-all-group-members"
+	docProjectMembersList = "project_members.md#list-all-members-of-a-project"
 	// The dual-shape labels array cannot be two types under one key in a typed
 	// schema, so the object half is published beside the names the way issues
 	// and merge requests publish theirs.
@@ -487,6 +493,30 @@ var docAddedFields = map[string]string{
 	"mrdiscussions.NoteOutput.suggestions":          docDiscussionsMRList,
 	"mrdiscussions.Output.resolvable":               docDiscussionsMRList,
 	"mrdiscussions.Output.resolved":                 docDiscussionsMRList,
+
+	// members — what lib/api/entities/member.rb exposes that gl.GroupMember
+	// and gl.ProjectMember do not declare, read from the captured response
+	// (ADR-0021, toolutil.CapturedMember and CapturedMembers) in the three
+	// packages that present a member. The project struct also lacks the
+	// public_email and group_saml_identity the group struct carries.
+	// Recorded in docs/development/upstream-bugs.md.
+	"groupmembers.Output.locked":              docGroupMembersList,
+	"groupmembers.Output.membership_state":    docGroupMembersList,
+	"groupmembers.Output.two_factor_enabled":  docGroupMembersList,
+	"groupmembers.Output.group_scim_identity": docGroupMembersList,
+	"groupmembers.Output.override":            docGroupMembersList,
+	"groups.MemberOutput.locked":              docGroupMembersList,
+	"groups.MemberOutput.membership_state":    docGroupMembersList,
+	"groups.MemberOutput.two_factor_enabled":  docGroupMembersList,
+	"groups.MemberOutput.group_scim_identity": docGroupMembersList,
+	"groups.MemberOutput.override":            docGroupMembersList,
+	"members.Output.locked":                   docProjectMembersList,
+	"members.Output.public_email":             docProjectMembersList,
+	"members.Output.membership_state":         docProjectMembersList,
+	"members.Output.two_factor_enabled":       docProjectMembersList,
+	"members.Output.group_saml_identity":      docProjectMembersList,
+	"members.Output.group_scim_identity":      docProjectMembersList,
+	"members.Output.override":                 docProjectMembersList,
 }
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we

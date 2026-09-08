@@ -264,6 +264,55 @@ func TestGroupMembersList_Success(t *testing.T) {
 	}
 }
 
+// TestGroupMembersList_ReadsWhatTheSDKDoesNotModel verifies the list reads,
+// beside what client-go decoded, the member fields lib/api/entities/member.rb
+// sends and gl.GroupMember does not carry, each paired with its member by
+// position.
+func TestGroupMembersList_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathGroupMembers {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"username":"devops1","access_level":40,"locked":true,`+
+			`"membership_state":"awaiting","two_factor_enabled":true,"override":true,`+
+			`"group_scim_identity":{"extern_uid":"s1","group_id":99,"active":true}},`+
+			`{"id":11,"username":"devops2","access_level":30,"locked":false}]`)
+	}))
+
+	out, err := MembersList(context.Background(), client, MembersListInput{GroupID: "99"})
+	if err != nil {
+		t.Fatalf(fmtGroupMembersListErr, err)
+	}
+	if len(out.Members) != 2 {
+		t.Fatalf("len(out.Members) = %d, want 2", len(out.Members))
+	}
+	first, second := out.Members[0], out.Members[1]
+	if !first.Locked || first.MembershipState != "awaiting" || first.TwoFactorEnabled == nil || !*first.TwoFactorEnabled ||
+		first.Override == nil || !*first.Override || first.GroupSCIMIdentity == nil || first.GroupSCIMIdentity.GroupID != 99 {
+		t.Errorf("first member = %+v, want the captured fields", first)
+	}
+	if second.Locked || second.MembershipState != "" || second.TwoFactorEnabled != nil || second.Override != nil || second.GroupSCIMIdentity != nil {
+		t.Errorf("second member = %+v, want the conditional fields absent", second)
+	}
+}
+
+// TestGroupMembersList_ACapturedFieldTheTypeCannotHold_IsReported verifies
+// the one failure the captured response adds: GitLab's answer decodes for the
+// SDK and not for the member fields read beside it, and the list reports it
+// rather than returning members with the fields silently zero.
+func TestGroupMembersList_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"username":"devops1","locked":"not-a-bool"}]`)
+	}))
+
+	_, err := MembersList(context.Background(), client, MembersListInput{GroupID: "99"})
+
+	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("MembersList() error = %v, want the capture's decode failure", err)
+	}
+}
+
 // TestGroupMembersList_WithQuery verifies the GroupMembersList_WithQuery handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -3020,8 +3069,9 @@ func TestMemberToOutput_FullObjects(t *testing.T) {
 // TestMemberToOutput_NilObjects verifies the member sub-object converters return
 // nil for absent objects.
 func TestMemberToOutput_NilObjects(t *testing.T) {
-	out := MemberToOutput(&gl.GroupMember{ID: 1})
-	if out.CreatedBy != nil || out.GroupSAMLIdentity != nil || out.MemberRole != nil {
+	out := MemberToOutput(&gl.GroupMember{ID: 1}, toolutil.MemberExtra{})
+	if out.CreatedBy != nil || out.GroupSAMLIdentity != nil || out.MemberRole != nil ||
+		out.GroupSCIMIdentity != nil || out.TwoFactorEnabled != nil || out.Override != nil {
 		t.Errorf("expected nil member sub-objects, got %+v", out)
 	}
 }

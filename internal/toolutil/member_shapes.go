@@ -51,6 +51,33 @@ func NewSAMLIdentityOutput(s *gl.GroupMemberSAMLIdentity) *SAMLIdentityOutput {
 	}
 }
 
+// SCIMIdentityOutput mirrors the group_scim_identity object,
+// ee/lib/api/entities/scim_identity.rb, which client-go does not model: the
+// SCIM identity a member holds in an SSO-enabled group, sent to the group's
+// owners.
+type SCIMIdentityOutput struct {
+	ExternUID string `json:"extern_uid"`
+	GroupID   int64  `json:"group_id"`
+	Active    bool   `json:"active"`
+}
+
+// MemberExtra is what lib/api/entities/member.rb sends on a member that
+// client-go's GroupMember and ProjectMember do not carry, read from the
+// captured response beside the SDK's own decode (ADR-0021). locked is on
+// every member and membership_state on every member of an Enterprise
+// instance; the rest are sent when their condition holds, so each is a
+// pointer that stays nil otherwise. public_email and group_saml_identity are
+// on GroupMember, and only a project member reads them from here.
+type MemberExtra struct {
+	Locked            bool                `json:"locked"`
+	PublicEmail       string              `json:"public_email"`
+	MembershipState   string              `json:"membership_state"`
+	TwoFactorEnabled  *bool               `json:"two_factor_enabled"`
+	GroupSAMLIdentity *SAMLIdentityOutput `json:"group_saml_identity"`
+	GroupSCIMIdentity *SCIMIdentityOutput `json:"group_scim_identity"`
+	Override          *bool               `json:"override"`
+}
+
 // MemberRoleOutput mirrors gl.MemberRole (the member_role object). Custom
 // member roles are an Enterprise (Premium/Ultimate) feature; the object is nil
 // on instances or members without a custom role. All permission flags are

@@ -160,7 +160,7 @@ func TestMemberToOutput_OptionalFields(t *testing.T) {
 			Name: "custom-role",
 		},
 	}
-	out := MemberToOutput(m)
+	out := MemberToOutput(m, toolutil.MemberExtra{})
 	if out.CreatedAt == "" {
 		t.Error("expected non-empty CreatedAt")
 	}
