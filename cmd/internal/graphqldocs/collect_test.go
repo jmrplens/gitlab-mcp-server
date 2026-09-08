@@ -204,6 +204,85 @@ func TestCollect_EveryShapeADocumentIsWrittenIn_IsFoundExactlyOnce(t *testing.T)
 	})
 }
 
+// objectsFixture declares one document as a variable and one under the blank
+// identifier, which is still an object and still nothing any body can name.
+const objectsFixture = `package objects
+
+var declaredMutation = @@
+mutation($id: ID!) {
+  thing(input: {id: $id}) { errors }
+}
+@@
+
+const _ = @@
+query {
+  currentUser {
+    id
+  }
+}
+@@
+`
+
+// TestCollect_DocumentsWithAndWithoutADefiningObject_CarryTheRightOne verifies
+// the field a caller resolving documents through the type checker joins on.
+//
+// cmd/audit_readonly_graphql reaches a document through the object a handler's
+// call graph names, so a document declared under a name has to carry that
+// object and a document nothing names has to carry none. Guessing from the
+// label instead would put a .graphql file, whose label is a file name, in the
+// same bucket as a constant.
+func TestCollect_DocumentsWithAndWithoutADefiningObject_CarryTheRightOne(t *testing.T) {
+	found := loadFixture(t, map[string]string{"objects": objectsFixture, "docs": docsFixture})
+
+	byLabel := map[string]Document{}
+	for _, one := range found {
+		byLabel[one.Label()] = one
+	}
+	cases := []struct {
+		name       string
+		label      string
+		wantObject string
+	}{
+		{name: "a document declared as a variable", label: "declaredMutation", wantObject: "declaredMutation"},
+		{name: "a document declared as a constant", label: "listQuery", wantObject: "listQuery"},
+		// The type checker gives even a blank declaration an object, so this is
+		// a named document like any other. Nothing can name it back, which is
+		// a fact about reachability and not about the inventory.
+		{name: "a document bound to the blank identifier", label: "_", wantObject: "_"},
+		{name: "a document written where it is used", label: "an inline document"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			document, ok := byLabel[testCase.label]
+			if !ok {
+				t.Fatalf("the fixture no longer collects a document labeled %q", testCase.label)
+			}
+			if testCase.wantObject == "" {
+				if document.Object != nil {
+					t.Errorf("Object = %v, want none for %s", document.Object, testCase.label)
+				}
+				return
+			}
+			if document.Object == nil {
+				t.Fatalf("Object = nil, want the object %q is declared as", testCase.label)
+			}
+			if got := document.Object.Name(); got != testCase.wantObject {
+				t.Errorf("Object.Name() = %q, want %q", got, testCase.wantObject)
+			}
+		})
+	}
+}
+
+// TestFromPackages_NoPackages_CollectsNothing verifies the in-source half
+// survives being handed nothing. Every load this repository does refuses an
+// empty result before it gets here, and an exported function that indexes the
+// first package must not depend on that promise being kept by its callers.
+func TestFromPackages_NoPackages_CollectsNothing(t *testing.T) {
+	if found := FromPackages(nil); found != nil {
+		t.Errorf("FromPackages(nil) = %v, want nothing", found)
+	}
+}
+
 // TestCollect_LoadFailures_AreReportedRatherThanSilentlyEmpty verifies that a
 // run which could not read the source says so. A partially typed package folds
 // no constants, so every document in it would go unseen, which is exactly the
@@ -288,7 +367,7 @@ func TestDocumentLabel_UnnamedDocument_SaysSo(t *testing.T) {
 	}
 }
 
-// TestCollectFiles_StandaloneDocuments_AreFoundAndThePinIsNot verifies the half
+// TestStandalone_DocumentsInFilesOfTheirOwn_AreFoundAndThePinIsNot verifies the half
 // of the inventory that does not go through the type checker.
 //
 // A go:embed variable is not a constant, so a document moved into its own file
@@ -296,7 +375,7 @@ func TestDocumentLabel_UnnamedDocument_SaysSo(t *testing.T) {
 // report one fewer document and still exit 0. Reading the files directly closes
 // that. The pinned schema is the one .graphql file that must be skipped, since
 // it is an SDL and not a document anybody sends.
-func TestCollectFiles_StandaloneDocuments_AreFoundAndThePinIsNot(t *testing.T) {
+func TestStandalone_DocumentsInFilesOfTheirOwn_AreFoundAndThePinIsNot(t *testing.T) {
 	root := t.TempDir()
 	tree := filepath.Join(root, "internal", "tools", "customemoji")
 	if err := os.MkdirAll(tree, 0o750); err != nil {
@@ -313,66 +392,66 @@ func TestCollectFiles_StandaloneDocuments_AreFoundAndThePinIsNot(t *testing.T) {
 	write(tree, "notes.txt", "mutation { nothing }\n")
 	write(filepath.Join(root, "internal"), graphqlschema.SDLFileName, "type Query {\n  ok: Boolean\n}\n")
 
-	found, err := collectFiles(root, []string{"./internal/..."})
+	found, err := Standalone(root, []string{"./internal/..."})
 	if err != nil {
-		t.Fatalf("collectFiles() error = %v, want nil", err)
+		t.Fatalf("Standalone() error = %v, want nil", err)
 	}
 	if len(found) != 1 {
-		t.Fatalf("collectFiles() found %d document(s), want 1: %+v", len(found), found)
+		t.Fatalf("Standalone() found %d document(s), want 1: %+v", len(found), found)
 	}
 	if found[0].Name != "create.graphql" {
-		t.Errorf("collectFiles() named the document %q, want %q", found[0].Name, "create.graphql")
+		t.Errorf("Standalone() named the document %q, want %q", found[0].Name, "create.graphql")
 	}
 	if !strings.Contains(found[0].Text, "createCustomEmoji") {
-		t.Errorf("collectFiles() read %q, want the document's text", found[0].Text)
+		t.Errorf("Standalone() read %q, want the document's text", found[0].Text)
 	}
 	if found[0].Position.Filename == "" || found[0].Position.Line != 1 {
-		t.Errorf("collectFiles() positioned the document at %+v, want its file at line 1", found[0].Position)
+		t.Errorf("Standalone() positioned the document at %+v, want its file at line 1", found[0].Position)
 	}
 }
 
-// TestCollectFiles_ATreeThatIsNotThere_IsNotAnError verifies that a pattern
+// TestStandalone_ATreeThatIsNotThere_IsNotAnError verifies that a pattern
 // naming a directory which does not exist is left to the package loader, which
 // has already answered it. Complaining twice about one mistyped pattern helps
 // nobody.
-func TestCollectFiles_ATreeThatIsNotThere_IsNotAnError(t *testing.T) {
-	found, err := collectFiles(t.TempDir(), []string{"./nowhere/..."})
+func TestStandalone_ATreeThatIsNotThere_IsNotAnError(t *testing.T) {
+	found, err := Standalone(t.TempDir(), []string{"./nowhere/..."})
 	if err != nil {
-		t.Fatalf("collectFiles() error = %v, want nil", err)
+		t.Fatalf("Standalone() error = %v, want nil", err)
 	}
 	if len(found) != 0 {
-		t.Errorf("collectFiles() found %+v, want nothing", found)
+		t.Errorf("Standalone() found %+v, want nothing", found)
 	}
 }
 
-// TestCollectFiles_ARootThatIsNotADirectory_Fails verifies that the two ways a
+// TestStandalone_ARootThatIsNotADirectory_Fails verifies that the two ways a
 // walk root can be unusable are told apart. A root that is simply absent is a
 // question about the patterns, which the package loader answers; anything else
 // is a tree the audit was asked to read and could not, and skipping that would
 // be the silence this pass exists to remove.
-func TestCollectFiles_ARootThatIsNotADirectory_Fails(t *testing.T) {
+func TestStandalone_ARootThatIsNotADirectory_Fails(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "internal"), []byte("not a directory"), 0o600); err != nil {
 		t.Fatalf("prepare the fixture: %v", err)
 	}
 
-	found, err := collectFiles(root, []string{"./internal/..."})
+	found, err := Standalone(root, []string{"./internal/..."})
 
 	if err == nil {
-		t.Fatal("collectFiles() error = nil, want the unusable root")
+		t.Fatal("Standalone() error = nil, want the unusable root")
 	}
 	if found != nil {
-		t.Errorf("collectFiles() returned %+v, want nothing on failure", found)
+		t.Errorf("Standalone() returned %+v, want nothing on failure", found)
 	}
 	if !strings.Contains(err.Error(), "open ") {
-		t.Errorf("collectFiles() error = %q, want it to name the root it could not open", err)
+		t.Errorf("Standalone() error = %q, want it to name the root it could not open", err)
 	}
 }
 
-// TestCollectFiles_AFileItCannotRead_Fails verifies that a document the audit
+// TestStandalone_AFileItCannotRead_Fails verifies that a document the audit
 // could not read stops the run. Skipping it would be the exact silence the
 // standalone-file pass was added to remove.
-func TestCollectFiles_AFileItCannotRead_Fails(t *testing.T) {
+func TestStandalone_AFileItCannotRead_Fails(t *testing.T) {
 	root := t.TempDir()
 	tree := filepath.Join(root, "internal")
 	if err := os.MkdirAll(tree, 0o750); err != nil {
@@ -386,13 +465,13 @@ func TestCollectFiles_AFileItCannotRead_Fails(t *testing.T) {
 		t.Fatalf("prepare the fixture: %v", err)
 	}
 
-	_, err := collectFiles(root, []string{"./internal/..."})
+	_, err := Standalone(root, []string{"./internal/..."})
 
 	if err == nil {
-		t.Fatal("collectFiles() error = nil, want the read failure")
+		t.Fatal("Standalone() error = nil, want the read failure")
 	}
 	if !strings.Contains(err.Error(), "read ") {
-		t.Errorf("collectFiles() error = %q, want it to name the file it could not read", err)
+		t.Errorf("Standalone() error = %q, want it to name the file it could not read", err)
 	}
 }
 

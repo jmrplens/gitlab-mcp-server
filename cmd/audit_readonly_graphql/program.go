@@ -10,6 +10,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/goprogram"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqldocs"
 )
 
 // toolutilPath is the import path of the package that owns ActionSpec, the
@@ -24,9 +25,15 @@ type program struct {
 	pkgs map[string]*packages.Package
 	// funcs maps a declared function to its indexed body.
 	funcs map[*types.Func]*function
-	// documents maps a string constant or package-level string variable to
-	// what its value asks GitLab to do.
+	// documents maps the constant or variable a GraphQL document is declared
+	// as to what its value asks GitLab to do.
 	documents map[types.Object]documentKind
+	// unattributed is every document in the shared inventory that neither the
+	// object index nor the body walk could place: a .graphql file, or a
+	// document written inline in a shape the body walk does not fold. Nothing
+	// here can be tied to the handler that sends it, so the audit reports them
+	// instead of passing them.
+	unattributed []graphqldocs.Document
 	// order is the loaded packages in the loader's order.
 	order []*packages.Package
 }
@@ -79,6 +86,16 @@ var graphQLSenders = map[string]bool{
 // type-checks against the real toolutil and the resolver is exercised on the
 // shapes it has to handle rather than on a mock of them. Production passes nil.
 func loadProgram(dir string, patterns []string, overlay map[string][]byte) (*program, error) {
+	// The documents that live in .graphql files are read from the same trees
+	// the patterns name, so the inventory this audit indexes is the inventory
+	// the schema gate judges rather than a second, narrower reading of it.
+	// They are read first for the reason graphqldocs.Collect reads them first:
+	// it costs milliseconds and type-checking the tree costs seconds, so a run
+	// that cannot read one of its own documents says so before paying the rest.
+	standalone, err := graphqldocs.Standalone(dir, patterns)
+	if err != nil {
+		return nil, err
+	}
 	loaded, err := goprogram.Load(dir, patterns, overlay)
 	if err != nil {
 		return nil, err
@@ -93,85 +110,69 @@ func loadProgram(dir string, patterns []string, overlay map[string][]byte) (*pro
 	for _, pkg := range prog.order {
 		prog.pkgs[pkg.PkgPath] = pkg
 	}
-	for _, pkg := range prog.order {
-		prog.indexDocuments(pkg)
-	}
+	inventory := append(graphqldocs.FromPackages(loaded), standalone...)
+	prog.indexDocuments(inventory)
 	for _, pkg := range prog.order {
 		prog.indexFunctions(pkg)
 	}
+	// The bodies have to be indexed first: an inline document is placed by the
+	// body that writes it, and until the walk has run nothing has placed one.
+	prog.unattributed = prog.unattributedDocuments(inventory)
 	return prog, nil
 }
 
-// indexDocuments records every string constant and package-level string
-// variable whose value is a GraphQL document.
+// indexDocuments records what every named document in the shared inventory
+// asks GitLab to do, keyed by the object that declares it.
+//
+// The inventory comes from cmd/internal/graphqldocs, the same reading the
+// schema gate judges, so a document moved into a .graphql file or assembled
+// from a shared fragment is seen here too; what stays this audit's own is the
+// rule that says what a document asks for, because the schema gate has no
+// opinion about read against write.
 //
 // Constants are folded by the type checker, so a document assembled from a
 // shared fragment constant is indexed with the fragment already spliced in,
 // which is how the vulnerability state mutations are written.
+func (p *program) indexDocuments(inventory []graphqldocs.Document) {
+	for _, document := range inventory {
+		if document.Object == nil {
+			continue
+		}
+		if kind := classifyDocument(document.Text); kind != notADocument {
+			p.documents[document.Object] = kind
+		}
+	}
+}
+
+// unattributedDocuments returns the inventory entries this audit cannot tie to
+// anything it walks.
 //
-// TypesInfo is read unchecked: [goprogram.Load] refuses a package that did not
-// type-check, which is what that refusal is for.
-func (p *program) indexDocuments(pkg *packages.Package) {
-	for ident, obj := range pkg.TypesInfo.Defs {
-		if obj == nil {
+// A document is placed either by the object that declares it, which the call
+// graph resolves at every use, or by the body that writes it inline, which
+// [program.indexBody] records at the position of the literal. A document with
+// neither is one the reachability walk can never reach: a .graphql file belongs
+// to no function, and an inline document written in a shape the body walk does
+// not fold, such as a concatenation or a literal outside every function body,
+// is a string this audit never classifies. Both are reported, because the
+// alternative is a gate that answers "no read-only action reaches a mutation"
+// when what it means is "none of the ones I could see".
+func (p *program) unattributedDocuments(inventory []graphqldocs.Document) []graphqldocs.Document {
+	inline := make(map[token.Position]bool)
+	for _, fn := range p.funcs {
+		for _, doc := range fn.docs {
+			if doc.name == "" {
+				inline[p.position(doc.pos)] = true
+			}
+		}
+	}
+	var found []graphqldocs.Document
+	for _, document := range inventory {
+		if document.Object != nil || inline[document.Position] {
 			continue
 		}
-		value, ok := definedStringValue(pkg, obj, ident)
-		if !ok {
-			continue
-		}
-		if kind := classifyDocument(value); kind != notADocument {
-			p.documents[obj] = kind
-		}
+		found = append(found, document)
 	}
-}
-
-// definedStringValue returns the constant string an object was defined with,
-// for the two shapes a GraphQL document is written in: a string constant, and
-// a package-level variable initialized from a constant string expression.
-func definedStringValue(pkg *packages.Package, obj types.Object, ident *ast.Ident) (string, bool) {
-	if con, ok := obj.(*types.Const); ok {
-		return constantString(con.Val())
-	}
-	variable, ok := obj.(*types.Var)
-	if !ok || variable.Parent() != pkg.Types.Scope() {
-		return "", false
-	}
-	init := variableInitializer(pkg, ident)
-	if init == nil {
-		return "", false
-	}
-	tv, ok := pkg.TypesInfo.Types[init]
-	if !ok || tv.Value == nil {
-		return "", false
-	}
-	return constantString(tv.Value)
-}
-
-// variableInitializer finds the expression a package-level variable is
-// declared with. A variable declared without one, or declared in a grouped
-// spec that assigns fewer values than names, has none.
-func variableInitializer(pkg *packages.Package, ident *ast.Ident) ast.Expr {
-	var found ast.Expr
-	for _, file := range pkg.Syntax {
-		ast.Inspect(file, func(node ast.Node) bool {
-			spec, ok := node.(*ast.ValueSpec)
-			if !ok || len(spec.Names) != len(spec.Values) {
-				return true
-			}
-			for i, name := range spec.Names {
-				if name == ident {
-					found = spec.Values[i]
-					return false
-				}
-			}
-			return true
-		})
-		if found != nil {
-			return found
-		}
-	}
-	return nil
+	return found
 }
 
 // constantString unwraps a string constant value.

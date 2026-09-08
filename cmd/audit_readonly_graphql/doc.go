@@ -23,6 +23,26 @@
 // finding, and neither is a mutation reached from an action already classified
 // as mutating.
 //
+// # Where the documents come from
+//
+// The inventory is cmd/internal/graphqldocs, the same reading the schema gate
+// judges, and only the operation-type rule is this command's own. It used to
+// have a document walk of its own that read string constants and package-level
+// variables, which is every document this repository writes today and not every
+// document it may write tomorrow: a document moved into a .graphql file and
+// pulled in with an embed directive folds to nothing for the type checker, so
+// that walk saw none of it while the schema gate read it straight off disk. Two
+// detectors of the same thing disagreeing is how a gate ends up answering a
+// narrower question than the one it prints.
+//
+// What one shared inventory does not fix is attribution. This audit places a
+// document through the object that declares it, or through the body that writes
+// it inline; a .graphql file belongs to no function and no object, so it can be
+// read and still not be tied to the handler that sends it. Rather than pass
+// what it cannot classify, the run reports every such document as a finding and
+// exits non-zero, which is the same answer it gives to a read-only action whose
+// handler it cannot resolve.
+//
 // Usage:
 //
 //	go run ./cmd/audit_readonly_graphql/

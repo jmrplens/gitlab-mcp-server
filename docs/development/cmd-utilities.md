@@ -411,6 +411,8 @@ The HTTP method cannot be the test: `client-go` sends every GraphQL request as a
 
 The audit loads `./internal/...`, resolves every read-only catalog action to the function its route runs, walks what that function can call, and classifies every GraphQL document those bodies name. An action that sends no GraphQL is not a finding, and neither is a mutation reached from an action already classified as mutating.
 
+The documents themselves come from `cmd/internal/graphqldocs`, the same reading [audit_graphql_documents](#audit_graphql_documents) judges against the schema; only the rule that says whether a document reads or writes is this command's own. It used to find them with a walk of its own over string constants and package-level variables, which is every document this repository writes today and not every document it may write tomorrow: a document moved into a `.graphql` file and pulled in with an embed directive folds to nothing for the type checker, so that walk saw none of it while the schema gate read it straight off disk. Two detectors of one thing disagree by construction, and the narrower one was the gate.
+
 #### Usage
 
 ```bash
@@ -432,11 +434,12 @@ go run ./cmd/audit_readonly_graphql/ -v
 
 One block per finding on stderr, naming the action, the file the action is declared in, the function that sends the mutation, and the document. Exits `1` when any finding is reported and when the catalog or the source tree cannot be loaded, so a gate that cannot read its inputs never looks like a gate that passed.
 
-Three things count as findings, not only the obvious one:
+Four things count as findings, not only the obvious one:
 
 - a read-only action whose handler can reach a mutation document;
 - a read-only action no `ActionSpec` construction resolves to, or whose route resolves to no handler, because an action the audit cannot classify is one it cannot vouch for;
-- an exception directive that no longer excuses anything, so an exception cannot outlive its reason.
+- an exception directive that no longer excuses anything, so an exception cannot outlive its reason;
+- a document in the shared inventory that this audit can tie to no handler: a `.graphql` file belongs to no object and to no function body, and neither does a document assembled in a package-level initializer, so the reachability walk can never reach either. The repository writes every document as a named constant today, so this is silent, and the day one moves it says so instead of going quiet.
 
 #### Declaring an exception
 

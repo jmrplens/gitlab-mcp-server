@@ -400,6 +400,78 @@ func TestLoadProgram_PackageLevelVariables_IndexesOnlyConstantDocuments(t *testi
 	}
 }
 
+// TestLoadProgram_ADocumentNoDeclarationNames_IsLeftUnattributed verifies the
+// tripwire the shared inventory made possible.
+//
+// The index resolves a document through the object that declares it, so a
+// document assembled in a package-level initializer belongs to no object and
+// sits in no function body: nothing in the reachability walk can ever reach it,
+// and a mutation written that way would leave the gate reporting a clean run.
+// It is recorded as unattributed instead, which is what the audit reports.
+func TestLoadProgram_ADocumentNoDeclarationNames_IsLeftUnattributed(t *testing.T) {
+	prog := loadFixture(t, map[string]string{"unplaced": unplacedFixture})
+
+	if len(prog.unattributed) != 1 {
+		t.Fatalf("loadProgram() left %d document(s) unattributed, want 1: %+v", len(prog.unattributed), prog.unattributed)
+	}
+	document := prog.unattributed[0]
+	t.Run("it is the assembled document", func(t *testing.T) {
+		if got := document.Label(); got != "an inline document" {
+			t.Errorf("the unattributed document is labeled %q, want an inline one", got)
+		}
+		if !strings.Contains(document.Text, "thing { errors }") {
+			t.Errorf("the unattributed document reads %q, want the assembled mutation", document.Text)
+		}
+		if !strings.HasSuffix(filepath.ToSlash(document.Position.Filename), "/unplaced/unplaced.go") {
+			t.Errorf("the unattributed document is positioned at %q, want the fixture file", document.Position.Filename)
+		}
+	})
+	t.Run("the audit reports it", func(t *testing.T) {
+		result := audit(prog, nil, repoRoot(t))
+
+		if len(result.findings) != 1 {
+			t.Fatalf("audit() reported %d finding(s), want the unattributed document: %+v", len(result.findings), result.findings)
+		}
+		if !strings.Contains(result.findings[0].message, "unplaced/unplaced.go") {
+			t.Errorf("the finding does not name the file:\n%s", result.findings[0].message)
+		}
+	})
+}
+
+// TestLoadProgram_AnInlineDocumentInAFunctionBody_IsAttributed verifies the
+// other half of that rule, which is what keeps the tripwire from firing on a
+// shape this audit does classify. An inline document written in a body is
+// recorded by the body walk at the position of its literal, so the inventory
+// entry at that position is placed and reported by nobody.
+func TestLoadProgram_AnInlineDocumentInAFunctionBody_IsAttributed(t *testing.T) {
+	prog := loadFixture(t, vulnSources())
+
+	if len(prog.unattributed) != 0 {
+		t.Errorf("loadProgram() left %+v unattributed, want nothing: the fixture's inline document is in a body",
+			prog.unattributed)
+	}
+}
+
+// TestLoadProgram_AStandaloneTreeItCannotRead_Fails verifies the run stops when
+// the .graphql half of the inventory cannot be read. Continuing would audit the
+// documents in Go source and silently none of the others, which is the silence
+// reading them was added to remove.
+func TestLoadProgram_AStandaloneTreeItCannotRead_Fails(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "internal"), []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+
+	_, err := loadProgram(dir, []string{"./internal/..."}, nil)
+
+	if err == nil {
+		t.Fatal("loadProgram() error = nil, want the unreadable tree")
+	}
+	if !strings.Contains(err.Error(), "open ") {
+		t.Errorf("loadProgram() error = %q, want it to name the tree it could not open", err)
+	}
+}
+
 // varFixture declares GraphQL documents as package-level variables rather than
 // constants, plus the two variable shapes that carry no knowable value.
 const varFixture = `package vars
@@ -416,6 +488,19 @@ var undeclared string
 
 func build() string {
 	return "mutation { thing { errors } }"
+}
+`
+
+// unplacedFixture writes a document in the one shape no walk in this audit can
+// place: assembled where it is used, in a package-level initializer, so it is
+// bound to no object and sits in no function body. It is a package of its own
+// because it fails every audit run that loads it, which is the point.
+const unplacedFixture = `package unplaced
+
+var sent = pass("mutation {" + " thing { errors } }")
+
+func pass(document string) string {
+	return document
 }
 `
 

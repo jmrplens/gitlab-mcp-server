@@ -36,8 +36,19 @@
 //
 // # Who calls it
 //
-// Two callers, deliberately: cmd/audit_graphql_documents renders the result as
-// the text of a standalone gate, and cmd/audit_1to1 folds the same result into
-// the R-PATH dimension, where a document GitLab refuses is one of the three
-// ways a registered action cannot reach the endpoint it names.
+// Two callers judge documents against a schema, deliberately:
+// cmd/audit_graphql_documents renders the result as the text of a standalone
+// gate, and cmd/audit_1to1 folds the same result into the R-PATH dimension,
+// where a document GitLab refuses is one of the three ways a registered action
+// cannot reach the endpoint it names.
+//
+// A third caller wants only the inventory. cmd/audit_readonly_graphql asks a
+// different question of the same documents, what operation type each one
+// carries, and used to find them with a walk of its own that read constants and
+// package-level variables and nothing else. Two detectors of the same thing
+// disagree by construction, and this one reads .graphql files that one could
+// not, so it now builds its index from [FromPackages] and [Standalone] and
+// judges the text with its own rule. What it cannot resolve, a document with no
+// [Document.Object] that its own body walk did not record either, it reports
+// rather than skips.
 package graphqldocs
