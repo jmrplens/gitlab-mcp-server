@@ -123,8 +123,8 @@ type gqlDiscussionNoteNodes struct {
 
 // gqlDiscussionsConnection holds a paginated list of discussion nodes.
 type gqlDiscussionsConnection struct {
-	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
-	Nodes    []gqlDiscussionNoteNodes    `json:"nodes"`
+	PageInfo toolutil.GraphQLRawForwardPageInfo `json:"pageInfo"`
+	Nodes    []gqlDiscussionNoteNodes           `json:"nodes"`
 }
 
 // gqlDiscussionsWidget is a work item widget containing discussions.
@@ -299,7 +299,7 @@ func listWith(ctx context.Context, client *gitlabclient.Client, query string, in
 	}
 
 	var notes []Output
-	var pageInfo toolutil.GraphQLRawPageInfo
+	var pageInfo toolutil.GraphQLRawForwardPageInfo
 	for _, w := range resp.Data.Namespace.WorkItem.Widgets {
 		if w.Discussions == nil {
 			continue
@@ -314,7 +314,7 @@ func listWith(ctx context.Context, client *gitlabclient.Client, query string, in
 
 	return ListOutput{
 		Notes:      notes,
-		Pagination: toolutil.PageInfoToForwardOutput(pageInfo),
+		Pagination: toolutil.ForwardPageInfoToOutput(pageInfo),
 	}, nil
 }
 

@@ -10,34 +10,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// GraphQL mutation fragment shared by all state mutations.
-const mutationVulnFields = `
-      id
-      title
-      severity
-      state
-      reportType
-      detectedAt
-      dismissedAt
-      resolvedAt
-      confirmedAt
-      dismissalReason
-      primaryIdentifier {
-        name
-        externalType
-        externalId
-        url
-      }
-      scanner {
-        name
-        vendor
-      }
-`
+// The four state mutations answer with the vulnerability they changed,
+// selected as vulnFields: the same node the list and the get answer with, so
+// a model that dismissed a vulnerability is handed the whole of it back.
 
 const mutationDismiss = `
 mutation($id: VulnerabilityID!, $comment: String, $dismissalReason: VulnerabilityDismissalReason) {
   vulnerabilityDismiss(input: {id: $id, comment: $comment, dismissalReason: $dismissalReason}) {
-    vulnerability {` + mutationVulnFields + `
+    vulnerability {` + vulnFields + `
     }
     errors
   }
@@ -47,7 +27,7 @@ mutation($id: VulnerabilityID!, $comment: String, $dismissalReason: Vulnerabilit
 const mutationConfirm = `
 mutation($id: VulnerabilityID!) {
   vulnerabilityConfirm(input: {id: $id}) {
-    vulnerability {` + mutationVulnFields + `
+    vulnerability {` + vulnFields + `
     }
     errors
   }
@@ -57,7 +37,7 @@ mutation($id: VulnerabilityID!) {
 const mutationResolve = `
 mutation($id: VulnerabilityID!) {
   vulnerabilityResolve(input: {id: $id}) {
-    vulnerability {` + mutationVulnFields + `
+    vulnerability {` + vulnFields + `
     }
     errors
   }
@@ -67,7 +47,7 @@ mutation($id: VulnerabilityID!) {
 const mutationRevert = `
 mutation($id: VulnerabilityID!) {
   vulnerabilityRevertToDetected(input: {id: $id}) {
-    vulnerability {` + mutationVulnFields + `
+    vulnerability {` + vulnFields + `
     }
     errors
   }
@@ -86,23 +66,24 @@ type gqlMutationPayload struct {
 	Errors        []string             `json:"errors"`
 }
 
+// vulnerabilityMutationResponse is the envelope every state mutation answers
+// with: one payload under the mutation's own name. A map rather than one
+// field per mutation, because each document selects one of the four and a
+// struct naming all four would hold three that are always empty.
 type vulnerabilityMutationResponse struct {
-	Data struct {
-		VulnerabilityDismiss          gqlMutationPayload `json:"vulnerabilityDismiss"`
-		VulnerabilityConfirm          gqlMutationPayload `json:"vulnerabilityConfirm"`
-		VulnerabilityResolve          gqlMutationPayload `json:"vulnerabilityResolve"`
-		VulnerabilityRevertToDetected gqlMutationPayload `json:"vulnerabilityRevertToDetected"`
-	} `json:"data"`
+	Data map[string]gqlMutationPayload `json:"data"`
 }
 
-func runVulnerabilityMutation(ctx context.Context, client *gitlabclient.Client, operation, query, hint string, vars map[string]any, payload func(*vulnerabilityMutationResponse) gqlMutationPayload) (MutationOutput, error) {
+// runVulnerabilityMutation sends one state mutation and reads its payload
+// back from under payloadKey, the name of the mutation the document selects.
+func runVulnerabilityMutation(ctx context.Context, client *gitlabclient.Client, operation, query, hint string, vars map[string]any, payloadKey string) (MutationOutput, error) {
 	var resp vulnerabilityMutationResponse
 	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: query, Variables: vars}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return MutationOutput{}, toolutil.WrapErrWithHint(operation, err, hint)
 	}
 
-	result := payload(&resp)
+	result := resp.Data[payloadKey]
 	if len(result.Errors) > 0 {
 		return MutationOutput{}, fmt.Errorf("%s: %s", operation, result.Errors[0])
 	}
@@ -134,7 +115,7 @@ func Dismiss(ctx context.Context, client *gitlabclient.Client, input DismissInpu
 
 	return runVulnerabilityMutation(ctx, client, "dismiss_vulnerability", mutationDismiss,
 		"verify the vulnerability GID is valid and the vulnerability is in a dismissable state", vars,
-		func(resp *vulnerabilityMutationResponse) gqlMutationPayload { return resp.Data.VulnerabilityDismiss })
+		"vulnerabilityDismiss")
 }
 
 // Confirm.
@@ -152,7 +133,7 @@ func Confirm(ctx context.Context, client *gitlabclient.Client, input ConfirmInpu
 
 	return runVulnerabilityMutation(ctx, client, "confirm_vulnerability", mutationConfirm,
 		"verify the vulnerability GID is valid and the vulnerability is in a confirmable state", map[string]any{"id": input.ID},
-		func(resp *vulnerabilityMutationResponse) gqlMutationPayload { return resp.Data.VulnerabilityConfirm })
+		"vulnerabilityConfirm")
 }
 
 // Resolve.
@@ -170,7 +151,7 @@ func Resolve(ctx context.Context, client *gitlabclient.Client, input ResolveInpu
 
 	return runVulnerabilityMutation(ctx, client, "resolve_vulnerability", mutationResolve,
 		"verify the vulnerability GID is valid and the vulnerability is in a resolvable state", map[string]any{"id": input.ID},
-		func(resp *vulnerabilityMutationResponse) gqlMutationPayload { return resp.Data.VulnerabilityResolve })
+		"vulnerabilityResolve")
 }
 
 // Revert.
@@ -188,7 +169,5 @@ func Revert(ctx context.Context, client *gitlabclient.Client, input RevertInput)
 
 	return runVulnerabilityMutation(ctx, client, "revert_vulnerability", mutationRevert,
 		"verify the vulnerability GID is valid and the vulnerability is in resolved or dismissed state", map[string]any{"id": input.ID},
-		func(resp *vulnerabilityMutationResponse) gqlMutationPayload {
-			return resp.Data.VulnerabilityRevertToDetected
-		})
+		"vulnerabilityRevertToDetected")
 }

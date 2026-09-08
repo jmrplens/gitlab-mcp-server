@@ -278,7 +278,7 @@ func TestListWith_UndeclaredPaginationVariable(t *testing.T) {
 		},
 	})
 
-	_, err := listWith(context.Background(), testutil.NewTestClient(t, handler), document,
+	_, err := listWith[gqlBranchRuleNodeCE](context.Background(), testutil.NewTestClient(t, handler), document,
 		ListInput{ProjectPath: "my-group/my-project"})
 	if err == nil {
 		t.Fatal("listWith() error = nil, want a refusal naming the missing declaration")

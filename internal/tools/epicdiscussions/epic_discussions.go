@@ -111,14 +111,22 @@ mutation($id: NoteID!) {
 }
 `
 
-// gqlNoteNode represents a note from the GitLab GraphQL API.
+// gqlNoteNode represents a note from the GitLab GraphQL API, as every
+// document here selects it.
 type gqlNoteNode struct {
-	ID         string            `json:"id"`
-	Body       string            `json:"body"`
-	Author     gqlNoteAuthor     `json:"author"`
-	System     bool              `json:"system"`
-	CreatedAt  *string           `json:"createdAt"`
-	UpdatedAt  *string           `json:"updatedAt"`
+	ID        string        `json:"id"`
+	Body      string        `json:"body"`
+	Author    gqlNoteAuthor `json:"author"`
+	System    bool          `json:"system"`
+	CreatedAt *string       `json:"createdAt"`
+	UpdatedAt *string       `json:"updatedAt"`
+}
+
+// gqlCreatedNoteNode is the note createNote answers with: the note, plus the
+// discussion GitLab opened for it, which only that document selects because
+// only that caller has no discussion to hand.
+type gqlCreatedNoteNode struct {
+	gqlNoteNode
 	Discussion *gqlDiscussionRef `json:"discussion"`
 }
 
@@ -145,8 +153,8 @@ type gqlDiscussionNode struct {
 
 // gqlDiscussionsConnection holds a paginated list of discussion nodes.
 type gqlDiscussionsConnection struct {
-	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
-	Nodes    []gqlDiscussionNode         `json:"nodes"`
+	PageInfo toolutil.GraphQLRawForwardPageInfo `json:"pageInfo"`
+	Nodes    []gqlDiscussionNode                `json:"nodes"`
 }
 
 // gqlDiscussionsWidget is a work item widget containing discussions.
@@ -362,7 +370,7 @@ func listWith(ctx context.Context, client *gitlabclient.Client, query string, in
 	}
 
 	var discussions []Output
-	var pageInfo toolutil.GraphQLRawPageInfo
+	var pageInfo toolutil.GraphQLRawForwardPageInfo
 	for _, w := range resp.Data.Namespace.WorkItem.Widgets {
 		if w.Discussions == nil {
 			continue
@@ -375,7 +383,7 @@ func listWith(ctx context.Context, client *gitlabclient.Client, query string, in
 
 	return ListOutput{
 		Discussions: discussions,
-		Pagination:  toolutil.PageInfoToForwardOutput(pageInfo),
+		Pagination:  toolutil.ForwardPageInfoToOutput(pageInfo),
 	}, nil
 }
 
@@ -454,7 +462,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 			"failed to resolve epic GID; verify full_path + iid with gitlab_epic_list; requires Reporter role on the group")
 	}
 
-	created, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
+	created, err := toolutil.ExecGraphQLNoteMutation[gqlCreatedNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
 		Op:         "epicDiscussionCreate",
 		Hint:       "body is rendered as GitLab Flavored Markdown; max 1MB; check Premium/Ultimate license; createNote mutation may fail if the work item is locked or confidential without permission",
 		PayloadKey: "createNote",
@@ -468,7 +476,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 
-	note := nodeToNoteOutput(*created)
+	note := nodeToNoteOutput(created.gqlNoteNode)
 	discussionID := ""
 	if created.Discussion != nil {
 		discussionID = extractDiscussionHex(created.Discussion.ID)
