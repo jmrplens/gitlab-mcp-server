@@ -108,10 +108,10 @@ func loadProgram(dir string, patterns []string, overlay map[string][]byte) (*pro
 // Constants are folded by the type checker, so a document assembled from a
 // shared fragment constant is indexed with the fragment already spliced in,
 // which is how the vulnerability state mutations are written.
+//
+// TypesInfo is read unchecked: [goprogram.Load] refuses a package that did not
+// type-check, which is what that refusal is for.
 func (p *program) indexDocuments(pkg *packages.Package) {
-	if pkg.TypesInfo == nil || pkg.Types == nil {
-		return
-	}
 	for ident, obj := range pkg.TypesInfo.Defs {
 		if obj == nil {
 			continue
@@ -184,9 +184,6 @@ func constantString(value constant.Value) (string, bool) {
 
 // indexFunctions records every declared function's body.
 func (p *program) indexFunctions(pkg *packages.Package) {
-	if pkg.TypesInfo == nil {
-		return
-	}
 	for _, file := range pkg.Syntax {
 		for _, decl := range file.Decls {
 			funcDecl, ok := decl.(*ast.FuncDecl)

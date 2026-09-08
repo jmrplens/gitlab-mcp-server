@@ -193,10 +193,10 @@ func walkRoots(dir string, patterns []string) []string {
 }
 
 // walk gathers one package's documents.
+//
+// TypesInfo is read unchecked: [goprogram.Load] refuses a package that did not
+// type-check, which is what that refusal is for.
 func (c *collector) walk(pkg *packages.Package) {
-	if pkg.TypesInfo == nil {
-		return
-	}
 	for _, file := range pkg.Syntax {
 		ast.Inspect(file, func(node ast.Node) bool { return c.visit(pkg, node) })
 	}

@@ -72,9 +72,6 @@ type resolver struct {
 func (r *resolver) collectSites() map[string][]site {
 	sites := make(map[string][]site)
 	for _, pkg := range r.prog.order {
-		if pkg.TypesInfo == nil {
-			continue
-		}
 		for _, file := range pkg.Syntax {
 			r.collectFileSites(pkg, file, sites)
 		}
