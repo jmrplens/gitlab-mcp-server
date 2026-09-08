@@ -100,6 +100,21 @@ func closureBody(ctx context.Context) error {
 	return nil
 }
 
+// ViaExecutor sends through the shared toolutil executor rather than through
+// the client-go service method. It is the shape the note domains are written
+// in, and the reason the transport check has a package half: the executor's
+// receiver is not a GraphQL type, so where it is declared is what says it puts
+// a document on the wire.
+func ViaExecutor(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	_, err := toolutil.ExecGraphQLNoteMutation[Output](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
+		Op:         "fixtureNoteUpdate",
+		PayloadKey: "updateNote",
+		Query:      writeMutation,
+		Variables:  map[string]any{"id": input.ID},
+	})
+	return Output{OK: err == nil}, err
+}
+
 func read(ctx context.Context, client *gitlabclient.Client) (Output, error) {
 	var response struct {
 		Data map[string]any ` + "`json:\"data\"`" + `

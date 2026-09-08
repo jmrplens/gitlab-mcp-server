@@ -148,6 +148,37 @@ func TestAudit_ASchemaTheCallerSupplies_JudgesByThatSchemaAndSaysSo(t *testing.T
 	}
 }
 
+// TestAudit_ASchemaValueTheCallerAlreadyHas_JudgesByItAndKeepsItsProvenance
+// verifies the other entry the live re-probe uses: the schema as a value rather
+// than as a path, which is what it has after introspecting an instance itself.
+// The provenance is the caller's own line, because only the caller knows what
+// it introspected, and a reader of a refusal is owed that rather than the pin's
+// date.
+func TestAudit_ASchemaValueTheCallerAlreadyHas_JudgesByItAndKeepsItsProvenance(t *testing.T) {
+	narrowed, err := graphqlschema.Load([]byte("type Query {\n  ok: Boolean\n}\n"))
+	if err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	const provenance = "1234 types from https://gitlab.example.com, introspected today"
+
+	result, err := Audit(Options{
+		Dir:        repoRoot(t),
+		Patterns:   []string{fixturePattern},
+		Overlay:    fixtureOverlay(t, map[string]string{"accepted": acceptedFixture}),
+		Schema:     narrowed,
+		Provenance: provenance,
+	})
+	if err != nil {
+		t.Fatalf("Audit() error = %v, want nil", err)
+	}
+	if len(result.Refusals) != 1 {
+		t.Fatalf("Audit() refused %d document(s), want 1: the supplied schema has no vulnerability field", len(result.Refusals))
+	}
+	if result.Provenance != provenance {
+		t.Errorf("Audit() provenance = %q, want the caller's own line %q", result.Provenance, provenance)
+	}
+}
+
 // TestAudit_ASuppliedSchemaThatCannotBeUsed_Fails verifies that a live re-probe
 // whose schema never arrived stops rather than falling back to the pin, which
 // would report a pass for a question nobody asked.

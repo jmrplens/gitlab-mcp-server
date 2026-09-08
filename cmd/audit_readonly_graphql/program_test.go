@@ -309,6 +309,41 @@ func TestProgram_Reachable_NoRoots_IsEmpty(t *testing.T) {
 	}
 }
 
+// TestProgram_Reachable_RepeatedRoot_IsVisitedOnce verifies the closure stops
+// at a function it has already reached. Nothing in the audit deduplicates the
+// roots it is given, and a handler that calls a helper the closure also reaches
+// puts the same function on the queue twice, so without this the walk would
+// re-expand it and a cycle would never end.
+func TestProgram_Reachable_RepeatedRoot_IsVisitedOnce(t *testing.T) {
+	prog := loadFixture(t, vulnSources())
+	send := lookupFunc(t, prog, "vuln", "send")
+	dismissAll := lookupFunc(t, prog, "vuln", "dismissAll")
+
+	reached := prog.reachable([]*types.Func{dismissAll, dismissAll, send})
+
+	for _, want := range []*types.Func{dismissAll, send} {
+		t.Run(want.Name(), func(t *testing.T) {
+			if !reached[want] {
+				t.Errorf("reachable from a repeated root does not contain %s", want.Name())
+			}
+		})
+	}
+}
+
+// TestIsGraphQLSender_SharedToolutilExecutor_IsATransport verifies the package
+// half of the transport check. The shared executors send the document their
+// caller supplied, and they are ordinary functions rather than methods on a
+// GraphQL service, so a check that only read receivers would miss every note
+// domain and report the actions that reach them as touching no GraphQL at all.
+func TestIsGraphQLSender_SharedToolutilExecutor_IsATransport(t *testing.T) {
+	prog := loadFixture(t, mainSources())
+	viaExecutor := prog.funcs[lookupFunc(t, prog, "shapes", "ViaExecutor")]
+
+	if !viaExecutor.sendsGraphQL {
+		t.Error("a handler calling the shared toolutil executor was not marked as sending GraphQL")
+	}
+}
+
 // TestIsGraphQLSender_Classification verifies the transport check accepts the
 // client-go GraphQL service method and the shared toolutil executors, and
 // rejects a method named Do on something else.
