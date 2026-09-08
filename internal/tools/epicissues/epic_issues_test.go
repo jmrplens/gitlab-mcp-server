@@ -124,12 +124,25 @@ const gqlRemoveParentData = `{
   }
 }`
 
-const gqlReorderData = `{
+// gqlReorderAck is what the reorder mutation answers with: the child that
+// moved, and nothing about its siblings. The epic's children are read back
+// with the list query afterwards.
+const gqlReorderAck = `{
   "workItemUpdate": {
+    "workItem": {"id": "gid://gitlab/WorkItem/10"},
+    "errors": []
+  }
+}`
+
+// gqlChildrenReordered is the epic's children as the list query answers them
+// after 10 was moved before 20.
+const gqlChildrenReordered = `{
+  "namespace": {
     "workItem": {
       "id": "gid://gitlab/WorkItem/1",
       "widgets": [{
         "children": {
+          "pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": "", "startCursor": ""},
           "nodes": [
             {
               "id": "gid://gitlab/WorkItem/20",
@@ -156,8 +169,7 @@ const gqlReorderData = `{
           ]
         }
       }]
-    },
-    "errors": []
+    }
   }
 }`
 
@@ -184,6 +196,27 @@ func resolveHandler(childPath string) http.HandlerFunc {
 		} else {
 			testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
 		}
+	}
+}
+
+// reorderAck answers the reorder mutation with the moved child when the
+// variables carry the values in want and no childrenIds, and with a mutation
+// error otherwise, so a document that drifts back to naming the children
+// beside relativePosition fails here the way GitLab fails it.
+func reorderAck(want map[string]string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars, _ := testutil.ParseGraphQLVariables(r)
+		if _, forbidden := vars["childrenIds"]; forbidden {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlMutationErrors)
+			return
+		}
+		for name, value := range want {
+			if vars[name] != value {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlMutationErrors)
+				return
+			}
+		}
+		testutil.RespondGraphQL(w, http.StatusOK, gqlReorderAck)
 	}
 }
 
@@ -811,12 +844,22 @@ func TestUpdateOrder(t *testing.T) {
 				ChildID: "gid://gitlab/WorkItem/10", AdjacentID: "gid://gitlab/WorkItem/20",
 				RelativePosition: "BEFORE",
 			},
+			// Three documents reach the mock: the GID resolution, the mutation,
+			// and the listing that reads the order back. The list query also
+			// says "workItem(iid", so its own, longer key has to be present or
+			// it would be answered as a resolution.
 			handler: graphqlMux(map[string]http.HandlerFunc{
 				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
 					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
 				},
-				"workItemUpdate(": func(w http.ResponseWriter, _ *http.Request) {
-					testutil.RespondGraphQL(w, http.StatusOK, gqlReorderData)
+				// The child is the item updated and the epic its parent; a
+				// document that named childrenIds beside relativePosition is
+				// what GitLab refused.
+				"workItemUpdate(": reorderAck(map[string]string{
+					"id": "gid://gitlab/WorkItem/10", "parentId": "gid://gitlab/WorkItem/1", "relativePosition": "BEFORE",
+				}),
+				"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlChildrenReordered)
 				},
 			}),
 			check: func(t *testing.T, out ListOutput) {
@@ -843,8 +886,9 @@ func TestUpdateOrder(t *testing.T) {
 				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
 					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
 				},
-				"workItemUpdate(": func(w http.ResponseWriter, _ *http.Request) {
-					testutil.RespondGraphQL(w, http.StatusOK, gqlReorderData)
+				"workItemUpdate(": reorderAck(map[string]string{"relativePosition": "AFTER"}),
+				"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlChildrenMultiple)
 				},
 			}),
 			check: func(t *testing.T, out ListOutput) {
@@ -865,8 +909,9 @@ func TestUpdateOrder(t *testing.T) {
 				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
 					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
 				},
-				"workItemUpdate(": func(w http.ResponseWriter, _ *http.Request) {
-					testutil.RespondGraphQL(w, http.StatusOK, gqlReorderData)
+				"workItemUpdate(": reorderAck(map[string]string{"relativePosition": "BEFORE"}),
+				"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlChildrenMultiple)
 				},
 			}),
 			check: func(t *testing.T, out ListOutput) {
@@ -875,6 +920,29 @@ func TestUpdateOrder(t *testing.T) {
 					t.Fatalf("got %d issues, want 2", len(out.Issues))
 				}
 			},
+		},
+		{
+			// The move is done and GitLab acknowledged it; what fails is reading
+			// the order back, which is reported as the listing's own error so a
+			// caller does not retry a reorder that already happened.
+			name: "reports the listing's error when reading the order back fails",
+			input: UpdateInput{
+				FullPath: testFullPath, IID: 1,
+				ChildID: "gid://gitlab/WorkItem/10", AdjacentID: "gid://gitlab/WorkItem/20",
+				RelativePosition: "BEFORE",
+			},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"workItemUpdate(": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlReorderAck)
+				},
+				"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusInternalServerError, `{"message":"boom"}`)
+				},
+			}),
+			wantErr: "epicIssueList",
 		},
 		{
 			name:    "returns error when full_path is empty",
