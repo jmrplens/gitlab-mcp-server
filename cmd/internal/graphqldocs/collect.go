@@ -259,24 +259,55 @@ func (c *collector) visit(pkg *packages.Package, node ast.Node) bool {
 // The defining object is carried with it, which is what lets a caller join this
 // inventory to a walk of the same type-checked source.
 func (c *collector) recordNamed(pkg *packages.Package, spec *ast.ValueSpec) {
-	if len(spec.Names) != len(spec.Values) {
-		return
-	}
 	for i, name := range spec.Names {
-		value := spec.Values[i]
-		text, ok := constantDocument(pkg, value)
+		object := pkg.TypesInfo.Defs[name]
+		text, ok := c.namedDocument(pkg, spec, i, object)
 		if !ok {
 			continue
 		}
-		c.claimed[value.Pos()] = true
 		c.documents = append(c.documents, Document{
 			Package:  pkg.PkgPath,
 			Name:     name.Name,
-			Object:   pkg.TypesInfo.Defs[name],
+			Object:   object,
 			Position: c.fset.Position(name.Pos()),
 			Text:     text,
 		})
 	}
+}
+
+// namedDocument returns the document the i-th name of a declaration holds,
+// from the expression written beside it when there is one and from the folded
+// value on the object when there is not.
+//
+// A grouped const block repeats the previous line's expression implicitly, so
+// a line that is nothing but a name declares a constant whose ValueSpec has no
+// value at all while the type checker has already folded the text onto the
+// object. Reading only the expressions drops such a document out of the
+// inventory entirely, and because its object is one no document carries, a
+// caller that joins on the object cannot report it as unattributed either: it
+// is simply gone. A name whose declaration lists fewer values than names for
+// any other reason initializes from something that is not a constant, and the
+// fold answers no for it as well.
+func (c *collector) namedDocument(pkg *packages.Package, spec *ast.ValueSpec, i int, object types.Object) (string, bool) {
+	if i >= len(spec.Values) {
+		return repeatedConstant(object)
+	}
+	value := spec.Values[i]
+	text, ok := constantDocument(pkg, value)
+	if ok {
+		c.claimed[value.Pos()] = true
+	}
+	return text, ok
+}
+
+// repeatedConstant returns the document a constant holds when its declaration
+// writes no expression of its own.
+func repeatedConstant(object types.Object) (string, bool) {
+	declared, ok := object.(*types.Const)
+	if !ok {
+		return "", false
+	}
+	return documentText(declared.Val())
 }
 
 // recordInline records a document written where it is used rather than
@@ -300,12 +331,20 @@ func (c *collector) recordInline(pkg *packages.Package, expr ast.Expr) bool {
 
 // constantDocument returns the folded string value of expr when it is a
 // GraphQL document.
+// An expression the type checker recorded nothing for indexes to the zero
+// TypeAndValue, whose value is nil, which is the answer that expression
+// deserves anyway.
 func constantDocument(pkg *packages.Package, expr ast.Expr) (string, bool) {
-	typed, ok := pkg.TypesInfo.Types[expr]
-	if !ok || typed.Value == nil || typed.Value.Kind() != constant.String {
+	return documentText(pkg.TypesInfo.Types[expr].Value)
+}
+
+// documentText returns a folded constant value when it is a GraphQL document,
+// which is the one question both ways into the inventory ask of a value.
+func documentText(value constant.Value) (string, bool) {
+	if value == nil || value.Kind() != constant.String {
 		return "", false
 	}
-	text := constant.StringVal(typed.Value)
+	text := constant.StringVal(value)
 	if !looksLikeDocument(text) {
 		return "", false
 	}

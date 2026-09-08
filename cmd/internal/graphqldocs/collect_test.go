@@ -273,6 +273,77 @@ func TestCollect_DocumentsWithAndWithoutADefiningObject_CarryTheRightOne(t *test
 	}
 }
 
+// repeatedFixture declares a document in a grouped const block and repeats the
+// declaration implicitly on the line below it, which is the one shape where
+// the text a name holds is on the object and nowhere in the declaration. The
+// integer pair below it is the same shape carrying something that is not a
+// document, so the fold is asked the question rather than the shape answering
+// it.
+const repeatedFixture = `package repeated
+
+const (
+	dismissMutation = @@
+mutation($id: ID!) {
+  vulnerabilityDismiss(input: {id: $id}) { errors }
+}
+@@
+	resolveMutation
+)
+
+const (
+	first = 1
+	second
+)
+`
+
+// TestCollect_AConstantAGroupedDeclarationRepeats_IsInTheInventory verifies the
+// declaration shape whose text exists only on the type-checked object.
+//
+// A grouped const block repeats the previous line's expression implicitly, so
+// the repeating line's ValueSpec carries a name and no value at all. Reading
+// only the expressions written in the declaration drops such a document out of
+// the inventory, and it leaves no trace anywhere else either: the object it is
+// declared as is then an object no document in the inventory carries, so
+// cmd/audit_readonly_graphql, which joins on exactly that, cannot report it as
+// unattributed. A mutation could ship classified by nobody.
+func TestCollect_AConstantAGroupedDeclarationRepeats_IsInTheInventory(t *testing.T) {
+	found := loadFixture(t, map[string]string{"repeated": repeatedFixture})
+
+	byLabel := map[string]Document{}
+	for _, one := range found {
+		byLabel[one.Label()] = one
+	}
+	cases := []struct {
+		name  string
+		label string
+	}{
+		{name: "the line that writes the document", label: "dismissMutation"},
+		{name: "the line that repeats it implicitly", label: "resolveMutation"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			document, ok := byLabel[testCase.label]
+			if !ok {
+				t.Fatalf("%s is not in the inventory; collected %v", testCase.label, names(found))
+			}
+			if !strings.Contains(document.Text, "vulnerabilityDismiss") {
+				t.Errorf("Text = %q, want the mutation the group declares", document.Text)
+			}
+			if document.Object == nil {
+				t.Fatalf("Object = nil, want the constant %q is declared as", testCase.label)
+			}
+			if got := document.Object.Name(); got != testCase.label {
+				t.Errorf("Object.Name() = %q, want %q", got, testCase.label)
+			}
+		})
+	}
+	t.Run("a repeated constant that is not a document is left alone", func(t *testing.T) {
+		if _, ok := byLabel["second"]; ok {
+			t.Error("a repeated integer constant was collected as a GraphQL document")
+		}
+	})
+}
+
 // TestFromPackages_NoPackages_CollectsNothing verifies the in-source half
 // survives being handed nothing. Every load this repository does refuses an
 // empty result before it gets here, and an exported function that indexes the
