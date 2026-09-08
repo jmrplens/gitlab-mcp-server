@@ -28,9 +28,10 @@ const (
 // own a committed artifact: the comparison is line-ending agnostic, so a
 // Windows checkout does not report drift a Linux one does not see; content is
 // given the trailing newline that keeps a generated file from being the one
-// text file in the repository without one; the parent directory is created on
-// the way in; and a stale artifact is reported with one sentence naming the
-// file and the command that refreshes it, which regenerate supplies.
+// text file in the repository without one; a write creates the parent
+// directory, while a check never does, so a gate reports a missing tree rather
+// than making one; and a stale artifact is reported with one sentence naming
+// the file and the command that refreshes it, which regenerate supplies.
 //
 // The file is written through an os.Root opened on its directory, so the write
 // can only ever land on the named file: that containment came from
