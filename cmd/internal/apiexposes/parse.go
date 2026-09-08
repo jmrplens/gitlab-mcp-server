@@ -120,6 +120,10 @@ type frame struct {
 	fields *[]Field
 	// condIf and condUnless are a scope's conditions.
 	condIf, condUnless string
+	// reopened marks a module frame opened by a `class X` with no
+	// superclass: a namespace reopened to declare something inside it, whose
+	// own exposes would belong to an entity declared elsewhere.
+	reopened bool
 }
 
 // describe names a frame for an error.
@@ -226,7 +230,9 @@ func (s *scanner) declaration(line string, lineNo int) (bool, error) {
 		if match == nil {
 			return true, fmt.Errorf("class declaration this reader does not understand: %q", line)
 		}
-		s.class(match, lineNo)
+		if err := s.class(match, lineNo); err != nil {
+			return true, err
+		}
 	case defLine.MatchString(line):
 		if !endlessDef.MatchString(line) && !strings.HasSuffix(line, " end") {
 			s.push(frame{kind: frameSkip})
@@ -273,16 +279,40 @@ func (s *scanner) prepended() {
 	s.push(frame{kind: framePrepended, fields: &bucket.fields})
 }
 
-// class opens an entity when the class sits under API::Entities, and a
-// skipped body otherwise.
-func (s *scanner) class(match []string, lineNo int) {
+// class opens an entity when the class sits under API::Entities and names a
+// superclass, and a skipped body outside API::Entities. Ruby lets a class be
+// opened again, and GitLab's entity files do it two ways. With no
+// superclass (`class Result`, in ci/lint/result/include.rb) it is a
+// namespace reopened to declare something inside it: a Grape entity always
+// names Grape::Entity or another entity as its parent, and reading that line
+// as an entity replaced the one result.rb declares with an empty one. With
+// the same superclass (feature_flag/basic_user_list.rb) it is the same
+// entity opened again: an entity declared inside it is named under it, and
+// an expose there joins the entity's fields after those of the file read
+// before it. A second declaration naming another parent is refused, since it
+// is not the same class and one of the two would silently replace the other.
+func (s *scanner) class(match []string, lineNo int) error {
 	name, parent := match[1], match[2]
 	namespace := s.namespace()
 	if !isEntityNamespace(namespace) {
 		s.push(frame{kind: frameSkip})
-		return
+		return nil
+	}
+	if parent == "" {
+		s.push(frame{kind: frameModule, name: name, reopened: true})
+		return nil
+	}
+	if parent == "Grape::Entity" || parent == "::Grape::Entity" {
+		parent = ""
 	}
 	rubyPath := strings.Join(append(append([]string{}, namespace...), name), "::")
+	if existing := s.p.entities[rubyPath]; existing != nil {
+		if existing.parentRef != parent {
+			return fmt.Errorf("class %s declared twice with another parent, first at %s:%d", rubyPath, existing.File, existing.Line)
+		}
+		s.push(frame{kind: frameClass, name: name, fields: &existing.Fields})
+		return nil
+	}
 	d := &decl{rubyPath: rubyPath, namespace: namespace, parentRef: parent}
 	d.File = s.path
 	d.Line = lineNo
@@ -291,11 +321,9 @@ func (s *scanner) class(match []string, lineNo int) {
 	// written as an empty list rather than null, so a reader iterating fields
 	// needs no guard.
 	d.Fields = []Field{}
-	if parent == "Grape::Entity" || parent == "::Grape::Entity" {
-		d.parentRef = ""
-	}
 	s.p.entities[rubyPath] = d
 	s.push(frame{kind: frameClass, name: name, fields: &d.Fields})
+	return nil
 }
 
 // blockKind says what follows an expose's arguments.
@@ -317,6 +345,12 @@ const (
 func (s *scanner) expose(line string, lineNo int) error {
 	stmt := s.join(line)
 	fields := s.currentFields()
+	if fields == nil && s.inReopenedClass() {
+		// The fields belong to an entity declared in another file, and
+		// attaching them there would need Ruby's load order, which this
+		// reader does not have.
+		return errors.New("expose under a class with no superclass: an entity reopened to add fields is not read")
+	}
 	rest := strings.TrimPrefix(strings.TrimPrefix(stmt, "expose"), "(")
 	if strings.HasPrefix(stmt, "expose(") {
 		// Parenthesized arguments: the block, if any, follows the paren.
@@ -441,6 +475,22 @@ func (s *scanner) push(f frame) { s.frames = append(s.frames, f) }
 // declared in.
 func (s *scanner) inSkip() bool {
 	return slices.ContainsFunc(s.frames, func(f frame) bool { return f.kind == frameSkip })
+}
+
+// inReopenedClass reports whether the statement sits directly in a class
+// declared without a superclass, scopes aside.
+func (s *scanner) inReopenedClass() bool {
+	for _, f := range slices.Backward(s.frames) {
+		switch f.kind {
+		case frameModule:
+			return f.reopened
+		case frameScope:
+			continue
+		default:
+			return false
+		}
+	}
+	return false
 }
 
 // currentFields is where an expose at this point lands, or nil when it is

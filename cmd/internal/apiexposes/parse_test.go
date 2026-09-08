@@ -187,9 +187,12 @@ end
 `
 
 // straySource holds the places an expose or a prepend can sit without an
-// entity to belong to: a class outside any module, a prepend under a module
-// that is not Enterprise's, and an expose directly in a module.
-const straySource = `class Standalone
+// entity to belong to: the top of a file, a class outside any module, a
+// prepend under a module that is not Enterprise's, and an expose directly in
+// a module.
+const straySource = `expose :top
+
+class Standalone
 end
 
 module API
@@ -202,6 +205,66 @@ module API
 
     class Stray < Grape::Entity
       expose :id
+    end
+  end
+end
+`
+
+// lintResultSource declares an entity whose name another file reopens as a
+// namespace, the way Ci::Lint::Result holds Result::Include.
+const lintResultSource = `module API
+  module Entities
+    module Ci
+      module Lint
+        class Result < Grape::Entity
+          expose :valid?, as: :valid
+          expose :jobs, if: ->(result, options) { options[:include_jobs] }
+        end
+      end
+    end
+  end
+end
+`
+
+// lintIncludeSource reopens that entity's constant, with no superclass, to
+// declare an entity inside it; the reopening declares nothing itself.
+const lintIncludeSource = `module API
+  module Entities
+    module Ci
+      module Lint
+        class Result
+          class Include < Grape::Entity
+            expose :type, as: :type do |include_data|
+              include_data[:type].to_s
+            end
+          end
+        end
+      end
+    end
+  end
+end
+`
+
+// featureFlagSource declares an entity another file opens again with the
+// same superclass.
+const featureFlagSource = `module API
+  module Entities
+    class FeatureFlag < Grape::Entity
+      expose :name
+    end
+  end
+end
+`
+
+// basicUserListSource opens it again, superclass and all, to declare an
+// entity inside it and to add a field of its own.
+const basicUserListSource = `module API
+  module Entities
+    class FeatureFlag < Grape::Entity
+      class BasicUserList < Grape::Entity
+        expose :id
+      end
+      expose :reopened
     end
   end
 end
@@ -236,14 +299,18 @@ end
 // what it fetched.
 func fixtureFiles() map[string][]byte {
 	return map[string][]byte{
-		"lib/api/entities/basic.rb":         []byte(basicSource),
-		"lib/api/entities/child.rb":         []byte(childSource),
-		"ee/lib/api/entities/epic.rb":       []byte(epicSource),
-		"ee/lib/ee/api/entities/basic.rb":   []byte(prependSource),
-		"ee/lib/ee/api/entities/orphan.rb":  []byte(orphanSource),
-		"lib/api/helpers/presenter.rb":      []byte(helperSource),
-		"lib/api/entities/stray.rb":         []byte(straySource),
-		"lib/api/entities/empty_comment.rb": []byte("# nothing here\n"),
+		"lib/api/entities/basic.rb":                        []byte(basicSource),
+		"lib/api/entities/child.rb":                        []byte(childSource),
+		"ee/lib/api/entities/epic.rb":                      []byte(epicSource),
+		"ee/lib/ee/api/entities/basic.rb":                  []byte(prependSource),
+		"ee/lib/ee/api/entities/orphan.rb":                 []byte(orphanSource),
+		"lib/api/helpers/presenter.rb":                     []byte(helperSource),
+		"lib/api/entities/stray.rb":                        []byte(straySource),
+		"lib/api/entities/empty_comment.rb":                []byte("# nothing here\n"),
+		"lib/api/entities/ci/lint/result.rb":               []byte(lintResultSource),
+		"lib/api/entities/ci/lint/result/include.rb":       []byte(lintIncludeSource),
+		"lib/api/entities/feature_flag.rb":                 []byte(featureFlagSource),
+		"lib/api/entities/feature_flag/basic_user_list.rb": []byte(basicUserListSource),
 	}
 }
 
@@ -392,8 +459,42 @@ func TestParse_EntitiesAndTheirRelations_AreRecorded(t *testing.T) {
 	if got := names(entities["APIEntitiesStray"].Fields); !reflect.DeepEqual(got, []string{"id"}) {
 		t.Errorf("Stray fields = %v, want [id]: the expose in its module and the prepend under API belong to nothing", got)
 	}
-	if exposes != 40 {
-		t.Errorf("Parse() exposes = %d, want 40 (nested ones counted, the splat as one)", exposes)
+	if exposes != 46 {
+		t.Errorf("Parse() exposes = %d, want 46 (nested ones counted, the splat as one)", exposes)
+	}
+}
+
+// TestParse_AClassOpenedAgain_IsReadAsRubyOpensIt verifies the two ways
+// GitLab's entity files open a constant that is already a class. Opened again
+// with its superclass (feature_flag/basic_user_list.rb), it is the same
+// entity: an entity declared inside it is named under it, and a field exposed
+// there joins the entity's after those of the file read first. Opened with no
+// superclass (ci/lint/result/include.rb), it is a namespace: the entity
+// declared inside it is named under it, the entity result.rb declares is left
+// as it is, and the reopening declares nothing, where the first reading of
+// that file replaced Ci::Lint::Result with an empty entity.
+func TestParse_AClassOpenedAgain_IsReadAsRubyOpensIt(t *testing.T) {
+	entities, _ := parseFixture(t)
+	cases := []struct {
+		name, entity, file string
+		line               int
+		fields             []string
+	}{
+		{name: "the entity a file opens again with its superclass", entity: "APIEntitiesFeatureFlag", file: "lib/api/entities/feature_flag.rb", line: 3, fields: []string{"name", "reopened"}},
+		{name: "the entity declared inside the reopened class", entity: "APIEntitiesFeatureFlagBasicUserList", file: "lib/api/entities/feature_flag/basic_user_list.rb", line: 4, fields: []string{"id"}},
+		{name: "the entity a file opens again with no superclass", entity: "APIEntitiesCiLintResult", file: "lib/api/entities/ci/lint/result.rb", line: 5, fields: []string{"valid", "jobs"}},
+		{name: "the entity declared inside the reopened constant", entity: "APIEntitiesCiLintResultInclude", file: "lib/api/entities/ci/lint/result/include.rb", line: 6, fields: []string{"type"}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, ok := entities[testCase.entity]
+			if !ok {
+				t.Fatalf("%s was not recorded; recorded: %v", testCase.entity, keysOf(entities))
+			}
+			if got.File != testCase.file || got.Line != testCase.line || !reflect.DeepEqual(names(got.Fields), testCase.fields) {
+				t.Errorf("%s = %s:%d %v, want %s:%d %v", testCase.entity, got.File, got.Line, names(got.Fields), testCase.file, testCase.line, testCase.fields)
+			}
+		})
 	}
 }
 
@@ -423,6 +524,9 @@ func TestParse_SourceThisReaderCannotFollow_IsRefused(t *testing.T) {
 		{name: "an expose with an unclosed parenthesis", source: "module API\n  module Entities\n    class Basic < Grape::Entity\n      expose(:id\n    end\n  end\nend\n", want: "x.rb:4: expose with an unclosed parenthesis"},
 		{name: "a lambda body the file ends inside", source: "module API\n  module Entities\n    class Basic < Grape::Entity\n      expose :x, if: ->(a) do\n        a.b?\n", want: "x.rb: 3 block(s) left open at the end of the file, the last a class Basic"},
 		{name: "no entity at all", source: "module API\n  module Helpers\n  end\nend\n", want: "no entity declared under API::Entities in 1 file(s)"},
+		{name: "an entity declared twice with another parent", source: "module API\n  module Entities\n    class Basic < Grape::Entity\n      expose :id\n    end\n    class Basic < Other\n      expose :name\n    end\n  end\nend\n", want: "x.rb:6: class API::Entities::Basic declared twice with another parent, first at x.rb:3"},
+		{name: "an expose under a reopened class", source: "module API\n  module Entities\n    class Basic\n      expose :id\n    end\n  end\nend\n", want: "x.rb:4: expose under a class with no superclass"},
+		{name: "an expose under a scope in a reopened class", source: "module API\n  module Entities\n    class Basic\n      with_options if: ->(_, _) { x? } do\n        expose :id\n      end\n    end\n  end\nend\n", want: "x.rb:5: expose under a class with no superclass"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {

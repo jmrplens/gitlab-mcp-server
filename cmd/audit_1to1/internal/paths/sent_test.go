@@ -92,9 +92,13 @@ func TestSentCheck_FieldsGitLabSendsThatWeDoNotPublish_AreListedWithTheirConditi
 
 // TestTypedShapeCheck_FieldsGitLabSendsThatTheTypeDoesNotPublish_AreListed
 // verifies the same finding at type grain, which is the list the review
-// reads: the type, the operations its client-go struct models, the component
-// the first of them named, and the condition record's answer per field, with
-// a splat in the entity leaving the field it stands for unknown.
+// reads: the type, the operations its client-go struct models, per field the
+// component the first operation carrying it named, and the condition
+// record's answer for the field on that component, with a splat in the
+// entity leaving the field it stands for unknown. The component is per field
+// rather than per type because one type's operations resolve to different
+// components: the field only the second operation carries is read from the
+// second's component.
 func TestTypedShapeCheck_FieldsGitLabSendsThatTheTypeDoesNotPublish_AreListed(t *testing.T) {
 	twoTypes := structs.Pairings{
 		ClientGoDir: "/client-go",
@@ -111,13 +115,17 @@ func TestTypedShapeCheck_FieldsGitLabSendsThatTheTypeDoesNotPublish_AreListed(t 
 			{Name: "approvers", Line: 5, If: ":with_approvers"},
 			{Name: "*Helper.attributes", Line: 6, Splat: true},
 		}},
+		"APIEntitiesApproved": {File: "lib/api/entities/approved.rb", Line: 3, Fields: []apiexposes.Field{
+			{Name: "approved", Line: 4},
+			{Name: "approved_at", Line: 5},
+		}},
 	})
 	operations := map[string]apishapes.Operation{
 		"GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals": {
 			Entity: "APIEntitiesApprovals", Response: []string{"approved", "approvers", "attribute_a"},
 		},
 		"POST /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approve": {
-			Response: []string{"approved", "approvers"},
+			Entity: "APIEntitiesApproved", Response: []string{"approved", "approved_at", "approvers"},
 		},
 	}
 
@@ -128,12 +136,43 @@ func TestTypedShapeCheck_FieldsGitLabSendsThatTheTypeDoesNotPublish_AreListed(t 
 
 	searched := []string{"GET /projects/:/merge_requests/:/approvals", "POST /projects/:/merge_requests/:/approve"}
 	want := []UnsurfacedField{
+		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "approved_at", Operations: searched, Entity: "APIEntitiesApproved", Sent: sentAlways},
 		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "approvers", Operations: searched, Entity: "APIEntitiesApprovals", Sent: sentWhen, If: ":with_approvers"},
 		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "attribute_a", Operations: searched, Entity: "APIEntitiesApprovals", Sent: sentUnknown},
+		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "SummaryOutput", Field: "approved_at", Operations: searched, Entity: "APIEntitiesApproved", Sent: sentAlways},
 		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "SummaryOutput", Field: "approvers", Operations: searched, Entity: "APIEntitiesApprovals", Sent: sentWhen, If: ":with_approvers"},
 	}
 	if !reflect.DeepEqual(check.Unsurfaced, want) {
 		t.Errorf("Unsurfaced = %+v, want %+v", check.Unsurfaced, want)
+	}
+}
+
+// TestSentCheck_TheComponentOfAField_IsTheFirstOperationNamingOne verifies
+// the package grain's choice of component when the same field comes back
+// from an operation the document names no component for and from one it
+// does: the field is read on the named one whichever order the requests were
+// recorded in, so that a request answered without a component does not hold
+// the field at unknown.
+func TestSentCheck_TheComponentOfAField_IsTheFirstOperationNamingOne(t *testing.T) {
+	root := recordIn(t, map[string]apishapes.Operation{
+		"GET /api/v4/things/{id}/plain": {Response: []string{"extra"}},
+		"GET /api/v4/things/{id}":       {Entity: "APIEntitiesThing", Response: []string{"extra", "id"}},
+	})
+	conditionsIn(t, root, map[string]apiexposes.Entity{
+		"APIEntitiesThing": {File: "lib/api/entities/thing.rb", Line: 3, Fields: []apiexposes.Field{{Name: "id", Line: 4}, {Name: "extra", Line: 5}}},
+	})
+	rows := []requestinventory.Row{
+		{Package: "internal/tools/things", Kind: "rest", Method: "GET", Path: "/things/:thing_id/plain"},
+		{Package: "internal/tools/things", Kind: "rest", Method: "GET", Path: "/things/:thing_id"},
+	}
+
+	check := shapeCheck(root, rows, []publishedType{{Package: "internal/tools/things", Name: "Output", Fields: []string{"id"}}})
+
+	want := []UnsurfacedField{
+		{Grain: grainPackage, Package: "internal/tools/things", Field: "extra", Operations: []string{"GET /things/:thing_id", "GET /things/:thing_id/plain"}, Entity: "APIEntitiesThing", Sent: sentAlways},
+	}
+	if !reflect.DeepEqual(check.Sent.Unsurfaced, want) {
+		t.Errorf("Unsurfaced = %+v, want %+v", check.Sent.Unsurfaced, want)
 	}
 }
 

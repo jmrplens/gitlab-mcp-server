@@ -41,8 +41,9 @@ type UnsurfacedField struct {
 	// Operations are the endpoints whose responses carry the field, as the
 	// inventory spells them.
 	Operations []string `json:"operations"`
-	// Entity is the component the responses resolve to, when the document
-	// names one; the conditions below were read from it.
+	// Entity is the component the first operation carrying the field and
+	// naming a component resolves to, when the document names one for any;
+	// the conditions below were read from it.
 	Entity string `json:"entity,omitempty"`
 	// Sent is one of always, when and unknown.
 	Sent string `json:"sent"`
@@ -133,7 +134,10 @@ func (s responseSources) note(pkg, operation, entity string, fields []string) {
 			byField[field] = sources
 		}
 		sources.operations[operation] = true
-		if sources.entity == "" {
+		// The first operation naming a component for the field, not the
+		// first carrying the field: one that names none would otherwise hold
+		// the answer to unknown however many after it name one.
+		if sources.entity == "" && entity != "" {
 			sources.entity = entity
 		}
 	}

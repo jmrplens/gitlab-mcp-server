@@ -4,9 +4,11 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -103,7 +105,7 @@ func publishedTypesIn(dir, pkg string) []publishedType {
 	}
 
 	fileSet := token.NewFileSet()
-	var found []declaredOutputType
+	var found []declaredStruct
 	nested := map[string]bool{}
 	for _, entry := range entries {
 		name := entry.Name()
@@ -114,7 +116,7 @@ func publishedTypesIn(dir, pkg string) []publishedType {
 		if parseErr != nil {
 			continue
 		}
-		found = append(found, outputTypesIn(file, nested)...)
+		found = append(found, structsIn(file, nested)...)
 	}
 
 	// Only a top-level output type can be compared with an operation's
@@ -128,36 +130,88 @@ func publishedTypesIn(dir, pkg string) []publishedType {
 	// under instead, by [typedShapeCheck], which is why they are kept here
 	// rather than only counted.
 	//
-	// A type another output type names as a field type is nested by
+	// A type any struct of the package names as a field type is nested by
 	// construction, which is the whole rule and needs no type checking.
-	byName := make(map[string]declaredOutputType, len(found))
+	byName := make(map[string]declaredStruct, len(found))
 	for _, candidate := range found {
 		byName[candidate.Name] = candidate
 	}
 
 	out := make([]publishedType, 0, len(found))
 	for _, candidate := range found {
-		if nested[candidate.Name] {
+		if !strings.HasSuffix(candidate.Name, outputSuffix) || nested[candidate.Name] {
+			continue
+		}
+		whole := flatten(candidate, byName, map[string]bool{})
+		if len(whole.Fields) == 0 {
 			continue
 		}
 		out = append(out, publishedType{
 			Package: pkg,
 			Name:    candidate.Name,
-			Fields:  candidate.Fields,
-			Nested:  nestedTypes(candidate, byName),
+			Fields:  whole.Fields,
+			Nested:  nestedTypes(whole, byName),
 		})
 	}
 	return out
 }
 
-// declaredOutputType is one `*Output` struct as parsed, before the top-level
-// ones are told from the nested ones.
-type declaredOutputType struct {
+// declaredStruct is one struct as parsed, before the top-level output types
+// are told from the nested ones and from the structs that are not outputs.
+type declaredStruct struct {
 	Name   string
 	Fields []string
 	// FieldTypes maps a json tag to the locally declared type its field
 	// carries, for the fields whose type is one.
 	FieldTypes map[string]string
+	// Embeds names the locally declared types embedded under no json name,
+	// whose fields encoding/json promotes into this struct's.
+	Embeds []string
+}
+
+// flatten returns a struct with the fields its embeds promote into it, the
+// way encoding/json marshals them, through as many levels as the embeds go:
+// a details type embedding the row type publishes the row's fields as its
+// own. A field the struct declares itself wins over a promoted one of the
+// same name, as encoding/json's depth rule has it; two embeds promoting one
+// name at the same depth, which encoding/json drops, are not told apart, as
+// no type here has them. A struct embedding itself through a pointer is cut
+// where it repeats, and an embed of a type not declared in the package is
+// left out, which is the one thing the parse gives up (see [publishedTypes]).
+func flatten(candidate declaredStruct, byName map[string]declaredStruct, walking map[string]bool) declaredStruct {
+	if len(candidate.Embeds) == 0 || walking[candidate.Name] {
+		return candidate
+	}
+	walking[candidate.Name] = true
+	defer delete(walking, candidate.Name)
+
+	whole := declaredStruct{Name: candidate.Name, Fields: slices.Clone(candidate.Fields), FieldTypes: maps.Clone(candidate.FieldTypes)}
+	seen := make(map[string]bool, len(whole.Fields))
+	for _, field := range whole.Fields {
+		seen[field] = true
+	}
+	for _, name := range candidate.Embeds {
+		embedded, ok := byName[name]
+		if !ok {
+			continue
+		}
+		embedded = flatten(embedded, byName, walking)
+		for _, field := range embedded.Fields {
+			if seen[field] {
+				continue
+			}
+			seen[field] = true
+			whole.Fields = append(whole.Fields, field)
+			if typeName, has := embedded.FieldTypes[field]; has {
+				if whole.FieldTypes == nil {
+					whole.FieldTypes = map[string]string{}
+				}
+				whole.FieldTypes[field] = typeName
+			}
+		}
+	}
+	sort.Strings(whole.Fields)
+	return whole
 }
 
 // nestedTypes resolves the locally declared types one output type names as
@@ -167,11 +221,15 @@ type declaredOutputType struct {
 // A field whose type is declared in another package resolves to nothing, the
 // same as one carrying a scalar: [namedType] returns "" for a qualified type,
 // since a type from elsewhere is not one of ours to compare.
-func nestedTypes(candidate declaredOutputType, byName map[string]declaredOutputType) map[string]nestedType {
+func nestedTypes(candidate declaredStruct, byName map[string]declaredStruct) map[string]nestedType {
 	var out map[string]nestedType
 	for tag, typeName := range candidate.FieldTypes {
 		target, ok := byName[typeName]
-		if !ok || len(target.Fields) == 0 {
+		if !ok {
+			continue
+		}
+		target = flatten(target, byName, map[string]bool{})
+		if len(target.Fields) == 0 {
 			continue
 		}
 		if out == nil {
@@ -182,49 +240,39 @@ func nestedTypes(candidate declaredOutputType, byName map[string]declaredOutputT
 	return out
 }
 
-// outputTypesIn reads the output types one parsed file declares, recording in
-// nested every locally declared type any of them uses as a field type.
-func outputTypesIn(file *ast.File, nested map[string]bool) []declaredOutputType {
-	var found []declaredOutputType
-	for _, declaration := range file.Decls {
-		general, isGeneral := declaration.(*ast.GenDecl)
-		if !isGeneral || general.Tok != token.TYPE {
-			continue
+// structsIn reads the structs one parsed file declares, recording in nested
+// every locally declared type any of them names as a field type.
+//
+// Every struct counts for that, not only the output types: an output type
+// reached through a plain struct, such as the user under the row of a list of
+// uploads, is nested all the same, and the first version of this walk, which
+// looked at output types alone, held such a type to the endpoints that answer
+// with a whole user. An embed marks nothing nested, for the opposite reason:
+// its fields are promoted into the embedding struct, and the embedded type is
+// often a response of its own, the row a details type is built on.
+func structsIn(file *ast.File, nested map[string]bool) []declaredStruct {
+	var found []declaredStruct
+	ast.Inspect(file, func(node ast.Node) bool {
+		switch typed := node.(type) {
+		case *ast.FuncDecl:
+			// A type declared inside a function is nobody's response.
+			return false
+		case *ast.TypeSpec:
+			if structType, isStruct := typed.Type.(*ast.StructType); isStruct {
+				fields, fieldTypes, embeds := jsonTags(structType)
+				for _, name := range fieldTypes {
+					nested[name] = true
+				}
+				if len(fields) > 0 || len(embeds) > 0 {
+					found = append(found, declaredStruct{Name: typed.Name.Name, Fields: fields, FieldTypes: fieldTypes, Embeds: embeds})
+				}
+			}
+			return false
+		default:
+			return true
 		}
-		for _, spec := range general.Specs {
-			typeSpec, isType := spec.(*ast.TypeSpec)
-			if !isType || !strings.HasSuffix(typeSpec.Name.Name, outputSuffix) {
-				continue
-			}
-			structType, isStruct := typeSpec.Type.(*ast.StructType)
-			if !isStruct {
-				continue
-			}
-			// Every locally declared type used as a field type is nested,
-			// whether or not that field carries a json tag: an untagged embed
-			// of one output type in another is still not a response of its own.
-			for _, name := range referencedTypes(structType) {
-				nested[name] = true
-			}
-			fields, fieldTypes := jsonTags(structType)
-			if len(fields) > 0 {
-				found = append(found, declaredOutputType{Name: typeSpec.Name.Name, Fields: fields, FieldTypes: fieldTypes})
-			}
-		}
-	}
+	})
 	return found
-}
-
-// referencedTypes names every locally declared type this struct uses as a field
-// type, through any number of pointers, slices and maps.
-func referencedTypes(structType *ast.StructType) []string {
-	var names []string
-	for _, field := range structType.Fields.List {
-		if name := namedType(field.Type); name != "" {
-			names = append(names, name)
-		}
-	}
-	return names
 }
 
 // namedType unwraps an expression to the local type name at its core, and
@@ -247,16 +295,18 @@ func namedType(expr ast.Expr) string {
 	}
 }
 
-// jsonTags returns the json names a struct publishes, sorted, and the locally
-// declared type each of those names carries where it carries one. The names
-// follow the rules encoding/json applies to a tag: a field tagged "-"
-// publishes nothing, an unexported field publishes nothing whatever its tag
-// says, a tag that names no key (`json:",omitempty"`) publishes the Go field
-// name, and an embed tagged with a name is published under that name. An
-// untagged field is left out rather than guessed at: this repository tags
-// every field it means a client to see, so an untagged one is an embed or an
-// oversight, and neither should become a finding about GitLab.
-func jsonTags(structType *ast.StructType) (names []string, fieldTypes map[string]string) {
+// jsonTags returns the json names a struct publishes, sorted, the locally
+// declared type each of those names carries where it carries one, and the
+// locally declared types it embeds under no name. The names follow the rules
+// encoding/json applies to a tag: a field tagged "-" publishes nothing, an
+// unexported field publishes nothing whatever its tag says, a tag that names
+// no key (`json:",omitempty"`) publishes the Go field name, and an embed
+// tagged with a name is published under that name while one tagged with none,
+// or not tagged at all, has its fields promoted (see [flatten]). An untagged
+// named field is left out rather than guessed at: this repository tags every
+// field it means a client to see, so an untagged one is an oversight, and an
+// oversight should not become a finding about GitLab.
+func jsonTags(structType *ast.StructType) (names []string, fieldTypes map[string]string, embeds []string) {
 	publish := func(key string, fieldType ast.Expr) {
 		names = append(names, key)
 		if typeName := namedType(fieldType); typeName != "" {
@@ -266,35 +316,46 @@ func jsonTags(structType *ast.StructType) (names []string, fieldTypes map[string
 			fieldTypes[key] = typeName
 		}
 	}
+	embed := func(fieldType ast.Expr) {
+		if typeName := namedType(fieldType); typeName != "" {
+			embeds = append(embeds, typeName)
+		}
+	}
 	for _, field := range structType.Fields.List {
-		if field.Tag == nil {
-			continue
-		}
-		raw, err := strconv.Unquote(field.Tag.Value)
-		if err != nil {
-			continue
-		}
-		name, _, _ := strings.Cut(reflect.StructTag(raw).Get("json"), ",")
-		if name == "-" {
-			continue
-		}
-		if len(field.Names) == 0 {
-			if name != "" {
-				publish(name, field.Type)
+		name, tagged := jsonName(field)
+		switch {
+		case name == "-":
+		case len(field.Names) == 0 && name != "":
+			publish(name, field.Type)
+		case len(field.Names) == 0:
+			embed(field.Type)
+		case tagged:
+			for _, ident := range field.Names {
+				if !ident.IsExported() {
+					continue
+				}
+				key := name
+				if key == "" {
+					key = ident.Name
+				}
+				publish(key, field.Type)
 			}
-			continue
-		}
-		for _, ident := range field.Names {
-			if !ident.IsExported() {
-				continue
-			}
-			key := name
-			if key == "" {
-				key = ident.Name
-			}
-			publish(key, field.Type)
 		}
 	}
 	sort.Strings(names)
-	return names, fieldTypes
+	return names, fieldTypes, embeds
+}
+
+// jsonName reads the key a field's json tag names, "" for a tag naming none,
+// and reports whether the field carries a tag that could be read at all.
+func jsonName(field *ast.Field) (name string, tagged bool) {
+	if field.Tag == nil {
+		return "", false
+	}
+	raw, err := strconv.Unquote(field.Tag.Value)
+	if err != nil {
+		return "", false
+	}
+	name, _, _ = strings.Cut(reflect.StructTag(raw).Get("json"), ",")
+	return name, true
 }
