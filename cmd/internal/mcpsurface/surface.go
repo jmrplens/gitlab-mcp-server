@@ -116,7 +116,7 @@ func NewGitLabComClient() *gitlabclient.Client {
 // cmd/server/main.go:1802-1808, in that order: the lockdown first, then the
 // pagination bounds, which the comment there records must sit inside it so it
 // sees the same finalized schema set. A listing that applies neither, or only
-// the first, measures and documents a schema no client ever receives — without
+// the first, measures and documents a schema no client ever receives: without
 // `additionalProperties: false`, with the jsonschema `,required` tag suffixes
 // still in the descriptions, and without the page/per_page bounds.
 //
@@ -241,8 +241,8 @@ type listKey struct {
 // it: what cmd/server registers for config.ToolSurfaceIndividual, listed over
 // a real tools/list round-trip through [Session]'s served-schema chain.
 //
-// [tools.RegisterAll] is the server's own pair for this surface — the catalog
-// built with IncludeMCP, projected with the standalone utilities — so the
+// [tools.RegisterAll] is the server's own pair for this surface: the catalog
+// built with IncludeMCP, projected with the standalone utilities, so the
 // gitlab_server_* tools are in the result.
 func IndividualTools(client *gitlabclient.Client, tier edition.Tier) []*mcp.Tool {
 	return listSurface(listKey{client: client, surface: config.ToolSurfaceIndividual, tier: tier, schemaMode: tools.MetaParamSchema()},
@@ -258,7 +258,7 @@ func IndividualTools(client *gitlabclient.Client, tier edition.Tier) []*mcp.Tool
 // The catalog is built with IncludeMCP, which is how cmd/server builds the one
 // it registers (tools.SharedMetaCatalog, keyed with includeMCP true), so
 // gitlab_server is present. [tools.RegisterAllMeta] builds without it and is
-// therefore one tool short of the served surface — the difference that had the
+// therefore one tool short of the served surface: the difference that had the
 // published meta counts saying 33 where the binary serves 34.
 func MetaTools(client *gitlabclient.Client, tier edition.Tier) []*mcp.Tool {
 	return listSurface(listKey{client: client, surface: config.ToolSurfaceMeta, tier: tier, schemaMode: tools.MetaParamSchema()},

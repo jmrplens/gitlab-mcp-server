@@ -217,7 +217,7 @@ func readVersion(rootDir string) string {
 
 // listTools returns either the enterprise individual catalog or the base
 // meta-tool catalog, depending on meta. Both come from [mcpsurface], which
-// registers what cmd/server registers for the surface — so the documented meta
+// registers what cmd/server registers for the surface, so the documented meta
 // surface carries gitlab_server, as the served one does.
 func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
 	if meta {

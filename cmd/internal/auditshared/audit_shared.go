@@ -83,7 +83,7 @@ func CachedActionSpecs(client *gitlabclient.Client, enterprise bool) []tools.Act
 }
 
 // ProjectIndividualDescriptions returns the projected description per
-// individual-tool name — the exact text the model consumes. Prefer
+// individual-tool name: the exact text the model consumes. Prefer
 // CachedIndividualDescriptions unless a fresh projection is the point.
 //
 // It is a projection over [mcpsurface.IndividualTools], which is the one
