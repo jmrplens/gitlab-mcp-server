@@ -18,10 +18,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,880 |
-| Unit test functions                                   | 14,277 |
+| Total test functions                                  | 14,883 |
+| Unit test functions                                   | 14,280 |
 | E2E test functions                                    |    603 |
-| cmd test functions                                    |  2,896 |
+| cmd test functions                                    |  2,899 |
 | Test files (internal/)                                |    519 |
 | Test files (cmd/)                                     |    196 |
 | Test files (test/e2e/)                                |    240 |
@@ -29,7 +29,7 @@
 | Core packages tested                                  |     21 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  98.4% |
 | Overall coverage (`go test ./internal/...`)           |  98.6% |
-| Average package coverage                              |  98.6% |
+| Average package coverage                              |  98.7% |
 
 ### Naming Convention Stats
 
@@ -37,7 +37,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 11,859 | 79.7% |
 | `TestFunc` (no underscore)             |    980 |  6.6% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,041 | 13.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,044 | 13.7% |
 
 ## Test Distribution
 
@@ -49,8 +49,8 @@
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (177) |          8,603 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            603 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,896 |        196 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,880** |    **955** |                                                                                                 |
+| cmd packages            |          2,899 |        196 | server entry point and developer command utilities                                              |
+| **Total**               |     **14,883** |    **955** |                                                                                                 |
 
 ### Core Packages
 
@@ -329,9 +329,9 @@
 | cmd/audit_string_dupes                         |    91.8% |
 | cmd/audit_supply_chain                         |    98.0% |
 | cmd/audit_surface_quality                      |    94.1% |
-| cmd/audit_test_goroutines                      |    93.6% |
-| cmd/audit_test_names                           |    88.2% |
-| cmd/audit_test_subtests                        |    98.0% |
+| cmd/audit_test_goroutines                      |    95.3% |
+| cmd/audit_test_names                           |    91.0% |
+| cmd/audit_test_subtests                        |    99.7% |
 | cmd/audit_tokens                               |    98.0% |
 | cmd/bench_resources                            |   100.0% |
 | cmd/eval_mcp_surfaces/internal/evalrun         |    88.9% |
@@ -582,7 +582,6 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_brand** (87.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_gateway_chars** (87.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_graphql_schema** (87.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_test_names** (88.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/evalrun** (88.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_lhm_manifest** (89.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_api_shapes** (89.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
