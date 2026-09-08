@@ -16642,7 +16642,7 @@ Update a feature flag's name, description, active state, or strategies. Returns:
 - `name` (string) (required): Current feature flag name
 - `new_name` (string): New feature flag name
 - `project_id` (string) (required): Project ID or path
-- `strategies` (array of objects): Activation strategies for the flag. Each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes
+- `strategies` (array of objects): Activation strategies for the flag. Each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes carrying their own id and _destroy
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -21217,7 +21217,6 @@ List the merge requests associated with a deployment, with merge-request filteri
 
 **Parameters:**
 
-- `approved` (string): Filter by approval status: yes or no
 - `approved_by_ids` (array of values): Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of "Any" (approved by someone) or "None" (unapproved)
 - `approved_by_usernames` (array of strings): Filter by MRs approved by all listed usernames
 - `approver_ids` (array of values): Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of "Any" (has approvers) or "None" (has none)
@@ -23120,7 +23119,6 @@ List merge requests across all accessible projects. Returns: visible MRs with pr
 
 **Parameters:**
 
-- `approved` (string): Filter by approval status: 'yes' or 'no' (Premium)
 - `approved_by_ids` (array of values): Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of "Any" (approved by someone) or "None" (unapproved)
 - `approved_by_usernames` (array of strings): Filter by MRs approved by all listed usernames
 - `approver_ids` (array of values): Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of "Any" (has approvers) or "None" (has none)
