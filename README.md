@@ -290,7 +290,7 @@ Rows use the base Community Edition catalog unless the Tier column says otherwis
 
 | MCP Capability    | Support                                                                                                                             |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **Tools**         | Up to 1079 individual / 32–50 meta                                                                                                  |
+| **Tools**         | Up to 1091 individual / 34–52 meta                                                                                                  |
 | **Resources**     | 45 (static + templates)                                                                                                             |
 | **Prompts**       | 37 templates                                                                                                                        |
 | **Completions**   | 18 argument names, among them projects, groups, users, branches, tags, MRs, issues, pipelines, jobs, labels, milestones and SHAs    |

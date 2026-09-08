@@ -179,7 +179,7 @@ Eleven more arrive with Ultimate:
 
 | #   | Tool Name      | Actions | Source                                                                                                          |
 | --- | -------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
-| 50  | `gitlab_orbit` | 6       | Experimental GitLab.com Orbit Knowledge Graph API (`status`, `schema`, `tools`, `dsl`, `query`, `graph_status`) |
+| 52  | `gitlab_orbit` | 6       | Experimental GitLab.com Orbit Knowledge Graph API (`status`, `schema`, `tools`, `dsl`, `query`, `graph_status`) |
 
 ---
 

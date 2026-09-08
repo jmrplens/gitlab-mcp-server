@@ -15,8 +15,8 @@ Use the dynamic toolset when the initial MCP `tools/list` payload is the limitin
 | Mode                     |                                                                    Visible Tools | Best For                                                               |
 | ------------------------ | -------------------------------------------------------------------------------: | ---------------------------------------------------------------------- |
 | Dynamic toolset, default |                                                                                2 | Low-token clients that can find an action with schema, then execute it |
-| Meta-tools               |                   32 Free/CE / 38 Premium / 49 Ultimate / 50 GitLab.com Ultimate | Broad compatibility and predictable domain-level action selection      |
-| Individual tools         | 854 Free/CE / 1007 Premium / 1073 Ultimate / 1079 GitLab.com Ultimate with Orbit | Clients that benefit from one tool per GitLab operation                |
+| Meta-tools               |                   34 Free/CE / 40 Premium / 51 Ultimate / 52 GitLab.com Ultimate | Broad compatibility and predictable domain-level action selection      |
+| Individual tools         | 866 Free/CE / 1019 Premium / 1085 Ultimate / 1091 GitLab.com Ultimate with Orbit | Clients that benefit from one tool per GitLab operation                |
 
 Dynamic mode keeps the same underlying GitLab coverage as meta-tools. It changes discovery, not business behavior.
 
