@@ -139,6 +139,9 @@ func typedShapeCheck(root string, index *operationIndex, published []publishedTy
 
 	check := TypedShapeCheck{Ran: true}
 	for _, candidate := range published {
+		if candidate.Inner {
+			continue
+		}
 		paired := sdkTypes[[2]string{shortPackage(candidate.Package), candidate.Name}]
 		if len(paired) == 0 {
 			check.SkippedNoPairing++
@@ -194,9 +197,14 @@ type describedResponses struct {
 	// a finding carries is the number of responses that failed to name the
 	// field rather than the number of endpoints the type touches.
 	Operations []string
-	// Entity is the component the first searched response named, which is
-	// what the conditions record is asked about for a field the type lacks.
-	Entity string
+	// EntityOf maps each top-level property to the component the first
+	// searched response carrying it resolved to, which is what the conditions
+	// record is asked about for a field the type lacks. Per property rather
+	// than per type, because the responses of one type's routes resolve to
+	// different components: the fingerprint lookup of a key is documented as
+	// answering with a user, and holding the key's own fields to that
+	// component left the three the key type lacked unknown.
+	EntityOf map[string]string
 	// Known is the union of the top-level property names those responses carry.
 	Known map[string]bool
 	// Nested is the union, per top-level property, of the property names the
@@ -210,7 +218,7 @@ type describedResponses struct {
 // gives them.
 func describedRoutes(paired []string, routes map[string][]sdkRoute, index *operationIndex) describedResponses {
 	seen := map[string]bool{}
-	described := describedResponses{Known: map[string]bool{}, Nested: map[string]map[string]bool{}}
+	described := describedResponses{EntityOf: map[string]string{}, Known: map[string]bool{}, Nested: map[string]map[string]bool{}}
 	for _, sdkType := range paired {
 		for _, route := range routes[sdkType] {
 			described.Routed = true
@@ -239,11 +247,11 @@ func describedRoutes(paired []string, routes map[string][]sdkRoute, index *opera
 // none was named yet, its top-level property names, and the names under each
 // property that carries an object.
 func (d *describedResponses) absorb(operation apishapes.Operation) {
-	if d.Entity == "" {
-		d.Entity = operation.Entity
-	}
 	for _, name := range operation.Response {
 		d.Known[name] = true
+		if operation.Entity != "" && d.EntityOf[name] == "" {
+			d.EntityOf[name] = operation.Entity
+		}
 	}
 	for property, names := range operation.Nested {
 		under := d.Nested[property]
@@ -297,7 +305,7 @@ func unsurfacedAtTypeGrain(candidate publishedType, described describedResponses
 			Type:       candidate.Name,
 			Field:      name,
 			Operations: described.Operations,
-			Entity:     described.Entity,
+			Entity:     described.EntityOf[name],
 		}
 		conditions.annotate(&finding)
 		out = append(out, finding)

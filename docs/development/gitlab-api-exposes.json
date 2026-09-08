@@ -3,12 +3,12 @@
  "note": "The condition under which GitLab sends each field a REST entity exposes, read out of gitlab-org/gitlab's Grape entities by cmd/gen_api_exposes. An entity's fields are its own in declaration order, Enterprise prepends last; the parent's come first in what GitLab sends and are listed under the parent. A field without a condition is always sent when the entity is; a field with one is sent only when it holds, and its tier is the license tier the named feature belongs to.",
  "source": {
   "ref": "master",
-  "commit": "bd97ac54e382c2388df83b78109ddb6f82de23eb",
+  "commit": "1c8ac0343e0f22861c5c7a4351a830483c6103bc",
   "retrieved_at": "2026-09-08",
-  "sha256": "484b55e9256f1784dc256db10955aa2d1f71ea1fa5a8fb4185cff1549a79103a",
+  "sha256": "b133e11a585a6e8456cb708bf2f1decefb87d487495cc9b1e245c7b6487aaa5c",
   "files": 598,
   "entities": 594,
-  "exposes": 3449,
+  "exposes": 3506,
   "features": 289
  },
  "entities": {
@@ -338,10 +338,87 @@
    ]
   },
   "APIEntitiesAiDuoWorkflowsWorkflow": {
-   "file": "ee/lib/api/entities/ai/duo_workflows/workflow/agent_privileges.rb",
+   "file": "ee/lib/api/entities/ai/duo_workflows/workflow.rb",
    "line": 7,
    "edition": "ee",
-   "fields": []
+   "fields": [
+    {
+     "name": "id",
+     "line": 8
+    },
+    {
+     "name": "project_id",
+     "line": 9
+    },
+    {
+     "name": "namespace_id",
+     "line": 10
+    },
+    {
+     "name": "agent_privileges",
+     "line": 11
+    },
+    {
+     "name": "agent_privileges_names",
+     "line": 12
+    },
+    {
+     "name": "pre_approved_agent_privileges",
+     "line": 13
+    },
+    {
+     "name": "pre_approved_agent_privileges_names",
+     "line": 14
+    },
+    {
+     "name": "workflow_definition",
+     "line": 15
+    },
+    {
+     "name": "status",
+     "line": 16
+    },
+    {
+     "name": "summary",
+     "line": 17
+    },
+    {
+     "name": "title",
+     "line": 18
+    },
+    {
+     "name": "allow_agent_to_request_user",
+     "line": 19
+    },
+    {
+     "name": "image",
+     "line": 20
+    },
+    {
+     "name": "environment",
+     "line": 21
+    },
+    {
+     "name": "ai_catalog_item_version_id",
+     "line": 22
+    },
+    {
+     "name": "workload",
+     "line": 36
+    },
+    {
+     "name": "mcp_enabled",
+     "line": 40
+    },
+    {
+     "name": "incremental_checkpoints_enabled",
+     "line": 41
+    },
+    {
+     "name": "gitlab_url",
+     "line": 43
+    }
+   ]
   },
   "APIEntitiesAiDuoWorkflowsWorkflowAgentPrivileges": {
    "file": "ee/lib/api/entities/ai/duo_workflows/workflow/agent_privileges.rb",
@@ -3528,9 +3605,36 @@
    ]
   },
   "APIEntitiesCiLintResult": {
-   "file": "lib/api/entities/ci/lint/result/include.rb",
+   "file": "lib/api/entities/ci/lint/result.rb",
    "line": 7,
-   "fields": []
+   "fields": [
+    {
+     "name": "valid",
+     "line": 8
+    },
+    {
+     "name": "errors",
+     "line": 9
+    },
+    {
+     "name": "warnings",
+     "line": 11
+    },
+    {
+     "name": "merged_yaml",
+     "line": 13
+    },
+    {
+     "name": "includes",
+     "line": 15,
+     "using": "APIEntitiesCiLintResultInclude"
+    },
+    {
+     "name": "jobs",
+     "line": 17,
+     "if": "-\u003e(result, options) { options[:include_jobs] }"
+    }
+   ]
   },
   "APIEntitiesCiLintResultInclude": {
    "file": "lib/api/entities/ci/lint/result/include.rb",
@@ -6379,9 +6483,43 @@
    "fields": []
   },
   "APIEntitiesFeatureFlag": {
-   "file": "lib/api/entities/feature_flag/user_list.rb",
+   "file": "lib/api/entities/feature_flag.rb",
    "line": 5,
-   "fields": []
+   "fields": [
+    {
+     "name": "name",
+     "line": 6
+    },
+    {
+     "name": "description",
+     "line": 7
+    },
+    {
+     "name": "active",
+     "line": 8
+    },
+    {
+     "name": "version",
+     "line": 9
+    },
+    {
+     "name": "created_at",
+     "line": 10
+    },
+    {
+     "name": "updated_at",
+     "line": 11
+    },
+    {
+     "name": "scopes",
+     "line": 12
+    },
+    {
+     "name": "strategies",
+     "line": 15,
+     "using": "APIEntitiesFeatureFlagStrategy"
+    }
+   ]
   },
   "APIEntitiesFeatureFlagBasicUserList": {
    "file": "lib/api/entities/feature_flag/basic_user_list.rb",
@@ -10991,9 +11129,25 @@
    ]
   },
   "APIEntitiesNamespace": {
-   "file": "lib/api/entities/namespace/root_storage_statistics.rb",
+   "file": "lib/api/entities/namespace.rb",
    "line": 5,
+   "parent": "APIEntitiesNamespaceBasic",
    "fields": [
+    {
+     "name": "members_count_with_descendants",
+     "line": 6,
+     "if": "-\u003e(namespace, opts) { expose_members_count_with_descendants?(namespace, opts) }"
+    },
+    {
+     "name": "root_repository_size",
+     "line": 14,
+     "if": "-\u003e(namespace, opts) { admin_request_for_group?(namespace, opts) }"
+    },
+    {
+     "name": "projects_count",
+     "line": 18,
+     "if": "-\u003e(namespace, opts) { admin_request_for_group?(namespace, opts) }"
+    },
     {
      "name": "shared_runners_minutes_limit",
      "file": "ee/lib/ee/api/entities/namespace.rb",
@@ -11707,9 +11861,95 @@
    ]
   },
   "APIEntitiesPackage": {
-   "file": "lib/api/entities/package/pipeline.rb",
+   "file": "lib/api/entities/package.rb",
    "line": 5,
-   "fields": []
+   "fields": [
+    {
+     "name": "id",
+     "line": 12
+    },
+    {
+     "name": "name",
+     "line": 14
+    },
+    {
+     "name": "conan_package_name",
+     "line": 22,
+     "if": "-\u003e(package) { package.conan? }"
+    },
+    {
+     "name": "version",
+     "line": 26
+    },
+    {
+     "name": "package_type",
+     "line": 27
+    },
+    {
+     "name": "status",
+     "line": 28
+    },
+    {
+     "name": "_links",
+     "line": 30,
+     "nested": [
+      {
+       "name": "web_path",
+       "line": 31,
+       "if": "-\u003e(package) { package.detailed_info? }"
+      },
+      {
+       "name": "delete_api_path",
+       "line": 35,
+       "if": "can_destroy(:package, \u0026:project)"
+      }
+     ]
+    },
+    {
+     "name": "created_at",
+     "line": 40
+    },
+    {
+     "name": "last_downloaded_at",
+     "line": 41
+    },
+    {
+     "name": "creator_id",
+     "line": 42
+    },
+    {
+     "name": "project_id",
+     "line": 44,
+     "if": "-\u003e(_, opts) { opts[:group] }"
+    },
+    {
+     "name": "project_path",
+     "line": 47,
+     "if": "-\u003e(obj, opts) do opts[:group] \u0026\u0026 Ability.allowed?(opts[:user], :read_project, obj.project) end"
+    },
+    {
+     "name": "tags",
+     "line": 50
+    },
+    {
+     "name": "pipeline",
+     "line": 52,
+     "if": "-\u003e(package, opts) { package.last_build_info \u0026\u0026 can_read_pipeline?(package, opts) }",
+     "using": "APIEntitiesPackagePipeline"
+    },
+    {
+     "name": "pipelines",
+     "line": 56,
+     "if": "-\u003e(package, opts) { package.pipelines.present? \u0026\u0026 can_read_pipeline?(package, opts) }",
+     "using": "APIEntitiesPackagePipeline"
+    },
+    {
+     "name": "versions",
+     "line": 62,
+     "unless": "-\u003e(_, opts) { opts[:collection] }",
+     "using": "APIEntitiesPackageVersion"
+    }
+   ]
   },
   "APIEntitiesPackageFile": {
    "file": "lib/api/entities/package_file.rb",
@@ -18175,9 +18415,23 @@
    ]
   },
   "APIEntitiesWikiPage": {
-   "file": "lib/api/entities/wiki_page/meta.rb",
+   "file": "lib/api/entities/wiki_page.rb",
    "line": 5,
-   "fields": []
+   "parent": "APIEntitiesWikiPageBasic",
+   "fields": [
+    {
+     "name": "content",
+     "line": 8
+    },
+    {
+     "name": "encoding",
+     "line": 22
+    },
+    {
+     "name": "front_matter",
+     "line": 26
+    }
+   ]
   },
   "APIEntitiesWikiPageBasic": {
    "file": "lib/api/entities/wiki_page_basic.rb",

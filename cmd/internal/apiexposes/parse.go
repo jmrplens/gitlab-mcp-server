@@ -73,7 +73,24 @@ type decl struct {
 	rubyPath  string
 	namespace []string
 	parentRef string
+	// reopened records every later declaration of the same class, whose
+	// parent is compared with the first once every declaration is read.
+	reopened []reopening
 	Entity
+}
+
+// reopening is a class declared again, with the parent it named.
+type reopening struct {
+	file      string
+	line      int
+	parentRef string
+}
+
+// scope is the constant path a reference inside the class is resolved from:
+// the enclosing namespace and then the class itself, as Ruby's lexical
+// lookup has it.
+func (d *decl) scope() []string {
+	return append(append([]string{}, d.namespace...), strings.Split(d.rubyPath, "::")[len(d.namespace):]...)
 }
 
 // prepend is the Enterprise module prepended into one entity.
@@ -120,6 +137,10 @@ type frame struct {
 	fields *[]Field
 	// condIf and condUnless are a scope's conditions.
 	condIf, condUnless string
+	// reopened marks a module frame opened by a `class X` with no
+	// superclass: a namespace reopened to declare something inside it, whose
+	// own exposes would belong to an entity declared elsewhere.
+	reopened bool
 }
 
 // describe names a frame for an error.
@@ -273,8 +294,21 @@ func (s *scanner) prepended() {
 	s.push(frame{kind: framePrepended, fields: &bucket.fields})
 }
 
-// class opens an entity when the class sits under API::Entities, and a
-// skipped body otherwise.
+// class opens an entity when the class sits under API::Entities and names a
+// superclass, and a skipped body outside API::Entities. Ruby lets a class be
+// opened again, and GitLab's entity files do it two ways. With no
+// superclass (`class Result`, in ci/lint/result/include.rb) it is a
+// namespace reopened to declare something inside it: a Grape entity always
+// names Grape::Entity or another entity as its parent, and reading that line
+// as an entity replaced the one result.rb declares with an empty one. With
+// the same superclass (feature_flag/basic_user_list.rb) it is the same
+// entity opened again: an entity declared inside it is named under it, and
+// an expose there joins the entity's fields after those of the file read
+// before it. A second declaration naming another parent is refused, since it
+// is not the same class and one of the two would silently replace the other;
+// the parents are compared once every declaration is read, by
+// [parser.checkReopenings], because a parent is a reference that may name a
+// class declared later and may be spelled more than one way.
 func (s *scanner) class(match []string, lineNo int) {
 	name, parent := match[1], match[2]
 	namespace := s.namespace()
@@ -282,7 +316,19 @@ func (s *scanner) class(match []string, lineNo int) {
 		s.push(frame{kind: frameSkip})
 		return
 	}
+	if parent == "" {
+		s.push(frame{kind: frameModule, name: name, reopened: true})
+		return
+	}
+	if parent == "Grape::Entity" || parent == "::Grape::Entity" {
+		parent = ""
+	}
 	rubyPath := strings.Join(append(append([]string{}, namespace...), name), "::")
+	if existing := s.p.entities[rubyPath]; existing != nil {
+		existing.reopened = append(existing.reopened, reopening{file: s.path, line: lineNo, parentRef: parent})
+		s.push(frame{kind: frameClass, name: name, fields: &existing.Fields})
+		return
+	}
 	d := &decl{rubyPath: rubyPath, namespace: namespace, parentRef: parent}
 	d.File = s.path
 	d.Line = lineNo
@@ -291,9 +337,6 @@ func (s *scanner) class(match []string, lineNo int) {
 	// written as an empty list rather than null, so a reader iterating fields
 	// needs no guard.
 	d.Fields = []Field{}
-	if parent == "Grape::Entity" || parent == "::Grape::Entity" {
-		d.parentRef = ""
-	}
 	s.p.entities[rubyPath] = d
 	s.push(frame{kind: frameClass, name: name, fields: &d.Fields})
 }
@@ -317,6 +360,12 @@ const (
 func (s *scanner) expose(line string, lineNo int) error {
 	stmt := s.join(line)
 	fields := s.currentFields()
+	if fields == nil && s.inReopenedClass() {
+		// The fields belong to an entity declared in another file, and
+		// attaching them there would need Ruby's load order, which this
+		// reader does not have.
+		return errors.New("expose under a class with no superclass: an entity reopened to add fields is not read")
+	}
 	rest := strings.TrimPrefix(strings.TrimPrefix(stmt, "expose"), "(")
 	if strings.HasPrefix(stmt, "expose(") {
 		// Parenthesized arguments: the block, if any, follows the paren.
@@ -443,6 +492,22 @@ func (s *scanner) inSkip() bool {
 	return slices.ContainsFunc(s.frames, func(f frame) bool { return f.kind == frameSkip })
 }
 
+// inReopenedClass reports whether the statement sits directly in a class
+// declared without a superclass, scopes aside.
+func (s *scanner) inReopenedClass() bool {
+	for _, f := range slices.Backward(s.frames) {
+		switch f.kind {
+		case frameModule:
+			return f.reopened
+		case frameScope:
+			continue
+		default:
+			return false
+		}
+	}
+	return false
+}
+
 // currentFields is where an expose at this point lands, or nil when it is
 // inside a skipped body or outside any entity.
 func (s *scanner) currentFields() *[]Field {
@@ -519,6 +584,9 @@ func isEntityNamespace(namespace []string) bool {
 // applies the Enterprise prepends, reads the licensed features out of each
 // condition, and keys the result by OpenAPI name.
 func (p *parser) finish(features map[string]string) (entities map[string]Entity, exposes int, err error) {
+	if reopenErr := p.checkReopenings(); reopenErr != nil {
+		return nil, 0, reopenErr
+	}
 	for target, bucket := range p.prepends {
 		d := p.entities[target]
 		if d == nil {
@@ -539,14 +607,46 @@ func (p *parser) finish(features map[string]string) (entities map[string]Entity,
 		if d.parentRef != "" {
 			d.Parent = OpenAPIName(p.resolve(d.parentRef, d.namespace))
 		}
-		scope := append(append([]string{}, d.namespace...), strings.Split(rubyPath, "::")[len(d.namespace):]...)
-		exposes += p.resolveFields(d.Fields, scope, features)
+		exposes += p.resolveFields(d.Fields, d.scope(), features)
 		entities[OpenAPIName(rubyPath)] = d.Entity
 	}
 	if len(entities) == 0 {
 		return nil, 0, fmt.Errorf("no entity declared under API::Entities in %d file(s)", p.files)
 	}
 	return entities, exposes, nil
+}
+
+// checkReopenings refuses a class opened again under another parent, once
+// every declaration is read: a parent is a reference resolved against what
+// the tree declares, so `Other` and `::API::Entities::Other` are compared as
+// the class they name rather than as the text they were written with. The
+// classes are walked in a fixed order so the first refusal is the same on
+// every run.
+func (p *parser) checkReopenings() error {
+	paths := make([]string, 0, len(p.entities))
+	for rubyPath := range p.entities {
+		paths = append(paths, rubyPath)
+	}
+	sort.Strings(paths)
+	for _, rubyPath := range paths {
+		d := p.entities[rubyPath]
+		first := p.parentPath(d.parentRef, d.namespace)
+		for _, again := range d.reopened {
+			if p.parentPath(again.parentRef, d.namespace) != first {
+				return fmt.Errorf("%s:%d: class %s declared twice with another parent, first at %s:%d", again.file, again.line, rubyPath, d.File, d.Line)
+			}
+		}
+	}
+	return nil
+}
+
+// parentPath is the class a parent reference names, "" standing for
+// Grape::Entity, resolved from the namespace the class is declared in.
+func (p *parser) parentPath(ref string, namespace []string) string {
+	if ref == "" {
+		return ""
+	}
+	return p.resolve(ref, namespace)
 }
 
 // resolveFields resolves the used entities and reads the licensed features of

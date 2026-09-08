@@ -30,7 +30,9 @@ func writePackage(t *testing.T, name, source string) string {
 // endpoint returns and not of the objects inside it, so comparing a nested type
 // against that list reports every one of its fields: the first run produced
 // 1418 findings, almost all of them the fields of a user or a group sitting
-// inside a response that does carry them.
+// inside a response that does carry them. A nested type is returned all the
+// same, marked inner, as is an exported struct not named as an output, since
+// the sent direction counts their fields as the package's.
 func TestPublishedTypes_NestedOutputs_AreNotCompared(t *testing.T) {
 	root := writePackage(t, "sample", `package sample
 
@@ -53,18 +55,159 @@ type NoteOutput struct {
 type NotAnOutputType struct {
 	Whatever string `+"`json:\"whatever\"`"+`
 }
+
+type CreateInput struct {
+	Title string `+"`json:\"title\"`"+`
+}
+
+type rawOutput struct {
+	Secret string `+"`json:\"secret\"`"+`
+}
 `)
 
 	types := publishedTypes(root)
 
-	if len(types) != 1 {
-		t.Fatalf("read %+v, want only the top-level output type", types)
+	want := []publishedType{
+		{Package: "internal/tools/sample", Name: "NotAnOutputType", Fields: []string{"whatever"}, Inner: true},
+		{Package: "internal/tools/sample", Name: "NoteOutput", Fields: []string{"body"}, Inner: true},
+		{Package: "internal/tools/sample", Name: "Output", Fields: []string{"author", "id", "notes"}, Nested: map[string]nestedType{"author": {Name: "UserOutput", Fields: []string{"name"}}, "notes": {Name: "NoteOutput", Fields: []string{"body"}}}},
+		{Package: "internal/tools/sample", Name: "UserOutput", Fields: []string{"name"}, Inner: true},
 	}
-	if types[0].Name != "Output" || types[0].Package != "internal/tools/sample" {
-		t.Errorf("type = %+v, want internal/tools/sample.Output", types[0])
+	// An input and an unexported struct publish nothing: the first is what a
+	// caller sends, the second a decode target nobody sees.
+	if !reflect.DeepEqual(types, want) {
+		t.Errorf("publishedTypes() = %+v, want %+v", types, want)
 	}
-	if strings.Join(types[0].Fields, ",") != "author,id,notes" {
-		t.Errorf("fields = %v, want the tagged ones only, sorted", types[0].Fields)
+}
+
+// writeShared puts one Go source file under the shared shapes package of a
+// tree writePackage began.
+func writeShared(t *testing.T, root, source string) {
+	t.Helper()
+	dir := filepath.Join(root, sharedDir)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "shapes.go"), []byte(source), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+}
+
+// TestPublishedTypes_SharedShapes_ResolveWhereverAPackageNamesThem verifies
+// the one cross-package edge the parse follows. A domain package takes a
+// user, a role or a milestone from internal/toolutil, as a field of that
+// type, as an embed, or as an alias under its own name, and until this was
+// read none of those fields counted as published: a package whose only user
+// object is the shared one was reported as failing to surface `username`.
+// The shared struct is flattened within its own package, a field of one
+// shared shape typed as another resolves too, an alias is published under
+// the package's name, and the hints type stays out, since its next steps are
+// the server's and not GitLab's.
+func TestPublishedTypes_SharedShapes_ResolveWhereverAPackageNamesThem(t *testing.T) {
+	root := writePackage(t, "sample", `package sample
+
+import "example.com/toolutil"
+
+type Output struct {
+	toolutil.HintableOutput
+	ID     int64                   `+"`json:\"id\"`"+`
+	Author toolutil.BasicUserOutput `+"`json:\"author\"`"+`
+	Role   MemberRoleOutput         `+"`json:\"role\"`"+`
+	Other  elsewhere.Thing          `+"`json:\"other\"`"+`
+}
+
+type MemberRoleOutput = toolutil.MemberRoleOutput
+
+type ActorOutput struct {
+	toolutil.BasicUserOutput
+	Kind string `+"`json:\"kind\"`"+`
+}
+
+type NoteOutput = toolutil.NoteOutput
+
+type DiscussionOutput struct {
+	toolutil.HintableOutput
+	Notes []toolutil.NoteOutput `+"`json:\"notes\"`"+`
+}
+
+type TimeStatsOutput = toolutil.TimeStatsOutput
+
+type DeleteOutput = toolutil.DeleteOutput
+
+type Hints = toolutil.HintableOutput
+
+func Remove() (DeleteOutput, error) { return DeleteOutput{}, nil }
+
+func (o Output) Stats() TimeStatsOutput { return TimeStatsOutput{} }
+
+func toStats() TimeStatsOutput { return TimeStatsOutput{} }
+`)
+	writeShared(t, root, `package toolutil
+
+type HintableOutput struct {
+	NextSteps []string `+"`json:\"next_steps,omitempty\"`"+`
+}
+
+type identity struct {
+	ID       int64  `+"`json:\"id\"`"+`
+	Username string `+"`json:\"username\"`"+`
+}
+
+type BasicUserOutput struct {
+	identity
+	Name string `+"`json:\"name\"`"+`
+}
+
+type MemberRoleOutput struct {
+	ID    int64            `+"`json:\"id\"`"+`
+	Owner *BasicUserOutput `+"`json:\"owner\"`"+`
+}
+
+type NoteOutput struct {
+	HintableOutput
+	Body string `+"`json:\"body\"`"+`
+}
+
+type TimeStatsOutput struct {
+	TimeEstimate int `+"`json:\"time_estimate\"`"+`
+}
+
+type DeleteOutput struct {
+	Status string `+"`json:\"status\"`"+`
+}
+
+type MergeRequestOutput struct {
+	TimeStats TimeStatsOutput `+"`json:\"time_stats\"`"+`
+	Deleted   DeleteOutput    `+"`json:\"deleted\"`"+`
+}
+`)
+
+	types := publishedTypes(root)
+
+	// NoteOutput is an alias the package keeps for its converters while the
+	// field naming the shape is typed toolutil.NoteOutput: nested under either
+	// name, and without the hints the shared shape embeds. TimeStatsOutput is
+	// named by nothing in the package and by a shared shape, and returned only
+	// by a method and an unexported function, so it is nested too; DeleteOutput
+	// is named by that same shared shape and returned by an exported function,
+	// which makes it a response of the package's own; and an alias of the
+	// hints type resolves to nothing and is not published.
+	want := []publishedType{
+		{Package: "internal/tools/sample", Name: "ActorOutput", Fields: []string{"id", "kind", "name", "username"}},
+		{Package: "internal/tools/sample", Name: "DeleteOutput", Fields: []string{"status"}},
+		{Package: "internal/tools/sample", Name: "DiscussionOutput", Fields: []string{"notes"}, Nested: map[string]nestedType{
+			"notes": {Name: "toolutil.NoteOutput", Fields: []string{"body"}},
+		}},
+		{Package: "internal/tools/sample", Name: "MemberRoleOutput", Fields: []string{"id", "owner"}, Inner: true},
+		{Package: "internal/tools/sample", Name: "NoteOutput", Fields: []string{"body"}, Inner: true},
+		{Package: "internal/tools/sample", Name: "Output", Fields: []string{"author", "id", "other", "role"}, Nested: map[string]nestedType{
+			"author": {Name: "toolutil.BasicUserOutput", Fields: []string{"id", "name", "username"}},
+			"role":   {Name: "MemberRoleOutput", Fields: []string{"id", "owner"}},
+		}},
+		{Package: "internal/tools/sample", Name: "TimeStatsOutput", Fields: []string{"time_estimate"}, Inner: true},
+	}
+	if !reflect.DeepEqual(types, want) {
+		t.Errorf("publishedTypes() = %+v, want %+v", types, want)
 	}
 }
 
@@ -98,7 +241,7 @@ func TestPublishedTypes_AFileThatDoesNotParse_ContributesNothing(t *testing.T) {
 func TestPublishedTypesIn_ADirectoryThatCannotBeRead_ContributesNothing(t *testing.T) {
 	gone := filepath.Join(t.TempDir(), "removed-between-the-two-listings")
 
-	if types := publishedTypesIn(gone, "internal/tools/gone"); len(types) != 0 {
+	if types := publishedTypesIn(gone, "internal/tools/gone", nil, nil); len(types) != 0 {
 		t.Errorf("publishedTypesIn() = %+v, want nothing", types)
 	}
 }
@@ -123,9 +266,9 @@ func TestJSONTags_ATagThatIsNotAQuotedString_PublishesNothing(t *testing.T) {
 		},
 	}}}
 
-	tags, fieldTypes := jsonTags(structType)
-	if strings.Join(tags, ",") != "read" {
-		t.Errorf("jsonTags() = %v, want only the field whose tag is a quoted string", tags)
+	tags, fieldTypes, embeds := jsonTags(structType)
+	if strings.Join(tags, ",") != "read" || len(embeds) != 0 {
+		t.Errorf("jsonTags() = %v, embeds %v, want only the field whose tag is a quoted string", tags, embeds)
 	}
 	// The field type is recorded for the same field and no other. What it names
 	// here is a predeclared type, which the parser writes as the same Ident a
@@ -139,9 +282,12 @@ func TestJSONTags_ATagThatIsNotAQuotedString_PublishesNothing(t *testing.T) {
 // TestJSONTags_FollowsEncodingJSON verifies that the names a struct is said to
 // publish are the names encoding/json would write: an unexported field is not
 // marshaled however it is tagged, a tag naming no key keeps the Go field name,
-// "-" publishes nothing, and an embed tagged with a name is keyed by that name.
-// The check exists because a name this reads and GitLab never receives is a
-// phantom finding, and a name it drops that GitLab does receive is a missed one.
+// "-" publishes nothing, an embed tagged with a name is keyed by that name,
+// and an embed tagged with none or not tagged at all is one whose fields are
+// promoted, a shared shape among them under its qualified name, which is
+// what flatten resolves or, for the hints type, drops. The check exists
+// because a name this reads and GitLab never receives is a phantom finding,
+// and a name it drops that GitLab does receive is a missed one.
 func TestJSONTags_FollowsEncodingJSON(t *testing.T) {
 	quoted := func(tag string) *ast.BasicLit {
 		return &ast.BasicLit{Kind: token.STRING, Value: "`" + tag + "`"}
@@ -151,11 +297,14 @@ func TestJSONTags_FollowsEncodingJSON(t *testing.T) {
 		{Names: []*ast.Ident{{Name: "Kept"}}, Type: &ast.Ident{Name: "string"}, Tag: quoted(`json:",omitempty"`)},
 		{Names: []*ast.Ident{{Name: "Renamed"}}, Type: &ast.Ident{Name: "string"}, Tag: quoted(`json:"renamed"`)},
 		{Names: []*ast.Ident{{Name: "Dropped"}}, Type: &ast.Ident{Name: "string"}, Tag: quoted(`json:"-"`)},
+		{Names: []*ast.Ident{{Name: "Untagged"}}, Type: &ast.Ident{Name: "string"}},
 		{Type: &ast.Ident{Name: "Embedded"}, Tag: quoted(`json:"embedded"`)},
 		{Type: &ast.Ident{Name: "Promoted"}, Tag: quoted(`json:",omitempty"`)},
+		{Type: &ast.StarExpr{X: &ast.Ident{Name: "PromotedToo"}}},
+		{Type: &ast.SelectorExpr{X: &ast.Ident{Name: "toolutil"}, Sel: &ast.Ident{Name: "HintableOutput"}}},
 	}}}
 
-	tags, fieldTypes := jsonTags(structType)
+	tags, fieldTypes, embeds := jsonTags(structType)
 	if strings.Join(tags, ",") != "Kept,embedded,renamed" {
 		t.Errorf("jsonTags() = %v, want Kept,embedded,renamed", tags)
 	}
@@ -164,5 +313,113 @@ func TestJSONTags_FollowsEncodingJSON(t *testing.T) {
 	want := map[string]string{"Kept": "string", "embedded": "Embedded", "renamed": "string"}
 	if !reflect.DeepEqual(fieldTypes, want) {
 		t.Errorf("jsonTags() field types = %v, want %v", fieldTypes, want)
+	}
+	if !reflect.DeepEqual(embeds, []string{"Promoted", "PromotedToo", "toolutil.HintableOutput"}) {
+		t.Errorf("jsonTags() embeds = %v, want the two local embeds and the shared one, none carrying a json name", embeds)
+	}
+}
+
+// TestPublishedTypes_EmbedsArePromotedAndNestingCountsThroughAnyStruct verifies
+// two rules of the walk that the first real run got wrong. A details type
+// embedding the row type publishes the row's fields as its own, through a
+// pointer as well, with its own field winning over a promoted one of the same
+// name, and the row type stays comparable, since the list endpoint answers
+// with it; before this the details type was reported missing every field it
+// promoted. And a type reached through a plain struct, the user under the row
+// of a list of uploads, is nested all the same and is not held to the
+// endpoints answering with a whole user, which is what it was held to while
+// only output types could make one nested. Two types embedding each other
+// through pointers are read once each.
+func TestPublishedTypes_EmbedsArePromotedAndNestingCountsThroughAnyStruct(t *testing.T) {
+	root := writePackage(t, "sample", `package sample
+
+import "example.com/toolutil"
+
+type Kind string
+
+type Output struct {
+	ID     int64         `+"`json:\"id\"`"+`
+	Owner  *UserOutput   `+"`json:\"owner\"`"+`
+	Group  *GroupOutput  `+"`json:\"group\"`"+`
+	Hollow *HollowOutput `+"`json:\"hollow\"`"+`
+}
+
+type DetailsOutput struct {
+	toolutil.HintableOutput
+	*Output
+	Connected bool   `+"`json:\"connected\"`"+`
+	Owner     string `+"`json:\"owner\"`"+`
+}
+
+type HollowOutput struct {
+	*Elsewhere
+}
+
+type BareOutput struct {
+	*Elsewhere
+}
+
+type Status string
+
+type StatusOutput struct {
+	*Status
+	Note string `+"`json:\"note\"`"+`
+}
+
+func helper() {
+	type LocalOutput struct {
+		X int `+"`json:\"x\"`"+`
+	}
+	_ = LocalOutput{}
+}
+
+type UserOutput struct {
+	Name string `+"`json:\"name\"`"+`
+}
+
+type GroupOutput struct {
+	Path string `+"`json:\"path\"`"+`
+}
+
+type ListItem struct {
+	UploadedBy UploadedByOutput `+"`json:\"uploaded_by\"`"+`
+}
+
+type UploadedByOutput struct {
+	Name string `+"`json:\"name\"`"+`
+}
+
+type LeftOutput struct {
+	*RightOutput
+	A string `+"`json:\"a\"`"+`
+}
+
+type RightOutput struct {
+	*LeftOutput
+	B string `+"`json:\"b\"`"+`
+}
+`)
+
+	types := publishedTypes(root)
+
+	// HollowOutput and BareOutput embed a type the package does not declare
+	// and so publish nothing: the first is not nested under the field naming
+	// it and the second, which nothing names, is not compared. Kind is not a
+	// struct and is passed over, and so is a type declared inside a function;
+	// Status is not a struct either, and embedding it is a field encoding/json
+	// writes under the type's name.
+	want := []publishedType{
+		{Package: "internal/tools/sample", Name: "DetailsOutput", Fields: []string{"connected", "group", "hollow", "id", "owner"}, Nested: map[string]nestedType{"group": {Name: "GroupOutput", Fields: []string{"path"}}}},
+		{Package: "internal/tools/sample", Name: "GroupOutput", Fields: []string{"path"}, Inner: true},
+		{Package: "internal/tools/sample", Name: "LeftOutput", Fields: []string{"a", "b"}},
+		{Package: "internal/tools/sample", Name: "ListItem", Fields: []string{"uploaded_by"}, Inner: true},
+		{Package: "internal/tools/sample", Name: "Output", Fields: []string{"group", "hollow", "id", "owner"}, Nested: map[string]nestedType{"group": {Name: "GroupOutput", Fields: []string{"path"}}, "owner": {Name: "UserOutput", Fields: []string{"name"}}}},
+		{Package: "internal/tools/sample", Name: "RightOutput", Fields: []string{"a", "b"}},
+		{Package: "internal/tools/sample", Name: "StatusOutput", Fields: []string{"Status", "note"}},
+		{Package: "internal/tools/sample", Name: "UploadedByOutput", Fields: []string{"name"}, Inner: true},
+		{Package: "internal/tools/sample", Name: "UserOutput", Fields: []string{"name"}, Inner: true},
+	}
+	if !reflect.DeepEqual(types, want) {
+		t.Errorf("publishedTypes() = %+v, want %+v", types, want)
 	}
 }
