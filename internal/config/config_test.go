@@ -910,7 +910,7 @@ func TestLoad_TierResolution(t *testing.T) {
 }
 
 // TestLoad_RetiredEnterpriseEnv_IsIgnored verifies that GITLAB_ENTERPRISE, the
-// tier selector v2 deprecated in favour of GITLAB_MCP_TIER, no longer decides
+// tier selector v2 deprecated in favor of GITLAB_MCP_TIER, no longer decides
 // anything: a configuration that sets it and nothing else detects the tier
 // from the instance, as one that sets neither does.
 func TestLoad_RetiredEnterpriseEnv_IsIgnored(t *testing.T) {
@@ -1283,7 +1283,7 @@ func TestParseToolSurfaceValue_UnknownIsRefusedByName(t *testing.T) {
 			}
 		})
 	}
-	if _, err := ParseToolSurface("indivdual"); err == nil {
+	if _, parseErr := ParseToolSurface("indivdual"); parseErr == nil {
 		t.Error("ParseToolSurface(typo) = nil error, want the same refusal")
 	}
 }
