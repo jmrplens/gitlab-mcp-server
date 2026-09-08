@@ -113,8 +113,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 }
 
 // scanDir scans a directory tree for test files and classifies test names.
-// A tree it cannot read is reported and skipped rather than aborting the audit,
-// which is what makes the command usable against a partly-checked-out tree.
+// A read error is reported on stderr and ends that root's walk, leaving the
+// rows already collected and the remaining roots to be scanned: the report is
+// still printed, and the line on stderr says which tree it stops short of.
 func scanDir(dir string) []testEntry {
 	var results []testEntry
 	err := testsource.WalkFiles([]string{filepath.Clean(dir)}, testsource.TestFiles, func(path string) error {

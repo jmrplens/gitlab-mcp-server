@@ -47,9 +47,10 @@ func run(args []string, stdout, stderr io.Writer, threshold, minLength int) int 
 			files = append(files, arg)
 			continue
 		}
-		// An entry the walk cannot read is left out rather than failing the
-		// audit, which is what makes the command usable against a tree being
-		// edited underneath it.
+		// A read error ends that argument's walk and is otherwise ignored, as
+		// it was before the walk was shared: the files already collected are
+		// still audited, and the exit code stays 0, because this command
+		// reports duplicates rather than certifying a tree.
 		_ = testsource.WalkFiles([]string{arg}, testsource.NonTestGoFiles, func(path string) error {
 			files = append(files, path)
 			return nil

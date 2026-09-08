@@ -12,12 +12,19 @@
 // "Test", the next rune not lower case, and exactly "TestMain" excluded as the
 // framework entry point rather than a test.
 //
-// The walk is here for the same reason. Four commands walked the same tree with
-// four skip lists, one of which was empty, so "is testdata part of the corpus"
-// had two answers and no recorded reason. SkipDir is that answer, written once:
-// generated and vendored trees (node_modules, dist), a tool's own fixtures
-// (testdata, whose Go files are inputs to a test rather than source this
-// repository holds to its conventions) and every dot-directory.
+// The walk is here for the same reason. Four commands walked the same tree
+// with two skip lists and two descents that skipped nothing, so "is testdata
+// part of the corpus" had two answers and no recorded reason. SkipDir is that
+// answer, written once: generated and vendored trees (node_modules, dist), a
+// tool's own fixtures (testdata, whose Go files are inputs to a test rather
+// than source this repository holds to its conventions) and every
+// dot-directory.
+//
+// One predicate deliberately stays where it is. cmd/godoc_tool asks which
+// functions need a test-form doc comment, not which functions the testing
+// package runs, so it keeps TestMain and the lower-case Test-prefixed helpers
+// that IsTestFunction excludes; routing it through here would drop those
+// findings from the documentation audit.
 //
 // Discovery of the corpus itself is deliberately not here. cmd/gen_stats asks
 // git for the tracked files so that its --check is a function of what is
