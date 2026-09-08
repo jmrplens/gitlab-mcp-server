@@ -78,10 +78,6 @@ func TestServerShapeKey_EveryCatalogDecidingFieldChangesTheShape(t *testing.T) {
 		change func(*config.ServerConfig)
 	}{
 		{name: "tool surface", change: func(c *config.ServerConfig) { c.ToolSurface = config.ToolSurfaceMeta }},
-		{name: "the legacy meta-tools switch", change: func(c *config.ServerConfig) {
-			c.ToolSurface = ""
-			c.MetaTools = true
-		}},
 		{name: "capability surface", change: func(c *config.ServerConfig) {
 			c.CapabilitySurface = config.CapabilitySurfaceMinimal
 		}},

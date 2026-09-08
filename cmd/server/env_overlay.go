@@ -79,14 +79,6 @@ func applyOverlayBools(hcfg *httpConfig, o *config.HTTPEnvOverlay) {
 	overlayBool(hcfg, "safe-mode", &hcfg.safeMode, o.SafeMode)
 	overlayBool(hcfg, "embedded-resources", &hcfg.embeddedResources, o.EmbeddedResources)
 	overlayBool(hcfg, "ignore-scopes", &hcfg.ignoreScopes, o.IgnoreScopes)
-
-	// META_TOOLS is the deprecated selector. It only reaches the flag layer
-	// when the operator passed neither --tool-surface nor --meta-tools, so an
-	// explicit surface flag always beats a stale environment variable.
-	if o.MetaTools != nil && !hcfg.setFlags["meta-tools"] && !hcfg.setFlags["tool-surface"] {
-		hcfg.metaTools = *o.MetaTools
-		hcfg.metaToolsSet = true
-	}
 }
 
 func applyOverlayNumbers(hcfg *httpConfig, o *config.HTTPEnvOverlay) {

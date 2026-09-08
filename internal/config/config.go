@@ -151,7 +151,6 @@ type Config struct {
 	GitLabToken       string
 	SkipTLSVerify     bool
 	DisableRetries    bool // Disable GitLab client retries for unit tests.
-	MetaTools         bool
 	ToolSurface       string
 	CapabilitySurface string
 
@@ -319,7 +318,6 @@ func (c *Config) Enterprise() bool {
 // server instance for a specific GitLab URL and credential principal.
 type ServerConfig struct {
 	GitLabURL         string
-	MetaTools         bool
 	ToolSurface       string
 	CapabilitySurface string
 	// Tier is the resolved GitLab licensing tier for this pool entry. When the
@@ -359,7 +357,6 @@ func (c *Config) ServerConfig() *ServerConfig {
 	}
 	return &ServerConfig{
 		GitLabURL:         c.GitLabURL,
-		MetaTools:         c.MetaTools,
 		ToolSurface:       c.ToolSurface,
 		CapabilitySurface: c.CapabilitySurface,
 		Tier:              c.Tier,
@@ -398,12 +395,12 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	tier, tierExplicit, err := resolveTierEnv(Getenv("TIER"), os.Getenv("GITLAB_ENTERPRISE"))
+	tier, tierExplicit, err := parseTierEnv(Getenv("TIER"))
 	if err != nil {
 		return nil, err
 	}
 
-	toolSurface, metaTools, err := ParseToolSurface(Getenv("TOOL_SURFACE"), Getenv("META_TOOLS"))
+	toolSurface, err := ParseToolSurface(Getenv("TOOL_SURFACE"))
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +437,6 @@ func Load() (*Config, error) {
 		GitLabURL:          gitLabURLFromEnv(),
 		GitLabToken:        os.Getenv("GITLAB_TOKEN"),
 		SkipTLSVerify:      bools.skipTLS,
-		MetaTools:          metaTools,
 		ToolSurface:        toolSurface,
 		CapabilitySurface:  capabilitySurface,
 		Tier:               tier,
@@ -537,40 +533,6 @@ func parseTierEnv(value string) (tier edition.Tier, explicit bool, err error) {
 	return parsed, true, nil
 }
 
-// resolveTierEnv resolves the effective tier from GITLAB_MCP_TIER (or its old
-// spelling GITLAB_MCP_TIER) and the DEPRECATED GITLAB_ENTERPRISE env vars. The tier
-// wins. When it is unset, the deprecated GITLAB_ENTERPRISE is honored for
-// back-compat with existing configs: true → ultimate, false → free (both
-// explicit, so no license check). When neither is set, returns
-// (edition.Free, false) so the caller detects from the license.
-func resolveTierEnv(tierValue, enterpriseValue string) (tier edition.Tier, explicit bool, err error) {
-	tier, explicit, err = parseTierEnv(tierValue)
-	if err != nil || explicit {
-		return tier, explicit, err
-	}
-	if raw := strings.TrimSpace(enterpriseValue); raw != "" {
-		enabled, perr := strconv.ParseBool(raw)
-		if perr != nil {
-			return edition.Free, false, fmt.Errorf(
-				"invalid GITLAB_ENTERPRISE value: expected true or false, got %q", raw,
-			)
-		}
-		if enabled {
-			return edition.Ultimate, true, nil
-		}
-		return edition.Free, true, nil
-	}
-	return edition.Free, false, nil
-}
-
-// LegacyEnterpriseEnvInUse reports whether the DEPRECATED GITLAB_ENTERPRISE env
-// var is the active tier source (the tier unset, GITLAB_ENTERPRISE set), so the
-// caller can emit a one-time deprecation warning pointing users to
-// GITLAB_MCP_TIER.
-func LegacyEnterpriseEnvInUse(tierValue, enterpriseValue string) bool {
-	return strings.TrimSpace(tierValue) == "" && strings.TrimSpace(enterpriseValue) != ""
-}
-
 // ParseTierFlag resolves a CLI --tier flag value into a tier and an "explicit"
 // flag, mirroring [parseTierEnv]. It is exported for cmd/server HTTP-mode flag
 // handling.
@@ -578,15 +540,14 @@ func ParseTierFlag(value string) (tier edition.Tier, explicit bool, err error) {
 	return parseTierEnv(value)
 }
 
-// TierFromEnv resolves the tier the way [Load] does, from GITLAB_MCP_TIER with
-// the deprecated GITLAB_ENTERPRISE as a fallback, and reports whether either
-// named one.
+// TierFromEnv resolves the tier the way [Load] does, from GITLAB_MCP_TIER, and
+// reports whether it named one.
 //
 // Exported for the one caller that needs this setting without the rest of a
 // configuration: --tool-search inspects the catalog offline, so it must not
 // demand the GitLab URL and token [Load] validates.
 func TierFromEnv() (tier edition.Tier, explicit bool, err error) {
-	return resolveTierEnv(Getenv("TIER"), os.Getenv("GITLAB_ENTERPRISE"))
+	return parseTierEnv(Getenv("TIER"))
 }
 
 func parseEnvBool(name string, defaultValue bool) (bool, error) {
@@ -800,18 +761,15 @@ func parseBool(s string, defaultValue bool) (bool, error) {
 	return strconv.ParseBool(s)
 }
 
-// EffectiveToolSurface returns the canonical tool surface for legacy and new
-// configuration snapshots. Empty ToolSurface values are derived from MetaTools
-// so older tests and callers keep their current behavior.
-func EffectiveToolSurface(metaTools bool, toolSurface string) string {
+// EffectiveToolSurface returns the canonical tool surface of a configuration
+// snapshot: the surface it names, or the default when it names none.
+func EffectiveToolSurface(toolSurface string) string {
 	switch toolSurface {
 	case ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic:
 		return toolSurface
+	default:
+		return DefaultToolSurface
 	}
-	if metaTools {
-		return ToolSurfaceMeta
-	}
-	return ToolSurfaceIndividual
 }
 
 // EffectiveCapabilitySurface returns the canonical capability surface.
@@ -824,57 +782,26 @@ func EffectiveCapabilitySurface(capabilitySurface string) string {
 	}
 }
 
-// ParseToolSurface resolves the explicit TOOL_SURFACE value and legacy
-// META_TOOLS value into a canonical tool surface and compatible MetaTools bool.
-func ParseToolSurface(toolSurfaceValue, metaToolsValue string) (mode string, metaTools bool, err error) {
-	if strings.TrimSpace(toolSurfaceValue) != "" {
-		resolvedMode, parseErr := parseToolSurfaceValue(toolSurfaceValue, "TOOL_SURFACE")
-		if parseErr != nil {
-			return "", false, parseErr
-		}
-		// MetaTools keeps its legacy meaning for callers that only need to know
-		// whether the selected surface is not the individual-tool catalog.
-		return resolvedMode, resolvedMode != ToolSurfaceIndividual, nil
+// ParseToolSurface resolves a TOOL_SURFACE value into a canonical tool
+// surface, answering the default when nothing was set.
+func ParseToolSurface(toolSurfaceValue string) (string, error) {
+	if strings.TrimSpace(toolSurfaceValue) == "" {
+		return DefaultToolSurface, nil
 	}
-
-	if strings.TrimSpace(metaToolsValue) == "" {
-		return DefaultToolSurface, true, nil
-	}
-	resolvedMode, parseErr := parseToolSurfaceValue(metaToolsValue, "META_TOOLS")
-	if parseErr != nil {
-		return "", false, parseErr
-	}
-	return resolvedMode, resolvedMode != ToolSurfaceIndividual, nil
-}
-
-// LegacyMetaToolsSelectorInUse reports whether a configuration relies on the
-// deprecated META_TOOLS selector instead of the canonical TOOL_SURFACE selector.
-func LegacyMetaToolsSelectorInUse(toolSurfaceValue, metaToolsValue string) bool {
-	return strings.TrimSpace(toolSurfaceValue) == "" && strings.TrimSpace(metaToolsValue) != ""
-}
-
-// LegacyMetaToolsReplacement returns the canonical TOOL_SURFACE value that
-// corresponds to a legacy META_TOOLS value. It returns an empty string when the
-// legacy value is invalid.
-func LegacyMetaToolsReplacement(metaToolsValue string) string {
-	mode, err := parseToolSurfaceValue(metaToolsValue, "META_TOOLS")
-	if err != nil {
-		return ""
-	}
-	return mode
+	return parseToolSurfaceValue(toolSurfaceValue, "TOOL_SURFACE")
 }
 
 func parseToolSurfaceValue(value, name string) (string, error) {
 	normalized := strings.ToLower(strings.TrimSpace(value))
 	switch normalized {
-	case "true", "t", "1", "yes", "y", ToolSurfaceMeta, "meta-tools", "metatools":
+	case ToolSurfaceMeta, "meta-tools", "metatools":
 		return ToolSurfaceMeta, nil
-	case "false", "f", "0", "no", "n", ToolSurfaceIndividual, "individual-tools", "tools":
+	case ToolSurfaceIndividual, "individual-tools", "tools":
 		return ToolSurfaceIndividual, nil
 	case ToolSurfaceDynamic, "dynamic-tools", "low-token":
 		return ToolSurfaceDynamic, nil
 	default:
-		return "", fmt.Errorf("invalid %s value: expected true, false, or one of %s, got %q", name, validToolSurfaceList(), value)
+		return "", fmt.Errorf("invalid %s value: expected one of %s, got %q", name, validToolSurfaceList(), value)
 	}
 }
 

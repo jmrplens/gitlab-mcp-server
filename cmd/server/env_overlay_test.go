@@ -142,19 +142,18 @@ func TestApplyHTTPEnvOverlay_TierOnlyPins(t *testing.T) {
 	})
 }
 
-// TestApplyHTTPEnvOverlay_SurfaceFlagBeatsDeprecatedEnv verifies that an
-// explicit --tool-surface is not overridden by a stale META_TOOLS variable.
-// The deprecated selector may only apply when the operator chose no surface at
-// all on the command line.
-func TestApplyHTTPEnvOverlay_SurfaceFlagBeatsDeprecatedEnv(t *testing.T) {
+// TestApplyHTTPEnvOverlay_SurfaceFlagBeatsEnv verifies that an explicit
+// --tool-surface is not overridden by the environment variable of the same
+// meaning.
+func TestApplyHTTPEnvOverlay_SurfaceFlagBeatsEnv(t *testing.T) {
 	hcfg := newOverlayConfig("tool-surface")
 	hcfg.toolSurface = config.ToolSurfaceDynamic
 
-	metaTools := true
-	applyHTTPEnvOverlay(hcfg, &config.HTTPEnvOverlay{MetaTools: &metaTools})
+	surface := config.ToolSurfaceMeta
+	applyHTTPEnvOverlay(hcfg, &config.HTTPEnvOverlay{ToolSurface: &surface})
 
-	if hcfg.metaToolsSet {
-		t.Error("metaToolsSet = true, want the explicit --tool-surface to win over META_TOOLS")
+	if hcfg.toolSurface != config.ToolSurfaceDynamic {
+		t.Errorf("toolSurface = %q, want the explicit flag value to win", hcfg.toolSurface)
 	}
 }
 
@@ -262,25 +261,6 @@ func TestApplyHTTPEnvOverlay_SettingsWithoutTheirOwnTest(t *testing.T) {
 
 		if !slices.Equal(hcfg.gitlabURLs, repeatedFlag{"https://from-the-flag.example.com"}) {
 			t.Errorf("gitlabURLs = %v, want the flag value kept", hcfg.gitlabURLs)
-		}
-	})
-
-	t.Run("the deprecated boolean selector is honored and marked", func(t *testing.T) {
-		t.Parallel()
-
-		hcfg := newOverlayConfig()
-		metaTools := true
-
-		applyHTTPEnvOverlay(hcfg, &config.HTTPEnvOverlay{MetaTools: &metaTools})
-
-		if !hcfg.metaTools {
-			t.Error("metaTools = false, want the deprecated environment selector honored")
-		}
-		// Marked as set, because the flag layer reads it only when it was
-		// stated: an unmarked value cannot be told from the flag's default and
-		// would silently select the meta surface for everyone.
-		if !hcfg.metaToolsSet {
-			t.Error("metaToolsSet = false, want the value recorded as stated")
 		}
 	})
 

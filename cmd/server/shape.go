@@ -50,7 +50,7 @@ import (
 // key that depended on any of them would be a key per credential, which is what
 // this replaces.
 func serverShapeKey(cfg *config.ServerConfig, dotcom bool) string {
-	toolSurface := config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface)
+	toolSurface := config.EffectiveToolSurface(cfg.ToolSurface)
 	capabilitySurface := config.EffectiveCapabilitySurface(cfg.CapabilitySurface)
 	return fmt.Sprintf("surface=%s|capability=%s|schema=%s|tier=%s|tierPinned=%t|dotcom=%t|%s|stateless=%t",
 		toolSurface,
@@ -132,7 +132,7 @@ func (s *shapeServers) get(cfg *config.ServerConfig, dotcom bool) (*serverShape,
 	}
 	slog.Info("built the MCP server for a configuration shape",
 		"shapes", len(s.shapes),
-		"tool_surface", config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface),
+		"tool_surface", config.EffectiveToolSurface(cfg.ToolSurface),
 		"capability_surface", config.EffectiveCapabilitySurface(cfg.CapabilitySurface),
 		"tier", cfg.Tier.String(),
 		"read_only", cfg.ReadOnly,

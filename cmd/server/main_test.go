@@ -127,7 +127,6 @@ func newMockGitLabClient(t *testing.T) *gitlabclient.Client {
 // build time so the kill-switch test cannot collide with default-env builds
 // of the same config.
 type createdServerKey struct {
-	metaTools         bool
 	toolSurface       string
 	capabilitySurface string
 	tier              edition.Tier
@@ -202,7 +201,6 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 		return server
 	}
 	key := createdServerKey{
-		metaTools:              cfg.MetaTools,
 		toolSurface:            cfg.ToolSurface,
 		capabilitySurface:      cfg.CapabilitySurface,
 		tier:                   cfg.Tier,
@@ -503,7 +501,7 @@ func TestHTTPHandler_Initialize_CapabilitySurfaceControlsPromptsCapability(t *te
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic, CapabilitySurface: tc.capabilitySurface})
+			server := mustCreateServer(t, client, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic, CapabilitySurface: tc.capabilitySurface})
 			caps := initializeCapabilities(t, server)
 			assertListChangedCapabilities(t, caps, "tools", "resources")
 			assertPromptsCapability(t, caps, tc.wantPromptsCapability)
@@ -672,7 +670,6 @@ func TestServeHTTP_GracefulShutdown(t *testing.T) {
 		GitLabURL:      srv.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
 		// to build the full individual catalog — which, under the race
@@ -869,7 +866,6 @@ func TestServeHTTP_PortConflict(t *testing.T) {
 		GitLabURL:      srv.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
 		// to build the full individual catalog — which, under the race
@@ -952,8 +948,8 @@ func newFailingGitLabServer(t *testing.T, status int) *httptest.Server {
 }
 
 // TestRunWithContext_SuccessHTTPIndividualTools verifies that [runWithContext]
-// starts successfully in HTTP mode with individual tools (META_TOOLS=false)
-// and shuts down cleanly on context cancellation.
+// starts successfully in HTTP mode on the individual surface and shuts down
+// cleanly on context cancellation.
 func TestRunWithContext_SuccessHTTPIndividualTools(t *testing.T) {
 	srv := newMockGitLabServer(t)
 
@@ -964,7 +960,7 @@ func TestRunWithContext_SuccessHTTPIndividualTools(t *testing.T) {
 		errCh <- runWithContext(ctx, &httpConfig{
 			addr:           ":0",
 			gitlabURL:      srv.URL,
-			metaTools:      false,
+			toolSurface:    config.ToolSurfaceIndividual,
 			maxHTTPClients: config.DefaultMaxHTTPClients,
 			sessionTimeout: config.DefaultSessionTimeout,
 		})
@@ -984,8 +980,8 @@ func TestRunWithContext_SuccessHTTPIndividualTools(t *testing.T) {
 }
 
 // TestRunWithContext_SuccessHTTPMetaTools verifies that [runWithContext] starts
-// successfully in HTTP mode with meta-tools enabled (META_TOOLS=true) and shuts
-// down cleanly on context cancellation.
+// successfully in HTTP mode on the meta surface and shuts down cleanly on
+// context cancellation.
 func TestRunWithContext_SuccessHTTPMetaTools(t *testing.T) {
 	srv := newMockGitLabServer(t)
 
@@ -996,7 +992,7 @@ func TestRunWithContext_SuccessHTTPMetaTools(t *testing.T) {
 		errCh <- runWithContext(ctx, &httpConfig{
 			addr:           ":0",
 			gitlabURL:      srv.URL,
-			metaTools:      true,
+			toolSurface:    config.ToolSurfaceMeta,
 			maxHTTPClients: config.DefaultMaxHTTPClients,
 			sessionTimeout: config.DefaultSessionTimeout,
 		})
@@ -1028,7 +1024,7 @@ func TestRunWithContext_SuccessStdio(t *testing.T) {
 	srv := newMockGitLabServer(t)
 	t.Setenv("GITLAB_URL", srv.URL)
 	t.Setenv("GITLAB_TOKEN", testToken)
-	t.Setenv("META_TOOLS", "false")
+	t.Setenv("GITLAB_MCP_TOOL_SURFACE", config.ToolSurfaceIndividual)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately so stdio exits immediately
@@ -1271,7 +1267,7 @@ func TestNormalizeFixedGitLabURL_ReadsBothFields(t *testing.T) {
 // TestCreateServer_ReturnsConfiguredServer verifies that [createServer]
 // produces a valid MCP server with tools, resources, and prompts registered.
 func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
-	serverInfo := initializeTestServer(t, &config.ServerConfig{MetaTools: false})
+	serverInfo := initializeTestServer(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceIndividual})
 	if name := serverInfo["name"]; name != serverName {
 		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
 	}
@@ -1333,7 +1329,6 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 		{"http flag", "-http"},
 		{"gitlab-url flag", "-gitlab-url"},
 		{"skip-tls flag", "-skip-tls-verify"},
-		{"meta-tools flag", "-meta-tools"},
 		{"meta-param-schema flag", "-meta-param-schema"},
 		{"safe-mode flag", "-safe-mode"},
 		{"embedded-resources flag", "-embedded-resources"},
@@ -1351,7 +1346,7 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 		{"GITLAB_MCP_PPROF_ADDR env", "GITLAB_MCP_PPROF_ADDR"},
 		{"GITLAB_URL env", "GITLAB_URL"},
 		{"GITLAB_TOKEN env", "GITLAB_TOKEN"},
-		{"META_TOOLS env", "META_TOOLS"},
+		{"GITLAB_MCP_TOOL_SURFACE env", "GITLAB_MCP_TOOL_SURFACE"},
 		{"META_PARAM_SCHEMA env", "META_PARAM_SCHEMA"},
 		{"GITLAB_MCP_SAFE_MODE env", "GITLAB_MCP_SAFE_MODE"},
 		{"EMBEDDED_RESOURCES env", "EMBEDDED_RESOURCES"},
@@ -1473,7 +1468,7 @@ func TestPrintHelp_NoPanic(t *testing.T) {
 }
 
 // TestStaticConfigurationExamplesPreferToolSurface verifies static setup
-// examples do not reintroduce META_TOOLS as the preferred selector.
+// examples do not reintroduce META_TOOLS, which v3 removed.
 func TestStaticConfigurationExamplesPreferToolSurface(t *testing.T) {
 	repoRoot := filepath.Clean("../..")
 	files := []string{"mcp.json", "docker-compose.yml", "server.json"}
@@ -1621,9 +1616,9 @@ func TestResolveBuildVersion_Fallbacks(t *testing.T) {
 }
 
 // TestCreateServer_MetaToolsEnabled verifies that createServer registers
-// meta-tools when MetaTools is true and returns an operational MCP server.
+// meta-tools on the meta surface and returns an operational MCP server.
 func TestCreateServer_MetaToolsEnabled(t *testing.T) {
-	serverInfo := initializeTestServer(t, &config.ServerConfig{MetaTools: true})
+	serverInfo := initializeTestServer(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta})
 	if name := serverInfo["name"]; name != serverName {
 		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
 	}
@@ -1633,7 +1628,7 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 // dynamic surface exposes find and execute plus surface-aware catalog resources.
 func TestCreateServer_DynamicToolSurface(t *testing.T) {
 	client := newMockGitLabClient(t)
-	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic})
+	server := mustCreateServer(t, client, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic})
 	session := newInMemorySession(t, server)
 
 	toolsResult, err := session.ListTools(t.Context(), nil)
@@ -1755,7 +1750,7 @@ func TestCreateServer_IndividualSurface_ExcludesByEveryNameAnOperatorMayUse(t *t
 // catalog-backed meta surface keeps standalone helper tools available.
 func TestCreateServer_MetaToolSurfaceIncludesStandaloneUtilities(t *testing.T) {
 	client := newMockGitLabClient(t)
-	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceMeta})
+	server := mustCreateServer(t, client, &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta})
 	session := newInMemorySession(t, server)
 
 	toolsResult, err := session.ListTools(t.Context(), nil)
@@ -1815,7 +1810,7 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: tc.toolSurface, CapabilitySurface: tc.capabilitySurface})
+			server := mustCreateServer(t, client, &config.ServerConfig{ToolSurface: tc.toolSurface, CapabilitySurface: tc.capabilitySurface})
 			assertCapabilitySurfaceParity(t, newInMemorySession(t, server), tc)
 		})
 	}
@@ -1996,7 +1991,6 @@ func TestCreateServer_EveryAdvertisedEntryIsFullyDescribed(t *testing.T) {
 	for _, toolSurface := range []string{config.ToolSurfaceIndividual, config.ToolSurfaceMeta, config.ToolSurfaceDynamic} {
 		t.Run(toolSurface, func(t *testing.T) {
 			server := mustCreateServer(t, client, &config.ServerConfig{
-				MetaTools:         true,
 				ToolSurface:       toolSurface,
 				CapabilitySurface: config.CapabilitySurfaceFull,
 			})
@@ -2127,7 +2121,6 @@ func TestCreateServer_ToolManifestEntriesCoverEveryVisibleTool(t *testing.T) {
 	for _, toolSurface := range []string{config.ToolSurfaceIndividual, config.ToolSurfaceMeta, config.ToolSurfaceDynamic} {
 		t.Run(toolSurface, func(t *testing.T) {
 			server := mustCreateServer(t, client, &config.ServerConfig{
-				MetaTools:         true,
 				ToolSurface:       toolSurface,
 				CapabilitySurface: config.CapabilitySurfaceFull,
 			})
@@ -2186,7 +2179,7 @@ func assertManifestCoversVisibleTools(t *testing.T, session *mcp.ClientSession) 
 // keeps discovery but removes execution from the dynamic surface.
 func TestCreateServer_DynamicReadOnlyKeepsExecuteForReadActions(t *testing.T) {
 	client := newMockGitLabClient(t)
-	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic, ReadOnly: true})
+	server := mustCreateServer(t, client, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic, ReadOnly: true})
 	toolsResult, err := listRegisteredTools(server, "dynamic-readonly")
 	if err != nil {
 		t.Fatalf("list dynamic read-only tools: %v", err)
@@ -2219,7 +2212,7 @@ func TestCreateServer_DynamicReadOnlyKeepsExecuteForReadActions(t *testing.T) {
 func TestCreateServer_ToolManifestResourcesFollowToolMode(t *testing.T) {
 	client := newMockGitLabClient(t)
 
-	individual := mustCreateServer(t, client, &config.ServerConfig{MetaTools: false})
+	individual := mustCreateServer(t, client, &config.ServerConfig{ToolSurface: config.ToolSurfaceIndividual})
 	individualSession := newInMemorySession(t, individual)
 	individualTemplates, err := individualSession.ListResourceTemplates(t.Context(), nil)
 	if err != nil {
@@ -2234,7 +2227,7 @@ func TestCreateServer_ToolManifestResourcesFollowToolMode(t *testing.T) {
 		t.Fatal("individual mode should advertise tool manifest detail resources")
 	}
 
-	meta := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true})
+	meta := mustCreateServer(t, client, &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta})
 	metaSession := newInMemorySession(t, meta)
 	metaTemplates, err := metaSession.ListResourceTemplates(t.Context(), nil)
 	if err != nil {
@@ -2256,7 +2249,7 @@ func TestCreateServer_ToolManifestResourcesFollowToolMode(t *testing.T) {
 func TestCreateServer_ToolManifestRoutesFollowVisibleTools(t *testing.T) {
 	client := newMockGitLabClient(t)
 	cfg := &config.ServerConfig{
-		MetaTools:    true,
+		ToolSurface:  config.ToolSurfaceMeta,
 		ExcludeTools: []string{"gitlab_runner"},
 	}
 	server := mustCreateServer(t, client, cfg)
@@ -2291,10 +2284,10 @@ func TestCreateServer_ToolManifestRoutesFollowVisibleTools(t *testing.T) {
 // server registers a different CE/Enterprise catalog later in the same process.
 func TestCreateServer_ToolManifestRoutesAreServerScoped(t *testing.T) {
 	client := newMockGitLabClient(t)
-	ceServer := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, Tier: edition.Free})
+	ceServer := mustCreateServer(t, client, &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta, Tier: edition.Free})
 	ceSession := newInMemorySession(t, ceServer)
 
-	_ = mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, Tier: edition.Ultimate})
+	_ = mustCreateServer(t, client, &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta, Tier: edition.Ultimate})
 
 	_, err := ceSession.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools/gitlab_project.push_rule_get"})
 	if err == nil {
@@ -2313,7 +2306,7 @@ func TestCreateServer_FilteringModes(t *testing.T) {
 	client := newMockGitLabClient(t)
 
 	readAPIServer := mustCreateServer(t, client, &config.ServerConfig{
-		MetaTools:   false,
+		ToolSurface: config.ToolSurfaceIndividual,
 		TokenScopes: []string{"read_api"},
 	})
 	readAPITools, err := listRegisteredTools(readAPIServer, "read-api-filter-test")
@@ -2326,7 +2319,7 @@ func TestCreateServer_FilteringModes(t *testing.T) {
 		}
 	}
 
-	safeModeServer := mustCreateServer(t, client, &config.ServerConfig{MetaTools: false, SafeMode: true})
+	safeModeServer := mustCreateServer(t, client, &config.ServerConfig{ToolSurface: config.ToolSurfaceIndividual, SafeMode: true})
 	safeModeTools, err := listRegisteredTools(safeModeServer, "safe-mode-test")
 	if err != nil {
 		t.Fatalf("list safe-mode tools: %v", err)
@@ -2349,7 +2342,7 @@ func TestCreateServer_ToolManifestInspectionError(t *testing.T) {
 
 	// Build directly: the stubbed inspection hook must not be captured into
 	// (or satisfied from) the shared mustCreateServer cache.
-	server, err := createServer(t.Context(), client, &config.ServerConfig{MetaTools: true})
+	server, err := createServer(t.Context(), client, &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta})
 	if err != nil {
 		t.Fatalf("createServer() error: %v", err)
 	}
@@ -3209,7 +3202,6 @@ func TestServeHTTP_RequestWithToken(t *testing.T) {
 		GitLabURL:      mockGL.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
 		// to build the full individual catalog — which, under the race
@@ -3357,7 +3349,6 @@ func TestServeHTTP_CrossOriginProtection_RejectsCrossSitePost(t *testing.T) {
 		GitLabURL:      mockGL.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
 		// to build the full individual catalog — which, under the race
@@ -3419,7 +3410,6 @@ func TestServeHTTP_RequestWithTokenAndGitLabURLHeader(t *testing.T) {
 		GitLabURL:      "",
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
 		// to build the full individual catalog — which, under the race
@@ -3493,7 +3483,6 @@ func TestServeHTTP_NoInstanceAndNoHeader_IsRefused(t *testing.T) {
 		GitLabURL:      "",
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
 		// to build the full individual catalog — which, under the race
@@ -3564,7 +3553,6 @@ func TestServeHTTP_InvalidGitLabURLHeader(t *testing.T) {
 		GitLabURL:      "",
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
 		// to build the full individual catalog — which, under the race
@@ -3625,7 +3613,6 @@ func TestServeHTTP_MissingToken(t *testing.T) {
 		GitLabURL:      mockGL.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
 		// to build the full individual catalog — which, under the race
@@ -3839,28 +3826,6 @@ func TestLogIgnoredRequestOptions(t *testing.T) {
 	logIgnoredRequestOptions("glpat-123456", serverpool.RequestOptions{IgnoredOptions: []string{"GITLAB_URL"}})
 }
 
-// TestLegacyMetaToolsFlagValue_OnlyUsesExplicitFlag verifies HTTP mode does
-// not let the deprecated boolean flag override the default tool surface unless
-// a user explicitly passes --meta-tools.
-func TestLegacyMetaToolsFlagValue_OnlyUsesExplicitFlag(t *testing.T) {
-	tests := []struct {
-		name string
-		cfg  httpConfig
-		want string
-	}{
-		{name: "unset", cfg: httpConfig{metaTools: true}, want: ""},
-		{name: "explicit true", cfg: httpConfig{metaToolsSet: true, metaTools: true}, want: "true"},
-		{name: "explicit false", cfg: httpConfig{metaToolsSet: true}, want: "false"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := legacyMetaToolsFlagValue(&tt.cfg); got != tt.want {
-				t.Fatalf("legacyMetaToolsFlagValue() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 // TestResolveHTTPTier verifies that the --tier flag resolves to the expected
 // tier and explicit flag, including the unset (detect) and invalid cases.
 func TestResolveHTTPTier(t *testing.T) {
@@ -3966,10 +3931,10 @@ func TestToolSearchSettings_FlagsBeatTheEnvironmentAndTheEnvironmentIsRead(t *te
 			wantTier:    edition.Ultimate,
 		},
 		{
-			name:        "the legacy spellings of both",
+			name:        "the retired spellings decide nothing",
 			env:         map[string]string{"GITLAB_MCP_META_TOOLS": "true", "GITLAB_ENTERPRISE": "true"},
-			wantSurface: config.ToolSurfaceMeta,
-			wantTier:    edition.Ultimate,
+			wantSurface: config.ToolSurfaceDynamic,
+			wantTier:    edition.Free,
 		},
 		{
 			name:        "a flag over the environment",
@@ -3979,9 +3944,9 @@ func TestToolSearchSettings_FlagsBeatTheEnvironmentAndTheEnvironmentIsRead(t *te
 			wantTier:    edition.Premium,
 		},
 		{
-			name:        "the legacy flag over the environment",
+			name:        "the flag over the environment, the other way round",
 			env:         map[string]string{"GITLAB_MCP_TOOL_SURFACE": "meta"},
-			hcfg:        httpConfig{metaTools: false, metaToolsSet: true},
+			hcfg:        httpConfig{toolSurface: config.ToolSurfaceIndividual},
 			wantSurface: config.ToolSurfaceIndividual,
 			wantTier:    edition.Free,
 		},
@@ -4049,8 +4014,7 @@ func clearToolSearchEnv(t *testing.T) {
 	t.Helper()
 	for _, name := range []string{
 		"GITLAB_MCP_TOOL_SURFACE", "TOOL_SURFACE",
-		"GITLAB_MCP_META_TOOLS", "META_TOOLS",
-		"GITLAB_MCP_TIER", "TIER", "GITLAB_ENTERPRISE",
+		"GITLAB_MCP_TIER", "TIER",
 	} {
 		t.Setenv(name, "")
 	}
@@ -4401,7 +4365,6 @@ func TestServeHTTP_OAuthMode_MetadataEndpoint(t *testing.T) {
 		GitLabURL:      mockGL.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
 		// to build the full individual catalog — which, under the race
@@ -4603,7 +4566,6 @@ func TestServeHTTP_OAuthMode_RejectsUnauthenticated(t *testing.T) {
 		GitLabURL:      mockGL.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
 		// to build the full individual catalog — which, under the race
@@ -4654,7 +4616,6 @@ func TestServeHTTP_OAuthMode_AcceptsValidBearer(t *testing.T) {
 		GitLabURL:      mockGL.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
 		// to build the full individual catalog — which, under the race
@@ -4725,7 +4686,6 @@ func TestServeHTTP_OAuthMode_PrivateTokenRejected(t *testing.T) {
 		GitLabURL:      mockGL.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
 		// to build the full individual catalog — which, under the race
@@ -4779,7 +4739,6 @@ func TestServeHTTP_OAuthMode_InvalidTokenReturns401(t *testing.T) {
 		GitLabURL:      mockGL.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
 		// to build the full individual catalog — which, under the race
@@ -4831,7 +4790,6 @@ func TestServeHTTP_LegacyMode_NoMetadataEndpoint(t *testing.T) {
 		GitLabURL:      mockGL.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		// The dynamic surface, explicitly: these are transport, auth and
 		// routing tests, and none of them needs the pool's first request
 		// to build the full individual catalog — which, under the race
@@ -5215,7 +5173,7 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 	cfg := &config.Config{
 		GitLabURL:     "", // empty uses config.DefaultGitLabURL for dummy client registration
 		SkipTLSVerify: true,
-		MetaTools:     true,
+		ToolSurface:   config.ToolSurfaceMeta,
 	}
 
 	data, err := buildServerCard(context.Background(), cfg)
@@ -5314,7 +5272,7 @@ func TestBuildServerCard_IndividualMode(t *testing.T) {
 	cfg := &config.Config{
 		GitLabURL:     "",
 		SkipTLSVerify: true,
-		MetaTools:     false,
+		ToolSurface:   config.ToolSurfaceIndividual,
 	}
 
 	data, err := buildServerCard(context.Background(), cfg)
@@ -5359,7 +5317,6 @@ func TestServeHTTP_ShutdownDuringServerCardBuild_DrainsCleanly(t *testing.T) {
 		GitLabURL:      srv.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      false,
 		ToolSurface:    config.ToolSurfaceDynamic, // the gated fake builds the card; the surface no longer matters
 	}
 
@@ -5556,7 +5513,6 @@ func TestBuildServerCard_MinimalCapabilitySurface(t *testing.T) {
 	cfg := &config.Config{
 		GitLabURL:         "",
 		SkipTLSVerify:     true,
-		MetaTools:         true,
 		ToolSurface:       config.ToolSurfaceDynamic,
 		CapabilitySurface: config.CapabilitySurfaceMinimal,
 	}
@@ -5596,7 +5552,7 @@ func TestServeHTTP_ServerCardEndpoint_ReturnsToolList(t *testing.T) {
 		GitLabURL:      mockGL.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      true,
+		ToolSurface:    config.ToolSurfaceMeta,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -5695,7 +5651,7 @@ func TestServeHTTP_ServerCardEndpoint_CORSAndCapabilities(t *testing.T) {
 		GitLabURL:      mockGL.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		MetaTools:      true,
+		ToolSurface:    config.ToolSurfaceMeta,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -5949,7 +5905,7 @@ func TestDefaultHTTPIdleTimeout_DisabledByDefault(t *testing.T) {
 // directly in tests) still maps to Stateless=false.
 func TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated(t *testing.T) {
 	hcfg := &httpConfig{stateless: true, jsonResponse: true, maxRequestBodyBytes: 2048}
-	cfg := configFromHTTPFlags(hcfg, "", false, edition.Free, false)
+	cfg := configFromHTTPFlags(hcfg, "", edition.Free, false)
 	if !cfg.Stateless {
 		t.Error("configFromHTTPFlags() Stateless = false, want true")
 	}
@@ -5959,7 +5915,7 @@ func TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated(t *testing.T) {
 	if cfg.MaxRequestBodyBytes != 2048 {
 		t.Errorf("configFromHTTPFlags() MaxRequestBodyBytes = %d, want 2048", cfg.MaxRequestBodyBytes)
 	}
-	defaults := configFromHTTPFlags(&httpConfig{}, "", false, edition.Free, false)
+	defaults := configFromHTTPFlags(&httpConfig{}, "", edition.Free, false)
 	if defaults.Stateless || defaults.JSONResponse {
 		t.Errorf("configFromHTTPFlags() defaults: Stateless=%v JSONResponse=%v, want false/false",
 			defaults.Stateless, defaults.JSONResponse)
@@ -7769,7 +7725,7 @@ func TestServerCard_AnnouncesTelemetryWithoutNamingTheCollector(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = provider.Shutdown(boundedShutdown(t)) })
 
-	cfg := &config.Config{SkipTLSVerify: true, MetaTools: true}
+	cfg := &config.Config{SkipTLSVerify: true, ToolSurface: config.ToolSurfaceMeta}
 	data, err := buildServerCard(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("buildServerCard: %v", err)
@@ -7818,7 +7774,7 @@ func TestServerCard_OmitsTelemetryWhenItIsOff(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = provider.Shutdown(boundedShutdown(t)) })
 
-	cfg := &config.Config{SkipTLSVerify: true, MetaTools: true}
+	cfg := &config.Config{SkipTLSVerify: true, ToolSurface: config.ToolSurfaceMeta}
 	data, err := buildServerCard(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("buildServerCard: %v", err)
@@ -7872,7 +7828,7 @@ func firstDescribedResource(t *testing.T, session *mcp.ClientSession) (uri, desc
 // server first, so the test holds whatever the catalog's wording becomes.
 func TestCreateServer_GatewayCompatWiring(t *testing.T) {
 	client := newMockGitLabClient(t)
-	cfg := &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic}
+	cfg := &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic}
 
 	control, err := createServer(t.Context(), client, cfg)
 	if err != nil {
@@ -7911,7 +7867,7 @@ func TestCreateServer_GatewayCompatWiring(t *testing.T) {
 func TestCreateServer_GatewayCompatInvalidValue(t *testing.T) {
 	t.Setenv(gatewaycompat.EnvVar, "=x")
 	client := newMockGitLabClient(t)
-	_, err := createServer(t.Context(), client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic})
+	_, err := createServer(t.Context(), client, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic})
 	if err == nil {
 		t.Fatal("createServer accepted a malformed substitution value")
 	}
@@ -7989,7 +7945,7 @@ func resourcePriorities(t *testing.T, session *mcp.ClientSession) (floats, integ
 // priorities while generic sessions of the same server keep the floats.
 func TestCreateServer_ClientCompatMiddlewareWiring(t *testing.T) {
 	client := newMockGitLabClient(t)
-	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic})
+	server := mustCreateServer(t, client, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic})
 
 	codex := connectSessionAs(t, server, &mcp.Implementation{Name: "codex-mcp-client", Title: "Codex", Version: "0.148.0"})
 	floats, integers := resourcePriorities(t, codex)
@@ -8012,7 +7968,7 @@ func TestCreateServer_ClientCompatMiddlewareWiring(t *testing.T) {
 func TestCreateServer_ClientCompatKillSwitch(t *testing.T) {
 	t.Setenv("CLIENT_COMPAT", "off")
 	client := newMockGitLabClient(t)
-	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic})
+	server := mustCreateServer(t, client, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic})
 
 	codex := connectSessionAs(t, server, &mcp.Implementation{Name: "codex-mcp-client", Title: "Codex", Version: "0.148.0"})
 	floats, _ := resourcePriorities(t, codex)
@@ -8521,13 +8477,11 @@ func TestResolveToolSurfaceForTelemetry_ReadsTheInputsEachModeReallyUses(t *test
 	tests := []struct {
 		name       string
 		envSurface string
-		envMeta    string
 		hcfg       *httpConfig
 		want       string
 	}{
 		{name: "stdio with nothing set", want: config.ToolSurfaceDynamic},
 		{name: "stdio reads the environment", envSurface: config.ToolSurfaceIndividual, want: config.ToolSurfaceIndividual},
-		{name: "stdio honors the deprecated selector", envMeta: "true", want: config.ToolSurfaceMeta},
 		{
 			name: "http takes the flag",
 			hcfg: &httpConfig{toolSurface: config.ToolSurfaceMeta},
@@ -8540,11 +8494,6 @@ func TestResolveToolSurfaceForTelemetry_ReadsTheInputsEachModeReallyUses(t *test
 			want:       config.ToolSurfaceIndividual,
 		},
 		{
-			name: "http honors an explicitly passed --meta-tools",
-			hcfg: &httpConfig{metaTools: true, metaToolsSet: true},
-			want: config.ToolSurfaceMeta,
-		},
-		{
 			name:       "an unusable value falls back to the default",
 			envSurface: "telepathy",
 			want:       config.ToolSurfaceDynamic,
@@ -8554,7 +8503,6 @@ func TestResolveToolSurfaceForTelemetry_ReadsTheInputsEachModeReallyUses(t *test
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("TOOL_SURFACE", tt.envSurface)
-			t.Setenv("META_TOOLS", tt.envMeta)
 
 			if got := resolveToolSurfaceForTelemetry(tt.hcfg); got != tt.want {
 				t.Errorf("resolveToolSurfaceForTelemetry = %q, want %q", got, tt.want)
@@ -9270,14 +9218,13 @@ func TestCatalogBackedToolNames_WithoutACatalog_ExemptsNothing(t *testing.T) {
 	}
 }
 
-// TestDeprecationWarnings_SayWhatToWriteInstead covers the three lines an
-// operator gets for configuration this server still honors but no longer
-// documents.
+// TestDeprecationWarnings_SayWhatToWriteInstead covers the lines an operator
+// gets for configuration this deployment does not act on.
 //
-// Each has to name the replacement rather than just the deprecation, because
-// the reader's next action is editing a unit file. Nothing is logged for a
-// configuration that is already current, so the lines only appear when they
-// apply to something.
+// Each has to name what was disregarded rather than merely that something was,
+// because the reader's next action is editing a unit file. Nothing is logged
+// for a configuration that is already current, so the lines only appear when
+// they apply to something.
 func TestDeprecationWarnings_SayWhatToWriteInstead(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -9286,39 +9233,18 @@ func TestDeprecationWarnings_SayWhatToWriteInstead(t *testing.T) {
 		wantNone bool
 	}{
 		{
-			name: "the deprecated boolean tool selector",
-			log:  func() { logLegacyMetaToolsDeprecation("", "true") },
-			want: []string{"TOOL_SURFACE"},
-		},
-		{
-			name:     "an unusable value for it says nothing here",
-			log:      func() { logLegacyMetaToolsDeprecation("", "sometimes") },
-			wantNone: true,
-		},
-		{
-			name:     "a current configuration says nothing",
-			log:      func() { logLegacyMetaToolsDeprecation(config.ToolSurfaceMeta, "") },
-			wantNone: true,
-		},
-		{
-			name: "the deprecated enterprise switch",
-			log:  func() { logLegacyEnterpriseEnvDeprecation("", "true") },
-			want: []string{"GITLAB_ENTERPRISE", "GITLAB_MCP_TIER"},
-		},
-		{
-			name:     "the tier variable alone says nothing",
-			log:      func() { logLegacyEnterpriseEnvDeprecation("ultimate", "") },
-			wantNone: true,
-		},
-		{
 			name: "request options this deployment ignores",
 			log: func() {
 				logIgnoredRequestOptions("glpat-0123456789", serverpool.RequestOptions{
-					IgnoredOptions:    []string{"META_TOOLS"},
-					DeprecatedOptions: []string{"META_TOOLS"},
+					IgnoredOptions: []string{"TOOL_SURFACE"},
 				})
 			},
-			want: []string{"META_TOOLS", "TOOL_SURFACE"},
+			want: []string{"TOOL_SURFACE"},
+		},
+		{
+			name:     "a request that carried none says nothing",
+			log:      func() { logIgnoredRequestOptions("glpat-0123456789", serverpool.RequestOptions{}) },
+			wantNone: true,
 		},
 	}
 

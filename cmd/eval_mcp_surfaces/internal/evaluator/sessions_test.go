@@ -254,7 +254,6 @@ func newEvalTestClient(t *testing.T, enterprise bool) *gitlabclient.Client {
 		GitLabToken:     "eval-token",
 		Tier:            tier,
 		TierExplicit:    true,
-		MetaTools:       true,
 		MetaParamSchema: config.DefaultMetaParamSchema,
 	})
 	if err != nil {

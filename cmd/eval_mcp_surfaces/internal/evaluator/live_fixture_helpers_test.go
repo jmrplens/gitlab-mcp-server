@@ -53,7 +53,6 @@ func TestCreateLiveTemporaryProject_RetriesNameCollision(t *testing.T) {
 	client, err := gitlabclient.NewClient(&config.Config{
 		GitLabURL:       server.URL,
 		GitLabToken:     "eval-token",
-		MetaTools:       true,
 		MetaParamSchema: config.DefaultMetaParamSchema,
 	})
 	if err != nil {

@@ -283,7 +283,7 @@ func normalizeEvalToolSurface(toolSurface string) (string, error) {
 	if surface == "" {
 		return config.DefaultToolSurface, nil
 	}
-	surface, _, err := config.ParseToolSurface(surface, "true")
+	surface, err := config.ParseToolSurface(surface)
 	if err != nil {
 		return "", err
 	}
