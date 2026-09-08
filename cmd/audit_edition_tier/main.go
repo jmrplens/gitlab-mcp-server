@@ -123,6 +123,13 @@ func run(ctx context.Context, res *docResolver, gapsOnly bool, outputPath string
 	if err != nil {
 		return fmt.Errorf("marshal report: %w", err)
 	}
+	// This is the one spelling of the "-" means stdout convention that
+	// docgen.WriteReport deliberately does not own: the destination here is a
+	// writer the caller injects, which is what lets the tests read the stdout
+	// branch back without swapping os.Stdout, and folding it in would mean
+	// either giving that seam up or giving WriteReport a writer parameter no
+	// other caller has a use for. Everything else already agrees with the
+	// shared helper: indented JSON, a trailing newline, mode 0o600.
 	if outputPath == "-" {
 		fmt.Fprintln(stdout, string(data))
 		return nil

@@ -1148,7 +1148,7 @@ func findSentenceEnd(s string) int {
 // writeGeneratedFile writes or checks generated content in the project root.
 // The name is held to the six artifacts this command owns before the path is
 // built, so a caller can never address anything else; docgen.WriteOrCheck
-// decides everything after that — the mode, the line-ending-agnostic
+// decides everything after that: the mode, the line-ending-agnostic
 // comparison and the sentence a stale file is reported with.
 func writeGeneratedFile(name, content string, checkOnly bool) error {
 	if !isGeneratedLLMSFile(name) {

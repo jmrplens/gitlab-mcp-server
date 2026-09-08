@@ -1763,6 +1763,10 @@ The Markdown renderers the generators share (`RenderMarkdownTable`, and `Replace
 
 Merging the two behind one signature with a mode flag is the one way to make this worse than the copies it replaced, which is why there are two functions. The managed-section helpers stay separate for the same reason: what is generated there is a region, and the rest of the file is somebody's prose.
 
+`NormalizeNewlines` is exported for one reason: the commands whose artifacts `WriteOrCheck` writes hold the same bytes to the same rule in their own tests (`gen_llms` against the six committed files, `audit_metrics` against the committed `stats.json`), and private copies of that one line in each test file are the drift this package exists to stop.
+
+One `-` writer stays where it is. [`audit_edition_tier`](#audit_edition_tier) writes its report to a writer the caller injects, which is how its tests read the stdout branch back without swapping `os.Stdout`; folding it in would mean giving up that seam or giving `WriteReport` a writer parameter no other caller has a use for. Everything else about it already agrees with the shared helper: indented JSON, a trailing newline, mode `0o600`.
+
 ## CI gate targets
 
 The following utilities expose a verification mode (`--check` or `-check`, or an invariant/error exit) that CI runs to guard against drift. The combined documentation gate is `make audit-docs`, which chains markdownlint, the table formatter, the llms, LobeHub-manifest, testing-docs and site-stats checks, the local-link check, the godoc, surface-quality and alias audits, and the site's own `check`, `build` and `lint`.
