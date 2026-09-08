@@ -18,26 +18,26 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,924 |
-| Unit test functions                                   | 14,321 |
+| Total test functions                                  | 14,933 |
+| Unit test functions                                   | 14,330 |
 | E2E test functions                                    |    603 |
-| cmd test functions                                    |  2,933 |
+| cmd test functions                                    |  2,942 |
 | Test files (internal/)                                |    519 |
-| Test files (cmd/)                                     |    202 |
+| Test files (cmd/)                                     |    203 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     21 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  98.4% |
 | Overall coverage (`go test ./internal/...`)           |  98.6% |
-| Average package coverage                              |  98.7% |
+| Average package coverage                              |  98.6% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,867 | 79.5% |
+| `TestFunc_Scenario` (2-part)           | 11,869 | 79.5% |
 | `TestFunc` (no underscore)             |    980 |  6.6% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,077 | 13.9% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,084 | 14.0% |
 
 ## Test Distribution
 
@@ -49,8 +49,8 @@
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (177) |          8,610 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            603 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,933 |        202 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,924** |    **961** |                                                                                                 |
+| cmd packages            |          2,942 |        203 | server entry point and developer command utilities                                              |
+| **Total**               |     **14,933** |    **962** |                                                                                                 |
 
 ### Core Packages
 
@@ -341,12 +341,12 @@
 | cmd/eval_mcp_surfaces/internal/termio          |   100.0% |
 | cmd/format_md_tables                           |    95.8% |
 | cmd/gen_action_catalog_manifest                |    66.7% |
-| cmd/gen_api_exposes                            |    93.1% |
+| cmd/gen_api_exposes                            |    93.8% |
 | cmd/gen_api_shapes                             |    89.8% |
 | cmd/gen_brand                                  |    87.1% |
 | cmd/gen_docker_tools                           |    94.5% |
 | cmd/gen_graphql_schema                         |    87.9% |
-| cmd/gen_icon_webp                              |    92.3% |
+| cmd/gen_icon_webp                              |    90.2% |
 | cmd/gen_lhm_manifest                           |    89.4% |
 | cmd/gen_llms                                   |    98.9% |
 | cmd/gen_request_inventory                      |    89.8% |

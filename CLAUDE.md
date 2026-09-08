@@ -53,7 +53,7 @@ The six read-only `gitlab_orbit_*` tools (`status`, `schema`, `tools`, `dsl`, `q
 gitlab-mcp-server/
 ├── cmd/
 │   ├── server/                  # MCP server entry point and --shutdown support
-│   ├── audit_1to1/              # Consolidated 1:1 SDK↔API parity audit (R-INPUT/R-OUTPUT/R-ACTION/R-META/R-ENUM + merge; -scope=sdk gates the service universe, the raw-GraphQL exemptions and the enum values; -scope=paths is R-PATH, the only rule that reads the request a handler builds rather than the surface it publishes — see Request paths below)
+│   ├── audit_1to1/              # Consolidated 1:1 SDK↔API parity audit (R-INPUT/R-OUTPUT/R-ACTION/R-META/R-ENUM + merge; R-PATH's `shapes.sent` and `shapes.typed.unsurfaced` list the fields GitLab sends that we do not publish, each with the entity condition and license tier read from `gitlab-api-exposes.json`, the list the field-by-field review reads; -scope=sdk gates the service universe, the raw-GraphQL exemptions and the enum values; -scope=paths is R-PATH, the only rule that reads the request a handler builds rather than the surface it publishes — see Request paths below)
 │   ├── audit_catalog_first/     # Enforces catalog-first registration invariants (ADR-0004)
 │   ├── audit_discovery_completeness/ # Audits discovery metadata (aliases/usage/related/param-guidance/sibling-cluster; input-enum candidates) — META-001
 │   ├── audit_doc_coverage/      # Audits docs/reference/tools/*.md vs canonical action catalog (DOC-002); reads doc-ownership.json
