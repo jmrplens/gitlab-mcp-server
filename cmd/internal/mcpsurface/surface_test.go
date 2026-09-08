@@ -337,8 +337,13 @@ func TestMetaTools_WidensWithTheTier(t *testing.T) {
 // maintenance group contributes to it.
 func TestIndividualTools_ProjectsTheDeclaredToolNames(t *testing.T) {
 	listed := IndividualTools(newStubClientForTest(t), edition.Ultimate)
-	if len(listed) < 800 {
-		t.Fatalf("len(IndividualTools(Ultimate)) = %d, want the full individual surface", len(listed))
+	// The floor is the SDK's own default page rather than a round number: a
+	// server that forgets ServerOptions.PageSize serves exactly
+	// mcp.DefaultPageSize tools and a cursor for the rest, which is the
+	// truncation two of this package's predecessors shipped for years. Any
+	// floor at or below it would accept that first page as a full surface.
+	if len(listed) <= mcp.DefaultPageSize {
+		t.Fatalf("len(IndividualTools(Ultimate)) = %d, want more than the SDK's default page of %d", len(listed), mcp.DefaultPageSize)
 	}
 
 	names := map[string]bool{}
@@ -352,6 +357,33 @@ func TestIndividualTools_ProjectsTheDeclaredToolNames(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRequireCompleteListing_CursorPresent_Panics verifies a truncated listing
+// stops the caller instead of being described as the whole surface. The live
+// listings can only reach the quiet branch while listPageSize covers them, so
+// the loud one is driven directly.
+func TestRequireCompleteListing_CursorPresent_Panics(t *testing.T) {
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("requireCompleteListing with a next cursor did not panic")
+		}
+		message, _ := recovered.(string)
+		for _, want := range []string{"individual tools", "stopped after 1000 entries", "listPageSize"} {
+			if !strings.Contains(message, want) {
+				t.Errorf("panic message %q does not mention %q", message, want)
+			}
+		}
+	}()
+
+	requireCompleteListing("individual tools", "next-page", mcp.DefaultPageSize)
+}
+
+// TestRequireCompleteListing_NoCursor_Returns verifies a complete listing is
+// waved through, which is the branch every live listing takes.
+func TestRequireCompleteListing_NoCursor_Returns(t *testing.T) {
+	requireCompleteListing("prompts", "", 37)
 }
 
 // TestListSurface_ServesOneListingPerKey verifies the memo: two calls with the

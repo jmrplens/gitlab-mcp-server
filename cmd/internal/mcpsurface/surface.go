@@ -35,7 +35,14 @@ const (
 )
 
 // listPageSize is high enough that the whole surface arrives in a single list
-// response, so callers never have to paginate.
+// response, so callers never have to paginate. It has to be stated: a server
+// that leaves ServerOptions.PageSize at zero gets the SDK's DefaultPageSize of
+// 1000, which is fewer entries than the individual surface carries at Ultimate.
+//
+// That was not a hypothetical. Two of the readers this package replaced set no
+// page size and listed once, so they measured and audited the first 1000 of
+// 1085 individual tools and said nothing about the 85 they never saw.
+// [requireCompleteListing] is what keeps the next such regression loud.
 const listPageSize = 2000
 
 // StubToken is the dummy credential the generators authenticate their stub
@@ -138,6 +145,21 @@ func Session(setup func(*mcp.Server)) (session *mcp.ClientSession, cleanup func(
 	}
 }
 
+// requireCompleteListing panics when a list response carries a next cursor,
+// which means the server answered with one page of a longer listing and every
+// caller is about to describe a surface with entries missing from it.
+//
+// It panics rather than paginating on purpose. A cursor here is a statement
+// about this package's own [listPageSize], not about anything the run
+// encountered, and the readers that quietly truncated their listings did so
+// for years precisely because nothing said a word. Silence is the failure mode
+// this guards; a generator that stops is one a maintainer can fix in a line.
+func requireCompleteListing(listing, nextCursor string, count int) {
+	if nextCursor != "" {
+		panic(fmt.Sprintf("mcpsurface: the %s listing stopped after %d entries with more to come; listPageSize (%d) no longer covers the surface", listing, count, listPageSize))
+	}
+}
+
 // DynamicCatalog builds the canonical action catalog behind the dynamic
 // find/execute surface, including the standalone actions that are not part of
 // any domain meta-tool. enterprise selects the Premium/Ultimate catalog.
@@ -185,7 +207,9 @@ func DynamicToolsFromCatalog(catalog *actioncatalog.Catalog) []*mcp.Tool {
 	})
 	defer cleanup()
 
-	return cmdutil.Must(session.ListTools(context.Background(), nil)).Tools
+	listed := cmdutil.Must(session.ListTools(context.Background(), nil))
+	requireCompleteListing(config.ToolSurfaceDynamic+" tools", listed.NextCursor, len(listed.Tools))
+	return listed.Tools
 }
 
 // listedTools memoizes [IndividualTools] and [MetaTools] per
@@ -256,9 +280,10 @@ func listSurface(key listKey, setup func(*mcp.Server)) []*mcp.Tool {
 	session, cleanup := Session(setup)
 	defer cleanup()
 
-	listed := cmdutil.Must(session.ListTools(context.Background(), nil)).Tools
-	listedTools.Store(key, listed)
-	return listed
+	result := cmdutil.Must(session.ListTools(context.Background(), nil))
+	requireCompleteListing(key.surface+" tools", result.NextCursor, len(result.Tools))
+	listedTools.Store(key, result.Tools)
+	return result.Tools
 }
 
 // SortDynamicTools orders the dynamic surface find-then-execute, which is the
@@ -325,7 +350,9 @@ func Resources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTem
 
 	ctx := context.Background()
 	res := cmdutil.Must(session.ListResources(ctx, nil))
+	requireCompleteListing("resources", res.NextCursor, len(res.Resources))
 	tpl := cmdutil.Must(session.ListResourceTemplates(ctx, nil))
+	requireCompleteListing("resource templates", tpl.NextCursor, len(tpl.ResourceTemplates))
 	return res.Resources, tpl.ResourceTemplates
 }
 
@@ -337,7 +364,9 @@ func Prompts(client *gitlabclient.Client) []*mcp.Prompt {
 	})
 	defer cleanup()
 
-	return cmdutil.Must(session.ListPrompts(context.Background(), nil)).Prompts
+	listed := cmdutil.Must(session.ListPrompts(context.Background(), nil))
+	requireCompleteListing("prompts", listed.NextCursor, len(listed.Prompts))
+	return listed.Prompts
 }
 
 // ProjectRoot walks up from the working directory to the directory holding
