@@ -16,6 +16,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqldocs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqlintrospect"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/provenance"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
@@ -64,15 +65,6 @@ type auditRun struct {
 	now func() time.Time
 }
 
-// clock is now with a default, so a run that judges by the pin does not have to
-// supply one.
-func (c auditRun) clock() time.Time {
-	if c.now == nil {
-		return time.Now()
-	}
-	return c.now()
-}
-
 func main() {
 	dir := flag.String("dir", ".", "repository root to audit")
 	verbose := flag.Bool("v", false, "list every document checked, not only the refused ones")
@@ -96,7 +88,7 @@ func main() {
 // this audit ends are reachable from a test instead of only from a process. It
 // returns the exit status rather than calling os.Exit.
 func run(cfg auditRun, out, errOut io.Writer) int {
-	probed, provenance, err := resolveSchema(cfg)
+	probed, judgedBy, err := resolveSchema(cfg)
 	if err != nil {
 		fmt.Fprintln(errOut, prefix, err)
 		return 1
@@ -106,7 +98,7 @@ func run(cfg auditRun, out, errOut io.Writer) int {
 		Dir:        cfg.dir,
 		Patterns:   cfg.patterns,
 		Schema:     probed,
-		Provenance: provenance,
+		Provenance: judgedBy,
 		Overlay:    cfg.overlay,
 	})
 	if err != nil {
@@ -144,7 +136,7 @@ func run(cfg auditRun, out, errOut io.Writer) int {
 		// act on.
 		fmt.Fprint(out, driftReport(
 			cmdutil.Must(graphqlschema.Schema()), probed, result.Documents,
-			cmdutil.Must(graphqlschema.SourceInfo()), cfg.clock(),
+			cmdutil.Must(graphqlschema.SourceInfo()), provenance.Clock(cfg.now),
 		))
 	}
 

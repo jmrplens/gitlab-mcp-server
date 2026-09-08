@@ -11,7 +11,11 @@
 // Generating needs the network, so it is not a CI gate. --check is: it loads
 // the committed files from disk and fails when the schema does not parse or
 // the record does not decode, which is what stops a truncated or half-written
-// artifact from reaching a branch.
+// artifact from reaching a branch. It also refuses a pin that is too old, on
+// the window and the verdict
+// [github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/provenance] holds for
+// every record this repository pins; what the pin is a pin of — the instance,
+// the version, the type floor and the schema beside it — is asked here.
 //
 // Usage:
 //

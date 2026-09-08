@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqlintrospect"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/provenance"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
 
@@ -21,11 +22,6 @@ const (
 	defaultEndpoint = "https://gitlab.com/api/graphql"
 	// defaultDir is where the package that embeds the schema lives.
 	defaultDir = "internal/graphqlschema"
-	// maxPinAge is how long a pin may stand before --check refuses it. GitLab
-	// ships monthly and narrows fields in place, so half a year is roughly six
-	// releases of drift: long enough not to ambush an unrelated change often,
-	// short enough that a narrowing is noticed within a release cycle or two.
-	maxPinAge = 180 * 24 * time.Hour
 )
 
 // genRun is one configured run: which instance to ask, where to write, and
@@ -45,15 +41,6 @@ type genRun struct {
 // takes.
 func (c genRun) target() graphqlintrospect.Target {
 	return graphqlintrospect.Target{Endpoint: c.endpoint, Token: c.token, Client: c.client}
-}
-
-// clock is now with a default, so a run that only checks the committed pair
-// does not have to supply one to ask how old it is.
-func (c genRun) clock() time.Time {
-	if c.now == nil {
-		return time.Now()
-	}
-	return c.now()
 }
 
 func main() {
@@ -102,7 +89,7 @@ func checkArtifacts(cfg genRun, out, errOut io.Writer) int {
 		return 1
 	}
 
-	problems := pinProblems(source, cfg.clock())
+	problems := pinProblems(source, provenance.Clock(cfg.now))
 	// The record and the schema are two files, and everything above judges
 	// the record alone. Holding the record's count to the count the file
 	// beside it loads with is what makes them one pin rather than a record
@@ -134,9 +121,10 @@ func checkArtifacts(cfg genRun, out, errOut io.Writer) int {
 // this existed nothing asked: a run against a self-managed instance, or one
 // without a token, wrote a narrower or anonymous pin that every gate accepted
 // in silence. Each check below stands for a way the guarantee quietly shrinks.
-// Age is here for the opposite reason: the pin can only report a document that
-// was already broken when it was taken, so an old pin is a gate that has
-// stopped asking, and the only honest way to say so is to fail.
+// Age is asked for the opposite reason and is asked elsewhere: the pin can only
+// report a document that was already broken when it was taken, so an old pin is
+// a gate that has stopped asking, which is the decision
+// [provenance.Problems] holds for every record this repository pins.
 func pinProblems(source graphqlschema.Source, now time.Time) []string {
 	var problems []string
 	if source.Instance != defaultEndpoint {
@@ -158,37 +146,10 @@ func pinProblems(source graphqlschema.Source, now time.Time) []string {
 		problems = append(problems,
 			"the pin records no GitLab version, which is what an introspection without GITLAB_TOKEN produces: nothing can then say which release the gate speaks for")
 	}
-	switch age, err := pinAge(source, now); {
-	case err != nil:
-		problems = append(problems, fmt.Sprintf(
-			"the pin records %q as the day it was taken, which is not a date: nothing can then say how old the gate is",
-			source.RetrievedAt,
-		))
-	case age < 0:
-		problems = append(problems, fmt.Sprintf(
-			"the pin says it was taken on %s, which has not happened yet: no regeneration writes a day in the future",
-			source.RetrievedAt,
-		))
-	case age > maxPinAge:
-		problems = append(problems, fmt.Sprintf(
-			"the pin is %d days old and the window is %d: GitLab narrows fields in place, so a pin this old can no longer report a document that broke since",
-			int(age.Hours()/24), int(maxPinAge.Hours()/24),
-		))
-	}
-	return problems
-}
-
-// pinAge reports how long ago the pin was taken, or the reason the record's
-// date cannot say. The decoder accepts any string in that field, so this is
-// the only place a date nobody can read is noticed, and a date the age check
-// cannot read is a pin whose age nobody knows, which is exactly what the
-// window exists to refuse.
-func pinAge(source graphqlschema.Source, now time.Time) (time.Duration, error) {
-	retrieved, err := time.Parse(time.DateOnly, source.RetrievedAt)
-	if err != nil {
-		return 0, err
-	}
-	return now.UTC().Sub(retrieved), nil
+	return append(problems, provenance.Problems(provenance.Subject{
+		Noun:        "pin",
+		Consequence: "GitLab narrows fields in place, so one this old can no longer report a document that broke since",
+	}, source.RetrievedAt, now)...)
 }
 
 // generate is the network half: introspect, convert, and write.
@@ -256,7 +217,7 @@ func generate(cfg genRun, out, errOut io.Writer) int {
 	// and the person who ran this is the only one in a position to notice.
 	// Saying so here rather than only in CI is the difference between a
 	// sentence and a red pipeline an hour later.
-	for _, problem := range pinProblems(source, cfg.clock()) {
+	for _, problem := range pinProblems(source, provenance.Clock(cfg.now)) {
 		fmt.Fprintln(errOut, prefix+" warning:", problem)
 	}
 	return 0

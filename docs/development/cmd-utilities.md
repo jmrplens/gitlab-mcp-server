@@ -1767,6 +1767,16 @@ Merging the two behind one signature with a mode flag is the one way to make thi
 
 Half of one `-` writer stays where it is. [`audit_edition_tier`](#audit_edition_tier) writes its stdout branch to a writer the caller injects, which is how its tests read that branch back without swapping `os.Stdout`; folding it in would mean giving up that seam or giving `WriteReport` a writer parameter no other caller has a use for. Its file branch is the shared helper's, which also gave it the missing parent directory it did not create before.
 
+### cmd/internal/provenance
+
+The age verdict passed on a committed record of something that lives in `gitlab-org/gitlab`: the retrieval date's arithmetic (`Age`, `Days`), the default clock the `--check` halves share (`Clock`), the three ways a date stops a record being one a gate can rest on (`Problems`), and the one 180-day window with its one recorded reason (`MaxAge`).
+
+Three commands pin such a record — [`gen_api_shapes`](#gen_api_shapes) the OpenAPI document, [`gen_api_exposes`](#gen_api_exposes) the entity conditions, [`gen_graphql_schema`](#gen_graphql_schema) the GraphQL schema — and each has the same shape for the same reason: generating needs the network so it cannot gate, `--check` gates precisely because it needs none, and a check that runs offline can prove the record is readable, whole and provenanced while proving nothing about whether it still matches the GitLab it was taken from. The window is the answer to that gap, and it is an answer about GitLab's release cadence rather than about any one of the three records: a reason to widen or narrow it moves all of them. It had been written down three times with three copies of its justification and a comment in one pointing at its twin.
+
+What stays with each command is what makes its record its own: its `Source` type, its floor (`MinimumOperations`, `MinimumEntities`, `MinimumTypes`), the identity checks that ask what the record is a record of, its artifact dialect, its make targets and its binary. `Subject` carries the two words that differ between the three messages — the noun (`record`, `pin`) and what this particular record can no longer report — so each sentence in CI output is still about one artifact.
+
+Two nearby commands are deliberately not members. [`gen_request_inventory`](#gen_request_inventory) commits no provenance at all: its `-check` is byte equality against a fresh recording of the unit suite, so there is no date to judge and no window to share. [`audit_graphql_documents`](#audit_graphql_documents) owns no record either; it reads the pinned schema's, and calls `Age` only to say how long ago the pin was taken in its drift report, where an unreadable date stays silent rather than becoming a second complaint about a field `check-graphql-schema` already refuses.
+
 ## CI gate targets
 
 The following utilities expose a verification mode (`--check` or `-check`, or an invariant/error exit) that CI runs to guard against drift. The combined documentation gate is `make audit-docs`, which chains markdownlint, the table formatter, the llms, LobeHub-manifest, testing-docs and site-stats checks, the local-link check, the godoc, surface-quality and alias audits, and the site's own `check`, `build` and `lint`.

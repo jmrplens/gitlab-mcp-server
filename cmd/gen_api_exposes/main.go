@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apiexposes"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/provenance"
 )
 
 const (
@@ -37,10 +38,6 @@ const (
 	// clone of the whole repository.
 	defaultBase = "https://gitlab.com"
 	projectID   = "278964"
-	// maxAge is how long a record may stand before --check refuses it: the
-	// window the OpenAPI record and the GraphQL pin stand for, for the same
-	// reason.
-	maxAge = 180 * 24 * time.Hour
 	// fetchTimeout bounds one download. The largest archive is under 100 KB.
 	fetchTimeout = 2 * time.Minute
 	// fetchAttempts is how many times one download is tried. gitlab.com
@@ -100,13 +97,6 @@ func (c genRun) wait(delay time.Duration) {
 	c.pause(delay)
 }
 
-func (c genRun) clock() time.Time {
-	if c.now == nil {
-		return time.Now()
-	}
-	return c.now()
-}
-
 func main() {
 	ref := flag.String("ref", defaultRef, "gitlab-org/gitlab ref to read the entities from")
 	dir := flag.String("dir", apiexposes.DefaultDir, "directory holding the committed record")
@@ -147,7 +137,7 @@ func checkRecord(cfg genRun, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, prefix, err)
 		return 1
 	}
-	problems := recordProblems(doc, cfg.clock())
+	problems := recordProblems(doc, provenance.Clock(cfg.now))
 	if len(problems) > 0 {
 		for _, problem := range problems {
 			fmt.Fprintln(errOut, prefix, problem)
@@ -179,32 +169,10 @@ func recordProblems(doc apiexposes.Document, now time.Time) []string {
 		problems = append(problems,
 			"the record does not say which ref and commit it came from or what it hashed: nothing can then say which GitLab it speaks for")
 	}
-	switch age, err := recordAge(doc, now); {
-	case err != nil:
-		problems = append(problems, fmt.Sprintf(
-			"the record says it was taken on %q, which is not a date: nothing can then say how old it is",
-			doc.Source.RetrievedAt,
-		))
-	case age < 0:
-		problems = append(problems, fmt.Sprintf(
-			"the record says it was taken on %s, which has not happened yet: no regeneration writes a day in the future",
-			doc.Source.RetrievedAt,
-		))
-	case age > maxAge:
-		problems = append(problems, fmt.Sprintf(
-			"the record is %d days old and the window is %d: GitLab moves fields behind and out from under conditions release by release, so one this old no longer says when a field is sent",
-			int(age.Hours()/24), int(maxAge.Hours()/24),
-		))
-	}
-	return problems
-}
-
-func recordAge(doc apiexposes.Document, now time.Time) (time.Duration, error) {
-	retrieved, err := time.Parse(time.DateOnly, doc.Source.RetrievedAt)
-	if err != nil {
-		return 0, err
-	}
-	return now.UTC().Sub(retrieved), nil
+	return append(problems, provenance.Problems(provenance.Subject{
+		Noun:        "record",
+		Consequence: "GitLab moves fields behind and out from under conditions release by release, so one this old no longer says when a field is sent",
+	}, doc.Source.RetrievedAt, now)...)
 }
 
 // reportEntity prints what one entity sends, field by field, the way a
@@ -315,7 +283,7 @@ func generate(cfg genRun, out, errOut io.Writer) int {
 		Source: apiexposes.Source{
 			Ref:         cfg.ref,
 			Commit:      commit,
-			RetrievedAt: cfg.clock().UTC().Format(time.DateOnly),
+			RetrievedAt: provenance.Clock(cfg.now).UTC().Format(time.DateOnly),
 			SHA256:      digest,
 			Files:       len(files),
 			Entities:    len(entities),
