@@ -23,11 +23,11 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runnercontrollers"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runnercontrollerscopes"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runnercontrollertokens"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/runnercontrollers"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/runnercontrollerscopes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/runnercontrollertokens"
 )
 
 // runnerCtlFindRunnerID returns the ID of any instance-level runner, or 0

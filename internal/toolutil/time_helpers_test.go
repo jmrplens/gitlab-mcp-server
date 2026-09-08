@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // TestFormatTime_ValidRFC3339 verifies that FormatTime formats a valid

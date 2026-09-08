@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/commits"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // hintVerifyMR is the 404 hint shared by MR tools.
@@ -128,7 +128,6 @@ type mergeRequestListFilters struct {
 	AuthorUsername      string
 	NotAuthorUsername   string
 	ReviewerUsername    string
-	Approved            string
 	In                  string
 	MyReactionEmoji     string
 	View                string
@@ -169,7 +168,6 @@ type mergeRequestListTarget struct {
 	authorUsername      func(*string)
 	notAuthorUsername   func(*string)
 	reviewerUsername    func(*string)
-	approved            func(*string)
 	in                  func(*string)
 	myReactionEmoji     func(*string)
 	view                func(*string)
@@ -224,7 +222,6 @@ func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeReq
 	setString(input.AuthorUsername, target.authorUsername)
 	setString(input.NotAuthorUsername, target.notAuthorUsername)
 	setString(input.ReviewerUsername, target.reviewerUsername)
-	setString(input.Approved, target.approved)
 	setString(input.In, target.in)
 	setString(input.MyReactionEmoji, target.myReactionEmoji)
 	setString(input.View, target.view)
@@ -1058,7 +1055,6 @@ type ListGlobalInput struct {
 	AuthorUsername         string                     `json:"author_username,omitempty"     jsonschema:"Filter by author username"`
 	NotAuthorUsername      string                     `json:"not_author_username,omitempty" jsonschema:"Exclude MRs authored by this username"`
 	ReviewerUsername       string                     `json:"reviewer_username,omitempty"   jsonschema:"Filter by reviewer username"`
-	Approved               string                     `json:"approved,omitempty"            jsonschema:"Filter by approval status: 'yes' or 'no' (Premium)"`
 	In                     string                     `json:"in,omitempty"                  jsonschema:"Scope of the search filter (e.g. title, description, or title,description)"`
 	MyReactionEmoji        string                     `json:"my_reaction_emoji,omitempty"   jsonschema:"Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)"`
 	View                   string                     `json:"view,omitempty"                jsonschema:"Set to 'simple' to return only basic MR fields"`
@@ -1110,12 +1106,16 @@ func buildGlobalListOptions(input ListGlobalInput) (*gl.ListMergeRequestsOptions
 	return opts, nil
 }
 
+// globalMRListFilters reads the global list input; see [groupMRListFilters]
+// for why its twin is not a copy of it.
+//
+//nolint:dupl // distinct input types; see groupMRListFilters.
 func globalMRListFilters(input ListGlobalInput) mergeRequestListFilters {
 	return mergeRequestListFilters{
 		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,
 		Scope: input.Scope, Search: input.Search, SourceBranch: input.SourceBranch, TargetBranch: input.TargetBranch,
 		AuthorUsername: input.AuthorUsername, NotAuthorUsername: input.NotAuthorUsername, ReviewerUsername: input.ReviewerUsername,
-		Approved: input.Approved, In: input.In, MyReactionEmoji: input.MyReactionEmoji, View: input.View, WIP: input.WIP,
+		In: input.In, MyReactionEmoji: input.MyReactionEmoji, View: input.View, WIP: input.WIP,
 		AuthorID: input.AuthorID, AssigneeID: input.AssigneeID, ReviewerID: input.ReviewerID,
 		ApproverIDs: input.ApproverIDs, ApprovedByIDs: input.ApprovedByIDs, ApprovedByUsernames: input.ApprovedByUsernames,
 		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
@@ -1130,7 +1130,6 @@ func globalMergeRequestListTarget(opts *gl.ListMergeRequestsOptions) mergeReques
 		state: &opts.State, labels: &opts.Labels, notLabels: &opts.NotLabels, milestone: &opts.Milestone, scope: &opts.Scope,
 		search: &opts.Search, sourceBranch: &opts.SourceBranch, targetBranch: &opts.TargetBranch, authorUsername: &opts.AuthorUsername,
 		notAuthorUsername: &opts.NotAuthorUsername, reviewerUsername: &opts.ReviewerUsername,
-		approved:        &opts.Approved, //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; prefer approved_by_ids.
 		in:              &opts.In,
 		myReactionEmoji: &opts.MyReactionEmoji, view: &opts.View, wip: &opts.WIP, authorID: &opts.AuthorID,
 		assigneeID: &opts.AssigneeID, reviewerID: &opts.ReviewerID, approverIDs: &opts.ApproverIDs, approvedByIDs: &opts.ApprovedByIDs, approvedByUsernames: &opts.ApprovedByUsernames,
@@ -1153,7 +1152,6 @@ type mergeRequestListTargetFields struct {
 	authorUsername      **string
 	notAuthorUsername   **string
 	reviewerUsername    **string
-	approved            **string
 	in                  **string
 	myReactionEmoji     **string
 	view                **string
@@ -1186,7 +1184,7 @@ func newMergeRequestListTarget(fields mergeRequestListTargetFields) mergeRequest
 		milestone: setStringPtr(fields.milestone), scope: setStringPtr(fields.scope), search: setStringPtr(fields.search),
 		sourceBranch: setStringPtr(fields.sourceBranch), targetBranch: setStringPtr(fields.targetBranch),
 		authorUsername: setStringPtr(fields.authorUsername), notAuthorUsername: setStringPtr(fields.notAuthorUsername),
-		reviewerUsername: setStringPtr(fields.reviewerUsername), approved: setStringPtr(fields.approved), in: setStringPtr(fields.in),
+		reviewerUsername: setStringPtr(fields.reviewerUsername), in: setStringPtr(fields.in),
 		myReactionEmoji: setStringPtr(fields.myReactionEmoji), view: setStringPtr(fields.view), wip: setStringPtr(fields.wip),
 		environment: setStringPtr(fields.environment), authorID: setInt64Ptr(fields.authorID),
 		assigneeID: setAssigneeIDPtr(fields.assigneeID), reviewerID: setReviewerIDPtr(fields.reviewerID),
@@ -1320,6 +1318,14 @@ func buildGroupListOptions(input ListGroupInput) (*gl.ListGroupMergeRequestsOpti
 	return opts, nil
 }
 
+// groupMRListFilters is textually identical to [globalMRListFilters] and is
+// not a copy of it: the two read different input types, whose fields happen to
+// carry the same names, and they diverged by one line until the `approved`
+// filter left with client-go v3. Unifying them would mean an embedded input
+// struct shared by two published tool schemas, which is a larger change than
+// the repetition costs.
+//
+//nolint:dupl // distinct input types; see the comment above.
 func groupMRListFilters(input ListGroupInput) mergeRequestListFilters {
 	return mergeRequestListFilters{
 		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,

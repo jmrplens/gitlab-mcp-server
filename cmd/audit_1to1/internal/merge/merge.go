@@ -6,7 +6,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 )
 
 const backlogNote = "Merged 1:1 audit backlog. The struct, action and metadata streams are candidate lists; intentional renames (e.g. branch->branch_name) and deliberately unexposed endpoints are expected false positives a human adjudicates per package. The enum stream is gated by -scope=sdk and is expected to be empty: an entry there is an SDK value we do not offer, or a value we offer that the SDK does not declare."

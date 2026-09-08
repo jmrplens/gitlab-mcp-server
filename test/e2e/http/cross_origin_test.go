@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 )
 
 const trustedOrigin = "https://client.example"

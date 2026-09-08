@@ -31,18 +31,18 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/alertmanagement"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/applications"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/errortracking"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/importservice"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/license"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/planlimits"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securefiles"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/systemhooks"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/terraformstates"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/usagedata"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/alertmanagement"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/applications"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/errortracking"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/importservice"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/license"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/planlimits"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securefiles"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/systemhooks"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/terraformstates"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/usagedata"
 )
 
 // errStateStillVisible marks a deleted Terraform state that a read can still

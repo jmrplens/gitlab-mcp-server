@@ -27,12 +27,12 @@ import (
 	"context"
 	"strings"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_readonly_graphql/fixture/other"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_readonly_graphql/fixture/other"
 )
 
 // constantName is an action name written as a constant rather than a literal.
@@ -222,8 +222,8 @@ const otherFixture = `package other
 import (
 	"context"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Input is the fixture handler input.
@@ -386,8 +386,8 @@ import (
 	"context"
 	"os"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Input is the fixture handler input.

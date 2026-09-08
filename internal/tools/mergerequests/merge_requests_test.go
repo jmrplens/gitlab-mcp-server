@@ -14,14 +14,14 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/commits"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Test constants for merge request endpoint paths and reusable values.
@@ -4965,7 +4965,6 @@ func TestListGlobal_NewFilterFields_ReachQuery(t *testing.T) {
 
 	boolTrue := true
 	_, err := ListGlobal(context.Background(), client, ListGlobalInput{
-		Approved:               "yes",
 		NotAuthorUsername:      "mallory",
 		In:                     "title,description",
 		MyReactionEmoji:        "rocket",
@@ -4984,7 +4983,6 @@ func TestListGlobal_NewFilterFields_ReachQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListGlobal() unexpected error: %v", err)
 	}
-	assertQuery(t, q, "approved", "yes")
 	assertQuery(t, q, "not[author_username]", "mallory")
 	assertQuery(t, q, "in", "title,description")
 	assertQuery(t, q, "my_reaction_emoji", "rocket")

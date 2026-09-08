@@ -22,17 +22,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupanalytics"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupboards"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupcredentials"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupldap"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupprotectedbranches"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupprotectedenvs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupsaml"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupsshcerts"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupwikis"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securitysettings"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupanalytics"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupboards"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupcredentials"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupldap"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupprotectedbranches"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupprotectedenvs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupsaml"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupsshcerts"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupwikis"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securitysettings"
 )
 
 // runMetaGroupBoardOperations dispatches to the Enterprise group-board

@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupprotectedenvs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupprotectedenvs"
 )
 
 // TestMeta_GroupProtectedEnvironmentsEE exercises the group

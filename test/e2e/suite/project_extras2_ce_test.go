@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/integrations"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pages"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectimportexport"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/integrations"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pages"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projectimportexport"
 )
 
 // projectExtrasIntegrationSlug is an inert integration that needs no

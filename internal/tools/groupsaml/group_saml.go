@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const groupSAMLLinkHint = "verify group_id with gitlab_group_get; group SAML links require Premium/Ultimate, Owner access, and group SAML SSO configured for the group; self-managed instances without SAML SSO can return 401 or 404"

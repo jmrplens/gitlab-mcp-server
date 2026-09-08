@@ -16,7 +16,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
 )
 
 // newSiteStats builds the stats payload from a mock self-managed client and a

@@ -4,10 +4,10 @@ import (
 	"context"
 	"net/http"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const groupProtectedEnvironmentTierHint = "use one of GitLab's valid group protected environment tiers: production, staging, testing, development, other; deploy_access_levels and approval_rules require valid user_id, group_id, or access_level values; requires Owner + Premium/Ultimate"

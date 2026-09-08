@@ -15,9 +15,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupstoragemoves"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectstoragemoves"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/snippetstoragemoves"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupstoragemoves"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projectstoragemoves"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/snippetstoragemoves"
 )
 
 // TestMeta_GroupStorageMoves_Graceful404 exercises group storage move list

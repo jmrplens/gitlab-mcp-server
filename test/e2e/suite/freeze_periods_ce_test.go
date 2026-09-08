@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/freezeperiods"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/freezeperiods"
 )
 
 // TestMeta_FreezePeriods exercises freeze period CRUD via the

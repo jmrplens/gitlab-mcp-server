@@ -13,7 +13,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupiterations"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupiterations"
 )
 
 // TestMeta_GroupIterations exercises group iteration list via gitlab_issue.

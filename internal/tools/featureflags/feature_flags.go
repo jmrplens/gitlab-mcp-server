@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // ──────────────────────────────────────────────
@@ -77,9 +77,19 @@ type ListOutput struct {
 // Strategy input types (for create/update)
 // ──────────────────────────────────────────────.
 
-// ScopeInput represents a scope for strategy options.
-type ScopeInput struct {
+// CreateScopeInput represents a scope of a strategy being created. Creation
+// carries no scope identity: GitLab documents environment_scope alone for
+// POST, and id and _destroy only for PUT.
+type CreateScopeInput struct {
 	EnvironmentScope string `json:"environment_scope" jsonschema:"Environment scope this strategy applies to (e.g. production, staging). Omit for the default * scope"`
+}
+
+// UpdateScopeInput represents a scope of a strategy being updated, where a
+// scope already on the flag can be addressed by id and removed with _destroy.
+type UpdateScopeInput struct {
+	ID               *int64 `json:"id,omitempty" jsonschema:"Environment scope ID, to update or remove a scope already on the strategy. Read it from the scopes of a prior feature flag get or list"`
+	EnvironmentScope string `json:"environment_scope,omitempty" jsonschema:"Environment scope this strategy applies to (e.g. production, staging). Omit for the default * scope"`
+	Destroy          *bool  `json:"_destroy,omitempty" jsonschema:"Set true together with id to delete this scope from the strategy"`
 }
 
 // StrategyParameterInput represents strategy parameters for create/update.
@@ -91,14 +101,26 @@ type StrategyParameterInput struct {
 	Stickiness string `json:"stickiness,omitempty" jsonschema:"Stickiness attribute used to bucket users for the flexibleRollout strategy: default, userId, sessionId, or random"`
 }
 
-// StrategyInput represents a strategy for create/update operations.
-type StrategyInput struct {
-	ID         int64                   `json:"id,omitempty" jsonschema:"Strategy ID (only for update operations referencing an existing strategy)"`
+// CreateStrategyInput represents a strategy of a flag being created. A
+// strategy that does not exist yet has no id to address and nothing to
+// remove, which is why GitLab documents neither for POST.
+type CreateStrategyInput struct {
+	Name       string                  `json:"name" jsonschema:"Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout),required"`
+	Parameters *StrategyParameterInput `json:"parameters,omitempty" jsonschema:"Strategy-specific parameters (group_id, user_ids, percentage, rollout, stickiness)"`
+	UserListID *int64                  `json:"user_list_id,omitempty" jsonschema:"ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use gitlab_ff_user_list_list to find it"`
+	Scopes     []CreateScopeInput      `json:"scopes,omitempty" jsonschema:"Environment scopes to which this strategy applies"`
+}
+
+// UpdateStrategyInput represents a strategy of a flag being updated, where a
+// strategy already on the flag can be addressed by id and removed with
+// _destroy.
+type UpdateStrategyInput struct {
+	ID         int64                   `json:"id,omitempty" jsonschema:"Strategy ID, to update or remove a strategy already on the flag. Read it from the strategies of a prior feature flag get or list"`
 	Name       string                  `json:"name,omitempty" jsonschema:"Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout). Required except when removing a strategy with _destroy"`
 	Parameters *StrategyParameterInput `json:"parameters,omitempty" jsonschema:"Strategy-specific parameters (group_id, user_ids, percentage, rollout, stickiness)"`
 	UserListID *int64                  `json:"user_list_id,omitempty" jsonschema:"ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use gitlab_ff_user_list_list to find it"`
-	Destroy    *bool                   `json:"_destroy,omitempty" jsonschema:"Set true together with id (and no name) to delete this strategy from the flag during an update"`
-	Scopes     []ScopeInput            `json:"scopes,omitempty" jsonschema:"Environment scopes to which this strategy applies"`
+	Destroy    *bool                   `json:"_destroy,omitempty" jsonschema:"Set true together with id (and no name) to delete this strategy from the flag"`
+	Scopes     []UpdateScopeInput      `json:"scopes,omitempty" jsonschema:"Environment scopes to which this strategy applies"`
 }
 
 // ──────────────────────────────────────────────
@@ -123,22 +145,22 @@ type GetInput struct {
 
 // CreateInput contains parameters for creating a feature flag.
 type CreateInput struct {
-	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	Name        string               `json:"name" jsonschema:"Feature flag name,required"`
-	Description string               `json:"description,omitempty" jsonschema:"Feature flag description"`
-	Version     string               `json:"version,omitempty" jsonschema:"Version of the feature flag (new_version_flag)"`
-	Active      *bool                `json:"active,omitempty" jsonschema:"Whether the flag is active"`
-	Strategies  []StrategyInput      `json:"strategies,omitempty" jsonschema:"Activation strategies for the flag. Each has a name, optional parameters, and optional environment scopes"`
+	ProjectID   toolutil.StringOrInt  `json:"project_id" jsonschema:"Project ID or path,required"`
+	Name        string                `json:"name" jsonschema:"Feature flag name,required"`
+	Description string                `json:"description,omitempty" jsonschema:"Feature flag description"`
+	Version     string                `json:"version,omitempty" jsonschema:"Version of the feature flag (new_version_flag)"`
+	Active      *bool                 `json:"active,omitempty" jsonschema:"Whether the flag is active"`
+	Strategies  []CreateStrategyInput `json:"strategies,omitempty" jsonschema:"Activation strategies for the flag. Each has a name, optional parameters, and optional environment scopes"`
 }
 
 // UpdateInput contains parameters for updating a feature flag.
 type UpdateInput struct {
-	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	Name        string               `json:"name" jsonschema:"Current feature flag name,required"`
-	NewName     string               `json:"new_name,omitempty" jsonschema:"New feature flag name"`
-	Description string               `json:"description,omitempty" jsonschema:"Feature flag description"`
-	Active      *bool                `json:"active,omitempty" jsonschema:"Whether the flag is active"`
-	Strategies  []StrategyInput      `json:"strategies,omitempty" jsonschema:"Activation strategies for the flag. Each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes"`
+	ProjectID   toolutil.StringOrInt  `json:"project_id" jsonschema:"Project ID or path,required"`
+	Name        string                `json:"name" jsonschema:"Current feature flag name,required"`
+	NewName     string                `json:"new_name,omitempty" jsonschema:"New feature flag name"`
+	Description string                `json:"description,omitempty" jsonschema:"Feature flag description"`
+	Active      *bool                 `json:"active,omitempty" jsonschema:"Whether the flag is active"`
+	Strategies  []UpdateStrategyInput `json:"strategies,omitempty" jsonschema:"Activation strategies for the flag. Each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes carrying their own id and _destroy"`
 }
 
 // DeleteInput contains parameters for deleting a feature flag.
@@ -227,10 +249,10 @@ func CreateFeatureFlag(ctx context.Context, client *gitlabclient.Client, input C
 		opts.Active = input.Active
 	}
 	if len(input.Strategies) > 0 {
-		if err := validateStrategies(input.Strategies); err != nil {
+		if err := validateCreateStrategies(input.Strategies); err != nil {
 			return Output{}, err
 		}
-		opts.Strategies = toStrategyOptions(input.Strategies)
+		opts.Strategies = toCreateStrategyOptions(input.Strategies)
 	}
 	flag, _, err := client.GL().ProjectFeatureFlags.CreateProjectFeatureFlag(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
@@ -268,10 +290,10 @@ func UpdateFeatureFlag(ctx context.Context, client *gitlabclient.Client, input U
 		opts.Active = input.Active
 	}
 	if len(input.Strategies) > 0 {
-		if err := validateStrategies(input.Strategies); err != nil {
+		if err := validateUpdateStrategies(input.Strategies); err != nil {
 			return Output{}, err
 		}
-		opts.Strategies = toStrategyOptions(input.Strategies)
+		opts.Strategies = toUpdateStrategyOptions(input.Strategies)
 	}
 	flag, _, err := client.GL().ProjectFeatureFlags.UpdateProjectFeatureFlag(
 		string(input.ProjectID), input.Name, opts, gl.WithContext(ctx),
@@ -381,10 +403,23 @@ func convertStrategy(s *gl.ProjectFeatureFlagStrategy) StrategyOutput {
 // Strategy conversion helpers
 // ──────────────────────────────────────────────.
 
-// validateStrategies rejects strategy entries the GitLab API cannot act on:
-// a removal needs the id of the strategy to remove, and anything else needs a
-// name. Catching it here turns an opaque API rejection into a usable message.
-func validateStrategies(strategies []StrategyInput) error {
+// validateCreateStrategies rejects a strategy the create endpoint cannot act
+// on. Creation names every strategy it adds, since there is nothing on the
+// flag yet to address or remove.
+func validateCreateStrategies(strategies []CreateStrategyInput) error {
+	for i, s := range strategies {
+		if s.Name == "" {
+			return fmt.Errorf("strategies[%d]: name is required when creating a feature flag strategy", i)
+		}
+	}
+	return nil
+}
+
+// validateUpdateStrategies rejects strategy entries the GitLab API cannot act
+// on: a removal needs the id of the strategy to remove, and anything else
+// needs a name. The same holds one level down for the scopes of a strategy.
+// Catching it here turns an opaque API rejection into a usable message.
+func validateUpdateStrategies(strategies []UpdateStrategyInput) error {
 	for i, s := range strategies {
 		destroying := s.Destroy != nil && *s.Destroy
 		switch {
@@ -393,16 +428,63 @@ func validateStrategies(strategies []StrategyInput) error {
 		case !destroying && s.Name == "":
 			return fmt.Errorf("strategies[%d]: name is required unless the entry removes a strategy with _destroy and id", i)
 		}
+		if err := validateUpdateScopes(i, s.Scopes); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-// toStrategyOptions converts typed strategy inputs into the client-go
-// FeatureFlagStrategyOptions shape used by create and update requests.
-func toStrategyOptions(strategies []StrategyInput) *[]*gl.FeatureFlagStrategyOptions {
-	opts := make([]*gl.FeatureFlagStrategyOptions, 0, len(strategies))
+// validateUpdateScopes holds a strategy's scopes to the same rule its
+// strategies obey: a removal addresses what it removes.
+func validateUpdateScopes(strategy int, scopes []UpdateScopeInput) error {
+	for j, sc := range scopes {
+		destroying := sc.Destroy != nil && *sc.Destroy
+		switch {
+		case destroying && (sc.ID == nil || *sc.ID == 0):
+			return fmt.Errorf("strategies[%d].scopes[%d]: _destroy requires the id of the scope to remove; read it from the scopes of a prior feature flag get or list", strategy, j)
+		case !destroying && sc.EnvironmentScope == "" && sc.ID == nil:
+			return fmt.Errorf("strategies[%d].scopes[%d]: environment_scope is required unless the entry addresses a scope by id", strategy, j)
+		}
+	}
+	return nil
+}
+
+// toCreateStrategyOptions converts typed strategy inputs into the client-go
+// CreateFeatureFlagStrategyOptions shape the create request takes.
+func toCreateStrategyOptions(strategies []CreateStrategyInput) *[]*gl.CreateFeatureFlagStrategyOptions {
+	opts := make([]*gl.CreateFeatureFlagStrategyOptions, 0, len(strategies))
 	for _, s := range strategies {
-		o := &gl.FeatureFlagStrategyOptions{}
+		o := &gl.CreateFeatureFlagStrategyOptions{
+			Name:       new(s.Name),
+			Parameters: toStrategyParameters(s.Parameters),
+			UserListID: s.UserListID,
+		}
+		if len(s.Scopes) > 0 {
+			scopes := make([]*gl.CreateProjectFeatureFlagScopeOptions, 0, len(s.Scopes))
+			for _, sc := range s.Scopes {
+				scopes = append(scopes, &gl.CreateProjectFeatureFlagScopeOptions{
+					EnvironmentScope: new(sc.EnvironmentScope),
+				})
+			}
+			o.Scopes = &scopes
+		}
+		opts = append(opts, o)
+	}
+	return &opts
+}
+
+// toUpdateStrategyOptions converts typed strategy inputs into the client-go
+// UpdateFeatureFlagStrategyOptions shape the update request takes, which is
+// the create shape plus the identity a strategy already on the flag has.
+func toUpdateStrategyOptions(strategies []UpdateStrategyInput) *[]*gl.UpdateFeatureFlagStrategyOptions {
+	opts := make([]*gl.UpdateFeatureFlagStrategyOptions, 0, len(strategies))
+	for _, s := range strategies {
+		o := &gl.UpdateFeatureFlagStrategyOptions{
+			Parameters: toStrategyParameters(s.Parameters),
+			UserListID: s.UserListID,
+			Destroy:    s.Destroy,
+		}
 		// name is omittable, and a destroy-only entry has none: sending
 		// "name":"" would fail the update schema instead of removing the
 		// strategy.
@@ -412,33 +494,37 @@ func toStrategyOptions(strategies []StrategyInput) *[]*gl.FeatureFlagStrategyOpt
 		if s.ID != 0 {
 			o.ID = new(s.ID)
 		}
-		if s.UserListID != nil {
-			o.UserListID = s.UserListID
-		}
-		if s.Destroy != nil {
-			o.Destroy = s.Destroy
-		}
-		if s.Parameters != nil {
-			o.Parameters = &gl.ProjectFeatureFlagStrategyParameter{
-				GroupID:    s.Parameters.GroupID,
-				UserIDs:    s.Parameters.UserIDs,
-				Percentage: s.Parameters.Percentage,
-				Rollout:    s.Parameters.Rollout,
-				Stickiness: s.Parameters.Stickiness,
-			}
-		}
 		if len(s.Scopes) > 0 {
-			scopes := make([]*gl.ProjectFeatureFlagScope, 0, len(s.Scopes))
+			scopes := make([]*gl.UpdateProjectFeatureFlagScopeOptions, 0, len(s.Scopes))
 			for _, sc := range s.Scopes {
-				scopes = append(scopes, &gl.ProjectFeatureFlagScope{
-					EnvironmentScope: sc.EnvironmentScope,
-				})
+				scope := &gl.UpdateProjectFeatureFlagScopeOptions{
+					ID:      sc.ID,
+					Destroy: sc.Destroy,
+				}
+				if sc.EnvironmentScope != "" {
+					scope.EnvironmentScope = new(sc.EnvironmentScope)
+				}
+				scopes = append(scopes, scope)
 			}
 			o.Scopes = &scopes
 		}
 		opts = append(opts, o)
 	}
 	return &opts
+}
+
+// toStrategyParameters converts the typed parameters both requests share.
+func toStrategyParameters(p *StrategyParameterInput) *gl.ProjectFeatureFlagStrategyParameter {
+	if p == nil {
+		return nil
+	}
+	return &gl.ProjectFeatureFlagStrategyParameter{
+		GroupID:    p.GroupID,
+		UserIDs:    p.UserIDs,
+		Percentage: p.Percentage,
+		Rollout:    p.Rollout,
+		Stickiness: p.Stickiness,
+	}
 }
 
 // ──────────────────────────────────────────────

@@ -20,7 +20,7 @@
 // window. It says nothing about whether the record still matches GitLab, which
 // only a regeneration can answer, and which is why the window exists at all.
 // The window itself, and the verdict passed on the retrieval date, are
-// [github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/provenance]'s, shared
+// [github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/provenance]'s, shared
 // with the two other records this repository pins; the floor, the identity
 // checks and the record's own dialect stay here.
 package main

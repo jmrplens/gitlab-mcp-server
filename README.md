@@ -19,7 +19,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/jmrplens/gitlab-mcp-server/ci.yml?branch=main&style=flat&logo=githubactions&logoColor=white&label=CI)](https://github.com/jmrplens/gitlab-mcp-server/actions/workflows/ci.yml)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=alert_status)](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=coverage)](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server)
-[![Go Reference](https://pkg.go.dev/badge/github.com/jmrplens/gitlab-mcp-server/v2.svg)](https://pkg.go.dev/github.com/jmrplens/gitlab-mcp-server/v2)
+[![Go Reference](https://pkg.go.dev/badge/github.com/jmrplens/gitlab-mcp-server/v3.svg)](https://pkg.go.dev/github.com/jmrplens/gitlab-mcp-server/v3)
 
 </p>
 
@@ -439,7 +439,7 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | ------------- | ------------------------------------------------ |
 | Language      | Go 1.27+                                         |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.7.0  |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.59.0 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v3` v2.59.0 |
 | Transport     | stdio (default), HTTP (Streamable HTTP)          |
 
 ## Privacy Policy
@@ -467,20 +467,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,244 |     261,551 |
-| Unit tests (`_test.go`)  |       731 |     425,408 |
+| Source (`.go`, non-test) |     1,244 |     261,621 |
+| Unit tests (`_test.go`)  |       731 |     425,458 |
 | End-to-end tests         |       246 |      66,271 |
-| **Total**                | **2,221** | **753,230** |
+| **Total**                | **2,221** | **753,350** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  9,632 |
+| Source functions                |  9,636 |
 | . Exported (public)             |  2,995 |
-| . Unexported (private)          |  6,637 |
-| Unit test functions (`TestXxx`) | 14,454 |
-| Subtests (`t.Run(...)`)         |  5,765 |
+| . Unexported (private)          |  6,641 |
+| Unit test functions (`TestXxx`) | 14,455 |
+| Subtests (`t.Run(...)`)         |  5,766 |
 | End-to-end test functions       |    603 |
 
 ### Ratios worth noting
@@ -490,16 +490,16 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.63× more tests than code |
 | Average source file length         |                 ~210 lines |
 | Average test file length           |                 ~582 lines |
-| Comment lines in source            |  47,708 (~18.2% of source) |
+| Comment lines in source            |  47,725 (~18.2% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 7,901 |
+| `if err != nil` checks             | 7,902 |
 | `defer` statements                 | 1,363 |
-| `struct` types defined             | 3,146 |
+| `struct` types defined             | 3,148 |
 | `//nolint` suppressions            |   335 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
@@ -522,8 +522,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~4,755 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 15,064 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~4,756 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 15,065 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

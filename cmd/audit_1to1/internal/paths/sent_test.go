@@ -5,10 +5,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/structs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apiexposes"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apishapes"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/requestinventory"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apiexposes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apishapes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
 
 // conditionsIn writes a conditions record beside the OpenAPI record a test

@@ -87,7 +87,7 @@
         "https://docs.github.com/en/copilot": true,
         "https://docs.gitlab.com/api": true,
         "https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk": true,
-        "https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2": true,
+        "https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v3": true,
         "https://modelcontextprotocol.io": true,
         "https://spec.modelcontextprotocol.io/specification": true,
         "https://golangci-lint.run": true,

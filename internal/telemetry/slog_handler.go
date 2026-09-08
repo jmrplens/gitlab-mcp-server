@@ -14,7 +14,7 @@ import (
 
 // scopeName names this bridge as the instrumentation scope on every exported
 // log record, matching what the span and metric instrumentation declares.
-const scopeName = "github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
+const scopeName = "github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 
 // DefaultLogSeverity is the floor for records that reach a collector.
 //

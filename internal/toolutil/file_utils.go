@@ -17,8 +17,8 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/progress"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/progress"
 )
 
 // DefaultMaxFileSize re-exports the upload size limit from config as the single

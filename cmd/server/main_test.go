@@ -41,22 +41,22 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/clientcompat"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/gatewaycompat"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/oauth"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
-	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/clientcompat"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/gatewaycompat"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/prompts"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/resources"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // HTTP header names, MIME types, and test values reused across tests.
@@ -10523,7 +10523,7 @@ func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
 // imports test support from production code, this is the check that says so,
 // and it says so before the binary grows.
 func TestDependencies_TestSupport_NeverReachesTheServerBinary(t *testing.T) {
-	const modulePrefix = "github.com/jmrplens/gitlab-mcp-server/v2/"
+	const modulePrefix = "github.com/jmrplens/gitlab-mcp-server/v3/"
 	forbidden := []string{"internal/testutil", "internal/graphqlschema"}
 
 	// The package list is asked of the toolchain rather than derived from the

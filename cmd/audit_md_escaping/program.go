@@ -7,12 +7,12 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/goprogram"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 )
 
 // modulePath is this repository's module path, trimmed off an import path so a
 // report names a package the way the repository does.
-const modulePath = "github.com/jmrplens/gitlab-mcp-server/v2"
+const modulePath = "github.com/jmrplens/gitlab-mcp-server/v3"
 
 // toolutilPath is the import path of the package that owns the escaping
 // helpers. Resolution keys on the path rather than on the package name so an

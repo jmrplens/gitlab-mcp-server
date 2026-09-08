@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqldocs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
 )
 
 // afterThePin is a day later than the committed provenance record, so the age

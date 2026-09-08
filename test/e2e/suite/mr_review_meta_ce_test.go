@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrchanges"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrdiscussions"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrdraftnotes"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrnotes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrchanges"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrdiscussions"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrdraftnotes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrnotes"
 )
 
 // TestMeta_MRReviewChanges exercises changes_get, diff_versions_list, and

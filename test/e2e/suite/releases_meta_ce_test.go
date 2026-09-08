@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/releaselinks"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/releases"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/tags"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/releaselinks"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/releases"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/tags"
 )
 
 // TestMeta_ReleaseLinksExtended exercises release link actions through the

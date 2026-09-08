@@ -31,7 +31,7 @@
 // never narrowed.
 //
 // The prompt surface, which was the third path to the same data, now takes the
-// same options: [github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts.RegisterOptions]
+// same options: [github.com/jmrplens/gitlab-mcp-server/v3/internal/prompts.RegisterOptions]
 // carries the excluded actions and that package keeps its own prompt-to-action
 // table.
 //

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/members"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/members"
 )
 
 // TestIndividual_Members exercises project member tools: list members and

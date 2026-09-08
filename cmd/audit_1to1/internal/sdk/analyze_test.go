@@ -16,9 +16,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/enums"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/enums"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
 // TestRun_SeamFailures_AreReported verifies the three failures the real tree
@@ -149,20 +149,20 @@ type Client struct {
 // defaults, so a case can add or replace a tool package.
 func fixtureModule(t *testing.T, extra map[string]string) string {
 	t.Helper()
-	const sdkDir = "gitlab.com/gitlab-org/api/client-go/v2/sdk.go"
+	const sdkDir = "gitlab.com/gitlab-org/api/client-go/v3/sdk.go"
 	files := map[string]string{
 		"go.mod": "module example.com/fixture\n\ngo 1.27\n",
 		sdkDir:   fixtureSDK,
 		"internal/tools/branches/branches.go": `package branches
 
-import gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v2"
+import gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
 
 // List calls the SDK wrapper, so Branches is covered.
 func List(c *gl.Client) error { return c.Branches.ListBranches() }
 `,
 		"internal/tools/widgets/widgets.go": `package widgets
 
-import gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v2"
+import gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
 
 // List reaches GitLab over raw GraphQL even though Widgets is a wrapper.
 func List(c *gl.Client) error {
@@ -337,7 +337,7 @@ type SprocketsServiceInterface interface {
 }
 `
 	root := fixtureModule(t, map[string]string{
-		"gitlab.com/gitlab-org/api/client-go/v2/sdk.go": withNewService,
+		"gitlab.com/gitlab-org/api/client-go/v3/sdk.go": withNewService,
 	})
 	declaredBy := map[string]declaration{
 		"Widgets": {coveredGraphQL, "reached over GraphQL"},
@@ -408,7 +408,7 @@ func TestFixture_MissingClientGoPieces_AbortTheRun(t *testing.T) {
 
 	t.Run("sdk_without_a_graphql_interface", func(t *testing.T) {
 		root := fixtureModule(t, map[string]string{
-			"gitlab.com/gitlab-org/api/client-go/v2/sdk.go": strings.NewReplacer(
+			"gitlab.com/gitlab-org/api/client-go/v3/sdk.go": strings.NewReplacer(
 				"GraphQLInterface", "QueryRunner",
 				"GraphQL   QueryRunner", "Runner    QueryRunner",
 			).Replace(fixtureSDK),

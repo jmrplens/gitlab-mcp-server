@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestGroupFromSpecs_ProjectsSpecMetadata verifies the GroupFromSpecs_ProjectsSpecMetadata handler.

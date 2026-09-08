@@ -18,9 +18,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectserviceaccounts"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securitysettings"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projectserviceaccounts"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securitysettings"
 )
 
 // TestMeta_ProjectServiceAccounts exercises project service account CRUD and

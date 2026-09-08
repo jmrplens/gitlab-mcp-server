@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/workitemsavedviews"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/workitemsavedviews"
 )
 
 // TestMeta_WorkItemSavedViews exercises the saved view lifecycle through the

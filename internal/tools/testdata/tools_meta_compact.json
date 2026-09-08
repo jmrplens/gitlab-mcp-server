@@ -8251,13 +8251,6 @@
             "params": {
               "additionalProperties": true,
               "properties": {
-                "approved": {
-                  "enum": [
-                    "yes",
-                    "no"
-                  ],
-                  "type": "string"
-                },
                 "approved_by_ids": {
                   "type": [
                     "null",
@@ -27324,13 +27317,6 @@
             "params": {
               "additionalProperties": true,
               "properties": {
-                "approved": {
-                  "enum": [
-                    "yes",
-                    "no"
-                  ],
-                  "type": "string"
-                },
                 "approved_by_ids": {
                   "type": [
                     "null",

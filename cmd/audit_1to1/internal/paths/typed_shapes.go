@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/structs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apishapes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apishapes"
 )
 
 // TypedShapeCheck is the same question [ShapeCheck] asks, at type grain: not

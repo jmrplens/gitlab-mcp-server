@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // expiryOrDash formats an optional expiry timestamp as RFC 3339, or "-" when nil.

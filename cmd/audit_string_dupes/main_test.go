@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/testsource"
 )
 
 // TestRun_NoArgsReturnsUsage verifies the CLI entry point reports usage without

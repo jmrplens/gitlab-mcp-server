@@ -12,7 +12,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrapprovalsettings"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrapprovalsettings"
 )
 
 // TestMeta_MRApprovalSettings exercises project-level MR approval settings

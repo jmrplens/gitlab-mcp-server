@@ -24,12 +24,12 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/accessrequests"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/accesstokens"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deploykeys"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/accessrequests"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/accesstokens"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/deploykeys"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // accessExtrasCreateUser creates a disposable non-member user via the admin

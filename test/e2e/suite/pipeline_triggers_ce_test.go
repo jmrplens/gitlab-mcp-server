@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelinetriggers"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelinetriggers"
 )
 
 // TestMeta_PipelineTriggers exercises pipeline trigger CRUD via the gitlab_pipeline meta-tool.

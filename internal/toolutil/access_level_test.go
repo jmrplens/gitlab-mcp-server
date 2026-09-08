@@ -5,7 +5,7 @@ package toolutil
 import (
 	"testing"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // TestAccessLevelDescription verifies human-readable labels for every known

@@ -1,6 +1,6 @@
 package epicnotes
 
-import "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 
 // Canonical output sub-objects for epic notes. Epic notes are served through the
 // Work Items GraphQL API (epics are migrated to work items), so the author is

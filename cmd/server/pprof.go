@@ -25,7 +25,7 @@ import (
 	"net/http/pprof"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
 // pprofReadHeaderTimeout bounds a request's headers. There is deliberately

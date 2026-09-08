@@ -28,8 +28,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/oauth"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/oauth"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 )
 
 // Bounds for the rejected-token cache. The TTL is deliberately short: a

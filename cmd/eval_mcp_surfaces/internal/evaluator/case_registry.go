@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	casecatalog "github.com/jmrplens/gitlab-mcp-server/v2/cmd/eval_mcp_surfaces/internal/evaluator/cases"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	casecatalog "github.com/jmrplens/gitlab-mcp-server/v3/cmd/eval_mcp_surfaces/internal/evaluator/cases"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // AllEvalCases returns the typed evaluation case registry.

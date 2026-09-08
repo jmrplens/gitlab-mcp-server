@@ -14,8 +14,8 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestIdentityRedactor_OneInstanceServesEverySignal is a wiring test, and it

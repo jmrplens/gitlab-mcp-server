@@ -12,11 +12,11 @@ import (
 	"testing"
 
 	"github.com/hashicorp/go-retryablehttp"
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
@@ -1219,8 +1219,5 @@ func TestRawRequestConstructionFailures(t *testing.T) {
 	}
 	if _, err := UpdateGroupBoard(ctx, client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1}); err == nil {
 		t.Error("UpdateGroupBoard: expected construction error")
-	}
-	if _, err := UpdateGroupBoardList(ctx, client, UpdateGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 2, Position: 1}); err == nil {
-		t.Error("UpdateGroupBoardList: expected construction error")
 	}
 }

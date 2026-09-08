@@ -10359,14 +10359,6 @@
             "params": {
               "additionalProperties": false,
               "properties": {
-                "approved": {
-                  "description": "Filter by approval status: yes or no",
-                  "enum": [
-                    "yes",
-                    "no"
-                  ],
-                  "type": "string"
-                },
                 "approved_by_ids": {
                   "description": "Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)",
                   "items": {
@@ -12094,19 +12086,8 @@
                   "items": {
                     "additionalProperties": false,
                     "properties": {
-                      "_destroy": {
-                        "description": "Set true together with id (and no name) to delete this strategy from the flag during an update",
-                        "type": [
-                          "null",
-                          "boolean"
-                        ]
-                      },
-                      "id": {
-                        "description": "Strategy ID (only for update operations referencing an existing strategy)",
-                        "type": "integer"
-                      },
                       "name": {
-                        "description": "Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout). Required except when removing a strategy with _destroy",
+                        "description": "Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout)",
                         "type": "string"
                       },
                       "parameters": {
@@ -12173,6 +12154,9 @@
                         ]
                       }
                     },
+                    "required": [
+                      "name"
+                    ],
                     "type": "object"
                   },
                   "type": [
@@ -12354,19 +12338,19 @@
                   "type": "string"
                 },
                 "strategies": {
-                  "description": "Activation strategies for the flag. Each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes",
+                  "description": "Activation strategies for the flag. Each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes carrying their own id and _destroy",
                   "items": {
                     "additionalProperties": false,
                     "properties": {
                       "_destroy": {
-                        "description": "Set true together with id (and no name) to delete this strategy from the flag during an update",
+                        "description": "Set true together with id (and no name) to delete this strategy from the flag",
                         "type": [
                           "null",
                           "boolean"
                         ]
                       },
                       "id": {
-                        "description": "Strategy ID (only for update operations referencing an existing strategy)",
+                        "description": "Strategy ID, to update or remove a strategy already on the flag. Read it from the strategies of a prior feature flag get or list",
                         "type": "integer"
                       },
                       "name": {
@@ -12414,14 +12398,25 @@
                         "items": {
                           "additionalProperties": false,
                           "properties": {
+                            "_destroy": {
+                              "description": "Set true together with id to delete this scope from the strategy",
+                              "type": [
+                                "null",
+                                "boolean"
+                              ]
+                            },
                             "environment_scope": {
                               "description": "Environment scope this strategy applies to (e.g. production, staging). Omit for the default * scope",
                               "type": "string"
+                            },
+                            "id": {
+                              "description": "Environment scope ID, to update or remove a scope already on the strategy. Read it from the scopes of a prior feature flag get or list",
+                              "type": [
+                                "null",
+                                "integer"
+                              ]
                             }
                           },
-                          "required": [
-                            "environment_scope"
-                          ],
                           "type": "object"
                         },
                         "type": [
@@ -35929,14 +35924,6 @@
             "params": {
               "additionalProperties": false,
               "properties": {
-                "approved": {
-                  "description": "Filter by approval status: 'yes' or 'no' (Premium)",
-                  "enum": [
-                    "yes",
-                    "no"
-                  ],
-                  "type": "string"
-                },
                 "approved_by_ids": {
                   "description": "Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)",
                   "items": {

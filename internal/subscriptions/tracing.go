@@ -9,7 +9,7 @@ import (
 )
 
 // scopeName names this package as the instrumentation scope on its spans.
-const scopeName = "github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions"
+const scopeName = "github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
 
 // tracer is fetched once. Without an installed SDK it is a working no-op, which
 // is why there is no enabled flag here and must never be one.

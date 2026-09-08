@@ -43,7 +43,7 @@ Record:
 
 **Discovery check** (before any move): The **client-go API** defines the canonical domain structure. Verify you have the complete picture:
 
-1. **Inspect client-go types**: Run `go doc gitlab.com/gitlab-org/api/client-go/v2.{Type}` for the domain's key types to understand the canonical fields and API contract
+1. **Inspect client-go types**: Run `go doc gitlab.com/gitlab-org/api/client-go/v3.{Type}` for the domain's key types to understand the canonical fields and API contract
 2. List all non-test handler files in the source package to find everything that exists
 3. Check `action_specs.go` and catalog aggregation for the domain's canonical runtime exposure
 4. Look for related files (e.g., a domain might span `{domain}.go` + `{domain}_extra.go`)
@@ -193,7 +193,7 @@ Verify: `go build ./...`
 5. Import the shared test helpers:
 
    ```go
-   import "github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+   import "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
    ```
 
 6. If the moved tests use a local `newTestClient`, replace it with
@@ -335,9 +335,9 @@ After moving a tool handler to a sub-package, ensure these imports:
 
 ```go
 import (
-    gl "gitlab.com/gitlab-org/api/client-go/v2"                        // For gl.*Options, gl.Ptr(), gl.WithContext()
-    gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"  // For client type
-    "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"             // For shared utilities
+    gl "gitlab.com/gitlab-org/api/client-go/v3"                        // For gl.*Options, gl.Ptr(), gl.WithContext()
+    gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"  // For client type
+    "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"             // For shared utilities
     "github.com/modelcontextprotocol/go-sdk/mcp"                          // Only when a handler builds an *mcp.CallToolResult itself
 )
 ```
@@ -352,11 +352,11 @@ Historical example (the move is done): the monolith's `repositories.go` held **P
 
 ### Domain Reference Hierarchy
 
-The **client-go API library** (`gitlab.com/gitlab-org/api/client-go/v2`) is the source of truth for domain organization, type structures, and field definitions.
+The **client-go API library** (`gitlab.com/gitlab-org/api/client-go/v3`) is the source of truth for domain organization, type structures, and field definitions.
 
 Before moving any domain:
 
-1. **Inspect client-go types first**: Run `go doc gitlab.com/gitlab-org/api/client-go/v2.{Type}` for the domain's key types (e.g., `gl.Branch`, `gl.CreateBranchOptions`). This defines the canonical fields and API contract — use it to validate that type renames and field mappings are correct after the move.
+1. **Inspect client-go types first**: Run `go doc gitlab.com/gitlab-org/api/client-go/v3.{Type}` for the domain's key types (e.g., `gl.Branch`, `gl.CreateBranchOptions`). This defines the canonical fields and API contract — use it to validate that type renames and field mappings are correct after the move.
 2. **Read the source file(s)** (`internal/tools/{domain}.go`) to understand our implementation: handler functions, `client.GL().{Service}.*` calls, and our Input/Output struct subset.
 3. **If a `docs/reference/tools/` page owns the domain** (see `doc-ownership.json` there), read it for supplementary user-facing context. If no doc exists, `go doc` + source code provide everything needed.
 4. **Check catalog exposure**: verify the domain appears in `ActionSpecs` and catalog aggregation. Uncataloged files are in-progress features — still move them, but note the gap.

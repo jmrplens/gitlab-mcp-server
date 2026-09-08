@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/wikis"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/wikis"
 )
 
 // TestMeta_WikiUploadAttachment exercises the wiki upload_attachment action

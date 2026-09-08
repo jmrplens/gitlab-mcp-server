@@ -417,7 +417,7 @@ The error handling system is designed to be informative for LLMs while avoiding 
 
 | Dependency                               | Security Notes                                                            |
 | ---------------------------------------- | ------------------------------------------------------------------------- |
-| `gitlab.com/gitlab-org/api/client-go/v2` | Official GitLab client; uses `retryablehttp` with exponential backoff     |
+| `gitlab.com/gitlab-org/api/client-go/v3` | Official GitLab client; uses `retryablehttp` with exponential backoff     |
 | `github.com/modelcontextprotocol/go-sdk` | Official MCP SDK; handles JSON-RPC transport                              |
 | `github.com/joho/godotenv`               | Loads dotenv files (`GITLAB_MCP_ENV_FILE` and `~/.gitlab-mcp-server.env`) |
 

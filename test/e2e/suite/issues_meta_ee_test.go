@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/workitems"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/workitems"
 )
 
 // TestMeta_IssueWorkItems exercises the work_item_* actions on gitlab_issue

@@ -18,10 +18,10 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // fixtureSDK is a stand-in for the client-go root package. Its import path
@@ -97,7 +97,7 @@ type Client struct {
 // the struct rule's finding, not this one's.
 const fixtureTool = `package widgets
 
-import gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v2"
+import gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
 
 type ListInput struct {
 	Color string ` + "`json:\"color\"`" + `
@@ -138,7 +138,7 @@ func fromDetail(w *gl.WidgetDetail) Output {
 
 const (
 	fixtureModulePath = "example.com/fixture"
-	fixtureSDKFile    = "gitlab.com/gitlab-org/api/client-go/v2/sdk.go"
+	fixtureSDKFile    = "gitlab.com/gitlab-org/api/client-go/v3/sdk.go"
 	fixtureInputKey   = fixtureModulePath + "/internal/tools/widgets.ListInput"
 	fixtureOutputKey  = fixtureModulePath + "/internal/tools/widgets.Output"
 	fixtureAction     = "widget.list"
@@ -235,10 +235,10 @@ func TestCollectExposedFields_Fixture_PairsEnumFieldsWithTheirMCPTag(t *testing.
 	got := collectExposedFields(pkgs, collectSDKEnums(clientGo))
 	pkgPath := fixtureModulePath + "/internal/tools/widgets"
 	want := []exposedField{
-		{PkgPath: pkgPath, Package: "widgets", Kind: kindInput, MCPType: "ListInput", Tag: "color", SDKType: "v2.ListWidgetsOptions", SDKField: "Color", Enum: "ColorValue"},
-		{PkgPath: pkgPath, Package: "widgets", Kind: kindInput, MCPType: "ListInput", Tag: "sizes", SDKType: "v2.ListWidgetsOptions", SDKField: "Sizes", Enum: "SizeValue"},
-		{PkgPath: pkgPath, Package: "widgets", Kind: kindOutput, MCPType: "Output", Tag: "color", SDKType: "v2.Widget", SDKField: "Color", Enum: "ColorValue"},
-		{PkgPath: pkgPath, Package: "widgets", Kind: kindOutput, MCPType: "Output", Tag: "size", SDKType: "v2.Widget", SDKField: "Size", Enum: "SizeValue"},
+		{PkgPath: pkgPath, Package: "widgets", Kind: kindInput, MCPType: "ListInput", Tag: "color", SDKType: "v3.ListWidgetsOptions", SDKField: "Color", Enum: "ColorValue"},
+		{PkgPath: pkgPath, Package: "widgets", Kind: kindInput, MCPType: "ListInput", Tag: "sizes", SDKType: "v3.ListWidgetsOptions", SDKField: "Sizes", Enum: "SizeValue"},
+		{PkgPath: pkgPath, Package: "widgets", Kind: kindOutput, MCPType: "Output", Tag: "color", SDKType: "v3.Widget", SDKField: "Color", Enum: "ColorValue"},
+		{PkgPath: pkgPath, Package: "widgets", Kind: kindOutput, MCPType: "Output", Tag: "size", SDKType: "v3.Widget", SDKField: "Size", Enum: "SizeValue"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("collectExposedFields = %+v, want %+v", got, want)
@@ -265,7 +265,7 @@ type WidgetOutput struct {
 		"internal/tools/gadgets/gadgets.go": `package gadgets
 
 import (
-	gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v2"
+	gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
 
 	"example.com/fixture/internal/shapes"
 )
@@ -287,7 +287,7 @@ func toOutput(w *gl.Widget) Output {
 	}
 	targetPath := fixtureModulePath + "/internal/shapes"
 	want := []exposedField{
-		{PkgPath: targetPath, Package: "gadgets", Kind: kindOutput, MCPType: "WidgetOutput", Tag: "color", SDKType: "v2.Widget", SDKField: "Color", Enum: "ColorValue"},
+		{PkgPath: targetPath, Package: "gadgets", Kind: kindOutput, MCPType: "WidgetOutput", Tag: "color", SDKType: "v3.Widget", SDKField: "Color", Enum: "ColorValue"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("collectExposedFields(gadgets) = %+v, want %+v", got, want)
@@ -326,23 +326,23 @@ func TestBuildReport_Fixture_HoldsEachFieldToTheSDKValues(t *testing.T) {
 	}{
 		{name: "input color", want: Finding{
 			Action: fixtureAction, Kind: kindInput, MCPType: "ListInput", Field: "color",
-			SDKType: "v2.ListWidgetsOptions", SDKField: "Color", Enum: "ColorValue", Source: sourceEnum,
+			SDKType: "v3.ListWidgetsOptions", SDKField: "Color", Enum: "ColorValue", Source: sourceEnum,
 			SDKValues: []string{"blue", "red"}, Offered: []string{"blue", "green"},
 			Missing: []string{"red"}, Extra: []string{"green"},
 		}},
 		{name: "input sizes", want: Finding{
 			Action: fixtureAction, Kind: kindInput, MCPType: "ListInput", Field: "sizes",
-			SDKType: "v2.ListWidgetsOptions", SDKField: "Sizes", Enum: "SizeValue", Source: sourceEnum,
+			SDKType: "v3.ListWidgetsOptions", SDKField: "Sizes", Enum: "SizeValue", Source: sourceEnum,
 			SDKValues: []string{"1", "3"}, Offered: []string{"1", "3"},
 		}},
 		{name: "output color", want: Finding{
 			Action: fixtureAction, Kind: kindOutput, MCPType: "Output", Field: "color",
-			SDKType: "v2.Widget", SDKField: "Color", Enum: "ColorValue", Source: sourceDescription,
+			SDKType: "v3.Widget", SDKField: "Color", Enum: "ColorValue", Source: sourceDescription,
 			SDKValues: []string{"blue", "red"}, Offered: []string{"blue", "red"},
 		}},
 		{name: "output size", want: Finding{
 			Action: fixtureAction, Kind: kindOutput, MCPType: "Output", Field: "size",
-			SDKType: "v2.Widget", SDKField: "Size", Enum: "SizeValue", Source: sourceNone,
+			SDKType: "v3.Widget", SDKField: "Size", Enum: "SizeValue", Source: sourceNone,
 			SDKValues: []string{"1", "3"}, Offered: []string{},
 		}},
 	}
@@ -478,8 +478,8 @@ func TestBuildReport_Fixture_ExemptionsExcuseAndGoStale(t *testing.T) {
 // and an output with nothing surfaced is left alone.
 func TestCompare_Sources_ReadTheOfferFromWhereItIs(t *testing.T) {
 	sdk := sdkEnum{Name: "StateValue", Values: []string{"closed", "opened"}}
-	input := exposedField{Kind: kindInput, MCPType: "In", Tag: "state", SDKType: "v2.Options", SDKField: "State", Enum: "StateValue"}
-	output := exposedField{Kind: kindOutput, MCPType: "Out", Tag: "state", SDKType: "v2.Result", SDKField: "State", Enum: "StateValue"}
+	input := exposedField{Kind: kindInput, MCPType: "In", Tag: "state", SDKType: "v3.Options", SDKField: "State", Enum: "StateValue"}
+	output := exposedField{Kind: kindOutput, MCPType: "Out", Tag: "state", SDKType: "v3.Result", SDKField: "State", Enum: "StateValue"}
 	cases := []struct {
 		name        string
 		field       exposedField

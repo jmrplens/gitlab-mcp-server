@@ -9,7 +9,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/notifications"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/notifications"
 )
 
 // TestMeta_Notifications exercises notification settings via the gitlab_user meta-tool.

@@ -16,7 +16,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securitycategories"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securitycategories"
 )
 
 // TestMeta_SecurityCategories exercises the security category lifecycle

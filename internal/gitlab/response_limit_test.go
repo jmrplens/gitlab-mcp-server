@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // gzipJSONOfSize returns a gzip-compressed JSON object whose decompressed form

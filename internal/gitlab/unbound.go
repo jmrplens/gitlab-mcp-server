@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // ErrUnboundClient is what every request through an unbound client fails

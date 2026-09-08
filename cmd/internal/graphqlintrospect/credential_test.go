@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqlintrospect"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqlintrospect"
 )
 
 // TestCredentialFor_DecidesByInstance verifies the rule that keeps a GitLab

@@ -282,7 +282,7 @@ formatters:
     - gci # Enforce deterministic import section grouping
   settings:
     gofumpt:
-      module-path: github.com/jmrplens/gitlab-mcp-server/v2
+      module-path: github.com/jmrplens/gitlab-mcp-server/v3
       extra:
         group-params: true
         clothe-returns: true
@@ -291,8 +291,8 @@ formatters:
       sections:
         - standard
         - default
-        - prefix(github.com/jmrplens/gitlab-mcp-server/v2)
+        - prefix(github.com/jmrplens/gitlab-mcp-server/v3)
       custom-order: true
     goimports:
       local-prefixes:
-        - github.com/jmrplens/gitlab-mcp-server/v2
+        - github.com/jmrplens/gitlab-mcp-server/v3

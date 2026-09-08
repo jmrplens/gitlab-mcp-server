@@ -13,14 +13,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/epicdiscussions"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/epicissues"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/epicnotes"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/epics"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupepicboards"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/epicdiscussions"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/epicissues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/epicnotes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/epics"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupepicboards"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
 )
 
 // TestMeta_Epics exercises epic CRUD via the gitlab_group meta-tool.

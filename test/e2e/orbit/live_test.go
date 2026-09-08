@@ -47,13 +47,13 @@ import (
 	"testing"
 	"time"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	// Import the orbit package under test. The test lives in
 	// test/e2e/orbit/ (external test package) so it can also be
 	// runnable on its own against any GitLab instance with the
 	// `orbitlive` build tag, without pulling in the full e2e
 	// suite from test/e2e/suite/.
-	orbit "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/orbit"
+	orbit "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/orbit"
 )
 
 // liveGitLabComURL is the base URL for the real GitLab.com REST API

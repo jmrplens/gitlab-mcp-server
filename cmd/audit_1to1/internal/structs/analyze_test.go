@@ -14,8 +14,8 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
 // TestRun_MarshalFailure_IsReported reaches the encoding branch through the
@@ -177,13 +177,13 @@ func TestTypesCompatible_AcceptsKnownProjections(t *testing.T) {
 
 // TestPathHelpers verifies the package-name extraction helpers.
 func TestPathHelpers(t *testing.T) {
-	if got := lastPathSegment("gitlab.com/gitlab-org/api/client-go/v2"); got != "v2" {
-		t.Errorf("lastPathSegment = %q, want v2", got)
+	if got := lastPathSegment("gitlab.com/gitlab-org/api/client-go/v3"); got != "v3" {
+		t.Errorf("lastPathSegment = %q, want v3", got)
 	}
 	if got := lastPathSegment("flat"); got != "flat" {
 		t.Errorf("lastPathSegment(flat) = %q, want flat", got)
 	}
-	full := "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/branches"
+	full := "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/branches"
 	if got := shortPackage(full); got != "branches" {
 		t.Errorf("shortPackage = %q, want branches", got)
 	}
@@ -720,8 +720,8 @@ func TestBuildReport_NoDiffPositionPhantomInput(t *testing.T) {
 				if g.Kind != "input" || g.MCPType != "DiffPosition" {
 					continue
 				}
-				if g.SDKType != "v2.PositionOptions" {
-					t.Errorf("%s: DiffPosition paired against %q, want only v2.PositionOptions (phantom not suppressed): missing=%v",
+				if g.SDKType != "v3.PositionOptions" {
+					t.Errorf("%s: DiffPosition paired against %q, want only v3.PositionOptions (phantom not suppressed): missing=%v",
 						name, g.SDKType, g.MissingFields)
 				}
 			}

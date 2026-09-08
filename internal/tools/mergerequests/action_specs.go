@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const (
@@ -430,7 +430,6 @@ func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecO
 			toolutil.SchemaPropertyOverride("order_by", map[string]any{"enum": []any{"created_at", "updated_at"}}),
 			toolutil.SchemaPropertyOverride("wip", map[string]any{"enum": []any{"yes", "no"}}),
 			toolutil.SchemaPropertyOverride("view", map[string]any{"enum": []any{"simple"}}),
-			toolutil.SchemaPropertyOverride("approved", map[string]any{"enum": []any{"yes", "no"}}),
 			toolutil.SchemaApproverIDsOverride("approver_ids"),
 			toolutil.SchemaApproverIDsOverride("approved_by_ids"),
 		}

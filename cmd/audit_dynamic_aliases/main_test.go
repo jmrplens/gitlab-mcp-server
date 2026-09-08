@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 )
 
 // TestRun_DefaultCatalogPasses verifies the dynamic alias audit succeeds against the generated catalog.

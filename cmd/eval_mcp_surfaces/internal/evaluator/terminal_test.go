@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/eval_mcp_surfaces/internal/termio"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/eval_mcp_surfaces/internal/termio"
 )
 
 // TestTerminalPrintHelpers_WriteToConfiguredLog verifies package-level terminal

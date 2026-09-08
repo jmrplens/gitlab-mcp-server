@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqldocs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
 )
 
 // backtick stands in for a backtick inside a fixture source, which is itself

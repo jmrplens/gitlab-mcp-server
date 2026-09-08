@@ -6,10 +6,10 @@ import (
 	"net/http"
 
 	"github.com/hashicorp/go-retryablehttp"
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -509,23 +509,14 @@ func UpdateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	opts := &gl.UpdateGroupIssueBoardListOptions{
 		Position: new(input.Position),
 	}
-	// client-go v2.58 declares []*BoardList for the group-level list update,
-	// but GitLab returns the single updated list object, so the wrapper can
-	// never unmarshal a successful response. The request is issued directly
-	// until the upstream signature is fixed (the project-level equivalent
-	// already returns *BoardList). Tracked in docs/development/upstream-bugs.md;
-	// client-go!2996 is open against the v3 line.
-	path := fmt.Sprintf("groups/%s/boards/%d/lists/%d", gl.PathEscape(string(input.GroupID)), input.BoardID, input.ListID)
-	req, err := newRawRequest(ctx, client, http.MethodPut, path, opts)
+	list, _, err := client.GL().GroupIssueBoards.UpdateIssueBoardList(
+		string(input.GroupID), input.BoardID, input.ListID, opts, gl.WithContext(ctx),
+	)
 	if err != nil {
-		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_update", err)
-	}
-	var list gl.BoardList
-	if _, err = client.GL().Do(req, &list); err != nil {
 		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_update", err, http.StatusNotFound,
 			"list_id not found on this board (only the position can be updated; recreate the list to change its scope)")
 	}
-	return convertBoardList(&list), nil
+	return convertBoardList(list), nil
 }
 
 // DeleteGroupBoardListInput represents input for deleting a group board list.
