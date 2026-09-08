@@ -13,7 +13,7 @@
 	audit-md-escaping check-md-escaping \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
-	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live \
+	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes \
 	gen-api-shapes check-api-shapes check-meta-descriptions \
 	gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
@@ -1400,6 +1400,18 @@ check-graphql-documents:
 ## than only the refused ones.
 audit-graphql-documents:
 	go run ./cmd/audit_graphql_documents/ -v
+
+## check-graphql-shapes: fail when a struct a GraphQL response is decoded into
+## cannot hold what its document selects, or declares a field the document
+## never selects. Every other GraphQL gate reads the request; this one pairs
+## each document with its decoder and reads the answer.
+check-graphql-shapes:
+	go run ./cmd/audit_graphql_shapes/
+
+## audit-graphql-shapes: same gate, listing every pairing judged and every
+## selection nothing reads.
+audit-graphql-shapes:
+	go run ./cmd/audit_graphql_shapes/ -v
 
 ## check-graphql-documents-live: judge every document against a schema fetched
 ## from a live instance right now rather than the pinned one, and report where
