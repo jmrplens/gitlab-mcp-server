@@ -28,6 +28,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_metrics`                | Surface quality audits        | Comprehensive metrics summary (tools, resources, prompts, codebase); `-site-stats` writes the site's stats JSON                                                                                     | `make audit-metrics`, `make gen-site-stats`                         |
 | `gen_graphql_schema`           | Generators                    | Pins a GitLab GraphQL schema by introspecting a live instance; `--check` gates the committed one                                                                                                    | `make gen-graphql-schema`, `make check-graphql-schema`              |
 | `gen_api_shapes`               | Generators                    | Pins what GitLab's own generated OpenAPI document says each REST operation accepts and returns; `--check` gates the committed record                                                                | `make gen-api-shapes`, `make check-api-shapes`                      |
+| `gen_api_exposes`              | Generators                    | Pins, from GitLab's Ruby source, the condition under which each field a REST entity exposes is sent and the license tier it belongs to; `-check` gates the record, `-report` prints an entity       | `make gen-api-exposes`, `make check-api-exposes`                    |
 | `godoc_tool`                   | Source quality audits         | Godoc compliance auditor and fixer (audit + fix subcommands)                                                                                                                                        | `make audit-godocs`                                                 |
 | `audit_test_names`             | Source quality audits         | Classifies `Test*` functions by naming pattern; emits rename hints; `-check-files` gates test-file naming                                                                                           | `make audit-test-names`, `make check-test-file-names`               |
 | `audit_test_goroutines`        | Source quality audits         | `testing.T` aborts made off the test goroutine                                                                                                                                                      | `make check-test-goroutines`                                        |
@@ -1185,6 +1186,52 @@ Writes `gitlab-api-shapes.json` into `-dir` and reports the operation count, how
 - `make gen-api-shapes`
 - `make check-api-shapes` — CI gate.
 
+### gen_api_exposes
+
+Pins, from GitLab's own Ruby source, the condition under which each field a REST entity exposes is sent, into `docs/development/gitlab-api-exposes.json`, beside the OpenAPI record it qualifies.
+
+The OpenAPI record is an upper bound. GitLab generates it from the Grape entities that render its responses, and an entity declaring `expose :approvals_before_merge, if: ->(project, _) { project.feature_available?(:merge_request_approvers) }` reaches the document as a plain property: the condition is invisible, so the record lists the field as if every GitLab sent it. The licensed run showed what that hides, nine approval-configuration fields the record lists and a live instance never sends, and every Enterprise field a Community instance never sends. This command reads the source the document was generated from and says, per field, when.
+
+It fetches three subtrees of `gitlab-org/gitlab` as archives at one ref, `lib/api/entities` (the Community entities), `ee/lib/api/entities` (entities only Enterprise declares) and `ee/lib/ee/api/entities` (the Enterprise modules prepended into Community entities, whose `prepended do` blocks add fields to them), plus the licensed-feature table, `features.rb` under `ee/app/models`, which lists every licensed feature symbol under the tier that unlocks it. `cmd/internal/apiexposes` reads the Grape DSL as GitLab writes it: `expose :a, :b, as:, if:, unless:, using:, with:, merge:` over as many lines as it takes, `expose :x do ... end` blocks nesting fields under `x` told apart from `expose :x do |obj| ... end` blocks computing it, `with_options if:` scopes, `if: ->(obj) do ... end` lambdas, class inheritance, and `merge: true`. Method bodies and value blocks are skipped statement by statement with every `do`, `if`, `def` and `end` tracked; a construct the reader does not understand stops the run with its file and line rather than leaving every frame after it off by one. Each condition is recorded as written, the licensed feature symbols in it (`feature_available?(:x)`, `licensed_feature_available?(:x)`, `License.feature_available?(:x)`) are read further into the tier the table puts them under, and a symbol the table does not list, a project setting such as `:issues`, is named without a tier.
+
+Entities are keyed the way the OpenAPI document names their schemas, `APIEntitiesProject` for `API::Entities::Project`, and the OpenAPI record carries that name per operation (`entity`) and per nested property (`nested_entity`) since its schema version 3, so a reader walks operation to entity to condition without translating. On the day this was written the join reached 327 of the 337 components the OpenAPI record names; the ten it does not are rendered by serializers and API modules declared outside the three entity directories (`ProjectEntity`, `TestReportEntity`, the VS Code settings entities, the subscriptions entities), which the record leaves unqualified rather than guesses at. The archives name the commit the ref resolved to, and a set of archives naming different commits, which a push to master between two downloads produces, is refused rather than recorded as one tree. The record is compared by hand on every regeneration; `-source` reads a local checkout for a run without the network.
+
+#### Usage
+
+```bash
+# Re-pin from master
+go run ./cmd/gen_api_exposes/
+
+# Pin a tag, or read a local checkout
+go run ./cmd/gen_api_exposes/ -ref v19.4.0-ee
+go run ./cmd/gen_api_exposes/ -source ~/src/gitlab
+
+# CI gate, no network
+go run ./cmd/gen_api_exposes/ -check
+
+# What one entity sends: the parent chain first, each field with its condition and tier
+go run ./cmd/gen_api_exposes/ -report APIEntitiesProject
+```
+
+#### Flags
+
+| Flag      | Type     | Default            | Description                                                                              |
+| --------- | -------- | ------------------ | ---------------------------------------------------------------------------------------- |
+| `-ref`    | `string` | `master`           | `gitlab-org/gitlab` ref to read the entities from                                        |
+| `-dir`    | `string` | `docs/development` | Directory holding the committed record                                                   |
+| `-check`  | `bool`   | `false`            | Read the committed record instead of fetching, and fail when it is not usable            |
+| `-report` | `string` | _(empty)_          | Print every field the named entity sends, with its conditions, from the committed record |
+| `-source` | `string` | _(empty)_          | Read the entities from this local checkout instead of fetching                           |
+
+#### Output
+
+Writes `gitlab-api-exposes.json` into `-dir` and reports the entity, feature, expose and file counts with the commit and the day. `-check` reports the provenance line only, and exits `1` on a schema version this build cannot read, fewer than 400 entities or 200 features, missing provenance, or a record older than 180 days. `-report` prints one line per field, the parent chain's first, with `[tier; if condition]`, `[ee; unless condition]` or `[as APIEntitiesX]` notes and nested fields indented; exits `1` for an entity the record does not hold.
+
+#### Make targets
+
+- `make gen-api-exposes`
+- `make check-api-exposes` — CI gate.
+
 ### gen_lhm_manifest
 
 Regenerates the `tools`, `prompts`, and `resources` arrays in `lhm.plugin.json`, the manifest published to the LobeHub Marketplace. LobeHub derives the listing's capability badges from those arrays — its scanner cannot introspect a server distributed as a Go binary or a Docker image — so a manifest without them advertises zero tools no matter what the server registers.
@@ -1725,5 +1772,6 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `check-graphql-schema`                   | `gen_graphql_schema --check`       | The committed GitLab schema parses and its provenance record decodes                                                       | Non-zero if either file is missing or unusable                                       |
 | `check-graphql-documents`                | `audit_graphql_documents`          | Every raw GraphQL document in the source is one the pinned GitLab schema accepts                                           | Non-zero on any refusal, or if no documents are found                                |
 | `check-graphql-shapes`                   | `audit_graphql_shapes`             | Every struct a GraphQL response is decoded into can hold what its document selects, and declares nothing it never selects  | Non-zero on any disagreement, anything unpaired, or if no call is found              |
+| `check-api-exposes`                      | `gen_api_exposes -check`           | The committed record of entity field conditions is readable, whole, provenanced and younger than 180 days                  | Non-zero if any of those fails                                                       |
 | `check-request-inventory`                | `gen_request_inventory -check`     | The committed request inventory is what the unit suite records now                                                         | Non-zero if the artifact is stale or no shard was written                            |
 | `audit-1to1-paths`                       | `audit_1to1 -scope=paths`          | Every action's owning package was seen issuing a request, and every GraphQL document is one the pinned schema accepts      | Non-zero on a refused document, an undeclared silent package, or a stale declaration |

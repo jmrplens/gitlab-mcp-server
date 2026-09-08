@@ -153,6 +153,11 @@ jobs:
       # and wired nowhere until the cmd/ consolidation study read the table.
       - name: Check the pinned GitLab API record
         run: make check-api-shapes
+      # The record's other half: the condition each entity field is sent
+      # under, read out of GitLab's Ruby source, so a field the OpenAPI
+      # record lists can be told "never sent" from "sent only when".
+      - name: Check the pinned GitLab entity conditions
+        run: make check-api-exposes
       # A meta-tool's description is checked against the parameters its routes
       # take, which is the third party the golden snapshot never was (issue 574).
       - name: Check every meta-tool description against its routes
