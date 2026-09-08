@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 )
@@ -313,6 +314,48 @@ func TestWalkFiles_Failures_StopAtTheFirstError(t *testing.T) {
 				t.Errorf("WalkFiles error = %v, want %v", err, tc.want)
 			}
 		})
+	}
+}
+
+// TestWalkFiles_UnreadableDirectory_StopsAndReports verifies the half of the
+// stop-at-the-first-error contract no visitor can raise: a directory below the
+// root whose contents the process may not list. The walk must surface that
+// error rather than skip the directory, because a caller that only sees the
+// files collected before it cannot tell a clean tree from an unread one.
+//
+// Directory permissions are a POSIX mechanism, and a sufficiently privileged
+// process ignores them, so the test skips when the chmod did not in fact deny
+// the read.
+func TestWalkFiles_UnreadableDirectory_StopsAndReports(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory read permission is not a Windows file mode")
+	}
+	root := t.TempDir()
+	writeFile(t, root, "aaa_test.go")
+	writeFile(t, root, "locked/deep_test.go")
+	writeFile(t, root, "zzz_test.go")
+
+	locked := filepath.Join(root, "locked")
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Fatalf("chmod %s: %v", locked, err)
+	}
+	// t.TempDir removes the tree itself, and cannot descend into a directory
+	// left unreadable.
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) }) //#nosec G302 -- a directory needs its search bit back or t.TempDir cannot remove it
+	if _, err := os.ReadDir(locked); err == nil {
+		t.Skip("this process reads a 0o000 directory; permissions cannot be tested here")
+	}
+
+	var visited []string
+	err := WalkFiles([]string{root}, TestFiles, func(path string) error {
+		visited = append(visited, filepath.Base(path))
+		return nil
+	})
+	if !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("WalkFiles error = %v, want a permission error", err)
+	}
+	if slices.Contains(visited, "zzz_test.go") {
+		t.Errorf("visited = %v, want the walk stopped at the unreadable directory", visited)
 	}
 }
 

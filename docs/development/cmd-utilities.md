@@ -944,6 +944,10 @@ Pass one or more positional path arguments after the flags.
 
 Per-file sections to stdout using a `[Ndx] "value"` format that shows the occurrence count and index of each duplicate literal.
 
+#### Exit code
+
+`0` when every path named on the command line was read, whatever the report found; duplicates are a result, not a failure. A path that could not be stat'd, and a directory whose walk stopped part way through because something under it could not be read, are each named on stderr, cost only their own subtree, and make the exit code `1`. That distinction is the point: a truncated duplicate report reads exactly like a clean one, so the exit code is what says the tree was not fully read.
+
 #### Make targets
 
 None. Run directly with `go run`.
@@ -1629,6 +1633,8 @@ The three questions every command that reads `_test.go` files used to answer for
 All three had drifted, and the drift was not theoretical. `gen_stats` required an upper-case rune after `Test` while `gen_testing_docs` required a non-lower-case one, under a comment claiming the two agreed; `audit_test_names` skipped every name starting with the `TestMain` prefix, so the nine tests named `TestMain_Something` were counted by both generators and invisible to the auditor. Go's own rule decides for all of them, which makes the reconciliation a fix to the auditor rather than a change to either published count. The walks disagreed the same way: two skip lists and two descents that skipped nothing, so whether `testdata` is part of the corpus had two answers and no recorded reason. `SkipDir` is that answer, written down once, and `audit_test_names` applies it in its `-check-files` gate as well as its report, so the gate certifies the corpus the report describes.
 
 A root is entered whatever it is called, so a scan pointed straight at a fixtures or dot directory scans it, and whatever it is: `filepath.WalkDir` lstats its root, so `WalkFiles` resolves a root that is a symlink to a directory before walking it and reports every path back under the name the caller gave. Without that, a tree named through a link is handed to the callback as a plain file, a report comes back empty and `-check-files` certifies it clean. Below the root nothing is resolved; a link that resolves to nothing is a read error rather than an empty corpus.
+
+`WalkFiles` stops at the first error and returns it, whether the walk raised it (an absent root, a directory the process may not read) or the visitor did, and there is deliberately no best-effort mode. Every caller but one is a gate, and a gate that skipped an unreadable directory would certify a tree it never read; the files gathered before such an error are a prefix of the tree and look exactly like the whole of it. A caller that wants to continue past a failure swallows it inside its own visitor, where it can say which file it gave up on. What no caller may do is discard the returned error, because by then the walk has already stopped: `audit_string_dupes` was doing that, and now names the tree it could not finish and exits non-zero.
 
 What the package deliberately does **not** own is discovery. `gen_stats` keeps asking git (`git ls-files`) so `check-stats` stays a function of what is committed, and `gen_testing_docs` keeps enumerating packages through `go list` because it describes packages; sharing the input universe would break both.
 

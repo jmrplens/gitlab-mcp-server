@@ -117,9 +117,16 @@ func SkipDir(name string) bool {
 // selects, in lexical order, entering no directory below a root that SkipDir
 // names. A root is always entered, whatever it is called and whether it is a
 // directory or a symlink to one, so a scan asked for one of those directories
-// by name, or through a link, still runs. It stops at the first error,
-// whether the walk raised it or visit returned it, so a caller that cannot
-// parse a file reports that rather than a partial corpus.
+// by name, or through a link, still runs.
+//
+// It stops at the first error and returns it, whether the walk raised it (an
+// absent root, a directory it may not read) or visit returned it. There is
+// deliberately no best-effort mode: every caller but one is a gate, and a gate
+// that skipped an unreadable directory would certify a tree it never read.
+// A caller that wants to continue past a failure decides that for itself, by
+// swallowing the error inside visit; what it must not do is discard the
+// returned error, because the walk has already stopped by then and the corpus
+// it collected is short with nothing to say so.
 func WalkFiles(roots []string, policy Policy, visit func(path string) error) error {
 	for _, root := range roots {
 		if err := walkRoot(root, policy, visit); err != nil {
