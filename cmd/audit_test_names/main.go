@@ -393,15 +393,24 @@ func applyFile(path string, stdout, stderr io.Writer, dryRun bool) (applied int,
 		fmt.Fprintf(stderr, "read %s: %v\n", cleanPath, err)
 		return 0, false
 	}
-	// Every name here was read off a declaration in this same file, so each
-	// pattern matches at least the declaration it came from and applied ends
-	// above zero whenever there is anything to rename.
+	// Every name here was read off a declaration in the parse above, but the
+	// parse and this read are two reads of the same path: an editor that saves
+	// between them leaves renames that match nothing in the bytes about to be
+	// written. Each replacement is therefore reported only once it has
+	// happened, and a file none of them touched is left exactly as it is
+	// rather than rewritten from a snapshot taken before the change.
 	result := string(src)
 	for old, newName := range renames {
 		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(old) + `\b`)
+		if !re.MatchString(result) {
+			continue
+		}
 		result = re.ReplaceAllString(result, newName)
 		applied++
 		fmt.Fprintf(stdout, "%s: %s -> %s\n", filepath.ToSlash(cleanPath), old, newName)
+	}
+	if applied == 0 {
+		return 0, true
 	}
 
 	if parseErr := parseRewritten(cleanPath, []byte(result)); parseErr != nil {

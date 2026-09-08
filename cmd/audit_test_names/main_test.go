@@ -506,6 +506,110 @@ func TestApplyFile_UnprovokableFailures_ReportAndFail(t *testing.T) {
 	}
 }
 
+// TestApplyFile_SourceChangedBetweenTheTwoReads_ReportsOnlyRealReplacements
+// verifies the guard on the gap between the parse and the read. applyFile
+// takes the names to rename from a parse of the path and then reads the path
+// again, so an editor saving in between hands the loop names that no longer
+// occur. A rename is counted, reported and written only once it has actually
+// replaced something, and a file where nothing matched is left alone instead
+// of being overwritten with the snapshot the second read returned.
+func TestApplyFile_SourceChangedBetweenTheTwoReads_ReportsOnlyRealReplacements(t *testing.T) {
+	testCases := []struct {
+		name      string
+		reread    string
+		want      int
+		wantWrite string
+		wantOut   []string
+		notOut    []string
+	}{
+		{
+			name: "no rename still matches",
+			reread: `package sample
+
+import "testing"
+
+func TestCatalog(t *testing.T) {}
+`,
+			want:   0,
+			notOut: []string{"TestCreate_IssueReturnsIssue", "TestBuild_Catalog_Error"},
+		},
+		{
+			name: "one of two still matches",
+			reread: `package sample
+
+import "testing"
+
+func TestCovBuildCatalogError(t *testing.T) {}
+`,
+			want: 1,
+			wantWrite: `package sample
+
+import "testing"
+
+func TestBuild_Catalog_Error(t *testing.T) {}
+`,
+			wantOut: []string{"TestBuild_Catalog_Error"},
+			notOut:  []string{"TestCreate_IssueReturnsIssue"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, "sample_test.go")
+			if err := os.WriteFile(path, []byte(legacyNamesFixture), 0o600); err != nil {
+				t.Fatalf("WriteFile() error = %v", err)
+			}
+
+			originalRead := readSource
+			readSource = func(string) ([]byte, error) { return []byte(tc.reread), nil }
+			t.Cleanup(func() { readSource = originalRead })
+
+			var written string
+			writes := 0
+			originalWrite := writeSource
+			writeSource = func(_ string, data []byte, _ os.FileMode) error {
+				writes++
+				written = string(data)
+				return nil
+			}
+			t.Cleanup(func() { writeSource = originalWrite })
+
+			var stdout, stderr bytes.Buffer
+			applied, ok := applyFile(path, &stdout, &stderr, false)
+			if applied != tc.want || !ok {
+				t.Errorf("applyFile() = (%d, %t), want (%d, true)", applied, ok, tc.want)
+			}
+			if tc.want == 0 && writes != 0 {
+				t.Errorf("writeSource called %d times, want the file left alone", writes)
+			}
+			if tc.want > 0 && written != tc.wantWrite {
+				t.Errorf("written = %q, want %q", written, tc.wantWrite)
+			}
+			assertMentions(t, stdout.String(), tc.wantOut, tc.notOut)
+			if stderr.String() != "" {
+				t.Errorf("stderr = %q, want empty", stderr.String())
+			}
+		})
+	}
+}
+
+// assertMentions reports every name in wanted that got is missing and every
+// name in unwanted that it contains.
+func assertMentions(t *testing.T, got string, wanted, unwanted []string) {
+	t.Helper()
+	for _, want := range wanted {
+		if !strings.Contains(got, want) {
+			t.Errorf("output = %q, want it to mention %q", got, want)
+		}
+	}
+	for _, name := range unwanted {
+		if strings.Contains(got, name) {
+			t.Errorf("output = %q, want no mention of %q", got, name)
+		}
+	}
+}
+
 // TestParseGoSourceText_Sources_ReportWhatTheParserSays verifies the seam's
 // own body: valid Go passes and invalid Go comes back as an error naming the
 // file, which is what the ABORT message quotes.
