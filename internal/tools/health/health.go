@@ -3,6 +3,8 @@ package health
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -50,6 +52,47 @@ func SetServerInfo(info ServerInfo) {
 	serverInfo = info
 }
 
+// publicBaseURL renders base with the three parts a secret can hide in
+// removed: the userinfo, the query and the fragment. What survives is the
+// scheme, the host and the path, which is what identifies the instance and
+// all this diagnostics field was ever meant to report.
+//
+// GITLAB_URL is validated for scheme and host only, so an operator may
+// configure any of the three — a proxy credential in the userinfo is the
+// realistic one — and this value is handed to whichever MCP client called the
+// tool and copied into whatever it logs. client-go builds its own error text
+// the same way, from scheme, host and path (gitlab.go, ErrorResponse.Error),
+// so this leaves the two agreeing rather than the field being the one place
+// that says more.
+func publicBaseURL(base *url.URL) string {
+	return base.Scheme + "://" + base.Host + base.EscapedPath()
+}
+
+// withoutUserinfo removes user from text, for the error strings that come
+// back from a request made against a base URL carrying one.
+//
+// Three renderings have to be caught, because the credential reaches the
+// message through three different writers: url.URL.String writes the userinfo
+// verbatim, the *url.Error net/http returns replaces the password with ***,
+// and url.URL.Redacted replaces it with xxxxx. Only the password is hidden by
+// any of them, so the username reaches the caller unless it is stripped here.
+// The forms are removed longest first so a shorter one cannot match inside a
+// longer one, and an empty one is skipped rather than turning into a stray
+// "@" that would eat every at-sign in the message.
+func withoutUserinfo(text string, user *url.Userinfo) string {
+	if user == nil {
+		return text
+	}
+	name := user.Username()
+	for _, form := range []string{user.String(), name + ":***", name + ":xxxxx", name} {
+		if form == "" {
+			continue
+		}
+		text = strings.ReplaceAll(text, form+"@", "")
+	}
+	return text
+}
+
 // Check verifies GitLab connectivity, authentication, and retrieves
 // server version and current user info for diagnostic purposes.
 func Check(ctx context.Context, client *gitlabclient.Client, _ Input) (Output, error) {
@@ -57,8 +100,10 @@ func Check(ctx context.Context, client *gitlabclient.Client, _ Input) (Output, e
 		return Output{}, err
 	}
 
+	base := client.GL().BaseURL()
+
 	out := Output{
-		GitLabURL:        client.GL().BaseURL().String(),
+		GitLabURL:        publicBaseURL(base),
 		MCPServerVersion: serverInfo.Version,
 		Author:           serverInfo.Author,
 		Department:       serverInfo.Department,
@@ -72,7 +117,7 @@ func Check(ctx context.Context, client *gitlabclient.Client, _ Input) (Output, e
 
 	if err != nil {
 		out.Status = "unhealthy"
-		out.Error = fmt.Sprintf("connectivity check failed: %v", err)
+		out.Error = withoutUserinfo(fmt.Sprintf("connectivity check failed: %v", err), base.User)
 		return out, nil
 	}
 
@@ -83,7 +128,7 @@ func Check(ctx context.Context, client *gitlabclient.Client, _ Input) (Output, e
 	if err != nil {
 		out.Status = "degraded"
 		out.Authenticated = false
-		out.Error = fmt.Sprintf("authenticated but user retrieval failed: %v", err)
+		out.Error = withoutUserinfo(fmt.Sprintf("authenticated but user retrieval failed: %v", err), base.User)
 		return out, nil
 	}
 

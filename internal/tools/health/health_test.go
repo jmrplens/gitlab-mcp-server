@@ -6,10 +6,14 @@ package health
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -568,4 +572,147 @@ func healthSpecByName(t *testing.T, specs []toolutil.ActionSpec, name string) to
 	}
 	t.Fatalf("missing ActionSpec for %s", name)
 	return toolutil.ActionSpec{}
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostics never carry the secrets a base URL can hide
+// ---------------------------------------------------------------------------.
+
+// TestPublicBaseURL_URLCarryingSecrets_KeepsOnlySchemeHostAndPath verifies that
+// the reported instance URL is reduced to the parts that identify the instance.
+// GITLAB_URL is validated for scheme and host alone, so userinfo, a query and a
+// fragment are all configurable, and this value ends up in a tool result and in
+// whatever the client logs.
+func TestPublicBaseURL_URLCarryingSecrets_KeepsOnlySchemeHostAndPath(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "plain", raw: "https://gitlab.example.com/api/v4/", want: "https://gitlab.example.com/api/v4/"},
+		{name: "userinfo with password", raw: "https://proxyuser:s3cret@gitlab.example.com/api/v4/", want: "https://gitlab.example.com/api/v4/"},
+		{name: "username only", raw: "https://proxyuser@gitlab.example.com/api/v4/", want: "https://gitlab.example.com/api/v4/"},
+		{name: "query and fragment", raw: "https://gitlab.example.com/api/v4/?token=s3cret#frag", want: "https://gitlab.example.com/api/v4/"},
+		{name: "escaped path", raw: "https://gitlab.example.com/gitlab%20ce/api/v4/", want: "https://gitlab.example.com/gitlab%20ce/api/v4/"},
+		{name: "no path", raw: "https://gitlab.example.com", want: "https://gitlab.example.com"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			parsed, err := url.Parse(tc.raw)
+			if err != nil {
+				t.Fatalf("url.Parse(%q): %v", tc.raw, err)
+			}
+			if got := publicBaseURL(parsed); got != tc.want {
+				t.Errorf("publicBaseURL(%q) = %q, want %q", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestWithoutUserinfo_EveryStandardRendering_RemovesTheCredential verifies that
+// each of the three ways the standard library writes a URL credential into an
+// error is stripped: verbatim (url.URL.String), password-masked (the *url.Error
+// net/http returns) and Redacted. The username is the part none of them hides
+// on its own, and an empty username must not turn into a stray "@".
+func TestWithoutUserinfo_EveryStandardRendering_RemovesTheCredential(t *testing.T) {
+	cases := []struct {
+		name string
+		user *url.Userinfo
+		text string
+		want string
+	}{
+		{
+			name: "no userinfo leaves the text alone",
+			user: nil,
+			text: `Get "https://gitlab.example.com/api/v4/version": dial tcp: refused`,
+			want: `Get "https://gitlab.example.com/api/v4/version": dial tcp: refused`,
+		},
+		{
+			name: "verbatim rendering",
+			user: url.UserPassword("proxyuser", "s3cret"),
+			text: `Get "https://proxyuser:s3cret@gitlab.example.com/api/v4/version": refused`,
+			want: `Get "https://gitlab.example.com/api/v4/version": refused`,
+		},
+		{
+			name: "net http password mask",
+			user: url.UserPassword("proxyuser", "s3cret"),
+			text: `Get "https://proxyuser:***@gitlab.example.com/api/v4/version": refused`,
+			want: `Get "https://gitlab.example.com/api/v4/version": refused`,
+		},
+		{
+			name: "redacted password mask",
+			user: url.UserPassword("proxyuser", "s3cret"),
+			text: `Get "https://proxyuser:xxxxx@gitlab.example.com/api/v4/version": refused`,
+			want: `Get "https://gitlab.example.com/api/v4/version": refused`,
+		},
+		{
+			name: "username only",
+			user: url.User("proxyuser"),
+			text: `Get "https://proxyuser@gitlab.example.com/api/v4/version": refused`,
+			want: `Get "https://gitlab.example.com/api/v4/version": refused`,
+		},
+		{
+			name: "empty username leaves at-signs alone",
+			user: url.User(""),
+			text: `Get "https://gitlab.example.com/api/v4/version": alice@example.com refused`,
+			want: `Get "https://gitlab.example.com/api/v4/version": alice@example.com refused`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := withoutUserinfo(tc.text, tc.user); got != tc.want {
+				t.Errorf("withoutUserinfo() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCheck_BaseURLWithUserinfo_ReportsTheURLWithoutIt drives the handler
+// against an instance whose configured URL carries a proxy credential and
+// asserts the credential reaches neither the reported URL nor the error field.
+func TestCheck_BaseURLWithUserinfo_ReportsTheURLWithoutIt(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathVersion {
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc123"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	parsed, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatalf("url.Parse(%q): %v", srv.URL, err)
+	}
+	parsed.User = url.UserPassword("proxyuser", "s3cret")
+
+	client, err := gitlabclient.NewClient(&config.Config{
+		GitLabURL:      parsed.String(),
+		GitLabToken:    "test-token",
+		DisableRetries: true,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	out, err := Check(t.Context(), client, Input{})
+	if err != nil {
+		t.Fatalf(fmtStatusCheckErr, err)
+	}
+	if out.Status != "degraded" {
+		t.Errorf(fmtStatusWant, out.Status, "degraded")
+	}
+	for _, secret := range []string{"proxyuser", "s3cret"} {
+		if strings.Contains(out.GitLabURL, secret) {
+			t.Errorf("GitLabURL = %q, must not carry %q", out.GitLabURL, secret)
+		}
+		if strings.Contains(out.Error, secret) {
+			t.Errorf("Error = %q, must not carry %q", out.Error, secret)
+		}
+	}
+	if !strings.HasPrefix(out.GitLabURL, "http://"+parsed.Host+"/") {
+		t.Errorf("GitLabURL = %q, want the instance host %q", out.GitLabURL, parsed.Host)
+	}
 }
