@@ -554,11 +554,10 @@ func PageInfoToOutput(pi GraphQLRawPageInfo) GraphQLPaginationOutput {
 	return GraphQLPaginationOutput(pi)
 }
 
-// PageInfoToForwardOutput converts a raw GraphQL PageInfo response struct to
-// the forward-only output struct, dropping the backward half. A forward-only
-// document need not select that half at all, in which case it is already zero.
-func PageInfoToForwardOutput(pi GraphQLRawPageInfo) GraphQLForwardPaginationOutput {
-	return GraphQLForwardPaginationOutput{HasNextPage: pi.HasNextPage, EndCursor: pi.EndCursor}
+// ForwardPageInfoToOutput converts the forward half of pageInfo, as a
+// forward-only document selects it, to the forward-only output struct.
+func ForwardPageInfoToOutput(pi GraphQLRawForwardPageInfo) GraphQLForwardPaginationOutput {
+	return GraphQLForwardPaginationOutput(pi)
 }
 
 // GraphQLRawPageInfo matches the camelCase JSON shape returned by the
@@ -568,6 +567,17 @@ type GraphQLRawPageInfo struct {
 	HasPreviousPage bool   `json:"hasPreviousPage"`
 	EndCursor       string `json:"endCursor"`
 	StartCursor     string `json:"startCursor"`
+}
+
+// GraphQLRawForwardPageInfo is the half of pageInfo a forward-only document
+// selects. A forward-only tool decodes into this rather than into
+// [GraphQLRawPageInfo], so its decoder declares exactly what its document asks
+// for: a decoder carrying the backward half beside a document that never
+// selects it holds two fields that are always empty, which is what
+// make check-graphql-shapes refuses.
+type GraphQLRawForwardPageInfo struct {
+	HasNextPage bool   `json:"hasNextPage"`
+	EndCursor   string `json:"endCursor"`
 }
 
 // GraphQLError is one top-level GraphQL error returned in a successful HTTP

@@ -161,6 +161,12 @@ jobs:
       # ones no test reaches, which is why it is a gate of its own.
       - name: Check every GraphQL document against the pinned schema
         run: make check-graphql-documents
+      # The other half of the same exchange: the struct each document is
+      # decoded into, judged against the selection set. No test can see a
+      # decoder disagreeing with GitLab, because the fixture is written to
+      # match the decoder.
+      - name: Check every GraphQL decoder against its document
+        run: make check-graphql-shapes
       # R-PATH, the dimension that reads the request rather than the surface.
       # It reads the committed inventory the coverage job regenerates, so it
       # needs no suite run and no network, and it fails on a package the suite

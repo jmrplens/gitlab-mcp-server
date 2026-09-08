@@ -170,20 +170,11 @@ type gqlChildrenResponse struct {
 	Errors []toolutil.GraphQLError `json:"errors"`
 }
 
-// gqlMutationChildrenNodes holds a non-paginated list of child nodes.
-type gqlMutationChildrenNodes struct {
-	Nodes []gqlChildNode `json:"nodes"`
-}
-
-// gqlMutationWidget is a work item widget for mutation responses.
-type gqlMutationWidget struct {
-	Children *gqlMutationChildrenNodes `json:"children"`
-}
-
-// gqlMutationWorkItem represents a work item in mutation responses.
+// gqlMutationWorkItem represents a work item in mutation responses, which
+// select its id alone: the three mutations here answer with the item they
+// updated and nothing about its children, which are listed afterwards.
 type gqlMutationWorkItem struct {
-	ID      string              `json:"id"`
-	Widgets []gqlMutationWidget `json:"widgets"`
+	ID string `json:"id"`
 }
 
 // gqlWorkItemUpdatePayload is the response payload for workItemUpdate mutations.

@@ -112,9 +112,20 @@ query($projectPath: ID!, $first: Int!, $after: String) {
 `
 
 // GraphQL response structs.
+//
+// The two documents select two shapes, so there are two node types, one per
+// document, rather than one node carrying fields the Community document can
+// never fill: a decoder declaring a field its document does not select holds
+// a value that is always empty, which make check-graphql-shapes refuses.
 
+// gqlBranchProtectionCE is the protection every edition reports.
+type gqlBranchProtectionCE struct {
+	AllowForcePush bool `json:"allowForcePush"`
+}
+
+// gqlBranchProtection is the protection the Enterprise document selects.
 type gqlBranchProtection struct {
-	AllowForcePush            bool `json:"allowForcePush"`
+	gqlBranchProtectionCE
 	CodeOwnerApprovalRequired bool `json:"codeOwnerApprovalRequired"`
 }
 
@@ -129,15 +140,27 @@ type gqlExternalStatusCheck struct {
 	ExternalURL string `json:"externalUrl"`
 }
 
+// gqlBranchRuleFields are the fields both documents select.
+type gqlBranchRuleFields struct {
+	Name                  string  `json:"name"`
+	IsDefault             bool    `json:"isDefault"`
+	IsProtected           bool    `json:"isProtected"`
+	MatchingBranchesCount int     `json:"matchingBranchesCount"`
+	CreatedAt             *string `json:"createdAt"`
+	UpdatedAt             *string `json:"updatedAt"`
+}
+
+// gqlBranchRuleNodeCE is a branch rule as the Community document selects it.
+type gqlBranchRuleNodeCE struct {
+	gqlBranchRuleFields
+	BranchProtection *gqlBranchProtectionCE `json:"branchProtection"`
+}
+
+// gqlBranchRuleNode is a branch rule as the Enterprise document selects it.
 type gqlBranchRuleNode struct {
-	Name                  string               `json:"name"`
-	IsDefault             bool                 `json:"isDefault"`
-	IsProtected           bool                 `json:"isProtected"`
-	MatchingBranchesCount int                  `json:"matchingBranchesCount"`
-	CreatedAt             *string              `json:"createdAt"`
-	UpdatedAt             *string              `json:"updatedAt"`
-	BranchProtection      *gqlBranchProtection `json:"branchProtection"`
-	ApprovalRules         *struct {
+	gqlBranchRuleFields
+	BranchProtection *gqlBranchProtection `json:"branchProtection"`
+	ApprovalRules    *struct {
 		Nodes []gqlApprovalRule `json:"nodes"`
 	} `json:"approvalRules"`
 	ExternalStatusChecks *struct {
@@ -145,9 +168,15 @@ type gqlBranchRuleNode struct {
 	} `json:"externalStatusChecks"`
 }
 
-// nodeToItem converts a raw GraphQL branch rule node into a [BranchRuleItem]
-// output struct, extracting timestamps, approval rules, and external status checks.
-func nodeToItem(n gqlBranchRuleNode) BranchRuleItem {
+// branchRuleNode is what the list decodes a node as: either edition's shape,
+// each knowing how to become the one output item.
+type branchRuleNode interface {
+	item() BranchRuleItem
+}
+
+// item converts the fields both editions select into a [BranchRuleItem],
+// extracting the timestamps.
+func (n gqlBranchRuleFields) item() BranchRuleItem {
 	item := BranchRuleItem{
 		Name:                  n.Name,
 		IsDefault:             n.IsDefault,
@@ -160,6 +189,22 @@ func nodeToItem(n gqlBranchRuleNode) BranchRuleItem {
 	if n.UpdatedAt != nil {
 		item.UpdatedAt = *n.UpdatedAt
 	}
+	return item
+}
+
+// item converts a Community node into a [BranchRuleItem].
+func (n gqlBranchRuleNodeCE) item() BranchRuleItem {
+	item := n.gqlBranchRuleFields.item()
+	if n.BranchProtection != nil {
+		item.BranchProtection = &BranchProtection{AllowForcePush: n.BranchProtection.AllowForcePush}
+	}
+	return item
+}
+
+// item converts an Enterprise node into a [BranchRuleItem], with its approval
+// rules and external status checks.
+func (n gqlBranchRuleNode) item() BranchRuleItem {
+	item := n.gqlBranchRuleFields.item()
 	if n.BranchProtection != nil {
 		item.BranchProtection = &BranchProtection{
 			AllowForcePush:            n.BranchProtection.AllowForcePush,
@@ -213,15 +258,14 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("list_branch_rules: project_path is required")
 	}
 
-	query := queryListBranchRulesCE
 	if client.IsEnterprise() {
-		query = queryListBranchRulesEE
+		return listWith[gqlBranchRuleNode](ctx, client, queryListBranchRulesEE, input)
 	}
-	return listWith(ctx, client, query, input)
+	return listWith[gqlBranchRuleNodeCE](ctx, client, queryListBranchRulesCE, input)
 }
 
 // listWith runs one branch rules document against the variables the input
-// resolves to.
+// resolves to, decoding each node as N, the shape that document selects.
 //
 // The document is a parameter rather than picked here so that a test can hand
 // it one declaring too little and prove the pagination guard refuses it. The
@@ -232,38 +276,42 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // Building the variables here rather than in the caller is what keeps the check
 // honest: the pair is checked against the document this call will actually
 // send, not against the one a tier decision happened to pick first.
-func listWith(ctx context.Context, client *gitlabclient.Client, query string, input ListInput) (ListOutput, error) {
+func listWith[N branchRuleNode](ctx context.Context, client *gitlabclient.Client, query string, input ListInput) (ListOutput, error) {
 	vars, err := input.Variables(query)
 	if err != nil {
 		return ListOutput{}, fmt.Errorf("list_branch_rules: %w", err)
 	}
 	vars["projectPath"] = input.ProjectPath
 
-	return doGraphQLList(ctx, client, query, vars, input.ProjectPath)
+	return doGraphQLList[N](ctx, client, query, vars, input.ProjectPath)
 }
 
 // gqlBranchRulesConnection holds the paginated list of branch rule nodes.
-type gqlBranchRulesConnection struct {
-	Nodes    []gqlBranchRuleNode         `json:"nodes"`
-	PageInfo toolutil.GraphQLRawPageInfo `json:"pageInfo"`
+//
+// Pagination is the forward half alone, because both documents select that
+// half alone: Project.branchRules accepts first and after and nothing else.
+type gqlBranchRulesConnection[N branchRuleNode] struct {
+	Nodes    []N                                `json:"nodes"`
+	PageInfo toolutil.GraphQLRawForwardPageInfo `json:"pageInfo"`
 }
 
 // gqlProjectBranchRules wraps the branch rules connection inside a project.
-type gqlProjectBranchRules struct {
-	BranchRules gqlBranchRulesConnection `json:"branchRules"`
+type gqlProjectBranchRules[N branchRuleNode] struct {
+	BranchRules gqlBranchRulesConnection[N] `json:"branchRules"`
 }
 
-// gqlResponse is the generic GraphQL response envelope for branch rules.
-type gqlResponse struct {
+// gqlResponse is the GraphQL response envelope for branch rules, with each
+// node decoded as N.
+type gqlResponse[N branchRuleNode] struct {
 	Data struct {
-		Project *gqlProjectBranchRules `json:"project"`
+		Project *gqlProjectBranchRules[N] `json:"project"`
 	} `json:"data"`
 	Errors []toolutil.GraphQLError `json:"errors"`
 }
 
 // doGraphQLList executes a branch rules GraphQL query and returns the output.
-func doGraphQLList(ctx context.Context, client *gitlabclient.Client, query string, vars map[string]any, projectPath string) (ListOutput, error) {
-	var resp gqlResponse
+func doGraphQLList[N branchRuleNode](ctx context.Context, client *gitlabclient.Client, query string, vars map[string]any, projectPath string) (ListOutput, error) {
+	var resp gqlResponse[N]
 
 	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
 		Query:     query,
@@ -285,11 +333,11 @@ func doGraphQLList(ctx context.Context, client *gitlabclient.Client, query strin
 
 	items := make([]BranchRuleItem, 0, len(resp.Data.Project.BranchRules.Nodes))
 	for _, n := range resp.Data.Project.BranchRules.Nodes {
-		items = append(items, nodeToItem(n))
+		items = append(items, n.item())
 	}
 
 	return ListOutput{
 		Rules:      items,
-		Pagination: toolutil.PageInfoToForwardOutput(resp.Data.Project.BranchRules.PageInfo),
+		Pagination: toolutil.ForwardPageInfoToOutput(resp.Data.Project.BranchRules.PageInfo),
 	}, nil
 }

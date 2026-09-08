@@ -794,21 +794,17 @@ func TestFormatGraphQLPagination(t *testing.T) {
 	}
 }
 
-// TestPageInfoToForwardOutput verifies that the forward-only conversion keeps
-// the next-page half and drops the previous-page half, which is the whole
-// reason the type exists: GitLab's keyset connections report a previous page
-// even where the field refuses before and last, and a tool with no before
-// parameter must not pass that cursor on.
-func TestPageInfoToForwardOutput(t *testing.T) {
-	got := PageInfoToForwardOutput(GraphQLRawPageInfo{
-		HasNextPage:     true,
-		HasPreviousPage: true,
-		EndCursor:       "end",
-		StartCursor:     "start",
-	})
+// TestForwardPageInfoToOutput verifies that the forward-only conversion
+// carries the next-page half through unchanged. The raw type it converts holds
+// nothing else, which is the whole reason the type exists: GitLab's keyset
+// connections report a previous page even where the field refuses before and
+// last, and a tool with no before parameter must neither pass that cursor on
+// nor decode it into a field its document never fills.
+func TestForwardPageInfoToOutput(t *testing.T) {
+	got := ForwardPageInfoToOutput(GraphQLRawForwardPageInfo{HasNextPage: true, EndCursor: "end"})
 	want := GraphQLForwardPaginationOutput{HasNextPage: true, EndCursor: "end"}
 	if got != want {
-		t.Errorf("PageInfoToForwardOutput() = %+v, want %+v", got, want)
+		t.Errorf("ForwardPageInfoToOutput() = %+v, want %+v", got, want)
 	}
 }
 

@@ -94,6 +94,29 @@ query($search: String, $scope: CiCatalogResourceScope, $sort: CiCatalogResourceS
       versions(first: 1) {
         nodes {
           name
+          releasedAt
+          createdAt
+          semver {
+            major
+            minor
+            patch
+          }
+          path
+          readmeHtml
+          components {
+            nodes {
+              name
+              description
+              includePath
+              inputs {
+                name
+                description
+                type
+                required
+                default
+              }
+            }
+          }
         }
       }
     }

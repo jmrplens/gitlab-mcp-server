@@ -69,69 +69,13 @@ type Item struct {
 
 // GraphQL queries.
 
-const queryListVulnerabilities = `
-query($projectPath: ID!, $first: Int, $after: String, $last: Int, $before: String, $severity: [VulnerabilitySeverity!], $state: [VulnerabilityState!], $scanner: [String!], $reportType: [VulnerabilityReportType!], $hasIssues: Boolean, $hasResolution: Boolean, $sort: VulnerabilitySort) {
-  project(fullPath: $projectPath) {
-    vulnerabilities(first: $first, after: $after, last: $last, before: $before, severity: $severity, state: $state, scanner: $scanner, reportType: $reportType, hasIssues: $hasIssues, hasResolution: $hasResolution, sort: $sort) {
-      nodes {
-        id
-        title
-        severity
-        state
-        reportType
-        detectedAt
-        dismissedAt
-        resolvedAt
-        confirmedAt
-        primaryIdentifier {
-          name
-          externalType
-          externalId
-          url
-        }
-        scanner {
-          name
-          vendor
-        }
-        location {
-          ... on VulnerabilityLocationSast {
-            file
-            startLine
-            endLine
-            blobPath
-          }
-          ... on VulnerabilityLocationDast {
-            path
-          }
-          ... on VulnerabilityLocationDependencyScanning {
-            file
-            blobPath
-          }
-          ... on VulnerabilityLocationContainerScanning {
-            image
-          }
-          ... on VulnerabilityLocationSecretDetection {
-            file
-            startLine
-            endLine
-            blobPath
-          }
-        }
-      }
-      pageInfo {
-        hasNextPage
-        hasPreviousPage
-        endCursor
-        startCursor
-      }
-    }
-  }
-}
-`
-
-const queryGetVulnerability = `
-query($id: VulnerabilityID!) {
-  vulnerability(id: $id) {
+// vulnFields is the selection every vulnerability document shares. The list,
+// the get and the four state mutations all answer with a vulnerability node
+// decoded into [gqlVulnerabilityNode], so the one selection is written once:
+// a document selecting less left the struct's other fields empty, and the
+// output claimed an empty description and no identifiers for a vulnerability
+// that has both. make check-graphql-shapes refuses that shape.
+const vulnFields = `
     id
     title
     severity
@@ -198,6 +142,28 @@ query($id: VulnerabilityID!) {
     mergeRequest {
       iid
     }
+`
+
+const queryListVulnerabilities = `
+query($projectPath: ID!, $first: Int, $after: String, $last: Int, $before: String, $severity: [VulnerabilitySeverity!], $state: [VulnerabilityState!], $scanner: [String!], $reportType: [VulnerabilityReportType!], $hasIssues: Boolean, $hasResolution: Boolean, $sort: VulnerabilitySort) {
+  project(fullPath: $projectPath) {
+    vulnerabilities(first: $first, after: $after, last: $last, before: $before, severity: $severity, state: $state, scanner: $scanner, reportType: $reportType, hasIssues: $hasIssues, hasResolution: $hasResolution, sort: $sort) {
+      nodes {` + vulnFields + `
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        endCursor
+        startCursor
+      }
+    }
+  }
+}
+`
+
+const queryGetVulnerability = `
+query($id: VulnerabilityID!) {
+  vulnerability(id: $id) {` + vulnFields + `
   }
 }
 `

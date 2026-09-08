@@ -19,6 +19,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_e2e_gaps`               | Catalog & metadata audits     | Catalog actions the e2e suite never exercises                                                                                                                                                       | `make audit-e2e-gaps`                                               |
 | `audit_edition_tier`           | Catalog & metadata audits     | Doc-grounded licensing tier (Free/Premium/Ultimate) vs binary gating                                                                                                                                | `make audit-edition-tier`                                           |
 | `audit_graphql_documents`      | Catalog & metadata audits     | Every raw GraphQL document in the source is one the pinned GitLab schema accepts; `-live` judges by what an instance serves now and reports the drift under our own documents                       | `make check-graphql-documents`, `make check-graphql-documents-live` |
+| `audit_graphql_shapes`         | Catalog & metadata audits     | Every struct a GraphQL response is decoded into can hold what its document selects and declares nothing the document never selects                                                                  | `make check-graphql-shapes`, `make audit-graphql-shapes`            |
 | `audit_readonly_graphql`       | Catalog & metadata audits     | No action classified ReadOnly can reach a GraphQL mutation                                                                                                                                          | `make check-readonly-graphql`                                       |
 | `audit_surface_quality`        | Surface quality audits        | Consolidated MCP tool surface quality audit (metadata + output)                                                                                                                                     | `make audit-surface-quality`                                        |
 | `audit_gateway_chars`          | Surface quality audits        | Served descriptions and titles carry no character an MCP gateway validator rejects                                                                                                                  | `make check-gateway-chars`                                          |
@@ -509,6 +510,56 @@ One block per refused document on stderr, naming the package, the constant it is
 - `make check-graphql-documents`: the CI gate.
 - `make audit-graphql-documents`: the same gate, listing what it accepted.
 - `make check-graphql-documents-live`: the same documents against a schema fetched from gitlab.com now. Needs the network, so it runs under `make test-e2e-gitlab-com` rather than in CI.
+
+### audit_graphql_shapes
+
+Fails when a struct this repository decodes a GraphQL response into cannot hold what the document it is sent with asks for.
+
+Every other GraphQL gate reads the request. The pinned schema judges the document and the test transport judges the variables, and neither looks at the struct the answer is decoded into, because the fixture a test answers with is written to match that struct. A decoder that disagrees with GitLab is therefore invisible to all of them: the licensed e2e run found `startLine` and `endLine` declared as `String` by the schema and decoded into `int` by two response structs, every located finding failed to decode, and every gate was green.
+
+This command pairs the two halves. It loads `./internal/...` with `go/packages`, finds every call whose first argument is a `GraphQLQuery`, folds the document that call sends and resolves what the pointer it decodes into points at, then walks the validated selection set against that type under `encoding/json`'s own rules: a field is matched by its json tag or, failing that, by its name case-insensitively; embedded structs are flattened; a type with an `UnmarshalJSON` method is trusted to know what it reads; a `map[string]T` takes every selected field as a `T`; and a type parameter is read as whatever the caller bound it to. A document reaches its call in several ways and all are followed: a constant named at the call, a local variable given one constant or one per branch, a parameter of a wrapper function (or a field of a struct parameter, the `toolutil.GraphQLNoteMutation` shape), and a generic wrapper called by another generic wrapper, whose type parameters are bound through the whole chain.
+
+The scalar table is how GitLab serializes each scalar the pin declares: `Int` is a JSON integer, `Float` and `Duration` may carry a fraction, `Boolean` is a boolean, `JSON` and `CiInputsValue` are arbitrary, and everything else, `BigInt` included, is a string. A scalar the table does not name and that is not a global id is reported rather than guessed, so a scalar a future pin adds is classified on purpose.
+
+Three disagreements fail the gate:
+
+- a Go kind that cannot hold what the schema says GitLab sends: a `String` into an `int`, a list into a struct, an object into a string, a `Float` into an integer;
+- a Go field the document never selects, which is always empty and lies to the model about what GitLab answered (a shared node struct decoding a document that selects less is the common cause, and the fix is one selection written once, as `vulnFields` now is);
+- a scalar with no serialization in the table.
+
+A field the document selects and no Go field reads is reported under `-v` and does not fail: it is transfer, not truth. A document built at run time, a request that is not a literal, a decode target that is not a pointer, a wrapper nothing calls, and a document `cmd/internal/graphqldocs` finds that no call this audit can see sends, are all failures rather than silences, because a document nobody judges is the shape this gate exists to refuse.
+
+What it does not read is client-go's own documents and decoders, for the reason `audit_graphql_documents` gives: they reach GitLab through this server, and only the test transport judges them.
+
+#### Usage
+
+```bash
+# CI gate
+go run ./cmd/audit_graphql_shapes/
+
+# Also list every pairing judged and every selection nothing reads
+go run ./cmd/audit_graphql_shapes/ -v
+
+# Judge against an SDL file already on disk
+go run ./cmd/audit_graphql_shapes/ -schema /tmp/live/gitlab-schema.graphql
+```
+
+#### Flags
+
+| Flag      | Type     | Default   | Description                                                                             |
+| --------- | -------- | --------- | --------------------------------------------------------------------------------------- |
+| `-dir`    | `string` | `.`       | Repository root to audit                                                                |
+| `-v`      | `bool`   | `false`   | List every pairing judged and every selection nothing reads, not only the disagreements |
+| `-schema` | `string` | _(empty)_ | SDL file to judge the documents against, instead of the pinned schema                   |
+
+#### Output
+
+One block per pairing with a disagreement on stderr, naming the package, the constant the document is declared as, the call, and, when the call received the document through a wrapper, where it was handed over; every finding sits under it with the response path it is about, from `data` down. Every call that could not be paired is one stderr line of its own. Under `-v`, stdout carries an `ok` line per clean pairing and a block per pairing whose only findings are selections nothing reads. The summary line says which schema judged them. Exits `1` on any disagreement, on anything unpaired, on a source tree that cannot be loaded, and when no call at all was found, since an audit that found nothing to judge is broken rather than satisfied.
+
+#### Make targets
+
+- `make check-graphql-shapes`: the CI gate.
+- `make audit-graphql-shapes`: the same gate, listing everything it judged.
 
 ## Surface quality audits
 
@@ -1673,5 +1724,6 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `check-readonly-graphql`                 | `audit_readonly_graphql`           | No action classified ReadOnly can reach a GraphQL mutation                                                                 | Non-zero on any finding, or if the audit cannot be run                               |
 | `check-graphql-schema`                   | `gen_graphql_schema --check`       | The committed GitLab schema parses and its provenance record decodes                                                       | Non-zero if either file is missing or unusable                                       |
 | `check-graphql-documents`                | `audit_graphql_documents`          | Every raw GraphQL document in the source is one the pinned GitLab schema accepts                                           | Non-zero on any refusal, or if no documents are found                                |
+| `check-graphql-shapes`                   | `audit_graphql_shapes`             | Every struct a GraphQL response is decoded into can hold what its document selects, and declares nothing it never selects  | Non-zero on any disagreement, anything unpaired, or if no call is found              |
 | `check-request-inventory`                | `gen_request_inventory -check`     | The committed request inventory is what the unit suite records now                                                         | Non-zero if the artifact is stale or no shard was written                            |
 | `audit-1to1-paths`                       | `audit_1to1 -scope=paths`          | Every action's owning package was seen issuing a request, and every GraphQL document is one the pinned schema accepts      | Non-zero on a refused document, an undeclared silent package, or a stale declaration |
