@@ -67,6 +67,14 @@ type Summary struct {
 	// UnpublishedFields counts the output fields no endpoint of their package
 	// declares. A lower bound, for the reason unpublishedFields records.
 	UnpublishedFields int `json:"unpublished_fields"`
+	// UnsurfacedFields counts the response fields GitLab's document lists for
+	// a package's endpoints that no output type of the package publishes,
+	// split by what the conditions record says: sent by every GitLab, or
+	// only when a condition holds. The unknown remainder is the difference.
+	// A lower bound at the same grain, for the reason [SentCheck] records.
+	UnsurfacedFields int `json:"unsurfaced_fields"`
+	UnsurfacedAlways int `json:"unsurfaced_sent_always"`
+	UnsurfacedWhen   int `json:"unsurfaced_sent_when"`
 	// The typed counts are the same comparison held at type grain, where an
 	// output type is judged only against the endpoints its client-go struct
 	// models. They are published beside the package-grain count rather than
@@ -89,6 +97,13 @@ type Summary struct {
 	// document gives the object it sits under. See [TypedShapeCheck.Nested].
 	TypedNestedCompared    int `json:"typed_nested_types_compared"`
 	TypedNestedUnpublished int `json:"typed_nested_unpublished_fields"`
+	// TypedUnsurfacedFields counts the reverse findings at type grain: the
+	// response fields the operations a type models declare that the type does
+	// not publish, split the same way the package-grain count is. See
+	// [TypedShapeCheck.Unsurfaced].
+	TypedUnsurfacedFields int `json:"typed_unsurfaced_fields"`
+	TypedUnsurfacedAlways int `json:"typed_unsurfaced_sent_always"`
+	TypedUnsurfacedWhen   int `json:"typed_unsurfaced_sent_when"`
 }
 
 // observedGrain is what [Summary.Grain] says, spelled once.
@@ -181,6 +196,8 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 	}
 
 	shapes := shapeCheck(root, inventory.Requests, publishedTypes(root))
+	sentAlways, sentWhen := unsurfacedCounts(shapes.Sent.Unsurfaced)
+	typedSentAlways, typedSentWhen := unsurfacedCounts(shapes.Typed.Unsurfaced)
 
 	stale = append(stale, endpoints.staleDeclarations()...)
 	stale = append(stale, shapes.Typed.staleDeclarations()...)
@@ -211,6 +228,12 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 			UndeclaredEndpoints:    endpoints.undeclared(),
 			UntemplatedSegments:    len(shapes.Untemplated),
 			UnpublishedFields:      len(shapes.Unpublished),
+			UnsurfacedFields:       len(shapes.Sent.Unsurfaced),
+			UnsurfacedAlways:       sentAlways,
+			UnsurfacedWhen:         sentWhen,
+			TypedUnsurfacedFields:  len(shapes.Typed.Unsurfaced),
+			TypedUnsurfacedAlways:  typedSentAlways,
+			TypedUnsurfacedWhen:    typedSentWhen,
 			TypedCompared:          shapes.Typed.Compared,
 			TypedNoPairing:         shapes.Typed.SkippedNoPairing,
 			TypedNoRoute:           shapes.Typed.SkippedNoRoute,

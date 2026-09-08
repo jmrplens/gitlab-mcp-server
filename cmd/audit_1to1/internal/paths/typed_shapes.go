@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/structs"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apishapes"
 )
 
 // TypedShapeCheck is the same question [ShapeCheck] asks, at type grain: not
@@ -67,6 +68,12 @@ type TypedShapeCheck struct {
 	// Nested are the same findings one level down, each naming the response
 	// property its type sits under.
 	Nested []UnpublishedField `json:"nested_unpublished,omitempty"`
+	// Unsurfaced are the reverse findings at this grain: a response field the
+	// operations a type models declare that the type does not publish, each
+	// with what the conditions record says about when GitLab sends it. This
+	// is the list the field-by-field review reads, since it names the type
+	// and the endpoints rather than a package's union of them.
+	Unsurfaced []UnsurfacedField `json:"unsurfaced,omitempty"`
 	// UnusedDeclarations names the shape declarations that matched no finding
 	// in this run, sorted. Each is a claim about GitLab's record that no longer
 	// describes it.
@@ -128,6 +135,7 @@ func typedShapeCheck(root string, index *operationIndex, published []publishedTy
 	}
 	routes := readRoutes(pairings.ClientGoDir)
 	sdkTypes := pairedSDKTypes(pairings.Outputs)
+	conditions := newConditionIndex(root)
 
 	check := TypedShapeCheck{Ran: true}
 	for _, candidate := range published {
@@ -148,10 +156,12 @@ func typedShapeCheck(root string, index *operationIndex, published []publishedTy
 			nested, compared := unpublishedNested(candidate, paired, described)
 			check.Nested = append(check.Nested, nested...)
 			check.NestedCompared += compared
+			check.Unsurfaced = append(check.Unsurfaced, unsurfacedAtTypeGrain(candidate, described, conditions)...)
 		}
 	}
 	sortFindings(check.Unpublished)
 	sortFindings(check.Nested)
+	sortUnsurfaced(check.Unsurfaced)
 	check.Unpublished, check.Nested, check.UnusedDeclarations = classifyShapeFindings(check.Unpublished, check.Nested)
 	return check
 }
@@ -184,6 +194,9 @@ type describedResponses struct {
 	// a finding carries is the number of responses that failed to name the
 	// field rather than the number of endpoints the type touches.
 	Operations []string
+	// Entity is the component the first searched response named, which is
+	// what the conditions record is asked about for a field the type lacks.
+	Entity string
 	// Known is the union of the top-level property names those responses carry.
 	Known map[string]bool
 	// Nested is the union, per top-level property, of the property names the
@@ -215,23 +228,33 @@ func describedRoutes(paired []string, routes map[string][]sdkRoute, index *opera
 				seen[name] = true
 				described.Operations = append(described.Operations, name)
 			}
-			for _, name := range operation.Response {
-				described.Known[name] = true
-			}
-			for property, names := range operation.Nested {
-				under := described.Nested[property]
-				if under == nil {
-					under = map[string]bool{}
-					described.Nested[property] = under
-				}
-				for _, name := range names {
-					under[name] = true
-				}
-			}
+			described.absorb(operation)
 		}
 	}
 	sort.Strings(described.Operations)
 	return described
+}
+
+// absorb adds what one searched response says: the component it named, when
+// none was named yet, its top-level property names, and the names under each
+// property that carries an object.
+func (d *describedResponses) absorb(operation apishapes.Operation) {
+	if d.Entity == "" {
+		d.Entity = operation.Entity
+	}
+	for _, name := range operation.Response {
+		d.Known[name] = true
+	}
+	for property, names := range operation.Nested {
+		under := d.Nested[property]
+		if under == nil {
+			under = map[string]bool{}
+			d.Nested[property] = under
+		}
+		for _, name := range names {
+			under[name] = true
+		}
+	}
 }
 
 // unpublishedAtTypeGrain reports every field of one type that no operation it
@@ -251,6 +274,33 @@ func unpublishedAtTypeGrain(candidate publishedType, paired []string, described 
 			Endpoints:  len(described.Operations),
 			Operations: described.Operations,
 		})
+	}
+	return out
+}
+
+// unsurfacedAtTypeGrain reports every response field the operations a type
+// models declare that the type does not publish, with what the conditions
+// record says about each.
+func unsurfacedAtTypeGrain(candidate publishedType, described describedResponses, conditions *conditionIndex) []UnsurfacedField {
+	published := make(map[string]bool, len(candidate.Fields))
+	for _, field := range candidate.Fields {
+		published[field] = true
+	}
+	var out []UnsurfacedField
+	for name := range described.Known {
+		if published[name] {
+			continue
+		}
+		finding := UnsurfacedField{
+			Grain:      grainType,
+			Package:    candidate.Package,
+			Type:       candidate.Name,
+			Field:      name,
+			Operations: described.Operations,
+			Entity:     described.Entity,
+		}
+		conditions.annotate(&finding)
+		out = append(out, finding)
 	}
 	return out
 }
