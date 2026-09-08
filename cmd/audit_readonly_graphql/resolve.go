@@ -69,6 +69,10 @@ type resolver struct {
 
 // collectSites resolves every ActionSpec construction the loaded packages
 // contain, keyed by the action name it declares.
+//
+// Every package is walked, none skipped: the shared loader refuses one that
+// did not type-check, so each of them has the type information the resolution
+// below reads.
 func (r *resolver) collectSites() map[string][]site {
 	sites := make(map[string][]site)
 	for _, pkg := range r.prog.order {

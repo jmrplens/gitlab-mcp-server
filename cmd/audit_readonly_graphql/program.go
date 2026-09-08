@@ -183,6 +183,9 @@ func constantString(value constant.Value) (string, bool) {
 }
 
 // indexFunctions records every declared function's body.
+//
+// TypesInfo is read unchecked here too, for the reason [program.indexDocuments]
+// gives: [goprogram.Load] refuses a package that did not type-check.
 func (p *program) indexFunctions(pkg *packages.Package) {
 	for _, file := range pkg.Syntax {
 		for _, decl := range file.Decls {
