@@ -1752,7 +1752,7 @@ The refusal is why this is a package rather than three tidy copies. Each gate an
 
 The `overlay` parameter is not a convenience. It is how each gate's tests supply a fixture package written in the test file itself, type-checked against the real packages it imports, so the classifiers are exercised on the shapes they have to handle rather than on a mock of them. Production passes `nil`.
 
-`cmd/audit_1to1/internal/shared.LoadToolPackages` is deliberately not folded in: it loads with `NeedDeps`, and it filters rather than refuses — it returns the tool packages that typed and drops the ones that did not. That is a different contract, not a different wording of this one.
+`cmd/audit_1to1/internal/shared.LoadToolPackages` is deliberately not folded in: it loads with `NeedDeps`, and it filters rather than refuses: it returns the tool packages that typed and drops the ones that did not. That is a different contract, not a different wording of this one.
 
 ## CI gate targets
 

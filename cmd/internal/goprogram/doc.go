@@ -22,9 +22,9 @@
 // What stays with each gate is everything above the load: its own indexers,
 // its own detectors, its own question and its own binary.
 //
-// [cmd/audit_1to1/internal/shared].LoadToolPackages is deliberately not folded
-// in. It loads with NeedDeps, so it pays for the dependency tree these three
-// refuse to pay for, and it filters rather than refuses: it returns the tool
-// packages that typed and drops the ones that did not. That is a different
-// contract, not a different wording of this one.
+// [github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared.LoadToolPackages]
+// is deliberately not folded in. It loads with NeedDeps, so it pays for the
+// dependency tree these three refuse to pay for, and it filters rather than
+// refuses: it returns the tool packages that typed and drops the ones that did
+// not. That is a different contract, not a different wording of this one.
 package goprogram
