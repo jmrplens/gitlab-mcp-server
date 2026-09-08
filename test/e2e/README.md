@@ -109,6 +109,29 @@ Or use the Makefile target:
 make test-e2e-docker
 ```
 
+### Running the fixture on another host
+
+The containers need about 5 GB and a few cores for ten minutes of boot, which
+is a poor fit for a busy workstation. Docker follows `DOCKER_HOST` (or the
+active context), so the whole fixture can run elsewhere while the suite runs
+here; the Makefile only has to know where GitLab is reachable from this
+machine:
+
+```bash
+DOCKER_HOST=ssh://truenas \
+E2E_DOCKER_GITLAB_URL=http://192.168.0.40:8929 \
+E2E_DOCKER_BITBUCKET_URL=http://192.168.0.40:7990 \
+E2E_BITBUCKET_BIND=0.0.0.0 \
+make test-e2e-docker          # or test-e2e-docker-enterprise
+```
+
+`E2E_DOCKER_GITLAB_URL` is also handed to the container as its `external_url`
+(the registry's follows on port 5050), so the `web_url` fields GitLab answers
+with name the address the tests reach. Bitbucket is published on loopback by
+default and has to be bound to the remote host's LAN address for the setup
+script and the import test to reach it. The published ports are then open on
+that host's network: use it on a LAN you trust.
+
 ### Docker Enterprise Mode
 
 Enterprise mode uses the same Docker topology with the EE image and a local

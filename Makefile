@@ -86,6 +86,21 @@ ORBIT_FIXTURES_INDEXER_TIMEOUT ?= 600
 # cross-entity CI/MR data. Adds ~5 min of mirror time on first run.
 ORBIT_FIXTURES_MIRROR ?= false
 E2E_DOCKER_ENTERPRISE_TIMEOUT ?= 3600s
+# Where the e2e Docker fixture is reached from the machine running the suite.
+# Docker itself follows DOCKER_HOST or the active context, so the fixture can
+# run on another host: `DOCKER_HOST=ssh://truenas
+# E2E_DOCKER_GITLAB_URL=http://192.168.0.40:8929 make test-e2e-docker`. GitLab's
+# own idea of its URL (external_url, and the registry's beside it) follows the
+# same value, so the web_url fields it answers with are the ones the tests
+# reach. Bitbucket is published on loopback by default and has to be bound to
+# the LAN (E2E_BITBUCKET_BIND=0.0.0.0) when the fixture is remote.
+E2E_DOCKER_GITLAB_URL ?= http://localhost:8929
+E2E_DOCKER_REGISTRY_URL ?= $(patsubst %:8929,%:5050,$(E2E_DOCKER_GITLAB_URL))
+E2E_DOCKER_BITBUCKET_URL ?= http://localhost:7990
+E2E_BITBUCKET_BIND ?= 127.0.0.1
+export E2E_GITLAB_EXTERNAL_URL = $(E2E_DOCKER_GITLAB_URL)
+export E2E_REGISTRY_EXTERNAL_URL = $(E2E_DOCKER_REGISTRY_URL)
+export E2E_BITBUCKET_BIND
 
 # Read version from VERSION file (single source of truth)
 VERSION := $(strip $(file < VERSION))
@@ -242,11 +257,11 @@ test-e2e-docker: ensure-gotestsum
 	@openssl rand -hex 16 > test/e2e/.bitbucket-admin-pass
 	E2E_BITBUCKET_ADMIN_PASSWORD=$$(cat test/e2e/.bitbucket-admin-pass) docker compose -f test/e2e/docker-compose.yml --profile bitbucket up -d
 	@echo "=== Waiting for GitLab readiness ==="
-	./test/e2e/scripts/wait-for-gitlab.sh http://localhost:8929 600
+	./test/e2e/scripts/wait-for-gitlab.sh $(E2E_DOCKER_GITLAB_URL) 600
 	@echo "=== Setting up test user and token ==="
 	@set -e; \
 	for attempt in 1 2 3; do \
-		if ./test/e2e/scripts/setup-gitlab.sh http://localhost:8929; then \
+		if ./test/e2e/scripts/setup-gitlab.sh $(E2E_DOCKER_GITLAB_URL); then \
 			break; \
 		fi; \
 		if [ "$$attempt" -eq 3 ]; then \
@@ -257,9 +272,9 @@ test-e2e-docker: ensure-gotestsum
 		sleep 5; \
 	done
 	@echo "=== Registering GitLab Runner ==="
-	./test/e2e/scripts/register-runner.sh http://localhost:8929
+	./test/e2e/scripts/register-runner.sh $(E2E_DOCKER_GITLAB_URL)
 	@echo "=== Provisioning Bitbucket import fixture ==="
-	E2E_BITBUCKET_ADMIN_PASSWORD=$$(cat test/e2e/.bitbucket-admin-pass) ./test/e2e/scripts/setup-bitbucket.sh http://localhost:7990
+	E2E_BITBUCKET_ADMIN_PASSWORD=$$(cat test/e2e/.bitbucket-admin-pass) ./test/e2e/scripts/setup-bitbucket.sh $(E2E_DOCKER_BITBUCKET_URL)
 	@echo "=== Running E2E tests ==="
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	@set +e; \
@@ -288,11 +303,11 @@ test-e2e-docker-enterprise: ensure-gotestsum
 	  if [ -z "$$activation_code" ] && [ -s "$${E2E_ENTERPRISE_LICENSE_FILE:-test/e2e/.enterprise-license}" ]; then echo "    Reusing cached Enterprise license during setup"; fi; \
 	  GITLAB_IMAGE=$${GITLAB_IMAGE:-gitlab/gitlab-ee:latest} GITLAB_ACTIVATION_CODE="$$activation_code" docker compose -f test/e2e/docker-compose.yml up -d
 	@echo "=== Waiting for GitLab readiness ==="
-	./test/e2e/scripts/wait-for-gitlab.sh http://localhost:8929 600
+	./test/e2e/scripts/wait-for-gitlab.sh $(E2E_DOCKER_GITLAB_URL) 600
 	@echo "=== Setting up test user, token, and Enterprise license ==="
 	@set -e; \
 	for attempt in 1 2 3; do \
-		if GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh http://localhost:8929; then \
+		if GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh $(E2E_DOCKER_GITLAB_URL); then \
 			break; \
 		fi; \
 		if [ "$$attempt" -eq 3 ]; then \
@@ -303,7 +318,7 @@ test-e2e-docker-enterprise: ensure-gotestsum
 		sleep 5; \
 	done
 	@echo "=== Registering GitLab Runner ==="
-	./test/e2e/scripts/register-runner.sh http://localhost:8929
+	./test/e2e/scripts/register-runner.sh $(E2E_DOCKER_GITLAB_URL)
 	@echo "=== Running Enterprise E2E tests ==="
 	@$(call MKDIR_P,$(E2E_REPORT_DIR))
 	@set +e; \
