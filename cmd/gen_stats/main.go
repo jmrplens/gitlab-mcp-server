@@ -156,7 +156,7 @@ func collectStats(root string) (*repoStats, error) {
 	for _, rel := range files {
 		path := filepath.Join(root, rel)
 		isE2E := strings.Contains(rel, "/e2e/")
-		isTest := strings.HasSuffix(rel, "_test.go")
+		isTest := strings.HasSuffix(rel, testsource.FileSuffix)
 
 		dirs[filepath.Dir(rel)] = true
 
@@ -271,7 +271,7 @@ func warnIndexDrift(root, gitBin string, missing int) {
 // scanGoFile reads every line of a .go file and accumulates pattern-based
 // counters into s. Returns the total line count.
 func scanGoFile(path string, isE2E, isTest bool, s *repoStats) (int, error) {
-	f, err := os.Open(filepath.Clean(path)) //#nosec G304 -- path from filepath.WalkDir within repo
+	f, err := os.Open(filepath.Clean(path)) //#nosec G304 -- path from git ls-files within repo
 	if err != nil {
 		return 0, err
 	}

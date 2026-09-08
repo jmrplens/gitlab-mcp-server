@@ -211,7 +211,7 @@ func scanFile(fset *token.FileSet, path string, file *ast.File) []site {
 	var sites []site
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Body == nil || !strings.HasPrefix(fn.Name.Name, "Test") {
+		if !ok || fn.Body == nil || !testsource.IsTestFunction(fn.Name.Name) {
 			continue
 		}
 		tables := localTables(fn.Body)
