@@ -227,16 +227,21 @@ type MembersListInput struct {
 
 // MemberOutput represents a GitLab group member.
 //
-// Fields mirror gl.GroupMember (1:1 audit policy: full nested objects). The
-// created_by, group_saml_identity, and member_role sub-objects are surfaced as
-// full local mirrors on their canonical json keys (C-IMPORTS: replicated here
-// rather than imported from sibling packages to preserve the zero-import-cycle
-// constraint).
+// Fields mirror gl.GroupMember (1:1 audit policy: full nested objects) plus
+// what lib/api/entities/member.rb sends that the SDK does not carry, read
+// from the captured response (ADR-0021): locked on every member,
+// membership_state on every member of an Enterprise instance, and
+// two_factor_enabled, group_scim_identity and override when the caller may
+// see them. The created_by, group_saml_identity, group_scim_identity and
+// member_role sub-objects are surfaced as full local mirrors on their
+// canonical json keys (C-IMPORTS: replicated here rather than imported from
+// sibling packages to preserve the zero-import-cycle constraint).
 type MemberOutput struct {
 	ID                int64               `json:"id"`
 	Username          string              `json:"username"`
 	Name              string              `json:"name"`
 	State             string              `json:"state"`
+	Locked            bool                `json:"locked"`
 	AvatarURL         string              `json:"avatar_url,omitempty"`
 	AccessLevel       int                 `json:"access_level"`
 	WebURL            string              `json:"web_url"`
@@ -245,7 +250,11 @@ type MemberOutput struct {
 	ExpiresAt         string              `json:"expires_at,omitempty"`
 	Email             string              `json:"email,omitempty"`
 	PublicEmail       string              `json:"public_email,omitempty"`
+	TwoFactorEnabled  *bool               `json:"two_factor_enabled,omitempty"`
 	GroupSAMLIdentity *SAMLIdentityOutput `json:"group_saml_identity,omitempty"`
+	GroupSCIMIdentity *SCIMIdentityOutput `json:"group_scim_identity,omitempty" tier:"premium"`
+	Override          *bool               `json:"override,omitempty" tier:"premium"`
+	MembershipState   string              `json:"membership_state,omitempty" tier:"premium"`
 	MemberRole        *MemberRoleOutput   `json:"member_role,omitempty"`
 	IsUsingSeat       bool                `json:"is_using_seat,omitempty"`
 }
@@ -257,6 +266,10 @@ type MemberUserOutput = toolutil.MemberUserOutput
 // SAMLIdentityOutput mirrors gl.GroupMemberSAMLIdentity (the
 // group_saml_identity object); canonical shape shared via toolutil.
 type SAMLIdentityOutput = toolutil.SAMLIdentityOutput
+
+// SCIMIdentityOutput mirrors the group_scim_identity object, which client-go
+// does not model; canonical shape shared via toolutil.
+type SCIMIdentityOutput = toolutil.SCIMIdentityOutput
 
 // MemberRoleOutput mirrors gl.MemberRole (the member_role object). Custom member
 // roles are an Enterprise (Premium/Ultimate) feature; the object is nil on
@@ -553,21 +566,27 @@ func projectItemsFromGroup(projects []*gl.Project) []ProjectItem {
 
 // MemberToOutput converts a GitLab API [gl.GroupMember] to the MCP tool output
 // format, surfacing the full created_by, group_saml_identity, and member_role
-// sub-objects (1:1 audit policy: full nested objects).
-func MemberToOutput(m *gl.GroupMember) MemberOutput {
+// sub-objects (1:1 audit policy: full nested objects), and takes the fields
+// the capture read beside the SDK.
+func MemberToOutput(m *gl.GroupMember, extra toolutil.MemberExtra) MemberOutput {
 	out := MemberOutput{
 		ID:                m.ID,
 		Username:          m.Username,
 		Name:              m.Name,
 		State:             m.State,
+		Locked:            extra.Locked,
 		AvatarURL:         m.AvatarURL,
 		AccessLevel:       int(m.AccessLevel),
 		WebURL:            m.WebURL,
 		Email:             m.Email,
 		PublicEmail:       m.PublicEmail,
+		TwoFactorEnabled:  extra.TwoFactorEnabled,
 		IsUsingSeat:       m.IsUsingSeat,
 		CreatedBy:         memberUserOutput(m.CreatedBy),
 		GroupSAMLIdentity: samlIdentityOutput(m.GroupSAMLIdentity),
+		GroupSCIMIdentity: extra.GroupSCIMIdentity,
+		Override:          extra.Override,
+		MembershipState:   extra.MembershipState,
 		MemberRole:        memberRoleOutput(m.MemberRole),
 	}
 	if m.CreatedAt != nil {
@@ -741,10 +760,15 @@ func MembersList(ctx context.Context, client *gitlabclient.Client, input Members
 		opts.ShowSeatInfo = input.ShowSeatInfo
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	memberList, resp, err := client.GL().Groups.ListAllGroupMembers(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return MemberListOutput{}, toolutil.WrapErrWithStatusHint("MembersList", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get; private group membership requires the caller to be a member")
+	}
+	extras, err := toolutil.CapturedMembers(captured, len(memberList))
+	if err != nil {
+		return MemberListOutput{}, toolutil.WrapErr("MembersList", err)
 	}
 
 	out := MemberListOutput{
@@ -752,7 +776,7 @@ func MembersList(ctx context.Context, client *gitlabclient.Client, input Members
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
 	for i, m := range memberList {
-		out.Members[i] = MemberToOutput(m)
+		out.Members[i] = MemberToOutput(m, extras[i])
 	}
 	return out, nil
 }

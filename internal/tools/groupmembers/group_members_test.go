@@ -51,6 +51,58 @@ func TestGetMember_Success(t *testing.T) {
 	}
 }
 
+// TestGetMember_ReadsWhatTheSDKDoesNotModel verifies a member carries, beside
+// what client-go decoded, the fields lib/api/entities/member.rb sends and
+// gl.GroupMember does not: locked and membership_state on every member, and
+// two_factor_enabled, group_scim_identity and override when the caller may
+// see them.
+func TestGetMember_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/5/members/10", func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"username":"dev","access_level":30,"locked":true,`+
+			`"membership_state":"awaiting","two_factor_enabled":false,"override":true,`+
+			`"group_scim_identity":{"extern_uid":"s1","group_id":5,"active":true}}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := GetMember(context.Background(), client, GetInput{GroupID: "5", UserID: 10})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !out.Locked || out.MembershipState != "awaiting" || out.TwoFactorEnabled == nil || *out.TwoFactorEnabled ||
+		out.Override == nil || !*out.Override || out.GroupSCIMIdentity == nil || out.GroupSCIMIdentity.ExternUID != "s1" {
+		t.Errorf("GetMember() = %+v, want the captured fields", out)
+	}
+}
+
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler that presents a
+// member: GitLab's answer decodes for the SDK and not for the fields read
+// beside it, and the handler reports it rather than swallowing it.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"username":"dev","access_level":30,"locked":"not-a-bool"}`)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "get", Call: func() error {
+			_, err := GetMember(context.Background(), client, GetInput{GroupID: "5", UserID: 10})
+			return err
+		}},
+		{Name: "get inherited", Call: func() error {
+			_, err := GetInheritedMember(context.Background(), client, GetInput{GroupID: "5", UserID: 10})
+			return err
+		}},
+		{Name: "add", Call: func() error {
+			_, err := AddMember(context.Background(), client, AddInput{GroupID: "5", UserID: 10, AccessLevel: 30})
+			return err
+		}},
+		{Name: "edit", Call: func() error {
+			_, err := EditMember(context.Background(), client, EditInput{GroupID: "5", UserID: 10, AccessLevel: 30})
+			return err
+		}},
+	})
+}
+
 // TestGetMember_MissingGroupID verifies that GetMember_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.

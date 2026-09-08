@@ -18,11 +18,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,958 |
-| Unit test functions                                   | 14,355 |
+| Total test functions                                  | 14,968 |
+| Unit test functions                                   | 14,365 |
 | E2E test functions                                    |    603 |
 | cmd test functions                                    |  2,949 |
-| Test files (internal/)                                |    520 |
+| Test files (internal/)                                |    521 |
 | Test files (cmd/)                                     |    204 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,881 | 79.4% |
+| `TestFunc_Scenario` (2-part)           | 11,887 | 79.4% |
 | `TestFunc` (no underscore)             |    977 |  6.5% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,100 | 14.0% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,104 | 14.1% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,451 |        145 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,454 |        146 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,617 |        359 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,624 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            603 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,949 |        204 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,958** |    **964** |                                                                                                 |
+| **Total**               |     **14,968** |    **965** |                                                                                                 |
 
 ### Core Packages
 
@@ -76,15 +76,15 @@
 | subscriptions |        99 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        90 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
-| toolutil      |       868 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,451** |          |                                                                                                                                                                                                                                                                    |
+| toolutil      |       871 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
+| **Subtotal**  | **2,454** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
 | projects          |   393 |   100.0% |    57 |
-| groups            |   249 |   100.0% |    37 |
+| groups            |   251 |   100.0% |    37 |
 | mergerequests     |   245 |   100.0% |    30 |
 | issues            |   223 |   100.0% |    21 |
 | users             |   210 |   100.0% |    38 |
@@ -105,9 +105,9 @@
 | groupmilestones   |    90 |   100.0% |     8 |
 | snippets          |    89 |    99.5% |    15 |
 | integrations      |    87 |    99.6% |    12 |
+| groupmembers      |    85 |   100.0% |    10 |
 | files             |    84 |   100.0% |     8 |
 | mrapprovals       |    84 |   100.0% |     7 |
-| groupmembers      |    83 |   100.0% |    10 |
 
 ### Complete Tool Sub-Package Test Counts
 
@@ -186,13 +186,13 @@
 | grouplabels             |        54 |          2 |   100.0% |         7 |
 | groupldap               |        14 |          2 |   100.0% |         5 |
 | groupmarkdownuploads    |        37 |          2 |   100.0% |         3 |
-| groupmembers            |        83 |          3 |   100.0% |        10 |
+| groupmembers            |        85 |          3 |   100.0% |        10 |
 | groupmilestones         |        90 |          2 |   100.0% |         8 |
 | groupprotectedbranches  |        16 |          2 |   100.0% |         5 |
 | groupprotectedenvs      |        19 |          2 |   100.0% |         5 |
 | grouprelationsexport    |        26 |          2 |   100.0% |         2 |
 | groupreleases           |        18 |          3 |   100.0% |         1 |
-| groups                  |       249 |          8 |   100.0% |        37 |
+| groups                  |       251 |          8 |   100.0% |        37 |
 | groupsaml               |        33 |          3 |   100.0% |         5 |
 | groupscim               |        31 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |        20 |          2 |   100.0% |         8 |
@@ -221,7 +221,7 @@
 | licensetemplates        |        21 |          1 |   100.0% |         2 |
 | markdown                |         8 |          1 |   100.0% |         1 |
 | memberroles             |        47 |          3 |   100.0% |         6 |
-| members                 |        60 |          2 |   100.0% |         6 |
+| members                 |        63 |          2 |   100.0% |         6 |
 | mergerequests           |       245 |          3 |   100.0% |        30 |
 | mergetrains             |        16 |          2 |   100.0% |         4 |
 | metadata                |         8 |          1 |   100.0% |         1 |
@@ -293,7 +293,7 @@
 | wikis                   |        61 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,617** |    **359** |          | **1,187** |
+| **Total**               | **8,624** |    **359** |          | **1,187** |
 
 </details>
 

@@ -18,17 +18,22 @@ import (
 
 // Output represents a single group member.
 //
-// Fields mirror gl.GroupMember (1:1 audit policy: full nested objects). The
-// created_by, group_saml_identity, and member_role sub-objects are surfaced as
-// full local mirrors on their canonical json keys (C-IMPORTS: replicated here
-// rather than imported from sibling packages to preserve the zero-import-cycle
-// constraint).
+// Fields mirror gl.GroupMember (1:1 audit policy: full nested objects) plus
+// what lib/api/entities/member.rb sends that the SDK does not carry, read
+// from the captured response (ADR-0021): locked on every member,
+// membership_state on every member of an Enterprise instance, and
+// two_factor_enabled, group_scim_identity and override when the caller may
+// see them. The created_by, group_saml_identity, group_scim_identity and
+// member_role sub-objects are surfaced as full local mirrors on their
+// canonical json keys (C-IMPORTS: replicated here rather than imported from
+// sibling packages to preserve the zero-import-cycle constraint).
 type Output struct {
 	toolutil.HintableOutput
 	ID                int64               `json:"id"`
 	Username          string              `json:"username"`
 	Name              string              `json:"name"`
 	State             string              `json:"state"`
+	Locked            bool                `json:"locked"`
 	AvatarURL         string              `json:"avatar_url,omitempty"`
 	WebURL            string              `json:"web_url"`
 	AccessLevel       int                 `json:"access_level"`
@@ -37,7 +42,11 @@ type Output struct {
 	ExpiresAt         string              `json:"expires_at,omitempty"`
 	Email             string              `json:"email,omitempty"`
 	PublicEmail       string              `json:"public_email,omitempty"`
+	TwoFactorEnabled  *bool               `json:"two_factor_enabled,omitempty"`
 	GroupSAMLIdentity *SAMLIdentityOutput `json:"group_saml_identity,omitempty" tier:"premium"`
+	GroupSCIMIdentity *SCIMIdentityOutput `json:"group_scim_identity,omitempty" tier:"premium"`
+	Override          *bool               `json:"override,omitempty" tier:"premium"`
+	MembershipState   string              `json:"membership_state,omitempty" tier:"premium"`
 	MemberRole        *MemberRoleOutput   `json:"member_role,omitempty" tier:"ultimate"`
 	IsUsingSeat       bool                `json:"is_using_seat,omitempty"`
 }
@@ -49,6 +58,10 @@ type MemberUserOutput = toolutil.MemberUserOutput
 // SAMLIdentityOutput mirrors gl.GroupMemberSAMLIdentity (the
 // group_saml_identity object); canonical shape shared via toolutil.
 type SAMLIdentityOutput = toolutil.SAMLIdentityOutput
+
+// SCIMIdentityOutput mirrors the group_scim_identity object, which client-go
+// does not model; canonical shape shared via toolutil.
+type SCIMIdentityOutput = toolutil.SCIMIdentityOutput
 
 // MemberRoleOutput mirrors gl.MemberRole (the member_role object). Custom
 // member roles are an Enterprise (Premium/Ultimate) feature; the object is nil
@@ -213,6 +226,7 @@ func GetMember(ctx context.Context, client *gitlabclient.Client, input GetInput)
 	if input.UserID == 0 {
 		return Output{}, toolutil.WrapErrWithMessage("group_member_get", toolutil.ErrFieldRequired("user_id"))
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	m, _, err := client.GL().GroupMembers.GetGroupMember(
 		string(input.GroupID), input.UserID, gl.WithContext(ctx),
 	)
@@ -220,7 +234,11 @@ func GetMember(ctx context.Context, client *gitlabclient.Client, input GetInput)
 		return Output{}, toolutil.WrapErrWithStatusHint("group_member_get", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get and user_id with gitlab_list_users. Inherited members are not returned, use gitlab_group_member_get_inherited for those")
 	}
-	return convertMember(m), nil
+	extra, err := toolutil.CapturedMember(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("group_member_get", err)
+	}
+	return convertMember(m, extra), nil
 }
 
 // GetInheritedMember gets a single inherited group member.
@@ -231,6 +249,7 @@ func GetInheritedMember(ctx context.Context, client *gitlabclient.Client, input 
 	if input.UserID == 0 {
 		return Output{}, toolutil.WrapErrWithMessage("group_member_get_inherited", toolutil.ErrFieldRequired("user_id"))
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	m, _, err := client.GL().GroupMembers.GetInheritedGroupMember(
 		string(input.GroupID), input.UserID, gl.WithContext(ctx),
 	)
@@ -238,7 +257,11 @@ func GetInheritedMember(ctx context.Context, client *gitlabclient.Client, input 
 		return Output{}, toolutil.WrapErrWithStatusHint("group_member_get_inherited", err, http.StatusNotFound,
 			"the user is not a member of this group or any ancestor group; verify with gitlab_group_members_list (include_inherited=true)")
 	}
-	return convertMember(m), nil
+	extra, err := toolutil.CapturedMember(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("group_member_get_inherited", err)
+	}
+	return convertMember(m, extra), nil
 }
 
 // AddMember adds a member to a group.
@@ -267,6 +290,7 @@ func AddMember(ctx context.Context, client *gitlabclient.Client, input AddInput)
 	if input.MemberRoleID != 0 {
 		opts.MemberRoleID = new(input.MemberRoleID)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	m, _, err := client.GL().GroupMembers.AddGroupMember(
 		string(input.GroupID), opts, gl.WithContext(ctx),
 	)
@@ -286,7 +310,11 @@ func AddMember(ctx context.Context, client *gitlabclient.Client, input AddInput)
 		return Output{}, toolutil.WrapErrWithStatusHint("group_member_add", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get and user_id/username with gitlab_list_users")
 	}
-	return convertMember(m), nil
+	extra, err := toolutil.CapturedMember(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("group_member_add", err)
+	}
+	return convertMember(m, extra), nil
 }
 
 // EditMember edits a group member.
@@ -307,6 +335,7 @@ func EditMember(ctx context.Context, client *gitlabclient.Client, input EditInpu
 	if input.MemberRoleID != 0 {
 		opts.MemberRoleID = new(input.MemberRoleID)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	m, _, err := client.GL().GroupMembers.EditGroupMember(
 		string(input.GroupID), input.UserID, opts, gl.WithContext(ctx),
 	)
@@ -318,7 +347,11 @@ func EditMember(ctx context.Context, client *gitlabclient.Client, input EditInpu
 		return Output{}, toolutil.WrapErrWithStatusHint("group_member_edit", err, http.StatusNotFound,
 			"the user is not a direct member of this group. Use gitlab_group_members_list to confirm direct membership before editing")
 	}
-	return convertMember(m), nil
+	extra, err := toolutil.CapturedMember(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("group_member_edit", err)
+	}
+	return convertMember(m, extra), nil
 }
 
 // RemoveMember removes a member from a group.
@@ -544,20 +577,26 @@ func removeBillableMemberOutput(ctx context.Context, client *gitlabclient.Client
 // Converters
 // ──────────────────────────────────────────────.
 
-// convertMember maps a GitLab group member into the MCP output shape.
-func convertMember(m *gl.GroupMember) Output {
+// convertMember maps a GitLab group member into the MCP output shape: what
+// client-go decoded, and what the capture read beside it.
+func convertMember(m *gl.GroupMember, extra toolutil.MemberExtra) Output {
 	out := Output{
 		ID:                m.ID,
 		Username:          m.Username,
 		Name:              m.Name,
 		State:             m.State,
+		Locked:            extra.Locked,
 		AvatarURL:         m.AvatarURL,
 		WebURL:            m.WebURL,
 		AccessLevel:       int(m.AccessLevel),
 		Email:             m.Email,
 		PublicEmail:       m.PublicEmail,
+		TwoFactorEnabled:  extra.TwoFactorEnabled,
 		CreatedBy:         memberUserOutput(m.CreatedBy),
 		GroupSAMLIdentity: samlIdentityOutput(m.GroupSAMLIdentity),
+		GroupSCIMIdentity: extra.GroupSCIMIdentity,
+		Override:          extra.Override,
+		MembershipState:   extra.MembershipState,
 		MemberRole:        memberRoleOutput(m.MemberRole),
 	}
 	if m.CreatedAt != nil {

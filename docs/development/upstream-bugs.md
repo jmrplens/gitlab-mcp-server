@@ -95,6 +95,7 @@ readable without opening the tracker:
 | 27 | client-go | [The achievements fragments select less than the schema offers](#the-achievements-fragments-select-less-than-the-schema-offers) | No | No | No | No | None possible |
 | 28 | client-go | [The epics wrapper is missing two filters and twelve response fields](#the-epics-wrapper-is-missing-two-filters-and-twelve-response-fields) | No | No | No | Was yes | Yes |
 | 29 | client-go | [The note and discussion structs miss what GitLab sends and declare what it does not](#the-note-and-discussion-structs-miss-what-gitlab-sends-and-declare-what-it-does-not) | No | No | No | No | Yes |
+| 30 | client-go | [The member structs, options and services miss what GitLab sends, accepts and serves](#the-member-structs-options-and-services-miss-what-gitlab-sends-accepts-and-serves) | No | No | No | No | Partial |
 
 States verified against the upstream trackers on 2026-09-05.
 
@@ -609,6 +610,67 @@ run's type grain, and the `email` one from reading `user_basic.rb`.
 with `json` tags, and `suggestions` needs one new type. The four phantoms and
 `email` are removals, so a deprecation note is the likely upstream shape for
 them.
+
+### The member structs, options and services miss what GitLab sends, accepts and serves
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: partial. The response fields are read from the captured
+  response beside the SDK's decode ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)):
+  `toolutil.CapturedMember` and `CapturedMembers` in
+  `internal/toolutil/member_capture.go`, taken by the converters of
+  `groupmembers`, `members` and the member list of `groups`, which retire
+  when the structs carry the fields. The missing parameters and the missing
+  endpoints have no workaround yet: this server does not publish them, and
+  the action pass of the field-by-field review is where they are picked up.
+
+**What**: three kinds of gap in `group_members.go` and `project_members.go`,
+held against `lib/api/members.rb`, `ee/lib/ee/api/members.rb` and
+`lib/api/entities/member.rb` at the pinned commit `1c8ac034` of
+gitlab-org/gitlab (`docs/development/gitlab-api-exposes.json`).
+
+- **Response fields.** `lib/api/entities/member.rb` exposes `locked` on every
+  member and, on an Enterprise instance, `membership_state`; it exposes
+  `two_factor_enabled` to a caller allowed to read it (the pages say group
+  owners and administrators), `group_scim_identity` (`extern_uid`,
+  `group_id`, `active`) to the owners of an SSO-enabled group, and `override`,
+  the LDAP override flag, on an LDAP member of a group. `GroupMember` declares
+  none of the five. `ProjectMember` declares none of them either, and also
+  lacks `public_email`, which the entity sends on every member, and
+  `group_saml_identity`, which `GroupMember` carries: a project member
+  inherited from a group renders through the same entity, so the project
+  struct is the group struct minus three fields for no reason in GitLab.
+  `avatar_path` and `custom_attributes` are exposed too, under presenter
+  options that `present_members` in `lib/api/helpers/members_helpers.rb`
+  never passes, so they are correctly absent from both structs.
+- **Parameters.** `ListGroupMembersOptions` and `ListProjectMembersOptions`
+  lack `skip_users`, which `GET /:source/:id/members` takes on both, and the
+  `state` filter (`awaiting` or `active`, Premium) the Enterprise prepend adds
+  to the same list. `AddGroupMemberOptions` and `AddProjectMemberOptions` lack
+  `invite_source`. `DeleteProjectMember` takes no options at all, while the
+  endpoint accepts `skip_subresources` and `unassign_issuables` the way the
+  group one does, which `RemoveGroupMemberOptions` models.
+- **Endpoints.** `ee/lib/ee/api/members.rb` serves six group endpoints no
+  service method reaches: `POST` and `DELETE /groups/:id/members/:user_id/override`,
+  `PUT /groups/:id/members/:member_id/approve`,
+  `POST /groups/:id/members/approve_all`, `GET /groups/:id/pending_members`,
+  `PUT /groups/:id/members/:user_id/state` and
+  `GET /groups/:id/billable_members/:user_id/indirect`. All are documented
+  on [doc/api/group_members.md](https://docs.gitlab.com/api/group_members/).
+
+**How we found it**: the sent dimension of the 1:1 audit for the fields
+(`shapes.typed.unsurfaced` and `shapes.sent.unsurfaced` in
+`go run ./cmd/audit_1to1/ -scope=paths`, with the entity condition on each);
+the parameters and the endpoints by reading the two Ruby files beside the
+service methods while writing the workaround.
+
+**Effort**: small for the fields, all additive struct members with `json`
+tags plus one type for the SCIM identity; small for the parameters, additive
+fields on the option structs and one new options struct for the project
+delete; medium for the endpoints, six methods with their option and result
+types.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

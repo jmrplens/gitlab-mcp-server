@@ -95,7 +95,8 @@ func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 			if _, held := doc.Entities[declaration.Entity]; !held {
 				t.Errorf("component %s is not in the conditions record", declaration.Entity)
 			}
-			if declaration.Category != categoryDocumentedNotSent || declaration.Reason == "" || declaration.Field == "" {
+			known := declaration.Category == categoryDocumentedNotSent || declaration.Category == categoryOptionNeverPassed
+			if !known || declaration.Reason == "" || declaration.Field == "" {
 				t.Errorf("declaration %+v is missing its category, reason or field", declaration)
 			}
 		})
