@@ -28,6 +28,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_metrics`                | Surface quality audits        | Comprehensive metrics summary (tools, resources, prompts, codebase); `-site-stats` writes the site's stats JSON                                                                                     | `make audit-metrics`, `make gen-site-stats`                         |
 | `gen_graphql_schema`           | Generators                    | Pins a GitLab GraphQL schema by introspecting a live instance; `--check` gates the committed one                                                                                                    | `make gen-graphql-schema`, `make check-graphql-schema`              |
 | `gen_api_shapes`               | Generators                    | Pins what GitLab's own generated OpenAPI document says each REST operation accepts and returns; `--check` gates the committed record                                                                | `make gen-api-shapes`, `make check-api-shapes`                      |
+| `gen_api_exposes`              | Generators                    | Pins, from GitLab's Ruby source, the condition under which each field a REST entity exposes is sent and the license tier it belongs to; `-check` gates the record, `-report` prints an entity       | `make gen-api-exposes`, `make check-api-exposes`                    |
 | `godoc_tool`                   | Source quality audits         | Godoc compliance auditor and fixer (audit + fix subcommands)                                                                                                                                        | `make audit-godocs`                                                 |
 | `audit_test_names`             | Source quality audits         | Classifies `Test*` functions by naming pattern; emits rename hints; `-check-files` gates test-file naming                                                                                           | `make audit-test-names`, `make check-test-file-names`               |
 | `audit_test_goroutines`        | Source quality audits         | `testing.T` aborts made off the test goroutine                                                                                                                                                      | `make check-test-goroutines`                                        |
@@ -148,9 +149,11 @@ This rule reads the request instead, out of `docs/development/request-inventory.
 
   A finding at type grain can be **answered rather than fixed**, because the oracle is generated and is not always complete: an endpoint that renders a bare hash gets no schema worth comparing against, and a nested property can be given a narrower entity than the endpoint renders. `cmd/audit_1to1/internal/paths/shape_declarations.go` is where such a finding is written down with a category and the evidence, on the terms every other declaration table in this audit works on: a declaration that matches nothing is itself reported as stale. Today it holds one entry, for `invites.InviteResultOutput`, whose POST GitLab answers with `{"status": "success"}` while the generated document carries the pending-invitation object of the GET at the same path.
 
+  The same two grains ask the **reverse question** as well, since a record that speaks for GitLab can say what GitLab sends that we do not publish. `shapes.sent.unsurfaced` (package grain) and `shapes.typed.unsurfaced` (type grain) list every response field the searched operations declare that the package, or the type, does not publish, and each finding carries what `docs/development/gitlab-api-exposes.json`, the record [gen_api_exposes](#gen_api_exposes) pins from GitLab's Ruby source, says about when GitLab sends it: `sent` is `always` for a field the entity exposes with no condition, `when` for one behind an `if:` or `unless:`, recorded beside it with the license tier and edition when the condition names a licensed feature, and `unknown` when the document names no component for the response, the conditions record does not hold the component, or the component names its fields at run time (`expose(*helper.attributes)`, which the record marks as a splat). The summary carries the three counts at each grain (`unsurfaced_fields`, `unsurfaced_sent_always`, `unsurfaced_sent_when` and their `typed_` twins); the unknown remainder is the difference. Neither grain gates: a field GitLab sends that this server does not surface is a candidate for the 1:1 surface, and the type-grain list, which names the output type and the operations it models, is what the field-by-field review reads. The package grain over-reports in one known way, since a package that calls an endpoint for something other than surfacing its answer (`health` reads `/user` to learn who the token is; `projectdiscovery` reads `/projects/{id}` to resolve a path) is reported as missing that answer's every field.
+
 The first two checks need no network and no suite run: the inventory is committed, the schema is pinned, and the catalog is compiled in. That is what makes them a CI gate. The fourth needs no network either, since the API record is committed like the inventory, and it runs with them; it contributes no gate outcome. Its type grain does cost the typed load of `./internal/tools/...` that the other scopes already pay for, memoized per root and so free to a run that has done it, and it reads the client-go source out of the module cache the build resolved rather than fetching one. The third needs 250 pages over the network, so it runs only when asked for, and nothing schedules it today: a declaration going stale is noticed the next time somebody runs `make audit-1to1-paths-endpoints`.
 
-Report keys: `schema_version`, `inventory`, a `summary` block (21 counters, `actions_observed_grain` among them), `graphql_refusals[]`, `silent_owners[]`, `stale_declarations[]`, an `endpoints` block that says whether the documentation comparison ran, how many pages it read, which it could not, the endpoints no page spells out with the declaration that accounts for each, and the declarations that accounted for none, and a `shapes` block carrying the join quality, the untemplated segments most frequent first, the package-grain unpublished fields, and a `typed` block with the type-grain counts and findings. Every finding of either grain carries a `grain` key naming the join that produced it, and a type-grain one also names the client-go struct and the operations searched. With `-gaps-only` `silent_owners[]` holds the undeclared and the unmapped ones and `endpoints.undocumented[]` holds the undeclared ones; `shapes` is unaffected, because every entry in it is already a finding.
+Report keys: `schema_version`, `inventory`, a `summary` block (27 counters, `actions_observed_grain` among them), `graphql_refusals[]`, `silent_owners[]`, `stale_declarations[]`, an `endpoints` block that says whether the documentation comparison ran, how many pages it read, which it could not, the endpoints no page spells out with the declaration that accounts for each, and the declarations that accounted for none, and a `shapes` block carrying the join quality, the untemplated segments most frequent first, the package-grain unpublished fields, and a `typed` block with the type-grain counts and findings. Every finding of either grain carries a `grain` key naming the join that produced it, and a type-grain one also names the client-go struct and the operations searched. With `-gaps-only` `silent_owners[]` holds the undeclared and the unmapped ones and `endpoints.undocumented[]` holds the undeclared ones; `shapes` is unaffected, because every entry in it is already a finding.
 
 #### Make targets
 
@@ -1185,6 +1188,52 @@ Writes `gitlab-api-shapes.json` into `-dir` and reports the operation count, how
 - `make gen-api-shapes`
 - `make check-api-shapes` — CI gate.
 
+### gen_api_exposes
+
+Pins, from GitLab's own Ruby source, the condition under which each field a REST entity exposes is sent, into `docs/development/gitlab-api-exposes.json`, beside the OpenAPI record it qualifies.
+
+The OpenAPI record is an upper bound. GitLab generates it from the Grape entities that render its responses, and an entity declaring `expose :approvals_before_merge, if: ->(project, _) { project.feature_available?(:merge_request_approvers) }` reaches the document as a plain property: the condition is invisible, so the record lists the field as if every GitLab sent it. The licensed run showed what that hides, nine approval-configuration fields the record lists and a live instance never sends, and every Enterprise field a Community instance never sends. This command reads the source the document was generated from and says, per field, when.
+
+It fetches three subtrees of `gitlab-org/gitlab` as archives at one ref, `lib/api/entities` (the Community entities), `ee/lib/api/entities` (entities only Enterprise declares) and `ee/lib/ee/api/entities` (the Enterprise modules prepended into Community entities, whose `prepended do` blocks add fields to them), plus the licensed-feature table, `features.rb` under `ee/app/models`, which lists every licensed feature symbol under the tier that unlocks it. `cmd/internal/apiexposes` reads the Grape DSL as GitLab writes it: `expose :a, :b, as:, if:, unless:, using:, with:, merge:` over as many lines as it takes, `expose :x do ... end` blocks nesting fields under `x` told apart from `expose :x do |obj| ... end` blocks computing it, `with_options if:` scopes, `if: ->(obj) do ... end` lambdas, class inheritance, and `merge: true`. Method bodies and value blocks are skipped statement by statement with every `do`, `if`, `def` and `end` tracked; a construct the reader does not understand stops the run with its file and line rather than leaving every frame after it off by one. Each condition is recorded as written, the licensed feature symbols in it (`feature_available?(:x)`, `licensed_feature_available?(:x)`, `License.feature_available?(:x)`) are read further into the tier the table puts them under, and a symbol the table does not list, a project setting such as `:issues`, is named without a tier.
+
+Entities are keyed the way the OpenAPI document names their schemas, `APIEntitiesProject` for `API::Entities::Project`, and the OpenAPI record carries that name per operation (`entity`) and per nested property (`nested_entity`) since its schema version 3, so a reader walks operation to entity to condition without translating. On the day this was written the join reached 327 of the 337 components the OpenAPI record names; the ten it does not are rendered by serializers and API modules declared outside the three entity directories (`ProjectEntity`, `TestReportEntity`, the VS Code settings entities, the subscriptions entities), which the record leaves unqualified rather than guesses at. The archives name the commit the ref resolved to, and a set of archives naming different commits, which a push to master between two downloads produces, is refused rather than recorded as one tree. The record is compared by hand on every regeneration; `-source` reads a local checkout for a run without the network.
+
+#### Usage
+
+```bash
+# Re-pin from master
+go run ./cmd/gen_api_exposes/
+
+# Pin a tag, or read a local checkout
+go run ./cmd/gen_api_exposes/ -ref v19.4.0-ee
+go run ./cmd/gen_api_exposes/ -source ~/src/gitlab
+
+# CI gate, no network
+go run ./cmd/gen_api_exposes/ -check
+
+# What one entity sends: the parent chain first, each field with its condition and tier
+go run ./cmd/gen_api_exposes/ -report APIEntitiesProject
+```
+
+#### Flags
+
+| Flag      | Type     | Default            | Description                                                                              |
+| --------- | -------- | ------------------ | ---------------------------------------------------------------------------------------- |
+| `-ref`    | `string` | `master`           | `gitlab-org/gitlab` ref to read the entities from                                        |
+| `-dir`    | `string` | `docs/development` | Directory holding the committed record                                                   |
+| `-check`  | `bool`   | `false`            | Read the committed record instead of fetching, and fail when it is not usable            |
+| `-report` | `string` | _(empty)_          | Print every field the named entity sends, with its conditions, from the committed record |
+| `-source` | `string` | _(empty)_          | Read the entities from this local checkout instead of fetching                           |
+
+#### Output
+
+Writes `gitlab-api-exposes.json` into `-dir` and reports the entity, feature, expose and file counts with the commit and the day. `-check` reports the provenance line only, and exits `1` on a schema version this build cannot read, fewer than 400 entities or 200 features, missing provenance, or a record older than 180 days. `-report` prints one line per field, the parent chain's first, with `[tier; if condition]`, `[ee; unless condition]` or `[as APIEntitiesX]` notes and nested fields indented; exits `1` for an entity the record does not hold.
+
+#### Make targets
+
+- `make gen-api-exposes`
+- `make check-api-exposes` — CI gate.
+
 ### gen_lhm_manifest
 
 Regenerates the `tools`, `prompts`, and `resources` arrays in `lhm.plugin.json`, the manifest published to the LobeHub Marketplace. LobeHub derives the listing's capability badges from those arrays — its scanner cannot introspect a server distributed as a Go binary or a Docker image — so a manifest without them advertises zero tools no matter what the server registers.
@@ -1725,5 +1774,6 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `check-graphql-schema`                   | `gen_graphql_schema --check`       | The committed GitLab schema parses and its provenance record decodes                                                       | Non-zero if either file is missing or unusable                                       |
 | `check-graphql-documents`                | `audit_graphql_documents`          | Every raw GraphQL document in the source is one the pinned GitLab schema accepts                                           | Non-zero on any refusal, or if no documents are found                                |
 | `check-graphql-shapes`                   | `audit_graphql_shapes`             | Every struct a GraphQL response is decoded into can hold what its document selects, and declares nothing it never selects  | Non-zero on any disagreement, anything unpaired, or if no call is found              |
+| `check-api-exposes`                      | `gen_api_exposes -check`           | The committed record of entity field conditions is readable, whole, provenanced and younger than 180 days                  | Non-zero if any of those fails                                                       |
 | `check-request-inventory`                | `gen_request_inventory -check`     | The committed request inventory is what the unit suite records now                                                         | Non-zero if the artifact is stale or no shard was written                            |
 | `audit-1to1-paths`                       | `audit_1to1 -scope=paths`          | Every action's owning package was seen issuing a request, and every GraphQL document is one the pinned schema accepts      | Non-zero on a refused document, an undeclared silent package, or a stale declaration |

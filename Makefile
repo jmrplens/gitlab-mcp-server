@@ -14,7 +14,7 @@
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes \
-	gen-api-shapes check-api-shapes check-meta-descriptions \
+	gen-api-shapes check-api-shapes gen-api-exposes check-api-exposes check-meta-descriptions \
 	gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
@@ -1389,6 +1389,21 @@ gen-api-shapes:
 ## window is for.
 check-api-shapes:
 	go run ./cmd/gen_api_shapes/ --check
+
+## gen-api-exposes: re-read, from GitLab's own Ruby source, the condition under
+## which each field a REST entity exposes is sent, and rewrite
+## docs/development/gitlab-api-exposes.json. The OpenAPI record lists a field
+## exposed under a condition as if it were always sent; this record says when.
+## Needs the network and no credential: three subtree archives and one file of
+## gitlab-org/gitlab, fetched at one ref. -source reads a local checkout instead.
+gen-api-exposes:
+	go run ./cmd/gen_api_exposes/
+
+## check-api-exposes: fail when the committed conditions record is not one this
+## build can read, is too short to be GitLab's whole entity tree, or is older
+## than the same 180-day window. No network, so it is a gate.
+check-api-exposes:
+	go run ./cmd/gen_api_exposes/ -check
 
 ## check-graphql-documents: fail when a raw GraphQL document in the source is
 ## one GitLab would refuse. The test transport catches the documents a test

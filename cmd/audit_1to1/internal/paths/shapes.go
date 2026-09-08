@@ -65,6 +65,10 @@ type ShapeCheck struct {
 	// Typed is the same question asked at type grain, beside this one rather
 	// than in place of it.
 	Typed TypedShapeCheck `json:"typed"`
+	// Sent is the reverse question: the fields GitLab's document says the
+	// endpoints return that the package does not publish, each with what the
+	// conditions record says about when GitLab sends it.
+	Sent SentCheck `json:"sent"`
 }
 
 // JoinQuality is how much of the inventory could be compared at all.
@@ -149,6 +153,7 @@ func shapeCheck(root string, requests []requestinventory.Row, published []publis
 	segments := map[string]*UntemplatedSegment{}
 	byPackage := map[string]map[string]bool{}
 	endpointsPerPackage := map[string]int{}
+	sources := responseSources{}
 
 	for _, request := range requests {
 		if !strings.EqualFold(request.Kind, "rest") {
@@ -189,11 +194,13 @@ func shapeCheck(root string, requests []requestinventory.Row, published []publis
 		for _, name := range operation.Response {
 			fields[name] = true
 		}
+		sources.note(request.Package, request.Method+" "+request.Path, operation.Entity, operation.Response)
 	}
 
 	check.Untemplated = sortedSegments(segments)
 	check.Unpublished = unpublishedFields(published, byPackage, endpointsPerPackage)
 	check.Typed = typedShapeCheck(root, index, published)
+	check.Sent = sentCheck(root, sources, published)
 	return check
 }
 
@@ -305,6 +312,12 @@ func newOperationIndex(record apishapes.Document) *operationIndex {
 		merged.Params = union(merged.Params, operation.Params)
 		merged.Body = union(merged.Body, operation.Body)
 		merged.Nested = unionNested(merged.Nested, operation.Nested)
+		// The component is the first one an operation of this shape named.
+		// Two operations sharing a shape nearly always render one entity,
+		// and a merged name would join the conditions record on nothing.
+		if merged.Entity == "" {
+			merged.Entity = operation.Entity
+		}
 		index.byShape[shapeKey] = merged
 	}
 	return index
