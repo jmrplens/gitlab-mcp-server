@@ -77,14 +77,7 @@ func run(opts auditOptions, stdout, stderr io.Writer) int {
 	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	defer cleanup()
 
-	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, audit-only dummy token
-		GitLabURL:   config.DefaultGitLabURL,
-		GitLabToken: "audit-token",
-	})
-	if err != nil {
-		fmt.Fprintf(stderr, "failed to create gitlab.com client: %v\n", err)
-		return 1
-	}
+	gitLabComClient := mcpsurface.NewGitLabComClient()
 
 	if opts.siteStatsPath != "" {
 		stats, statsErr := generateSiteStats(client, gitLabComClient)
