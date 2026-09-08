@@ -69,8 +69,8 @@ func TestLoad_RealPackage_ReturnsTypedSyntax(t *testing.T) {
 	}
 }
 
-// TestLoad_Overlay_TypeChecksSourceThatIsNotOnDisk verifies the parameter the
-// three gates build their fixtures on: a file supplied by the caller is
+// TestLoad_Overlay_TypeChecksSourceThatIsNotOnDisk verifies the parameter three
+// of the gates build their fixtures on: a file supplied by the caller is
 // type-checked as part of the package, so a fixture written in a test file
 // resolves against the real packages it imports.
 func TestLoad_Overlay_TypeChecksSourceThatIsNotOnDisk(t *testing.T) {

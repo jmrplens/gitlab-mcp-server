@@ -8,21 +8,11 @@ import (
 	"go/types"
 	"maps"
 	"sort"
-	"strings"
 
 	"golang.org/x/tools/go/packages"
-)
 
-// loadMode is what pairing a document with its decoder needs: syntax to find
-// the calls, and types to fold the document and name what the pointer handed
-// to Do points at.
-//
-// NeedDeps is deliberately absent, for the reason cmd/internal/graphqldocs
-// gives: a document is folded inside the package that sends it and the decoder
-// is declared there too, so type-checking the dependency tree from source
-// would cost minutes and change no answer.
-const loadMode = packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
-	packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/goprogram"
+)
 
 // queryTypeName names the request type whose Do method sends a document. A
 // call is a send when its first argument has a named type of this name,
@@ -107,23 +97,16 @@ type program struct {
 
 // loadProgram type-checks the packages patterns name under dir.
 //
-// A package that did not type-check completely is refused rather than walked:
-// a partially typed package folds no constants and types no expression, so
-// every call in it would go unseen, which is the failure this audit must not
-// have.
+// The load itself belongs to [goprogram.Load], including the refusal of a
+// package that did not type-check completely: such a package folds no
+// constants and types no expression, so every call in it would go unseen,
+// which is the failure this audit must not have. This audit passes no overlay
+// because its fixtures are written to a module on disk rather than into the
+// loader.
 func loadProgram(dir string, patterns []string) (*program, error) {
-	cfg := &packages.Config{Mode: loadMode, Dir: dir, Tests: false}
-	loaded, err := packages.Load(cfg, patterns...)
+	loaded, err := goprogram.Load(dir, patterns, nil)
 	if err != nil {
-		return nil, fmt.Errorf("load packages: %w", err)
-	}
-	if len(loaded) == 0 {
-		return nil, fmt.Errorf("no packages matched %s in %s", strings.Join(patterns, " "), dir)
-	}
-	for _, pkg := range loaded {
-		if len(pkg.Errors) > 0 {
-			return nil, fmt.Errorf("load %s: %w", pkg.PkgPath, pkg.Errors[0])
-		}
+		return nil, err
 	}
 	return &program{fset: loaded[0].Fset, pkgs: loaded}, nil
 }

@@ -12,7 +12,7 @@ import (
 // the one string it denotes, and imports so an object has one identity across
 // the packages that share it.
 //
-// NeedDeps is deliberately absent, for one reason that holds for all three
+// NeedDeps is deliberately absent, for one reason that holds for all four
 // callers: each of them only ever reads bodies written inside the patterns it
 // loads, so type-checking the dependency tree from source would cost minutes
 // and change no answer. What a dependency's function returns is judged by its
