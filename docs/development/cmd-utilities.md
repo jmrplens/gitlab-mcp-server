@@ -850,7 +850,7 @@ Human report to stdout (per-site `file:line [category] boundary`), summary line,
 #### Make targets
 
 - `make audit-test-goroutines` — writes `plan/test-goroutines-backlog.json`.
-- `make check-test-goroutines` — CI gate; also step [7/14] of `make analyze`.
+- `make check-test-goroutines` — CI gate; also step [7/15] of `make analyze`.
 
 ### audit_test_names
 
@@ -916,7 +916,7 @@ Per-file tallies (`sites`, `fixable`), a summary line, and optionally the JSON w
 #### Make targets
 
 - `make audit-test-subtests` — writes `plan/test-subtests-backlog.json`.
-- `make check-test-subtests` — CI gate; also step [8/14] of `make analyze`.
+- `make check-test-subtests` — CI gate; also step [8/15] of `make analyze`.
 
 ### audit_md_escaping
 
@@ -964,7 +964,7 @@ Findings grouped by package, each naming the file, line, formatter, construct, v
 #### Make targets
 
 - `make audit-md-escaping` — report plus `plan/md-escaping-backlog.json`.
-- `make check-md-escaping` — CI gate; also step [10/14] of `make analyze`.
+- `make check-md-escaping` — CI gate; also step [10/15] of `make analyze`.
 
 ### audit_string_dupes
 
@@ -1039,7 +1039,7 @@ One line per violation under a `supply-chain audit FAILED (N problems):` header,
 
 #### Make targets
 
-- `make check-supply-chain` — CI gate; also step [9/14] of `make analyze`.
+- `make check-supply-chain` — CI gate; also step [9/15] of `make analyze`.
 
 ### audit_install_buttons
 
@@ -1188,7 +1188,7 @@ Writes `gitlab-api-shapes.json` into `-dir` and reports the operation count, how
 #### Make targets
 
 - `make gen-api-shapes`
-- `make check-api-shapes` — CI gate.
+- `make check-api-shapes` — CI gate; also step [15/15] of `make analyze`.
 
 ### gen_api_exposes
 
@@ -1776,6 +1776,7 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `check-graphql-schema`                   | `gen_graphql_schema --check`       | The committed GitLab schema parses and its provenance record decodes                                                       | Non-zero if either file is missing or unusable                                       |
 | `check-graphql-documents`                | `audit_graphql_documents`          | Every raw GraphQL document in the source is one the pinned GitLab schema accepts                                           | Non-zero on any refusal, or if no documents are found                                |
 | `check-graphql-shapes`                   | `audit_graphql_shapes`             | Every struct a GraphQL response is decoded into can hold what its document selects, and declares nothing it never selects  | Non-zero on any disagreement, anything unpaired, or if no call is found              |
+| `check-api-shapes`                       | `gen_api_shapes --check`           | The REST twin of the schema pin: the committed OpenAPI record is readable, complete and provenanced                        | Non-zero if it is unreadable, truncated, unprovenanced or over 180 days old          |
 | `check-api-exposes`                      | `gen_api_exposes -check`           | The committed record of entity field conditions is readable, whole, provenanced and younger than 180 days                  | Non-zero if any of those fails                                                       |
 | `check-request-inventory`                | `gen_request_inventory -check`     | The committed request inventory is what the unit suite records now                                                         | Non-zero if the artifact is stale or no shard was written                            |
 | `audit-1to1-paths`                       | `audit_1to1 -scope=paths`          | Every action's owning package was seen issuing a request, and every GraphQL document is one the pinned schema accepts      | Non-zero on a refused document, an undeclared silent package, or a stale declaration |

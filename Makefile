@@ -631,20 +631,21 @@ analyze:
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo "Enterprise e2e analysis: $(GO_ANALYSIS_ENTERPRISE_PKGS) with $(GO_ANALYSIS_ENTERPRISE_TAGS)"; \
 	echo ""; \
-	run_check "[1/14] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/14] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/14] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/14] golangci-lint run (Enterprise e2e half)" golangci-lint run --build-tags $(GO_ANALYSIS_ENTERPRISE_TAGS) $(GO_ANALYSIS_ENTERPRISE_PKGS); \
-	run_check "[5/14] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/14] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[7/14] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/14] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/14] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/14] Markdown escaping" go run ./cmd/audit_md_escaping --check; \
-	run_check "[11/14] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[12/14] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[13/14] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[14/14] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[1/15] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/15] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/15] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/15] golangci-lint run (Enterprise e2e half)" golangci-lint run --build-tags $(GO_ANALYSIS_ENTERPRISE_TAGS) $(GO_ANALYSIS_ENTERPRISE_PKGS); \
+	run_check "[5/15] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/15] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[7/15] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/15] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/15] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/15] Markdown escaping" go run ./cmd/audit_md_escaping --check; \
+	run_check "[11/15] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[12/15] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[13/15] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[14/15] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[15/15] pinned GitLab API record" go run ./cmd/gen_api_shapes/ --check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
