@@ -53,7 +53,16 @@ type UnsurfacedField struct {
 	Unless  string `json:"unless,omitempty"`
 	Tier    string `json:"tier,omitempty"`
 	Edition string `json:"edition,omitempty"`
+	// Category and Reason are the declaration in sent_declarations.go
+	// accounting for the finding, when one does: a field the document lists
+	// for the operation and the endpoint does not send. Empty for a finding
+	// nothing answers, which is the half a reader is asked to act on.
+	Category string `json:"category,omitempty"`
+	Reason   string `json:"reason,omitempty"`
 }
+
+// declared reports whether a declaration accounts for the finding.
+func (f UnsurfacedField) declared() bool { return f.Category != "" }
 
 // SentCheck is the reverse comparison: what GitLab's document says the
 // endpoints a package calls return, held against what the package publishes,
@@ -78,11 +87,31 @@ type SentCheck struct {
 	Record string `json:"record,omitempty"`
 	// Unsurfaced are the findings, by package then field.
 	Unsurfaced []UnsurfacedField `json:"unsurfaced,omitempty"`
+	// UnusedDeclarations names the entries of sent_declarations.go that
+	// accounted for no finding at either grain, which is a finding of its own
+	// for the reason [TypedShapeCheck.UnusedDeclarations] records.
+	UnusedDeclarations []string `json:"unused_declarations,omitempty"`
 }
 
-// unsurfacedCounts returns how many findings say always and how many say
-// when; the unknown remainder is the difference from the total.
-func unsurfacedCounts(fields []UnsurfacedField) (always, when int) {
+// staleDeclarations renders this run's unused declarations as the findings
+// the gate reports, and nothing when the check did not run, for the reason
+// [TypedShapeCheck.staleDeclarations] records: every declaration would be
+// unused then, and all of them stale.
+func (c SentCheck) staleDeclarations() []string {
+	if !c.Ran {
+		return nil
+	}
+	stale := make([]string, 0, len(c.UnusedDeclarations))
+	for _, key := range c.UnusedDeclarations {
+		stale = append(stale, key+" is declared as a field GitLab's document lists and the endpoint does not send, and no finding matched it: the document no longer lists the field on that component, or the package now publishes it")
+	}
+	return stale
+}
+
+// unsurfacedCounts returns how many findings say always, how many say when,
+// and how many a declaration accounts for; the unknown remainder is the
+// difference of the first two from the total.
+func unsurfacedCounts(fields []UnsurfacedField) (always, when, declared int) {
 	for _, field := range fields {
 		switch field.Sent {
 		case sentAlways:
@@ -90,8 +119,11 @@ func unsurfacedCounts(fields []UnsurfacedField) (always, when int) {
 		case sentWhen:
 			when++
 		}
+		if field.declared() {
+			declared++
+		}
 	}
-	return always, when
+	return always, when, declared
 }
 
 // sortUnsurfaced orders the findings the way a reader reads them: down the

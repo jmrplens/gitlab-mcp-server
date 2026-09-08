@@ -75,6 +75,12 @@ type Summary struct {
 	UnsurfacedFields int `json:"unsurfaced_fields"`
 	UnsurfacedAlways int `json:"unsurfaced_sent_always"`
 	UnsurfacedWhen   int `json:"unsurfaced_sent_when"`
+	// UnsurfacedDeclared counts the findings a declaration in
+	// sent_declarations.go accounts for: fields the document lists and the
+	// endpoint does not send. They stay in the three counts above, since
+	// those say what the conditions record answered, and this says how many
+	// of them a reader need not act on.
+	UnsurfacedDeclared int `json:"unsurfaced_declared"`
 	// The typed counts are the same comparison held at type grain, where an
 	// output type is judged only against the endpoints its client-go struct
 	// models. They are published beside the package-grain count rather than
@@ -101,9 +107,10 @@ type Summary struct {
 	// response fields the operations a type models declare that the type does
 	// not publish, split the same way the package-grain count is. See
 	// [TypedShapeCheck.Unsurfaced].
-	TypedUnsurfacedFields int `json:"typed_unsurfaced_fields"`
-	TypedUnsurfacedAlways int `json:"typed_unsurfaced_sent_always"`
-	TypedUnsurfacedWhen   int `json:"typed_unsurfaced_sent_when"`
+	TypedUnsurfacedFields   int `json:"typed_unsurfaced_fields"`
+	TypedUnsurfacedAlways   int `json:"typed_unsurfaced_sent_always"`
+	TypedUnsurfacedWhen     int `json:"typed_unsurfaced_sent_when"`
+	TypedUnsurfacedDeclared int `json:"typed_unsurfaced_declared"`
 }
 
 // observedGrain is what [Summary.Grain] says, spelled once.
@@ -196,11 +203,12 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 	}
 
 	shapes := shapeCheck(root, inventory.Requests, publishedTypes(root))
-	sentAlways, sentWhen := unsurfacedCounts(shapes.Sent.Unsurfaced)
-	typedSentAlways, typedSentWhen := unsurfacedCounts(shapes.Typed.Unsurfaced)
+	sentAlways, sentWhen, sentDeclared := unsurfacedCounts(shapes.Sent.Unsurfaced)
+	typedSentAlways, typedSentWhen, typedSentDeclared := unsurfacedCounts(shapes.Typed.Unsurfaced)
 
 	stale = append(stale, endpoints.staleDeclarations()...)
 	stale = append(stale, shapes.Typed.staleDeclarations()...)
+	stale = append(stale, shapes.Sent.staleDeclarations()...)
 	sort.Strings(stale)
 
 	report := Report{
@@ -212,36 +220,38 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 		Endpoints:         endpoints,
 		Shapes:            shapes,
 		Summary: Summary{
-			InventoryRows:          len(inventory.Requests),
-			GraphQLDocuments:       len(documents.Documents),
-			GraphQLRefused:         len(documents.Refusals),
-			CatalogActions:         coverage.Total,
-			ActionsObserved:        coverage.Covered,
-			Grain:                  observedGrain,
-			ActionsSilent:          coverage.Silent,
-			ActionsUnmapped:        coverage.Unmapped,
-			SilentPackages:         len(coverage.SilentOwners),
-			UndeclaredSilent:       undeclaredPackages,
-			UndeclaredActions:      undeclaredActions,
-			StaleDeclarations:      len(stale),
-			UndocumentedEndpoints:  len(endpoints.Undocumented),
-			UndeclaredEndpoints:    endpoints.undeclared(),
-			UntemplatedSegments:    len(shapes.Untemplated),
-			UnpublishedFields:      len(shapes.Unpublished),
-			UnsurfacedFields:       len(shapes.Sent.Unsurfaced),
-			UnsurfacedAlways:       sentAlways,
-			UnsurfacedWhen:         sentWhen,
-			TypedUnsurfacedFields:  len(shapes.Typed.Unsurfaced),
-			TypedUnsurfacedAlways:  typedSentAlways,
-			TypedUnsurfacedWhen:    typedSentWhen,
-			TypedCompared:          shapes.Typed.Compared,
-			TypedNoPairing:         shapes.Typed.SkippedNoPairing,
-			TypedNoRoute:           shapes.Typed.SkippedNoRoute,
-			TypedNoSchema:          shapes.Typed.SkippedNoSchema,
-			TypedUnpublishedField:  len(shapes.Typed.Unpublished),
-			TypedUndeclaredFields:  shapes.Typed.undeclared(),
-			TypedNestedCompared:    shapes.Typed.NestedCompared,
-			TypedNestedUnpublished: len(shapes.Typed.Nested),
+			InventoryRows:           len(inventory.Requests),
+			GraphQLDocuments:        len(documents.Documents),
+			GraphQLRefused:          len(documents.Refusals),
+			CatalogActions:          coverage.Total,
+			ActionsObserved:         coverage.Covered,
+			Grain:                   observedGrain,
+			ActionsSilent:           coverage.Silent,
+			ActionsUnmapped:         coverage.Unmapped,
+			SilentPackages:          len(coverage.SilentOwners),
+			UndeclaredSilent:        undeclaredPackages,
+			UndeclaredActions:       undeclaredActions,
+			StaleDeclarations:       len(stale),
+			UndocumentedEndpoints:   len(endpoints.Undocumented),
+			UndeclaredEndpoints:     endpoints.undeclared(),
+			UntemplatedSegments:     len(shapes.Untemplated),
+			UnpublishedFields:       len(shapes.Unpublished),
+			UnsurfacedFields:        len(shapes.Sent.Unsurfaced),
+			UnsurfacedAlways:        sentAlways,
+			UnsurfacedWhen:          sentWhen,
+			UnsurfacedDeclared:      sentDeclared,
+			TypedUnsurfacedFields:   len(shapes.Typed.Unsurfaced),
+			TypedUnsurfacedAlways:   typedSentAlways,
+			TypedUnsurfacedWhen:     typedSentWhen,
+			TypedUnsurfacedDeclared: typedSentDeclared,
+			TypedCompared:           shapes.Typed.Compared,
+			TypedNoPairing:          shapes.Typed.SkippedNoPairing,
+			TypedNoRoute:            shapes.Typed.SkippedNoRoute,
+			TypedNoSchema:           shapes.Typed.SkippedNoSchema,
+			TypedUnpublishedField:   len(shapes.Typed.Unpublished),
+			TypedUndeclaredFields:   shapes.Typed.undeclared(),
+			TypedNestedCompared:     shapes.Typed.NestedCompared,
+			TypedNestedUnpublished:  len(shapes.Typed.Nested),
 		},
 	}
 	if gapsOnly {

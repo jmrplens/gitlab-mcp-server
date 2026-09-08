@@ -27,12 +27,12 @@ func indexOf(operations map[string]apishapes.Operation) *operationIndex {
 // is where the table itself is exercised.
 func stubTypeGrainInputs(t *testing.T, pairings structs.Pairings, loadErr error, routes map[string][]sdkRoute) {
 	t.Helper()
-	previousPairings, previousRoutes, previousDeclarations := collectPairings, readRoutes, declaredShapeFields
+	previousPairings, previousRoutes, previousDeclarations, previousSent := collectPairings, readRoutes, declaredShapeFields, declaredUnsurfaced
 	collectPairings = func(string) (structs.Pairings, error) { return pairings, loadErr }
 	readRoutes = func(string) map[string][]sdkRoute { return routes }
-	declaredShapeFields = nil
+	declaredShapeFields, declaredUnsurfaced = nil, nil
 	t.Cleanup(func() {
-		collectPairings, readRoutes, declaredShapeFields = previousPairings, previousRoutes, previousDeclarations
+		collectPairings, readRoutes, declaredShapeFields, declaredUnsurfaced = previousPairings, previousRoutes, previousDeclarations, previousSent
 	})
 }
 

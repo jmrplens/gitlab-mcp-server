@@ -61,11 +61,16 @@ func projectRows() []requestinventory.Row {
 // is sent always, one behind a licensed feature is sent when, with its tier
 // and edition beside it, one the document lists and the entity does not
 // expose is unknown, and one from an endpoint naming no component is unknown
-// too. The published fields are left out, and the list is ordered by field.
+// too. The published fields are left out, an inner type's among them, since
+// the row of a list is what the list endpoint sends, and the list is ordered
+// by field.
 func TestSentCheck_FieldsGitLabSendsThatWeDoNotPublish_AreListedWithTheirCondition(t *testing.T) {
 	root := projectRecord(t)
 	conditionsIn(t, root, projectConditions())
-	published := []publishedType{{Package: "internal/tools/projects", Name: "Output", Fields: []string{"archived", "id"}}}
+	published := []publishedType{
+		{Package: "internal/tools/projects", Name: "Output", Fields: []string{"archived", "id"}},
+		{Package: "internal/tools/projects", Name: "RowOutput", Fields: []string{"star_count"}, Inner: true},
+	}
 
 	check := shapeCheck(root, projectRows(), published)
 
@@ -79,14 +84,13 @@ func TestSentCheck_FieldsGitLabSendsThatWeDoNotPublish_AreListedWithTheirConditi
 			If: "->(project, _) { project.feature_available?(:repository_mirrors) }", Tier: apiexposes.TierPremium, Edition: "ee",
 		},
 		{Grain: grainPackage, Package: "internal/tools/projects", Field: "name", Operations: []string{"GET /projects/:project_id"}, Entity: "APIEntitiesProject", Sent: sentAlways},
-		{Grain: grainPackage, Package: "internal/tools/projects", Field: "star_count", Operations: []string{"GET /projects/:project_id"}, Entity: "APIEntitiesProject", Sent: sentAlways},
 		{Grain: grainPackage, Package: "internal/tools/projects", Field: "unlisted", Operations: []string{"GET /projects/:project_id"}, Entity: "APIEntitiesProject", Sent: sentUnknown},
 	}
 	if !reflect.DeepEqual(check.Sent.Unsurfaced, want) {
 		t.Errorf("Unsurfaced = %+v, want %+v", check.Sent.Unsurfaced, want)
 	}
-	if always, when := unsurfacedCounts(check.Sent.Unsurfaced); always != 2 || when != 1 {
-		t.Errorf("unsurfacedCounts() = %d always, %d when; want 2 and 1", always, when)
+	if always, when, declared := unsurfacedCounts(check.Sent.Unsurfaced); always != 1 || when != 1 || declared != 0 {
+		t.Errorf("unsurfacedCounts() = %d always, %d when, %d declared; want 1, 1 and 0", always, when, declared)
 	}
 }
 

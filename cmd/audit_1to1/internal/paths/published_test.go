@@ -30,7 +30,9 @@ func writePackage(t *testing.T, name, source string) string {
 // endpoint returns and not of the objects inside it, so comparing a nested type
 // against that list reports every one of its fields: the first run produced
 // 1418 findings, almost all of them the fields of a user or a group sitting
-// inside a response that does carry them.
+// inside a response that does carry them. A nested type is returned all the
+// same, marked inner, as is an exported struct not named as an output, since
+// the sent direction counts their fields as the package's.
 func TestPublishedTypes_NestedOutputs_AreNotCompared(t *testing.T) {
 	root := writePackage(t, "sample", `package sample
 
@@ -53,18 +55,28 @@ type NoteOutput struct {
 type NotAnOutputType struct {
 	Whatever string `+"`json:\"whatever\"`"+`
 }
+
+type CreateInput struct {
+	Title string `+"`json:\"title\"`"+`
+}
+
+type rawOutput struct {
+	Secret string `+"`json:\"secret\"`"+`
+}
 `)
 
 	types := publishedTypes(root)
 
-	if len(types) != 1 {
-		t.Fatalf("read %+v, want only the top-level output type", types)
+	want := []publishedType{
+		{Package: "internal/tools/sample", Name: "NotAnOutputType", Fields: []string{"whatever"}, Inner: true},
+		{Package: "internal/tools/sample", Name: "NoteOutput", Fields: []string{"body"}, Inner: true},
+		{Package: "internal/tools/sample", Name: "Output", Fields: []string{"author", "id", "notes"}, Nested: map[string]nestedType{"author": {Name: "UserOutput", Fields: []string{"name"}}, "notes": {Name: "NoteOutput", Fields: []string{"body"}}}},
+		{Package: "internal/tools/sample", Name: "UserOutput", Fields: []string{"name"}, Inner: true},
 	}
-	if types[0].Name != "Output" || types[0].Package != "internal/tools/sample" {
-		t.Errorf("type = %+v, want internal/tools/sample.Output", types[0])
-	}
-	if strings.Join(types[0].Fields, ",") != "author,id,notes" {
-		t.Errorf("fields = %v, want the tagged ones only, sorted", types[0].Fields)
+	// An input and an unexported struct publish nothing: the first is what a
+	// caller sends, the second a decode target nobody sees.
+	if !reflect.DeepEqual(types, want) {
+		t.Errorf("publishedTypes() = %+v, want %+v", types, want)
 	}
 }
 
@@ -257,9 +269,13 @@ type RightOutput struct {
 	// struct and is passed over, and so is a type declared inside a function.
 	want := []publishedType{
 		{Package: "internal/tools/sample", Name: "DetailsOutput", Fields: []string{"connected", "group", "hollow", "id", "owner"}, Nested: map[string]nestedType{"group": {Name: "GroupOutput", Fields: []string{"path"}}}},
+		{Package: "internal/tools/sample", Name: "GroupOutput", Fields: []string{"path"}, Inner: true},
 		{Package: "internal/tools/sample", Name: "LeftOutput", Fields: []string{"a", "b"}},
+		{Package: "internal/tools/sample", Name: "ListItem", Fields: []string{"uploaded_by"}, Inner: true},
 		{Package: "internal/tools/sample", Name: "Output", Fields: []string{"group", "hollow", "id", "owner"}, Nested: map[string]nestedType{"group": {Name: "GroupOutput", Fields: []string{"path"}}, "owner": {Name: "UserOutput", Fields: []string{"name"}}}},
 		{Package: "internal/tools/sample", Name: "RightOutput", Fields: []string{"a", "b"}},
+		{Package: "internal/tools/sample", Name: "UploadedByOutput", Fields: []string{"name"}, Inner: true},
+		{Package: "internal/tools/sample", Name: "UserOutput", Fields: []string{"name"}, Inner: true},
 	}
 	if !reflect.DeepEqual(types, want) {
 		t.Errorf("publishedTypes() = %+v, want %+v", types, want)

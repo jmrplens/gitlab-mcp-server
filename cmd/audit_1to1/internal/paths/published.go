@@ -29,10 +29,16 @@ type publishedType struct {
 	// Nested holds, per json tag whose Go type is another output type of the
 	// same package, that type's own name and fields. It is one level deep,
 	// which is as far as GitLab's record goes (see [apishapes.Operation.Nested]),
-	// and it is empty on a nested type: a type reached through a field of a
+	// and it is empty on an inner type: a type reached through a field of a
 	// field is compared against nothing, so collecting it would only grow the
 	// walk.
 	Nested map[string]nestedType
+	// Inner is true for a type that is nobody's response on its own: one some
+	// struct of the package names as a field type, or one not named as an
+	// output type. It is compared with no operation and counted with none,
+	// and in the sent direction its fields still count as the package's, since
+	// the row of a list is inner and is what the list endpoint sends.
+	Inner bool
 }
 
 // nestedType is one output type reached through a field of another.
@@ -49,13 +55,19 @@ const toolsDir = "internal/tools"
 // not compared, which can only lose a finding.
 const outputSuffix = "Output"
 
+// inputSuffix is how this repository names a type it takes from a model. Its
+// json names are what a caller sends, so they are no evidence that the package
+// publishes anything, and a struct so named is left out of the walk entirely.
+const inputSuffix = "Input"
+
 // recordDir is where the GitLab API record lives for a given repository root.
 func recordDir(root string) string {
 	return filepath.Join(root, apishapes.DefaultDir)
 }
 
-// publishedTypes reads every `*Output` struct under internal/tools and returns
-// the json tags each one publishes.
+// publishedTypes reads every exported struct under internal/tools that is not
+// an input and returns the json tags each one publishes, the `*Output` types
+// nothing names as a field type first among them (see [publishedType.Inner]).
 //
 // It parses rather than type-checks on purpose. What the comparison needs is
 // the set of names a client sees, which is exactly the set of json tags in the
@@ -131,7 +143,13 @@ func publishedTypesIn(dir, pkg string) []publishedType {
 	// rather than only counted.
 	//
 	// A type any struct of the package names as a field type is nested by
-	// construction, which is the whole rule and needs no type checking.
+	// construction, which is the whole rule and needs no type checking. Such
+	// a type is still returned, marked inner, because the sent direction asks
+	// what the package publishes anywhere in a response: the row of a list is
+	// nested under the list and is exactly what the list endpoint sends, and
+	// leaving it out reported a package as failing to surface the fields of
+	// its own rows. So is every other exported struct that is not an input,
+	// for the same reason.
 	byName := make(map[string]declaredStruct, len(found))
 	for _, candidate := range found {
 		byName[candidate.Name] = candidate
@@ -139,19 +157,23 @@ func publishedTypesIn(dir, pkg string) []publishedType {
 
 	out := make([]publishedType, 0, len(found))
 	for _, candidate := range found {
-		if !strings.HasSuffix(candidate.Name, outputSuffix) || nested[candidate.Name] {
+		if !ast.IsExported(candidate.Name) || strings.HasSuffix(candidate.Name, inputSuffix) {
 			continue
 		}
 		whole := flatten(candidate, byName, map[string]bool{})
 		if len(whole.Fields) == 0 {
 			continue
 		}
-		out = append(out, publishedType{
+		published := publishedType{
 			Package: pkg,
 			Name:    candidate.Name,
 			Fields:  whole.Fields,
-			Nested:  nestedTypes(whole, byName),
-		})
+			Inner:   !strings.HasSuffix(candidate.Name, outputSuffix) || nested[candidate.Name],
+		}
+		if !published.Inner {
+			published.Nested = nestedTypes(whole, byName)
+		}
+		out = append(out, published)
 	}
 	return out
 }

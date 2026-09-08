@@ -201,6 +201,7 @@ func shapeCheck(root string, requests []requestinventory.Row, published []publis
 	check.Unpublished = unpublishedFields(published, byPackage, endpointsPerPackage)
 	check.Typed = typedShapeCheck(root, index, published)
 	check.Sent = sentCheck(root, sources, published)
+	check.Sent.Unsurfaced, check.Typed.Unsurfaced, check.Sent.UnusedDeclarations = classifySentFindings(declaredUnsurfaced, check.Sent.Unsurfaced, check.Typed.Unsurfaced)
 	return check
 }
 
@@ -234,7 +235,7 @@ func unpublishedFields(published []publishedType, byPackage map[string]map[strin
 	var out []UnpublishedField
 	for _, publishedType := range published {
 		known := byPackage[publishedType.Package]
-		if len(known) == 0 {
+		if publishedType.Inner || len(known) == 0 {
 			continue
 		}
 		for _, field := range publishedType.Fields {

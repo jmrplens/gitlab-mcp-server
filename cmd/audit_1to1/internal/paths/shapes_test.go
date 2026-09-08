@@ -154,15 +154,19 @@ func TestShapeCheck_AnEndpointWithNoDescribedResponse_IsNotCountedAsSearched(t *
 		{Package: "p", Kind: "rest", Method: "GET", Path: "/projects/:project_id/thing"},
 		{Package: "p", Kind: "rest", Method: "DELETE", Path: "/projects/:project_id/thing"},
 	}
-	published := []publishedType{{Package: "p", Name: "Output", Fields: []string{"described", "invented"}}}
+	published := []publishedType{
+		{Package: "p", Name: "Output", Fields: []string{"described", "invented"}},
+		// An inner type is nobody's response and is held to none.
+		{Package: "p", Name: "RowOutput", Fields: []string{"invented_too"}, Inner: true},
+	}
 
 	check := shapeCheck(root, rows, published)
 
 	if check.Join.Exact != 2 {
 		t.Fatalf("join = %+v, want both rows matched", check.Join)
 	}
-	if len(check.Unpublished) != 1 || check.Unpublished[0].Endpoints != 1 {
-		t.Errorf("unpublished = %+v, want the one field held against the one described response", check.Unpublished)
+	if len(check.Unpublished) != 1 || check.Unpublished[0].Endpoints != 1 || check.Unpublished[0].Field != "invented" {
+		t.Errorf("unpublished = %+v, want the one field of the top-level type held against the one described response", check.Unpublished)
 	}
 }
 

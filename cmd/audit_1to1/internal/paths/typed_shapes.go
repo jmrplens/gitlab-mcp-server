@@ -139,6 +139,9 @@ func typedShapeCheck(root string, index *operationIndex, published []publishedTy
 
 	check := TypedShapeCheck{Ran: true}
 	for _, candidate := range published {
+		if candidate.Inner {
+			continue
+		}
 		paired := sdkTypes[[2]string{shortPackage(candidate.Package), candidate.Name}]
 		if len(paired) == 0 {
 			check.SkippedNoPairing++
