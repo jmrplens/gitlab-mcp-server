@@ -472,6 +472,79 @@ func TestLoadProgram_AStandaloneTreeItCannotRead_Fails(t *testing.T) {
 	}
 }
 
+// standaloneModule writes a throwaway module holding one Go package and one
+// standalone GraphQL document beside it, and returns its root.
+//
+// A real directory is needed rather than a loader overlay: the .graphql half of
+// the inventory is read off disk by [graphqldocs.Standalone], which no overlay
+// reaches. The module is minimal and imports nothing, so type-checking it costs
+// no network and no dependency tree.
+func standaloneModule(t *testing.T, document string) string {
+	t.Helper()
+	dir := t.TempDir()
+	pkg := filepath.Join(dir, "internal", "probe")
+	if err := os.MkdirAll(pkg, 0o750); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	files := map[string]string{
+		filepath.Join(dir, "go.mod"):        "module standalone.example\n\ngo 1.24\n",
+		filepath.Join(pkg, "probe.go"):      "package probe\n",
+		filepath.Join(pkg, "probe.graphql"): document,
+	}
+	for path, content := range files {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatalf("prepare the fixture: %v", err)
+		}
+	}
+	return dir
+}
+
+// TestLoadProgram_ADocumentInAFileOfItsOwn_IsReadAndLeftUnattributed verifies
+// the .graphql half of the tripwire end to end.
+//
+// This is the shape the shared inventory was adopted for: a document that folds
+// to nothing for the type checker, is bound to no object, and sits in no
+// function body. Read but not indexed, it has to reach the report as an
+// unattributed document; dropped from the inventory instead, a mutation in a
+// file of its own would leave the gate printing a clean run. Nothing else in
+// this package can see that, because an overlay never reaches the disk the
+// standalone half reads.
+func TestLoadProgram_ADocumentInAFileOfItsOwn_IsReadAndLeftUnattributed(t *testing.T) {
+	dir := standaloneModule(t, "mutation($id: ID!) {\n  thing(input: {id: $id}) { errors }\n}\n")
+
+	prog, err := loadProgram(dir, []string{"./internal/..."}, nil)
+	if err != nil {
+		t.Fatalf("loadProgram: %v", err)
+	}
+
+	if len(prog.unattributed) != 1 {
+		t.Fatalf("loadProgram() left %d document(s) unattributed, want the .graphql file: %+v",
+			len(prog.unattributed), prog.unattributed)
+	}
+	document := prog.unattributed[0]
+	t.Run("it is the standalone document", func(t *testing.T) {
+		if document.Name != "probe.graphql" {
+			t.Errorf("the unattributed document is named %q, want probe.graphql", document.Name)
+		}
+		if document.Object != nil {
+			t.Errorf("the unattributed document carries object %v, want none: no declaration names it", document.Object)
+		}
+		if !strings.HasSuffix(filepath.ToSlash(document.Position.Filename), "/internal/probe/probe.graphql") {
+			t.Errorf("the unattributed document is positioned at %q, want the fixture file", document.Position.Filename)
+		}
+	})
+	t.Run("the audit reports it", func(t *testing.T) {
+		result := audit(prog, nil, dir)
+
+		if len(result.findings) != 1 {
+			t.Fatalf("audit() reported %d finding(s), want the standalone document: %+v", len(result.findings), result.findings)
+		}
+		if !strings.Contains(result.findings[0].message, "probe.graphql") {
+			t.Errorf("the finding does not name the document:\n%s", result.findings[0].message)
+		}
+	})
+}
+
 // varFixture declares GraphQL documents as package-level variables rather than
 // constants, plus the two variable shapes that carry no knowable value.
 const varFixture = `package vars

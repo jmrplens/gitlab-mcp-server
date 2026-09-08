@@ -408,6 +408,10 @@ func TestStandalone_DocumentsInFilesOfTheirOwn_AreFoundAndThePinIsNot(t *testing
 	if found[0].Position.Filename == "" || found[0].Position.Line != 1 {
 		t.Errorf("Standalone() positioned the document at %+v, want its file at line 1", found[0].Position)
 	}
+	if found[0].Object != nil {
+		t.Errorf("Standalone() carried object %v, want none: a file of its own is declared by nothing, "+
+			"which is what cmd/audit_readonly_graphql reports rather than resolves", found[0].Object)
+	}
 }
 
 // TestStandalone_ATreeThatIsNotThere_IsNotAnError verifies that a pattern
