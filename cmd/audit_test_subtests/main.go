@@ -10,11 +10,11 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
-	"io/fs"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
 )
 
 // Finding is one case loop that asserts without a subtest.
@@ -67,6 +67,17 @@ var nameFields = []string{"name", "desc", "description", "label", "title", "id"}
 // assertMethods are the testing.TB methods that record a failure.
 var assertMethods = map[string]bool{"Error": true, "Errorf": true, "Fatal": true, "Fatalf": true, "Fail": true, "FailNow": true}
 
+// The three operations whose failures no input can provoke are indirected so
+// that the branches answering for them are still exercised: a Report is
+// strings and counts, which encoding/json cannot be made to refuse; a rewrite
+// only wraps a loop body in a call, which leaves source the formatter accepts;
+// and the file written back is the one just read.
+var ( //nolint:gochecknoglobals // test seams
+	marshalReport = json.MarshalIndent
+	formatSource  = format.Source
+	writeSource   = os.WriteFile
+)
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
@@ -110,7 +121,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	printHuman(stdout, report)
 
 	if *jsonPath != "" {
-		data, marshalErr := json.MarshalIndent(report, "", "  ")
+		data, marshalErr := marshalReport(report, "", "  ")
 		if marshalErr != nil {
 			fmt.Fprintf(stderr, "audit_test_subtests: marshal: %v\n", marshalErr)
 			return 2
@@ -138,10 +149,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 func scan(dirs []string) (*Report, error) {
 	report := &Report{}
 	files := map[string]bool{}
-	for _, dir := range dirs {
-		if err := filepath.WalkDir(dir, visitTestFiles(report, files)); err != nil {
-			return nil, err
-		}
+	if err := testsource.WalkFiles(dirs, testsource.TestFiles, visitTestFiles(report, files)); err != nil {
+		return nil, err
 	}
 	sortFindings(report.Findings)
 	sortFindings(report.Sequential)
@@ -153,22 +162,10 @@ func scan(dirs []string) (*Report, error) {
 	return report, nil
 }
 
-// visitTestFiles is the WalkDir callback that parses each test file and
-// records its sites in the report.
-func visitTestFiles(report *Report, files map[string]bool) fs.WalkDirFunc {
-	return func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			if skipDir(d.Name()) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
+// visitTestFiles is the walk callback that parses each test file and records
+// its sites in the report.
+func visitTestFiles(report *Report, files map[string]bool) func(string) error {
+	return func(path string) error {
 		fset := token.NewFileSet()
 		file, parseErr := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if parseErr != nil {
@@ -180,11 +177,6 @@ func visitTestFiles(report *Report, files map[string]bool) fs.WalkDirFunc {
 		}
 		return nil
 	}
-}
-
-// skipDir reports directories the walk never enters.
-func skipDir(name string) bool {
-	return name == "node_modules" || name == "dist" || (strings.HasPrefix(name, ".") && name != ".")
 }
 
 // recordSite files one site under the report list its classification names.
@@ -230,7 +222,7 @@ func scanFile(fset *token.FileSet, path string, file *ast.File) []site {
 	var sites []site
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Body == nil || !strings.HasPrefix(fn.Name.Name, "Test") {
+		if !ok || fn.Body == nil || !testsource.IsTestFunction(fn.Name.Name) {
 			continue
 		}
 		tables := localTables(fn.Body)
@@ -591,29 +583,12 @@ func fixable(fix string) bool {
 // fixAll rewrites every fixable site under dirs and returns how many.
 func fixAll(dirs []string) (int, error) {
 	total := 0
-	for _, dir := range dirs {
-		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				if skipDir(d.Name()) {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if !strings.HasSuffix(path, "_test.go") {
-				return nil
-			}
-			n, fixErr := fixFile(path)
-			total += n
-			return fixErr
-		})
-		if err != nil {
-			return total, err
-		}
-	}
-	return total, nil
+	err := testsource.WalkFiles(dirs, testsource.TestFiles, func(path string) error {
+		n, fixErr := fixFile(path)
+		total += n
+		return fixErr
+	})
+	return total, err
 }
 
 // fixFile rewrites the fixable sites of one file in place.
@@ -646,11 +621,11 @@ func fixFile(path string) (int, error) {
 	if count == 0 {
 		return 0, nil
 	}
-	formatted, err := format.Source(apply(src, edits))
+	formatted, err := formatSource(apply(src, edits))
 	if err != nil {
 		return 0, fmt.Errorf("%s: rewritten source does not parse: %w", path, err)
 	}
-	if writeErr := os.WriteFile(path, formatted, 0o600); writeErr != nil { //#nosec G306,G703 -- rewriting the test file the walk found, never a user-supplied path
+	if writeErr := writeSource(path, formatted, 0o600); writeErr != nil { //#nosec G306,G703 -- rewriting the test file the walk found, never a user-supplied path
 		return 0, writeErr
 	}
 	return count, nil

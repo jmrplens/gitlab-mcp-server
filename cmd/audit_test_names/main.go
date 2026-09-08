@@ -13,17 +13,41 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
 )
 
-// Pattern classifications for test function names.
+// Pattern classifications for test function names. The four buckets a name is
+// classified into are cmd/internal/testsource's, shared with the generators
+// that count the same names; "other" and "skip" are reported here and produced
+// by no classification.
 const (
-	Pattern3Part        = "3-part"
-	Pattern2Part        = "2-part"
-	PatternNoUnderscore = "no-underscore"
-	PatternTestCov      = "TestCov"
+	Pattern3Part        = testsource.Pattern3Part
+	Pattern2Part        = testsource.Pattern2Part
+	PatternNoUnderscore = testsource.PatternNoUnderscore
+	PatternTestCov      = testsource.PatternTestCov
 	PatternOther        = "other"
 	PatternSkip         = "skip"
 )
+
+// The file operations applyFile performs once a file has already parsed are
+// indirected here so that their failures can be exercised. By that point the
+// file is known to exist and to be valid Go, and every replacement is one
+// identifier for another, so no tree can produce a read that fails, a rewrite
+// that stops parsing, or a write that is refused — and the branches that
+// answer for those would otherwise go untested.
+var ( //nolint:gochecknoglobals // test seams
+	readSource     = os.ReadFile
+	writeSource    = os.WriteFile
+	parseRewritten = parseGoSourceText
+)
+
+// parseGoSourceText reports whether src is a Go file the parser accepts,
+// naming it path in the error.
+func parseGoSourceText(path string, src []byte) error {
+	_, err := parser.ParseFile(token.NewFileSet(), path, src, 0)
+	return err
+}
 
 // testEntry holds the audit result for a single test function.
 //
@@ -37,12 +61,6 @@ type testEntry struct {
 	Pattern       string
 	SuggestedName string
 }
-
-// Test name regular expressions used to classify known naming patterns.
-var (
-	// covPattern matches TestCov* prefixed tests.
-	covPattern = regexp.MustCompile(`^TestCov[A-Z]`)
-)
 
 // main audits test function naming convention compliance across the project.
 func main() {
@@ -84,12 +102,18 @@ func run(args []string, stdout, stderr io.Writer) error {
 		entries = append(entries, scanDir(dir)...)
 	}
 
-	w := csv.NewWriter(stdout)
-	if err := w.Write([]string{"file", "current_name", "pattern", "suggested_name"}); err != nil {
-		return fmt.Errorf("write csv header: %w", err)
-	}
+	// The header is the first row rather than a write of its own: it is far
+	// too short to fill the writer's buffer, so a failure it could report is
+	// one no writer can produce.
+	rows := make([][]string, 0, len(entries)+1)
+	rows = append(rows, []string{"file", "current_name", "pattern", "suggested_name"})
 	for _, e := range entries {
-		if err := w.Write([]string{e.File, e.CurrentName, e.Pattern, e.SuggestedName}); err != nil {
+		rows = append(rows, []string{e.File, e.CurrentName, e.Pattern, e.SuggestedName})
+	}
+
+	w := csv.NewWriter(stdout)
+	for _, row := range rows {
+		if err := w.Write(row); err != nil {
 			return fmt.Errorf("write csv row: %w", err)
 		}
 	}
@@ -113,25 +137,18 @@ func run(args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-// scanDir recursively scans a directory for test files and classifies test names.
+// scanDir scans a directory tree for test files and classifies test names.
+// A read error is reported on stderr and ends that root's walk, leaving the
+// rows already collected and the remaining roots to be scanned: the report is
+// still printed, and the line on stderr says which tree it stops short of.
 func scanDir(dir string) []testEntry {
-	cleanDir := filepath.Clean(dir)
-	entries, err := os.ReadDir(cleanDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "readdir %s: %v\n", cleanDir, err)
-		return nil
-	}
-
 	var results []testEntry
-	for _, e := range entries {
-		path := filepath.Join(cleanDir, e.Name())
-		if e.IsDir() {
-			results = append(results, scanDir(path)...)
-			continue
-		}
-		if strings.HasSuffix(e.Name(), testFileSuffix) {
-			results = append(results, scanFile(path)...)
-		}
+	err := testsource.WalkFiles([]string{filepath.Clean(dir)}, testsource.TestFiles, func(path string) error {
+		results = append(results, scanFile(path)...)
+		return nil
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "walk %s: %v\n", filepath.Clean(dir), err)
 	}
 	return results
 }
@@ -156,17 +173,7 @@ func scanFile(path string) []testEntry {
 			continue
 		}
 		name := fn.Name.Name
-
-		// Only Test* functions (exported, starts with Test).
-		if !strings.HasPrefix(name, "Test") {
-			continue
-		}
-		// Skip lowercase test helpers (e.g., testCreateProject).
-		if len(name) > 4 && unicode.IsLower(rune(name[4])) {
-			continue
-		}
-		// Skip Benchmark*, Fuzz*, Example*.
-		if strings.HasPrefix(name, "TestMain") {
+		if !testsource.IsTestFunction(name) {
 			continue
 		}
 
@@ -183,22 +190,14 @@ func scanFile(path string) []testEntry {
 
 // classify determines the naming pattern and suggests a corrected name.
 func classify(name string) (pattern, suggested string) {
-	// TestCov* prefix tests.
-	if covPattern.MatchString(name) {
-		suggested = renameCov(name)
-		return PatternTestCov, suggested
-	}
-
-	parts := strings.Split(name, "_")
-	switch {
-	case len(parts) >= 3:
-		return Pattern3Part, name
-	case len(parts) == 2:
-		return Pattern2Part, name
-	default:
+	switch pattern = testsource.ClassifyTestName(name); pattern {
+	case PatternTestCov:
+		return pattern, renameCov(name)
+	case PatternNoUnderscore:
 		// Single part — no underscores at all.
-		suggested = splitCamelCase(name)
-		return PatternNoUnderscore, suggested
+		return pattern, splitCamelCase(name)
+	default:
+		return pattern, name
 	}
 }
 
@@ -311,35 +310,24 @@ func runApply(dirs []string, stdout, stderr io.Writer, dryRun bool) (ok bool) {
 	return ok
 }
 
-// applyDir recursively walks a directory applying renames to test files. ok is
-// false when readdir or any descended file/dir failed.
+// applyDir walks a directory tree applying renames to test files. It walks the
+// same corpus the audit reads, so -apply cannot reach a file the report never
+// judged. ok is false when the walk or any file failed.
 func applyDir(dir string, stdout, stderr io.Writer, dryRun bool) (renames, files int, ok bool) {
 	cleanDir := filepath.Clean(dir)
-	entries, err := os.ReadDir(cleanDir)
-	if err != nil {
-		fmt.Fprintf(stderr, "readdir %s: %v\n", cleanDir, err)
-		return 0, 0, false
-	}
-	totalRenames := 0
-	totalFiles := 0
 	ok = true
-	for _, e := range entries {
-		path := filepath.Join(cleanDir, e.Name())
-		if e.IsDir() {
-			r, f, sub := applyDir(path, stdout, stderr, dryRun)
-			totalRenames += r
-			totalFiles += f
-			ok = ok && sub
-			continue
-		}
-		if strings.HasSuffix(e.Name(), testFileSuffix) {
-			totalFiles++
-			r, fileOK := applyFile(path, stdout, stderr, dryRun)
-			totalRenames += r
-			ok = ok && fileOK
-		}
+	err := testsource.WalkFiles([]string{cleanDir}, testsource.TestFiles, func(path string) error {
+		files++
+		r, fileOK := applyFile(path, stdout, stderr, dryRun)
+		renames += r
+		ok = ok && fileOK
+		return nil
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "walk %s: %v\n", cleanDir, err)
+		return renames, files, false
 	}
-	return totalRenames, totalFiles, ok
+	return renames, files, ok
 }
 
 // collectRenames builds a map of old→new names for test functions that need
@@ -361,8 +349,7 @@ func collectRenames(node *ast.File, cleanPath string, stderr io.Writer) map[stri
 			continue
 		}
 		name := fn.Name.Name
-		runes := []rune(name)
-		if !strings.HasPrefix(name, "Test") || (len(runes) > 4 && unicode.IsLower(runes[4])) || strings.HasPrefix(name, "TestMain") {
+		if !testsource.IsTestFunction(name) {
 			continue
 		}
 		pattern, suggested := classify(name)
@@ -401,32 +388,39 @@ func applyFile(path string, stdout, stderr io.Writer, dryRun bool) (applied int,
 		return 0, true
 	}
 
-	src, err := os.ReadFile(cleanPath)
+	src, err := readSource(cleanPath)
 	if err != nil {
 		fmt.Fprintf(stderr, "read %s: %v\n", cleanPath, err)
 		return 0, false
 	}
+	// Every name here was read off a declaration in the parse above, but the
+	// parse and this read are two reads of the same path: an editor that saves
+	// between them leaves renames that match nothing in the bytes about to be
+	// written. Each replacement is therefore reported only once it has
+	// happened, and a file none of them touched is left exactly as it is
+	// rather than rewritten from a snapshot taken before the change.
 	result := string(src)
 	for old, newName := range renames {
 		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(old) + `\b`)
-		if re.MatchString(result) {
-			result = re.ReplaceAllString(result, newName)
-			applied++
-			fmt.Fprintf(stdout, "%s: %s -> %s\n", filepath.ToSlash(cleanPath), old, newName)
+		if !re.MatchString(result) {
+			continue
 		}
+		result = re.ReplaceAllString(result, newName)
+		applied++
+		fmt.Fprintf(stdout, "%s: %s -> %s\n", filepath.ToSlash(cleanPath), old, newName)
 	}
 	if applied == 0 {
 		return 0, true
 	}
 
-	if _, parseErr := parser.ParseFile(token.NewFileSet(), cleanPath, []byte(result), 0); parseErr != nil {
+	if parseErr := parseRewritten(cleanPath, []byte(result)); parseErr != nil {
 		fmt.Fprintf(stderr, "  ABORT %s: rename would produce invalid Go: %v\n", cleanPath, parseErr)
 		return 0, false
 	}
 	if dryRun {
 		return applied, true
 	}
-	if writeErr := os.WriteFile(cleanPath, []byte(result), 0o600); writeErr != nil { //#nosec G306,G703 -- CLI tool, user provides paths intentionally
+	if writeErr := writeSource(cleanPath, []byte(result), 0o600); writeErr != nil { //#nosec G306,G703 -- CLI tool, user provides paths intentionally
 		fmt.Fprintf(stderr, "write %s: %v\n", cleanPath, writeErr)
 		return 0, false
 	}

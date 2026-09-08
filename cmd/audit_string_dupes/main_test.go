@@ -8,6 +8,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -17,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
 )
 
 // TestRun_NoArgsReturnsUsage verifies the CLI entry point reports usage without
@@ -37,7 +40,8 @@ func TestRun_NoArgsReturnsUsage(t *testing.T) {
 }
 
 // TestRun_ScansFilesAndDirectories verifies CLI orchestration accepts explicit
-// files and directories while reporting stat errors for missing inputs.
+// files and directories, and that a path it could not stat is named on stderr,
+// costs only itself, and makes the exit code say the report is incomplete.
 func TestRun_ScansFilesAndDirectories(t *testing.T) {
 	dir := t.TempDir()
 	writeDuplicateSource(t, filepath.Join(dir, "source.go"), "directory duplicate", 3)
@@ -48,8 +52,8 @@ func TestRun_ScansFilesAndDirectories(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := run([]string{dir, file, filepath.Join(dir, "missing.go")}, &stdout, &stderr, 3, 3)
-	if code != 0 {
-		t.Fatalf("run() code = %d, want 0", code)
+	if code != 1 {
+		t.Fatalf("run() code = %d, want 1", code)
 	}
 	output := stdout.String()
 	if !strings.Contains(output, "directory duplicate") {
@@ -63,6 +67,64 @@ func TestRun_ScansFilesAndDirectories(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "stat error") {
 		t.Fatalf("stderr = %q, want stat error", stderr.String())
+	}
+}
+
+// TestRun_EveryPathRead_ReportsAndSucceeds verifies that a run in which every
+// named path was read exits 0, so the exit code carries only the "did I read
+// what you named" answer and never the count of duplicates found.
+func TestRun_EveryPathRead_ReportsAndSucceeds(t *testing.T) {
+	dir := t.TempDir()
+	writeDuplicateSource(t, filepath.Join(dir, "source.go"), "directory duplicate", 3)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if code := run([]string{dir}, &stdout, &stderr, 3, 3); code != 0 {
+		t.Fatalf("run() code = %d, want 0", code)
+	}
+	if !strings.Contains(stdout.String(), "directory duplicate") {
+		t.Fatalf("stdout = %q, want directory duplicate", stdout.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+}
+
+// TestRun_WalkStopsPartWayThrough_ReportsTheTruncation verifies the failure the
+// shared walk cannot swallow: a directory it may not read stops the walk, and
+// the files gathered before it are a prefix of the tree rather than the tree.
+// The command audits what it did reach, names the tree it could not finish on
+// stderr, and exits non-zero, because a truncated duplicate report is
+// indistinguishable from a clean one.
+//
+// The walk is stubbed rather than staged with os.Chmod because a process with
+// enough privilege reads a mode-0 directory anyway, and this assertion must
+// hold on every host.
+func TestRun_WalkStopsPartWayThrough_ReportsTheTruncation(t *testing.T) {
+	dir := t.TempDir()
+	reached := filepath.Join(dir, "reached.go")
+	writeDuplicateSource(t, reached, "reached duplicate", 3)
+	sentinel := errors.New("permission denied")
+
+	original := walkFiles
+	walkFiles = func(_ []string, _ testsource.Policy, visit func(string) error) error {
+		if err := visit(reached); err != nil {
+			return err
+		}
+		return sentinel
+	}
+	t.Cleanup(func() { walkFiles = original })
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if code := run([]string{dir}, &stdout, &stderr, 3, 3); code != 1 {
+		t.Fatalf("run() code = %d, want 1", code)
+	}
+	if !strings.Contains(stdout.String(), "reached duplicate") {
+		t.Fatalf("stdout = %q, want the files reached before the error audited", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "walk error") || !strings.Contains(stderr.String(), sentinel.Error()) {
+		t.Fatalf("stderr = %q, want the walk error named", stderr.String())
 	}
 }
 

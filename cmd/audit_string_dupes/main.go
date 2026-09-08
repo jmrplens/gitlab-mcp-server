@@ -8,11 +8,18 @@ import (
 	"go/token"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
 )
+
+// walkFiles is testsource.WalkFiles, indirected so a test can drive the
+// unreadable-tree path. The real failure is a directory the process may not
+// read, which a test cannot stage on a host privileged enough to read one
+// anyway.
+var walkFiles = testsource.WalkFiles
 
 // main finds duplicated string literals that should be extracted to constants.
 func main() {
@@ -33,29 +40,44 @@ func run(args []string, stdout, stderr io.Writer, threshold, minLength int) int 
 		fmt.Fprintln(stderr, "usage: go run ./cmd/audit_string_dupes/ [flags] <dir|file>...")
 		return 1
 	}
+	// A path the caller named that could not be read leaves the report short,
+	// and a short report of a duplicate-literal audit reads exactly like a
+	// clean one. Every such path is named on stderr and the remaining
+	// arguments are still scanned, so one bad path costs one subtree rather
+	// than the run; the exit code then says the report is incomplete.
+	// Duplicates found are an ordinary result and never change it.
+	incomplete := false
 	var files []string
 	for _, arg := range args {
 		info, err := os.Stat(arg) // #nosec G703 -- CLI tool: user provides paths intentionally
 		if err != nil {
 			fmt.Fprintf(stderr, "stat error %s: %v\n", arg, err)
+			incomplete = true
 			continue
 		}
+		// A file named on the command line is audited whatever it is called;
+		// only a directory argument is filtered down to the non-test sources.
 		if !info.IsDir() {
 			files = append(files, arg)
 			continue
 		}
-		_ = filepath.Walk(arg, func(path string, fi os.FileInfo, err error) error { // #nosec G703 -- CLI tool: user provides paths intentionally
-			if err != nil || fi.IsDir() {
-				return err
-			}
-			if strings.HasSuffix(fi.Name(), ".go") && !strings.HasSuffix(fi.Name(), "_test.go") {
-				files = append(files, path)
-			}
+		// WalkFiles stops at the first error it meets, so what it collected
+		// before an unreadable directory is a prefix of the tree, not the
+		// tree. The files it did reach are still audited; the error is what
+		// tells the caller the rest was not.
+		if walkErr := walkFiles([]string{arg}, testsource.NonTestGoFiles, func(path string) error {
+			files = append(files, path)
 			return nil
-		})
+		}); walkErr != nil {
+			fmt.Fprintf(stderr, "walk error %s: %v\n", arg, walkErr)
+			incomplete = true
+		}
 	}
 	for _, file := range files {
 		findDupes(file, stdout, stderr, threshold, minLength)
+	}
+	if incomplete {
+		return 1
 	}
 	return 0
 }

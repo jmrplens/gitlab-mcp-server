@@ -192,6 +192,46 @@ func TestCheckFileNamesInDir_WalksTreeAndExemptsE2E(t *testing.T) {
 	}
 }
 
+// TestCheckFileNamesInDir_PrunedTrees_AreOutsideTheCorpus verifies the gate
+// judges the corpus the shared walk defines: a test file under a fixtures,
+// vendored or dot directory is an input to some tool rather than source this
+// convention governs, so the gate neither reports it nor descends to it.
+func TestCheckFileNamesInDir_PrunedTrees_AreOutsideTheCorpus(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureDir(t, root, []string{"testdata", "node_modules", ".github"}, []fileSpec{
+		{"testdata/theme_test.go", "package fixture\n"},
+		{"node_modules/theme_test.go", "package vendored\n"},
+		{".github/theme_test.go", "package hidden\n"},
+	})
+
+	if got := checkFileNamesInDir(root); len(got) != 0 {
+		t.Fatalf("violations = %+v, want none", got)
+	}
+}
+
+// TestCheckFileNamesInDir_SymlinkedRoot_IsStillJudged verifies the gate reads
+// the tree behind a root that is a symlink to a directory, which is how a
+// developer checkout or a worktree layout can name it. A walk that stopped at
+// the link would find no test file and certify the tree clean.
+func TestCheckFileNamesInDir_SymlinkedRoot_IsStillJudged(t *testing.T) {
+	base := t.TempDir()
+	writeFixtureDir(t, base, []string{"real"}, []fileSpec{
+		{"real/theme_test.go", "package real\n"},
+	})
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(filepath.Join(base, "real"), link); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
+
+	got := checkFileNamesInDir(link)
+	want := []fileViolation{
+		{path: filepath.ToSlash(filepath.Join(link, "theme_test.go")), reason: "no module file matches this name"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("violations = %+v\nwant %+v", got, want)
+	}
+}
+
 // TestCheckFileNamesInDir_UnreadableDirectoryIsAViolation verifies a
 // directory the gate cannot read is reported as a violation rather than
 // certified clean.
@@ -244,10 +284,10 @@ func TestRunFileCheck_ReportsVerdict(t *testing.T) {
 			wantStdout: func(root string) string {
 				absent := filepath.Join(root, "absent")
 				// The reason carries the operating system's own text for a
-				// missing directory, so it is taken from the same read the
-				// check makes rather than spelled the Linux way.
-				_, readErr := os.ReadDir(absent)
-				return fmt.Sprintf("%-70s %s\n", filepath.ToSlash(absent), "unreadable: "+readErr.Error()) +
+				// missing directory, so it is taken from the same call the
+				// walk makes on its root rather than spelled the Linux way.
+				_, statErr := os.Lstat(absent)
+				return fmt.Sprintf("%-70s %s\n", filepath.ToSlash(absent), "unreadable: "+statErr.Error()) +
 					"test-file naming: 1 file(s) violate the convention\n"
 			},
 		},

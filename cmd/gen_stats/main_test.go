@@ -645,23 +645,6 @@ func TestFmtInt_AddsThousandsSeparators(t *testing.T) {
 	}
 }
 
-// TestIsTestFunctionName_ExcludesTestMain verifies TestMain is not counted as a
-// test function while regular Test* entry points are.
-func TestIsTestFunctionName_ExcludesTestMain(t *testing.T) {
-	if isTestFunctionName("TestMain") {
-		t.Error("isTestFunctionName(TestMain) = true, want false")
-	}
-	if !isTestFunctionName("TestFoo") {
-		t.Error("isTestFunctionName(TestFoo) = false, want true")
-	}
-	if !isTestFunctionName("Test") {
-		t.Error("isTestFunctionName(Test) = false, want true")
-	}
-	if isTestFunctionName("Testable") {
-		t.Error("isTestFunctionName(Testable) = true, want false (lowercase-ish suffix)")
-	}
-}
-
 // TestScanGoFile_SkipsRawStringFixtures verifies that a fake test embedded in
 // a multi-line raw string does not reach the line-level counters. A fixture
 // source holding a whole fake Go file must not inflate subtest, defer or

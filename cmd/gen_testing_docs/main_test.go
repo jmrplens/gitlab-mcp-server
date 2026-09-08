@@ -162,30 +162,6 @@ func TestCountTests_MissingDirOrBrokenFile_ReturnsError(t *testing.T) {
 	}
 }
 
-// TestIsTestFunction_NameShapes_MatchGoRules verifies the Test* entry-point
-// rule: a bare Test, an uppercase follower, and rejection of TestMain, a
-// lowercase follower, and a non-Test prefix.
-func TestIsTestFunction_NameShapes_MatchGoRules(t *testing.T) {
-	tests := []struct {
-		name string
-		want bool
-	}{
-		{name: "Test", want: true},
-		{name: "TestWidget", want: true},
-		{name: "Test_Widget", want: true},
-		{name: "TestMain", want: false},
-		{name: "Testwidget", want: false},
-		{name: "BenchmarkWidget", want: false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := isTestFunction(tt.name); got != tt.want {
-				t.Fatalf("isTestFunction(%q) = %v, want %v", tt.name, got, tt.want)
-			}
-		})
-	}
-}
-
 // TestCountMCPTools_CountsAddToolCalls verifies tool-count extraction from
 // mcp.AddTool calls without executing registration code.
 func TestCountMCPTools_CountsAddToolCalls(t *testing.T) {

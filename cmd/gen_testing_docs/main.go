@@ -18,9 +18,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
@@ -63,7 +63,7 @@ const (
 	e2eTags = "e2e,orbitlive,httpe2e,stdioe2e,collectore2e"
 
 	goFileSuffix     = ".go"
-	goTestFileSuffix = "_test.go"
+	goTestFileSuffix = testsource.FileSuffix
 
 	cmdPathPrefix           = "cmd/"
 	internalPathPrefix      = "internal/"
@@ -76,10 +76,13 @@ const (
 	layerToolsOrchestration = "tools-orchestration"
 	layerToolSubpackage     = "tool-subpackage"
 
-	pattern3Part        = "3-part"
-	pattern2Part        = "2-part"
-	patternNoUnderscore = "no-underscore"
-	patternTestCov      = "TestCov"
+	// The bucket names this document reports are the ones cmd/internal/testsource
+	// classifies into; "other" is a row of the table that nothing classifies
+	// into, kept so the reader sees the bucket exists and is empty.
+	pattern3Part        = testsource.Pattern3Part
+	pattern2Part        = testsource.Pattern2Part
+	patternNoUnderscore = testsource.PatternNoUnderscore
+	patternTestCov      = testsource.PatternTestCov
 	patternOther        = "other"
 
 	testFilesMetricFormat = "Test files (%s)"
@@ -130,7 +133,6 @@ var (
 var (
 	coverageLineRE = regexp.MustCompile(`^ok\s+(\S+)\s+.*coverage:\s+([0-9.]+)% of statements`)
 	totalLineRE    = regexp.MustCompile(`total:\s+\(statements\)\s+([0-9.]+)%`)
-	covPattern     = regexp.MustCompile(`^TestCov[A-Z]`)
 )
 
 // options controls how the generator collects and writes documentation data.
@@ -643,42 +645,15 @@ func countTests(dir string) (testFunctions, testFiles int, namingCounts map[stri
 		}
 		for _, decl := range node.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || !isTestFunction(fn.Name.Name) {
+			if !ok || !testsource.IsTestFunction(fn.Name.Name) {
 				continue
 			}
 			testFunctions++
-			pattern := classifyTestName(fn.Name.Name)
+			pattern := testsource.ClassifyTestName(fn.Name.Name)
 			namingCounts[pattern]++
 		}
 	}
 	return testFunctions, testFiles, namingCounts, nil
-}
-
-// isTestFunction reports whether name follows Go's Test* entry-point rules.
-func isTestFunction(name string) bool {
-	if name == "TestMain" || !strings.HasPrefix(name, "Test") {
-		return false
-	}
-	if len(name) == len("Test") {
-		return true
-	}
-	return !unicode.IsLower(rune(name[len("Test")]))
-}
-
-// classifyTestName returns the documentation naming-pattern bucket for a test name.
-func classifyTestName(name string) string {
-	if covPattern.MatchString(name) {
-		return patternTestCov
-	}
-	parts := strings.Split(name, "_")
-	switch {
-	case len(parts) >= 3:
-		return pattern3Part
-	case len(parts) == 2:
-		return pattern2Part
-	default:
-		return patternNoUnderscore
-	}
 }
 
 // countMCPTools counts individual MCP tool registrations in a package directory.

@@ -8,11 +8,11 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
-	"io/fs"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
 )
 
 // Finding describes one abort or missing-return site inside a non-test
@@ -49,6 +49,11 @@ var abortNames = map[string]bool{"Fatal": true, "Fatalf": true, "FailNow": true}
 // missing-return contract.
 var errorNames = map[string]bool{"Error": true, "Errorf": true}
 
+// marshalReport is indirected so that the encoder failure run answers for can
+// be exercised: a Report is strings and counts, which encoding/json cannot be
+// made to refuse, and the branch would otherwise go untested.
+var marshalReport = json.MarshalIndent //nolint:gochecknoglobals // test seam
+
 func main() {
 	jsonPath := flag.String("json", "", "write the JSON work list to this path")
 	check := flag.Bool("check", false, "exit non-zero when any abort (Fatal/FailNow) site exists; errorf sites stay advisory")
@@ -75,7 +80,7 @@ func run(dirs []string, jsonPath string, check bool, stdout, stderr io.Writer) i
 	printHuman(stdout, report)
 
 	if jsonPath != "" {
-		data, marshalErr := json.MarshalIndent(report, "", "  ")
+		data, marshalErr := marshalReport(report, "", "  ")
 		if marshalErr != nil {
 			fmt.Fprintf(stderr, "audit_test_goroutines: marshal: %v\n", marshalErr)
 			return 2
@@ -111,10 +116,8 @@ func scan(dirs []string) (*Report, error) {
 	files := map[string]bool{}
 	fset := token.NewFileSet()
 
-	for _, dir := range dirs {
-		if walkErr := filepath.WalkDir(dir, collectFindings(fset, report, files)); walkErr != nil {
-			return nil, walkErr
-		}
+	if walkErr := testsource.WalkFiles(dirs, testsource.TestFiles, collectFindings(fset, report, files)); walkErr != nil {
+		return nil, walkErr
 	}
 
 	sortFindings(report.Fatal)
@@ -134,22 +137,10 @@ func scan(dirs []string) (*Report, error) {
 	return report, nil
 }
 
-// collectFindings returns the WalkDir callback that parses each _test.go
-// file and appends its findings to the report.
-func collectFindings(fset *token.FileSet, report *Report, files map[string]bool) fs.WalkDirFunc {
-	return func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			if name := d.Name(); name == "node_modules" || name == "testdata" || strings.HasPrefix(name, ".") {
-				return fs.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
+// collectFindings returns the walk callback that parses each _test.go file and
+// appends its findings to the report.
+func collectFindings(fset *token.FileSet, report *Report, files map[string]bool) func(string) error {
+	return func(path string) error {
 		file, parseErr := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
 		if parseErr != nil {
 			return fmt.Errorf("parse %s: %w", path, parseErr)

@@ -5,7 +5,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -630,6 +634,69 @@ func assertRunOutcome(t *testing.T, got runOutcome, wantExit int, wantStdout, wa
 	}
 	if !strings.HasPrefix(got.stderr, wantStderrPrefix) {
 		t.Errorf("stderr = %q, want prefix %q", got.stderr, wantStderrPrefix)
+	}
+}
+
+// TestRun_UnencodableReport_ExitsTwo verifies the exit code for an encoder
+// that refuses the work list. A Report is strings and counts, so nothing a
+// tree contains can provoke this; the seam stands in for the encoder, and
+// what is asserted is that the failure is named and the work list is not
+// written half-finished.
+func TestRun_UnencodableReport_ExitsTwo(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a_test.go"), []byte(cleanFixture), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	jsonPath := filepath.Join(root, "worklist.json")
+
+	original := marshalReport
+	marshalReport = func(any, string, string) ([]byte, error) { return nil, errUnencodable }
+	t.Cleanup(func() { marshalReport = original })
+
+	var stdout, stderr bytes.Buffer
+	if exit := run([]string{root}, jsonPath, false, &stdout, &stderr); exit != 2 {
+		t.Errorf("exit = %d, want 2", exit)
+	}
+	if got := stderr.String(); !strings.Contains(got, "marshal: "+errUnencodable.Error()) {
+		t.Errorf("stderr = %q, want the marshal failure", got)
+	}
+	if _, err := os.Stat(jsonPath); !os.IsNotExist(err) {
+		t.Errorf("os.Stat(%s) error = %v, want the file not to exist", jsonPath, err)
+	}
+}
+
+// errUnencodable is the failure the marshal seam reports.
+var errUnencodable = errors.New("unencodable")
+
+// TestScanFile_LiteralReachedTwice_IsAuditedOnce verifies one function
+// literal yields one set of findings however many places in the tree reach
+// it. Parsed Go gives every literal a single parent, so the tree is spliced
+// by hand to put the same node behind two go statements.
+func TestScanFile_LiteralReachedTwice_IsAuditedOnce(t *testing.T) {
+	const src = "package sample\n\nimport \"testing\"\n\nfunc TestShared(t *testing.T) {\n\tgo func() { t.Fatal(\"abort\") }()\n}\n"
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "shared_test.go", src, 0)
+	if err != nil {
+		t.Fatalf("ParseFile() error = %v", err)
+	}
+	var fn *ast.FuncDecl
+	for _, decl := range file.Decls {
+		if declared, isFunc := decl.(*ast.FuncDecl); isFunc {
+			fn = declared
+			break
+		}
+	}
+	if fn == nil {
+		t.Fatal("the fixture declares no function")
+	}
+	first, ok := fn.Body.List[0].(*ast.GoStmt)
+	if !ok {
+		t.Fatalf("statement 0 = %T, want *ast.GoStmt", fn.Body.List[0])
+	}
+	fn.Body.List = append(fn.Body.List, &ast.GoStmt{Call: &ast.CallExpr{Fun: first.Call.Fun}})
+
+	if got := scanFile(fset, "shared_test.go", file); len(got) != 1 {
+		t.Errorf("scanFile() returned %d finding(s), want 1: %+v", len(got), got)
 	}
 }
 

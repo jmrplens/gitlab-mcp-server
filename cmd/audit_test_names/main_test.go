@@ -99,7 +99,11 @@ func TestMergeIntoSegments_GroupsResultWords(t *testing.T) {
 	}
 }
 
-// TestScanDir_RecursesAndClassifiesTestFunctions verifies scanDir reads nested test files and skips non-test helpers.
+// TestScanDir_RecursesAndClassifiesTestFunctions verifies scanDir reads nested
+// test files and skips non-test helpers. TestMain_Flags_Parse is in the fixture
+// on purpose: the framework entry point is exactly TestMain, and a name that
+// merely starts with those letters is an ordinary test, which is what both
+// generators have always counted and this auditor used to skip.
 func TestScanDir_RecursesAndClassifiesTestFunctions(t *testing.T) {
 	root := t.TempDir()
 	nested := filepath.Join(root, "nested")
@@ -113,6 +117,7 @@ import "testing"
 func TestCreateIssueReturnsIssue(t *testing.T) {}
 func TestCreateIssue_ReturnsIssue(t *testing.T) {}
 func TestCovBuildCatalogError(t *testing.T) {}
+func TestMain_Flags_Parse(t *testing.T) {}
 func TestMain(m *testing.M) {}
 func Testhelper(t *testing.T) {}
 func BenchmarkCreateIssue(b *testing.B) {}
@@ -125,8 +130,8 @@ func BenchmarkCreateIssue(b *testing.B) {}
 	}
 
 	entries := scanDir(root)
-	if len(entries) != 3 {
-		t.Fatalf("scanDir() len = %d, want 3 entries: %+v", len(entries), entries)
+	if len(entries) != 4 {
+		t.Fatalf("scanDir() len = %d, want 4 entries: %+v", len(entries), entries)
 	}
 	patterns := map[string]string{}
 	for _, entry := range entries {
@@ -140,6 +145,9 @@ func BenchmarkCreateIssue(b *testing.B) {}
 	}
 	if patterns["TestCovBuildCatalogError"] != PatternTestCov {
 		t.Fatalf("patterns = %+v, want TestCovBuildCatalogError as TestCov", patterns)
+	}
+	if patterns["TestMain_Flags_Parse"] != Pattern3Part {
+		t.Fatalf("patterns = %+v, want TestMain_Flags_Parse as 3-part", patterns)
 	}
 }
 
@@ -388,7 +396,7 @@ func TestRunApply_Failures_ReturnFalse(t *testing.T) {
 		{
 			name:          "missing directory",
 			dirs:          func(root string) []string { return []string{filepath.Join(root, "absent")} },
-			wantStderrPre: func(root string) string { return "readdir " + filepath.Join(root, "absent") + ": " },
+			wantStderrPre: func(root string) string { return "walk " + filepath.Join(root, "absent") + ": " },
 			wantSummary:   "\n=== Rename Summary (applied) ===\nFiles scanned: 0\nRenames: 0\n",
 		},
 		{
@@ -428,6 +436,190 @@ func TestRunApply_Failures_ReturnFalse(t *testing.T) {
 				t.Errorf("stderr = %q, want prefix %q and suffix %q", got, prefix, tc.wantSummary)
 			}
 		})
+	}
+}
+
+// TestApplyFile_UnprovokableFailures_ReportAndFail verifies the three
+// failures a real tree cannot produce, because by then the file has parsed
+// and every replacement is one identifier for another: the second read
+// failing, the rewritten source no longer parsing, and the write being
+// refused. Each names the file on stderr, counts no rename and fails the
+// run, so -apply exits non-zero instead of reporting a rewrite it did not
+// make.
+func TestApplyFile_UnprovokableFailures_ReportAndFail(t *testing.T) {
+	sentinel := errors.New("boom")
+	testCases := []struct {
+		name    string
+		install func(t *testing.T)
+		want    string
+	}{
+		{
+			name: "read fails",
+			install: func(t *testing.T) {
+				t.Helper()
+				original := readSource
+				readSource = func(string) ([]byte, error) { return nil, sentinel }
+				t.Cleanup(func() { readSource = original })
+			},
+			want: "read ",
+		},
+		{
+			name: "rewritten source does not parse",
+			install: func(t *testing.T) {
+				t.Helper()
+				original := parseRewritten
+				parseRewritten = func(string, []byte) error { return sentinel }
+				t.Cleanup(func() { parseRewritten = original })
+			},
+			want: "ABORT ",
+		},
+		{
+			name: "write is refused",
+			install: func(t *testing.T) {
+				t.Helper()
+				original := writeSource
+				writeSource = func(string, []byte, os.FileMode) error { return sentinel }
+				t.Cleanup(func() { writeSource = original })
+			},
+			want: "write ",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, "sample_test.go")
+			if err := os.WriteFile(path, []byte(legacyNamesFixture), 0o600); err != nil {
+				t.Fatalf("WriteFile() error = %v", err)
+			}
+			tc.install(t)
+
+			var stdout, stderr bytes.Buffer
+			applied, ok := applyFile(path, &stdout, &stderr, false)
+			if applied != 0 || ok {
+				t.Errorf("applyFile() = (%d, %t), want (0, false)", applied, ok)
+			}
+			if got := stderr.String(); !strings.Contains(got, tc.want) || !strings.Contains(got, sentinel.Error()) {
+				t.Errorf("stderr = %q, want it to mention %q and %q", got, tc.want, sentinel.Error())
+			}
+		})
+	}
+}
+
+// TestApplyFile_SourceChangedBetweenTheTwoReads_ReportsOnlyRealReplacements
+// verifies the guard on the gap between the parse and the read. applyFile
+// takes the names to rename from a parse of the path and then reads the path
+// again, so an editor saving in between hands the loop names that no longer
+// occur. A rename is counted, reported and written only once it has actually
+// replaced something, and a file where nothing matched is left alone instead
+// of being overwritten with the snapshot the second read returned.
+func TestApplyFile_SourceChangedBetweenTheTwoReads_ReportsOnlyRealReplacements(t *testing.T) {
+	testCases := []struct {
+		name      string
+		reread    string
+		want      int
+		wantWrite string
+		wantOut   []string
+		notOut    []string
+	}{
+		{
+			name: "no rename still matches",
+			reread: `package sample
+
+import "testing"
+
+func TestCatalog(t *testing.T) {}
+`,
+			want:   0,
+			notOut: []string{"TestCreate_IssueReturnsIssue", "TestBuild_Catalog_Error"},
+		},
+		{
+			name: "one of two still matches",
+			reread: `package sample
+
+import "testing"
+
+func TestCovBuildCatalogError(t *testing.T) {}
+`,
+			want: 1,
+			wantWrite: `package sample
+
+import "testing"
+
+func TestBuild_Catalog_Error(t *testing.T) {}
+`,
+			wantOut: []string{"TestBuild_Catalog_Error"},
+			notOut:  []string{"TestCreate_IssueReturnsIssue"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, "sample_test.go")
+			if err := os.WriteFile(path, []byte(legacyNamesFixture), 0o600); err != nil {
+				t.Fatalf("WriteFile() error = %v", err)
+			}
+
+			originalRead := readSource
+			readSource = func(string) ([]byte, error) { return []byte(tc.reread), nil }
+			t.Cleanup(func() { readSource = originalRead })
+
+			var written string
+			writes := 0
+			originalWrite := writeSource
+			writeSource = func(_ string, data []byte, _ os.FileMode) error {
+				writes++
+				written = string(data)
+				return nil
+			}
+			t.Cleanup(func() { writeSource = originalWrite })
+
+			var stdout, stderr bytes.Buffer
+			applied, ok := applyFile(path, &stdout, &stderr, false)
+			if applied != tc.want || !ok {
+				t.Errorf("applyFile() = (%d, %t), want (%d, true)", applied, ok, tc.want)
+			}
+			if tc.want == 0 && writes != 0 {
+				t.Errorf("writeSource called %d times, want the file left alone", writes)
+			}
+			if tc.want > 0 && written != tc.wantWrite {
+				t.Errorf("written = %q, want %q", written, tc.wantWrite)
+			}
+			assertMentions(t, stdout.String(), tc.wantOut, tc.notOut)
+			if stderr.String() != "" {
+				t.Errorf("stderr = %q, want empty", stderr.String())
+			}
+		})
+	}
+}
+
+// assertMentions reports every name in wanted that got is missing and every
+// name in unwanted that it contains.
+func assertMentions(t *testing.T, got string, wanted, unwanted []string) {
+	t.Helper()
+	for _, want := range wanted {
+		if !strings.Contains(got, want) {
+			t.Errorf("output = %q, want it to mention %q", got, want)
+		}
+	}
+	for _, name := range unwanted {
+		if strings.Contains(got, name) {
+			t.Errorf("output = %q, want no mention of %q", got, name)
+		}
+	}
+}
+
+// TestParseGoSourceText_Sources_ReportWhatTheParserSays verifies the seam's
+// own body: valid Go passes and invalid Go comes back as an error naming the
+// file, which is what the ABORT message quotes.
+func TestParseGoSourceText_Sources_ReportWhatTheParserSays(t *testing.T) {
+	if err := parseGoSourceText("sample_test.go", []byte(legacyNamesFixture)); err != nil {
+		t.Errorf("parseGoSourceText() error = %v, want nil", err)
+	}
+	err := parseGoSourceText("broken_test.go", []byte("package sample\n\nfunc (\n"))
+	if err == nil || !strings.Contains(err.Error(), "broken_test.go") {
+		t.Errorf("parseGoSourceText() error = %v, want one naming broken_test.go", err)
 	}
 }
 
