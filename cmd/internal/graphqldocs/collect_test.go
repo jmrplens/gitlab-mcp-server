@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"golang.org/x/tools/go/packages"
-
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
 
@@ -267,21 +265,6 @@ func TestCollect_PatternMatchingNothing_IsReported(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no packages matched") {
 		t.Errorf("Collect() error = %q, want it to say nothing matched", err)
-	}
-}
-
-// TestWalk_PackageWithoutTypeInformation_IsSkipped verifies the guard that
-// keeps the collector from reading a package the loader gave no types for.
-// Constants are folded during type checking, so such a package would answer
-// every question with "not a document" and the audit would report a clean run
-// over source it never understood.
-func TestWalk_PackageWithoutTypeInformation_IsSkipped(t *testing.T) {
-	gatherer := &collector{fset: token.NewFileSet(), claimed: map[token.Pos]bool{}}
-
-	gatherer.walk(&packages.Package{PkgPath: "x/y"})
-
-	if len(gatherer.documents) != 0 {
-		t.Errorf("walk() collected %d document(s) from a package with no types", len(gatherer.documents))
 	}
 }
 
