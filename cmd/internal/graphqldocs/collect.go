@@ -15,17 +15,9 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/goprogram"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
-
-// loadMode is everything this audit needs: syntax to walk, and types so a
-// constant expression can be folded into the one string GitLab would receive.
-//
-// NeedDeps is deliberately absent. A document assembled from a fragment is
-// assembled inside the package that sends it, so type-checking the whole
-// dependency tree from source would cost minutes and change no answer.
-const loadMode = packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
-	packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports
 
 // DefaultPatterns are the packages an audit loads. Every GraphQL document this
 // repository writes lives under them.
@@ -70,10 +62,12 @@ type collector struct {
 // Collect loads the packages named by patterns, rooted at dir, and returns
 // every GraphQL document they declare.
 //
-// The overlay is how a test supplies source that is not on disk: a fixture
-// package written in the test file itself is type-checked like any other, so
-// the folding of a document assembled from a fragment is exercised for real
-// rather than mocked. Production passes nil.
+// The load itself, including the refusal of a package that did not type-check,
+// belongs to [goprogram.Load]. The overlay is passed straight through: it is
+// how a test supplies source that is not on disk, so a fixture package written
+// in the test file itself is type-checked like any other and the folding of a
+// document assembled from a fragment is exercised for real rather than mocked.
+// Production passes nil.
 func Collect(dir string, patterns []string, overlay map[string][]byte) ([]Document, error) {
 	// The standalone files are read first because it costs milliseconds and
 	// type-checking the tree costs seconds: a run that cannot read one of its
@@ -83,20 +77,13 @@ func Collect(dir string, patterns []string, overlay map[string][]byte) ([]Docume
 		return nil, err
 	}
 
-	cfg := &packages.Config{Mode: loadMode, Dir: dir, Tests: false, Overlay: overlay}
-	loaded, err := packages.Load(cfg, patterns...)
+	loaded, err := goprogram.Load(dir, patterns, overlay)
 	if err != nil {
-		return nil, fmt.Errorf("load packages: %w", err)
-	}
-	if len(loaded) == 0 {
-		return nil, fmt.Errorf("no packages matched %s in %s", strings.Join(patterns, " "), dir)
+		return nil, err
 	}
 
 	gatherer := &collector{fset: loaded[0].Fset, claimed: map[token.Pos]bool{}}
 	for _, pkg := range loaded {
-		if loadErr := packageLoadError(pkg); loadErr != nil {
-			return nil, loadErr
-		}
 		gatherer.walk(pkg)
 	}
 
@@ -203,16 +190,6 @@ func walkRoots(dir string, patterns []string) []string {
 		roots = append(roots, filepath.Join(dir, filepath.FromSlash(trimmed)))
 	}
 	return roots
-}
-
-// packageLoadError turns a package's load errors into one reportable error. A
-// partially typed package folds no constants, so every document in it would go
-// unseen, which is exactly the failure this audit must not have.
-func packageLoadError(pkg *packages.Package) error {
-	if len(pkg.Errors) == 0 {
-		return nil
-	}
-	return fmt.Errorf("load %s: %w", pkg.PkgPath, pkg.Errors[0])
 }
 
 // walk gathers one package's documents.

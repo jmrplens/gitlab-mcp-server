@@ -277,18 +277,6 @@ func TestLoadProgram_BrokenFixture_ReturnsLoadError(t *testing.T) {
 	}
 }
 
-// TestPackageLoadError_NoErrors_ReturnsNil verifies the happy path of the
-// per-package error check, which the loader relies on to pass clean packages
-// through untouched.
-func TestPackageLoadError_NoErrors_ReturnsNil(t *testing.T) {
-	prog := loadFixture(t, vulnSources())
-	for _, pkg := range prog.order {
-		if err := packageLoadError(pkg); err != nil {
-			t.Errorf("packageLoadError(%s) = %v, want nil", pkg.PkgPath, err)
-		}
-	}
-}
-
 // TestProgram_Reachable_FollowsCallees verifies the call graph reaches a
 // function only named through an intermediate callee, and stops at functions
 // nothing names.
