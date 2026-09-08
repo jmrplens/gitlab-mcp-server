@@ -251,7 +251,7 @@ func main() {
 	flag.StringVar(&transport, "transport", "", "Transport to serve: stdio, http, or auto. Empty defers to --http. auto serves HTTP only when stdin is "+os.DevNull+", which is what a container started without -i gives, and stdio for the pipe every MCP client provides")
 	flag.StringVar(&hcfg.addr, "http-addr", ":8080", "HTTP listen address")
 	flag.Var(&hcfg.gitlabURLs, "gitlab-url", "GitLab instance URL, required in HTTP mode unless --allow-any-gitlab-url is passed. Repeat (or comma-separate) to publish several instances; the GITLAB-URL header then selects among them and is required, since choosing on the caller's behalf would send their token to an instance they never named")
-	flag.BoolVar(&hcfg.allowAnyGitLabURL, "allow-any-gitlab-url", false, "Let the GITLAB-URL header name any instance when --gitlab-url publishes none. Every request is then served against a host the caller chose, with a token only that host can judge; use it for a single-user local deployment and never on a reachable one")
+	flag.BoolVar(&hcfg.allowAnyGitLabURL, "allow-any-gitlab-url", false, "Let the GITLAB-URL header name any instance when --gitlab-url publishes none. Every request is then served against a host the caller chose, with a token only that host can judge, so it is accepted only on a listener nobody else can reach: --http-addr must bind a loopback address or a unix socket")
 	flag.BoolVar(&hcfg.skipTLSVerify, "skip-tls-verify", false, "Skip TLS certificate verification")
 	flag.StringVar(&hcfg.toolSurface, "tool-surface", "", "Tool surface: dynamic (default), meta, individual")
 	flag.StringVar(&hcfg.capabilitySurface, "capability-surface", config.DefaultCapabilitySurface, "Capability surface: full (default) or minimal")
@@ -487,7 +487,8 @@ FLAGS
   -gitlab-url string        GitLab URL, required in HTTP mode. Repeatable to publish several instances, which a
                             GITLAB-URL header then selects among
   -allow-any-gitlab-url     Let the GITLAB-URL header name any host when -gitlab-url publishes none. Every request
-                            is then served against a host the caller chose; local single-user deployments only
+                            is then served against a host the caller chose, so -http-addr must bind a loopback
+                            address or a unix socket
   -skip-tls-verify          Skip TLS certificate verification when calling GitLab (default false)
   -tier string              Force licensing tier: free|ce|premium|ultimate; omit to detect per server entry
   -ignore-scopes            Skip PAT scope detection, register all tools (default false)
@@ -655,8 +656,8 @@ JSON CONFIGURATION EXAMPLES
   HTTP mode (single GitLab instance):
   gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com --http-addr=:8080
 
-  HTTP mode with no instance published (single-user only; clients send GITLAB-URL per request):
-  gitlab-mcp-server --http --allow-any-gitlab-url --http-addr=:8080
+  HTTP mode with no instance published (loopback only; clients send GITLAB-URL per request):
+  gitlab-mcp-server --http --allow-any-gitlab-url --http-addr=127.0.0.1:8080
 `, version, commit,
 		projectAuthor, projectDepartment, projectRepository,
 		// In the order the grouped FLAGS block prints them: Transport, then
@@ -910,9 +911,10 @@ func normalizeFixedGitLabURL(hcfg *httpConfig) error {
 // hole.
 //
 // The escape hatch exists for the single-user local deployment where the
-// operator IS the caller, and it warns rather than passing quietly: an
-// operator who reached for it on a reachable listener should be able to find
-// out from the log why their server is being used as a proxy.
+// operator IS the caller, so it is admitted only on a listener nobody else can
+// reach — see [listenerIsHostLocal]. Anywhere else it reproduces the whole
+// vulnerability above, on purpose and reachably, which is what the sentence it
+// used to print said and did not enforce.
 func requireInstanceAllowList(hcfg *httpConfig) error {
 	if len(hcfg.gitlabURLs) > 0 || strings.TrimSpace(hcfg.gitlabURL) != "" {
 		return nil
@@ -925,10 +927,44 @@ func requireInstanceAllowList(hcfg *httpConfig) error {
 				"Pass --allow-any-gitlab-url to accept that for a single-user local deployment",
 		)
 	}
+	if !listenerIsHostLocal(hcfg.addr) {
+		return fmt.Errorf(
+			"--allow-any-gitlab-url names no instance and --http-addr %q is reachable from the network: "+
+				"every caller could then name any host in the GITLAB-URL header, this server would make requests to it "+
+				"with whatever token that caller supplied, and the responses would be returned to them. "+
+				"Bind a loopback address or a unix socket to keep the hatch, or name the instance with --gitlab-url",
+			hcfg.addr,
+		)
+	}
 	slog.Warn("--allow-any-gitlab-url is set and no instance is published: any caller may name any host in the GITLAB-URL header, " +
 		"this server will make requests to it with whatever token the caller supplies, and the responses are returned to the caller. " +
-		"Do not run this on a listener anyone else can reach")
+		"The listener is host-local, so that caller is somebody with an account on this machine")
 	return nil
+}
+
+// listenerIsHostLocal reports whether an address binds a listener no other
+// machine can open a connection to.
+//
+// A loopback address is the plain case. A unix socket qualifies too, and for a
+// stronger reason than a port does: it resolves to a file rather than a name,
+// so no remote peer can reach it at all, and --http-socket-mode decides which
+// local principals may. A wildcard bind is the one that matters here, because
+// it is what the container CMD does and what the flag's own warning was about.
+//
+// It cannot see a port publication. A container binding 0.0.0.0 and published
+// with `-p 127.0.0.1:8080:8080` is host-local in fact and is refused anyway,
+// since nothing inside the process distinguishes it from the same container
+// published on every interface. Such a deployment names its instance with
+// --gitlab-url, which is what every other container deployment does.
+func listenerIsHostLocal(addr string) bool {
+	if isUnixSocketAddr(addr) {
+		return true
+	}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	return isLoopbackHost(strings.ToLower(host))
 }
 
 // validateFixedGitLabURL rejects a --gitlab-url value with a message naming

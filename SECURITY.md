@@ -185,9 +185,11 @@ The remainder of this document describes how the server handles security-sensiti
   `--gitlab-url`, because a deployment that names none makes requests to
   whatever host a caller puts in a header, with whatever token that caller
   supplied, and returns the answer to them. `--allow-any-gitlab-url` accepts
-  that for a single-user local deployment and warns at startup. Where several
-  instances are published the header is required, since choosing for the caller
-  would send their token to an instance they never named.
+  that for a single-user local deployment, and only there: it is refused unless
+  `--http-addr` binds a loopback address or a unix socket, because on a
+  listener anyone else can reach it is that same request forgery, opted into.
+  Where several instances are published the header is required, since choosing
+  for the caller would send their token to an instance they never named.
 - The `.env` file containing credentials is excluded from version control via `.gitignore`.
 
 ### File System Access (caller-supplied local paths)

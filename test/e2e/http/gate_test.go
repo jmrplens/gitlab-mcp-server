@@ -324,6 +324,57 @@ func TestGate_NoPublishedInstanceAndNoHatch_RefusesToStart(t *testing.T) {
 	}
 }
 
+// TestGate_TheEscapeHatchIsRefusedOnAReachableListener pins the other half of
+// that default: the hatch is admitted only where the caller it serves can only
+// be the operator.
+//
+// The hatch reproduces the request forgery above deliberately, and what made
+// that defensible was the sentence its warning printed, "do not run this on a
+// listener anyone else can reach". Printing a sentence is not enforcing it: on
+// a wildcard bind, which is exactly what the container CMD does, the hatch was
+// an SSRF proxy for the whole network and the server started anyway. So a
+// loopback address or a unix socket is now a precondition rather than advice.
+//
+// The wildcard bind is the case that matters, and the case a refactor is most
+// likely to lose, because every other test in this module binds 127.0.0.1 and
+// would keep passing while this hole reopened.
+func TestGate_TheEscapeHatchIsRefusedOnAReachableListener(t *testing.T) {
+	for _, addr := range []string{"0.0.0.0:0", ":0", "[::]:0"} {
+		t.Run(addr, func(t *testing.T) {
+			out, err := runServerExpectingExit(t, serverBinary(t),
+				"--http", "--allow-any-gitlab-url", "--http-addr="+addr,
+			)
+
+			if err == nil {
+				t.Fatalf("the escape hatch started on %s, which anyone on the network can reach; output:\n%s", addr, out)
+			}
+			// The address is the whole content of this refusal: an operator
+			// reading "reachable from the network" without seeing which
+			// address the server judged has to guess what to change.
+			if !strings.Contains(out, "--http-addr") || !strings.Contains(out, addr) {
+				t.Errorf("the refusal should name --http-addr and the address it judged; output:\n%s", out)
+			}
+			if !strings.Contains(out, "--gitlab-url") {
+				t.Errorf("the refusal should name the way out, which is to publish the instance; output:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestGate_TheEscapeHatchStartsOnLoopback is the other side of the test above:
+// the tightening must not have closed the deployment the hatch exists for.
+//
+// Asserted through the same startup path rather than in the unit test alone,
+// because the address the binary judges is the one it parsed off its own
+// command line, and a flag that stopped reaching the check would leave the
+// unit test green.
+func TestGate_TheEscapeHatchStartsOnLoopback(t *testing.T) {
+	srv := startServer(t, nil, "--allow-any-gitlab-url")
+	if !strings.Contains(srv.logs(), "allow-any-gitlab-url") {
+		t.Errorf("a deployment running with the hatch must say so in its log; logs:\n%s", srv.logs())
+	}
+}
+
 // TestGate_RepeatedFailuresBlockTheAddress verifies the per-address failure
 // budget: a stream of invented tokens is cut off with 429 and a Retry-After,
 // rather than relayed upstream one for one.

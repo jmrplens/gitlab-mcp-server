@@ -40,7 +40,8 @@ gitlab-mcp-server --http \
   --gitlab-url=https://gitlab.com,https://gitlab.internal.example.com \
   --http-addr=:8080
 
-# No instance published: GITLAB-URL names any host. Single-user local deployments only
+# No instance published: GITLAB-URL names any host. Single-user local deployments only,
+# and the loopback bind is not decoration: the hatch is refused on any other address
 gitlab-mcp-server --http \
   --allow-any-gitlab-url \
   --http-addr=127.0.0.1:8080
@@ -54,7 +55,7 @@ gitlab-mcp-server --http \
 | `--transport`                   | _(empty)_      | `stdio`, `http` or `auto`. Empty defers to `--http`; given both, `--transport` wins. `auto` reads file descriptor 0 and serves HTTP only when stdin is the null device (a container started without `-i`), stdio for the pipe an MCP client connects                                                                                                                                                                                                 |
 | `--env-file`                    | _(empty)_      | Dotenv file to load besides `~/.gitlab-mcp-server.env`; the same setting as `GITLAB_MCP_ENV_FILE`, and wins over it                                                                                                                                                                                                                                                                                                                                  |
 | `--gitlab-url`                  | _(required)_   | GitLab instance URL. **Required in HTTP mode** unless `--allow-any-gitlab-url` is passed. Repeatable (or comma-separated) to publish several instances, among which the `GITLAB-URL` header then selects; see [Publishing more than one instance](#publishing-more-than-one-instance)                                                                                                                                                                |
-| `--allow-any-gitlab-url`        | `false`        | Start with no instance published and let the `GITLAB-URL` header name any host; a request without the header is refused. Every request is then served against a host the caller chose, so it warns at startup and belongs on a single-user local deployment only                                                                                                                                                                                     |
+| `--allow-any-gitlab-url`        | `false`        | Start with no instance published and let the `GITLAB-URL` header name any host; a request without the header is refused. Every request is then served against a host the caller chose, so it is refused unless `--http-addr` binds a loopback address or a unix socket, and warns at startup even there                                                                                                                                              |
 | `--http-addr`                   | `:8080`        | Listen address. `host:port` binds TCP; a path (e.g. `/run/gitlab-mcp.sock`) binds a unix socket instead                                                                                                                                                                                                                                                                                                                                              |
 | `--http-socket-mode`            | `0660`         | Permission mode, in octal, for a unix socket named by `--http-addr`                                                                                                                                                                                                                                                                                                                                                                                  |
 | `--tls-cert` / `--tls-key`      | _(empty)_      | PEM certificate and key. Serves HTTPS on the listener itself, for a proxy that does not share the machine. Both or neither                                                                                                                                                                                                                                                                                                                           |
@@ -716,7 +717,8 @@ The socket is created `0660`, so the proxy reaches it by sharing a group with th
 For a proxy that does **not** share the machine:
 
 ```bash
-gitlab-mcp-server --http --http-addr=:8443 --tls-cert=/etc/ssl/mcp.crt --tls-key=/etc/ssl/mcp.key
+gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
+  --http-addr=:8443 --tls-cert=/etc/ssl/mcp.crt --tls-key=/etc/ssl/mcp.key
 ```
 
 Both flags or neither: a certificate without its key is a deployment that believes it is encrypting and is not. The pair is loaded at startup, so a wrong path fails there rather than at the first handshake.

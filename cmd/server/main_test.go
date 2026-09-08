@@ -4861,10 +4861,13 @@ func TestRunHTTP_OAuthRequiresGitLabURL(t *testing.T) {
 	err := runHTTP(context.Background(), &httpConfig{
 		gitlabURL:         "",
 		allowAnyGitLabURL: true,
-		maxHTTPClients:    config.DefaultMaxHTTPClients,
-		sessionTimeout:    config.DefaultSessionTimeout,
-		authMode:          "oauth",
-		oauthCacheTTL:     config.DefaultOAuthCacheTTL,
+		// The hatch is only admitted on a listener nobody else can reach, so
+		// an address is part of satisfying the general requirement now.
+		addr:           "127.0.0.1:0",
+		maxHTTPClients: config.DefaultMaxHTTPClients,
+		sessionTimeout: config.DefaultSessionTimeout,
+		authMode:       "oauth",
+		oauthCacheTTL:  config.DefaultOAuthCacheTTL,
 	})
 	if err == nil {
 		t.Fatal("expected error when OAuth mode has no fixed GitLab URL")
@@ -8783,12 +8786,12 @@ func TestRunWithContext_DeclaresWhichGitLabHostsAMetricMayName(t *testing.T) {
 			hcfg: &httpConfig{authMode: "saml"},
 		},
 		{
-			// Free selection now has to be asked for: without
-			// --allow-any-gitlab-url the deployment is refused before it
-			// reaches the mode's own validation, which is a different
-			// refusal from the one this test is about.
+			// Free selection now has to be asked for, and asked for on a
+			// listener nobody else can reach: without either the deployment
+			// is refused before it reaches the mode's own validation, which
+			// is a different refusal from the one this test is about.
 			name: "an http deployment that lets callers choose",
-			hcfg: &httpConfig{authMode: "saml", allowAnyGitLabURL: true},
+			hcfg: &httpConfig{authMode: "saml", allowAnyGitLabURL: true, addr: "127.0.0.1:0"},
 		},
 	}
 
@@ -9655,8 +9658,16 @@ func TestSecurityHeaders_RefusesDeeplyNestedBody(t *testing.T) {
 }
 
 // TestRequireInstanceAllowList verifies that HTTP mode refuses to start
-// without an instance allow-list, and that the escape hatch is the only way
-// past it.
+// without an instance allow-list, that the escape hatch is the only way past
+// it, and that the hatch itself is admitted only on a listener nobody else can
+// reach.
+//
+// That second half is the part a reader is most likely to weaken by accident.
+// The hatch reproduces the whole vulnerability below on purpose, so the only
+// thing keeping it defensible is that the caller it serves is the operator:
+// a loopback address or a unix socket. On a wildcard bind, which is what the
+// container CMD does, it is an SSRF proxy for the network. Warning about that
+// and starting anyway is what this used to do.
 //
 // With no --gitlab-url the resolver treated the GITLAB-URL header as a free
 // choice, and admission does not compensate: the credential probe runs against
@@ -9681,20 +9692,52 @@ func TestRequireInstanceAllowList(t *testing.T) {
 			wantErr: "--gitlab-url",
 		},
 		{
-			name: "no_instance_with_the_escape_hatch_starts",
-			hcfg: httpConfig{allowAnyGitLabURL: true},
+			name: "the_escape_hatch_starts_on_a_loopback_bind",
+			hcfg: httpConfig{allowAnyGitLabURL: true, addr: "127.0.0.1:8080"},
+		},
+		{
+			name: "the_escape_hatch_starts_on_localhost",
+			hcfg: httpConfig{allowAnyGitLabURL: true, addr: "localhost:8080"},
+		},
+		{
+			name: "the_escape_hatch_starts_on_ipv6_loopback",
+			hcfg: httpConfig{allowAnyGitLabURL: true, addr: "[::1]:8080"},
+		},
+		{
+			name: "the_escape_hatch_starts_on_a_unix_socket",
+			hcfg: httpConfig{allowAnyGitLabURL: true, addr: "/run/gitlab-mcp.sock"},
+		},
+		{
+			name:    "the_escape_hatch_is_refused_on_a_wildcard_bind",
+			hcfg:    httpConfig{allowAnyGitLabURL: true, addr: "0.0.0.0:8080"},
+			wantErr: "--http-addr",
+		},
+		{
+			name:    "the_escape_hatch_is_refused_on_a_portonly_bind",
+			hcfg:    httpConfig{allowAnyGitLabURL: true, addr: ":8080"},
+			wantErr: "--http-addr",
+		},
+		{
+			name:    "the_escape_hatch_is_refused_on_a_routable_host",
+			hcfg:    httpConfig{allowAnyGitLabURL: true, addr: "10.0.0.7:8080"},
+			wantErr: "--http-addr",
+		},
+		{
+			name:    "the_escape_hatch_is_refused_when_the_address_names_no_port",
+			hcfg:    httpConfig{allowAnyGitLabURL: true, addr: "8080"},
+			wantErr: "--http-addr",
 		},
 		{
 			name: "one_instance",
-			hcfg: httpConfig{gitlabURLs: repeatedFlag{"https://gitlab.example.com"}},
+			hcfg: httpConfig{gitlabURLs: repeatedFlag{"https://gitlab.example.com"}, addr: "0.0.0.0:8080"},
 		},
 		{
 			name: "several_instances",
-			hcfg: httpConfig{gitlabURLs: repeatedFlag{"https://a.example.com", "https://b.example.com"}},
+			hcfg: httpConfig{gitlabURLs: repeatedFlag{"https://a.example.com", "https://b.example.com"}, addr: "0.0.0.0:8080"},
 		},
 		{
 			name: "the_escape_hatch_is_ignored_when_an_instance_is_named",
-			hcfg: httpConfig{gitlabURLs: repeatedFlag{"https://a.example.com"}, allowAnyGitLabURL: true},
+			hcfg: httpConfig{gitlabURLs: repeatedFlag{"https://a.example.com"}, allowAnyGitLabURL: true, addr: "0.0.0.0:8080"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
