@@ -50,6 +50,12 @@ type publishedType struct {
 	// package's either way, since the row of a list is inner and is what the
 	// list endpoint sends.
 	Inner bool
+	// Payload is true for a type some struct of the package wraps and carries
+	// nothing else beside: `{badge: BadgeItem}`, or a list plus its
+	// pagination. That struct is this server's packaging and this type is
+	// what GitLab answered with, so the type grain judges it against the
+	// endpoint even though it is Inner. See [envelopePayload].
+	Payload bool
 }
 
 // nestedType is one output type reached through a field of another.
@@ -203,6 +209,7 @@ func publishedTypesIn(dir, pkg string, shared map[string]declaredStruct, sharedN
 			Name:    candidate.Name,
 			Fields:  whole.Fields,
 			Inner:   !strings.HasSuffix(candidate.Name, outputSuffix) || nested[candidate.Name],
+			Payload: parsed.enveloped[candidate.Name],
 		}
 		if !published.Inner {
 			published.Nested = nestedTypes(whole, byName, scalars)
@@ -219,6 +226,10 @@ type parsedPackage struct {
 	// nested holds every locally declared or shared type any struct names as
 	// a tagged field's type.
 	nested map[string]bool
+	// enveloped holds every type some struct wraps and carries nothing else
+	// beside, which is this repository's shape for a whole response. See
+	// [envelopePayload].
+	enveloped map[string]bool
 	// scalars holds every type it declares as something other than a struct.
 	scalars map[string]bool
 	// aliases maps every type it declares as, or from, a shared shape to that
@@ -235,7 +246,10 @@ type parsedPackage struct {
 // it does not own the state of must not fail over somebody's half-written
 // edit; a directory that cannot be read reads as empty for the same reason.
 func parsePackage(dir string) parsedPackage {
-	parsed := parsedPackage{nested: map[string]bool{}, scalars: map[string]bool{}, aliases: map[string]string{}, returned: map[string]bool{}}
+	parsed := parsedPackage{
+		nested: map[string]bool{}, enveloped: map[string]bool{},
+		scalars: map[string]bool{}, aliases: map[string]string{}, returned: map[string]bool{},
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return parsed
@@ -419,6 +433,9 @@ func structsIn(file *ast.File, parsed *parsedPackage) []declaredStruct {
 			for _, name := range fieldTypes {
 				parsed.nested[name] = true
 			}
+			if payload := envelopePayload(fields, fieldTypes); payload != "" {
+				parsed.enveloped[payload] = true
+			}
 			if len(fields) > 0 || len(embeds) > 0 {
 				found = append(found, declaredStruct{Name: typed.Name.Name, Fields: fields, FieldTypes: fieldTypes, Embeds: embeds})
 			}
@@ -469,6 +486,48 @@ func namedType(expr ast.Expr) string {
 			return ""
 		}
 	}
+}
+
+// framingShapes are the shared shapes a response carries because of how this
+// server answers rather than because of what GitLab sent. A struct wrapping
+// one object beside one of these is still a wrapper.
+//
+// Only pagination is here. The hint shapes are embedded rather than given a
+// json name, so they are never among a struct's tagged fields and need no
+// entry.
+var framingShapes = map[string]bool{
+	sharedPrefix + "PaginationOutput":               true,
+	sharedPrefix + "GraphQLPaginationOutput":        true,
+	sharedPrefix + "GraphQLForwardPaginationOutput": true,
+}
+
+// envelopePayload names the type a struct is a thin wrapper around, or "" when
+// the struct carries content of its own beside it.
+//
+// The convention here is that a handler answers with a one-key envelope:
+// `{badge: BadgeItem}` for a get, `{badges: []BadgeItem, pagination: …}` for a
+// list. The envelope is this server's packaging and the payload is what GitLab
+// sent, so the payload is the type the shape audit has to judge against the
+// endpoint even though some struct names it as a field.
+//
+// The distinction matters in the other direction too, and getting it wrong is
+// worse there: `jobs.ProjectObject` is named by a struct carrying thirty other
+// fields, so it is a project REFERENCE inside a job rather than a project
+// response, and judging it against the endpoints that answer with a whole
+// project reported all eighty-five fields of one as missing from it.
+func envelopePayload(fields []string, fieldTypes map[string]string) string {
+	payload := ""
+	for _, name := range fields {
+		typeName, named := fieldTypes[name]
+		if named && framingShapes[typeName] {
+			continue
+		}
+		if !named || payload != "" {
+			return ""
+		}
+		payload = typeName
+	}
+	return payload
 }
 
 // jsonTags returns the json names a struct publishes, sorted, the locally

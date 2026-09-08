@@ -133,19 +133,28 @@ func TestTypedShapeCheck_ATypeNamedAsAField_IsJudgedWhenAConverterPairsIt(t *tes
 	cases := []struct {
 		name          string
 		pairings      structs.Pairings
+		payload       bool
 		wantCompared  int
 		wantInner     int
 		wantNoPairing int
 		wantFindings  int
 	}{
 		{
-			name:         "paired",
-			pairings:     approvalPairing,
+			name:     "wrapped by an envelope and paired",
+			pairings: approvalPairing, payload: true,
 			wantCompared: 1, wantInner: 1, wantFindings: 1,
 		},
 		{
-			name:     "unpaired",
-			pairings: structs.Pairings{ClientGoDir: "/client-go"},
+			name:     "wrapped by an envelope and unpaired",
+			pairings: structs.Pairings{ClientGoDir: "/client-go"}, payload: true,
+		},
+		{
+			// A reference to another resource sitting inside a response. Its
+			// pairing names the struct of the whole entity, so judging it
+			// here would hold a job's project reference to what
+			// GET /projects/:id answers with.
+			name:     "a field of a response that carries other content, paired",
+			pairings: approvalPairing,
 		},
 	}
 	for _, testCase := range cases {
@@ -154,7 +163,7 @@ func TestTypedShapeCheck_ATypeNamedAsAField_IsJudgedWhenAConverterPairsIt(t *tes
 
 			check := typedShapeCheck("", indexOf(approvalOperations), []publishedType{{
 				Package: "internal/tools/mrapprovals", Name: "ConfigOutput",
-				Fields: []string{"approved", "title"}, Inner: true,
+				Fields: []string{"approved", "title"}, Inner: true, Payload: testCase.payload,
 			}})
 
 			if check.Compared != testCase.wantCompared || check.ComparedInner != testCase.wantInner {

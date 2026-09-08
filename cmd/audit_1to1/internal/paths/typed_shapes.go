@@ -184,11 +184,19 @@ func typedShapeCheck(root string, index *operationIndex, published []publishedTy
 	for _, candidate := range published {
 		named := shortPackage(candidate.Package) + "." + candidate.Name
 		paired := sdkTypes[[2]string{shortPackage(candidate.Package), candidate.Name}]
-		if candidate.Inner && len(paired) == 0 {
-			// A nested-only shape with nothing to ask about. Counted nowhere,
-			// because the NoPairing figure is about the types this grain was
-			// meant to judge and would stop being comparable if it grew a
-			// second population.
+		if candidate.Inner && !candidate.Payload {
+			// A reference to another resource sitting inside a response, not a
+			// response. Its pairing names the struct of the whole entity, so
+			// judging it here would hold a job's project reference to what
+			// GET /projects/:id answers with and report all eighty-five fields
+			// of a project as missing from it. The nested pass asks the only
+			// question that fits, against the property it sits under.
+			continue
+		}
+		if len(paired) == 0 && candidate.Payload {
+			// Wrapped and unpaired: the envelope was already counted a skip
+			// under its own name, and counting the payload again would double
+			// one response.
 			continue
 		}
 		if len(paired) == 0 {
