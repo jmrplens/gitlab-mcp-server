@@ -836,6 +836,11 @@ func TestRelative_PositionOutsideTheRoot_IsLeftAbsolute(t *testing.T) {
 // TestAbsolute_WhenTheWorkingDirectoryIsGone_KeepsTheDirAsWritten verifies
 // the fallback when the root cannot be made absolute, which is the one case
 // filepath.Abs fails in: the working directory no longer exists.
+//
+// Only Linux can be made to fail that way. Windows refuses to remove a
+// process's working directory, and macOS keeps answering getcwd from the
+// path it remembers, so on both the premise cannot be set up and the case is
+// skipped rather than reported as a defect in the operating system.
 func TestAbsolute_WhenTheWorkingDirectoryIsGone_KeepsTheDirAsWritten(t *testing.T) {
 	gone := filepath.Join(t.TempDir(), "gone")
 	if err := os.Mkdir(gone, 0o750); err != nil {
@@ -843,7 +848,10 @@ func TestAbsolute_WhenTheWorkingDirectoryIsGone_KeepsTheDirAsWritten(t *testing.
 	}
 	t.Chdir(gone)
 	if err := os.Remove(gone); err != nil {
-		t.Fatalf("remove: %v", err)
+		t.Skipf("this platform will not remove the working directory, so filepath.Abs cannot be made to fail here: %v", err)
+	}
+	if _, err := os.Getwd(); err == nil {
+		t.Skip("this platform's getcwd still answers after the working directory is removed, so filepath.Abs cannot fail here")
 	}
 
 	if got := absolute("."); got != "." {
