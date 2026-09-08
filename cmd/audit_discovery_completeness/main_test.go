@@ -6,8 +6,6 @@ package main
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
@@ -1022,65 +1020,6 @@ func TestReportCheck_Scenarios_GatesOnThreshold(t *testing.T) {
 			}
 		})
 	}
-}
-
-// captureDiscoveryStdout swaps os.Stdout for a temporary file until the test
-// ends and returns a reader for what was written, so the "-" report path can
-// be observed.
-func captureDiscoveryStdout(t *testing.T) func() string {
-	t.Helper()
-	file, err := os.Create(filepath.Join(t.TempDir(), "stdout"))
-	if err != nil {
-		t.Fatalf("create stdout capture: %v", err)
-	}
-	previous := os.Stdout
-	os.Stdout = file
-	t.Cleanup(func() {
-		os.Stdout = previous
-		_ = file.Close()
-	})
-	return func() string {
-		data, readErr := os.ReadFile(file.Name())
-		if readErr != nil {
-			t.Fatalf("read stdout capture: %v", readErr)
-		}
-		return string(data)
-	}
-}
-
-// TestWriteReport_Scenarios_WritesStdoutOrFile verifies the "-" sentinel
-// writes the JSON report to stdout, a nested output path gets its parent
-// directories created, and a parent that is a regular file is reported as an
-// error instead of silently dropping the report.
-func TestWriteReport_Scenarios_WritesStdoutOrFile(t *testing.T) {
-	t.Run("stdout sentinel", func(t *testing.T) {
-		stdout := captureDiscoveryStdout(t)
-		if err := writeReport("-", []byte("{}\n")); err != nil {
-			t.Fatalf("writeReport(-) error = %v", err)
-		}
-		if got := stdout(); got != "{}\n" {
-			t.Errorf("stdout = %q, want the report", got)
-		}
-	})
-	t.Run("nested file", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), "plan", "discovery-backlog.json")
-		if err := writeReport(path, []byte("{}\n")); err != nil {
-			t.Fatalf("writeReport() error = %v", err)
-		}
-		data, err := os.ReadFile(path)
-		if err != nil || string(data) != "{}\n" {
-			t.Errorf("written report = %q, %v; want the content", data, err)
-		}
-	})
-	t.Run("parent is a file", func(t *testing.T) {
-		blocker := filepath.Join(t.TempDir(), "blocker")
-		if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
-			t.Fatalf("write blocker: %v", err)
-		}
-		if err := writeReport(filepath.Join(blocker, "backlog.json"), []byte("{}\n")); err == nil {
-			t.Fatal("writeReport() error = nil, want the directory creation failure")
-		}
-	})
 }
 
 // TestInferOwnerFromName_Scenarios_TakesDottedPrefix verifies the defensive

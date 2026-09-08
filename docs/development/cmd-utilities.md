@@ -1754,6 +1754,19 @@ The `overlay` parameter is not a convenience. It is how three of the gates' test
 
 `cmd/audit_1to1/internal/shared.LoadToolPackages` is deliberately not folded in. It loads with `NeedDeps`, so it pays for the dependency tree these four refuse to pay for, and it refuses more widely than `Load` does, collecting every error of every loaded package (the dependencies included) and aborting on all of them at once where `Load` stops at the first error of a package the caller asked for. It also returns a subset rather than what it loaded, keeping the packages under `internal/tools` and dropping the rest, and memoizes that result per root. That is a different contract, not a different wording of this one.
 
+### cmd/internal/docgen
+
+The Markdown renderers the generators share (`RenderMarkdownTable`, and `ReplaceSection` / `ComputeReplacedSection` for a managed region of a hand-written document), plus the two ways a command puts bytes on disk. Those two are kept apart on purpose, because they answer different questions:
+
+- **`WriteOrCheck(path, content, check, regenerate)`** is the whole-file freshness convention for a committed artifact, and the one place its decisions are taken: a write creates the parent directory (a check never does, so a gate reports a missing tree rather than making one), the file is written through an `os.Root` opened on that directory so the write can only land on the named file, content is given the trailing newline that keeps a generated file from being the one text file in the repository without one, the comparison ignores carriage returns so a Windows checkout does not report drift a Linux one cannot see, and a stale artifact is reported with one sentence naming the file and the command that refreshes it. The mode is `0o600`: seven of the eight callers already used it, it is what gosec's G306 accepts without a suppression, and it only ever applies to a file the generator creates from nothing, since neither `os.WriteFile` nor `Root.WriteFile` changes the mode of a file that is already there.
+- **`WriteReport(path, content)`** is the `-` means stdout convention for an auditor's `-output` flag. Nothing there is committed and nothing is compared, and the path is the operator's own, so it is contained to no directory.
+
+Merging the two behind one signature with a mode flag is the one way to make this worse than the copies it replaced, which is why there are two functions. The managed-section helpers stay separate for the same reason: what is generated there is a region, and the rest of the file is somebody's prose.
+
+`NormalizeNewlines` is exported for one reason: the commands whose artifacts `WriteOrCheck` writes hold the same bytes to the same rule in their own tests (`gen_llms` against the six committed files, `audit_metrics` against the committed `stats.json`), and private copies of that one line in each test file are the drift this package exists to stop.
+
+Half of one `-` writer stays where it is. [`audit_edition_tier`](#audit_edition_tier) writes its stdout branch to a writer the caller injects, which is how its tests read that branch back without swapping `os.Stdout`; folding it in would mean giving up that seam or giving `WriteReport` a writer parameter no other caller has a use for. Its file branch is the shared helper's, which also gave it the missing parent directory it did not create before.
+
 ## CI gate targets
 
 The following utilities expose a verification mode (`--check` or `-check`, or an invariant/error exit) that CI runs to guard against drift. The combined documentation gate is `make audit-docs`, which chains markdownlint, the table formatter, the llms, LobeHub-manifest, testing-docs and site-stats checks, the local-link check, the godoc, surface-quality and alias audits, and the site's own `check`, `build` and `lint`.

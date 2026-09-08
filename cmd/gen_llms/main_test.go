@@ -21,6 +21,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
@@ -416,9 +417,9 @@ func TestRun_CheckModeReportsDrift(t *testing.T) {
 		remove  bool
 		wantErr string
 	}{
-		{name: "stale llms.txt", file: llmsFileName, wantErr: "write llms.txt: llms.txt is out of date; run go run ./cmd/gen_llms/"},
-		{name: "stale llms-full.txt", file: llmsFullFileName, wantErr: "write llms-full.txt: llms-full.txt is out of date"},
-		{name: "stale medium companion", file: llmsMediumFileName, wantErr: "write llms-medium.txt: llms-medium.txt is out of date"},
+		{name: "stale llms.txt", file: llmsFileName, wantErr: "llms.txt is stale; run go run ./cmd/gen_llms/"},
+		{name: "stale llms-full.txt", file: llmsFullFileName, wantErr: "llms-full.txt is stale"},
+		{name: "stale medium companion", file: llmsMediumFileName, wantErr: "llms-medium.txt is stale"},
 		{name: "missing individual companion", file: llmsFullIndividualFileName, remove: true, wantErr: "write llms-full-individual-tools.txt: "},
 	}
 
@@ -503,7 +504,7 @@ func TestRun_RealSurfaceReproducesCommittedFiles(t *testing.T) {
 		if readErr != nil {
 			t.Fatalf("read committed %s: %v", name, readErr)
 		}
-		committed[name] = normalizeLineEndings(string(data))
+		committed[name] = string(docgen.NormalizeNewlines(data))
 	}
 
 	dir := projectRootWithVersion(t, readVersion(repoRoot))
@@ -513,7 +514,7 @@ func TestRun_RealSurfaceReproducesCommittedFiles(t *testing.T) {
 
 	for _, name := range generatedFileNames {
 		t.Run(name, func(t *testing.T) {
-			got := normalizeLineEndings(readGenerated(t, dir, name))
+			got := string(docgen.NormalizeNewlines([]byte(readGenerated(t, dir, name))))
 			if got != committed[name] {
 				t.Errorf("%s differs from the committed file (%d vs %d bytes); run go run ./cmd/gen_llms/", name, len(got), len(committed[name]))
 			}
@@ -937,7 +938,7 @@ func TestWriteGeneratedFile_CheckModeReportsMissingAndStaleFiles(t *testing.T) {
 		wantNotExist bool
 	}{
 		{name: "missing file", wantNotExist: true},
-		{name: "stale file", existing: "# stale\n", wantErr: "llms.txt is out of date; run go run ./cmd/gen_llms/"},
+		{name: "stale file", existing: "# stale\n", wantErr: "llms.txt is stale; run go run ./cmd/gen_llms/"},
 	}
 
 	for _, tt := range tests {

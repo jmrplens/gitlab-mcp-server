@@ -18,13 +18,13 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
@@ -220,28 +220,6 @@ func renderSiteStatsJSON(stats siteStats) []byte {
 // checkOnly is set — verifies the committed file matches the freshly generated
 // content and returns an actionable error if it is stale.
 func writeOrCheckSiteStats(path string, stats siteStats, checkOnly bool) error {
-	content := renderSiteStatsJSON(stats)
-	if checkOnly {
-		existing, readErr := os.ReadFile(path) //#nosec G304 -- path is an operator-supplied generator target
-		if readErr != nil {
-			return fmt.Errorf("read %s: %w", path, readErr)
-		}
-		if !bytes.Equal(normalizeNewlines(existing), normalizeNewlines(content)) {
-			return fmt.Errorf("%s is out of date; run: go run ./cmd/audit_metrics/ -site-stats %s", path, path)
-		}
-		return nil
-	}
-	if mkErr := os.MkdirAll(filepath.Dir(path), 0o750); mkErr != nil {
-		return fmt.Errorf("create dir for %s: %w", path, mkErr)
-	}
-	if writeErr := os.WriteFile(path, content, 0o600); writeErr != nil {
-		return fmt.Errorf("write %s: %w", path, writeErr)
-	}
-	return nil
-}
-
-// normalizeNewlines strips carriage returns so the check is line-ending
-// agnostic across platforms.
-func normalizeNewlines(b []byte) []byte {
-	return bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
+	return docgen.WriteOrCheck(path, renderSiteStatsJSON(stats), checkOnly,
+		"go run ./cmd/audit_metrics/ -site-stats "+path)
 }

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -22,6 +21,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/sdk"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/structs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
@@ -108,7 +108,7 @@ func run(ctx context.Context, opts options) error {
 	if err != nil {
 		return err
 	}
-	if writeErr := writeOutput(opts.outputPath, content); writeErr != nil {
+	if writeErr := docgen.WriteReport(opts.outputPath, content); writeErr != nil {
 		return fmt.Errorf("write output: %w", writeErr)
 	}
 	// The report is written before the gate fails, so whoever reads the failure
@@ -157,7 +157,7 @@ func validateDocs(ctx context.Context, root, outputPath string, fetcher *apidocs
 	if err != nil {
 		return err
 	}
-	if writeErr := writeOutput(outputPath, content); writeErr != nil {
+	if writeErr := docgen.WriteReport(outputPath, content); writeErr != nil {
 		return fmt.Errorf("write output: %w", writeErr)
 	}
 	if !ok {
@@ -286,15 +286,4 @@ func parseScope(s string) ([]string, error) {
 	}
 	sort.Strings(scopes)
 	return scopes, nil
-}
-
-func writeOutput(outputPath string, content []byte) error {
-	if outputPath == "-" {
-		_, err := os.Stdout.Write(content)
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0o750); err != nil {
-		return err
-	}
-	return os.WriteFile(outputPath, content, 0o600)
 }

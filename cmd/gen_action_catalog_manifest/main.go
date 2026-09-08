@@ -5,10 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"go/format"
-	"os"
 	"path/filepath"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
@@ -57,14 +57,8 @@ func run(root, sourceDir, outputPath string, check bool) error {
 		return fmt.Errorf("generate manifest: %w", err)
 	}
 	targetPath := filepath.Join(root, outputPath)
-	if check {
-		if checkErr := checkManifest(targetPath, content); checkErr != nil {
-			return fmt.Errorf("check manifest: %w", checkErr)
-		}
-		return nil
-	}
-	if writeErr := os.WriteFile(targetPath, content, 0o600); writeErr != nil {
-		return fmt.Errorf("write %s: %w", targetPath, writeErr)
+	if writeErr := docgen.WriteOrCheck(targetPath, content, check, "go run ./cmd/gen_action_catalog_manifest/"); writeErr != nil {
+		return fmt.Errorf("action spec manifest: %w", writeErr)
 	}
 	return nil
 }
@@ -85,15 +79,4 @@ func generateManifest(builders []string) ([]byte, error) {
 		return nil, fmt.Errorf("format generated manifest: %w", err)
 	}
 	return formatted, nil
-}
-
-func checkManifest(path string, want []byte) error {
-	got, err := os.ReadFile(path) // #nosec G304 -- path is resolved from the local repository root and points to the generated manifest.
-	if err != nil {
-		return fmt.Errorf("read %s: %w", path, err)
-	}
-	if !bytes.Equal(got, want) {
-		return fmt.Errorf("%s is stale; run go run ./cmd/gen_action_catalog_manifest/", path)
-	}
-	return nil
 }

@@ -22,6 +22,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -458,8 +459,9 @@ func TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked(t *testing.T) {
 	assertSurfaceBackedDomain(t, report, "projectdiscovery", "runtime-utility", 1)
 }
 
-// TestWriteReport_WritesJSONFile verifies WriteReport writes JSON file.
-func TestWriteReport_WritesJSONFile(t *testing.T) {
+// TestMarshalReport_WrittenFile_RoundTripsThroughJSON verifies the marshaled
+// coverage report survives a write and a decode unchanged.
+func TestMarshalReport_WrittenFile_RoundTripsThroughJSON(t *testing.T) {
 	report := coverageReport{SchemaVersion: schemaVersion, Summary: coverageSummary{DomainCount: 1}, Domains: []domainCoverage{{Package: "example"}}}
 	content, err := marshalReport(report)
 	if err != nil {
@@ -467,9 +469,9 @@ func TestWriteReport_WritesJSONFile(t *testing.T) {
 	}
 
 	outputPath := filepath.Join(t.TempDir(), "coverage.json")
-	writeErr := writeReport(outputPath, content)
+	writeErr := docgen.WriteReport(outputPath, content)
 	if writeErr != nil {
-		t.Fatalf("writeReport() error = %v", writeErr)
+		t.Fatalf("WriteReport() error = %v", writeErr)
 	}
 
 	written, err := os.ReadFile(outputPath)
@@ -1245,52 +1247,6 @@ func TestJoinSortedSet_Scenarios_JoinsSortedOrEmpty(t *testing.T) {
 			}
 		})
 	}
-}
-
-// captureStdout swaps os.Stdout for a temporary file until the test ends and
-// returns a reader for what was written, so the "-" output path can be
-// observed.
-func captureStdout(t *testing.T) func() string {
-	t.Helper()
-	file, err := os.Create(filepath.Join(t.TempDir(), "stdout"))
-	if err != nil {
-		t.Fatalf("create stdout capture: %v", err)
-	}
-	previous := os.Stdout
-	os.Stdout = file
-	t.Cleanup(func() {
-		os.Stdout = previous
-		_ = file.Close()
-	})
-	return func() string {
-		data, readErr := os.ReadFile(file.Name())
-		if readErr != nil {
-			t.Fatalf("read stdout capture: %v", readErr)
-		}
-		return string(data)
-	}
-}
-
-// TestWriteReport_Scenarios_WritesStdoutOrFailsOnBlockedDirectory verifies
-// the "-" sentinel writes the report to stdout and a report path whose parent
-// directory cannot be created is reported as an error.
-func TestWriteReport_Scenarios_WritesStdoutOrFailsOnBlockedDirectory(t *testing.T) {
-	t.Run("stdout sentinel", func(t *testing.T) {
-		stdout := captureStdout(t)
-		if err := writeReport("-", []byte("{}\n")); err != nil {
-			t.Fatalf("writeReport(-) error = %v", err)
-		}
-		if got := stdout(); got != "{}\n" {
-			t.Errorf("stdout = %q, want the report", got)
-		}
-	})
-	t.Run("blocked parent directory", func(t *testing.T) {
-		blocker := filepath.Join(t.TempDir(), "blocker")
-		writeAuditTestFile(t, blocker, "x")
-		if err := writeReport(filepath.Join(blocker, "coverage.json"), []byte("{}\n")); err == nil {
-			t.Fatal("writeReport() error = nil, want the directory creation failure")
-		}
-	})
 }
 
 // TestProductionFileCallsSelector_FindsCallsAndParsesErrors verifies the

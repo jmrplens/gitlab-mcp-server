@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
@@ -184,7 +185,7 @@ func main() {
 	if err != nil {
 		cmdutil.Fatalf("marshal coverage report: %v", err)
 	}
-	writeErr := writeReport(*outputPath, content)
+	writeErr := docgen.WriteReport(*outputPath, content)
 	if writeErr != nil {
 		cmdutil.Fatalf("write coverage report: %v", writeErr)
 	}
@@ -1059,15 +1060,4 @@ func marshalReport(report coverageReport) ([]byte, error) {
 		return nil, err
 	}
 	return append(content, '\n'), nil
-}
-
-func writeReport(outputPath string, content []byte) error {
-	if outputPath == "-" {
-		_, err := os.Stdout.Write(content)
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0o750); err != nil {
-		return err
-	}
-	return os.WriteFile(outputPath, content, 0o600)
 }

@@ -8,12 +8,15 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 )
 
 // newSiteStats builds the stats payload from a mock self-managed client and a
@@ -77,7 +80,7 @@ func TestSiteStatsMatchesCommittedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read committed stats.json: %v", err)
 	}
-	if string(normalizeNewlines(got)) != string(normalizeNewlines(want)) {
+	if !bytes.Equal(docgen.NormalizeNewlines(got), docgen.NormalizeNewlines(want)) {
 		t.Errorf("%s is stale; regenerate with: go run ./cmd/audit_metrics/ -site-stats site/src/data/stats.json", path)
 	}
 }
@@ -153,9 +156,9 @@ func TestWriteOrCheckSiteStats_Failures_ReturnActionableErrors(t *testing.T) {
 		checkOnly bool
 		want      string
 	}{
-		{name: "stale file fails the check", path: stale, checkOnly: true, want: stale + " is out of date; run: go run ./cmd/audit_metrics/ -site-stats " + stale},
+		{name: "stale file fails the check", path: stale, checkOnly: true, want: stale + " is stale; run go run ./cmd/audit_metrics/ -site-stats " + stale},
 		{name: "missing file fails the check", path: filepath.Join(root, "missing.json"), checkOnly: true, want: "read " + filepath.Join(root, "missing.json")},
-		{name: "parent that is a file fails the write", path: filepath.Join(blocker, "stats.json"), want: "create dir for " + filepath.Join(blocker, "stats.json")},
+		{name: "parent that is a file fails the write", path: filepath.Join(blocker, "stats.json"), want: "create directory for " + filepath.Join(blocker, "stats.json")},
 		{name: "target that is a directory fails the write", path: directory, want: "write " + directory},
 	}
 	for _, tt := range tests {

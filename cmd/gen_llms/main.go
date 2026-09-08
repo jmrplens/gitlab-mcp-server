@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
@@ -1144,6 +1146,10 @@ func findSentenceEnd(s string) int {
 }
 
 // writeGeneratedFile writes or checks generated content in the project root.
+// The name is held to the six artifacts this command owns before the path is
+// built, so a caller can never address anything else; docgen.WriteOrCheck
+// decides everything after that: the mode, the line-ending-agnostic
+// comparison and the sentence a stale file is reported with.
 func writeGeneratedFile(name, content string, checkOnly bool) error {
 	if !isGeneratedLLMSFile(name) {
 		return fmt.Errorf("unexpected generated file %q", name)
@@ -1152,27 +1158,7 @@ func writeGeneratedFile(name, content string, checkOnly bool) error {
 	if err != nil {
 		return err
 	}
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = root.Close() }()
-
-	if checkOnly {
-		existing, readErr := root.ReadFile(name)
-		if readErr != nil {
-			return readErr
-		}
-		if normalizeLineEndings(string(existing)) != normalizeLineEndings(content) {
-			return fmt.Errorf("%s is out of date; run go run ./cmd/gen_llms/", name)
-		}
-		return nil
-	}
-	return root.WriteFile(name, []byte(content), 0o644)
-}
-
-func normalizeLineEndings(s string) string {
-	return strings.ReplaceAll(s, "\r\n", "\n")
+	return docgen.WriteOrCheck(filepath.Join(dir, name), []byte(content), checkOnly, "go run ./cmd/gen_llms/")
 }
 
 func isGeneratedLLMSFile(name string) bool {

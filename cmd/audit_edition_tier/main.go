@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
@@ -123,11 +124,17 @@ func run(ctx context.Context, res *docResolver, gapsOnly bool, outputPath string
 	if err != nil {
 		return fmt.Errorf("marshal report: %w", err)
 	}
+	// The stdout half is the one spelling of this convention docgen.WriteReport
+	// does not own: the destination here is a writer the caller injects, which
+	// is what lets the tests read that branch back without swapping os.Stdout,
+	// and folding it in would mean either giving that seam up or giving
+	// WriteReport a writer parameter no other caller has a use for. The file
+	// half is the shared helper's, mode and missing parent directory included.
 	if outputPath == "-" {
 		fmt.Fprintln(stdout, string(data))
 		return nil
 	}
-	if writeErr := os.WriteFile(outputPath, append(data, '\n'), 0o600); writeErr != nil {
+	if writeErr := docgen.WriteReport(outputPath, append(data, '\n')); writeErr != nil {
 		return fmt.Errorf("write report: %w", writeErr)
 	}
 	return nil
