@@ -107,9 +107,13 @@ func normalizeNewlines(b []byte) []byte {
 // ensureTrailingNewline appends the final newline when content lacks one.
 // Empty content is left empty: a file with nothing in it is a caller's mistake
 // to report, not one this helper should paper over with a blank line.
+//
+// The copy is what keeps the caller's slice its own: appending to the argument
+// would write into its backing array whenever it had the spare capacity, which
+// is a mutation no caller of a writing helper expects.
 func ensureTrailingNewline(content []byte) []byte {
 	if len(content) == 0 || content[len(content)-1] == '\n' {
 		return content
 	}
-	return append(append(make([]byte, 0, len(content)+1), content...), '\n')
+	return append(bytes.Clone(content), '\n')
 }
