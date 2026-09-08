@@ -115,6 +115,29 @@ func tarball(t *testing.T, root string, files map[string]string) []byte {
 	return buf.Bytes()
 }
 
+// cutHeader builds an archive that ends inside its first header, so not even
+// the first entry can be read.
+func cutHeader(t *testing.T) []byte {
+	t.Helper()
+	var plain bytes.Buffer
+	archive := tar.NewWriter(&plain)
+	if err := archive.WriteHeader(&tar.Header{Name: "gitlab-master-" + commitA + "-lib-api-entities/", Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
+		t.Fatalf("write the archive: %v", err)
+	}
+	if err := archive.Flush(); err != nil {
+		t.Fatalf("write the archive: %v", err)
+	}
+	var buf bytes.Buffer
+	zipped := gzip.NewWriter(&buf)
+	if _, err := zipped.Write(plain.Bytes()[:300]); err != nil {
+		t.Fatalf("write the archive: %v", err)
+	}
+	if err := zipped.Close(); err != nil {
+		t.Fatalf("close the archive: %v", err)
+	}
+	return buf.Bytes()
+}
+
 // shortArchive builds an archive whose one file announces more bytes than
 // follow, so its header reads and its content does not.
 func shortArchive(t *testing.T) []byte {
@@ -138,11 +161,16 @@ func shortArchive(t *testing.T) []byte {
 }
 
 // gitlabAnswers maps each fetched path to its body: the three archives by
-// the subtree they were asked for, the table by its raw path.
+// the subtree they were asked for, the table by its raw path. A non-zero
+// status is answered to everything; failFirst says how many requests are
+// answered 503 before the server starts answering properly, which is how
+// gitlab.com's archive endpoint behaves now and then.
 type gitlabAnswers struct {
-	archives map[string][]byte
-	table    []byte
-	status   int
+	archives  map[string][]byte
+	table     []byte
+	status    int
+	failFirst int
+	requests  int
 }
 
 // serving returns a server answering the way gitlab.com does for the four
@@ -150,6 +178,11 @@ type gitlabAnswers struct {
 func serving(t *testing.T, answers gitlabAnswers) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		answers.requests++
+		if answers.requests <= answers.failFirst {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		if answers.status != 0 {
 			w.WriteHeader(answers.status)
 			return
@@ -187,7 +220,8 @@ func wholeTree(t *testing.T) gitlabAnswers {
 	}
 }
 
-// generating runs a generate against a server, into a fresh directory.
+// generating runs a generate against a server, into a fresh directory, with
+// no pause between retries.
 func generating(t *testing.T, answers gitlabAnswers, client *http.Client) (int, string, string, string) {
 	t.Helper()
 	server := serving(t, answers)
@@ -195,8 +229,53 @@ func generating(t *testing.T, answers gitlabAnswers, client *http.Client) (int, 
 	if client == nil {
 		client = server.Client()
 	}
-	status, out, errOut := runCommand(t, genRun{ref: "master", dir: dir, client: client, base: server.URL, now: fixedClock})
+	status, out, errOut := runCommand(t, genRun{ref: "master", dir: dir, client: client, base: server.URL, now: fixedClock, pause: func(time.Duration) {}})
 	return status, out, errOut, dir
+}
+
+// TestRun_Generate_TriesAgainAfterAServerSideFailure verifies the retry:
+// two 503s before the answers are what gitlab.com's archive endpoint does
+// now and then, and a run that met one used to fail on it. A failure that
+// outlasts every attempt is reported with the attempt count, and one that is
+// an answer, a 404, is not retried at all.
+func TestRun_Generate_TriesAgainAfterAServerSideFailure(t *testing.T) {
+	t.Run("a failure the next attempt outlives", func(t *testing.T) {
+		answers := wholeTree(t)
+		answers.failFirst = 2
+		status, _, errOut, dir := generating(t, answers, nil)
+
+		if status != 0 {
+			t.Fatalf("run() = %d, want 0; stderr:\n%s", status, errOut)
+		}
+		if _, err := apiexposes.Read(dir); err != nil {
+			t.Errorf("Read() error = %v, want the record written after the retries", err)
+		}
+	})
+	t.Run("a failure that outlasts every attempt", func(t *testing.T) {
+		answers := wholeTree(t)
+		answers.failFirst = fetchAttempts
+		status, _, errOut, _ := generating(t, answers, nil)
+
+		if status != 1 || !strings.Contains(errOut, "503 Service Unavailable (after 3 attempts)") {
+			t.Errorf("run() = %d, stderr %q, want the failure with its attempt count", status, errOut)
+		}
+	})
+	t.Run("an answer that is not worth retrying", func(t *testing.T) {
+		answers := wholeTree(t)
+		answers.archives = map[string][]byte{}
+		status, _, errOut, _ := generating(t, answers, nil)
+
+		if status != 1 || !strings.Contains(errOut, "404 Not Found") || strings.Contains(errOut, "attempts") {
+			t.Errorf("run() = %d, stderr %q, want a 404 reported once", status, errOut)
+		}
+	})
+	t.Run("the default pause sleeps", func(t *testing.T) {
+		started := time.Now()
+		genRun{}.wait(time.Millisecond)
+		if time.Since(started) < time.Millisecond {
+			t.Error("wait() returned before the delay")
+		}
+	})
 }
 
 // TestRun_Generate_FetchesEverySourceAndWritesTheRecord verifies the network
@@ -248,7 +327,7 @@ func TestRun_Generate_RefusesWhatItCannotTrust(t *testing.T) {
 	empty := wholeTree(t)
 	empty.archives["lib/api/entities"] = tarball(t, "", map[string]string{})
 	truncated := wholeTree(t)
-	truncated.archives["lib/api/entities"] = truncated.archives["lib/api/entities"][:len(truncated.archives["lib/api/entities"])-40]
+	truncated.archives["lib/api/entities"] = cutHeader(t)
 	short := wholeTree(t)
 	short.archives["lib/api/entities"] = shortArchive(t)
 	unreadable := wholeTree(t)
@@ -347,28 +426,41 @@ func checkout(t *testing.T, withTable bool) string {
 	return root
 }
 
-// TestRun_Source_ReadsALocalCheckoutWithoutTheNetwork verifies the -source
-// half: the same directories read off disk, recorded as a local checkout
-// rather than a commit, with the failures a checkout can have.
-func TestRun_Source_ReadsALocalCheckoutWithoutTheNetwork(t *testing.T) {
-	t.Run("a whole checkout", func(t *testing.T) {
-		dir := t.TempDir()
-		status, out, errOut := runCommand(t, genRun{ref: "master", dir: dir, source: checkout(t, true), client: &http.Client{Transport: refusedDial{}}, now: fixedClock})
+// TestRun_Source_WholeCheckout_IsRecordedDigestedAndWarned verifies the
+// -source half on a checkout that has everything: the same directories read
+// off disk without the network, the record digested the way a fetched one is
+// so that -check accepts it, its commit recorded as a local checkout rather
+// than one it did not see, and a warning saying so.
+func TestRun_Source_WholeCheckout_IsRecordedDigestedAndWarned(t *testing.T) {
+	dir := t.TempDir()
+	status, out, errOut := runCommand(t, genRun{ref: "master", dir: dir, source: checkout(t, true), client: &http.Client{Transport: refusedDial{}}, now: fixedClock})
 
-		if status != 0 {
-			t.Fatalf("run() = %d, want 0; stderr:\n%s", status, errOut)
-		}
-		doc, err := apiexposes.Read(dir)
-		if err != nil {
-			t.Fatalf("Read() error = %v", err)
-		}
-		if doc.Source.Commit != "local checkout" || doc.Source.SHA256 != "" || doc.Source.Files != 1 {
-			t.Errorf("Source = %+v, want a local checkout with one Ruby file", doc.Source)
-		}
-		if !strings.Contains(out, "wrote gitlab-api-exposes.json") {
-			t.Errorf("run() stdout = %q", out)
-		}
-	})
+	if status != 0 {
+		t.Fatalf("run() = %d, want 0; stderr:\n%s", status, errOut)
+	}
+	doc, err := apiexposes.Read(dir)
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+	if doc.Source.Commit != localCheckout || len(doc.Source.SHA256) != 64 || doc.Source.Files != 1 {
+		t.Errorf("Source = %+v, want a local checkout with one Ruby file, digested", doc.Source)
+	}
+	if !strings.Contains(out, "wrote gitlab-api-exposes.json") {
+		t.Errorf("run() stdout = %q", out)
+	}
+	if !strings.Contains(errOut, "the record's ref is what -ref said and its commit is unknown, so regenerate from the network before committing it") {
+		t.Errorf("run() stderr = %q, want the warning about a local record", errOut)
+	}
+	status, _, checkErr := runCommand(t, genRun{dir: dir, check: true, now: fixedClock})
+	if status != 0 {
+		t.Errorf("run(-check) = %d on a local record, want 0; stderr:\n%s", status, checkErr)
+	}
+}
+
+// TestRun_Source_ReadsALocalCheckoutWithoutTheNetwork verifies the failures
+// a checkout can have: no feature table, a missing entity directory, a path
+// that is a file, and a Ruby file that cannot be read.
+func TestRun_Source_ReadsALocalCheckoutWithoutTheNetwork(t *testing.T) {
 	t.Run("a checkout without the table", func(t *testing.T) {
 		status, _, errOut := runCommand(t, genRun{ref: "master", dir: t.TempDir(), source: checkout(t, false), now: fixedClock})
 
@@ -519,6 +611,7 @@ func TestRun_Report_PrintsAnEntityAsAReviewerReadsIt(t *testing.T) {
 		{Name: "gated", Line: 4, If: "->(c, _) { c.feature_available?(:feature_1) }", Features: []string{"feature_1"}, Tier: apiexposes.TierPremium},
 		{Name: "prepended", Line: 9, Edition: "ee", Unless: "->(_, _) { off? }"},
 		{Name: "links", Line: 5, Using: "APIEntitiesParent", Nested: []apiexposes.Field{{Name: "self", Line: 6}}},
+		{Name: "*Helper.attributes", Line: 7, Splat: true},
 	}}
 	dir := committing(t, doc)
 
@@ -528,12 +621,13 @@ func TestRun_Report_PrintsAnEntityAsAReviewerReadsIt(t *testing.T) {
 		if status != 0 {
 			t.Fatalf("run() = %d, want 0; stderr:\n%s", status, errOut)
 		}
-		want := "APIEntitiesChild (lib/api/entities/child.rb:3, inherits APIEntitiesParent, ee only): 4 field(s)\n" +
+		want := "APIEntitiesChild (lib/api/entities/child.rb:3, inherits APIEntitiesParent, ee only): 5 field(s)\n" +
 			"  id\n" +
 			"  gated  [premium; if ->(c, _) { c.feature_available?(:feature_1) }]\n" +
 			"  prepended  [ee; unless ->(_, _) { off? }]\n" +
 			"  links  [as APIEntitiesParent]\n" +
-			"    self\n"
+			"    self\n" +
+			"  *Helper.attributes  [names decided at run time]\n"
 		if out != want {
 			t.Errorf("run() stdout =\n%s\nwant\n%s", out, want)
 		}

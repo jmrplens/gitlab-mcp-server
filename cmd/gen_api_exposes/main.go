@@ -43,9 +43,22 @@ const (
 	maxAge = 180 * 24 * time.Hour
 	// fetchTimeout bounds one download. The largest archive is under 100 KB.
 	fetchTimeout = 2 * time.Minute
+	// fetchAttempts is how many times one download is tried. gitlab.com
+	// answers the archive endpoint with a 503 now and then, and a run that
+	// fetches four things in a row meets one often enough that giving up on
+	// the first would make the generator fail more often than the source
+	// does. Only a server-side failure or a connection that fails is retried;
+	// a 404 is an answer.
+	fetchAttempts = 3
+	// retryDelay is the pause before a retry.
+	retryDelay = 2 * time.Second
 	// featuresPath is GitLab's licensed-feature table.
 	featuresPath = "ee/app/models/gitlab_subscriptions/features.rb"
-	note         = "The condition under which GitLab sends each field a REST entity exposes, read out of gitlab-org/gitlab's Grape entities by cmd/gen_api_exposes. " +
+	// localCheckout is what a record generated with -source carries as its
+	// commit: the checkout proves nothing about the ref, and the record says
+	// so rather than naming a commit it did not see.
+	localCheckout = "local checkout"
+	note          = "The condition under which GitLab sends each field a REST entity exposes, read out of gitlab-org/gitlab's Grape entities by cmd/gen_api_exposes. " +
 		"An entity's fields are its own in declaration order, Enterprise prepends last; the parent's come first in what GitLab sends and are listed under the parent. " +
 		"A field without a condition is always sent when the entity is; a field with one is sent only when it holds, and its tier is the license tier the named feature belongs to."
 )
@@ -74,6 +87,17 @@ type genRun struct {
 	// now supplies the day recorded, as a parameter so a test can assert on
 	// the record it produced.
 	now func() time.Time
+	// pause waits before a retry; a test supplies one that does not wait.
+	pause func(time.Duration)
+}
+
+// wait pauses before a retry, with a default that sleeps.
+func (c genRun) wait(delay time.Duration) {
+	if c.pause == nil {
+		time.Sleep(delay)
+		return
+	}
+	c.pause(delay)
 }
 
 func (c genRun) clock() time.Time {
@@ -215,6 +239,9 @@ func reportEntity(cfg genRun, out, errOut io.Writer) int {
 func printFields(out io.Writer, fields []apiexposes.Field, indent string) {
 	for _, field := range fields {
 		var notes []string
+		if field.Splat {
+			notes = append(notes, "names decided at run time")
+		}
 		if field.Tier != "" {
 			notes = append(notes, field.Tier)
 		} else if field.Edition != "" {
@@ -250,8 +277,8 @@ func generate(cfg genRun, out, errOut io.Writer) int {
 		fetched string
 	)
 	if cfg.source != "" {
-		files, table, err = readCheckout(cfg.source)
-		commit, digest, fetched = "local checkout", "", cfg.source
+		files, table, digest, err = readCheckout(cfg.source)
+		commit, fetched = localCheckout, cfg.source
 	} else {
 		files, table, commit, digest, err = fetchAll(cfg)
 		fetched = cfg.base
@@ -259,6 +286,13 @@ func generate(cfg genRun, out, errOut io.Writer) int {
 	if err != nil {
 		fmt.Fprintln(errOut, prefix, err)
 		return 1
+	}
+	if cfg.source != "" {
+		// The record can be checked and read like any other, since it is
+		// hashed the same way, but it cannot say which GitLab it speaks for:
+		// the ref is what -ref claimed and the commit is whatever the
+		// checkout holds.
+		fmt.Fprintf(errOut, prefix+" the sources were read from %s: the record's ref is what -ref said and its commit is unknown, so regenerate from the network before committing it\n", cfg.source)
 	}
 
 	features := apiexposes.ParseFeatures(table)
@@ -341,27 +375,48 @@ func rawURL(base, ref, path string) string {
 	return fmt.Sprintf("%s/gitlab-org/gitlab/-/raw/%s/%s", base, ref, path)
 }
 
-// fetch downloads one URL.
+// fetch downloads one URL, trying again after a server-side failure or a
+// connection that failed, up to fetchAttempts times.
 func fetch(cfg genRun, url string) ([]byte, error) {
+	var last error
+	for attempt := 1; attempt <= fetchAttempts; attempt++ {
+		body, retry, err := fetchOnce(cfg, url)
+		if err == nil {
+			return body, nil
+		}
+		last = err
+		if !retry {
+			return nil, err
+		}
+		if attempt < fetchAttempts {
+			cfg.wait(retryDelay)
+		}
+	}
+	return nil, fmt.Errorf("%w (after %d attempts)", last, fetchAttempts)
+}
+
+// fetchOnce downloads one URL once, saying whether a failure is one worth
+// trying again.
+func fetchOnce(cfg genRun, url string) (body []byte, retry bool, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
-		return nil, fmt.Errorf("build the request for %s: %w", url, err)
+		return nil, false, fmt.Errorf("build the request for %s: %w", url, err)
 	}
 	response, err := cfg.client.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("fetch %s: %w", url, err)
+		return nil, true, fmt.Errorf("fetch %s: %w", url, err)
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch %s: %s", url, response.Status)
+		return nil, response.StatusCode >= http.StatusInternalServerError, fmt.Errorf("fetch %s: %s", url, response.Status)
 	}
-	body, err := io.ReadAll(response.Body)
+	body, err = io.ReadAll(response.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", url, err)
+		return nil, true, fmt.Errorf("read %s: %w", url, err)
 	}
-	return body, nil
+	return body, false, nil
 }
 
 // readArchive reads the Ruby files out of a subtree archive, keyed by their
@@ -410,19 +465,24 @@ func readArchive(archive []byte) (files map[string][]byte, commit string, err er
 	return files, commit, nil
 }
 
-// readCheckout reads the same sources out of a local checkout. The checkout
-// is opened as a root, so every path read stays inside it whatever a symlink
-// in it points at.
-func readCheckout(root string) (files map[string][]byte, table []byte, err error) {
+// readCheckout reads the same sources out of a local checkout, and digests
+// them the way the fetch does, in a fixed order, so two records read from
+// the same tree hash the same and the check can read either. The checkout is
+// opened as a root, so every path read stays inside it whatever a symlink in
+// it points at.
+func readCheckout(root string) (files map[string][]byte, table []byte, digest string, err error) {
 	opened, err := os.OpenRoot(root)
 	if err != nil {
-		return nil, nil, fmt.Errorf("read the checkout: %w", err)
+		return nil, nil, "", fmt.Errorf("read the checkout: %w", err)
 	}
 	defer func() { _ = opened.Close() }()
 	tree := opened.FS()
 
 	files = map[string][]byte{}
+	hasher := sha256.New()
 	for _, dir := range entityDirs {
+		// WalkDir visits in lexical order, which is what makes the digest
+		// stable across runs.
 		walkErr := fs.WalkDir(tree, dir, func(path string, entry fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
@@ -435,15 +495,18 @@ func readCheckout(root string) (files map[string][]byte, table []byte, err error
 				return readErr
 			}
 			files[path] = content
+			hasher.Write([]byte(path))
+			hasher.Write(content)
 			return nil
 		})
 		if walkErr != nil {
-			return nil, nil, fmt.Errorf("read %s: %w", dir, walkErr)
+			return nil, nil, "", fmt.Errorf("read %s: %w", dir, walkErr)
 		}
 	}
 	table, err = fs.ReadFile(tree, featuresPath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("read the feature table: %w", err)
+		return nil, nil, "", fmt.Errorf("read the feature table: %w", err)
 	}
-	return files, table, nil
+	hasher.Write(table)
+	return files, table, hex.EncodeToString(hasher.Sum(nil)), nil
 }

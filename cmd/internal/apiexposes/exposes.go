@@ -62,8 +62,10 @@ type Source struct {
 	Ref         string `json:"ref"`
 	Commit      string `json:"commit"`
 	RetrievedAt string `json:"retrieved_at"`
-	// SHA256 is of the fetched sources, in the order they were fetched, not
-	// of this file.
+	// SHA256 is of the sources, not of this file: the archives in the order
+	// they were fetched, or for a record read from a checkout the entity
+	// files in lexical order, each with its path, and then the feature
+	// table.
 	SHA256   string `json:"sha256"`
 	Files    int    `json:"files"`
 	Entities int    `json:"entities"`
@@ -98,7 +100,10 @@ type Field struct {
 	// Community entity.
 	Edition string `json:"edition,omitempty"`
 	// If and Unless are the conditions as written, an enclosing
-	// with_options scope joined to the field's own with " && ".
+	// with_options scope joined to the field's own the way Grape reads
+	// them: every `if:` has to hold, so those join with `&&`, and any
+	// `unless:` omits the field, so those join with `||`, each side in
+	// parentheses. See [JoinIf] and [JoinUnless].
 	If     string `json:"if,omitempty"`
 	Unless string `json:"unless,omitempty"`
 	// Features are the licensed feature symbols the conditions name, and
@@ -113,6 +118,11 @@ type Field struct {
 	// Merge is `merge: true`: the used entity's fields land at this level
 	// rather than under Name.
 	Merge bool `json:"merge,omitempty"`
+	// Splat is an expose whose names come from a method call at run time,
+	// `expose(*Helper.attributes)`: Name holds the expression, and the
+	// fields it stands for cannot be named here. An entity with one exposes
+	// more than the record lists.
+	Splat bool `json:"splat,omitempty"`
 	// Nested are the fields an `expose :x do ... end` block declares under
 	// this one.
 	Nested []Field `json:"nested,omitempty"`
@@ -215,22 +225,63 @@ func (d Document) effective(name string, walking map[string]bool) []Field {
 			continue
 		}
 		for _, merged := range d.effective(field.Using, walking) {
-			merged.If = joinConditions(field.If, merged.If)
-			merged.Unless = joinConditions(field.Unless, merged.Unless)
-			fields = append(fields, merged)
+			fields = append(fields, under(field, merged, d.Features))
 		}
 	}
 	return fields
 }
 
-// joinConditions combines an enclosing condition with an inner one.
-func joinConditions(outer, inner string) string {
+// under returns inner as it is sent beneath outer's conditions: sent when
+// both `if:` hold and omitted when either `unless:` holds, with the licensed
+// features of both and the tier of the higher.
+func under(outer, inner Field, features map[string]string) Field {
+	inner.If = JoinIf(outer.If, inner.If)
+	inner.Unless = JoinUnless(outer.Unless, inner.Unless)
+	inner.Features = unionFeatures(outer.Features, inner.Features)
+	inner.Tier = tierOf(inner.Features, features)
+	return inner
+}
+
+// JoinIf combines an enclosing `if:` with an inner one: the field is sent
+// when both hold. Each side is parenthesized so an `||` inside one keeps its
+// meaning.
+func JoinIf(outer, inner string) string {
+	return joinConditions(outer, inner, "&&")
+}
+
+// JoinUnless combines an enclosing `unless:` with an inner one: the field is
+// omitted when either holds.
+func JoinUnless(outer, inner string) string {
+	return joinConditions(outer, inner, "||")
+}
+
+// joinConditions combines two conditions with an operator, parenthesized,
+// or returns the one that is written when the other is not.
+func joinConditions(outer, inner, operator string) string {
 	switch {
 	case outer == "":
 		return inner
 	case inner == "":
 		return outer
 	default:
-		return outer + " && " + inner
+		return "(" + outer + ") " + operator + " (" + inner + ")"
 	}
+}
+
+// unionFeatures lists the symbols of both, outer's first, without repeats.
+func unionFeatures(outer, inner []string) []string {
+	if len(outer) == 0 {
+		return inner
+	}
+	joined := make([]string, 0, len(outer)+len(inner))
+	seen := map[string]bool{}
+	for _, list := range [][]string{outer, inner} {
+		for _, symbol := range list {
+			if !seen[symbol] {
+				seen[symbol] = true
+				joined = append(joined, symbol)
+			}
+		}
+	}
+	return joined
 }

@@ -346,12 +346,13 @@ func (s *scanner) expose(line string, lineNo int) error {
 	var declared []Field
 	for _, name := range names {
 		field := Field{Name: name, Line: lineNo, If: opts["if"], Unless: opts["unless"], Using: firstOf(opts, "using", "with")}
+		field.Splat = strings.HasPrefix(name, "*")
 		if alias := opts["as"]; alias != "" && len(names) == 1 {
 			field.Name = symbolName(alias)
 		}
 		field.Merge = opts["merge"] == "true"
-		field.If = joinConditions(s.scopeCondition("if"), field.If)
-		field.Unless = joinConditions(s.scopeCondition("unless"), field.Unless)
+		field.If = JoinIf(s.scopeCondition("if"), field.If)
+		field.Unless = JoinUnless(s.scopeCondition("unless"), field.Unless)
 		declared = append(declared, field)
 	}
 
@@ -457,18 +458,19 @@ func (s *scanner) currentFields() *[]Field {
 }
 
 // scopeCondition joins the conditions of every enclosing scope, outermost
-// first, for the key asked for.
+// first, for the key asked for: `if:` scopes all have to hold, `unless:`
+// scopes omit the field when any holds.
 func (s *scanner) scopeCondition(key string) string {
 	joined := ""
 	for _, f := range s.frames {
 		if f.kind != frameScope {
 			continue
 		}
-		condition := f.condIf
 		if key == "unless" {
-			condition = f.condUnless
+			joined = JoinUnless(joined, f.condUnless)
+			continue
 		}
-		joined = joinConditions(joined, condition)
+		joined = JoinIf(joined, f.condIf)
 	}
 	return joined
 }

@@ -3,9 +3,9 @@
  "note": "The condition under which GitLab sends each field a REST entity exposes, read out of gitlab-org/gitlab's Grape entities by cmd/gen_api_exposes. An entity's fields are its own in declaration order, Enterprise prepends last; the parent's come first in what GitLab sends and are listed under the parent. A field without a condition is always sent when the entity is; a field with one is sent only when it holds, and its tier is the license tier the named feature belongs to.",
  "source": {
   "ref": "master",
-  "commit": "c6ea3c952d188c497d829806cc8b663eb8f37048",
+  "commit": "bd97ac54e382c2388df83b78109ddb6f82de23eb",
   "retrieved_at": "2026-09-08",
-  "sha256": "38a7d423b01f5aac71ffe23a1d11f6635347e3a7d2ab296ce59ea6a46368e2ef",
+  "sha256": "484b55e9256f1784dc256db10955aa2d1f71ea1fa5a8fb4185cff1549a79103a",
   "files": 598,
   "entities": 594,
   "exposes": 3449,
@@ -792,7 +792,8 @@
     },
     {
      "name": "*exposed_attributes",
-     "line": 21
+     "line": 21,
+     "splat": true
     },
     {
      "name": "restricted_visibility_levels",
@@ -816,7 +817,8 @@
     },
     {
      "name": "*::ApplicationSettingsHelper.external_authorization_service_attributes",
-     "line": 30
+     "line": 30,
+     "splat": true
     },
     {
      "name": "throttle_unauthenticated_web_enabled",
@@ -907,7 +909,8 @@
      "features": [
       "repository_mirrors"
      ],
-     "tier": "premium"
+     "tier": "premium",
+     "splat": true
     },
     {
      "name": "*EE::ApplicationSettingsHelper.merge_request_appovers_rules_attributes",
@@ -918,7 +921,8 @@
      "features": [
       "admin_merge_request_approvers_rules"
      ],
-     "tier": "premium"
+     "tier": "premium",
+     "splat": true
     },
     {
      "name": "*EE::ApplicationSettingsHelper.password_complexity_attributes",
@@ -929,7 +933,8 @@
      "features": [
       "password_complexity"
      ],
-     "tier": "premium"
+     "tier": "premium",
+     "splat": true
     },
     {
      "name": "email_additional_text",
@@ -1147,7 +1152,8 @@
      "features": [
       "git_abuse_rate_limit"
      ],
-     "tier": "ultimate"
+     "tier": "ultimate",
+     "splat": true
     },
     {
      "name": "*EE::ApplicationSettingsHelper.delete_unconfirmed_users_attributes",
@@ -1158,7 +1164,8 @@
      "features": [
       "delete_unconfirmed_users"
      ],
-     "tier": "premium"
+     "tier": "premium",
+     "splat": true
     },
     {
      "name": "make_profile_private",

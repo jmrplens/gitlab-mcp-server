@@ -16,10 +16,11 @@ func sampleDocument() Document {
 		Entities: map[string]Entity{
 			"APIEntitiesBasic": {File: "lib/api/entities/basic.rb", Line: 5, Fields: []Field{
 				{Name: "id", Line: 6},
-				{Name: "bits", Line: 7, Merge: true, Using: "APIEntitiesBits", If: "outer?"},
+				{Name: "bits", Line: 7, Merge: true, Using: "APIEntitiesBits", If: "outer? || other?", Unless: "hidden?", Features: []string{"epics"}, Tier: TierPremium},
 			}},
 			"APIEntitiesBits": {File: "lib/api/entities/bits.rb", Line: 3, Fields: []Field{
 				{Name: "bit", Line: 4, If: "inner?", Unless: "off?"},
+				{Name: "plain", Line: 5, Features: []string{"epics", "ultimate_thing"}, Tier: TierUltimate},
 			}},
 			"APIEntitiesChild": {File: "lib/api/entities/child.rb", Line: 3, Parent: "APIEntitiesBasic", Fields: []Field{
 				{Name: "extra", Line: 4},
@@ -28,7 +29,7 @@ func sampleDocument() Document {
 				{Name: "self_ref", Line: 4, Merge: true, Using: "APIEntitiesLoop"},
 			}},
 		},
-		Features: map[string]string{"epics": TierPremium},
+		Features: map[string]string{"epics": TierPremium, "ultimate_thing": TierUltimate},
 	}
 }
 
@@ -120,8 +121,11 @@ func TestWrite_DirectoryThatCannotBeCreated_IsReported(t *testing.T) {
 
 // TestEffective_AssemblesFieldsTheWayGrapeDoes verifies the one reading a
 // reviewer needs: the parent's fields first, a merge replaced by the merged
-// entity's fields with the merging field's conditions joined onto theirs, an
-// unknown name reported as such, and a chain that loops cut where it repeats.
+// entity's fields under the merging field's conditions (sent when both `if:`
+// hold, each parenthesized so an `||` keeps its meaning, and omitted when
+// either `unless:` holds), with the licensed features of both and the tier
+// of the higher, an unknown name reported as such, and a chain that loops
+// cut where it repeats.
 func TestEffective_AssemblesFieldsTheWayGrapeDoes(t *testing.T) {
 	doc := sampleDocument()
 	cases := []struct {
@@ -136,7 +140,8 @@ func TestEffective_AssemblesFieldsTheWayGrapeDoes(t *testing.T) {
 			known: true,
 			want: []Field{
 				{Name: "id", Line: 6},
-				{Name: "bit", Line: 4, If: "outer? && inner?", Unless: "off?"},
+				{Name: "bit", Line: 4, If: "(outer? || other?) && (inner?)", Unless: "(hidden?) || (off?)", Features: []string{"epics"}, Tier: TierPremium},
+				{Name: "plain", Line: 5, If: "outer? || other?", Unless: "hidden?", Features: []string{"epics", "ultimate_thing"}, Tier: TierUltimate},
 				{Name: "extra", Line: 4},
 			},
 		},
@@ -152,6 +157,53 @@ func TestEffective_AssemblesFieldsTheWayGrapeDoes(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, testCase.want) {
 				t.Errorf("Effective() = %+v, want %+v", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestJoinConditions_KeepEachSidesMeaning verifies the two joins: an `if:`
+// under an `if:` needs both, an `unless:` under an `unless:` needs either,
+// each side is parenthesized when both are written, and a side that is not
+// written leaves the other as it was.
+func TestJoinConditions_KeepEachSidesMeaning(t *testing.T) {
+	cases := []struct {
+		name, outer, inner, wantIf, wantUnless string
+	}{
+		{name: "both written", outer: "a? || b?", inner: "c?", wantIf: "(a? || b?) && (c?)", wantUnless: "(a? || b?) || (c?)"},
+		{name: "only the inner", inner: "c?", wantIf: "c?", wantUnless: "c?"},
+		{name: "only the outer", outer: "a?", wantIf: "a?", wantUnless: "a?"},
+		{name: "neither"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := JoinIf(testCase.outer, testCase.inner); got != testCase.wantIf {
+				t.Errorf("JoinIf() = %q, want %q", got, testCase.wantIf)
+			}
+			if got := JoinUnless(testCase.outer, testCase.inner); got != testCase.wantUnless {
+				t.Errorf("JoinUnless() = %q, want %q", got, testCase.wantUnless)
+			}
+		})
+	}
+}
+
+// TestUnionFeatures_ListsBothWithoutRepeats verifies the feature list a
+// merge produces: the outer symbols first, the inner ones after, a symbol
+// both name once, and an outer with none leaving the inner as it was.
+func TestUnionFeatures_ListsBothWithoutRepeats(t *testing.T) {
+	cases := []struct {
+		name               string
+		outer, inner, want []string
+	}{
+		{name: "both, one shared", outer: []string{"a", "b"}, inner: []string{"b", "c"}, want: []string{"a", "b", "c"}},
+		{name: "no outer", inner: []string{"c"}, want: []string{"c"}},
+		{name: "no inner", outer: []string{"a"}, want: []string{"a"}},
+		{name: "neither"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := unionFeatures(testCase.outer, testCase.inner); !reflect.DeepEqual(got, testCase.want) {
+				t.Errorf("unionFeatures() = %v, want %v", got, testCase.want)
 			}
 		})
 	}

@@ -63,6 +63,7 @@ module API
       end
       unless Rails.env.test?
         expose :not_in_tests
+        expose :not_in_tests_or_ci, unless: ->(_, _) { ci? }
       end
       with_options(format_with: :time_tracking_formatter) do
         expose :total_time, as: :human_total_time
@@ -79,6 +80,7 @@ module API
           false
         end
       end
+      expose(*Helpers.mirror_attributes, if: ->(_, _) { mirror? })
 
       private
 
@@ -284,8 +286,8 @@ func TestParse_EveryShapeGitLabWrites_IsReadAsGrapeWouldReadIt(t *testing.T) {
 	want := []string{
 		"id", "title", "a", "b", "hidden", "readme_url", "forks_count", "_links", "calculated", "task_status",
 		"projects", "child", "bits", "job", "raw_name", "quoted", "described", "only_ee_build", "not_in_tests",
-		"human_total_time", "missing_ref", "shard", "trailing", "escaped", "nested_parens", "deep",
-		"licensed", "ultimate_thing", "setting",
+		"not_in_tests_or_ci", "human_total_time", "missing_ref", "shard", "trailing", "escaped", "nested_parens", "deep",
+		"*Helpers.mirror_attributes", "licensed", "ultimate_thing", "setting",
 	}
 	if got := names(basic.Fields); !reflect.DeepEqual(got, want) {
 		t.Errorf("Basic fields = %v, want %v", got, want)
@@ -301,7 +303,7 @@ func TestParse_EveryShapeGitLabWrites_IsReadAsGrapeWouldReadIt(t *testing.T) {
 		{name: "an alias renames the field", want: Field{Name: "title", Line: 9}},
 		{name: "a condition is kept as written", want: Field{Name: "hidden", Line: 11, If: "->(_, options) { options[:hidden] }"}},
 		{name: "a scope's condition reaches its fields", want: Field{Name: "readme_url", Line: 13, If: "->(_, _) { user_has_access? }"}},
-		{name: "a scope's condition joins the field's own", want: Field{Name: "forks_count", Line: 14, If: "->(_, _) { user_has_access? } && ->(p, _) { p.forks? }"}},
+		{name: "a scope's condition joins the field's own", want: Field{Name: "forks_count", Line: 14, If: "(->(_, _) { user_has_access? }) && (->(p, _) { p.forks? })"}},
 		{name: "a brace value block declares one field", want: Field{Name: "calculated", Line: 26}},
 		{name: "a do-bodied lambda is read to its end", want: Field{Name: "task_status", Line: 27, If: "->(issue, _) do !issue.tasks? end"}},
 		{name: "a three-line expose ending in a value block", want: Field{Name: "projects", Line: 30, If: "->(_, options) { options[:with_projects] }", Using: "APIEntitiesChild"}},
@@ -312,13 +314,15 @@ func TestParse_EveryShapeGitLabWrites_IsReadAsGrapeWouldReadIt(t *testing.T) {
 		{name: "a backslash continuation is one statement", want: Field{Name: "described", Line: 42}},
 		{name: "a statement-level if is a scope", want: Field{Name: "only_ee_build", Line: 46, If: "Gitlab.ee?"}},
 		{name: "a statement-level unless is a scope", want: Field{Name: "not_in_tests", Line: 49, Unless: "Rails.env.test?"}},
-		{name: "a with_options without a condition scopes nothing", want: Field{Name: "human_total_time", Line: 52}},
-		{name: "Entities::X nothing declares is read as under API", want: Field{Name: "missing_ref", Line: 54, Using: "APIEntitiesMissing"}},
-		{name: "a reference nothing declares is kept as written", want: Field{Name: "shard", Line: 55, Using: "StorageShardEntity"}},
-		{name: "a trailing comma in parentheses", want: Field{Name: "trailing", Line: 56}},
-		{name: "an escaped quote inside a string", want: Field{Name: "escaped", Line: 57}},
-		{name: "parentheses nested in the arguments", want: Field{Name: "nested_parens", Line: 58}},
-		{name: "a do-bodied lambda holding an if of its own", want: Field{Name: "deep", Line: 59, If: "->(obj, _) do if obj.a?; true; else; false; end end"}},
+		{name: "an unless scope joins the field's own unless with or", want: Field{Name: "not_in_tests_or_ci", Line: 50, Unless: "(Rails.env.test?) || (->(_, _) { ci? })"}},
+		{name: "a with_options without a condition scopes nothing", want: Field{Name: "human_total_time", Line: 53}},
+		{name: "Entities::X nothing declares is read as under API", want: Field{Name: "missing_ref", Line: 55, Using: "APIEntitiesMissing"}},
+		{name: "a reference nothing declares is kept as written", want: Field{Name: "shard", Line: 56, Using: "StorageShardEntity"}},
+		{name: "a trailing comma in parentheses", want: Field{Name: "trailing", Line: 57}},
+		{name: "an escaped quote inside a string", want: Field{Name: "escaped", Line: 58}},
+		{name: "parentheses nested in the arguments", want: Field{Name: "nested_parens", Line: 59}},
+		{name: "a do-bodied lambda holding an if of its own", want: Field{Name: "deep", Line: 60, If: "->(obj, _) do if obj.a?; true; else; false; end end"}},
+		{name: "a splat names its fields at run time", want: Field{Name: "*Helpers.mirror_attributes", Line: 67, If: "->(_, _) { mirror? }", Splat: true}},
 		{name: "a prepended field carries its file, edition, feature and tier", want: Field{Name: "licensed", File: "ee/lib/ee/api/entities/basic.rb", Line: 14, Edition: "ee", If: "->(p, _) { p.licensed_feature_available?(:merge_pipelines) }", Features: []string{"merge_pipelines"}, Tier: TierPremium}},
 		{name: "License.feature_available? resolves too", want: Field{Name: "ultimate_thing", File: "ee/lib/ee/api/entities/basic.rb", Line: 15, Edition: "ee", If: "->(_, _) { ::License.feature_available?(:security_orchestration_policies) }", Features: []string{"security_orchestration_policies"}, Tier: TierUltimate}},
 		{name: "a project feature is named and has no tier", want: Field{Name: "setting", File: "ee/lib/ee/api/entities/basic.rb", Line: 16, Edition: "ee", If: "->(p, _) { p.feature_available?(:issues) }", Features: []string{"issues"}}},
@@ -388,8 +392,8 @@ func TestParse_EntitiesAndTheirRelations_AreRecorded(t *testing.T) {
 	if got := names(entities["APIEntitiesStray"].Fields); !reflect.DeepEqual(got, []string{"id"}) {
 		t.Errorf("Stray fields = %v, want [id]: the expose in its module and the prepend under API belong to nothing", got)
 	}
-	if exposes != 38 {
-		t.Errorf("Parse() exposes = %d, want 38 (nested ones counted)", exposes)
+	if exposes != 40 {
+		t.Errorf("Parse() exposes = %d, want 40 (nested ones counted, the splat as one)", exposes)
 	}
 }
 
