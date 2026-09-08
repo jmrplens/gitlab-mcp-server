@@ -67,6 +67,17 @@ var nameFields = []string{"name", "desc", "description", "label", "title", "id"}
 // assertMethods are the testing.TB methods that record a failure.
 var assertMethods = map[string]bool{"Error": true, "Errorf": true, "Fatal": true, "Fatalf": true, "Fail": true, "FailNow": true}
 
+// The three operations whose failures no input can provoke are indirected so
+// that the branches answering for them are still exercised: a Report is
+// strings and counts, which encoding/json cannot be made to refuse; a rewrite
+// only wraps a loop body in a call, which leaves source the formatter accepts;
+// and the file written back is the one just read.
+var ( //nolint:gochecknoglobals // test seams
+	marshalReport = json.MarshalIndent
+	formatSource  = format.Source
+	writeSource   = os.WriteFile
+)
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
@@ -110,7 +121,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	printHuman(stdout, report)
 
 	if *jsonPath != "" {
-		data, marshalErr := json.MarshalIndent(report, "", "  ")
+		data, marshalErr := marshalReport(report, "", "  ")
 		if marshalErr != nil {
 			fmt.Fprintf(stderr, "audit_test_subtests: marshal: %v\n", marshalErr)
 			return 2
@@ -610,11 +621,11 @@ func fixFile(path string) (int, error) {
 	if count == 0 {
 		return 0, nil
 	}
-	formatted, err := format.Source(apply(src, edits))
+	formatted, err := formatSource(apply(src, edits))
 	if err != nil {
 		return 0, fmt.Errorf("%s: rewritten source does not parse: %w", path, err)
 	}
-	if writeErr := os.WriteFile(path, formatted, 0o600); writeErr != nil { //#nosec G306,G703 -- rewriting the test file the walk found, never a user-supplied path
+	if writeErr := writeSource(path, formatted, 0o600); writeErr != nil { //#nosec G306,G703 -- rewriting the test file the walk found, never a user-supplied path
 		return 0, writeErr
 	}
 	return count, nil

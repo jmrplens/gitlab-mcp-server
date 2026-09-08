@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -682,6 +683,93 @@ func TestFixFile_Failures_ReturnErrors(t *testing.T) {
 				t.Errorf("fixFile counted %d rewrite(s) on failure, want 0", n)
 			}
 		})
+	}
+}
+
+// TestFixFile_UnprovokableFailures_ReturnErrors verifies the two failures no
+// input can produce, since a rewrite only wraps a loop body in a call and the
+// file written back is the one just read: a formatter that rejects the
+// rewritten source, and a write that is refused. Both leave the rewrite
+// uncounted so -fix reports nothing it did not do.
+func TestFixFile_UnprovokableFailures_ReturnErrors(t *testing.T) {
+	cases := []struct {
+		name    string
+		install func(t *testing.T)
+		wantErr string
+	}{
+		{
+			name: "rewritten source does not parse",
+			install: func(t *testing.T) {
+				t.Helper()
+				original := formatSource
+				formatSource = func([]byte) ([]byte, error) { return nil, errSeam }
+				t.Cleanup(func() { formatSource = original })
+			},
+			wantErr: "rewritten source does not parse",
+		},
+		{
+			name: "write is refused",
+			install: func(t *testing.T) {
+				t.Helper()
+				original := writeSource
+				writeSource = func(string, []byte, os.FileMode) error { return errSeam }
+				t.Cleanup(func() { writeSource = original })
+			},
+			wantErr: errSeam.Error(),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeFixture(t, fixtureSource)
+			tc.install(t)
+
+			n, err := fixFile(path)
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("fixFile error = %v, want it to mention %q", err, tc.wantErr)
+			}
+			if n != 0 {
+				t.Errorf("fixFile counted %d rewrite(s) on failure, want 0", n)
+			}
+		})
+	}
+}
+
+// TestRun_UnencodableReport_ExitsTwo verifies the exit code for an encoder
+// that refuses the work list, and that no half-written file is left behind. A
+// Report is strings and counts, so the seam stands in for the encoder.
+func TestRun_UnencodableReport_ExitsTwo(t *testing.T) {
+	dir := filepath.Dir(writeFixture(t, cleanSource))
+	path := filepath.Join(dir, "work.json")
+	original := marshalReport
+	marshalReport = func(any, string, string) ([]byte, error) { return nil, errSeam }
+	t.Cleanup(func() { marshalReport = original })
+
+	var stdout, stderr strings.Builder
+	if got := run([]string{"-json", path, dir}, &stdout, &stderr); got != 2 {
+		t.Errorf("run = %d, want 2", got)
+	}
+	if !strings.Contains(stderr.String(), "marshal: "+errSeam.Error()) {
+		t.Errorf("stderr = %q, want the marshal failure", stderr.String())
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("os.Stat(%s) error = %v, want the file not to exist", path, err)
+	}
+}
+
+// errSeam is the failure the marshal, format and write seams report.
+var errSeam = errors.New("seam refused")
+
+// TestSubtestName_UnadmittedTableType_NeedsAName verifies the answer for a
+// literal that is neither a map nor an array. tableLiteral admits only those
+// two today, so no source reaches this; the call is made directly, because a
+// third shape admitted later must report that it has no name to derive rather
+// than name a case after nothing.
+func TestSubtestName_UnadmittedTableType_NeedsAName(t *testing.T) {
+	lit := &ast.CompositeLit{Type: ast.NewIdent("cases")}
+
+	expr, fix := subtestName(&ast.RangeStmt{}, lit, &ast.File{})
+	if expr != "" || fix != fixNeedsName {
+		t.Errorf("subtestName() = (%q, %q), want (%q, %q)", expr, fix, "", fixNeedsName)
 	}
 }
 

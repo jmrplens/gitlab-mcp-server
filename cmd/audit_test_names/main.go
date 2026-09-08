@@ -30,6 +30,25 @@ const (
 	PatternSkip         = "skip"
 )
 
+// The file operations applyFile performs once a file has already parsed are
+// indirected here so that their failures can be exercised. By that point the
+// file is known to exist and to be valid Go, and every replacement is one
+// identifier for another, so no tree can produce a read that fails, a rewrite
+// that stops parsing, or a write that is refused — and the branches that
+// answer for those would otherwise go untested.
+var ( //nolint:gochecknoglobals // test seams
+	readSource     = os.ReadFile
+	writeSource    = os.WriteFile
+	parseRewritten = parseGoSourceText
+)
+
+// parseGoSourceText reports whether src is a Go file the parser accepts,
+// naming it path in the error.
+func parseGoSourceText(path string, src []byte) error {
+	_, err := parser.ParseFile(token.NewFileSet(), path, src, 0)
+	return err
+}
+
 // testEntry holds the audit result for a single test function.
 //
 // File is the slash-separated path of the source file. CurrentName is the
@@ -83,12 +102,18 @@ func run(args []string, stdout, stderr io.Writer) error {
 		entries = append(entries, scanDir(dir)...)
 	}
 
-	w := csv.NewWriter(stdout)
-	if err := w.Write([]string{"file", "current_name", "pattern", "suggested_name"}); err != nil {
-		return fmt.Errorf("write csv header: %w", err)
-	}
+	// The header is the first row rather than a write of its own: it is far
+	// too short to fill the writer's buffer, so a failure it could report is
+	// one no writer can produce.
+	rows := make([][]string, 0, len(entries)+1)
+	rows = append(rows, []string{"file", "current_name", "pattern", "suggested_name"})
 	for _, e := range entries {
-		if err := w.Write([]string{e.File, e.CurrentName, e.Pattern, e.SuggestedName}); err != nil {
+		rows = append(rows, []string{e.File, e.CurrentName, e.Pattern, e.SuggestedName})
+	}
+
+	w := csv.NewWriter(stdout)
+	for _, row := range rows {
+		if err := w.Write(row); err != nil {
 			return fmt.Errorf("write csv row: %w", err)
 		}
 	}
@@ -363,32 +388,30 @@ func applyFile(path string, stdout, stderr io.Writer, dryRun bool) (applied int,
 		return 0, true
 	}
 
-	src, err := os.ReadFile(cleanPath)
+	src, err := readSource(cleanPath)
 	if err != nil {
 		fmt.Fprintf(stderr, "read %s: %v\n", cleanPath, err)
 		return 0, false
 	}
+	// Every name here was read off a declaration in this same file, so each
+	// pattern matches at least the declaration it came from and applied ends
+	// above zero whenever there is anything to rename.
 	result := string(src)
 	for old, newName := range renames {
 		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(old) + `\b`)
-		if re.MatchString(result) {
-			result = re.ReplaceAllString(result, newName)
-			applied++
-			fmt.Fprintf(stdout, "%s: %s -> %s\n", filepath.ToSlash(cleanPath), old, newName)
-		}
-	}
-	if applied == 0 {
-		return 0, true
+		result = re.ReplaceAllString(result, newName)
+		applied++
+		fmt.Fprintf(stdout, "%s: %s -> %s\n", filepath.ToSlash(cleanPath), old, newName)
 	}
 
-	if _, parseErr := parser.ParseFile(token.NewFileSet(), cleanPath, []byte(result), 0); parseErr != nil {
+	if parseErr := parseRewritten(cleanPath, []byte(result)); parseErr != nil {
 		fmt.Fprintf(stderr, "  ABORT %s: rename would produce invalid Go: %v\n", cleanPath, parseErr)
 		return 0, false
 	}
 	if dryRun {
 		return applied, true
 	}
-	if writeErr := os.WriteFile(cleanPath, []byte(result), 0o600); writeErr != nil { //#nosec G306,G703 -- CLI tool, user provides paths intentionally
+	if writeErr := writeSource(cleanPath, []byte(result), 0o600); writeErr != nil { //#nosec G306,G703 -- CLI tool, user provides paths intentionally
 		fmt.Fprintf(stderr, "write %s: %v\n", cleanPath, writeErr)
 		return 0, false
 	}

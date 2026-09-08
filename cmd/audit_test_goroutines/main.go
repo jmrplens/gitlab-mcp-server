@@ -49,6 +49,11 @@ var abortNames = map[string]bool{"Fatal": true, "Fatalf": true, "FailNow": true}
 // missing-return contract.
 var errorNames = map[string]bool{"Error": true, "Errorf": true}
 
+// marshalReport is indirected so that the encoder failure run answers for can
+// be exercised: a Report is strings and counts, which encoding/json cannot be
+// made to refuse, and the branch would otherwise go untested.
+var marshalReport = json.MarshalIndent //nolint:gochecknoglobals // test seam
+
 func main() {
 	jsonPath := flag.String("json", "", "write the JSON work list to this path")
 	check := flag.Bool("check", false, "exit non-zero when any abort (Fatal/FailNow) site exists; errorf sites stay advisory")
@@ -75,7 +80,7 @@ func run(dirs []string, jsonPath string, check bool, stdout, stderr io.Writer) i
 	printHuman(stdout, report)
 
 	if jsonPath != "" {
-		data, marshalErr := json.MarshalIndent(report, "", "  ")
+		data, marshalErr := marshalReport(report, "", "  ")
 		if marshalErr != nil {
 			fmt.Fprintf(stderr, "audit_test_goroutines: marshal: %v\n", marshalErr)
 			return 2

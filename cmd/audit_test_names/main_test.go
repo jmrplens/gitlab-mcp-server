@@ -439,6 +439,86 @@ func TestRunApply_Failures_ReturnFalse(t *testing.T) {
 	}
 }
 
+// TestApplyFile_UnprovokableFailures_ReportAndFail verifies the three
+// failures a real tree cannot produce, because by then the file has parsed
+// and every replacement is one identifier for another: the second read
+// failing, the rewritten source no longer parsing, and the write being
+// refused. Each names the file on stderr, counts no rename and fails the
+// run, so -apply exits non-zero instead of reporting a rewrite it did not
+// make.
+func TestApplyFile_UnprovokableFailures_ReportAndFail(t *testing.T) {
+	sentinel := errors.New("boom")
+	testCases := []struct {
+		name    string
+		install func(t *testing.T)
+		want    string
+	}{
+		{
+			name: "read fails",
+			install: func(t *testing.T) {
+				t.Helper()
+				original := readSource
+				readSource = func(string) ([]byte, error) { return nil, sentinel }
+				t.Cleanup(func() { readSource = original })
+			},
+			want: "read ",
+		},
+		{
+			name: "rewritten source does not parse",
+			install: func(t *testing.T) {
+				t.Helper()
+				original := parseRewritten
+				parseRewritten = func(string, []byte) error { return sentinel }
+				t.Cleanup(func() { parseRewritten = original })
+			},
+			want: "ABORT ",
+		},
+		{
+			name: "write is refused",
+			install: func(t *testing.T) {
+				t.Helper()
+				original := writeSource
+				writeSource = func(string, []byte, os.FileMode) error { return sentinel }
+				t.Cleanup(func() { writeSource = original })
+			},
+			want: "write ",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, "sample_test.go")
+			if err := os.WriteFile(path, []byte(legacyNamesFixture), 0o600); err != nil {
+				t.Fatalf("WriteFile() error = %v", err)
+			}
+			tc.install(t)
+
+			var stdout, stderr bytes.Buffer
+			applied, ok := applyFile(path, &stdout, &stderr, false)
+			if applied != 0 || ok {
+				t.Errorf("applyFile() = (%d, %t), want (0, false)", applied, ok)
+			}
+			if got := stderr.String(); !strings.Contains(got, tc.want) || !strings.Contains(got, sentinel.Error()) {
+				t.Errorf("stderr = %q, want it to mention %q and %q", got, tc.want, sentinel.Error())
+			}
+		})
+	}
+}
+
+// TestParseGoSourceText_Sources_ReportWhatTheParserSays verifies the seam's
+// own body: valid Go passes and invalid Go comes back as an error naming the
+// file, which is what the ABORT message quotes.
+func TestParseGoSourceText_Sources_ReportWhatTheParserSays(t *testing.T) {
+	if err := parseGoSourceText("sample_test.go", []byte(legacyNamesFixture)); err != nil {
+		t.Errorf("parseGoSourceText() error = %v, want nil", err)
+	}
+	err := parseGoSourceText("broken_test.go", []byte("package sample\n\nfunc (\n"))
+	if err == nil || !strings.Contains(err.Error(), "broken_test.go") {
+		t.Errorf("parseGoSourceText() error = %v, want one naming broken_test.go", err)
+	}
+}
+
 // TestCollectRenames_SkipsCollisionsAndReservesTargets verifies a legacy
 // name whose suggestion already exists is skipped with a message, a target
 // claimed by an earlier rename is not claimed twice, and names that are
