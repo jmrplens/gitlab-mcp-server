@@ -177,8 +177,8 @@ func TestTypesCompatible_AcceptsKnownProjections(t *testing.T) {
 
 // TestPathHelpers verifies the package-name extraction helpers.
 func TestPathHelpers(t *testing.T) {
-	if got := lastPathSegment("gitlab.com/gitlab-org/api/client-go/v3"); got != "v2" {
-		t.Errorf("lastPathSegment = %q, want v2", got)
+	if got := lastPathSegment("gitlab.com/gitlab-org/api/client-go/v3"); got != "v3" {
+		t.Errorf("lastPathSegment = %q, want v3", got)
 	}
 	if got := lastPathSegment("flat"); got != "flat" {
 		t.Errorf("lastPathSegment(flat) = %q, want flat", got)
@@ -720,8 +720,8 @@ func TestBuildReport_NoDiffPositionPhantomInput(t *testing.T) {
 				if g.Kind != "input" || g.MCPType != "DiffPosition" {
 					continue
 				}
-				if g.SDKType != "v2.PositionOptions" {
-					t.Errorf("%s: DiffPosition paired against %q, want only v2.PositionOptions (phantom not suppressed): missing=%v",
+				if g.SDKType != "v3.PositionOptions" {
+					t.Errorf("%s: DiffPosition paired against %q, want only v3.PositionOptions (phantom not suppressed): missing=%v",
 						name, g.SDKType, g.MissingFields)
 				}
 			}

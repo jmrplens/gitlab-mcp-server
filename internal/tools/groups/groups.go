@@ -907,8 +907,8 @@ func (b *BranchProtectionDefaultsInput) toOptions() *gl.DefaultBranchProtectionD
 }
 
 // accessLevelOptions converts integer access levels into the SDK
-// []*gl.GroupAccessLevel pointer-slice shape.
-func accessLevelOptions(levels []int) *[]*gl.GroupAccessLevel {
+// []*gl.GroupAccessLevel slice shape.
+func accessLevelOptions(levels []int) []*gl.GroupAccessLevel {
 	if len(levels) == 0 {
 		return nil
 	}
@@ -916,7 +916,7 @@ func accessLevelOptions(levels []int) *[]*gl.GroupAccessLevel {
 	for i, l := range levels {
 		out[i] = &gl.GroupAccessLevel{AccessLevel: new(gl.AccessLevelValue(l))}
 	}
-	return &out
+	return out
 }
 
 // CreateInput defines parameters for creating a group.

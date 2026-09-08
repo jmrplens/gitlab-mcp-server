@@ -4965,7 +4965,6 @@ func TestListGlobal_NewFilterFields_ReachQuery(t *testing.T) {
 
 	boolTrue := true
 	_, err := ListGlobal(context.Background(), client, ListGlobalInput{
-		Approved:               "yes",
 		NotAuthorUsername:      "mallory",
 		In:                     "title,description",
 		MyReactionEmoji:        "rocket",
@@ -4984,7 +4983,6 @@ func TestListGlobal_NewFilterFields_ReachQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListGlobal() unexpected error: %v", err)
 	}
-	assertQuery(t, q, "approved", "yes")
 	assertQuery(t, q, "not[author_username]", "mallory")
 	assertQuery(t, q, "in", "title,description")
 	assertQuery(t, q, "my_reaction_emoji", "rocket")

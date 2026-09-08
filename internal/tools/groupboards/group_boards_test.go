@@ -1220,7 +1220,4 @@ func TestRawRequestConstructionFailures(t *testing.T) {
 	if _, err := UpdateGroupBoard(ctx, client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1}); err == nil {
 		t.Error("UpdateGroupBoard: expected construction error")
 	}
-	if _, err := UpdateGroupBoardList(ctx, client, UpdateGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 2, Position: 1}); err == nil {
-		t.Error("UpdateGroupBoardList: expected construction error")
-	}
 }

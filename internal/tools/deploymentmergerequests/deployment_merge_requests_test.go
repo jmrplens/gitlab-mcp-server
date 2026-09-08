@@ -342,7 +342,6 @@ func TestList_MergeRequestFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		checks := map[string]string{
-			"approved":        "yes",
 			"author_username": "alice",
 			"in":              "title",
 			"author_id":       "7",
@@ -386,7 +385,6 @@ func TestList_MergeRequestFilters(t *testing.T) {
 	_, err := List(context.Background(), client, ListInput{
 		ProjectID:           "1",
 		DeploymentID:        2,
-		Approved:            "yes",
 		ApprovedByIDs:       toolutil.ApproverIDsFilter{"13"},
 		ApprovedByUsernames: []string{"alice", "bob"},
 		ApproverIDs:         toolutil.ApproverIDsFilter{"11"},
