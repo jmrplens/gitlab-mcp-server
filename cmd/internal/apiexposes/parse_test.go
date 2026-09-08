@@ -496,6 +496,19 @@ func TestParse_AClassOpenedAgain_IsReadAsRubyOpensIt(t *testing.T) {
 			}
 		})
 	}
+	t.Run("the parent spelled two ways is one parent", func(t *testing.T) {
+		// The parent is compared as the class it names, so a reopening that
+		// spells it absolutely is the same class and not a refusal.
+		source := "module API\n  module Entities\n    class Base < Grape::Entity\n      expose :id\n    end\n    class Basic < Entities::Base\n      expose :name\n    end\n    class Basic < ::API::Entities::Base\n      expose :again\n    end\n  end\nend\n"
+
+		parsed, _, err := Parse(map[string][]byte{"x.rb": []byte(source)}, nil)
+		if err != nil {
+			t.Fatalf("Parse() error = %v", err)
+		}
+		if basic := parsed["APIEntitiesBasic"]; basic.Parent != "APIEntitiesBase" || !reflect.DeepEqual(names(basic.Fields), []string{"name", "again"}) {
+			t.Errorf("Basic = %+v, want the one entity under Base with both files' fields", basic)
+		}
+	})
 }
 
 // keysOf lists a map's keys for a message.

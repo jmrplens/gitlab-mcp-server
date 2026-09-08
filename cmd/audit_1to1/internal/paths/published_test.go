@@ -227,6 +227,13 @@ type BareOutput struct {
 	*Elsewhere
 }
 
+type Status string
+
+type StatusOutput struct {
+	*Status
+	Note string `+"`json:\"note\"`"+`
+}
+
 func helper() {
 	type LocalOutput struct {
 		X int `+"`json:\"x\"`"+`
@@ -266,7 +273,9 @@ type RightOutput struct {
 	// HollowOutput and BareOutput embed a type the package does not declare
 	// and so publish nothing: the first is not nested under the field naming
 	// it and the second, which nothing names, is not compared. Kind is not a
-	// struct and is passed over, and so is a type declared inside a function.
+	// struct and is passed over, and so is a type declared inside a function;
+	// Status is not a struct either, and embedding it is a field encoding/json
+	// writes under the type's name.
 	want := []publishedType{
 		{Package: "internal/tools/sample", Name: "DetailsOutput", Fields: []string{"connected", "group", "hollow", "id", "owner"}, Nested: map[string]nestedType{"group": {Name: "GroupOutput", Fields: []string{"path"}}}},
 		{Package: "internal/tools/sample", Name: "GroupOutput", Fields: []string{"path"}, Inner: true},
@@ -274,6 +283,7 @@ type RightOutput struct {
 		{Package: "internal/tools/sample", Name: "ListItem", Fields: []string{"uploaded_by"}, Inner: true},
 		{Package: "internal/tools/sample", Name: "Output", Fields: []string{"group", "hollow", "id", "owner"}, Nested: map[string]nestedType{"group": {Name: "GroupOutput", Fields: []string{"path"}}, "owner": {Name: "UserOutput", Fields: []string{"name"}}}},
 		{Package: "internal/tools/sample", Name: "RightOutput", Fields: []string{"a", "b"}},
+		{Package: "internal/tools/sample", Name: "StatusOutput", Fields: []string{"Status", "note"}},
 		{Package: "internal/tools/sample", Name: "UploadedByOutput", Fields: []string{"name"}, Inner: true},
 		{Package: "internal/tools/sample", Name: "UserOutput", Fields: []string{"name"}, Inner: true},
 	}

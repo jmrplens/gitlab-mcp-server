@@ -119,6 +119,7 @@ func publishedTypesIn(dir, pkg string) []publishedType {
 	fileSet := token.NewFileSet()
 	var found []declaredStruct
 	nested := map[string]bool{}
+	scalars := map[string]bool{}
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
@@ -128,7 +129,7 @@ func publishedTypesIn(dir, pkg string) []publishedType {
 		if parseErr != nil {
 			continue
 		}
-		found = append(found, structsIn(file, nested)...)
+		found = append(found, structsIn(file, nested, scalars)...)
 	}
 
 	// Only a top-level output type can be compared with an operation's
@@ -160,7 +161,7 @@ func publishedTypesIn(dir, pkg string) []publishedType {
 		if !ast.IsExported(candidate.Name) || strings.HasSuffix(candidate.Name, inputSuffix) {
 			continue
 		}
-		whole := flatten(candidate, byName, map[string]bool{})
+		whole := flatten(candidate, byName, scalars, map[string]bool{})
 		if len(whole.Fields) == 0 {
 			continue
 		}
@@ -171,7 +172,7 @@ func publishedTypesIn(dir, pkg string) []publishedType {
 			Inner:   !strings.HasSuffix(candidate.Name, outputSuffix) || nested[candidate.Name],
 		}
 		if !published.Inner {
-			published.Nested = nestedTypes(whole, byName)
+			published.Nested = nestedTypes(whole, byName, scalars)
 		}
 		out = append(out, published)
 	}
@@ -197,10 +198,13 @@ type declaredStruct struct {
 // own. A field the struct declares itself wins over a promoted one of the
 // same name, as encoding/json's depth rule has it; two embeds promoting one
 // name at the same depth, which encoding/json drops, are not told apart, as
-// no type here has them. A struct embedding itself through a pointer is cut
-// where it repeats, and an embed of a type not declared in the package is
-// left out, which is the one thing the parse gives up (see [publishedTypes]).
-func flatten(candidate declaredStruct, byName map[string]declaredStruct, walking map[string]bool) declaredStruct {
+// no type here has them. An embed of a type the package declares as
+// something other than a struct is a field named after the type, which is
+// what encoding/json writes for it. A struct embedding itself through a
+// pointer is cut where it repeats, and an embed of a type not declared in the
+// package is left out, which is the one thing the parse gives up (see
+// [publishedTypes]).
+func flatten(candidate declaredStruct, byName map[string]declaredStruct, scalars, walking map[string]bool) declaredStruct {
 	if len(candidate.Embeds) == 0 || walking[candidate.Name] {
 		return candidate
 	}
@@ -215,9 +219,13 @@ func flatten(candidate declaredStruct, byName map[string]declaredStruct, walking
 	for _, name := range candidate.Embeds {
 		embedded, ok := byName[name]
 		if !ok {
+			if scalars[name] && !seen[name] {
+				seen[name] = true
+				whole.Fields = append(whole.Fields, name)
+			}
 			continue
 		}
-		embedded = flatten(embedded, byName, walking)
+		embedded = flatten(embedded, byName, scalars, walking)
 		for _, field := range embedded.Fields {
 			if seen[field] {
 				continue
@@ -243,14 +251,14 @@ func flatten(candidate declaredStruct, byName map[string]declaredStruct, walking
 // A field whose type is declared in another package resolves to nothing, the
 // same as one carrying a scalar: [namedType] returns "" for a qualified type,
 // since a type from elsewhere is not one of ours to compare.
-func nestedTypes(candidate declaredStruct, byName map[string]declaredStruct) map[string]nestedType {
+func nestedTypes(candidate declaredStruct, byName map[string]declaredStruct, scalars map[string]bool) map[string]nestedType {
 	var out map[string]nestedType
 	for tag, typeName := range candidate.FieldTypes {
 		target, ok := byName[typeName]
 		if !ok {
 			continue
 		}
-		target = flatten(target, byName, map[string]bool{})
+		target = flatten(target, byName, scalars, map[string]bool{})
 		if len(target.Fields) == 0 {
 			continue
 		}
@@ -263,7 +271,9 @@ func nestedTypes(candidate declaredStruct, byName map[string]declaredStruct) map
 }
 
 // structsIn reads the structs one parsed file declares, recording in nested
-// every locally declared type any of them names as a field type.
+// every locally declared type any of them names as a field type, and in
+// scalars every type the file declares as something other than a struct,
+// which an embed of is a field rather than a promotion.
 //
 // Every struct counts for that, not only the output types: an output type
 // reached through a plain struct, such as the user under the row of a list of
@@ -272,7 +282,7 @@ func nestedTypes(candidate declaredStruct, byName map[string]declaredStruct) map
 // with a whole user. An embed marks nothing nested, for the opposite reason:
 // its fields are promoted into the embedding struct, and the embedded type is
 // often a response of its own, the row a details type is built on.
-func structsIn(file *ast.File, nested map[string]bool) []declaredStruct {
+func structsIn(file *ast.File, nested, scalars map[string]bool) []declaredStruct {
 	var found []declaredStruct
 	ast.Inspect(file, func(node ast.Node) bool {
 		switch typed := node.(type) {
@@ -280,14 +290,17 @@ func structsIn(file *ast.File, nested map[string]bool) []declaredStruct {
 			// A type declared inside a function is nobody's response.
 			return false
 		case *ast.TypeSpec:
-			if structType, isStruct := typed.Type.(*ast.StructType); isStruct {
-				fields, fieldTypes, embeds := jsonTags(structType)
-				for _, name := range fieldTypes {
-					nested[name] = true
-				}
-				if len(fields) > 0 || len(embeds) > 0 {
-					found = append(found, declaredStruct{Name: typed.Name.Name, Fields: fields, FieldTypes: fieldTypes, Embeds: embeds})
-				}
+			structType, isStruct := typed.Type.(*ast.StructType)
+			if !isStruct {
+				scalars[typed.Name.Name] = true
+				return false
+			}
+			fields, fieldTypes, embeds := jsonTags(structType)
+			for _, name := range fieldTypes {
+				nested[name] = true
+			}
+			if len(fields) > 0 || len(embeds) > 0 {
+				found = append(found, declaredStruct{Name: typed.Name.Name, Fields: fields, FieldTypes: fieldTypes, Embeds: embeds})
 			}
 			return false
 		default:
