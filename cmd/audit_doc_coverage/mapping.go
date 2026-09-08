@@ -260,8 +260,8 @@ func hardcodedDocOverrides() docOverrideMap {
 			"gitlab_interactive_release_create",
 			"gitlab_server_status",
 		},
-		// Orbit is a GitLab.com-only meta-tool. The auditclient
-		// mock reports a non-gitlab.com URL so the catalog walk
+		// Orbit is a GitLab.com-only meta-tool. The stub client
+		// reports a non-gitlab.com URL so the catalog walk
 		// skips it entirely. We hardcode the six Orbit Knowledge
 		// Graph tools here so orbit.md's expected set reflects the
 		// production deployment and the Phase-1 agents can write

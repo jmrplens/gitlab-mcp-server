@@ -138,6 +138,14 @@ Action counts are the Free/CE catalog as served by the binary (read them from th
 | 32  | `gitlab_interactive_project_create` | Guided prompts for name, visibility, initialization, and confirmation | GitLab        |
 | 33  | `gitlab_interactive_release_create` | Guided prompts for tag, name, notes, and confirmation                 | GitLab        |
 
+### Maintenance Meta-Tools (1)
+
+Registered on every tier from a maintenance group of its own rather than from the GitLab action catalog, which is why the published figures used to leave it out.
+
+| #   | Tool Name       | Actions | Source                                        |
+| --- | --------------- | ------- | --------------------------------------------- |
+| 34  | `gitlab_server` | 2       | Server diagnostics (`status`, `health_check`) |
+
 ### Premium and Ultimate Meta-Tools (17)
 
 Registered when the resolved tier is Premium or Ultimate. Six arrive with Premium:
@@ -327,7 +335,7 @@ Meta-tools advertise a deliberately compact input schema by default (`GITLAB_MCP
 
    For example, `gitlab://tools/gitlab_merge_request.create` returns the call shape and JSON Schema for the `create` action's `params`. The `gitlab://tools` manifest enumerates every visible meta-tool action in the active server configuration.
 
-   The manifest resource returns a JSON object with the URI template, visible tools, and action entries for the current server configuration (abridged; every entry also carries `title`, `description`, `detail_uri`, `destructive`, `read_only` and typed `required_params`). `visible_tool_count` is one more than the 33 tools listed above because `gitlab_server`, which sits outside the catalog counts, has actions of its own and so appears in the manifest:
+   The manifest resource returns a JSON object with the URI template, visible tools, and action entries for the current server configuration (abridged; every entry also carries `title`, `description`, `detail_uri`, `destructive`, `read_only` and typed `required_params`). `visible_tool_count` is the 34 tools listed above, `gitlab_server` included: it sits outside the GitLab action catalog but carries actions of its own, so the manifest enumerates it like every other meta-tool:
 
    ```json
    {
@@ -379,6 +387,6 @@ Meta-tools advertise a deliberately compact input schema by default (`GITLAB_MCP
 
   These resources remain available for meta-tools when `GITLAB_MCP_CAPABILITY_SURFACE=minimal` is enabled, while optional GitLab data resources, prompts, and workflow guides are omitted. Dynamic surfaces can use `gitlab_find_action` for inline schemas in minimal mode; meta-tool callers can keep `GITLAB_MCP_META_PARAM_SCHEMA=opaque` and read `gitlab://tools/{id}` for exact params.
 
-1. **Embed schemas in the tool description** — set `GITLAB_MCP_META_PARAM_SCHEMA=full` (or the lighter `compact` mode) at startup. The meta-tool's `inputSchema` then exposes a `oneOf` discriminating on `action`, with the per-action params shape inlined. Current audit metrics show `full` is 18.0x larger than `opaque`, and `compact` is 8.1x larger, so keep `opaque` unless your MCP client cannot read resources. See [Environment Variables](../reference/env.md) for size/cost trade-offs.
+1. **Embed schemas in the tool description** — set `GITLAB_MCP_META_PARAM_SCHEMA=full` (or the lighter `compact` mode) at startup. The meta-tool's `inputSchema` then exposes a `oneOf` discriminating on `action`, with the per-action params shape inlined. Current audit metrics show `full` is 18.3x larger than `opaque`, and `compact` is 8.7x larger, so keep `opaque` unless your MCP client cannot read resources. See [Environment Variables](../reference/env.md) for size/cost trade-offs.
 
 The dispatch behaviour is identical across modes — only the schema sent to the LLM changes.
