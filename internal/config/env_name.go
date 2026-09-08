@@ -43,7 +43,6 @@ var prefixedNames = []string{
 	"LOG_LEVEL",
 	"MAX_HTTP_CLIENTS",
 	"META_PARAM_SCHEMA",
-	"META_TOOLS",
 	"OAUTH_CACHE_TTL",
 	"OAUTH_CLIENT_UID",
 	"POOL_IDLE_TIMEOUT",

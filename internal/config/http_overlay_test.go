@@ -29,7 +29,6 @@ func TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing(t *testing.T) {
 		"GitLabURL":          overlay.GitLabURL == nil,
 		"SkipTLSVerify":      overlay.SkipTLSVerify == nil,
 		"ToolSurface":        overlay.ToolSurface == nil,
-		"MetaTools":          overlay.MetaTools == nil,
 		"CapabilitySurface":  overlay.CapabilitySurface == nil,
 		"MetaParamSchema":    overlay.MetaParamSchema == nil,
 		"Tier":               overlay.Tier == nil,
@@ -134,17 +133,6 @@ func presentVariableCases() []presentVariableCase {
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
 				assertStr(t, "ToolSurface", o.ToolSurface, ToolSurfaceMeta)
-				if o.MetaTools == nil || !*o.MetaTools {
-					t.Error("MetaTools should accompany a meta surface")
-				}
-			},
-		},
-		{
-			name: "the deprecated selector still resolves a surface",
-			env:  map[string]string{"META_TOOLS": "false"},
-			assert: func(t *testing.T, o *HTTPEnvOverlay) {
-				t.Helper()
-				assertStr(t, "ToolSurface", o.ToolSurface, ToolSurfaceIndividual)
 			},
 		},
 		{
@@ -174,12 +162,12 @@ func presentVariableCases() []presentVariableCase {
 			},
 		},
 		{
-			name: "the deprecated enterprise flag still resolves a tier",
+			name: "the retired enterprise flag resolves nothing",
 			env:  map[string]string{"GITLAB_ENTERPRISE": "true"},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
-				if o.Tier == nil || *o.Tier != edition.Ultimate {
-					t.Errorf("Tier = %v, want ultimate", o.Tier)
+				if o.Tier != nil {
+					t.Errorf("Tier = %v, want the overlay to leave it unset", *o.Tier)
 				}
 			},
 		},
@@ -296,14 +284,12 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		wantMsg string
 	}{
 		{"TOOL_SURFACE", "bogus", "TOOL_SURFACE"},
-		{"META_TOOLS", "bogus", "META_TOOLS"},
 		{"CAPABILITY_SURFACE", "bogus", "CAPABILITY_SURFACE"},
 		{"META_PARAM_SCHEMA", "bogus", "META_PARAM_SCHEMA"},
 		// The renamed switches, under both spellings: the message names the
 		// canonical variable either way, since that is the one to fix.
 		{"GITLAB_TIER", "bogus", "GITLAB_MCP_TIER"},
 		{"GITLAB_MCP_TIER", "bogus", "GITLAB_MCP_TIER"},
-		{"GITLAB_ENTERPRISE", "bogus", "GITLAB_ENTERPRISE"},
 		{"GITLAB_SKIP_TLS_VERIFY", "bogus", "GITLAB_MCP_SKIP_TLS_VERIFY"},
 		{"GITLAB_MCP_SKIP_TLS_VERIFY", "bogus", "GITLAB_MCP_SKIP_TLS_VERIFY"},
 		{"GITLAB_READ_ONLY", "bogus", "GITLAB_MCP_READ_ONLY"},

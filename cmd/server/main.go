@@ -138,8 +138,6 @@ type httpConfig struct {
 	// [requireInstanceAllowList].
 	allowAnyGitLabURL bool
 	skipTLSVerify     bool
-	metaTools         bool
-	metaToolsSet      bool
 	// setFlags names the flags the operator passed explicitly, which is what
 	// separates "chose the default" from "did not choose", and therefore
 	// whether the environment may supply the value instead.
@@ -255,7 +253,6 @@ func main() {
 	flag.Var(&hcfg.gitlabURLs, "gitlab-url", "GitLab instance URL, required in HTTP mode unless --allow-any-gitlab-url is passed. Repeat (or comma-separate) to publish several instances; the GITLAB-URL header then selects among them and is required, since choosing on the caller's behalf would send their token to an instance they never named")
 	flag.BoolVar(&hcfg.allowAnyGitLabURL, "allow-any-gitlab-url", false, "Let the GITLAB-URL header name any instance when --gitlab-url publishes none. Every request is then served against a host the caller chose, with a token only that host can judge; use it for a single-user local deployment and never on a reachable one")
 	flag.BoolVar(&hcfg.skipTLSVerify, "skip-tls-verify", false, "Skip TLS certificate verification")
-	flag.BoolVar(&hcfg.metaTools, "meta-tools", false, "Legacy boolean tool selector; prefer --tool-surface")
 	flag.StringVar(&hcfg.toolSurface, "tool-surface", "", "Tool surface: dynamic (default), meta, individual")
 	flag.StringVar(&hcfg.capabilitySurface, "capability-surface", config.DefaultCapabilitySurface, "Capability surface: full (default) or minimal")
 	flag.StringVar(&hcfg.tier, "tier", "", "Force licensing tier (free, ce, premium, ultimate); omit to detect per server entry")
@@ -339,11 +336,8 @@ func main() {
 	hcfg.setFlags = make(map[string]bool)
 	flag.Visit(func(f *flag.Flag) {
 		hcfg.setFlags[f.Name] = true
-		switch f.Name {
-		case "tier":
+		if f.Name == "tier" {
 			hcfg.tierSet = true
-		case "meta-tools":
-			hcfg.metaToolsSet = true
 		}
 	})
 
@@ -505,7 +499,6 @@ FLAGS
 
  Tool surface
   -tool-surface string      Tool surface: dynamic|meta|individual (default dynamic)
-  -meta-tools               Legacy boolean tool selector; prefer -tool-surface
   -capability-surface str   Capability surface: full|minimal (default full)
   -meta-param-schema str    Meta-tool input schema mode: opaque|compact|full (default opaque)
   -embedded-resources       Embed canonical MCP resource links in get_* tool results (default true)
@@ -569,8 +562,6 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_TOKEN                      Personal Access Token (glpat-...)
   GITLAB_MCP_SKIP_TLS_VERIFY        Skip TLS verification: true/false (default false)
   GITLAB_MCP_TOOL_SURFACE           Canonical tool surface: dynamic|meta|individual (default dynamic)
-  GITLAB_MCP_META_TOOLS             Deprecated legacy selector: true|false|dynamic; ignored when
-                                    GITLAB_MCP_TOOL_SURFACE is set
   GITLAB_MCP_CAPABILITY_SURFACE     Resource/prompt surface: full|minimal (default full)
   GITLAB_MCP_META_PARAM_SCHEMA      Meta-tool input schema: opaque|compact|full (default opaque)
   GITLAB_MCP_TIER                   Force licensing tier: free|ce|premium|ultimate; omit to detect from license
@@ -697,24 +688,18 @@ func run(hcfg *httpConfig) error {
 // duplicate error message is a cost.
 func resolveToolSurfaceForTelemetry(hcfg *httpConfig) string {
 	surfaceInput := config.Getenv("TOOL_SURFACE")
-	metaInput := config.Getenv("META_TOOLS")
-	if hcfg != nil {
-		// The flag wins and the environment fills in behind it, which is the
-		// same precedence the HTTP env overlay applies later. Reading the
-		// flags alone made TOOL_SURFACE exported into an HTTP deployment's
-		// environment invisible here while the overlay honored it.
-		if hcfg.toolSurface != "" {
-			surfaceInput = hcfg.toolSurface
-		}
-		if legacy := legacyMetaToolsFlagValue(hcfg); legacy != "" {
-			metaInput = legacy
-		}
+	// The flag wins and the environment fills in behind it, which is the same
+	// precedence the HTTP env overlay applies later. Reading the flag alone
+	// made TOOL_SURFACE exported into an HTTP deployment's environment
+	// invisible here while the overlay honored it.
+	if hcfg != nil && hcfg.toolSurface != "" {
+		surfaceInput = hcfg.toolSurface
 	}
-	surface, metaTools, err := config.ParseToolSurface(surfaceInput, metaInput)
+	surface, err := config.ParseToolSurface(surfaceInput)
 	if err != nil {
 		return config.ToolSurfaceDynamic
 	}
-	return config.EffectiveToolSurface(metaTools, surface)
+	return config.EffectiveToolSurface(surface)
 }
 
 // hostsOf extracts the hostnames a set of instance URLs names, dropping
@@ -837,7 +822,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		return err
 	}
 
-	toolSurface, metaTools, err := config.ParseToolSurface(hcfg.toolSurface, legacyMetaToolsFlagValue(hcfg))
+	toolSurface, err := config.ParseToolSurface(hcfg.toolSurface)
 	if err != nil {
 		return fmt.Errorf("parse tool surface: %w", err)
 	}
@@ -845,7 +830,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	if err != nil {
 		return err
 	}
-	cfg := configFromHTTPFlags(hcfg, toolSurface, metaTools, tier, tierExplicit)
+	cfg := configFromHTTPFlags(hcfg, toolSurface, tier, tierExplicit)
 	if validationErr := validateHTTPRuntimeConfig(cfg); validationErr != nil {
 		return validationErr
 	}
@@ -975,12 +960,11 @@ func resolveHTTPTier(hcfg *httpConfig) (edition.Tier, bool, error) {
 	return tier, explicit, nil
 }
 
-func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, tier edition.Tier, tierExplicit bool) *config.Config {
+func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, tier edition.Tier, tierExplicit bool) *config.Config {
 	return &config.Config{
 		GitLabURL:             hcfg.gitlabURL,
 		GitLabURLs:            hcfg.gitlabURLs,
 		SkipTLSVerify:         hcfg.skipTLSVerify,
-		MetaTools:             metaTools,
 		ToolSurface:           toolSurface,
 		CapabilitySurface:     hcfg.capabilitySurface,
 		Tier:                  tier,
@@ -1238,13 +1222,6 @@ func validateHTTPDurationConfig(cfg *config.Config) error {
 	return nil
 }
 
-func legacyMetaToolsFlagValue(hcfg *httpConfig) string {
-	if hcfg == nil || !hcfg.metaToolsSet {
-		return ""
-	}
-	return strconv.FormatBool(hcfg.metaTools)
-}
-
 type serverSurfaceRegistration struct {
 	metaSchemaRoutes map[string]toolutil.ActionMap
 	surfaceCatalog   *actioncatalog.Catalog
@@ -1274,8 +1251,6 @@ func runStdio(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
-	logLegacyMetaToolsDeprecation(config.Getenv("TOOL_SURFACE"), config.Getenv("META_TOOLS"))
-	logLegacyEnterpriseEnvDeprecation(config.Getenv("TIER"), os.Getenv("GITLAB_ENTERPRISE"))
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
 	toolutil.SetActionTimeout(cfg.ActionTimeout)
@@ -1640,7 +1615,7 @@ func newServerShell(
 	settings := newServerSettings(opts)
 	completionHandler := completions.NewHandler(client)
 	capabilitySurface := config.EffectiveCapabilitySurface(cfg.CapabilitySurface)
-	toolSurface := config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface)
+	toolSurface := config.EffectiveToolSurface(cfg.ToolSurface)
 
 	// Resource subscriptions. The machinery has to exist before the server,
 	// because its handlers travel in ServerOptions; each credential's notifier
@@ -3389,32 +3364,10 @@ func logIgnoredRequestOptions(token string, options serverpool.RequestOptions) {
 	if !options.HasIgnoredOptions() {
 		return
 	}
-	args := []any{
+	slog.Warn( //#nosec G706 -- structured log uses constant option names and a masked token suffix only
+		"request options ignored due to MCP configuration",
 		"ignored_options", options.IgnoredOptionsCopy(),
 		"token_suffix", safeTokenSuffix(token),
-	}
-	if deprecated := options.DeprecatedOptionsCopy(); len(deprecated) > 0 {
-		args = append(
-			args,
-			"deprecated_options", deprecated,
-			"deprecation_hint", "use TOOL_SURFACE instead of META_TOOLS",
-		)
-	}
-	slog.Warn("request options ignored due to MCP configuration", args...) //#nosec G706 -- structured log uses constant option names and a masked token suffix only
-}
-
-func logLegacyMetaToolsDeprecation(toolSurfaceValue, metaToolsValue string) {
-	if !config.LegacyMetaToolsSelectorInUse(toolSurfaceValue, metaToolsValue) {
-		return
-	}
-	replacement := config.LegacyMetaToolsReplacement(metaToolsValue)
-	if replacement == "" {
-		return
-	}
-	slog.Warn(
-		"META_TOOLS is deprecated; use GITLAB_MCP_TOOL_SURFACE instead", //#nosec G706 -- replacement is derived from supported TOOL_SURFACE constants and logged as structured data.
-		"legacy_selector", "META_TOOLS",
-		"replacement", "GITLAB_MCP_TOOL_SURFACE="+replacement,
 	)
 }
 
@@ -3434,20 +3387,6 @@ func logDeprecatedEnvNames() {
 	for _, warning := range config.DeprecatedEnvWarnings() {
 		slog.Warn(warning) //#nosec G706 -- the text is built by config from its own compile-time name list
 	}
-}
-
-// logLegacyEnterpriseEnvDeprecation warns when the deprecated GITLAB_ENTERPRISE
-// env var is the active tier source (GITLAB_MCP_TIER unset), pointing users to
-// GITLAB_MCP_TIER. GITLAB_ENTERPRISE=true maps to GITLAB_MCP_TIER=ultimate, false to free.
-func logLegacyEnterpriseEnvDeprecation(tierValue, enterpriseValue string) {
-	if !config.LegacyEnterpriseEnvInUse(tierValue, enterpriseValue) {
-		return
-	}
-	slog.Warn(
-		"GITLAB_ENTERPRISE is deprecated; use GITLAB_MCP_TIER (free/premium/ultimate) instead",
-		"legacy_selector", "GITLAB_ENTERPRISE",
-		"replacement", "GITLAB_MCP_TIER=ultimate (was true) or GITLAB_MCP_TIER=free (was false)",
-	)
 }
 
 // safeTokenSuffix returns a masked token suffix suitable for structured logs.
@@ -4462,7 +4401,7 @@ func doToolSearch(query, toolSurface string, tier edition.Tier) error {
 
 	// EffectiveToolSurface answers one of exactly these three, so there is no
 	// fourth case to refuse.
-	surface := config.EffectiveToolSurface(true, toolSurface)
+	surface := config.EffectiveToolSurface(toolSurface)
 	matches := matchCatalogActions(catalog.Actions(), terms, surface)
 	if len(matches) == 0 {
 		fmt.Printf("No actions found matching %q (tier %s, %s surface)\n", query, tier, surface)
@@ -4593,12 +4532,12 @@ func toolSearchSettings(hcfg *httpConfig) (surface string, tier edition.Tier, er
 	// ~/.gitlab-mcp-server.env is the surface searched.
 	config.LoadEnvFiles()
 
-	surface, _, err = config.ParseToolSurface(config.Getenv("TOOL_SURFACE"), config.Getenv("META_TOOLS"))
+	surface, err = config.ParseToolSurface(config.Getenv("TOOL_SURFACE"))
 	if err != nil {
 		return "", edition.Free, err
 	}
-	if strings.TrimSpace(hcfg.toolSurface) != "" || hcfg.metaToolsSet {
-		surface, _, err = config.ParseToolSurface(hcfg.toolSurface, legacyMetaToolsFlagValue(hcfg))
+	if strings.TrimSpace(hcfg.toolSurface) != "" {
+		surface, err = config.ParseToolSurface(hcfg.toolSurface)
 		if err != nil {
 			return "", edition.Free, err
 		}
