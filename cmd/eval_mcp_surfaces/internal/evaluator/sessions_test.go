@@ -2,6 +2,7 @@ package evaluator
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +16,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -572,6 +575,173 @@ func TestBuildCatalogSession_ServerModeShapesDynamicSurface(t *testing.T) {
 	closeSafe()
 	if !hasEvalRoute(safeRoutes, "issue.create") {
 		t.Error("safe mode must keep mutating actions routable so the model can attempt them")
+	}
+}
+
+// TestBuildCatalogSession_ReadOnlyDynamic_NamesTheCauseOfAWithheldAction
+// verifies the evaluated dynamic surface answers a write the protective mode
+// withheld by naming the cause, not by calling the action unknown.
+//
+// The catalog is assembled by dynamiccatalog.Build, which is what cmd/server
+// assembles, so the bookkeeping FilterActionCatalog produces reaches the
+// registry through WithWithheldActions. While the evaluator assembled its own
+// catalog that bookkeeping did not exist, and the evaluated model read
+// "unknown action ... Did you mean" — an answer whose suggestions are all real
+// read-only actions, so it reads as "this server cannot do that" for a
+// capability the deployment has and this session merely may not use. Scoring a
+// model against that answer measures a surface the product never serves.
+func TestBuildCatalogSession_ReadOnlyDynamic_NamesTheCauseOfAWithheldAction(t *testing.T) {
+	client := newEvalTestClient(t, false)
+
+	session, closeSession, _, _, err := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeReadOnly)
+	if err != nil {
+		t.Fatalf("buildCatalogSession(dynamic, read-only) error = %v", err)
+	}
+	defer closeSession()
+
+	result, callErr := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      dynamicExecuteActionTool,
+		Arguments: map[string]any{"action": "issue.create", "params": map[string]any{}},
+	})
+	if callErr != nil {
+		t.Fatalf("CallTool(%s) error = %v", dynamicExecuteActionTool, callErr)
+	}
+	if !result.IsError {
+		t.Fatalf("CallTool(%s, issue.create) succeeded in read-only mode", dynamicExecuteActionTool)
+	}
+	answer := callToolResultText(result)
+	if !strings.Contains(answer, "exists but is not available") {
+		t.Errorf("read-only answer = %q, want the withheld cause", answer)
+	}
+	if strings.Contains(answer, "Did you mean") {
+		t.Errorf("read-only answer = %q, want the withheld cause rather than an unknown-action guess", answer)
+	}
+}
+
+// errEvalCatalogSeam is returned by the assembler seams below, so the failure
+// the session reports can be matched rather than pattern-matched on text.
+var errEvalCatalogSeam = errors.New("catalog assembler refused")
+
+// TestBuildCatalogSession_AssemblerFails_ReportsTheCatalogError verifies both
+// surfaces report the assembler's failure instead of building a session on a
+// catalog that was never assembled.
+//
+// Neither assembler can fail from any input the evaluator takes: both build the
+// ActionSpecs compiled into this binary, and the filter they apply adds groups
+// the base catalog already validated. That is exactly why the seams exist. The
+// branch has to hold the error rather than swallow it, because the evaluator
+// would otherwise score a model against an empty surface and report the score
+// as if the surface were the product's.
+func TestBuildCatalogSession_AssemblerFails_ReportsTheCatalogError(t *testing.T) {
+	cases := []struct {
+		name        string
+		toolSurface string
+		install     func(*testing.T)
+	}{
+		{
+			name:        "dynamic",
+			toolSurface: config.ToolSurfaceDynamic,
+			install: func(t *testing.T) {
+				t.Helper()
+				original := buildDynamicCatalog
+				buildDynamicCatalog = func(*gitlabclient.Client, *config.ServerConfig) (*actioncatalog.Catalog, tools.WithheldActions, error) {
+					return nil, tools.WithheldActions{}, errEvalCatalogSeam
+				}
+				t.Cleanup(func() { buildDynamicCatalog = original })
+			},
+		},
+		{
+			name:        "meta",
+			toolSurface: config.ToolSurfaceMeta,
+			install: func(t *testing.T) {
+				t.Helper()
+				original := sharedMetaCatalog
+				sharedMetaCatalog = func(*gitlabclient.Client, *config.ServerConfig) (*actioncatalog.Catalog, tools.WithheldActions, error) {
+					return nil, tools.WithheldActions{}, errEvalCatalogSeam
+				}
+				t.Cleanup(func() { sharedMetaCatalog = original })
+			},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.install(t)
+			client := newEvalTestClient(t, false)
+			session, closeSession, _, _, err := buildCatalogSession(client, testCase.toolSurface, ServerModeDefault)
+			if closeSession != nil {
+				closeSession()
+			}
+			if session != nil {
+				t.Error("buildCatalogSession returned a session over a catalog that failed to assemble")
+			}
+			if !errors.Is(err, errEvalCatalogSeam) {
+				t.Fatalf("buildCatalogSession error = %v, want the assembler failure", err)
+			}
+			if !strings.Contains(err.Error(), "build action catalog") {
+				t.Errorf("buildCatalogSession error = %q, want it to name the step that failed", err)
+			}
+		})
+	}
+}
+
+// TestBuildCatalogSession_UnknownSurface_IsRefused verifies a tool surface the
+// evaluator has no assembler for is an error rather than a session with no
+// tools, which would score every case as a model failure.
+func TestBuildCatalogSession_UnknownSurface_IsRefused(t *testing.T) {
+	client := newEvalTestClient(t, false)
+
+	session, closeSession, _, _, err := buildCatalogSession(client, "individual", ServerModeDefault)
+	if closeSession != nil {
+		closeSession()
+	}
+	if session != nil {
+		t.Error("buildCatalogSession returned a session for an unsupported surface")
+	}
+	if err == nil || !strings.Contains(err.Error(), `unsupported tool surface "individual"`) {
+		t.Fatalf("buildCatalogSession error = %v, want the surface named", err)
+	}
+}
+
+// TestEvalServerConfig_ServerModes_ShareOneBaseAndDifferByFilter verifies the
+// memoization the shared assemblers apply keys the evaluated catalogs apart by
+// server mode, and reuses one catalog per mode.
+//
+// A single evaluator process builds a session per --server-mode against one
+// client, so all three configurations meet in the one cache
+// [tools.ShareCatalog] keeps. Two modes colliding on a key would serve the
+// unrestricted catalog to a protective run, and every case would then be scored
+// against a surface the product does not serve for that mode; a mode failing to
+// memoize would rebuild a thousand actions per session for nothing. The route
+// assertions elsewhere in this file would catch the collision, but not this
+// way: they would report a scoring difference and leave the cause to guesswork.
+func TestEvalServerConfig_ServerModes_ShareOneBaseAndDifferByFilter(t *testing.T) {
+	client := newEvalTestClient(t, false)
+
+	origins := make(map[string]*actioncatalog.Catalog, 3)
+	for _, mode := range []string{ServerModeDefault, ServerModeReadOnly, ServerModeSafe} {
+		t.Run(mode, func(t *testing.T) {
+			catalog, _, err := buildDynamicCatalog(client, evalServerConfig(client, mode))
+			if err != nil {
+				t.Fatalf("buildDynamicCatalog(%s) error = %v", mode, err)
+			}
+			origin := catalog.SharedOrigin()
+			if origin == nil {
+				t.Fatalf("catalog for %s is not shared: every session of this mode would rebuild it", mode)
+			}
+			again, _, againErr := buildDynamicCatalog(client, evalServerConfig(client, mode))
+			if againErr != nil {
+				t.Fatalf("buildDynamicCatalog(%s) second call error = %v", mode, againErr)
+			}
+			if again.SharedOrigin() != origin {
+				t.Errorf("%s assembled a second catalog; the shared one was not reused", mode)
+			}
+			for otherMode, otherOrigin := range origins {
+				if otherOrigin == origin {
+					t.Errorf("%s and %s share one catalog; one of them is evaluated against the other's surface", mode, otherMode)
+				}
+			}
+			origins[mode] = origin
+		})
 	}
 }
 

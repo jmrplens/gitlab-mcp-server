@@ -13,12 +13,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamiccatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -95,12 +96,21 @@ func Session(setup func(*mcp.Server)) (session *mcp.ClientSession, cleanup func(
 // find/execute surface, including the standalone actions that are not part of
 // any domain meta-tool. enterprise selects the Premium/Ultimate catalog.
 //
-// Both steps assemble the ActionSpecs compiled into this binary, so a failure
+// It delegates to [dynamiccatalog.Build] with a configuration that narrows
+// nothing, so the generators describe the catalog the server assembles rather
+// than a second assembly of the same parts: an unconfigured deployment is what
+// a generated artifact must describe, and this is the function cmd/server
+// calls to assemble it. Several audit commands and the e2e suite still put
+// their own copy together; each one that moves onto this package is one fewer
+// surface that can drift from the served one without a test noticing.
+//
+// Assembly reads only the ActionSpecs compiled into this binary, so a failure
 // means the committed catalog is malformed, which no generator run can fix and
 // every caller would only print.
 func DynamicCatalog(client *gitlabclient.Client, enterprise bool) *actioncatalog.Catalog {
-	catalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true}))
-	return cmdutil.Must(dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{}))
+	catalog, _, err := dynamiccatalog.Build(client, &config.ServerConfig{Tier: edition.TierForEnterprise(enterprise)})
+	cmdutil.MustDo(err)
+	return catalog
 }
 
 // DynamicTools returns the visible two-tool dynamic catalog from a real MCP
