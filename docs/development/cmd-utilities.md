@@ -566,7 +566,7 @@ One block per pairing with a disagreement on stderr, naming the package, the con
 
 #### Make targets
 
-- `make check-graphql-shapes`: the CI gate.
+- `make check-graphql-shapes`: the CI gate; also step [16/16] of `make analyze`.
 - `make audit-graphql-shapes`: the same gate, listing everything it judged.
 
 ## Surface quality audits
@@ -853,7 +853,7 @@ Human report to stdout (per-site `file:line [category] boundary`), summary line,
 #### Make targets
 
 - `make audit-test-goroutines` — writes `plan/test-goroutines-backlog.json`.
-- `make check-test-goroutines` — CI gate; also step [7/15] of `make analyze`.
+- `make check-test-goroutines` — CI gate; also step [7/16] of `make analyze`.
 
 ### audit_test_names
 
@@ -919,7 +919,7 @@ Per-file tallies (`sites`, `fixable`), a summary line, and optionally the JSON w
 #### Make targets
 
 - `make audit-test-subtests` — writes `plan/test-subtests-backlog.json`.
-- `make check-test-subtests` — CI gate; also step [8/15] of `make analyze`.
+- `make check-test-subtests` — CI gate; also step [8/16] of `make analyze`.
 
 ### audit_md_escaping
 
@@ -967,7 +967,7 @@ Findings grouped by package, each naming the file, line, formatter, construct, v
 #### Make targets
 
 - `make audit-md-escaping` — report plus `plan/md-escaping-backlog.json`.
-- `make check-md-escaping` — CI gate; also step [10/15] of `make analyze`.
+- `make check-md-escaping` — CI gate; also step [10/16] of `make analyze`.
 
 ### audit_string_dupes
 
@@ -1042,7 +1042,7 @@ One line per violation under a `supply-chain audit FAILED (N problems):` header,
 
 #### Make targets
 
-- `make check-supply-chain` — CI gate; also step [9/15] of `make analyze`.
+- `make check-supply-chain` — CI gate; also step [9/16] of `make analyze`.
 
 ### audit_install_buttons
 
@@ -1191,7 +1191,7 @@ Writes `gitlab-api-shapes.json` into `-dir` and reports the operation count, how
 #### Make targets
 
 - `make gen-api-shapes`
-- `make check-api-shapes` — CI gate; also step [15/15] of `make analyze`.
+- `make check-api-shapes` — CI gate; also step [15/16] of `make analyze`.
 
 ### gen_api_exposes
 
