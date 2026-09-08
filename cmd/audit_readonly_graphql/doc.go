@@ -43,6 +43,29 @@
 // exits non-zero, which is the same answer it gives to a read-only action whose
 // handler it cannot resolve.
 //
+// # Where the two rules disagree
+//
+// The inventory has a pre-filter of its own, and it is not this command's
+// operation-type rule, so the two part company in both directions on shapes
+// nothing in this repository writes today.
+//
+// The pre-filter is the narrower one: it wants the operation keyword at the
+// very start of the comment-stripped text, where the rule here accepts it at
+// the start of any line. A string that only the looser rule reads as a
+// document, such as a sentence of prose above a mutation, is not in the
+// inventory at all and so is neither indexed nor reported. That is a narrowing
+// of what this gate sees, and it is deliberate: every document this repository
+// sends opens with its keyword, including the four assembled from a shared
+// fragment, and a string that does not is not a document GitLab would accept.
+//
+// The pre-filter is also the looser one, for a literal written inside a
+// function body: it may read one as a document that classifyDocument then
+// classifies as none, in which case the body walk places nothing at its
+// position and the document is reported as unattributed. That is a false alarm
+// rather than a silence, which is the trade this gate makes everywhere else
+// too, and it is a reviewable line rather than a clean run over a string
+// nobody judged.
+//
 // Usage:
 //
 //	go run ./cmd/audit_readonly_graphql/

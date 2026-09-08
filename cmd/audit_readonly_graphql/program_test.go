@@ -564,6 +564,85 @@ func build() string {
 }
 `
 
+// disagreeFixture writes the two shapes the shared pre-filter and this audit's
+// own operation-type rule judge differently, one in each direction.
+//
+// prose carries a mutation on a line of its own but opens with something that
+// is not an operation keyword, so the inventory does not consider it a document
+// at all while classifyDocument's per-line regex would call it a mutation.
+// send returns a literal the inventory does consider a document, the keyword
+// being the first token, while classifyDocument refuses it because the keyword
+// is not followed on its own line by a name, a brace or a paren.
+const disagreeFixture = `package disagree
+
+const prose = @@
+Sent to GitLab:
+mutation { thing { errors } }
+@@
+
+func send() string {
+	return @@query
+{ thing { id } }@@
+}
+`
+
+// TestLoadProgram_ADocumentThePreFilterRefuses_IsNotIndexed pins the narrowing
+// the shared inventory brings with it.
+//
+// The inventory asks for the operation keyword at the very start of the
+// comment-stripped text, where this audit's own rule accepts it at the start of
+// any line. A string that only satisfies the looser rule therefore leaves the
+// inventory and is neither indexed nor reported. Every document this repository
+// sends opens with its keyword, so nothing is lost today; the test is here so
+// that the day the difference matters, it is a failing assertion rather than a
+// gate that quietly stopped looking.
+func TestLoadProgram_ADocumentThePreFilterRefuses_IsNotIndexed(t *testing.T) {
+	prog := loadFixture(t, map[string]string{"disagree": disagreeFixture})
+
+	if got := classifyDocument("\nSent to GitLab:\nmutation { thing { errors } }\n"); got != writeDocument {
+		t.Fatalf("classifyDocument() = %v for the fixture's prose, want %v: the test would not be about the "+
+			"narrowing if this audit's own rule refused it too", got, writeDocument)
+	}
+	for obj := range prog.documents {
+		if obj.Pkg() != nil && obj.Pkg().Name() == "disagree" && obj.Name() == "prose" {
+			t.Errorf("prose is indexed as a document, want it left out: the inventory does not read it as one")
+		}
+	}
+	for _, document := range prog.unattributed {
+		if strings.Contains(document.Text, "Sent to GitLab") {
+			t.Errorf("prose is reported as unattributed, want it left out entirely: %+v", document)
+		}
+	}
+}
+
+// TestLoadProgram_ALiteralOnlyTheInventoryReadsAsADocument_IsReported pins the
+// other direction, which is a false alarm rather than a silence.
+//
+// The inventory reads such a literal as a document; the body walk classifies it
+// as none and so places nothing at its position, which leaves it unattributed
+// and fails the run. That is the trade this gate makes everywhere else too: a
+// reviewable finding over a string it never classified, since the alternative is
+// a clean report over a document nobody judged.
+func TestLoadProgram_ALiteralOnlyTheInventoryReadsAsADocument_IsReported(t *testing.T) {
+	prog := loadFixture(t, map[string]string{"disagree": disagreeFixture})
+
+	if len(prog.unattributed) != 1 {
+		t.Fatalf("loadProgram() left %d document(s) unattributed, want the literal the two rules disagree about: %+v",
+			len(prog.unattributed), prog.unattributed)
+	}
+	document := prog.unattributed[0]
+	if !strings.Contains(document.Text, "thing { id }") {
+		t.Errorf("the unattributed document reads %q, want the literal in send()", document.Text)
+	}
+	if got := classifyDocument(document.Text); got != notADocument {
+		t.Errorf("classifyDocument() = %v for the literal, want %v: it is unattributed precisely because this "+
+			"audit's own rule reads it as no document", got, notADocument)
+	}
+	if !strings.HasSuffix(filepath.ToSlash(document.Position.Filename), "/disagree/disagree.go") {
+		t.Errorf("the unattributed document is positioned at %q, want the fixture file", document.Position.Filename)
+	}
+}
+
 // unplacedFixture writes a document in the one shape no walk in this audit can
 // place: assembled where it is used, in a package-level initializer, so it is
 // bound to no object and sits in no function body. It is a package of its own
