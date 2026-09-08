@@ -18,10 +18,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,887 |
-| Unit test functions                                   | 14,284 |
+| Total test functions                                  | 14,894 |
+| Unit test functions                                   | 14,291 |
 | E2E test functions                                    |    603 |
-| cmd test functions                                    |  2,899 |
+| cmd test functions                                    |  2,903 |
 | Test files (internal/)                                |    519 |
 | Test files (cmd/)                                     |    196 |
 | Test files (test/e2e/)                                |    240 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,861 | 79.7% |
+| `TestFunc_Scenario` (2-part)           | 11,861 | 79.6% |
 | `TestFunc` (no underscore)             |    980 |  6.6% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,046 | 13.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,053 | 13.8% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,440 |        144 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,607 |        359 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,610 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            603 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,899 |        196 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,887** |    **955** |                                                                                                 |
+| cmd packages            |          2,903 |        196 | server entry point and developer command utilities                                              |
+| **Total**               |     **14,894** |    **955** |                                                                                                 |
 
 ### Core Packages
 
@@ -200,7 +200,7 @@
 | groupstoragemoves       |        36 |          2 |   100.0% |         6 |
 | groupvariables          |        54 |          2 |   100.0% |         5 |
 | groupwikis              |        33 |          3 |   100.0% |         5 |
-| health                  |        17 |          1 |   100.0% |         2 |
+| health                  |        20 |          1 |   100.0% |         2 |
 | impersonationtokens     |        40 |          2 |   100.0% |         5 |
 | importservice           |        31 |          1 |   100.0% |         5 |
 | instancevariables       |        41 |          2 |   100.0% |         5 |
@@ -293,7 +293,7 @@
 | wikis                   |        61 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,607** |    **359** |          | **1,187** |
+| **Total**               | **8,610** |    **359** |          | **1,187** |
 
 </details>
 
@@ -326,11 +326,11 @@
 | cmd/audit_meta_descriptions                    |    96.6% |
 | cmd/audit_metrics                              |    97.7% |
 | cmd/audit_readonly_graphql                     |    90.8% |
-| cmd/audit_string_dupes                         |    91.8% |
+| cmd/audit_string_dupes                         |    92.3% |
 | cmd/audit_supply_chain                         |    98.0% |
 | cmd/audit_surface_quality                      |    94.1% |
 | cmd/audit_test_goroutines                      |    95.3% |
-| cmd/audit_test_names                           |    91.0% |
+| cmd/audit_test_names                           |    91.1% |
 | cmd/audit_test_subtests                        |    99.7% |
 | cmd/audit_tokens                               |    98.0% |
 | cmd/bench_resources                            |   100.0% |
