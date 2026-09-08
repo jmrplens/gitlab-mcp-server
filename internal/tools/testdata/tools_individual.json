@@ -38036,15 +38036,6 @@
             "alert_events": {
               "type": "boolean"
             },
-            "api_url": {
-              "type": "string"
-            },
-            "archive_trace_events": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
             "comment_on_event_enabled": {
               "type": "boolean"
             },
@@ -38058,24 +38049,6 @@
               "type": "boolean"
             },
             "created_at": {
-              "type": "string"
-            },
-            "datadog_ci_visibility": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
-            "datadog_env": {
-              "type": "string"
-            },
-            "datadog_service": {
-              "type": "string"
-            },
-            "datadog_site": {
-              "type": "string"
-            },
-            "datadog_tags": {
               "type": "string"
             },
             "deployment_events": {
@@ -38113,7 +38086,7 @@
             },
             "properties": {
               "additionalProperties": false,
-              "description": "Canonical Datadog configuration object. Prefer these values over the deprecated flat copies",
+              "description": "The Datadog configuration GitLab returns for the integration",
               "properties": {
                 "api_url": {
                   "type": "string"
@@ -203802,15 +203775,6 @@
             "alert_events": {
               "type": "boolean"
             },
-            "api_url": {
-              "type": "string"
-            },
-            "archive_trace_events": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
             "comment_on_event_enabled": {
               "type": "boolean"
             },
@@ -203824,24 +203788,6 @@
               "type": "boolean"
             },
             "created_at": {
-              "type": "string"
-            },
-            "datadog_ci_visibility": {
-              "type": [
-                "null",
-                "boolean"
-              ]
-            },
-            "datadog_env": {
-              "type": "string"
-            },
-            "datadog_service": {
-              "type": "string"
-            },
-            "datadog_site": {
-              "type": "string"
-            },
-            "datadog_tags": {
               "type": "string"
             },
             "deployment_events": {
@@ -203879,7 +203825,7 @@
             },
             "properties": {
               "additionalProperties": false,
-              "description": "Canonical Datadog configuration object. Prefer these values over the deprecated flat copies",
+              "description": "The Datadog configuration GitLab returns for the integration",
               "properties": {
                 "api_url": {
                   "type": "string"

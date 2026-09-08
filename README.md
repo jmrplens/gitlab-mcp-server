@@ -271,7 +271,7 @@ Tool counts scale with your GitLab edition (`GITLAB_MCP_TIER`); higher tiers exp
 
 Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the cl100k_base tokenizer (GPT-4/GPT-3.5 encoding). For the full matrix (meta and individual surfaces, all `GITLAB_MCP_META_PARAM_SCHEMA` modes), see [Token Footprint Reference](docs/development/token-footprint.md).
 
-**Default configuration**: with `GITLAB_MCP_TOOL_SURFACE` unset or `GITLAB_MCP_TOOL_SURFACE=dynamic`, `GITLAB_MCP_CAPABILITY_SURFACE=full`, `GITLAB_MCP_META_PARAM_SCHEMA=opaque`, and `GITLAB_MCP_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `GITLAB_MCP_TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `GITLAB_MCP_TOOL_SURFACE=individual` only when your client can handle the full tool catalog.
+**Default configuration**: with `GITLAB_MCP_TOOL_SURFACE` unset or `GITLAB_MCP_TOOL_SURFACE=dynamic`, `GITLAB_MCP_CAPABILITY_SURFACE=full`, `GITLAB_MCP_META_TOOLS` unset, `GITLAB_MCP_META_PARAM_SCHEMA=opaque`, and `GITLAB_MCP_TIER` unset (detected, fallback `free`), the server uses the **dynamic find/execute surface**. Use `GITLAB_MCP_TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `GITLAB_MCP_TOOL_SURFACE=individual` only when your client can handle the full tool catalog.
 
 | Configuration (`GITLAB_MCP_TOOL_SURFACE` / `GITLAB_MCP_CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `GITLAB_MCP_META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | --------------------------------------------------------------------------- | -------- | ------------: | ----------------: | ------------------------------ | -----------------: | ------------: | -----------: |
@@ -467,20 +467,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,244 |     261,621 |
-| Unit tests (`_test.go`)  |       731 |     425,458 |
+| Source (`.go`, non-test) |     1,244 |     261,443 |
+| Unit tests (`_test.go`)  |       731 |     425,138 |
 | End-to-end tests         |       246 |      66,271 |
-| **Total**                | **2,221** | **753,350** |
+| **Total**                | **2,221** | **752,852** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  9,636 |
-| . Exported (public)             |  2,995 |
-| . Unexported (private)          |  6,641 |
-| Unit test functions (`TestXxx`) | 14,455 |
-| Subtests (`t.Run(...)`)         |  5,766 |
+| Source functions                |  9,627 |
+| . Exported (public)             |  2,990 |
+| . Unexported (private)          |  6,637 |
+| Unit test functions (`TestXxx`) | 14,448 |
+| Subtests (`t.Run(...)`)         |  5,759 |
 | End-to-end test functions       |    603 |
 
 ### Ratios worth noting
@@ -490,17 +490,17 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.63× more tests than code |
 | Average source file length         |                 ~210 lines |
 | Average test file length           |                 ~582 lines |
-| Comment lines in source            |  47,725 (~18.2% of source) |
+| Comment lines in source            |  47,692 (~18.2% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 7,902 |
+| `if err != nil` checks             | 7,897 |
 | `defer` statements                 | 1,363 |
 | `struct` types defined             | 3,148 |
-| `//nolint` suppressions            |   335 |
+| `//nolint` suppressions            |   337 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
@@ -515,15 +515,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Record              | File                                    |
 | ------------------- | --------------------------------------- |
-| Longest source file | `cmd/server/main.go`. 4,659 lines       |
-| Longest test file   | `cmd/server/main_test.go`. 10,551 lines |
+| Longest source file | `cmd/server/main.go`. 4,598 lines       |
+| Longest test file   | `cmd/server/main_test.go`. 10,477 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~4,756 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 15,065 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~4,753 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 15,044 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
