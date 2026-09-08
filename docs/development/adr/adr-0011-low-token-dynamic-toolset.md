@@ -102,7 +102,8 @@ explicit configuration flag and must pass evaluation gates before it can become 
 ## Implementation Notes
 
 - **IMP-001**: Add the dynamic toolset behind the explicit `GITLAB_MCP_TOOL_SURFACE=dynamic`
-  selector. Legacy `GITLAB_MCP_META_TOOLS=true|false` remains only as a compatibility fallback when `GITLAB_MCP_TOOL_SURFACE` is absent.
+  selector. Legacy `GITLAB_MCP_META_TOOLS=true|false` remained a compatibility fallback when
+  `GITLAB_MCP_TOOL_SURFACE` was absent, and was removed in 3.0.0.
 - **IMP-002**: Build the dynamic action view from the canonical action catalog shared with meta-tools, then apply
   enterprise, GitLab.com, exclude-tools, token-scope, read-only, and safe-mode behavior without constructing a separate
   MCP server.

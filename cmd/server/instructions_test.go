@@ -36,7 +36,6 @@ func TestBuildInstructions_NamesResolveOnEverySurface(t *testing.T) {
 	for _, surface := range instructionSurfaces {
 		t.Run(surface, func(t *testing.T) {
 			server := mustCreateServer(t, client, &config.ServerConfig{
-				MetaTools:         true,
 				ToolSurface:       surface,
 				CapabilitySurface: config.CapabilitySurfaceFull,
 			})

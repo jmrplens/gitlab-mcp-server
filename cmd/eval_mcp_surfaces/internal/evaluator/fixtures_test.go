@@ -212,7 +212,6 @@ func TestEnsureLiveProjectActive_UnarchivesArchivedFixtureProject(t *testing.T) 
 	client, err := gitlabclient.NewClient(&config.Config{
 		GitLabURL:       server.URL,
 		GitLabToken:     "eval-token",
-		MetaTools:       true,
 		MetaParamSchema: config.DefaultMetaParamSchema,
 	})
 	if err != nil {
@@ -482,7 +481,6 @@ func newFixtureTestClient(t *testing.T, gitlabURL string) *gitlabclient.Client {
 	client, err := gitlabclient.NewClient(&config.Config{
 		GitLabURL:       gitlabURL,
 		GitLabToken:     "eval-token",
-		MetaTools:       true,
 		MetaParamSchema: config.DefaultMetaParamSchema,
 		// Fixture tests drive failure paths through fake 4xx/5xx responses;
 		// without this the SDK retries each one with backoff and a handful of

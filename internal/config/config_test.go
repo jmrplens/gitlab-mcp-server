@@ -168,47 +168,12 @@ func TestLoad_SkipTLSVerifyInvalid(t *testing.T) {
 	}
 }
 
-// TestLoad_MetaToolsInvalid verifies that [Load] returns an error when
-// META_TOOLS contains an unsupported tool surface value.
-func TestLoad_MetaToolsInvalid(t *testing.T) {
-	t.Setenv("GITLAB_URL", testGitLabURL)
-	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
-	t.Setenv("TOOL_SURFACE", "")
-	t.Setenv("META_TOOLS", "notabool")
-
-	_, err := Load()
-	if err == nil {
-		t.Fatal("Load() expected error for invalid META_TOOLS, got nil")
-	}
-}
-
-// TestLoad_MetaToolsDynamic verifies that META_TOOLS=dynamic selects the
-// low-token dynamic tool surface while preserving legacy MetaTools truthiness.
-func TestLoad_MetaToolsDynamic(t *testing.T) {
-	t.Setenv("GITLAB_URL", testGitLabURL)
-	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("META_TOOLS", "dynamic")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf(fmtLoadUnexpected, err)
-	}
-	if cfg.ToolSurface != ToolSurfaceDynamic {
-		t.Fatalf("ToolSurface = %q, want %q", cfg.ToolSurface, ToolSurfaceDynamic)
-	}
-	if !cfg.MetaTools {
-		t.Fatal("MetaTools = false, want true for dynamic mode")
-	}
-}
-
 // TestLoad_DefaultToolSurface verifies the empty selector path uses the
-// low-token dynamic surface while preserving legacy MetaTools truthiness.
+// low-token dynamic surface.
 func TestLoad_DefaultToolSurface(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
 	t.Setenv("TOOL_SURFACE", "")
-	t.Setenv("META_TOOLS", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -217,85 +182,13 @@ func TestLoad_DefaultToolSurface(t *testing.T) {
 	if cfg.ToolSurface != ToolSurfaceDynamic {
 		t.Fatalf("ToolSurface = %q, want %q", cfg.ToolSurface, ToolSurfaceDynamic)
 	}
-	if !cfg.MetaTools {
-		t.Fatal("MetaTools = false, want true for dynamic mode")
-	}
 }
 
-// TestLegacyMetaToolsSelectorInUse verifies that legacy selector detection is
-// limited to configurations that set META_TOOLS without TOOL_SURFACE.
-func TestLegacyMetaToolsSelectorInUse(t *testing.T) {
-	tests := []struct {
-		name             string
-		toolSurfaceValue string
-		metaToolsValue   string
-		want             bool
-	}{
-		{name: "empty values", want: false},
-		{name: "legacy only", metaToolsValue: "false", want: true},
-		{name: "canonical only", toolSurfaceValue: "individual", want: false},
-		{name: "canonical wins", toolSurfaceValue: "dynamic", metaToolsValue: "false", want: false},
-		{name: "whitespace legacy only", metaToolsValue: " dynamic ", want: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := LegacyMetaToolsSelectorInUse(tt.toolSurfaceValue, tt.metaToolsValue)
-			if got != tt.want {
-				t.Fatalf("LegacyMetaToolsSelectorInUse() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-// TestLegacyMetaToolsReplacement verifies that legacy META_TOOLS spellings map
-// to their canonical TOOL_SURFACE replacements.
-func TestLegacyMetaToolsReplacement(t *testing.T) {
-	tests := []struct {
-		value string
-		want  string
-	}{
-		{value: "true", want: ToolSurfaceMeta},
-		{value: "false", want: ToolSurfaceIndividual},
-		{value: "dynamic", want: ToolSurfaceDynamic},
-		{value: "notabool", want: ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.value, func(t *testing.T) {
-			if got := LegacyMetaToolsReplacement(tt.value); got != tt.want {
-				t.Fatalf("LegacyMetaToolsReplacement(%q) = %q, want %q", tt.value, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestLoad_ToolSurfaceOverridesMetaTools verifies that TOOL_SURFACE is the
-// explicit catalog-mode knob when both new and legacy settings are present.
-func TestLoad_ToolSurfaceOverridesMetaTools(t *testing.T) {
-	t.Setenv("GITLAB_URL", testGitLabURL)
-	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("META_TOOLS", "false")
-	t.Setenv("TOOL_SURFACE", "dynamic")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf(fmtLoadUnexpected, err)
-	}
-	if cfg.ToolSurface != ToolSurfaceDynamic {
-		t.Fatalf("ToolSurface = %q, want %q", cfg.ToolSurface, ToolSurfaceDynamic)
-	}
-	if !cfg.MetaTools {
-		t.Fatal("MetaTools = false, want true for dynamic mode")
-	}
-}
-
-// TestLoad_ToolSurfaceInvalid verifies that Load rejects unsupported explicit
-// tool surface values before falling back to META_TOOLS.
+// TestLoad_ToolSurfaceInvalid verifies that Load rejects an unsupported
+// tool surface value.
 func TestLoad_ToolSurfaceInvalid(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("META_TOOLS", "true")
 	t.Setenv("TOOL_SURFACE", "not-a-surface")
 
 	_, err := Load()
@@ -328,9 +221,6 @@ func TestLoad_ToolSurfaceDynamicCandidates(t *testing.T) {
 			}
 			if cfg.ToolSurface != tt.want {
 				t.Fatalf("ToolSurface = %q, want %q", cfg.ToolSurface, tt.want)
-			}
-			if !cfg.MetaTools {
-				t.Fatal("MetaTools = false, want true for dynamic candidate mode")
 			}
 		})
 	}
@@ -905,7 +795,6 @@ func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
 
 	cfg := &Config{
 		GitLabURL:         "https://gitlab.example.com",
-		MetaTools:         true,
 		Tier:              edition.Ultimate,
 		TierExplicit:      true,
 		ReadOnly:          true,
@@ -919,7 +808,7 @@ func TestServerConfig_CopiesServerScopedFields(t *testing.T) {
 	}
 
 	snapshot := cfg.ServerConfig()
-	if snapshot.GitLabURL != cfg.GitLabURL || !snapshot.MetaTools || !snapshot.Enterprise() || !snapshot.ReadOnly || !snapshot.SafeMode {
+	if snapshot.GitLabURL != cfg.GitLabURL || !snapshot.Enterprise() || !snapshot.ReadOnly || !snapshot.SafeMode {
 		t.Fatalf("ServerConfig snapshot does not preserve boolean/url fields: %+v", snapshot)
 	}
 	if snapshot.Tier != edition.Ultimate || !snapshot.TierExplicit {
@@ -963,20 +852,6 @@ func TestLoad_InvalidSkipTLS(t *testing.T) {
 	}
 }
 
-// TestLoad_InvalidMetaTools verifies that Load returns an error when
-// META_TOOLS has an invalid tool surface value.
-func TestLoad_InvalidMetaTools(t *testing.T) {
-	t.Setenv("META_TOOLS", "notabool")
-	t.Setenv("TOOL_SURFACE", "")
-	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
-	t.Setenv("GITLAB_TOKEN", "test")
-	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
-	_, err := Load()
-	if err == nil {
-		t.Fatal("expected error for invalid META_TOOLS")
-	}
-}
-
 // TestLoad_InvalidTier verifies that Load returns an error when GITLAB_MCP_TIER
 // holds an unrecognized value.
 func TestLoad_InvalidTier(t *testing.T) {
@@ -1012,7 +887,6 @@ func TestLoad_TierResolution(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 			t.Setenv("GITLAB_TOKEN", "test")
-			t.Setenv("GITLAB_ENTERPRISE", "")
 			if tc.set {
 				t.Setenv("GITLAB_MCP_TIER", tc.value)
 			} else {
@@ -1035,50 +909,22 @@ func TestLoad_TierResolution(t *testing.T) {
 	}
 }
 
-// TestLoad_DeprecatedEnterpriseEnv verifies the deprecated GITLAB_ENTERPRISE env
-// var is honored for back-compat when GITLAB_MCP_TIER is unset (true→ultimate,
-// false→free, both explicit), and that GITLAB_MCP_TIER takes precedence over it.
-func TestLoad_DeprecatedEnterpriseEnv(t *testing.T) {
-	tests := []struct {
-		name         string
-		tier         string
-		enterprise   string
-		wantTier     edition.Tier
-		wantExplicit bool
-	}{
-		{name: "enterprise true maps to ultimate", enterprise: "true", wantTier: edition.Ultimate, wantExplicit: true},
-		{name: "enterprise false maps to free", enterprise: "false", wantTier: edition.Free, wantExplicit: true},
-		{name: "GITLAB_MCP_TIER wins over enterprise", tier: "premium", enterprise: "true", wantTier: edition.Premium, wantExplicit: true},
-		{name: "both unset detects", wantTier: edition.Free, wantExplicit: false},
+// TestLoad_RetiredEnterpriseEnv_IsIgnored verifies that GITLAB_ENTERPRISE, the
+// tier selector v2 deprecated in favor of GITLAB_MCP_TIER, no longer decides
+// anything: a configuration that sets it and nothing else detects the tier
+// from the instance, as one that sets neither does.
+func TestLoad_RetiredEnterpriseEnv_IsIgnored(t *testing.T) {
+	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
+	t.Setenv("GITLAB_TOKEN", "test")
+	t.Setenv("GITLAB_MCP_TIER", "")
+	t.Setenv("GITLAB_ENTERPRISE", "true")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("GITLAB_URL", "https://gitlab.example.com")
-			t.Setenv("GITLAB_TOKEN", "test")
-			t.Setenv("GITLAB_MCP_TIER", tc.tier)
-			t.Setenv("GITLAB_ENTERPRISE", tc.enterprise)
-			cfg, err := Load()
-			if err != nil {
-				t.Fatalf("Load() error = %v", err)
-			}
-			if cfg.Tier != tc.wantTier || cfg.TierExplicit != tc.wantExplicit {
-				t.Errorf("Tier=%v Explicit=%v, want %v %v", cfg.Tier, cfg.TierExplicit, tc.wantTier, tc.wantExplicit)
-			}
-		})
-	}
-	if !LegacyEnterpriseEnvInUse("", "true") {
-		t.Error("LegacyEnterpriseEnvInUse(unset tier, enterprise set) should be true")
-	}
-	if LegacyEnterpriseEnvInUse("premium", "true") {
-		t.Error("LegacyEnterpriseEnvInUse should be false when GITLAB_MCP_TIER is set")
-	}
-	// Neither set is the ordinary case, and it must not warn: a deprecation
-	// notice about a variable the operator never wrote is noise they cannot act on.
-	if LegacyEnterpriseEnvInUse("", "") {
-		t.Error("LegacyEnterpriseEnvInUse should be false when neither variable is set")
-	}
-	if LegacyEnterpriseEnvInUse("", "   ") {
-		t.Error("LegacyEnterpriseEnvInUse should treat a whitespace-only GITLAB_ENTERPRISE as unset")
+	if cfg.Tier != edition.Free || cfg.TierExplicit {
+		t.Errorf("Tier=%v Explicit=%v, want the detected default (free, not explicit)", cfg.Tier, cfg.TierExplicit)
 	}
 }
 
@@ -1089,8 +935,6 @@ func TestLoad_InvalidReadOnly(t *testing.T) {
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
 	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
-	t.Setenv("META_TOOLS", "true")
-	t.Setenv("GITLAB_ENTERPRISE", "false")
 	_, err := Load()
 	if err == nil {
 		t.Fatal("expected error for invalid GITLAB_MCP_READ_ONLY")
@@ -1104,8 +948,6 @@ func TestLoad_InvalidUploadMaxFileSize(t *testing.T) {
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
 	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
-	t.Setenv("META_TOOLS", "true")
-	t.Setenv("GITLAB_ENTERPRISE", "false")
 	t.Setenv("GITLAB_MCP_READ_ONLY", "false")
 	_, err := Load()
 	if err == nil {
@@ -1119,8 +961,6 @@ func TestLoad_InvalidMaxHTTPClients(t *testing.T) {
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
 	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
-	t.Setenv("META_TOOLS", "true")
-	t.Setenv("GITLAB_ENTERPRISE", "false")
 	t.Setenv("GITLAB_MCP_READ_ONLY", "false")
 	t.Setenv("UPLOAD_MAX_FILE_SIZE", "5242880")
 	_, err := Load()
@@ -1135,8 +975,6 @@ func TestLoad_InvalidSessionTimeout(t *testing.T) {
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
 	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
-	t.Setenv("META_TOOLS", "true")
-	t.Setenv("GITLAB_ENTERPRISE", "false")
 	t.Setenv("GITLAB_MCP_READ_ONLY", "false")
 	t.Setenv("UPLOAD_MAX_FILE_SIZE", "5242880")
 	t.Setenv("MAX_HTTP_CLIENTS", "100")
@@ -1304,8 +1142,6 @@ func TestLoad_InvalidSafeMode(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
 	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
-	t.Setenv("META_TOOLS", "true")
-	t.Setenv("GITLAB_ENTERPRISE", "false")
 	t.Setenv("GITLAB_MCP_READ_ONLY", "false")
 	t.Setenv("GITLAB_MCP_SAFE_MODE", "notabool")
 
@@ -1351,29 +1187,24 @@ func TestValidate_DirectErrorBranches(t *testing.T) {
 	}
 }
 
-// TestEffectiveToolSurface verifies explicit and legacy tool-surface resolution.
+// TestEffectiveToolSurface verifies that a snapshot's surface is the one it
+// names, and that anything else answers the default rather than a guess.
 func TestEffectiveToolSurface(t *testing.T) {
 	tests := []struct {
 		name        string
-		metaTools   bool
 		toolSurface string
 		want        string
 	}{
-		{name: "explicit dynamic", metaTools: false, toolSurface: ToolSurfaceDynamic, want: ToolSurfaceDynamic},
-		{name: "legacy meta", metaTools: true, want: ToolSurfaceMeta},
-		{name: "legacy individual", metaTools: false, want: ToolSurfaceIndividual},
-		{name: "unknown falls back to meta", metaTools: true, toolSurface: "unknown", want: ToolSurfaceMeta},
-		// An explicit surface wins over the legacy boolean in both
-		// directions; only the dynamic arm was exercised, so a switch that
-		// had lost these two would have gone on passing while silently
-		// deriving the surface from META_TOOLS instead.
-		{name: "explicit meta beats a contradicting legacy boolean", metaTools: false, toolSurface: ToolSurfaceMeta, want: ToolSurfaceMeta},
-		{name: "explicit individual beats a contradicting legacy boolean", metaTools: true, toolSurface: ToolSurfaceIndividual, want: ToolSurfaceIndividual},
+		{name: "dynamic", toolSurface: ToolSurfaceDynamic, want: ToolSurfaceDynamic},
+		{name: "meta", toolSurface: ToolSurfaceMeta, want: ToolSurfaceMeta},
+		{name: "individual", toolSurface: ToolSurfaceIndividual, want: ToolSurfaceIndividual},
+		{name: "empty takes the default", want: DefaultToolSurface},
+		{name: "unknown takes the default", toolSurface: "unknown", want: DefaultToolSurface},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := EffectiveToolSurface(tt.metaTools, tt.toolSurface); got != tt.want {
+			if got := EffectiveToolSurface(tt.toolSurface); got != tt.want {
 				t.Errorf("EffectiveToolSurface() = %q, want %q", got, tt.want)
 			}
 		})
@@ -1384,12 +1215,16 @@ func TestEffectiveToolSurface(t *testing.T) {
 // accepted spelling of the tool-surface selector resolves to the surface it
 // names, and that an unrecognized one is refused by name.
 //
-// The selector accepts nineteen spellings across three surfaces, and only six
-// of them were ever evaluated: the two booleans and the three canonical names,
-// plus one alias. An arm quietly deleted from any of the three cases would
-// have turned a documented value into a startup error, and nothing here would
-// have noticed. They are cheap to pin because the function is pure, and they
-// are the values operators copy out of the README.
+// The selector accepts nine spellings across three surfaces, and only four of
+// them were ever evaluated: the three canonical names plus one alias. An arm
+// quietly deleted from any of the three cases would have turned a documented
+// value into a startup error, and nothing here would have noticed. They are
+// cheap to pin because the function is pure, and they are the values operators
+// copy out of the README.
+//
+// The boolean spellings this table also carried are gone with META_TOOLS: a
+// tool surface named "true" meant the meta catalog only because the deprecated
+// selector was a boolean.
 func TestParseToolSurfaceValue_EverySpellingAnOperatorMayWrite(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -1397,20 +1232,10 @@ func TestParseToolSurfaceValue_EverySpellingAnOperatorMayWrite(t *testing.T) {
 		want  string
 	}{
 		{name: "the canonical meta", value: ToolSurfaceMeta, want: ToolSurfaceMeta},
-		{name: "legacy true", value: "true", want: ToolSurfaceMeta},
-		{name: "legacy t", value: "t", want: ToolSurfaceMeta},
-		{name: "legacy 1", value: "1", want: ToolSurfaceMeta},
-		{name: "legacy yes", value: "yes", want: ToolSurfaceMeta},
-		{name: "legacy y", value: "y", want: ToolSurfaceMeta},
 		{name: "meta-tools", value: "meta-tools", want: ToolSurfaceMeta},
 		{name: "metatools", value: "metatools", want: ToolSurfaceMeta},
 
 		{name: "the canonical individual", value: ToolSurfaceIndividual, want: ToolSurfaceIndividual},
-		{name: "legacy false", value: "false", want: ToolSurfaceIndividual},
-		{name: "legacy f", value: "f", want: ToolSurfaceIndividual},
-		{name: "legacy 0", value: "0", want: ToolSurfaceIndividual},
-		{name: "legacy no", value: "no", want: ToolSurfaceIndividual},
-		{name: "legacy n", value: "n", want: ToolSurfaceIndividual},
 		{name: "individual-tools", value: "individual-tools", want: ToolSurfaceIndividual},
 		{name: "tools", value: "tools", want: ToolSurfaceIndividual},
 
@@ -1431,20 +1256,13 @@ func TestParseToolSurfaceValue_EverySpellingAnOperatorMayWrite(t *testing.T) {
 				t.Errorf("parseToolSurfaceValue(%q) = %q, want %q", tt.value, got, tt.want)
 			}
 
-			// The same spelling must survive the exported entry point, in
-			// both the TOOL_SURFACE and the legacy META_TOOLS position.
-			mode, metaTools, err := ParseToolSurface(tt.value, "")
+			// The same spelling must survive the exported entry point.
+			mode, err := ParseToolSurface(tt.value)
 			if err != nil {
-				t.Fatalf("ParseToolSurface(%q, \"\") unexpected error: %v", tt.value, err)
+				t.Fatalf("ParseToolSurface(%q) unexpected error: %v", tt.value, err)
 			}
 			if mode != tt.want {
-				t.Errorf("ParseToolSurface(%q, \"\") = %q, want %q", tt.value, mode, tt.want)
-			}
-			if wantMeta := tt.want != ToolSurfaceIndividual; metaTools != wantMeta {
-				t.Errorf("ParseToolSurface(%q, \"\") metaTools = %v, want %v", tt.value, metaTools, wantMeta)
-			}
-			if replacement := LegacyMetaToolsReplacement(tt.value); replacement != tt.want {
-				t.Errorf("LegacyMetaToolsReplacement(%q) = %q, want %q", tt.value, replacement, tt.want)
+				t.Errorf("ParseToolSurface(%q) = %q, want %q", tt.value, mode, tt.want)
 			}
 		})
 	}
@@ -1465,8 +1283,8 @@ func TestParseToolSurfaceValue_UnknownIsRefusedByName(t *testing.T) {
 			}
 		})
 	}
-	if got := LegacyMetaToolsReplacement("indivdual"); got != "" {
-		t.Errorf("LegacyMetaToolsReplacement(typo) = %q, want no replacement", got)
+	if _, parseErr := ParseToolSurface("indivdual"); parseErr == nil {
+		t.Error("ParseToolSurface(typo) = nil error, want the same refusal")
 	}
 }
 
@@ -1527,8 +1345,6 @@ func TestLoad_InvalidIgnoreScopes(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
 	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
-	t.Setenv("META_TOOLS", "true")
-	t.Setenv("GITLAB_ENTERPRISE", "false")
 	t.Setenv("GITLAB_MCP_READ_ONLY", "false")
 	t.Setenv("GITLAB_MCP_SAFE_MODE", "false")
 	t.Setenv("GITLAB_MCP_IGNORE_SCOPES", "notabool")
@@ -1884,16 +1700,6 @@ func TestConfigEnterprise_NilReceivers(t *testing.T) {
 	}
 }
 
-// TestResolveTierEnv_InvalidEnterpriseValue verifies a non-boolean
-// GITLAB_ENTERPRISE value yields the explicit invalid-value error instead of
-// silently defaulting a tier.
-func TestResolveTierEnv_InvalidEnterpriseValue(t *testing.T) {
-	_, _, err := resolveTierEnv("", "maybe")
-	if err == nil || !strings.Contains(err.Error(), "invalid GITLAB_ENTERPRISE value") {
-		t.Errorf("resolveTierEnv err = %v, want invalid GITLAB_ENTERPRISE error", err)
-	}
-}
-
 // TestLoad_DisableableDurations_AcceptZero verifies that the two settings
 // documented as "0 disables" actually accept 0 from the environment.
 //
@@ -2188,30 +1994,24 @@ func TestParseTierFlag_MirrorsTheEnvironmentParser(t *testing.T) {
 // the catalog offline, so it must reach the tier without [Load] demanding the
 // GitLab URL and token.
 //
-// It answers what Load answers, the deprecated GITLAB_ENTERPRISE fallback
-// included, so the two cannot drift into disagreeing about which catalog a
-// deployment serves.
+// It answers what Load answers, so the two cannot drift into disagreeing
+// about which catalog a deployment serves.
 func TestTierFromEnv_ResolvesTheTierWithoutTheRestOfAConfiguration(t *testing.T) {
 	cases := []struct {
 		name         string
 		tier         string
-		enterprise   string
 		wantTier     edition.Tier
 		wantExplicit bool
 		wantErr      bool
 	}{
-		{name: "neither set detects free", wantTier: edition.Free},
+		{name: "unset detects free", wantTier: edition.Free},
 		{name: "the tier variable", tier: "ultimate", wantTier: edition.Ultimate, wantExplicit: true},
-		{name: "the deprecated enterprise flag", enterprise: "true", wantTier: edition.Ultimate, wantExplicit: true},
-		{name: "the tier variable wins over it", tier: "premium", enterprise: "true", wantTier: edition.Premium, wantExplicit: true},
 		{name: "an unknown tier is refused", tier: "platinum", wantErr: true},
-		{name: "an unparseable enterprise flag is refused", enterprise: "maybe", wantErr: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv(EnvPrefix+"TIER", tc.tier)
 			t.Setenv("GITLAB_TIER", "")
-			t.Setenv("GITLAB_ENTERPRISE", tc.enterprise)
 
 			tier, explicit, err := TierFromEnv()
 			if tc.wantErr {

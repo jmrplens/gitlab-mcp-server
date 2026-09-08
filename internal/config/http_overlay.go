@@ -31,7 +31,6 @@ type HTTPEnvOverlay struct {
 	GitLabURL         *string
 	SkipTLSVerify     *bool
 	ToolSurface       *string
-	MetaTools         *bool
 	CapabilitySurface *string
 	MetaParamSchema   *string
 
@@ -97,14 +96,12 @@ func loadOverlaySurface(o *HTTPEnvOverlay) error {
 		value := strings.TrimRight(strings.TrimSpace(os.Getenv("GITLAB_URL")), "/")
 		o.GitLabURL = &value
 	}
-	// TOOL_SURFACE and META_TOOLS resolve together: the deprecated selector is
-	// only consulted when the canonical one is absent.
-	if envPresent("TOOL_SURFACE") || envPresent("META_TOOLS") {
-		surface, metaTools, err := ParseToolSurface(Getenv("TOOL_SURFACE"), Getenv("META_TOOLS"))
+	if envPresent("TOOL_SURFACE") {
+		surface, err := ParseToolSurface(Getenv("TOOL_SURFACE"))
 		if err != nil {
 			return err
 		}
-		o.ToolSurface, o.MetaTools = &surface, &metaTools
+		o.ToolSurface = &surface
 	}
 	if envPresent("CAPABILITY_SURFACE") {
 		value, err := parseCapabilitySurface(Getenv("CAPABILITY_SURFACE"), DefaultCapabilitySurface)
@@ -120,8 +117,8 @@ func loadOverlaySurface(o *HTTPEnvOverlay) error {
 		}
 		o.MetaParamSchema = &value
 	}
-	if envPresent("TIER") || envPresent("GITLAB_ENTERPRISE") {
-		tier, explicit, err := resolveTierEnv(Getenv("TIER"), os.Getenv("GITLAB_ENTERPRISE"))
+	if envPresent("TIER") {
+		tier, explicit, err := parseTierEnv(Getenv("TIER"))
 		if err != nil {
 			return err
 		}

@@ -230,7 +230,6 @@ func TestExtractGitLabURL(t *testing.T) {
 func TestResolveRequestOptions_IgnoredOptions(t *testing.T) {
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", nil)
 	req.Header.Set("GITLAB-URL", "https://other.gitlab.example.com")
-	req.Header.Set("META-TOOLS", "true")
 	req.Header.Set("RATE-LIMIT-RPS", "999")
 	req.Header.Set("TOOL-SURFACE", "dynamic")
 	req.Header.Set("META-PARAM-SCHEMA", "full")
@@ -245,58 +244,30 @@ func TestResolveRequestOptions_IgnoredOptions(t *testing.T) {
 	if !options.HasIgnoredOptions() {
 		t.Fatal("HasIgnoredOptions() = false, want true")
 	}
-	if !options.HasDeprecatedOptions() {
-		t.Fatal("HasDeprecatedOptions() = false, want true")
-	}
 	ignored := options.IgnoredOptionsCopy()
-	want := []string{"META_TOOLS", "TOOL_SURFACE", "META_PARAM_SCHEMA", "RATE_LIMIT_RPS", RequestOptionGitLabURL}
+	want := []string{"TOOL_SURFACE", "META_PARAM_SCHEMA", "RATE_LIMIT_RPS", RequestOptionGitLabURL}
 	if !slicesEqual(ignored, want) {
 		t.Fatalf("IgnoredOptions = %v, want %v", ignored, want)
-	}
-	deprecated := options.DeprecatedOptionsCopy()
-	if !slicesEqual(deprecated, []string{"META_TOOLS"}) {
-		t.Fatalf("DeprecatedOptions = %v, want [META_TOOLS]", deprecated)
 	}
 }
 
 // TestRequestOptions_ReportNothingWhenNothingWasIgnored verifies the negative
-// answer of both predicates.
+// answer of the predicate.
 //
-// They gate a per-request log line, and only their true half was ever
-// evaluated. A predicate stuck at true would put one "ignored options" warning
-// on every ordinary request, which is the noise these were written to avoid,
-// and no test would have failed.
+// It gates a per-request log line, and only its true half was ever evaluated.
+// A predicate stuck at true would put one "ignored options" warning on every
+// ordinary request, which is the noise it was written to avoid, and no test
+// would have failed.
 func TestRequestOptions_ReportNothingWhenNothingWasIgnored(t *testing.T) {
-	t.Run("a request carrying no options at all", func(t *testing.T) {
-		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", nil)
 
-		options, err := ResolveRequestOptions(req, "https://gitlab.example.com/")
-		if err != nil {
-			t.Fatalf("ResolveRequestOptions() error: %v", err)
-		}
-		if options.HasIgnoredOptions() {
-			t.Errorf("HasIgnoredOptions() = true for a bare request, ignoring %v", options.IgnoredOptionsCopy())
-		}
-		if options.HasDeprecatedOptions() {
-			t.Errorf("HasDeprecatedOptions() = true for a bare request, ignoring %v", options.DeprecatedOptionsCopy())
-		}
-	})
-
-	t.Run("options ignored but none of them deprecated", func(t *testing.T) {
-		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", nil)
-		req.Header.Set("RATE-LIMIT-RPS", "999")
-
-		options, err := ResolveRequestOptions(req, "https://gitlab.example.com/")
-		if err != nil {
-			t.Fatalf("ResolveRequestOptions() error: %v", err)
-		}
-		if !options.HasIgnoredOptions() {
-			t.Error("HasIgnoredOptions() = false although RATE_LIMIT_RPS was ignored")
-		}
-		if options.HasDeprecatedOptions() {
-			t.Errorf("HasDeprecatedOptions() = true, want false: %v is ignored but not deprecated", options.DeprecatedOptionsCopy())
-		}
-	})
+	options, err := ResolveRequestOptions(req, "https://gitlab.example.com/")
+	if err != nil {
+		t.Fatalf("ResolveRequestOptions() error: %v", err)
+	}
+	if options.HasIgnoredOptions() {
+		t.Errorf("HasIgnoredOptions() = true for a bare request, ignoring %v", options.IgnoredOptionsCopy())
+	}
 }
 
 // TestResolveRequestOptions_ServerManagedHeadersIgnoredWithoutDefault verifies
