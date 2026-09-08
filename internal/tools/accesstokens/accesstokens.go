@@ -22,6 +22,10 @@ const (
 	// hintTokenAlreadyRevoked is returned when revoking a token that the API
 	// reports as not found.
 	hintTokenAlreadyRevoked = "token already revoked or never existed. Nothing to do" //#nosec G101 -- error hint, not a credential
+	// Operation names for the two rotations that report under one name from
+	// their request, their hint and their capture alike.
+	opRotateGroupToken    = "rotate group access token"    //#nosec G101 -- operation name, not a credential
+	opRotatePersonalToken = "rotate personal access token" //#nosec G101 -- operation name, not a credential
 )
 
 // ---------------------------------------------------------------------------
@@ -130,33 +134,13 @@ func fromProjectToken(t *gl.ProjectAccessToken, extra toolutil.ResourceTokenExtr
 
 // fromGroupToken maps from group token between API and evaluator models,
 // with the fields the capture read beside the SDK.
+//
+// client-go declares [gl.ProjectAccessToken] and [gl.GroupAccessToken] as two
+// names for one unexported struct, and GitLab renders both through
+// lib/api/entities/resource_access_token.rb, so the conversion is exact and
+// the two kinds share one mapping rather than two that must be kept in step.
 func fromGroupToken(t *gl.GroupAccessToken, extra toolutil.ResourceTokenExtra) Output {
-	out := Output{
-		ID:             t.ID,
-		Name:           t.Name,
-		Description:    t.Description,
-		Revoked:        t.Revoked,
-		Active:         t.Active,
-		Scopes:         t.Scopes,
-		Granular:       extra.Granular,
-		GranularScopes: extra.GranularScopes,
-		UserID:         t.UserID,
-		AccessLevel:    int(t.AccessLevel),
-		ResourceType:   extra.ResourceType,
-		ResourceID:     extra.ResourceID,
-		LastUsedIPs:    extra.LastUsedIPs,
-		Token:          t.Token,
-	}
-	if t.CreatedAt != nil {
-		out.CreatedAt = t.CreatedAt.Format(time.RFC3339)
-	}
-	if t.LastUsedAt != nil {
-		out.LastUsedAt = t.LastUsedAt.Format(time.RFC3339)
-	}
-	if t.ExpiresAt != nil {
-		out.ExpiresAt = time.Time(*t.ExpiresAt).Format(toolutil.DateFormatISO)
-	}
-	return out
+	return fromProjectToken((*gl.ProjectAccessToken)(t), extra)
 }
 
 // fromPersonalToken maps from personal token between API and evaluator models.
@@ -247,25 +231,50 @@ type ProjectGetInput struct {
 
 // ProjectGet returns a specific project access token.
 func ProjectGet(ctx context.Context, client *gitlabclient.Client, input ProjectGetInput) (Output, error) {
-	if input.ProjectID == "" {
-		return Output{}, toolutil.ErrFieldRequired("project_id")
+	return getAccessToken(ctx, accessTokenGetArgs{
+		scopeID:       input.ProjectID,
+		tokenID:       input.TokenID,
+		requiredField: "project_id",
+		operation:     "get project access token",
+		notFoundHint:  "token_id not found on this project (already revoked or never existed) - use gitlab_project_access_token_list to discover current token IDs",
+		get: func(scopeID string, tokenID int64) (Output, error) {
+			capturingCtx, captured := gitlabclient.WithResponseCapture(ctx)
+			t, _, err := client.GL().ProjectAccessTokens.GetProjectAccessToken(scopeID, tokenID, gl.WithContext(capturingCtx))
+			if err != nil {
+				return Output{}, err
+			}
+			return capturedProjectOutput(t, captured)
+		},
+	})
+}
+
+// accessTokenGetArgs is what one access-token read needs beyond its own
+// service call: the identifiers to validate and the words to report under.
+type accessTokenGetArgs struct {
+	scopeID       toolutil.StringOrInt
+	tokenID       int64
+	requiredField string
+	operation     string
+	notFoundHint  string
+	get           func(string, int64) (Output, error)
+}
+
+// getAccessToken validates one read's identifiers, runs it, and reports a
+// failure under the operation's own name, the way createAccessToken and
+// rotateAccessToken do for the other two shapes.
+func getAccessToken(ctx context.Context, args accessTokenGetArgs) (Output, error) {
+	if args.scopeID == "" {
+		return Output{}, toolutil.ErrFieldRequired(args.requiredField)
 	}
-	if input.TokenID == 0 {
+	if args.tokenID == 0 {
 		return Output{}, errors.New(errTokenIDInvalid)
 	}
 	if err := ctx.Err(); err != nil {
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
-
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	t, _, err := client.GL().ProjectAccessTokens.GetProjectAccessToken(string(input.ProjectID), input.TokenID, gl.WithContext(ctx))
+	out, err := args.get(string(args.scopeID), args.tokenID)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("get project access token", err, http.StatusNotFound,
-			"token_id not found on this project (already revoked or never existed) - use gitlab_project_access_token_list to discover current token IDs")
-	}
-	out, err := capturedProjectOutput(t, captured)
-	if err != nil {
-		return Output{}, toolutil.WrapErr("get project access token", err)
+		return Output{}, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusNotFound, args.notFoundHint)
 	}
 	return out, nil
 }
@@ -584,27 +593,21 @@ type GroupGetInput struct {
 
 // GroupGet returns a specific group access token.
 func GroupGet(ctx context.Context, client *gitlabclient.Client, input GroupGetInput) (Output, error) {
-	if input.GroupID == "" {
-		return Output{}, toolutil.ErrFieldRequired("group_id")
-	}
-	if input.TokenID == 0 {
-		return Output{}, errors.New(errTokenIDInvalid)
-	}
-	if err := ctx.Err(); err != nil {
-		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
-	}
-
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	t, _, err := client.GL().GroupAccessTokens.GetGroupAccessToken(string(input.GroupID), input.TokenID, gl.WithContext(ctx))
-	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("get group access token", err, http.StatusNotFound,
-			"token_id not found on this group. Use gitlab_group_access_token_list to discover current token IDs")
-	}
-	out, err := capturedGroupOutput(t, captured)
-	if err != nil {
-		return Output{}, toolutil.WrapErr("get group access token", err)
-	}
-	return out, nil
+	return getAccessToken(ctx, accessTokenGetArgs{
+		scopeID:       input.GroupID,
+		tokenID:       input.TokenID,
+		requiredField: "group_id",
+		operation:     "get group access token",
+		notFoundHint:  "token_id not found on this group. Use gitlab_group_access_token_list to discover current token IDs",
+		get: func(scopeID string, tokenID int64) (Output, error) {
+			capturingCtx, captured := gitlabclient.WithResponseCapture(ctx)
+			t, _, err := client.GL().GroupAccessTokens.GetGroupAccessToken(scopeID, tokenID, gl.WithContext(capturingCtx))
+			if err != nil {
+				return Output{}, err
+			}
+			return capturedGroupOutput(t, captured)
+		},
+	})
 }
 
 // GroupCreateInput defines parameters for creating a group access token.
@@ -676,15 +679,15 @@ func GroupRotate(ctx context.Context, client *gitlabclient.Client, input GroupRo
 	token, _, err := client.GL().GroupAccessTokens.RotateGroupAccessToken(string(input.GroupID), input.TokenID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint("rotate group access token", err,
+			return Output{}, toolutil.WrapErrWithHint(opRotateGroupToken, err,
 				"token may already be revoked/expired; expires_at must be YYYY-MM-DD")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("rotate group access token", err, http.StatusNotFound,
+		return Output{}, toolutil.WrapErrWithStatusHint(opRotateGroupToken, err, http.StatusNotFound,
 			"token_id not found. Use gitlab_group_access_token_list to verify")
 	}
 	out, err := capturedGroupOutput(token, captured)
 	if err != nil {
-		return Output{}, toolutil.WrapErr("rotate group access token", err)
+		return Output{}, toolutil.WrapErr(opRotateGroupToken, err)
 	}
 	return out, nil
 }
@@ -1020,15 +1023,15 @@ func PersonalRotate(ctx context.Context, client *gitlabclient.Client, input Pers
 	token, _, err := client.GL().PersonalAccessTokens.RotatePersonalAccessToken(input.TokenID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint("rotate personal access token", err,
+			return Output{}, toolutil.WrapErrWithHint(opRotatePersonalToken, err,
 				"token may already be revoked/expired; expires_at must be YYYY-MM-DD")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("rotate personal access token", err, http.StatusNotFound,
+		return Output{}, toolutil.WrapErrWithStatusHint(opRotatePersonalToken, err, http.StatusNotFound,
 			"token_id not found. Use gitlab_personal_access_token_list to verify")
 	}
 	out, err := capturedPersonalOutput(token, captured)
 	if err != nil {
-		return Output{}, toolutil.WrapErr("rotate personal access token", err)
+		return Output{}, toolutil.WrapErr(opRotatePersonalToken, err)
 	}
 	return out, nil
 }

@@ -7621,6 +7621,30 @@
       "package": "internal/tools/issuediscussions",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/issues/:issue_id/discussions/d1"
+    },
+    {
+      "package": "internal/tools/issuediscussions",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/issues/:issue_id/discussions/d1/notes",
+      "body": [
+        "body"
+      ]
+    },
+    {
+      "package": "internal/tools/issuediscussions",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/issues/:issue_id/discussions/d1/notes/:note_id",
+      "body": [
+        "body"
+      ]
+    },
+    {
+      "package": "internal/tools/issuediscussions",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/issues/:issue_id/discussions/multi001"
     },
     {
@@ -8350,6 +8374,12 @@
         "new_name",
         "priority"
       ]
+    },
+    {
+      "package": "internal/tools/labels",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/labels/bug/subscribe"
     },
     {
       "package": "internal/tools/labels",
@@ -9373,6 +9403,39 @@
       "body": [
         "body",
         "resolved"
+      ]
+    },
+    {
+      "package": "internal/tools/mrdiscussions",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/discussions/d1"
+    },
+    {
+      "package": "internal/tools/mrdiscussions",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/discussions/d1",
+      "body": [
+        "resolved"
+      ]
+    },
+    {
+      "package": "internal/tools/mrdiscussions",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/discussions/d1/notes",
+      "body": [
+        "body"
+      ]
+    },
+    {
+      "package": "internal/tools/mrdiscussions",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/discussions/d1/notes/:note_id",
+      "body": [
+        "body"
       ]
     },
     {

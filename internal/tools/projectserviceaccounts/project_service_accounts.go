@@ -12,6 +12,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// opRotateProjectServiceAccountPAT names the rotation in its request, hint
+// and capture errors alike.
+const opRotateProjectServiceAccountPAT = "rotate project service account PAT" //#nosec G101 -- operation name, not a credential
+
 const projectServiceAccountTokenHint = "token_id must be the project service account personal access token ID returned by service_account_pat_list or service_account_pat_create; do not use service_account_id as token_id; available on all tiers, requires sufficient project permissions"
 
 // Output represents a project service account.
@@ -412,11 +416,11 @@ func RotatePAT(ctx context.Context, client *gitlabclient.Client, input RotatePAT
 	token, _, err := client.GL().Projects.RotateProjectServiceAccountPersonalAccessToken(input.ProjectID.String(), input.ServiceAccountID, input.TokenID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) || toolutil.IsHTTPStatus(err, http.StatusNotFound) || toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
-			return PATOutput{}, toolutil.WrapErrWithHint("rotate project service account PAT", err, projectServiceAccountTokenHint)
+			return PATOutput{}, toolutil.WrapErrWithHint(opRotateProjectServiceAccountPAT, err, projectServiceAccountTokenHint)
 		}
-		return PATOutput{}, toolutil.WrapErrWithMessage("rotate project service account PAT", err)
+		return PATOutput{}, toolutil.WrapErrWithMessage(opRotateProjectServiceAccountPAT, err)
 	}
-	return capturedPATOutput("rotate project service account PAT", token, captured)
+	return capturedPATOutput(opRotateProjectServiceAccountPAT, token, captured)
 }
 
 func listPATOptions(input ListPATInput) (*gl.ListProjectServiceAccountPersonalAccessTokensOptions, error) {
