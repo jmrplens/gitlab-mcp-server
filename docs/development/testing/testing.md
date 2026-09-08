@@ -18,12 +18,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,875 |
-| Unit test functions                                   | 14,272 |
+| Total test functions                                  | 14,871 |
+| Unit test functions                                   | 14,268 |
 | E2E test functions                                    |    603 |
-| cmd test functions                                    |  2,884 |
+| cmd test functions                                    |  2,887 |
 | Test files (internal/)                                |    519 |
-| Test files (cmd/)                                     |    195 |
+| Test files (cmd/)                                     |    196 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     21 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,862 | 79.7% |
+| `TestFunc_Scenario` (2-part)           | 11,859 | 79.7% |
 | `TestFunc` (no underscore)             |    980 |  6.6% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,033 | 13.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,032 | 13.7% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,440 |        144 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,610 |        359 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,603 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            603 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,884 |        195 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,875** |    **954** |                                                                                                 |
+| cmd packages            |          2,887 |        196 | server entry point and developer command utilities                                              |
+| **Total**               |     **14,871** |    **955** |                                                                                                 |
 
 ### Core Packages
 
@@ -83,7 +83,7 @@
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   393 |   100.0% |    57 |
+| projects          |   391 |   100.0% |    57 |
 | groups            |   249 |   100.0% |    37 |
 | mergerequests     |   245 |   100.0% |    30 |
 | issues            |   223 |   100.0% |    21 |
@@ -200,7 +200,7 @@
 | groupstoragemoves       |        36 |          2 |   100.0% |         6 |
 | groupvariables          |        54 |          2 |   100.0% |         5 |
 | groupwikis              |        33 |          3 |   100.0% |         5 |
-| health                  |        20 |          1 |   100.0% |         2 |
+| health                  |        17 |          1 |   100.0% |         2 |
 | impersonationtokens     |        40 |          2 |   100.0% |         5 |
 | importservice           |        31 |          1 |   100.0% |         5 |
 | instancevariables       |        41 |          2 |   100.0% |         5 |
@@ -248,7 +248,7 @@
 | projectimportexport     |        40 |          1 |    99.6% |         5 |
 | projectiterations       |        18 |          1 |   100.0% |         1 |
 | projectmirrors          |        63 |          2 |   100.0% |         7 |
-| projects                |       393 |          6 |   100.0% |        57 |
+| projects                |       391 |          6 |   100.0% |        57 |
 | projectserviceaccounts  |        11 |          2 |   100.0% |         8 |
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
 | projectstoragemoves     |        19 |          2 |   100.0% |         6 |
@@ -269,7 +269,7 @@
 | securefiles             |        28 |          2 |   100.0% |         4 |
 | securityattributes      |        24 |          1 |   100.0% |         5 |
 | securitycategories      |        16 |          1 |   100.0% |         3 |
-| securityfindings        |        24 |          1 |   100.0% |         1 |
+| securityfindings        |        23 |          1 |   100.0% |         1 |
 | securityscanprofiles    |        17 |          1 |   100.0% |         3 |
 | securitysettings        |        32 |          3 |   100.0% |         3 |
 | settings                |        17 |          1 |    94.4% |         2 |
@@ -288,12 +288,12 @@
 | useremails              |        24 |          2 |   100.0% |         6 |
 | usergpgkeys             |        44 |          2 |   100.0% |         8 |
 | users                   |       210 |          7 |   100.0% |        38 |
-| vulnerabilities         |        66 |          3 |   100.0% |         8 |
+| vulnerabilities         |        65 |          3 |   100.0% |         8 |
 | waitpoll                |        13 |          1 |    99.2% |         0 |
 | wikis                   |        61 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,610** |    **359** |          | **1,187** |
+| **Total**               | **8,603** |    **359** |          | **1,187** |
 
 </details>
 
@@ -326,12 +326,12 @@
 | cmd/audit_meta_descriptions                    |    96.6% |
 | cmd/audit_metrics                              |    97.7% |
 | cmd/audit_readonly_graphql                     |    90.8% |
-| cmd/audit_string_dupes                         |    92.1% |
+| cmd/audit_string_dupes                         |    91.8% |
 | cmd/audit_supply_chain                         |    98.0% |
 | cmd/audit_surface_quality                      |    94.1% |
-| cmd/audit_test_goroutines                      |    93.9% |
-| cmd/audit_test_names                           |    89.3% |
-| cmd/audit_test_subtests                        |    98.1% |
+| cmd/audit_test_goroutines                      |    93.6% |
+| cmd/audit_test_names                           |    88.2% |
+| cmd/audit_test_subtests                        |    98.0% |
 | cmd/audit_tokens                               |    98.0% |
 | cmd/bench_resources                            |   100.0% |
 | cmd/eval_mcp_surfaces/internal/evalrun         |    88.9% |
@@ -349,7 +349,7 @@
 | cmd/gen_llms                                   |    98.9% |
 | cmd/gen_request_inventory                      |    89.8% |
 | cmd/gen_stats                                  |   100.0% |
-| cmd/gen_testing_docs                           |    97.8% |
+| cmd/gen_testing_docs                           |    97.7% |
 | cmd/godoc_tool                                 |   100.0% |
 | cmd/internal/apidocs                           |   100.0% |
 | cmd/internal/apishapes                         |   100.0% |
@@ -359,6 +359,7 @@
 | cmd/internal/graphqlintrospect                 |   100.0% |
 | cmd/internal/mcpsurface                        |   100.0% |
 | cmd/internal/requestinventory                  |   100.0% |
+| cmd/internal/testsource                        |   100.0% |
 | cmd/server                                     |    99.9% |
 
 ### Core Packages
@@ -581,8 +582,8 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_brand** (87.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_gateway_chars** (87.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_graphql_schema** (87.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_test_names** (88.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/evalrun** (88.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_test_names** (89.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_lhm_manifest** (89.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_api_shapes** (89.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_request_inventory** (89.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
