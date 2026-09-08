@@ -33,11 +33,15 @@ func TestClock_FunctionSupplied_UsesIt(t *testing.T) {
 	}
 }
 
-// TestAge_ADateItCanRead_MeasuresFromUTC verifies the arithmetic itself,
-// including the conversion the three records depend on: a retrieval date is a
-// UTC day, so the comparison has to be made in UTC whatever zone the machine
-// running the gate is in.
-func TestAge_ADateItCanRead_MeasuresFromUTC(t *testing.T) {
+// TestAge_ADateItCanRead_MeasuresElapsedTimeNotCalendarDays verifies the
+// arithmetic itself, and that it is elapsed time between two instants rather
+// than a difference of calendar dates. The distinction is what the three
+// records depend on: a retrieval date is midnight UTC, and an age derived from
+// the calendar date the clock reads locally would move with the zone of the
+// machine running the gate. The last case is the one that can tell the two
+// implementations apart, because the instant it names falls on the next day in
+// the zone it is rendered in.
+func TestAge_ADateItCanRead_MeasuresElapsedTimeNotCalendarDays(t *testing.T) {
 	cases := []struct {
 		name        string
 		retrievedAt string
@@ -47,9 +51,9 @@ func TestAge_ADateItCanRead_MeasuresFromUTC(t *testing.T) {
 		{name: "the same day", retrievedAt: "2026-09-08", now: today, want: 0},
 		{name: "a week ago", retrievedAt: "2026-09-01", now: today, want: 7},
 		{
-			name:        "a day recorded in another zone",
+			name:        "an instant rendered in a zone where it is already tomorrow",
 			retrievedAt: "2026-09-01",
-			now:         today.In(time.FixedZone("UTC-11", -11*60*60)),
+			now:         today.In(time.FixedZone("UTC+14", 14*60*60)),
 			want:        7,
 		},
 	}

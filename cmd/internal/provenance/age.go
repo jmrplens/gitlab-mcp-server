@@ -42,12 +42,19 @@ func Clock(now func() time.Time) time.Time {
 // place a date nobody can read is noticed, and a date the age check cannot
 // read is a record whose age nobody knows, which is exactly what the window
 // exists to refuse.
+//
+// The subtraction is elapsed time between two instants, not a difference of
+// calendar days: a retrieval date is read as midnight UTC, and the instant now
+// names is the same instant whatever zone it is rendered in, so the answer does
+// not move with the zone of the machine running the gate. Deriving the age from
+// two calendar dates would, which is the implementation this arithmetic is
+// deliberately not.
 func Age(retrievedAt string, now time.Time) (time.Duration, error) {
 	retrieved, err := time.Parse(time.DateOnly, retrievedAt)
 	if err != nil {
 		return 0, err
 	}
-	return now.UTC().Sub(retrieved), nil
+	return now.Sub(retrieved), nil
 }
 
 // Days renders an age the way every sentence about one spells it: whole days,
