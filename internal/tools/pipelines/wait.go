@@ -59,11 +59,12 @@ func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Cl
 			return fmt.Sprintf("Polling pipeline #%d (attempt %d, status check)...", input.PipelineID, attempt)
 		},
 		Poll: func(pollCtx context.Context) (DetailOutput, error) {
+			pollCtx, captured := gitlabclient.WithResponseCapture(pollCtx)
 			p, _, err := client.GL().Pipelines.GetPipeline(string(input.ProjectID), input.PipelineID, gl.WithContext(pollCtx))
 			if err != nil {
 				return DetailOutput{}, toolutil.WrapErrWithStatusHint("pipelineWait", err, http.StatusNotFound, "verify project_id and pipeline_id with gitlab_pipeline_list")
 			}
-			return DetailToOutput(p), nil
+			return capturedDetail("pipelineWait", p, captured)
 		},
 		Status: func(detail DetailOutput) string { return detail.Status },
 		FailureError: func(detail DetailOutput) error {

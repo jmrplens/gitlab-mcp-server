@@ -39,7 +39,9 @@ type ListOutput struct {
 
 // RunOutput mirrors gl.Pipeline, the result of triggering a pipeline. Per the
 // 1:1 audit policy every Pipeline field is surfaced, with the user and
-// detailed_status sub-objects preserved as full nested objects.
+// detailed_status sub-objects preserved as full nested objects, plus whether
+// the pipeline is archived, which lib/api/entities/ci/pipeline.rb sends and
+// the SDK does not carry, read from the captured response (ADR-0021).
 type RunOutput struct {
 	toolutil.HintableOutput
 	ID             int64                 `json:"id"`
@@ -52,6 +54,7 @@ type RunOutput struct {
 	SHA            string                `json:"sha"`
 	BeforeSHA      string                `json:"before_sha,omitempty"`
 	Tag            bool                  `json:"tag,omitempty"`
+	Archived       bool                  `json:"archived"`
 	YamlErrors     string                `json:"yaml_errors,omitempty"`
 	User           *BasicUserOutput      `json:"user,omitempty"`
 	Duration       int64                 `json:"duration,omitempty"`
@@ -268,6 +271,7 @@ func RunTrigger(ctx context.Context, client *gitlabclient.Client, input RunInput
 		}
 		opts.Inputs = inputs
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().PipelineTriggers.RunPipelineTrigger(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
@@ -283,7 +287,11 @@ func RunTrigger(ctx context.Context, client *gitlabclient.Client, input RunInput
 		return RunOutput{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_run", err, http.StatusNotFound,
 			"verify project_id and that the ref (branch/tag) exists with gitlab_branch_get or gitlab_tag_get")
 	}
-	return convertPipeline(p), nil
+	extra, err := toolutil.CapturedPipeline(captured)
+	if err != nil {
+		return RunOutput{}, toolutil.WrapErr("pipeline_trigger_run", err)
+	}
+	return convertPipeline(p, extra), nil
 }
 
 // ──────────────────────────────────────────────
@@ -307,8 +315,8 @@ func convertTrigger(t *gl.PipelineTrigger) Output {
 
 // convertPipeline maps a triggered GitLab pipeline into the run output shape,
 // surfacing every gl.Pipeline field plus the nested user and detailed_status
-// sub-objects.
-func convertPipeline(p *gl.Pipeline) RunOutput {
+// sub-objects, and takes the field the capture read beside the SDK.
+func convertPipeline(p *gl.Pipeline, extra toolutil.PipelineExtra) RunOutput {
 	return RunOutput{
 		ID:             p.ID,
 		IID:            p.IID,
@@ -320,6 +328,7 @@ func convertPipeline(p *gl.Pipeline) RunOutput {
 		SHA:            p.SHA,
 		BeforeSHA:      p.BeforeSHA,
 		Tag:            p.Tag,
+		Archived:       extra.Archived,
 		YamlErrors:     p.YamlErrors,
 		User:           basicUserOutput(p.User),
 		Duration:       p.Duration,

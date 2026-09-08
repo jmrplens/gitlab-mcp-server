@@ -9768,6 +9768,80 @@
             "array"
           ]
         },
+        "jobs": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "after_script": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "allow_failure": {
+                "type": "boolean"
+              },
+              "before_script": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "environment": true,
+              "except": true,
+              "name": {
+                "type": "string"
+              },
+              "needs": true,
+              "only": true,
+              "script": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "stage": {
+                "type": "string"
+              },
+              "tag_list": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "stage",
+              "before_script",
+              "script",
+              "after_script",
+              "tag_list",
+              "when",
+              "allow_failure"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "merged_yaml": {
           "type": "string"
         },
@@ -9881,6 +9955,80 @@
             "required": [
               "type",
               "location"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "jobs": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "after_script": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "allow_failure": {
+                "type": "boolean"
+              },
+              "before_script": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "environment": true,
+              "except": true,
+              "name": {
+                "type": "string"
+              },
+              "needs": true,
+              "only": true,
+              "script": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "stage": {
+                "type": "string"
+              },
+              "tag_list": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "stage",
+              "before_script",
+              "script",
+              "after_script",
+              "tag_list",
+              "when",
+              "allow_failure"
             ],
             "type": "object"
           },
@@ -39873,10 +40021,16 @@
         "created_at": {
           "type": "string"
         },
+        "expires_at": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
         },
         "key": {
+          "type": "string"
+        },
+        "last_used_at": {
           "type": "string"
         },
         "next_steps": {
@@ -39889,6 +40043,9 @@
           ]
         },
         "title": {
+          "type": "string"
+        },
+        "usage_type": {
           "type": "string"
         },
         "user": {
@@ -39949,10 +40106,16 @@
         "created_at": {
           "type": "string"
         },
+        "expires_at": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
         },
         "key": {
+          "type": "string"
+        },
+        "last_used_at": {
           "type": "string"
         },
         "next_steps": {
@@ -39965,6 +40128,9 @@
           ]
         },
         "title": {
+          "type": "string"
+        },
+        "usage_type": {
           "type": "string"
         },
         "user": {
@@ -55090,6 +55256,9 @@
         "description": {
           "type": "string"
         },
+        "description_html": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
         },
@@ -55239,6 +55408,9 @@
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "description_html": {
           "type": "string"
         },
         "id": {
@@ -55391,6 +55563,9 @@
               "description": {
                 "type": "string"
               },
+              "description_html": {
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
               },
@@ -55539,6 +55714,9 @@
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "description_html": {
           "type": "string"
         },
         "id": {
@@ -55708,6 +55886,9 @@
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "description_html": {
           "type": "string"
         },
         "id": {
@@ -97513,6 +97694,9 @@
         "description": {
           "type": "string"
         },
+        "description_html": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
         },
@@ -97668,6 +97852,9 @@
         "description": {
           "type": "string"
         },
+        "description_html": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
         },
@@ -97801,6 +97988,9 @@
                 "type": "string"
               },
               "description": {
+                "type": "string"
+              },
+              "description_html": {
                 "type": "string"
               },
               "id": {
@@ -98006,6 +98196,9 @@
         "description": {
           "type": "string"
         },
+        "description_html": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
         },
@@ -98177,6 +98370,9 @@
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "description_html": {
           "type": "string"
         },
         "id": {
@@ -146734,6 +146930,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "before_sha": {
           "type": "string"
         },
@@ -146905,6 +147104,7 @@
         "sha",
         "name",
         "tag",
+        "archived",
         "duration",
         "queued_duration",
         "web_url",
@@ -147001,6 +147201,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "before_sha": {
           "type": "string"
         },
@@ -147172,6 +147375,7 @@
         "sha",
         "name",
         "tag",
+        "archived",
         "duration",
         "queued_duration",
         "web_url",
@@ -147269,6 +147473,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "before_sha": {
           "type": "string"
         },
@@ -147440,6 +147647,7 @@
         "sha",
         "name",
         "tag",
+        "archived",
         "duration",
         "queued_duration",
         "web_url",
@@ -147601,6 +147809,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "before_sha": {
           "type": "string"
         },
@@ -147772,6 +147983,7 @@
         "sha",
         "name",
         "tag",
+        "archived",
         "duration",
         "queued_duration",
         "web_url",
@@ -148083,6 +148295,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "before_sha": {
           "type": "string"
         },
@@ -148254,6 +148469,7 @@
         "sha",
         "name",
         "tag",
+        "archived",
         "duration",
         "queued_duration",
         "web_url",
@@ -151083,6 +151299,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "before_sha": {
           "type": "string"
         },
@@ -151248,6 +151467,7 @@
         "status",
         "ref",
         "sha",
+        "archived",
         "web_url"
       ],
       "type": "object"
@@ -151406,6 +151626,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "before_sha": {
           "type": "string"
         },
@@ -151577,6 +151800,7 @@
         "sha",
         "name",
         "tag",
+        "archived",
         "duration",
         "queued_duration",
         "web_url",
@@ -151718,6 +151942,9 @@
         "pipeline": {
           "additionalProperties": false,
           "properties": {
+            "archived": {
+              "type": "boolean"
+            },
             "before_sha": {
               "type": "string"
             },
@@ -151889,6 +152116,7 @@
             "sha",
             "name",
             "tag",
+            "archived",
             "duration",
             "queued_duration",
             "web_url",
@@ -194491,6 +194719,48 @@
         "active": {
           "type": "boolean"
         },
+        "created_at": {
+          "type": "string"
+        },
+        "created_by": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "locked": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "public_email": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "locked"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "description": {
           "type": "string"
         },
@@ -194502,6 +194772,9 @@
         },
         "is_shared": {
           "type": "boolean"
+        },
+        "job_execution_status": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -194585,6 +194858,48 @@
         "contacted_at": {
           "type": "string"
         },
+        "created_at": {
+          "type": "string"
+        },
+        "created_by": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "locked": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "public_email": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "locked"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "description": {
           "type": "string"
         },
@@ -194622,6 +194937,9 @@
         },
         "is_shared": {
           "type": "boolean"
+        },
+        "job_execution_status": {
+          "type": "string"
         },
         "locked": {
           "type": "boolean"
@@ -195384,6 +195702,48 @@
               "active": {
                 "type": "boolean"
               },
+              "created_at": {
+                "type": "string"
+              },
+              "created_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "locked": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "locked"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "description": {
                 "type": "string"
               },
@@ -195395,6 +195755,9 @@
               },
               "is_shared": {
                 "type": "boolean"
+              },
+              "job_execution_status": {
+                "type": "string"
               },
               "name": {
                 "type": "string"
@@ -195602,6 +195965,48 @@
               "active": {
                 "type": "boolean"
               },
+              "created_at": {
+                "type": "string"
+              },
+              "created_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "locked": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "locked"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "description": {
                 "type": "string"
               },
@@ -195613,6 +196018,9 @@
               },
               "is_shared": {
                 "type": "boolean"
+              },
+              "job_execution_status": {
+                "type": "string"
               },
               "name": {
                 "type": "string"
@@ -195808,6 +196216,48 @@
               "active": {
                 "type": "boolean"
               },
+              "created_at": {
+                "type": "string"
+              },
+              "created_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "locked": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "locked"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "description": {
                 "type": "string"
               },
@@ -195819,6 +196269,9 @@
               },
               "is_shared": {
                 "type": "boolean"
+              },
+              "job_execution_status": {
+                "type": "string"
               },
               "name": {
                 "type": "string"
@@ -196124,6 +196577,48 @@
               "active": {
                 "type": "boolean"
               },
+              "created_at": {
+                "type": "string"
+              },
+              "created_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "locked": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "locked"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "description": {
                 "type": "string"
               },
@@ -196135,6 +196630,9 @@
               },
               "is_shared": {
                 "type": "boolean"
+              },
+              "job_execution_status": {
+                "type": "string"
               },
               "name": {
                 "type": "string"
@@ -196309,6 +196807,48 @@
         "active": {
           "type": "boolean"
         },
+        "created_at": {
+          "type": "string"
+        },
+        "created_by": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "locked": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "public_email": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "locked"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "description": {
           "type": "string"
         },
@@ -196320,6 +196860,9 @@
         },
         "is_shared": {
           "type": "boolean"
+        },
+        "job_execution_status": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -196693,6 +197236,48 @@
         "contacted_at": {
           "type": "string"
         },
+        "created_at": {
+          "type": "string"
+        },
+        "created_by": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "locked": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "public_email": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "locked"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "description": {
           "type": "string"
         },
@@ -196730,6 +197315,9 @@
         },
         "is_shared": {
           "type": "boolean"
+        },
+        "job_execution_status": {
+          "type": "string"
         },
         "locked": {
           "type": "boolean"

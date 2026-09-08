@@ -96,6 +96,7 @@ readable without opening the tracker:
 | 28 | client-go | [The epics wrapper is missing two filters and twelve response fields](#the-epics-wrapper-is-missing-two-filters-and-twelve-response-fields) | No | No | No | Was yes | Yes |
 | 29 | client-go | [The note and discussion structs miss what GitLab sends and declare what it does not](#the-note-and-discussion-structs-miss-what-gitlab-sends-and-declare-what-it-does-not) | No | No | No | No | Yes |
 | 30 | client-go | [The member structs, options and services miss what GitLab sends, accepts and serves](#the-member-structs-options-and-services-miss-what-gitlab-sends-accepts-and-serves) | No | No | No | No | Partial |
+| 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-05.
 
@@ -671,6 +672,57 @@ tags plus one type for the SCIM identity; small for the parameters, additive
 fields on the option structs and one new options struct for the project
 delete; medium for the endpoints, six methods with their option and result
 types.
+
+### Six response structs miss a field GitLab sends on every object
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. Each field is read from the captured response beside
+  the SDK's decode ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)),
+  through the readers in `internal/toolutil/sent_shapes.go`, in `keys`,
+  `runners`, `cilint`, `labeldata` with `labels` and `grouplabels`,
+  `pipelines` and `pipelinetriggers`. They retire when the structs carry the
+  fields.
+
+**What**: one gap per struct, each a field the rendering entity exposes with
+no condition at the pinned commit `1c8ac034` of gitlab-org/gitlab
+(`docs/development/gitlab-api-exposes.json`), except where noted.
+
+- `Key` (`keys.go`) declares `id`, `title`, `key`, `created_at` and `user`,
+  and `lib/api/entities/ssh_key.rb` exposes `expires_at`, `last_used_at` and
+  `usage_type` beside them; `SSHKey` in `users.go` carries the first and the
+  third and not `last_used_at`. The
+  [keys page](https://docs.gitlab.com/api/keys/) prints all three.
+- `Runner` and `RunnerDetails` (`runners.go`) declare neither `created_at`,
+  nor `created_by`, nor `job_execution_status`, which
+  `lib/api/entities/ci/runner.rb` exposes on every runner, the second one to
+  a caller allowed to read the creating user. The
+  [runners page](https://docs.gitlab.com/api/runners/) prints
+  `job_execution_status` on every example.
+- `ProjectLintResult` (`validate.go`) declares no `jobs`, the array
+  `lib/api/entities/ci/lint/result.rb` exposes when the request set
+  `include_jobs`, which both `ProjectLintOptions` and
+  `ProjectNamespaceLintOptions` already model, so the option is accepted and
+  its one effect on the answer is dropped. The
+  [lint page](https://docs.gitlab.com/api/lint/) prints the array.
+- `Label` and `GroupLabel` (`labels.go`, `group_labels.go`) declare no
+  `description_html`, which `lib/api/entities/label.rb` exposes on every
+  label and both label pages print in every example body.
+- `Pipeline` (`pipelines.go`) declares no `archived`, which
+  `lib/api/entities/ci/pipeline.rb` exposes on every pipeline rendered whole
+  and the pipelines page prints on every single-pipeline example. The list
+  rows render through `Ci::PipelineBasic`, which does not carry it, so
+  `PipelineInfo` is complete.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`, with
+the entity condition on each field), during the field-by-field review.
+
+**Effort**: small. Every field is an additive struct member with a `json`
+tag; the lint jobs need one type for the job object, and the runner's creator
+can reuse whichever basic-user struct the wrapper settles on.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

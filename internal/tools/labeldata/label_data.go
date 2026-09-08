@@ -6,7 +6,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// Output represents a GitLab label shared by project and group label tools.
+// Output represents a GitLab label shared by project and group label tools:
+// what the SDK's label structs decode, plus the description rendered as
+// HTML, which lib/api/entities/label.rb sends on every label and neither
+// struct carries, read from the captured response (ADR-0021).
 type Output struct {
 	toolutil.HintableOutput
 	ID                     int64  `json:"id"`
@@ -14,6 +17,7 @@ type Output struct {
 	Color                  string `json:"color"`
 	TextColor              string `json:"text_color"`
 	Description            string `json:"description"`
+	DescriptionHTML        string `json:"description_html,omitempty"`
 	OpenIssuesCount        int64  `json:"open_issues_count"`
 	ClosedIssuesCount      int64  `json:"closed_issues_count"`
 	OpenMergeRequestsCount int64  `json:"open_merge_requests_count"`
@@ -24,8 +28,9 @@ type Output struct {
 	Archived               bool   `json:"archived"`
 }
 
-// ProjectOutput converts a GitLab project label to shared output fields.
-func ProjectOutput(label *gl.Label) Output {
+// ProjectOutput converts a GitLab project label to shared output fields, and
+// takes the field the capture read beside the SDK.
+func ProjectOutput(label *gl.Label, extra toolutil.LabelExtra) Output {
 	if label == nil {
 		return Output{}
 	}
@@ -35,6 +40,7 @@ func ProjectOutput(label *gl.Label) Output {
 		Color:                  label.Color,
 		TextColor:              label.TextColor,
 		Description:            label.Description,
+		DescriptionHTML:        extra.DescriptionHTML,
 		OpenIssuesCount:        label.OpenIssuesCount,
 		ClosedIssuesCount:      label.ClosedIssuesCount,
 		OpenMergeRequestsCount: label.OpenMergeRequestsCount,
@@ -45,8 +51,9 @@ func ProjectOutput(label *gl.Label) Output {
 	})
 }
 
-// GroupOutput converts a GitLab group label to shared output fields.
-func GroupOutput(label *gl.GroupLabel) Output {
+// GroupOutput converts a GitLab group label to shared output fields, and
+// takes the field the capture read beside the SDK.
+func GroupOutput(label *gl.GroupLabel, extra toolutil.LabelExtra) Output {
 	if label == nil {
 		return Output{}
 	}
@@ -56,6 +63,7 @@ func GroupOutput(label *gl.GroupLabel) Output {
 		Color:                  label.Color,
 		TextColor:              label.TextColor,
 		Description:            label.Description,
+		DescriptionHTML:        extra.DescriptionHTML,
 		OpenIssuesCount:        label.OpenIssuesCount,
 		ClosedIssuesCount:      label.ClosedIssuesCount,
 		OpenMergeRequestsCount: label.OpenMergeRequestsCount,
@@ -105,6 +113,7 @@ type labelFields struct {
 	Color                  string
 	TextColor              string
 	Description            string
+	DescriptionHTML        string
 	OpenIssuesCount        int64
 	ClosedIssuesCount      int64
 	OpenMergeRequestsCount int64
@@ -122,6 +131,7 @@ func outputFromFields(fields labelFields) Output {
 		Color:                  fields.Color,
 		TextColor:              fields.TextColor,
 		Description:            fields.Description,
+		DescriptionHTML:        fields.DescriptionHTML,
 		OpenIssuesCount:        fields.OpenIssuesCount,
 		ClosedIssuesCount:      fields.ClosedIssuesCount,
 		OpenMergeRequestsCount: fields.OpenMergeRequestsCount,

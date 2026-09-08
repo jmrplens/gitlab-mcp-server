@@ -11,16 +11,7 @@ import (
 // an `email` GitLab does not send, and `public_email` and `locked` it does
 // not model, which is why the two shared values come from the captured
 // response (see [NoteUserExtra]).
-type NoteUserOutput struct {
-	ID          int64  `json:"id"`
-	Username    string `json:"username"`
-	PublicEmail string `json:"public_email,omitempty"`
-	Name        string `json:"name"`
-	State       string `json:"state,omitempty"`
-	Locked      bool   `json:"locked"`
-	AvatarURL   string `json:"avatar_url,omitempty"`
-	WebURL      string `json:"web_url,omitempty"`
-}
+type NoteUserOutput = UserBasicOutput
 
 // NoteUserExtra is what a note's author or resolver carries that client-go's
 // NoteAuthor and NoteResolvedBy do not model, read from the captured

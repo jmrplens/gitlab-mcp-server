@@ -15,6 +15,14 @@ import (
 
 const errRunnerIDRequired = "runner_id is required and must be > 0"
 
+// Operation names, each used by its handler's request, hint and capture
+// errors alike.
+const (
+	opUpdateRunner        = "update runner details"
+	opEnableProjectRunner = "enable project runner"
+	opRegisterRunner      = "register new runner"
+)
+
 // hintRunnerNotFound is the 404 hint shared by runner tools.
 const hintRunnerNotFound = "runner not found. Verify runner_id with gitlab_runner_list"
 
@@ -24,17 +32,24 @@ const hintRunnerNotFound = "runner not found. Verify runner_id with gitlab_runne
 
 // Output represents a GitLab CI Runner in responses. Field set mirrors
 // gl.Runner one-to-one, including the deprecated Active/IPAddress fields and the
-// registration Token/TokenExpiresAt returned by create/register endpoints.
+// registration Token/TokenExpiresAt returned by create/register endpoints,
+// plus what lib/api/entities/ci/runner.rb sends on every runner and the SDK
+// does not carry, read from the captured response (ADR-0021): when it was
+// created, who created it when the caller may read that user, and the job
+// execution status.
 type Output struct {
 	toolutil.HintableOutput
-	ID          int64  `json:"id"`
-	Description string `json:"description"`
-	Name        string `json:"name"`
-	Paused      bool   `json:"paused"`
-	IsShared    bool   `json:"is_shared"`
-	RunnerType  string `json:"runner_type"`
-	Online      bool   `json:"online"`
-	Status      string `json:"status"`
+	ID                 int64                     `json:"id"`
+	Description        string                    `json:"description"`
+	Name               string                    `json:"name"`
+	Paused             bool                      `json:"paused"`
+	IsShared           bool                      `json:"is_shared"`
+	RunnerType         string                    `json:"runner_type"`
+	Online             bool                      `json:"online"`
+	Status             string                    `json:"status"`
+	CreatedAt          string                    `json:"created_at,omitempty"`
+	CreatedBy          *toolutil.UserBasicOutput `json:"created_by,omitempty"`
+	JobExecutionStatus string                    `json:"job_execution_status,omitempty"`
 	// Active mirrors the deprecated gl.Runner.Active flag (use Paused instead).
 	Active bool `json:"active"`
 	// IPAddress mirrors the deprecated gl.Runner.IPAddress (empty from 17.0 on).
@@ -92,6 +107,13 @@ type DetailsOutput struct {
 	MaximumTimeout  int64                        `json:"maximum_timeout,omitempty"`
 	Groups          []RunnerDetailsGroupOutput   `json:"groups,omitempty"`
 	Projects        []RunnerDetailsProjectOutput `json:"projects,omitempty"`
+	// CreatedAt, CreatedBy and JobExecutionStatus are what
+	// lib/api/entities/ci/runner.rb sends on every runner and
+	// gl.RunnerDetails does not carry, read from the captured response
+	// (ADR-0021); created_by is sent to a caller allowed to read the user.
+	CreatedAt          string                    `json:"created_at,omitempty"`
+	CreatedBy          *toolutil.UserBasicOutput `json:"created_by,omitempty"`
+	JobExecutionStatus string                    `json:"job_execution_status,omitempty"`
 	// Active mirrors the deprecated gl.RunnerDetails.Active flag.
 	Active bool `json:"active"`
 	// Architecture mirrors the deprecated gl.RunnerDetails.Architecture.
@@ -131,22 +153,26 @@ type AuthTokenOutput struct {
 // Converters
 // ---------------------------------------------------------------------------.
 
-// toOutput converts the GitLab API response to the tool output format.
+// toOutput converts the GitLab API response to the tool output format, and
+// takes the fields the capture read beside the SDK.
 //
 //nolint:staticcheck // Active and IPAddress are deprecated in client-go but mirrored 1:1.
-func toOutput(r *gl.Runner) Output {
+func toOutput(r *gl.Runner, extra toolutil.RunnerExtra) Output {
 	out := Output{
-		ID:          r.ID,
-		Description: r.Description,
-		Name:        r.Name,
-		Paused:      r.Paused,
-		IsShared:    r.IsShared,
-		RunnerType:  r.RunnerType,
-		Online:      r.Online,
-		Status:      r.Status,
-		Active:      r.Active,
-		IPAddress:   r.IPAddress,
-		Token:       r.Token,
+		ID:                 r.ID,
+		Description:        r.Description,
+		Name:               r.Name,
+		Paused:             r.Paused,
+		IsShared:           r.IsShared,
+		RunnerType:         r.RunnerType,
+		Online:             r.Online,
+		Status:             r.Status,
+		Active:             r.Active,
+		IPAddress:          r.IPAddress,
+		Token:              r.Token,
+		CreatedAt:          toolutil.FormatTimePtr(extra.CreatedAt),
+		CreatedBy:          extra.CreatedBy,
+		JobExecutionStatus: extra.JobExecutionStatus,
 	}
 	if r.TokenExpiresAt != nil {
 		out.TokenExpiresAt = r.TokenExpiresAt.Format(time.RFC3339)
@@ -154,31 +180,35 @@ func toOutput(r *gl.Runner) Output {
 	return out
 }
 
-// toDetailsOutput converts the GitLab API response to the tool output format.
+// toDetailsOutput converts the GitLab API response to the tool output
+// format, and takes the fields the capture read beside the SDK.
 //
 //nolint:staticcheck // Active/Architecture/Platform/Revision/Version/IPAddress are deprecated in client-go but mirrored 1:1.
-func toDetailsOutput(d *gl.RunnerDetails) DetailsOutput {
+func toDetailsOutput(d *gl.RunnerDetails, extra toolutil.RunnerExtra) DetailsOutput {
 	out := DetailsOutput{
-		ID:              d.ID,
-		Description:     d.Description,
-		Name:            d.Name,
-		Paused:          d.Paused,
-		IsShared:        d.IsShared,
-		RunnerType:      d.RunnerType,
-		Online:          d.Online,
-		Status:          d.Status,
-		MaintenanceNote: d.MaintenanceNote,
-		TagList:         d.TagList,
-		RunUntagged:     d.RunUntagged,
-		Locked:          d.Locked,
-		AccessLevel:     d.AccessLevel,
-		MaximumTimeout:  d.MaximumTimeout,
-		Active:          d.Active,
-		Architecture:    d.Architecture,
-		Platform:        d.Platform,
-		Revision:        d.Revision,
-		Version:         d.Version,
-		IPAddress:       d.IPAddress,
+		ID:                 d.ID,
+		Description:        d.Description,
+		Name:               d.Name,
+		Paused:             d.Paused,
+		IsShared:           d.IsShared,
+		RunnerType:         d.RunnerType,
+		Online:             d.Online,
+		Status:             d.Status,
+		MaintenanceNote:    d.MaintenanceNote,
+		TagList:            d.TagList,
+		RunUntagged:        d.RunUntagged,
+		Locked:             d.Locked,
+		AccessLevel:        d.AccessLevel,
+		MaximumTimeout:     d.MaximumTimeout,
+		Active:             d.Active,
+		Architecture:       d.Architecture,
+		Platform:           d.Platform,
+		Revision:           d.Revision,
+		Version:            d.Version,
+		IPAddress:          d.IPAddress,
+		CreatedAt:          toolutil.FormatTimePtr(extra.CreatedAt),
+		CreatedBy:          extra.CreatedBy,
+		JobExecutionStatus: extra.JobExecutionStatus,
 	}
 	for _, g := range d.Groups {
 		out.Groups = append(out.Groups, RunnerDetailsGroupOutput{
@@ -294,10 +324,10 @@ func applyRunnerListOptions(opts *gl.ListOptions, req runnerListRequest) {
 	toolutil.ApplyListOptions(opts, req.PaginationInput, req.KeysetPaginationInput)
 }
 
-func listOutput(runners []*gl.Runner, resp *gl.Response) ListOutput {
+func listOutput(runners []*gl.Runner, extras []toolutil.RunnerExtra, resp *gl.Response) ListOutput {
 	items := make([]Output, len(runners))
 	for i, r := range runners {
-		items[i] = toOutput(r)
+		items[i] = toOutput(r, extras[i])
 	}
 	return ListOutput{Runners: items, Pagination: toolutil.PaginationFromResponse(resp)}
 }
@@ -306,11 +336,16 @@ func listRunners(ctx context.Context, req runnerListRequest, operation, hint str
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	runners, resp, err := list(buildListRunnersOptions(req), gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusUnprocessableEntity, hint)
 	}
-	return listOutput(runners, resp), nil
+	extras, err := toolutil.CapturedRunners(captured, len(runners))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr(operation, err)
+	}
+	return listOutput(runners, extras, resp), nil
 }
 
 func listScopedRunners(ctx context.Context, scopeID toolutil.StringOrInt, requiredField, operation, hint string, req runnerListRequest, list func(string, runnerListRequest, ...gl.RequestOptionFunc) ([]*gl.Runner, *gl.Response, error)) (ListOutput, error) {
@@ -320,11 +355,16 @@ func listScopedRunners(ctx context.Context, scopeID toolutil.StringOrInt, requir
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	runners, resp, err := list(string(scopeID), req, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, hint)
 	}
-	return listOutput(runners, resp), nil
+	extras, err := toolutil.CapturedRunners(captured, len(runners))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr(operation, err)
+	}
+	return listOutput(runners, extras, resp), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -368,12 +408,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 		return DetailsOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Runners.GetRunnerDetails(int(input.RunnerID), gl.WithContext(ctx))
 	if err != nil {
 		return DetailsOutput{}, toolutil.WrapErrWithStatusHint("get runner details", err, http.StatusNotFound,
 			"runner not found or already deleted. Use gitlab_runner_list_all (admin) or gitlab_runner_list to discover current runner_id values")
 	}
-	return toDetailsOutput(d), nil
+	extra, err := toolutil.CapturedRunner(captured)
+	if err != nil {
+		return DetailsOutput{}, toolutil.WrapErr("get runner details", err)
+	}
+	return toDetailsOutput(d, extra), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -432,16 +477,21 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.Active = input.Active //nolint:staticcheck // Active is deprecated in client-go but mirrored 1:1.
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Runners.UpdateRunnerDetails(int(input.RunnerID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return DetailsOutput{}, toolutil.WrapErrWithHint("update runner details", err,
+			return DetailsOutput{}, toolutil.WrapErrWithHint(opUpdateRunner, err,
 				"updating instance runners requires an admin token; group/project runners require Owner/Maintainer role on the owning scope")
 		}
-		return DetailsOutput{}, toolutil.WrapErrWithStatusHint("update runner details", err, http.StatusNotFound,
+		return DetailsOutput{}, toolutil.WrapErrWithStatusHint(opUpdateRunner, err, http.StatusNotFound,
 			hintRunnerNotFound)
 	}
-	return toDetailsOutput(d), nil
+	extra, err := toolutil.CapturedRunner(captured)
+	if err != nil {
+		return DetailsOutput{}, toolutil.WrapErr(opUpdateRunner, err)
+	}
+	return toDetailsOutput(d, extra), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -580,16 +630,21 @@ func EnableProject(ctx context.Context, client *gitlabclient.Client, input Enabl
 		RunnerID: input.RunnerID,
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	r, _, err := client.GL().Runners.EnableProjectRunner(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("enable project runner", err,
+			return Output{}, toolutil.WrapErrWithHint(opEnableProjectRunner, err,
 				"runner is locked to another project (set locked=false via gitlab_runner_update first), is a group/instance runner that cannot be enabled per-project, or you need Maintainer/Owner role")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("enable project runner", err, http.StatusNotFound,
+		return Output{}, toolutil.WrapErrWithStatusHint(opEnableProjectRunner, err, http.StatusNotFound,
 			"runner_id or project_id not found. Verify with gitlab_runner_list and gitlab_project_get")
 	}
-	return toOutput(r), nil
+	extra, err := toolutil.CapturedRunner(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(opEnableProjectRunner, err)
+	}
+	return toOutput(r, extra), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -760,16 +815,21 @@ func Register(ctx context.Context, client *gitlabclient.Client, input RegisterIn
 		opts.Active = input.Active //nolint:staticcheck // Active is deprecated in client-go but mirrored 1:1.
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	r, _, err := client.GL().Runners.RegisterNewRunner(opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("register new runner", err,
+			return Output{}, toolutil.WrapErrWithHint(opRegisterRunner, err,
 				"registration token is invalid, expired, or has been revoked. Obtain a fresh token via gitlab_runner_reset_instance_reg_token (admin), gitlab_runner_reset_group_reg_token, or gitlab_runner_reset_project_reg_token")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("register new runner", err, http.StatusUnprocessableEntity,
+		return Output{}, toolutil.WrapErrWithStatusHint(opRegisterRunner, err, http.StatusUnprocessableEntity,
 			"validation failed. Ensure token is non-empty and any tag_list entries are valid")
 	}
-	return toOutput(r), nil
+	extra, err := toolutil.CapturedRunner(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(opRegisterRunner, err)
+	}
+	return toOutput(r, extra), nil
 }
 
 // ---------------------------------------------------------------------------

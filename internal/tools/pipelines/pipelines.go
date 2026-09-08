@@ -150,7 +150,10 @@ type GetInput struct {
 	PipelineID int64                `json:"pipeline_id" jsonschema:"Pipeline ID to retrieve,required"`
 }
 
-// DetailOutput represents a single pipeline with full details.
+// DetailOutput represents a single pipeline with full details: what
+// [gl.Pipeline] decodes, plus whether it is archived, which
+// lib/api/entities/ci/pipeline.rb sends on every pipeline rendered whole and
+// the SDK does not carry, read from the captured response (ADR-0021).
 type DetailOutput struct {
 	toolutil.HintableOutput
 	ID             int64                     `json:"id"`
@@ -163,6 +166,7 @@ type DetailOutput struct {
 	BeforeSHA      string                    `json:"before_sha,omitempty"`
 	Name           string                    `json:"name"`
 	Tag            bool                      `json:"tag"`
+	Archived       bool                      `json:"archived"`
 	YamlErrors     string                    `json:"yaml_errors,omitempty"`
 	Duration       int64                     `json:"duration"`
 	QueuedDuration int64                     `json:"queued_duration"`
@@ -189,16 +193,28 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 		return DetailOutput{}, toolutil.ErrRequiredInt64("pipelineGet", "pipeline_id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Pipelines.GetPipeline(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
 		return DetailOutput{}, toolutil.WrapErrWithStatusHint("pipelineGet", err, http.StatusNotFound,
 			"verify pipeline_id with gitlab_pipeline_list. Pipeline IDs are project-scoped")
 	}
-	return DetailToOutput(p), nil
+	return capturedDetail("pipelineGet", p, captured)
 }
 
-// DetailToOutput converts a GitLab API [gl.Pipeline] to MCP output.
-func DetailToOutput(p *gl.Pipeline) DetailOutput {
+// capturedDetail converts one pipeline with what its captured answer carries
+// beside the SDK's decode, or reports the answer the type cannot hold.
+func capturedDetail(op string, p *gl.Pipeline, captured *gitlabclient.ResponseCapture) (DetailOutput, error) {
+	extra, err := toolutil.CapturedPipeline(captured)
+	if err != nil {
+		return DetailOutput{}, toolutil.WrapErr(op, err)
+	}
+	return DetailToOutput(p, extra), nil
+}
+
+// DetailToOutput converts a GitLab API [gl.Pipeline] to MCP output, and
+// takes the field the capture read beside the SDK.
+func DetailToOutput(p *gl.Pipeline, extra toolutil.PipelineExtra) DetailOutput {
 	out := DetailOutput{
 		ID:             p.ID,
 		IID:            p.IID,
@@ -210,6 +226,7 @@ func DetailToOutput(p *gl.Pipeline) DetailOutput {
 		BeforeSHA:      p.BeforeSHA,
 		Name:           p.Name,
 		Tag:            p.Tag,
+		Archived:       extra.Archived,
 		YamlErrors:     p.YamlErrors,
 		Duration:       p.Duration,
 		QueuedDuration: p.QueuedDuration,
@@ -254,6 +271,7 @@ func Cancel(ctx context.Context, client *gitlabclient.Client, input ActionInput)
 		return DetailOutput{}, toolutil.ErrRequiredInt64("pipelineCancel", "pipeline_id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Pipelines.CancelPipelineBuild(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 403) {
@@ -262,7 +280,7 @@ func Cancel(ctx context.Context, client *gitlabclient.Client, input ActionInput)
 		}
 		return DetailOutput{}, toolutil.WrapErrWithMessage("pipelineCancel", err)
 	}
-	return DetailToOutput(p), nil
+	return capturedDetail("pipelineCancel", p, captured)
 }
 
 // Retry retries failed jobs in a pipeline.
@@ -277,6 +295,7 @@ func Retry(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 		return DetailOutput{}, toolutil.ErrRequiredInt64("pipelineRetry", "pipeline_id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Pipelines.RetryPipelineBuild(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 403) {
@@ -285,7 +304,7 @@ func Retry(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 		}
 		return DetailOutput{}, toolutil.WrapErrWithMessage("pipelineRetry", err)
 	}
-	return DetailToOutput(p), nil
+	return capturedDetail("pipelineRetry", p, captured)
 }
 
 // DeleteInput defines parameters for deleting a pipeline.
@@ -485,6 +504,10 @@ func GetTestReportSummary(ctx context.Context, client *gitlabclient.Client, inpu
 	}, nil
 }
 
+// opGetLatestFallback names the operation the latest-pipeline fallback
+// reports under, in its two request errors and its capture error alike.
+const opGetLatestFallback = "pipelineGetLatest(fallback)"
+
 // GetLatestInput defines parameters for getting the latest pipeline.
 //
 // The /latest endpoint itself only accepts ref. The additional filters below
@@ -524,14 +547,15 @@ func GetLatest(ctx context.Context, client *gitlabclient.Client, input GetLatest
 	if input.Ref != "" {
 		opts.Ref = new(input.Ref)
 	}
-	p, _, err := client.GL().Pipelines.GetLatestPipeline(string(input.ProjectID), opts, gl.WithContext(ctx))
+	latestCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	p, _, err := client.GL().Pipelines.GetLatestPipeline(string(input.ProjectID), opts, gl.WithContext(latestCtx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 403) {
 			return getLatestFallback(ctx, client, input)
 		}
 		return DetailOutput{}, toolutil.WrapErrWithMessage("pipelineGetLatest", err)
 	}
-	return DetailToOutput(p), nil
+	return capturedDetail("pipelineGetLatest", p, captured)
 }
 
 // getLatestFallback lists pipelines (keyset-capable, defaulting to the single
@@ -568,16 +592,17 @@ func getLatestFallback(ctx context.Context, client *gitlabclient.Client, input G
 	}
 	pipelines, _, err := client.GL().Pipelines.ListProjectPipelines(string(input.ProjectID), listOpts, gl.WithContext(ctx))
 	if err != nil {
-		return DetailOutput{}, toolutil.WrapErrWithMessage("pipelineGetLatest(fallback)", err)
+		return DetailOutput{}, toolutil.WrapErrWithMessage(opGetLatestFallback, err)
 	}
 	if len(pipelines) == 0 {
 		return DetailOutput{}, errors.New("pipelineGetLatest: no pipelines found for this project")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	detail, _, err := client.GL().Pipelines.GetPipeline(string(input.ProjectID), pipelines[0].ID, gl.WithContext(ctx))
 	if err != nil {
-		return DetailOutput{}, toolutil.WrapErrWithMessage("pipelineGetLatest(fallback)", err)
+		return DetailOutput{}, toolutil.WrapErrWithMessage(opGetLatestFallback, err)
 	}
-	return DetailToOutput(detail), nil
+	return capturedDetail(opGetLatestFallback, detail, captured)
 }
 
 // CreateInput defines parameters for creating a new pipeline.
@@ -631,6 +656,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		}
 		opts.Inputs = inputs
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Pipelines.CreatePipeline(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 400) {
@@ -639,7 +665,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		}
 		return DetailOutput{}, toolutil.WrapErrWithMessage("pipelineCreate", err)
 	}
-	return DetailToOutput(p), nil
+	return capturedDetail("pipelineCreate", p, captured)
 }
 
 // UpdateMetadataInput defines parameters for updating pipeline metadata.
@@ -666,6 +692,7 @@ func UpdateMetadata(ctx context.Context, client *gitlabclient.Client, input Upda
 	opts := &gl.UpdatePipelineMetadataOptions{
 		Name: new(input.Name),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Pipelines.UpdatePipelineMetadata(string(input.ProjectID), input.PipelineID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -675,5 +702,5 @@ func UpdateMetadata(ctx context.Context, client *gitlabclient.Client, input Upda
 		return DetailOutput{}, toolutil.WrapErrWithStatusHint("pipelineUpdateMetadata", err, http.StatusNotFound,
 			"verify pipeline_id with gitlab_pipeline_list")
 	}
-	return DetailToOutput(p), nil
+	return capturedDetail("pipelineUpdateMetadata", p, captured)
 }

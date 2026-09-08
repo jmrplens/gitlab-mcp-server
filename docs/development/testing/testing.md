@@ -18,11 +18,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,968 |
-| Unit test functions                                   | 14,365 |
+| Total test functions                                  | 14,986 |
+| Unit test functions                                   | 14,383 |
 | E2E test functions                                    |    603 |
 | cmd test functions                                    |  2,949 |
-| Test files (internal/)                                |    521 |
+| Test files (internal/)                                |    522 |
 | Test files (cmd/)                                     |    204 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,887 | 79.4% |
+| `TestFunc_Scenario` (2-part)           | 11,897 | 79.4% |
 | `TestFunc` (no underscore)             |    977 |  6.5% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,104 | 14.1% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,112 | 14.1% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,454 |        146 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,456 |        147 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,624 |        359 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,640 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            603 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,949 |        204 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,968** |    **965** |                                                                                                 |
+| **Total**               |     **14,986** |    **966** |                                                                                                 |
 
 ### Core Packages
 
@@ -76,8 +76,8 @@
 | subscriptions |        99 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        90 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
-| toolutil      |       871 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,454** |          |                                                                                                                                                                                                                                                                    |
+| toolutil      |       873 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
+| **Subtotal**  | **2,456** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -96,8 +96,8 @@
 | commits           |   114 |    99.8% |    13 |
 | resourceevents    |   114 |   100.0% |    17 |
 | awardemoji        |   113 |   100.0% |    24 |
-| pipelines         |   110 |   100.0% |    12 |
-| runners           |   109 |   100.0% |    19 |
+| pipelines         |   113 |   100.0% |    12 |
+| runners           |   112 |   100.0% |    19 |
 | containerregistry |   101 |   100.0% |    16 |
 | accesstokens      |    97 |   100.0% |    18 |
 | branches          |    95 |   100.0% |    10 |
@@ -137,7 +137,7 @@
 | broadcastmessages       |        30 |          2 |   100.0% |         5 |
 | bulkimports             |        35 |          2 |   100.0% |         7 |
 | cicatalog               |        29 |          1 |   100.0% |         2 |
-| cilint                  |        26 |          1 |   100.0% |         2 |
+| cilint                  |        28 |          1 |   100.0% |         2 |
 | civariables             |        46 |          2 |   100.0% |         5 |
 | ciyamltemplates         |        23 |          1 |   100.0% |         2 |
 | clusteragents           |        42 |          1 |   100.0% |         8 |
@@ -183,7 +183,7 @@
 | groupepicboards         |        15 |          3 |    98.4% |         2 |
 | groupimportexport       |        31 |          1 |   100.0% |         3 |
 | groupiterations         |        21 |          1 |   100.0% |         1 |
-| grouplabels             |        54 |          2 |   100.0% |         7 |
+| grouplabels             |        56 |          2 |   100.0% |         7 |
 | groupldap               |        14 |          2 |   100.0% |         5 |
 | groupmarkdownuploads    |        37 |          2 |   100.0% |         3 |
 | groupmembers            |        85 |          3 |   100.0% |        10 |
@@ -214,9 +214,9 @@
 | iterationdata           |         8 |          1 |   100.0% |         0 |
 | jobs                    |       151 |          4 |   100.0% |        17 |
 | jobtokenscope           |        52 |          2 |   100.0% |         8 |
-| keys                    |        21 |          1 |   100.0% |         2 |
+| keys                    |        23 |          1 |   100.0% |         2 |
 | labeldata               |         6 |          1 |   100.0% |         0 |
-| labels                  |        60 |          1 |   100.0% |         8 |
+| labels                  |        62 |          1 |   100.0% |         8 |
 | license                 |        18 |          2 |   100.0% |         3 |
 | licensetemplates        |        21 |          1 |   100.0% |         2 |
 | markdown                |         8 |          1 |   100.0% |         1 |
@@ -239,9 +239,9 @@
 | orbit                   |        57 |          4 |   100.0% |         6 |
 | packages                |       131 |          6 |    99.0% |         9 |
 | pages                   |        54 |          2 |   100.0% |         9 |
-| pipelines               |       110 |          3 |   100.0% |        12 |
+| pipelines               |       113 |          3 |   100.0% |        12 |
 | pipelineschedules       |        94 |          2 |    99.7% |        11 |
-| pipelinetriggers        |        56 |          2 |   100.0% |         6 |
+| pipelinetriggers        |        58 |          2 |   100.0% |         6 |
 | planlimits              |        13 |          2 |   100.0% |         2 |
 | projectaliases          |        26 |          2 |   100.0% |         4 |
 | projectdiscovery        |        19 |          1 |   100.0% |         1 |
@@ -264,7 +264,7 @@
 | runnercontrollers       |        34 |          2 |   100.0% |         5 |
 | runnercontrollerscopes  |        34 |          2 |   100.0% |         5 |
 | runnercontrollertokens  |        41 |          2 |   100.0% |         5 |
-| runners                 |       109 |          2 |   100.0% |        19 |
+| runners                 |       112 |          2 |   100.0% |        19 |
 | search                  |       118 |          1 |   100.0% |        10 |
 | securefiles             |        28 |          2 |   100.0% |         4 |
 | securityattributes      |        24 |          1 |   100.0% |         5 |
@@ -293,7 +293,7 @@
 | wikis                   |        61 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,624** |    **359** |          | **1,187** |
+| **Total**               | **8,640** |    **359** |          | **1,187** |
 
 </details>
 

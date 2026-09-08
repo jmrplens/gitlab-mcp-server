@@ -4,14 +4,18 @@ import (
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestOutputConverters_MapSharedFields verifies project and group label
-// converters preserve common fields including nullable priority metadata.
+// converters preserve common fields including nullable priority metadata,
+// and the rendered description the capture read beside the SDK.
 func TestOutputConverters_MapSharedFields(t *testing.T) {
 	priority := gl.NewNullableWithValue(int64(3))
-	project := ProjectOutput(&gl.Label{ID: 1, Name: "bug", Color: "#d9534f", TextColor: "#fff", Description: "Bug", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1, Priority: priority, IsProjectLabel: true, Subscribed: true})
-	group := GroupOutput(&gl.GroupLabel{ID: 1, Name: "bug", Color: "#d9534f", TextColor: "#fff", Description: "Bug", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1, Priority: priority, IsProjectLabel: true, Subscribed: true})
+	extra := toolutil.LabelExtra{DescriptionHTML: "<p>Bug</p>"}
+	project := ProjectOutput(&gl.Label{ID: 1, Name: "bug", Color: "#d9534f", TextColor: "#fff", Description: "Bug", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1, Priority: priority, IsProjectLabel: true, Subscribed: true}, extra)
+	group := GroupOutput(&gl.GroupLabel{ID: 1, Name: "bug", Color: "#d9534f", TextColor: "#fff", Description: "Bug", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1, Priority: priority, IsProjectLabel: true, Subscribed: true}, extra)
 
 	if project.ID != group.ID || project.Name != group.Name || project.Color != group.Color || project.OpenIssuesCount != group.OpenIssuesCount || project.OpenMergeRequestsCount != group.OpenMergeRequestsCount {
 		t.Fatalf("ProjectOutput() = %+v, GroupOutput() = %+v, want equal shared fields", project, group)
@@ -19,15 +23,18 @@ func TestOutputConverters_MapSharedFields(t *testing.T) {
 	if project.Priority != 3 || !project.PrioritySpecified {
 		t.Fatalf("priority = (%d, %t), want (3, true)", project.Priority, project.PrioritySpecified)
 	}
+	if project.DescriptionHTML != "<p>Bug</p>" || group.DescriptionHTML != "<p>Bug</p>" {
+		t.Fatalf("description_html = (%q, %q), want the captured rendering on both", project.DescriptionHTML, group.DescriptionHTML)
+	}
 }
 
 // TestOutputConverters_NilInput verifies converters return zero-value output
 // for nil API objects so callers can safely handle absent GitLab payloads.
 func TestOutputConverters_NilInput(t *testing.T) {
-	if got := ProjectOutput(nil); got.ID != 0 || got.Name != "" {
+	if got := ProjectOutput(nil, toolutil.LabelExtra{}); got.ID != 0 || got.Name != "" {
 		t.Fatalf("ProjectOutput(nil) = %+v, want zero Output", got)
 	}
-	if got := GroupOutput(nil); got.ID != 0 || got.Name != "" {
+	if got := GroupOutput(nil, toolutil.LabelExtra{}); got.ID != 0 || got.Name != "" {
 		t.Fatalf("GroupOutput(nil) = %+v, want zero Output", got)
 	}
 }
@@ -122,12 +129,12 @@ func TestPriorityFromNullable(t *testing.T) {
 func TestOutputConverters_PropagateNullPriority(t *testing.T) {
 	nullPriority := gl.NewNullNullable[int64]()
 
-	project := ProjectOutput(&gl.Label{ID: 7, Name: "needs-info", Priority: nullPriority})
+	project := ProjectOutput(&gl.Label{ID: 7, Name: "needs-info", Priority: nullPriority}, toolutil.LabelExtra{})
 	if project.Priority != 0 || project.PrioritySpecified {
 		t.Fatalf("ProjectOutput priority = (%d, %t), want (0, false) for null nullable", project.Priority, project.PrioritySpecified)
 	}
 
-	group := GroupOutput(&gl.GroupLabel{ID: 7, Name: "needs-info", Priority: nullPriority})
+	group := GroupOutput(&gl.GroupLabel{ID: 7, Name: "needs-info", Priority: nullPriority}, toolutil.LabelExtra{})
 	if group.Priority != 0 || group.PrioritySpecified {
 		t.Fatalf("GroupOutput priority = (%d, %t), want (0, false) for null nullable", group.Priority, group.PrioritySpecified)
 	}

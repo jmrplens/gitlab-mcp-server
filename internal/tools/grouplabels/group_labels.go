@@ -97,15 +97,20 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.Archived = input.Archived
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	labels, resp, err := client.GL().GroupLabels.ListGroupLabels(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("groupLabelList", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get")
 	}
+	extras, err := toolutil.CapturedLabels(captured, len(labels))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("groupLabelList", err)
+	}
 
 	out := make([]Output, len(labels))
 	for i, l := range labels {
-		out[i] = toOutput(l)
+		out[i] = toOutput(l, extras[i])
 	}
 	return ListOutput{Labels: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -118,12 +123,13 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.GroupID == "" {
 		return Output{}, errors.New("groupLabelGet: group_id is required")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().GroupLabels.GetGroupLabel(string(input.GroupID), string(input.LabelID), gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("groupLabelGet", err, http.StatusNotFound,
 			"verify label_id (numeric ID or name) with gitlab_group_label_list; label names are case-sensitive")
 	}
-	return toOutput(l), nil
+	return capturedOutput("groupLabelGet", l, captured)
 }
 
 // Create creates a new label in a GitLab group.
@@ -147,12 +153,13 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Archived != nil {
 		opts.Archived = input.Archived
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().GroupLabels.CreateGroupLabel(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("groupLabelCreate", err, http.StatusBadRequest,
 			"name must be unique within the group; color must be a 6-digit hex string with leading # (e.g. #FF0000); creating group labels requires Reporter role or higher")
 	}
-	return toOutput(l), nil
+	return capturedOutput("groupLabelCreate", l, captured)
 }
 
 // Update modifies an existing group label. Only non-empty fields are applied.
@@ -179,12 +186,13 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Archived != nil {
 		opts.Archived = input.Archived
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().GroupLabels.UpdateGroupLabel(string(input.GroupID), string(input.LabelID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("groupLabelUpdate", err, http.StatusBadRequest,
 			"new_name must be unique within the group; color must be a 6-digit hex string with leading #; verify label_id with gitlab_group_label_list")
 	}
-	return toOutput(l), nil
+	return capturedOutput("groupLabelUpdate", l, captured)
 }
 
 // Delete removes a label from a GitLab group.
@@ -211,12 +219,13 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input Subscribe
 	if input.GroupID == "" {
 		return Output{}, errors.New("groupLabelSubscribe: group_id is required")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().GroupLabels.SubscribeToGroupLabel(string(input.GroupID), string(input.LabelID), gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("groupLabelSubscribe", err, http.StatusNotModified,
 			"the user is already subscribed to this label")
 	}
-	return toOutput(l), nil
+	return capturedOutput("groupLabelSubscribe", l, captured)
 }
 
 // Unsubscribe removes the authenticated user's subscription from a group label.
@@ -235,7 +244,18 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input Subscri
 	return nil
 }
 
-// toOutput converts a GitLab API [gl.GroupLabel] to MCP output format.
-func toOutput(label *gl.GroupLabel) Output {
-	return labeldata.GroupOutput(label)
+// toOutput converts a GitLab API [gl.GroupLabel] to MCP output format, and
+// passes on the field the capture read beside the SDK.
+func toOutput(label *gl.GroupLabel, extra toolutil.LabelExtra) Output {
+	return labeldata.GroupOutput(label, extra)
+}
+
+// capturedOutput converts one label with what its captured answer carries
+// beside the SDK's decode, or reports the answer the type cannot hold.
+func capturedOutput(op string, label *gl.GroupLabel, captured *gitlabclient.ResponseCapture) (Output, error) {
+	extra, err := toolutil.CapturedLabel(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(op, err)
+	}
+	return toOutput(label, extra), nil
 }
