@@ -1,25 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
-	"strings"
 
 	"golang.org/x/tools/go/packages"
-)
 
-// loadMode is everything the audit needs: syntax to walk, types to tell a
-// number from a string, and imports so an object has one identity across the
-// packages that share it.
-//
-// NeedDeps is absent for the reason its sibling audits give. Every function
-// whose body this audit reads lives under internal/, and type-checking the
-// dependency tree from source would cost minutes to learn nothing: what a
-// dependency's function returns is judged by name, not by body.
-const loadMode = packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
-	packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/goprogram"
+)
 
 // modulePath is this repository's module path, trimmed off an import path so a
 // report names a package the way the repository does.
@@ -58,29 +47,22 @@ type callSite struct {
 
 // loadProgram loads and indexes the packages named by patterns, rooted at dir.
 //
-// The overlay is how a test supplies source that is not on disk: a fixture
-// package written in the test file itself type-checks against the real
-// toolutil, so the classifier is exercised on the shapes it has to handle
-// rather than on a mock of them. Production passes nil.
+// The load itself, including the refusal of a package that did not type-check,
+// belongs to [goprogram.Load]; what is here is the indexing this audit needs.
+// The overlay is passed straight through: it is how a test supplies source
+// that is not on disk, so a fixture package written in the test file itself
+// type-checks against the real toolutil and the classifier is exercised on the
+// shapes it has to handle rather than on a mock of them. Production passes nil.
 func loadProgram(dir string, patterns []string, overlay map[string][]byte) (*program, error) {
-	cfg := &packages.Config{Mode: loadMode, Dir: dir, Tests: false, Overlay: overlay}
-	loaded, err := packages.Load(cfg, patterns...)
+	loaded, err := goprogram.Load(dir, patterns, overlay)
 	if err != nil {
-		return nil, fmt.Errorf("load packages: %w", err)
-	}
-	if len(loaded) == 0 {
-		return nil, fmt.Errorf("no packages matched %s in %s", strings.Join(patterns, " "), dir)
+		return nil, err
 	}
 	prog := &program{
 		fset:    loaded[0].Fset,
+		order:   loaded,
 		decls:   make(map[*types.Func]*funcDecl),
 		callers: make(map[*types.Func][]callSite),
-	}
-	for _, pkg := range loaded {
-		if loadErr := packageLoadError(pkg); loadErr != nil {
-			return nil, loadErr
-		}
-		prog.order = append(prog.order, pkg)
 	}
 	for _, pkg := range prog.order {
 		prog.indexDecls(pkg)
@@ -89,20 +71,6 @@ func loadProgram(dir string, patterns []string, overlay map[string][]byte) (*pro
 		prog.indexCalls(pkg)
 	}
 	return prog, nil
-}
-
-// packageLoadError turns a package's load errors into one reportable error. A
-// partially typed package would make every classification below fall back to
-// "cannot tell", which is exactly the failure mode a gate must not have.
-//
-// It is also what lets everything downstream read TypesInfo without checking
-// it: the loader fills it for every package it type-checked without error, and
-// a package it could not is refused here.
-func packageLoadError(pkg *packages.Package) error {
-	if len(pkg.Errors) == 0 {
-		return nil
-	}
-	return fmt.Errorf("load %s: %w", pkg.PkgPath, pkg.Errors[0])
 }
 
 // indexDecls records every declared function's body.

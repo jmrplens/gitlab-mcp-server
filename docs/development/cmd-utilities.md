@@ -1742,6 +1742,18 @@ What the package deliberately does **not** own is discovery. `gen_stats` keeps a
 
 One predicate also stays where it is. `cmd/godoc_tool` asks which functions need a test-form doc comment rather than which functions the testing package runs, so it keeps `TestMain` and the lower-case `Test`-prefixed helpers that `IsTestFunction` excludes; routing it through the shared predicate would silently drop those findings from `make audit-docs`.
 
+### cmd/internal/goprogram
+
+The go/packages front end for the four gates that type-check this repository's own source: [`audit_md_escaping`](#audit_md_escaping) walks the calls that interpolate a GitLab-authored value into Markdown, [`audit_readonly_graphql`](#audit_readonly_graphql) walks the calls a read-only action can reach, `cmd/internal/graphqldocs` folds every raw GraphQL document to the one string GitLab would receive, and [`audit_graphql_shapes`](#audit_graphql_shapes) pairs each of those documents with the struct that decodes it. It owns `LoadMode`, `Load(dir, patterns, overlay)` and the refusal of a package that did not type-check; the indexers, the detectors, the questions and the binaries stay with each gate.
+
+`LoadMode` deliberately omits `NeedDeps`, for one reason that holds for all four: each gate only ever reads bodies written inside the patterns it loads, so type-checking the dependency tree from source would cost minutes and change no answer, while export data still gives every dependency object the identity the packages using it see.
+
+The refusal is why this is a package rather than four tidy copies. Each gate answers "cannot tell" for what it cannot resolve, and a partially typed package resolves nothing: the escaping audit would classify every value as unfollowable, the read-only audit would find no handlers, and the document collector and the shape audit would fold no constants, so all four would report a clean run over source they never understood. The rule was written four times with four wordings, and a change to it was a four-file edit with one file easy to forget.
+
+The `overlay` parameter is not a convenience. It is how three of the gates' tests supply a fixture package written in the test file itself, type-checked against the real packages it imports, so the classifiers are exercised on the shapes they have to handle rather than on a mock of them. Production passes `nil`, and so does `audit_graphql_shapes`, whose fixtures are written to a module on disk.
+
+`cmd/audit_1to1/internal/shared.LoadToolPackages` is deliberately not folded in. It loads with `NeedDeps`, so it pays for the dependency tree these four refuse to pay for, and it refuses more widely than `Load` does, collecting every error of every loaded package (the dependencies included) and aborting on all of them at once where `Load` stops at the first error of a package the caller asked for. It also returns a subset rather than what it loaded, keeping the packages under `internal/tools` and dropping the rest, and memoizes that result per root. That is a different contract, not a different wording of this one.
+
 ## CI gate targets
 
 The following utilities expose a verification mode (`--check` or `-check`, or an invariant/error exit) that CI runs to guard against drift. The combined documentation gate is `make audit-docs`, which chains markdownlint, the table formatter, the llms, LobeHub-manifest, testing-docs and site-stats checks, the local-link check, the godoc, surface-quality and alias audits, and the site's own `check`, `build` and `lint`.

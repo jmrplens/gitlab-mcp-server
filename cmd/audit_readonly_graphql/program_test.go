@@ -2,12 +2,17 @@ package main
 
 import (
 	"errors"
+	"go/ast"
+	"go/constant"
+	"go/token"
 	"go/types"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // fixtureDir is the directory the in-memory fixture packages pretend to live
@@ -277,18 +282,6 @@ func TestLoadProgram_BrokenFixture_ReturnsLoadError(t *testing.T) {
 	}
 }
 
-// TestPackageLoadError_NoErrors_ReturnsNil verifies the happy path of the
-// per-package error check, which the loader relies on to pass clean packages
-// through untouched.
-func TestPackageLoadError_NoErrors_ReturnsNil(t *testing.T) {
-	prog := loadFixture(t, vulnSources())
-	for _, pkg := range prog.order {
-		if err := packageLoadError(pkg); err != nil {
-			t.Errorf("packageLoadError(%s) = %v, want nil", pkg.PkgPath, err)
-		}
-	}
-}
-
 // TestProgram_Reachable_FollowsCallees verifies the call graph reaches a
 // function only named through an intermediate callee, and stops at functions
 // nothing names.
@@ -318,6 +311,41 @@ func TestProgram_Reachable_NoRoots_IsEmpty(t *testing.T) {
 	prog := loadFixture(t, vulnSources())
 	if reached := prog.reachable(nil); len(reached) != 0 {
 		t.Errorf("reachable(nil) returned %d functions, want 0", len(reached))
+	}
+}
+
+// TestProgram_Reachable_RepeatedRoot_IsVisitedOnce verifies the closure stops
+// at a function it has already reached. Nothing in the audit deduplicates the
+// roots it is given, and a handler that calls a helper the closure also reaches
+// puts the same function on the queue twice, so without this the walk would
+// re-expand it and a cycle would never end.
+func TestProgram_Reachable_RepeatedRoot_IsVisitedOnce(t *testing.T) {
+	prog := loadFixture(t, vulnSources())
+	send := lookupFunc(t, prog, "vuln", "send")
+	dismissAll := lookupFunc(t, prog, "vuln", "dismissAll")
+
+	reached := prog.reachable([]*types.Func{dismissAll, dismissAll, send})
+
+	for _, want := range []*types.Func{dismissAll, send} {
+		t.Run(want.Name(), func(t *testing.T) {
+			if !reached[want] {
+				t.Errorf("reachable from a repeated root does not contain %s", want.Name())
+			}
+		})
+	}
+}
+
+// TestIsGraphQLSender_SharedToolutilExecutor_IsATransport verifies the package
+// half of the transport check. The shared executors send the document their
+// caller supplied, and they are ordinary functions rather than methods on a
+// GraphQL service, so a check that only read receivers would miss every note
+// domain and report the actions that reach them as touching no GraphQL at all.
+func TestIsGraphQLSender_SharedToolutilExecutor_IsATransport(t *testing.T) {
+	prog := loadFixture(t, mainSources())
+	viaExecutor := prog.funcs[lookupFunc(t, prog, "shapes", "ViaExecutor")]
+
+	if !viaExecutor.sendsGraphQL {
+		t.Error("a handler calling the shared toolutil executor was not marked as sending GraphQL")
 	}
 }
 
@@ -397,6 +425,43 @@ func build() string {
 func TestConstantString_NonString_ReturnsFalse(t *testing.T) {
 	if _, ok := constantString(nil); ok {
 		t.Error("a nil constant value must not unwrap to a string")
+	}
+}
+
+// TestIndexFunctions_DeclarationBoundToNoFunction_IsSkipped verifies the
+// function index only records declarations the type checker gave an object
+// for. A declaration named with the blank identifier is bound to nothing, and
+// indexing it under a nil object would put every such declaration in the same
+// bucket of the call graph.
+func TestIndexFunctions_DeclarationBoundToNoFunction_IsSkipped(t *testing.T) {
+	prog := &program{funcs: map[*types.Func]*function{}}
+	pkg := &packages.Package{
+		Name:      "synth",
+		Syntax:    []*ast.File{{Decls: []ast.Decl{&ast.FuncDecl{Name: ast.NewIdent("_"), Body: &ast.BlockStmt{}}}}},
+		TypesInfo: synthInfo(),
+	}
+
+	prog.indexFunctions(pkg)
+
+	if len(prog.funcs) != 0 {
+		t.Errorf("indexFunctions() recorded %d function(s) for a declaration bound to none", len(prog.funcs))
+	}
+}
+
+// TestRecordLiteral_ConstantThatIsNotAString_IsNoDocument verifies the literal
+// recorder judges the constant it was handed rather than the kind of node it
+// arrived in. Only a document can be a document, and a value that is not a
+// string cannot be one.
+func TestRecordLiteral_ConstantThatIsNotAString_IsNoDocument(t *testing.T) {
+	lit := &ast.BasicLit{Kind: token.INT, Value: "42"}
+	info := synthInfo()
+	info.Types[lit] = types.TypeAndValue{Value: constant.MakeInt64(42)}
+	fn := &function{}
+
+	(&program{}).recordLiteral(fn, &packages.Package{TypesInfo: info}, lit, map[token.Pos]bool{})
+
+	if len(fn.docs) != 0 {
+		t.Errorf("recordLiteral() recorded %d document(s) for a constant that is not a string", len(fn.docs))
 	}
 }
 

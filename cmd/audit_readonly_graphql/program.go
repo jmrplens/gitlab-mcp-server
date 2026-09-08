@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"go/ast"
 	"go/constant"
 	"go/token"
@@ -9,18 +8,9 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/packages"
-)
 
-// loadMode is everything the audit needs from the loader: syntax to walk and
-// types to resolve an identifier to the object it names.
-//
-// NeedDeps is deliberately absent. Every function this audit follows lives in
-// the patterns it loads, so type-checking the whole dependency tree from
-// source would buy nothing and cost minutes; dependencies come in through
-// export data, which still gives each of their objects one identity shared
-// with the packages that use them.
-const loadMode = packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
-	packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/goprogram"
+)
 
 // toolutilPath is the import path of the package that owns ActionSpec, the
 // route constructors, and the shared GraphQL executors. Resolution keys on the
@@ -82,31 +72,26 @@ var graphQLSenders = map[string]bool{
 
 // loadProgram loads and indexes the packages named by patterns, rooted at dir.
 //
-// The overlay is how a test supplies source that is not on disk: a fixture
-// package written in the test file itself loads and type-checks against the
-// real toolutil, so the resolver is exercised on the shapes it has to handle
-// rather than on a mock of them. Production passes nil.
+// The load itself, including the refusal of a package that did not type-check,
+// belongs to [goprogram.Load]; what is here is the indexing this audit needs.
+// The overlay is passed straight through: it is how a test supplies source
+// that is not on disk, so a fixture package written in the test file itself
+// type-checks against the real toolutil and the resolver is exercised on the
+// shapes it has to handle rather than on a mock of them. Production passes nil.
 func loadProgram(dir string, patterns []string, overlay map[string][]byte) (*program, error) {
-	cfg := &packages.Config{Mode: loadMode, Dir: dir, Tests: false, Overlay: overlay}
-	loaded, err := packages.Load(cfg, patterns...)
+	loaded, err := goprogram.Load(dir, patterns, overlay)
 	if err != nil {
-		return nil, fmt.Errorf("load packages: %w", err)
-	}
-	if len(loaded) == 0 {
-		return nil, fmt.Errorf("no packages matched %s in %s", strings.Join(patterns, " "), dir)
+		return nil, err
 	}
 	prog := &program{
 		fset:      loaded[0].Fset,
 		pkgs:      make(map[string]*packages.Package, len(loaded)),
 		funcs:     make(map[*types.Func]*function),
 		documents: make(map[types.Object]documentKind),
+		order:     loaded,
 	}
-	for _, pkg := range loaded {
-		if loadErr := packageLoadError(pkg); loadErr != nil {
-			return nil, loadErr
-		}
+	for _, pkg := range prog.order {
 		prog.pkgs[pkg.PkgPath] = pkg
-		prog.order = append(prog.order, pkg)
 	}
 	for _, pkg := range prog.order {
 		prog.indexDocuments(pkg)
@@ -117,26 +102,16 @@ func loadProgram(dir string, patterns []string, overlay map[string][]byte) (*pro
 	return prog, nil
 }
 
-// packageLoadError turns a package's load errors into one reportable error. A
-// partially typed package would make every resolution below silently
-// unresolvable, which is exactly the failure mode this audit must not have.
-func packageLoadError(pkg *packages.Package) error {
-	if len(pkg.Errors) == 0 {
-		return nil
-	}
-	return fmt.Errorf("load %s: %w", pkg.PkgPath, pkg.Errors[0])
-}
-
 // indexDocuments records every string constant and package-level string
 // variable whose value is a GraphQL document.
 //
 // Constants are folded by the type checker, so a document assembled from a
 // shared fragment constant is indexed with the fragment already spliced in,
 // which is how the vulnerability state mutations are written.
+//
+// TypesInfo is read unchecked: [goprogram.Load] refuses a package that did not
+// type-check, which is what that refusal is for.
 func (p *program) indexDocuments(pkg *packages.Package) {
-	if pkg.TypesInfo == nil || pkg.Types == nil {
-		return
-	}
 	for ident, obj := range pkg.TypesInfo.Defs {
 		if obj == nil {
 			continue
@@ -208,10 +183,10 @@ func constantString(value constant.Value) (string, bool) {
 }
 
 // indexFunctions records every declared function's body.
+//
+// TypesInfo is read unchecked here too, for the reason [program.indexDocuments]
+// gives: [goprogram.Load] refuses a package that did not type-check.
 func (p *program) indexFunctions(pkg *packages.Package) {
-	if pkg.TypesInfo == nil {
-		return
-	}
 	for _, file := range pkg.Syntax {
 		for _, decl := range file.Decls {
 			funcDecl, ok := decl.(*ast.FuncDecl)
