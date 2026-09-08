@@ -670,12 +670,16 @@ func buildBaseTransport(skipTLSVerify bool) http.RoundTripper {
 // The response ceiling is the innermost wrapper for the same kind of reason:
 // what it must bound is the body net/http has already decompressed, so it
 // belongs on the far side of the base transport rather than anywhere that
-// happens to see the wire bytes.
+// happens to see the wire bytes. The capture sits just outside it, so the
+// body a handler reads a field from under [WithResponseCapture] is the
+// bounded one.
 func apiTransport(base http.RoundTripper, c *Client) http.RoundTripper {
 	return mcpotel.NewTransport(&outboundBoundaryTransport{
 		base: &dotUnescapeTransport{
 			base: &resilienceTransport{
-				base:   &responseLimitTransport{base: base, client: c},
+				base: &captureTransport{
+					base: &responseLimitTransport{base: base, client: c},
+				},
 				client: c,
 			},
 		},

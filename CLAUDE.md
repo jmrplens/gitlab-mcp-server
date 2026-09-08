@@ -246,6 +246,10 @@ Four error wrapping functions in `internal/toolutil/errors.go`, used across the 
 
 Use `IsHTTPStatus(err, code)` and `ContainsAny(err, substrs...)` for status-specific branching before calling `WrapErrWithHint`. For get handlers, check `IsHTTPStatus(err, 404)` **before** `LogToolCallAll` and return `NotFoundResult` with `nil` error to log at INFO instead of ERROR. See [ADR-0007](docs/development/adr/adr-0007-rich-error-semantics.md) and [Error Handling](docs/concepts/error-handling.md).
 
+### Fields client-go does not model
+
+A field GitLab sends that client-go's struct does not carry is read from the **captured response** rather than from a request of the handler's own ([ADR-0021](docs/development/adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)): wrap the context with `gitlabclient.WithResponseCapture`, pass it to the SDK call as always, and decode the capture into a small type naming the field as GitLab spells it. The transport hands the SDK the same bytes, so the route, the options, the retries, the pagination and the request inventory stay exactly what client-go makes them; a body that does not decode into the handler's type is an error the handler returns. The `invites` pattern (a `client.GL().NewRequest` of the handler's own) stays for an endpoint client-go has no method for at all. Each such gap is recorded in `docs/development/upstream-bugs.md` with the handler that carries it, since an upstream contribution retires it.
+
 ### Transport end-to-end modules
 
 Two modules start the **real binary** and drive it the way a client does, both
@@ -735,6 +739,7 @@ ADRs document key decisions in `docs/development/adr`:
 | ADR-0018 | Authorization admits at the minimum scope; writes gated per action | Accepted (a read_api token is admitted and served a read-only surface; `tools/list` stays authenticated per the MCP authorization spec) |
 | ADR-0019 | Audience binding is unavailable at the authorization server    | Accepted (GitLab publishes no `resource_indicators_supported`; `--oauth-client-uid` is the "otherwise verify" alternative) |
 | ADR-0020 | One MCP server per configuration shape, owner-filtered delivery | Accepted (HTTP mode shares one server per shape; the credential is bound per request and resource-updated notifications are filtered by pool entry) |
+| ADR-0021 | A field client-go does not model is read from the captured response | Accepted (`gitlabclient.WithResponseCapture` in the SDK transport chain; the `invites` pattern stays for an endpoint client-go has no method for) |
 
 ### Modular tools sub-packages (ADR-0004)
 
