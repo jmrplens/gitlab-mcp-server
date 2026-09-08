@@ -6,7 +6,7 @@
 // The three had drifted. Two generators counted test functions with rules that
 // disagreed about a name whose first rune after "Test" is neither upper nor
 // lower case, and the naming auditor skipped every name starting with the
-// "TestMain" prefix, so nine tests named TestMain_Something were counted by the
+// "TestMain" prefix, so every test named TestMain_Something was counted by the
 // generators and invisible to the auditor. Go's own rule (testing.isTest) is
 // what IsTestFunction implements, and it decides for all of them: the prefix
 // "Test", the next rune not lower case, and exactly "TestMain" excluded as the
