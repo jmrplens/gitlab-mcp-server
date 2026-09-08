@@ -93,11 +93,14 @@ func (p Policy) selects(name string) bool {
 	return strings.HasSuffix(name, FileSuffix)
 }
 
-// SkipDir reports whether a directory of this base name is left out of every
-// walk: a generated or vendored tree, a tool's own fixtures, or a dot
-// directory. The walk root itself is never skipped, which is what the "." case
-// covers — filepath.WalkDir names the root by its own path, and a scan asked
-// for the current directory must still run.
+// SkipDir reports whether a directory of this base name is left out of a walk
+// that descends into it: a generated or vendored tree, a tool's own fixtures,
+// or a dot directory. The relative names "." and ".." are exempt because they
+// name a tree the caller is already in rather than one to descend into.
+//
+// A walk root is exempt too, but that is WalkFiles' decision rather than this
+// one: a scan pointed at a fixtures directory scans it, and only what lies
+// below a root is judged by name.
 func SkipDir(name string) bool {
 	switch name {
 	case "node_modules", "dist", "testdata":
@@ -110,9 +113,11 @@ func SkipDir(name string) bool {
 }
 
 // WalkFiles calls visit once for every file under each root that policy
-// selects, in lexical order, entering no directory SkipDir names. It stops at
-// the first error, whether the walk raised it or visit returned it, so a caller
-// that cannot parse a file reports that rather than a partial corpus.
+// selects, in lexical order, entering no directory below a root that SkipDir
+// names. A root is always entered, whatever it is called, so a scan asked for
+// one of those directories by name still runs. It stops at the first error,
+// whether the walk raised it or visit returned it, so a caller that cannot
+// parse a file reports that rather than a partial corpus.
 func WalkFiles(roots []string, policy Policy, visit func(path string) error) error {
 	for _, root := range roots {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -120,7 +125,7 @@ func WalkFiles(roots []string, policy Policy, visit func(path string) error) err
 				return err
 			}
 			if d.IsDir() {
-				if SkipDir(d.Name()) {
+				if path != root && SkipDir(d.Name()) {
 					return fs.SkipDir
 				}
 				return nil

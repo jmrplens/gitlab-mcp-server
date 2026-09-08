@@ -146,6 +146,51 @@ func TestWalkFiles_Policies_SelectTheirCorpus(t *testing.T) {
 	}
 }
 
+// TestWalkFiles_PrunedRoot_IsStillWalked verifies that the skip list judges
+// what lies below a root and never the root itself: a scan pointed straight at
+// a fixtures or dot directory scans it, and prunes one of the same name found
+// inside it.
+func TestWalkFiles_PrunedRoot_IsStillWalked(t *testing.T) {
+	base := t.TempDir()
+	// sequential: setup steps building one tree, asserted by the walks below
+	for _, rel := range []string{
+		"testdata/fixture_test.go",
+		"testdata/testdata/deeper_test.go",
+		".github/hook_test.go",
+	} {
+		writeFile(t, base, rel)
+	}
+
+	cases := []struct {
+		name string
+		root string
+		want []string
+	}{
+		{name: "fixtures root", root: "testdata", want: []string{"fixture_test.go"}},
+		{name: "dot root", root: ".github", want: []string{"hook_test.go"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := filepath.Join(base, tc.root)
+			var got []string
+			if err := WalkFiles([]string{root}, TestFiles, func(path string) error {
+				got = append(got, filepath.Base(path))
+				return nil
+			}); err != nil {
+				t.Fatalf("WalkFiles: %v", err)
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("WalkFiles visited %v, want %v", got, tc.want)
+			}
+			for i, want := range tc.want {
+				if got[i] != want {
+					t.Errorf("visit %d = %q, want %q", i, got[i], want)
+				}
+			}
+		})
+	}
+}
+
 // TestWalkFiles_Failures_StopAtTheFirstError verifies that a root that does not
 // exist and an error the visitor returns both reach the caller, so a command
 // reports a corpus it could not read instead of a short one.
