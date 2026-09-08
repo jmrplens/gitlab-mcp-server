@@ -21,6 +21,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
@@ -484,12 +485,6 @@ func TestRun_RequiresProjectRoot(t *testing.T) {
 	}
 }
 
-// normalizeLineEndings makes a comparison of generated text line-ending
-// agnostic, the way docgen.WriteOrCheck makes the freshness check itself.
-func normalizeLineEndings(s string) string {
-	return strings.ReplaceAll(s, "\r\n", "\n")
-}
-
 // TestRun_RealSurfaceReproducesCommittedFiles builds the real surface once and
 // generates into a scratch project root carrying the repository's VERSION,
 // then holds the six outputs to the committed files byte for byte (line
@@ -509,7 +504,7 @@ func TestRun_RealSurfaceReproducesCommittedFiles(t *testing.T) {
 		if readErr != nil {
 			t.Fatalf("read committed %s: %v", name, readErr)
 		}
-		committed[name] = normalizeLineEndings(string(data))
+		committed[name] = string(docgen.NormalizeNewlines(data))
 	}
 
 	dir := projectRootWithVersion(t, readVersion(repoRoot))
@@ -519,7 +514,7 @@ func TestRun_RealSurfaceReproducesCommittedFiles(t *testing.T) {
 
 	for _, name := range generatedFileNames {
 		t.Run(name, func(t *testing.T) {
-			got := normalizeLineEndings(readGenerated(t, dir, name))
+			got := string(docgen.NormalizeNewlines([]byte(readGenerated(t, dir, name))))
 			if got != committed[name] {
 				t.Errorf("%s differs from the committed file (%d vs %d bytes); run go run ./cmd/gen_llms/", name, len(got), len(committed[name]))
 			}

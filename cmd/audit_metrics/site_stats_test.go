@@ -8,12 +8,15 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
 )
 
 // newSiteStats builds the stats payload from a mock self-managed client and a
@@ -77,15 +80,9 @@ func TestSiteStatsMatchesCommittedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read committed stats.json: %v", err)
 	}
-	if normalizeNewlines(string(got)) != normalizeNewlines(string(want)) {
+	if !bytes.Equal(docgen.NormalizeNewlines(got), docgen.NormalizeNewlines(want)) {
 		t.Errorf("%s is stale; regenerate with: go run ./cmd/audit_metrics/ -site-stats site/src/data/stats.json", path)
 	}
-}
-
-// normalizeNewlines makes the comparison line-ending agnostic, the way
-// docgen.WriteOrCheck makes the generator's own check.
-func normalizeNewlines(s string) string {
-	return strings.ReplaceAll(s, "\r\n", "\n")
 }
 
 // TestWriteOrCheckSiteStats_CommittedFile_PassesCheck verifies the -check

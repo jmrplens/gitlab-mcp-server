@@ -70,7 +70,7 @@ func WriteOrCheck(path string, content []byte, check bool, regenerate string) er
 			// two failures want different fixes.
 			return fmt.Errorf("read %s: %w", path, readErr)
 		}
-		if !bytes.Equal(normalizeNewlines(existing), normalizeNewlines(content)) {
+		if !bytes.Equal(NormalizeNewlines(existing), NormalizeNewlines(content)) {
 			return fmt.Errorf("%s is stale; run %s", path, regenerate)
 		}
 		return nil
@@ -99,9 +99,12 @@ func WriteReport(path string, content []byte) error {
 	return os.WriteFile(path, content, generatedFileMode)
 }
 
-// normalizeNewlines strips carriage returns so a freshness comparison is
-// line-ending agnostic across platforms.
-func normalizeNewlines(b []byte) []byte {
+// NormalizeNewlines strips carriage returns so a comparison of generated text
+// is line-ending agnostic across platforms. It is what [WriteOrCheck] compares
+// through, and it is exported because the commands whose artifacts it writes
+// hold the same bytes to the same rule in their own tests: three private
+// spellings of this one line is exactly what this package exists to stop.
+func NormalizeNewlines(b []byte) []byte {
 	return bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
 }
 
