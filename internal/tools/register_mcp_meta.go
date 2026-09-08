@@ -37,7 +37,7 @@ When to use: at session start to confirm the GitLab token works, when diagnosing
 NOT for: resolving a git remote URL to a project (use gitlab_discover_project), GitLab instance admin (use gitlab_admin), per-project membership/permissions (use gitlab_project / gitlab_user), CI runner health (use gitlab_runner).
 
 Returns: {status, mcp_server_version, gitlab_url, gitlab_version, gitlab_revision, authenticated (bool), username, user_id, response_time_ms, error}. Authentication and connectivity failures are surfaced inside this diagnostics object (status / error fields), not as a tool-level JSON-RPC error.
-Errors: tool-level errors are rare. Inspect the returned status / error fields. Network errors name the GitLab instance by scheme, host and path; any userinfo, query or fragment the configured URL carries is stripped from both gitlab_url and error.
+Errors: tool-level errors are rare. Inspect the returned status / error fields. Network errors name the GitLab instance by scheme, host and path. Any userinfo, query or fragment the configured URL carries is stripped from both gitlab_url and error.
 
 - status: (no params). Returns the diagnostics object above.
 - health_check: (no params). Alias for status.
