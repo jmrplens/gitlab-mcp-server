@@ -1,6 +1,34 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
+)
+
+// TestCatalogActions_CatalogThatCannotBeBuilt_IsReported verifies the run ends
+// with the builder's own reason rather than with an empty action list. An
+// audit that answered for no action would exit clean while checking nothing,
+// which is the one outcome this gate must not have.
+func TestCatalogActions_CatalogThatCannotBeBuilt_IsReported(t *testing.T) {
+	previous := buildActionCatalog
+	t.Cleanup(func() { buildActionCatalog = previous })
+	buildActionCatalog = func(*gitlabclient.Client, tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
+		return nil, errFixture
+	}
+
+	actions, err := catalogActions()
+
+	if err == nil {
+		t.Fatalf("catalogActions() error = nil and returned %d action(s), want the builder's failure", len(actions))
+	}
+	if !strings.Contains(err.Error(), errFixture.Error()) {
+		t.Errorf("catalogActions() error = %q, want it to carry %q", err, errFixture)
+	}
+}
 
 // TestCatalogActions_ReturnsTheWholeSurface verifies the audit reads the real
 // canonical catalog offline: every action arrives with the identity the

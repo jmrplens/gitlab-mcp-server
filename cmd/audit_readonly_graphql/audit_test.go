@@ -26,6 +26,14 @@ mutation($id: ID!) {
 }
 @@
 
+// undoMutation is the second mutation this handler can send, so the sites a
+// finding would list are more than one and their order has to be settled.
+const undoMutation = @@
+mutation($id: ID!) {
+  thingUntouch(input: {id: $id}) { errors }
+}
+@@
+
 // Input is the fixture handler input.
 type Input struct {
 	ID string ` + "`json:\"id\"`" + `
@@ -43,6 +51,13 @@ func Risky(ctx context.Context, client *gitlabclient.Client, input Input) (Outpu
 	}
 	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
 		Query:     writeMutation,
+		Variables: map[string]any{"id": input.ID},
+	}, &response, gl.WithContext(ctx))
+	if err == nil {
+		return Output{OK: true}, nil
+	}
+	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
+		Query:     undoMutation,
 		Variables: map[string]any{"id": input.ID},
 	}, &response, gl.WithContext(ctx))
 	return Output{OK: err == nil}, err
@@ -334,6 +349,32 @@ func TestAudit_ExceptionInAnotherPackage_DoesNotApply(t *testing.T) {
 	}
 	if result.exceptions != 0 {
 		t.Errorf("%d exceptions used, want 0", result.exceptions)
+	}
+}
+
+// TestAudit_TwoFindingsForOneAction_AreOrderedByMessage verifies the report is
+// ordered all the way down. Findings sort by action, and an action can carry
+// two of them at once: here the catalog names an action the source does not
+// declare, and the stale directive left in that package is filed under the
+// same identifier. Ordering them by message is what keeps the output stable,
+// so a CI log diff shows a changed finding rather than a reshuffled pair.
+func TestAudit_TwoFindingsForOneAction_AreOrderedByMessage(t *testing.T) {
+	prog := loadFixture(t, exceptionSources())
+	actions := []action{{ID: "stale.quiet_read", Name: "renamed_away", Owner: "stale", ReadOnly: true}}
+
+	result := audit(prog, actions, repoRoot(t))
+
+	var messages []string
+	for _, item := range result.findings {
+		if item.action == "stale.quiet_read" {
+			messages = append(messages, item.message)
+		}
+	}
+	if len(messages) != 2 {
+		t.Fatalf("%d finding(s) for stale.quiet_read, want the unresolved action and its stale directive", len(messages))
+	}
+	if messages[0] >= messages[1] {
+		t.Errorf("findings for one action are not ordered by message:\n%s\n%s", messages[0], messages[1])
 	}
 }
 

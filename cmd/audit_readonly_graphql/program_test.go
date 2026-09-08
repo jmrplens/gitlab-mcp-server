@@ -2,12 +2,17 @@ package main
 
 import (
 	"errors"
+	"go/ast"
+	"go/constant"
+	"go/token"
 	"go/types"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // fixtureDir is the directory the in-memory fixture packages pretend to live
@@ -420,6 +425,43 @@ func build() string {
 func TestConstantString_NonString_ReturnsFalse(t *testing.T) {
 	if _, ok := constantString(nil); ok {
 		t.Error("a nil constant value must not unwrap to a string")
+	}
+}
+
+// TestIndexFunctions_DeclarationBoundToNoFunction_IsSkipped verifies the
+// function index only records declarations the type checker gave an object
+// for. A declaration named with the blank identifier is bound to nothing, and
+// indexing it under a nil object would put every such declaration in the same
+// bucket of the call graph.
+func TestIndexFunctions_DeclarationBoundToNoFunction_IsSkipped(t *testing.T) {
+	prog := &program{funcs: map[*types.Func]*function{}}
+	pkg := &packages.Package{
+		Name:      "synth",
+		Syntax:    []*ast.File{{Decls: []ast.Decl{&ast.FuncDecl{Name: ast.NewIdent("_"), Body: &ast.BlockStmt{}}}}},
+		TypesInfo: synthInfo(),
+	}
+
+	prog.indexFunctions(pkg)
+
+	if len(prog.funcs) != 0 {
+		t.Errorf("indexFunctions() recorded %d function(s) for a declaration bound to none", len(prog.funcs))
+	}
+}
+
+// TestRecordLiteral_ConstantThatIsNotAString_IsNoDocument verifies the literal
+// recorder judges the constant it was handed rather than the kind of node it
+// arrived in. Only a document can be a document, and a value that is not a
+// string cannot be one.
+func TestRecordLiteral_ConstantThatIsNotAString_IsNoDocument(t *testing.T) {
+	lit := &ast.BasicLit{Kind: token.INT, Value: "42"}
+	info := synthInfo()
+	info.Types[lit] = types.TypeAndValue{Value: constant.MakeInt64(42)}
+	fn := &function{}
+
+	(&program{}).recordLiteral(fn, &packages.Package{TypesInfo: info}, lit, map[token.Pos]bool{})
+
+	if len(fn.docs) != 0 {
+		t.Errorf("recordLiteral() recorded %d document(s) for a constant that is not a string", len(fn.docs))
 	}
 }
 
