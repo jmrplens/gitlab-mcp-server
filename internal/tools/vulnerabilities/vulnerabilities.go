@@ -3,6 +3,8 @@ package vulnerabilities
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -214,13 +216,28 @@ type gqlScanner struct {
 	Vendor string `json:"vendor"`
 }
 
+// gqlLocation is the location a finding reports. GitLab types startLine and
+// endLine as String on every location type (VulnerabilityLocationSast and its
+// siblings in the pinned schema), and a live instance sends them quoted; an
+// int here made the whole response fail to decode.
 type gqlLocation struct {
 	File      string `json:"file"`
 	Path      string `json:"path"`
 	Image     string `json:"image"`
-	StartLine int    `json:"startLine"`
-	EndLine   int    `json:"endLine"`
+	StartLine string `json:"startLine"`
+	EndLine   string `json:"endLine"`
 	BlobPath  string `json:"blobPath"`
+}
+
+// lineNumber reads the line GitLab spells as a string. A value that is not a
+// number, which the schema allows, reads as no line rather than an error, since
+// a finding is worth reporting whether or not its line parsed.
+func lineNumber(s string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 type gqlProject struct {
@@ -308,8 +325,8 @@ func nodeToItem(n gqlVulnerabilityNode) Item {
 	if n.Location != nil {
 		loc := &LocationItem{
 			File:      n.Location.File,
-			StartLine: n.Location.StartLine,
-			EndLine:   n.Location.EndLine,
+			StartLine: lineNumber(n.Location.StartLine),
+			EndLine:   lineNumber(n.Location.EndLine),
 			BlobPath:  n.Location.BlobPath,
 		}
 		if loc.File == "" && n.Location.Path != "" {

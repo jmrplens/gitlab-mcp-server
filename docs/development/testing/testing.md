@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,859 |
-| Unit test functions                                   | 14,256 |
+| Total test functions                                  | 14,863 |
+| Unit test functions                                   | 14,260 |
 | E2E test functions                                    |    603 |
 | cmd test functions                                    |  2,871 |
 | Test files (internal/)                                |    520 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,856 | 79.8% |
+| `TestFunc_Scenario` (2-part)           | 11,858 | 79.8% |
 | `TestFunc` (no underscore)             |    980 |  6.6% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,023 | 13.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,025 | 13.6% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,442 |        145 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            340 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,603 |        359 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,607 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            603 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,871 |        195 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,859** |    **955** |                                                                                                 |
+| **Total**               |     **14,863** |    **955** |                                                                                                 |
 
 ### Core Packages
 
@@ -84,7 +84,7 @@
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   391 |   100.0% |    57 |
+| projects          |   393 |   100.0% |    57 |
 | groups            |   249 |   100.0% |    37 |
 | mergerequests     |   245 |   100.0% |    30 |
 | issues            |   223 |   100.0% |    21 |
@@ -249,7 +249,7 @@
 | projectimportexport     |        40 |          1 |    99.6% |         5 |
 | projectiterations       |        18 |          1 |   100.0% |         1 |
 | projectmirrors          |        63 |          2 |   100.0% |         7 |
-| projects                |       391 |          6 |   100.0% |        57 |
+| projects                |       393 |          6 |   100.0% |        57 |
 | projectserviceaccounts  |        11 |          2 |   100.0% |         8 |
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
 | projectstoragemoves     |        19 |          2 |   100.0% |         6 |
@@ -270,7 +270,7 @@
 | securefiles             |        28 |          2 |   100.0% |         4 |
 | securityattributes      |        24 |          1 |   100.0% |         5 |
 | securitycategories      |        16 |          1 |   100.0% |         3 |
-| securityfindings        |        23 |          1 |   100.0% |         1 |
+| securityfindings        |        24 |          1 |   100.0% |         1 |
 | securityscanprofiles    |        17 |          1 |   100.0% |         3 |
 | securitysettings        |        32 |          3 |   100.0% |         3 |
 | settings                |        17 |          1 |    94.4% |         2 |
@@ -289,12 +289,12 @@
 | useremails              |        24 |          2 |   100.0% |         6 |
 | usergpgkeys             |        44 |          2 |   100.0% |         8 |
 | users                   |       210 |          7 |   100.0% |        38 |
-| vulnerabilities         |        65 |          3 |   100.0% |         8 |
+| vulnerabilities         |        66 |          3 |   100.0% |         8 |
 | waitpoll                |        13 |          1 |    99.2% |         0 |
 | wikis                   |        61 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,603** |    **359** |          | **1,187** |
+| **Total**               | **8,607** |    **359** |          | **1,187** |
 
 </details>
 

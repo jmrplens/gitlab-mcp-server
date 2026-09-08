@@ -3,6 +3,8 @@ package securityfindings
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -157,13 +159,37 @@ type gqlIdentifier struct {
 	URL          string `json:"url"`
 }
 
+// gqlLocation is the location a finding reports. GitLab types startLine and
+// endLine as String on every location type in the pinned schema, and a live
+// instance sends them quoted; an int here made the whole response fail to
+// decode.
 type gqlLocation struct {
 	File      string `json:"file"`
 	Path      string `json:"path"`
 	Image     string `json:"image"`
-	StartLine int    `json:"startLine"`
-	EndLine   int    `json:"endLine"`
+	StartLine string `json:"startLine"`
+	EndLine   string `json:"endLine"`
 	BlobPath  string `json:"blobPath"`
+}
+
+// lineNumber reads the line GitLab spells as a string. A value that is not a
+// number, which the schema allows, reads as no line rather than an error, since
+// a finding is worth reporting whether or not its line parsed.
+func lineNumber(s string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+// lowercased spells filter values the way GitLab's finder looks them up.
+func lowercased(values []string) []string {
+	out := make([]string, len(values))
+	for i, v := range values {
+		out[i] = strings.ToLower(strings.TrimSpace(v))
+	}
+	return out
 }
 
 // gqlVulnerabilityRef holds a reference to a vulnerability.
@@ -240,8 +266,8 @@ func nodeToItem(n gqlFindingNode) FindingItem {
 	if n.Location != nil {
 		loc := &LocationItem{
 			File:      n.Location.File,
-			StartLine: n.Location.StartLine,
-			EndLine:   n.Location.EndLine,
+			StartLine: lineNumber(n.Location.StartLine),
+			EndLine:   lineNumber(n.Location.EndLine),
 			BlobPath:  n.Location.BlobPath,
 		}
 		if loc.File == "" && n.Location.Path != "" {
@@ -308,14 +334,19 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 			"pipelineIID": input.PipelineIID,
 		},
 	)
+	// severity and reportType are plain String arguments on this field, not
+	// the enums the vulnerability queries take, and GitLab looks the values up
+	// in its own lowercase enums (Security::Finding.severities.fetch_values,
+	// Security::Scan.by_scan_types): CRITICAL or SAST as spelled everywhere
+	// else in this server is a KeyError there and comes back as a 500.
 	if len(input.Severity) > 0 {
-		vars["severity"] = input.Severity
+		vars["severity"] = lowercased(input.Severity)
 	}
 	if len(input.Scanner) > 0 {
 		vars["scanner"] = input.Scanner
 	}
 	if len(input.ReportType) > 0 {
-		vars["reportType"] = input.ReportType
+		vars["reportType"] = lowercased(input.ReportType)
 	}
 	if len(input.State) > 0 {
 		vars["state"] = input.State
