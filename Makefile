@@ -588,9 +588,8 @@ audit-docs:
 	go run ./cmd/audit_metrics/ -site-stats site/src/data/stats.json -check
 	$(MAKE) check-doc-links
 	go run ./cmd/godoc_tool/ audit
-	go run ./cmd/audit_surface_quality/ -view=metadata
+	go run ./cmd/audit_surface_quality/ -view=all
 	go run ./cmd/audit_dynamic_aliases/
-	go run ./cmd/audit_surface_quality/ -view=output
 	cd site && pnpm run check
 	cd site && pnpm run build
 	cd site && pnpm run lint

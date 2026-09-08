@@ -7,7 +7,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -56,7 +55,7 @@ func Run(gapsOnly bool) []byte {
 }
 
 func buildReport(gapsOnly bool) report {
-	client, cleanup := auditclient.NewMock()
+	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	defer cleanup()
 
 	projected := auditshared.CachedIndividualDescriptions(client)

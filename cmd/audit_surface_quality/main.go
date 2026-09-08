@@ -1,18 +1,16 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // outputJSON switches stdout output from human-readable markdown to structured
@@ -38,7 +36,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	client, cleanup := auditclient.NewMock()
+	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	defer cleanup()
 
 	if *view == "metadata" || *view == "all" {
@@ -49,43 +47,15 @@ func main() {
 	}
 }
 
-// listTools registers all MCP tools on an in-memory server and returns
-// the tool list. When meta is true, meta-tools are registered instead of
-// individual tools. LockdownInputSchemas is applied so the audit reflects
-// the schemas clients actually see.
+// listTools returns the tool list one surface advertises at the widest tier,
+// from [mcpsurface], which registers what cmd/server registers and applies the
+// served-schema chain, so the audit judges the schemas clients actually see.
+// When meta is true the meta surface is listed instead of the individual one.
 func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
-	server := mcp.NewServer(&mcp.Implementation{Name: "audit", Version: "0.0.1"}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	if meta {
-		if err := tools.RegisterAllMeta(server, client, edition.Ultimate); err != nil {
-			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
-			os.Exit(1)
-		}
-	} else {
-		tools.RegisterAll(server, client, edition.Ultimate)
+		return mcpsurface.MetaTools(client, edition.Ultimate)
 	}
-	toolutil.LockdownInputSchemas(server)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
-		os.Exit(1)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "audit-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "client connect: %v\n", err)
-		os.Exit(1)
-	}
-	defer session.Close()
-
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListTools: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
-	}
-	return result.Tools
+	return mcpsurface.IndividualTools(client, edition.Ultimate)
 }
 
 // jsonEntry is the JSON representation of a violation or finding.

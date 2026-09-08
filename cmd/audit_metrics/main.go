@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -12,28 +11,24 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// Audit server identity values used for in-memory MCP introspection sessions.
+// Report formatting constants: the per-tool line of a listing and the column
+// the metric values line up in.
 const (
-	auditServerName  = "audit-metrics"
-	auditClientName  = "audit-metrics-client"
-	auditVersion     = "0.0.1"
 	toolListFormat   = "  - %s\n"
 	metricLabelWidth = 48
 )
@@ -77,17 +72,10 @@ func run(opts auditOptions, stdout, stderr io.Writer) int {
 	}
 
 	cmdutil.Progressf("audit_metrics: building catalog and counting tools/resources/prompts across surfaces...")
-	client, cleanup := auditclient.NewMock()
+	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	defer cleanup()
 
-	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, audit-only dummy token
-		GitLabURL:   config.DefaultGitLabURL,
-		GitLabToken: "audit-token",
-	})
-	if err != nil {
-		fmt.Fprintf(stderr, "failed to create gitlab.com client: %v\n", err)
-		return 1
-	}
+	gitLabComClient := mcpsurface.NewGitLabComClient()
 
 	if opts.siteStatsPath != "" {
 		stats, statsErr := generateSiteStats(client, gitLabComClient)
@@ -485,12 +473,10 @@ func dynamicActionCatalog(client *gitlabclient.Client, enterprise bool) *actionc
 	return cmdutil.Must(dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{}))
 }
 
-// listDynamicTools registers the low-token dynamic public toolset backed by
-// catalog action routes and returns the advertised tool definitions.
+// listDynamicTools returns the advertised tool definitions of the low-token
+// dynamic surface backed by catalog action routes.
 func listDynamicTools(catalog *actioncatalog.Catalog) []*mcp.Tool {
-	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
-	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
-	return listToolsFromServer(server)
+	return mcpsurface.DynamicToolsFromCatalog(catalog)
 }
 
 // countActionRoutes counts catalog action routes in a dynamic/meta route map.
@@ -502,112 +488,34 @@ func countActionRoutes(routes map[string]toolutil.ActionMap) int {
 	return count
 }
 
-// listToolsFromServer connects to server in-memory and returns advertised
-// tools. Nothing here leaves the process: the transport is a pair of
-// in-memory pipes, the peer is the server this program just registered, and
-// the listing asks it for what it advertises. There is no failure for a
-// caller to handle, so a broken handshake stops the program where it happens.
-func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	cmdutil.Must(server.Connect(ctx, st, nil))
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: auditClientName, Version: auditVersion}, nil)
-	session := cmdutil.Must(mcpClient.Connect(ctx, ct, nil))
-	defer session.Close()
-
-	return cmdutil.Must(session.ListTools(ctx, nil)).Tools
-}
-
-// listServerTools registers tools on an in-memory MCP server and returns
-// the full tool list. When meta is true, meta-tools are registered.
-// Enterprise controls whether Enterprise/Premium meta-tools are included.
-// listedToolsCache memoizes listServerTools per (client, surface, tier,
-// meta schema mode): registering a full surface costs seconds, the result
-// depends only on the compiled-in catalog and those inputs, and callers only
-// read it. The schema mode is part of the key because printMetaSchemaModes
-// re-registers the meta surface under each mode to size its input schemas;
-// a key without it would hand every mode the first listing and report three
-// identical sizes. The audit repeats the opaque meta enterprise listing, and
-// the test binary repeats several combinations.
-var listedToolsCache sync.Map // listKey -> []*mcp.Tool
-
-type listKey struct {
-	client     *gitlabclient.Client
-	meta       bool
-	enterprise bool
-	schemaMode string
-}
-
+// listServerTools returns the tool list one surface advertises, from
+// [mcpsurface], which is the one reader of the served surface: it registers
+// what cmd/server registers, applies the served-schema chain, and memoizes the
+// listing per (client, surface, tier, meta schema mode). When meta is true the
+// meta surface is listed; enterprise selects the tier.
+//
+// The individual surface is listed at Ultimate whatever enterprise says, which
+// is what this audit has always measured: the per-tier individual counts are
+// site_stats.go's, taken through the same function with an explicit tier.
 func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
-	key := listKey{client: client, meta: meta, enterprise: enterprise, schemaMode: tools.MetaParamSchema()}
-	if cached, ok := listedToolsCache.Load(key); ok {
-		listed, _ := cached.([]*mcp.Tool)
-		return listed
-	}
-	listed := listServerToolsUncached(client, meta, enterprise)
-	listedToolsCache.Store(key, listed)
-	return listed
-}
-
-func listServerToolsUncached(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
-	opts := &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}}
-	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, opts)
-
 	if meta {
-		// The only failure registering the meta surface has is building the
-		// catalog it projects, which is the compiled-in ActionSpecs again.
-		cmdutil.MustDo(tools.RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)))
-	} else {
-		tools.RegisterAll(server, client, edition.Ultimate)
+		return mcpsurface.MetaTools(client, edition.TierForEnterprise(enterprise))
 	}
-
-	return listToolsFromServer(server)
+	return mcpsurface.IndividualTools(client, edition.Ultimate)
 }
 
-// countResources registers all MCP resources and returns static and template counts.
-// This includes resources from Register(), schema resources, and RegisterWorkflowGuides().
-// Workspace roots (+1) are counted separately because they need a roots.Manager.
+// countResources returns the static and template MCP resource counts. This
+// includes the resources from Register(), the surface-aware tool manifest and
+// its detail template, and RegisterWorkflowGuides(). Workspace roots (+1) are
+// counted separately because they need a roots.Manager.
 func countResources(client *gitlabclient.Client) (static, templates int) {
-	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
-	metaCatalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{IncludeMCP: true}))
-	resources.Register(server, client)
-	resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
-		Surface: config.ToolSurfaceDynamic,
-		Catalog: metaCatalog,
-	})
-	resources.RegisterWorkflowGuides(server)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	cmdutil.Must(server.Connect(ctx, st, nil))
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: auditClientName, Version: auditVersion}, nil)
-	session := cmdutil.Must(mcpClient.Connect(ctx, ct, nil))
-	defer session.Close()
-
-	res := cmdutil.Must(session.ListResources(ctx, nil))
-	tpl := cmdutil.Must(session.ListResourceTemplates(ctx, nil))
-	return len(res.Resources), len(tpl.ResourceTemplates)
+	res, tpl := mcpsurface.Resources(client)
+	return len(res), len(tpl)
 }
 
-// countPrompts registers all MCP prompts and returns the count.
+// countPrompts returns the number of registered MCP prompts.
 func countPrompts(client *gitlabclient.Client) int {
-	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
-	prompts.Register(server, client)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	cmdutil.Must(server.Connect(ctx, st, nil))
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: auditClientName, Version: auditVersion}, nil)
-	session := cmdutil.Must(mcpClient.Connect(ctx, ct, nil))
-	defer session.Close()
-
-	return len(cmdutil.Must(session.ListPrompts(ctx, nil)).Prompts)
+	return len(mcpsurface.Prompts(client))
 }
 
 // countSourceFiles walks the internal/ directory and counts .go source files

@@ -162,7 +162,7 @@ Dynamic mode is the default low-token surface and is documented in [Dynamic tool
 
 ### Meta-tool mode
 
-With `GITLAB_MCP_TOOL_SURFACE=meta`, the server exposes a baseline of **{stats.meta.base} domain-level meta-tools** instead of the individual catalog. The Premium tier adds 6 meta-tools for 38 total, Ultimate 11 more for {stats.meta.self_managed_enterprise} total on a self-managed instance, and GitLab.com on Premium or Ultimate adds `gitlab_orbit` (GitLab.com's Knowledge Graph feature) for {stats.meta.gitlab_com} total. Each meta-tool groups related operations:
+With `GITLAB_MCP_TOOL_SURFACE=meta`, the server exposes a baseline of **{stats.meta.base} meta-tools** instead of the individual catalog: 29 catalog-backed tools (28 GitLab domain dispatchers plus `gitlab_server`), `gitlab_discover_project`, and the four interactive creation flows. The Premium tier adds 6 meta-tools for 40 total, Ultimate 11 more for {stats.meta.self_managed_enterprise} total on a self-managed instance, and GitLab.com adds `gitlab_orbit` (GitLab.com's Knowledge Graph feature) on Premium and Ultimate alike, for {stats.meta.gitlab_com} total on GitLab.com Ultimate. Each meta-tool groups related operations:
 
 ```mermaid
 graph TD
@@ -196,7 +196,7 @@ This reduces token usage and improves AI tool selection accuracy compared to exp
 
 ### Individual tool mode
 
-With `GITLAB_MCP_TOOL_SURFACE=individual`, all individual tools are exposed (e.g., `gitlab_issue_list`, `gitlab_issue_create`): {stats.tools.ultimate_self_managed} on self-managed Enterprise/Premium, or {stats.tools.gitlab_com} on GitLab.com Enterprise/Premium with Orbit. This may be useful for testing but is not recommended for production.
+With `GITLAB_MCP_TOOL_SURFACE=individual`, all individual tools are exposed (e.g., `gitlab_issue_list`, `gitlab_issue_create`): {stats.tools.ultimate_self_managed} on self-managed Ultimate, or {stats.tools.gitlab_com} on GitLab.com Ultimate with Orbit. This may be useful for testing but is not recommended for production.
 
 ## Optional components
 

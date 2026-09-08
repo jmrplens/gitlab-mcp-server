@@ -17,26 +17,18 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-)
-
-// Token audit constants define the in-memory MCP session identity and the
-// byte-to-token conversion heuristic used by the report.
-const (
-	serverName = "audit-tokens"
-	clientName = "audit-tokens-client"
-	auditVer   = "0.0.1"
 )
 
 // toolTokenInfo stores the serialized size estimate for one MCP tool.
@@ -121,7 +113,7 @@ func run(opts auditOptions, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	client, cleanup := auditclient.NewMock()
+	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	defer cleanup()
 
 	audit := measureTokenAudit(client)
@@ -378,73 +370,27 @@ func printTokenAuditReport(audit tokenAudit, topTools, topDomains int) {
 // could handle: it panics instead of measuring an empty server as if it were a
 // surface.
 func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool) []*mcp.Tool {
-	server := newAuditServer()
-
+	tier := edition.TierForEnterprise(enterprise)
 	switch toolSurface {
 	case config.ToolSurfaceMeta:
-		cmdutil.MustDo(tools.RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)))
-		tools.RegisterMCPMeta(server, client)
+		return mcpsurface.MetaTools(client, tier)
 	case config.ToolSurfaceIndividual:
-		tools.RegisterAll(server, client, edition.TierForEnterprise(enterprise))
+		return mcpsurface.IndividualTools(client, tier)
 	default:
 		panic(fmt.Sprintf("audit_tokens: unknown tool surface %q", toolSurface))
 	}
-	return listToolsFromServer(server)
 }
 
-// listDynamicTools registers the low-token dynamic public toolset backed by
-// action routes and returns the advertised tool definitions.
+// listDynamicTools returns the advertised tool definitions of the low-token
+// dynamic public toolset backed by action routes.
 func listDynamicTools(catalog *actioncatalog.Catalog) []*mcp.Tool {
-	server := newAuditServer()
-	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
-	return listToolsFromServer(server)
+	return mcpsurface.DynamicToolsFromCatalog(catalog)
 }
 
 // buildMetaActionMaps builds the action route catalog that backs both
 // meta-tools and the dynamic toolset.
 func buildMetaActionMaps(client *gitlabclient.Client, enterprise bool) map[string]toolutil.ActionMap {
 	return cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})).ActionMaps()
-}
-
-// newAuditServer builds the in-memory MCP server every tool-listing pass
-// registers onto. The page size is large enough that a single tools/list page
-// carries the whole individual surface.
-func newAuditServer() *mcp.Server {
-	return mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
-}
-
-// withSession pairs an in-memory client session with server, runs fn against
-// it, and returns fn's result. Both sessions are torn down before it returns,
-// the client's first.
-//
-// It replaces a pair of helpers, one handing the session back and one taking a
-// callback, that had come to differ only in the wording of failures neither
-// could produce. So did the four measurement passes layered on them.
-//
-// Every step of the handshake is a [cmdutil.Must]: an in-memory transport has
-// no peer to be unreachable, no address to be taken and no wire to be cut, so
-// there is nothing here for a caller to recover from and nothing for a report
-// to say beyond what the panic already carries.
-func withSession[T any](server *mcp.Server, fn func(context.Context, *mcp.ClientSession) T) T {
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	serverSession := cmdutil.Must(server.Connect(ctx, st, nil))
-	defer func() { cmdutil.MustDo(serverSession.Close()) }()
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
-	session := cmdutil.Must(mcpClient.Connect(ctx, ct, nil))
-	defer func() { cmdutil.MustDo(session.Close()) }()
-
-	return fn(ctx, session)
-}
-
-// listToolsFromServer connects to server in-memory and returns the advertised
-// tool definitions.
-func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
-	return withSession(server, func(ctx context.Context, session *mcp.ClientSession) []*mcp.Tool {
-		return cmdutil.Must(session.ListTools(ctx, nil)).Tools
-	})
 }
 
 // measureTools serializes each tool definition to JSON and estimates its token
@@ -490,33 +436,42 @@ func measureResources(client *gitlabclient.Client, metaRoutes map[string]tooluti
 	})
 }
 
+// measureResourcesWithOptions registers the resource families opts selects on a
+// server of its own and estimates the token cost of the definitions a client
+// would be listed.
+//
+// The listing runs through [mcpsurface.Session], the one reader of the served
+// surface, rather than a handshake of this command's own: its setup hook takes
+// an arbitrary registration, so a selective one fits it unchanged, and the two
+// schema middlewares it applies are no-ops on a server carrying no tools.
 func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[string]toolutil.ActionMap, opts resourceRegistrationOptions) int {
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
-	if opts.Core {
-		resources.Register(server, client)
-	}
-	if opts.ToolManifest {
-		resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
-			Surface:    opts.ToolSurface,
-			Tools:      opts.ToolList,
-			Catalog:    opts.ToolCatalog,
-			MetaRoutes: metaRoutes,
-		})
-	}
-	if opts.WorkflowGuides {
-		resources.RegisterWorkflowGuides(server)
-	}
-
-	return withSession(server, func(ctx context.Context, session *mcp.ClientSession) int {
-		totalTokens := 0
-		for _, r := range cmdutil.Must(session.ListResources(ctx, nil)).Resources {
-			totalTokens += countTokens(mustMarshalModelFacing(r))
+	session, cleanup := mcpsurface.Session(func(server *mcp.Server) {
+		if opts.Core {
+			resources.Register(server, client)
 		}
-		for _, t := range cmdutil.Must(session.ListResourceTemplates(ctx, nil)).ResourceTemplates {
-			totalTokens += countTokens(mustMarshalModelFacing(t))
+		if opts.ToolManifest {
+			resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
+				Surface:    opts.ToolSurface,
+				Tools:      opts.ToolList,
+				Catalog:    opts.ToolCatalog,
+				MetaRoutes: metaRoutes,
+			})
 		}
-		return totalTokens
+		if opts.WorkflowGuides {
+			resources.RegisterWorkflowGuides(server)
+		}
 	})
+	defer cleanup()
+
+	ctx := context.Background()
+	totalTokens := 0
+	for _, r := range cmdutil.Must(session.ListResources(ctx, nil)).Resources {
+		totalTokens += countTokens(mustMarshalModelFacing(r))
+	}
+	for _, t := range cmdutil.Must(session.ListResourceTemplates(ctx, nil)).ResourceTemplates {
+		totalTokens += countTokens(mustMarshalModelFacing(t))
+	}
+	return totalTokens
 }
 
 // countActions returns the number of actions in a route catalog.
@@ -528,8 +483,9 @@ func countActions(routes map[string]toolutil.ActionMap) int {
 	return total
 }
 
-// measurePrompts registers MCP prompts and estimates the token cost of their
-// advertised definitions.
+// measurePrompts estimates the token cost of the advertised prompt
+// definitions, read from [mcpsurface.Prompts] so the audit measures the same
+// prompts/list round-trip every other reader of the served surface measures.
 //
 // This was the last of four helper pairs to be collapsed into one, and the
 // only pair whose halves disagreed rather than merely being spelled
@@ -544,19 +500,14 @@ func countActions(routes map[string]toolutil.ActionMap) int {
 // every caller to handle something that cannot occur: the listing runs over an
 // in-memory transport against a server this process built moments earlier, so
 // there is no peer to be unreachable and nothing a report could say beyond
-// what a panic already carries. It panics at the leaf, like every other step
-// of [withSession].
+// what a panic already carries. It panics at the leaf, as the shared reader
+// does.
 func measurePrompts(client *gitlabclient.Client) int {
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
-	prompts.Register(server, client)
-
-	return withSession(server, func(ctx context.Context, session *mcp.ClientSession) int {
-		totalTokens := 0
-		for _, pr := range cmdutil.Must(session.ListPrompts(ctx, nil)).Prompts {
-			totalTokens += countTokens(mustMarshalModelFacing(pr))
-		}
-		return totalTokens
-	})
+	totalTokens := 0
+	for _, pr := range mcpsurface.Prompts(client) {
+		totalTokens += countTokens(mustMarshalModelFacing(pr))
+	}
+	return totalTokens
 }
 
 // extractDomain returns the GitLab tool domain from names like
@@ -657,29 +608,26 @@ func fmtNum(n int) string {
 	return string(result)
 }
 
-// runMetaSchemaSizing builds an in-memory MCP server with the full meta-tool
-// catalog and compares the generated action parameter schemas across all
-// supported GITLAB_MCP_META_PARAM_SCHEMA modes (opaque/full/compact), printing a sizing
-// table to stdout. Formerly the standalone audit_meta_schema binary.
+// runMetaSchemaSizing compares the meta-tool input schemas a client receives
+// across all supported GITLAB_MCP_META_PARAM_SCHEMA modes (opaque/full/compact),
+// printing a sizing table to stdout. Formerly the standalone audit_meta_schema
+// binary.
+//
+// All three columns are served listings, re-listed once per mode through
+// [mcpsurface.MetaTools] and so through the lockdown and pagination
+// middlewares cmd/server installs. The spike used to size the full and compact
+// columns straight from [toolutil.BuildMetaToolSchema] and take the opaque one
+// from a private in-memory server carrying neither middleware, which sized a
+// schema no client is ever sent and drew the ratio between three different
+// things.
 func runMetaSchemaSizing() {
-	client, cleanup := auditclient.NewMock()
+	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	defer cleanup()
 
-	server := newAuditServer()
-	catalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true}))
-	routes := catalog.ActionMaps()
-	tools.RegisterMetaCatalog(server, catalog)
-
-	currentByName := map[string]map[string]any{}
-	for _, t := range listToolsFromServer(server) {
-		if t.InputSchema == nil {
-			continue
-		}
-		raw := cmdutil.Must(json.Marshal(t.InputSchema))
-		var m map[string]any
-		cmdutil.MustDo(json.Unmarshal(raw, &m))
-		currentByName[t.Name] = m
-	}
+	routes := buildMetaActionMaps(client, true)
+	opaqueSizes := servedMetaSchemaSizes(client, config.MetaParamSchemaOpaque)
+	fullSizes := servedMetaSchemaSizes(client, config.MetaParamSchemaFull)
+	compactSizes := servedMetaSchemaSizes(client, config.MetaParamSchemaCompact)
 
 	type row struct {
 		name      string
@@ -700,22 +648,13 @@ func runMetaSchemaSizing() {
 	totalOpaque, totalFull, totalCompact := 0, 0, 0
 
 	for _, name := range names {
-		rmap := routes[name]
-		opaqueJSON := cmdutil.Must(json.Marshal(currentByName[name]))
-
-		full := toolutil.BuildMetaToolSchema(rmap, toolutil.MetaParamSchemaFull)
-		compact := toolutil.BuildMetaToolSchema(rmap, toolutil.MetaParamSchemaCompact)
-
-		fullJSON := cmdutil.Must(json.Marshal(full))
-		compactJSON := cmdutil.Must(json.Marshal(compact))
-
 		r := row{
 			name:      name,
-			actions:   len(rmap),
-			opaque:    len(opaqueJSON),
-			full:      len(fullJSON),
-			compact:   len(compactJSON),
-			fullDelta: len(fullJSON) - len(opaqueJSON),
+			actions:   len(routes[name]),
+			opaque:    opaqueSizes[name],
+			full:      fullSizes[name],
+			compact:   compactSizes[name],
+			fullDelta: fullSizes[name] - opaqueSizes[name],
 		}
 		rows = append(rows, r)
 		totalOpaque += r.opaque
@@ -745,6 +684,28 @@ func runMetaSchemaSizing() {
 	fmt.Println()
 	fmt.Printf("Full / opaque   ratio: %.1fx\n", float64(totalFull)/float64(totalOpaque))
 	fmt.Printf("Compact / opaque ratio: %.1fx\n", float64(totalCompact)/float64(totalOpaque))
+}
+
+// servedMetaSchemaSizes returns the marshaled size of every meta-tool input
+// schema the meta surface serves under mode, keyed by tool name.
+//
+// The mode is set for the duration of the listing because the schema strategy
+// is process-wide state the catalog reads as it builds each tool, and
+// [mcpsurface.MetaTools] keys its memo on the active mode, so each of the
+// three calls lists the surface afresh rather than being handed the first
+// mode's answer.
+//
+// No tool is skipped for want of a schema: inputSchema is required of every
+// entry in a tools/list result, so a listed tool always carries one.
+func servedMetaSchemaSizes(client *gitlabclient.Client, mode string) map[string]int {
+	restore := tools.SetMetaParamSchemaScoped(mode)
+	defer restore()
+
+	sizes := map[string]int{}
+	for _, t := range mcpsurface.MetaTools(client, edition.TierForEnterprise(true)) {
+		sizes[t.Name] = len(cmdutil.Must(json.Marshal(t.InputSchema)))
+	}
+	return sizes
 }
 
 // humanBytes formats a byte count using compact B, KB, or MB units for the
@@ -849,7 +810,7 @@ var measureFootprintRows = measureTokenFootprintRows
 // footprint measurement, mirroring the self-contained client pattern of
 // [runMetaSchemaSizing].
 func runFootprintMode(check bool) error {
-	client, cleanup := auditclient.NewMock()
+	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	defer cleanup()
 	if check {
 		return runFootprintCheck(client)
@@ -1107,7 +1068,7 @@ func measureTierFootprintWithPrompts(client *gitlabclient.Client, tier edition.T
 	reachableActions := countActions(dynamicRoutes)
 
 	dynamicTools := listDynamicTools(dynamicCatalog)
-	individualTools := listIndividualToolsAtTier(client, tier)
+	individualTools := mcpsurface.IndividualTools(client, tier)
 
 	dynamicToolTokens := measureToolSchemaTokens(dynamicTools)
 	individualToolTokens := measureToolSchemaTokens(individualTools)
@@ -1144,7 +1105,7 @@ func measureTierFootprintWithPrompts(client *gitlabclient.Client, tier edition.T
 	metaSchemaModes := []string{"opaque", "compact", "full"}
 	for _, mode := range metaSchemaModes {
 		restore := tools.SetMetaParamSchemaScoped(mode)
-		metaTools := listMetaToolsFromCatalog(client, metaCatalog)
+		metaTools := mcpsurface.MetaTools(client, tier)
 		metaTokens := measureToolSchemaTokens(metaTools)
 		restore()
 		rows = append(
@@ -1311,19 +1272,6 @@ func renderDetailedFootprint(rows []tokenFootprintRow) string {
 	b.WriteString("- **Tier scaling**: Free/CE has the fewest actions. Premium adds enterprise features. Ultimate includes everything. The token cost scales with the number of available actions.\n")
 	b.WriteString("- **Shared tokens** are dominated by MCP resources (`gitlab://tools` template, workflow guides) and prompts. The `minimal` capability surface strips these to just `gitlab://tools`, cutting shared overhead by ~90%%.\n")
 	return b.String()
-}
-
-func listMetaToolsFromCatalog(client *gitlabclient.Client, catalog *actioncatalog.Catalog) []*mcp.Tool {
-	server := newAuditServer()
-	tools.RegisterMetaCatalog(server, catalog)
-	tools.RegisterMetaStandaloneTools(server, client)
-	return listToolsFromServer(server)
-}
-
-func listIndividualToolsAtTier(client *gitlabclient.Client, tier edition.Tier) []*mcp.Tool {
-	server := newAuditServer()
-	tools.RegisterAll(server, client, tier)
-	return listToolsFromServer(server)
 }
 
 // measureToolSchemaTokens sums the token cost of a tool list without keeping

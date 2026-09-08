@@ -1,14 +1,14 @@
 # Meta-Tools Reference
 
-Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 866 (Free/CE) to 1085 (self-managed Ultimate) individual tools, or 1091 on GitLab.com Ultimate, **33 base meta-tools** (39 on Premium, 50 on self-managed Ultimate, 51 on GitLab.com Ultimate) provide the same functionality while reducing token overhead for LLMs.
+Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 866 (Free/CE) to 1085 (self-managed Ultimate) individual tools, or 1091 on GitLab.com Ultimate, **34 base meta-tools** (40 on Premium, 51 on self-managed Ultimate, 52 on GitLab.com Ultimate) provide the same functionality while reducing token overhead for LLMs.
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Understanding of MCP protocol and tool concepts
 
-In meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`), the server registers **33 base GitLab/interactive tools**: 29 catalog-backed meta-tools plus 4 interactive elicitation tools. Premium registers 6 additional inline meta-tools for **39 tools**, Ultimate 11 more for **50 tools** on self-managed GitLab, and GitLab.com adds the experimental `gitlab_orbit` meta-tool on Premium and Ultimate, for **51 tools** on GitLab.com Ultimate. The default tool surface is now dynamic find/execute; set `GITLAB_MCP_TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
+In meta-tool mode (`GITLAB_MCP_TOOL_SURFACE=meta`), the server registers **34 base GitLab/interactive tools**: 29 catalog-backed meta-tools, the `gitlab_server` diagnostics tool, and 4 interactive elicitation tools. Premium registers 6 additional inline meta-tools for **40 tools**, Ultimate 11 more for **51 tools** on self-managed GitLab, and GitLab.com adds the experimental `gitlab_orbit` meta-tool on Premium and Ultimate, for **52 tools** on GitLab.com Ultimate. The default tool surface is now dynamic find/execute; set `GITLAB_MCP_TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
 
-The `gitlab_server` meta-tool (actions `status` and `health_check`) is registered separately for server diagnostics and is not included in the 33/50/51 GitLab action catalog counts.
+The `gitlab_server` meta-tool (actions `status` and `health_check`) comes from a maintenance group of its own rather than from the GitLab action catalog, but the server registers it on every tier, so it is counted here. It used to be left out of the published figures, which is why they said one tool fewer than a client receives.
 
 Stdio mode enables the Enterprise/Premium catalog with `GITLAB_MCP_TIER=premium` or `GITLAB_MCP_TIER=ultimate`. HTTP mode can force the tier with `--tier`, and otherwise detects it per token+URL pool entry from the instance license (fallback `free`).
 
@@ -66,7 +66,7 @@ Meta-tools remain available because they are the most broadly compatible consoli
 | Mode              |                                                                       Tool Count | Best For                                                                         |
 | ----------------- | -------------------------------------------------------------------------------: | -------------------------------------------------------------------------------- |
 | Dynamic (default) |                                2 (`gitlab_find_action`, `gitlab_execute_action`) | Any client; lowest startup context, every action reachable by `domain.action` ID |
-| Meta-tools        |                   33 Free/CE / 39 Premium / 50 Ultimate / 51 GitLab.com Ultimate | LLM clients that need the complete GitLab surface with a compact tool list       |
+| Meta-tools        |                   34 Free/CE / 40 Premium / 51 Ultimate / 52 GitLab.com Ultimate | LLM clients that need the complete GitLab surface with a compact tool list       |
 | Individual tools  | 866 Free/CE / 1019 Premium / 1085 Ultimate / 1091 GitLab.com Ultimate with Orbit | Clients that benefit from one MCP tool per GitLab operation                      |
 
 ---
@@ -138,6 +138,14 @@ Action counts are the Free/CE catalog as served by the binary (read them from th
 | 32  | `gitlab_interactive_project_create` | Guided prompts for name, visibility, initialization, and confirmation | GitLab        |
 | 33  | `gitlab_interactive_release_create` | Guided prompts for tag, name, notes, and confirmation                 | GitLab        |
 
+### Maintenance Meta-Tools (1)
+
+Registered on every tier from a maintenance group of its own rather than from the GitLab action catalog, which is why the published figures used to leave it out.
+
+| #   | Tool Name       | Actions | Source                                        |
+| --- | --------------- | ------- | --------------------------------------------- |
+| 34  | `gitlab_server` | 2       | Server diagnostics (`status`, `health_check`) |
+
 ### Premium and Ultimate Meta-Tools (17)
 
 Registered when the resolved tier is Premium or Ultimate. Six arrive with Premium:
@@ -171,7 +179,7 @@ Eleven more arrive with Ultimate:
 
 | #   | Tool Name      | Actions | Source                                                                                                          |
 | --- | -------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
-| 50  | `gitlab_orbit` | 6       | Experimental GitLab.com Orbit Knowledge Graph API (`status`, `schema`, `tools`, `dsl`, `query`, `graph_status`) |
+| 52  | `gitlab_orbit` | 6       | Experimental GitLab.com Orbit Knowledge Graph API (`status`, `schema`, `tools`, `dsl`, `query`, `graph_status`) |
 
 ---
 
@@ -190,7 +198,7 @@ The consolidated surface reduces:
 ### Implementation Pattern
 
 Meta-tools are registered from the canonical action catalog built by `internal/tools.BuildActionCatalog()`.
-`RegisterAllMeta()` registers visible domain dispatchers from that catalog.
+`RegisterAllMeta()` registers visible domain dispatchers from that catalog. It builds without `ActionCatalogOptions.IncludeMCP` and so registers 33 tools on Free/CE, one short of the 34 the binary serves: `cmd/server` asks for the MCP group, which adds `gitlab_server`. Count the served surface from a `tools/list` round-trip, not from `RegisterAllMeta()`.
 Developers define action metadata through `ActionSpec` and `CatalogGroupSpec`; meta-tools use that metadata for parameter schemas, output schemas, destructive flags, aliases, usage hints, individual projection policy, and result formatting.
 
 All meta-tools use the shared infrastructure in `internal/toolutil/meta_tool.go`:
@@ -327,7 +335,7 @@ Meta-tools advertise a deliberately compact input schema by default (`GITLAB_MCP
 
    For example, `gitlab://tools/gitlab_merge_request.create` returns the call shape and JSON Schema for the `create` action's `params`. The `gitlab://tools` manifest enumerates every visible meta-tool action in the active server configuration.
 
-   The manifest resource returns a JSON object with the URI template, visible tools, and action entries for the current server configuration (abridged; every entry also carries `title`, `description`, `detail_uri`, `destructive`, `read_only` and typed `required_params`). `visible_tool_count` is one more than the 33 tools listed above because `gitlab_server`, which sits outside the catalog counts, has actions of its own and so appears in the manifest:
+   The manifest resource returns a JSON object with the URI template, visible tools, and action entries for the current server configuration (abridged; every entry also carries `title`, `description`, `detail_uri`, `destructive`, `read_only` and typed `required_params`). `visible_tool_count` is the 34 tools listed above, `gitlab_server` included: it sits outside the GitLab action catalog but carries actions of its own, so the manifest enumerates it like every other meta-tool:
 
    ```json
    {
@@ -379,6 +387,6 @@ Meta-tools advertise a deliberately compact input schema by default (`GITLAB_MCP
 
   These resources remain available for meta-tools when `GITLAB_MCP_CAPABILITY_SURFACE=minimal` is enabled, while optional GitLab data resources, prompts, and workflow guides are omitted. Dynamic surfaces can use `gitlab_find_action` for inline schemas in minimal mode; meta-tool callers can keep `GITLAB_MCP_META_PARAM_SCHEMA=opaque` and read `gitlab://tools/{id}` for exact params.
 
-1. **Embed schemas in the tool description** — set `GITLAB_MCP_META_PARAM_SCHEMA=full` (or the lighter `compact` mode) at startup. The meta-tool's `inputSchema` then exposes a `oneOf` discriminating on `action`, with the per-action params shape inlined. Current audit metrics show `full` is 18.0x larger than `opaque`, and `compact` is 8.1x larger, so keep `opaque` unless your MCP client cannot read resources. See [Environment Variables](../reference/env.md) for size/cost trade-offs.
+1. **Embed schemas in the tool description** — set `GITLAB_MCP_META_PARAM_SCHEMA=full` (or the lighter `compact` mode) at startup. The meta-tool's `inputSchema` then exposes a `oneOf` discriminating on `action`, with the per-action params shape inlined. Current audit metrics show `full` is 18.3x larger than `opaque`, and `compact` is 8.7x larger, so keep `opaque` unless your MCP client cannot read resources. See [Environment Variables](../reference/env.md) for size/cost trade-offs.
 
 The dispatch behaviour is identical across modes — only the schema sent to the LLM changes.

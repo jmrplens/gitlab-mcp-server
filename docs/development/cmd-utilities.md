@@ -516,6 +516,8 @@ One block per refused document on stderr, naming the package, the constant it is
 
 Consolidated MCP tool surface quality audit. It combines metadata-quality checks (naming, annotations, schema shape, duplicates — formerly `audit_tools`) and output-quality checks (`OutputSchema`, Returns/See-also, Title — formerly `audit_output`) behind a single `-view` flag.
 
+Both views judge the surface as a client receives it, because both list it through `cmd/internal/mcpsurface`: the meta view therefore includes `gitlab_server`, and every schema it inspects has been through the lockdown and the pagination bounds. `make audit-docs` runs the command once with the default `-view=all` rather than once per view, since one listing now serves both.
+
 #### Usage
 
 ```bash
@@ -548,7 +550,7 @@ A Markdown report to stdout with summary tables, violations/findings grouped by 
 
 #### Notes
 
-The shared `listTools` applies `LockdownInputSchemas`, so the audit reflects exactly what clients see. Legacy wrappers (`audit-tools`, `audit-output`) exist for backward compatibility.
+Both views read their listing from [`cmd/internal/mcpsurface`](#cmdinternalmcpsurface), which applies the served schema chain before handing it back, so the audit reflects exactly what clients see. Legacy wrappers (`audit-tools`, `audit-output`) exist for backward compatibility.
 
 ### audit_gateway_chars
 
@@ -1597,6 +1599,26 @@ Evaluates model behavior across MCP tool surfaces by running typed evaluation ca
 The main `gitlab-mcp-server` MCP binary — the runtime entry point and the only `cmd/` binary that ships to users. See [CLI Reference](../reference/cli.md) for the full CLI reference and [configuration.md](../reference/configuration.md) for environment and configuration details.
 
 **Make targets:** `make build` (builds `./dist/gitlab-mcp-server`), `make run` (builds and runs locally).
+
+## Shared packages
+
+Neither of these is a command. They are the libraries under `cmd/internal/` that the commands above share, documented here because a generator's output is decided as much by them as by its own flags.
+
+### cmd/internal/mcpsurface
+
+The one reader of the served MCP surface. It answers what the server registers — the individual, meta and dynamic tool listings, the resources, the resource templates and the prompts — over a real MCP round-trip against an in-process stub client, so a generator describes what a client receives rather than what a maintainer believed.
+
+Three properties are the reason it exists as one package rather than a helper per command:
+
+- **The surface is pinned, never read from the environment.** Each constructor takes its surface and tier as arguments and talks to `NewStubClientWithToken`, so a developer machine with `GITLAB_MCP_TOOL_SURFACE=individual` or a `GITLAB_URL` exported generates the same artifact CI checks. A new environment-sensitive input belongs here, pinned once for every caller, not at a call site.
+- **`Session` applies the served schema chain.** `LockdownInputSchemas` then `EnrichPaginationConstraints`, in the order `cmd/server` installs them, because a listing that applies neither measures a schema no client ever receives: without `additionalProperties: false`, with the jsonschema `,required` tag suffixes still in the descriptions, and without the page/per_page bounds.
+- **A truncated listing stops the run.** Every listing is checked for a next cursor and panics on one instead of describing a partial surface as the whole of it. That was the failure mode the readers this package replaced had: they paginated no further than the first page and said nothing.
+
+Listings are memoized on (client, surface, tier, meta parameter-schema mode), since registering a full surface costs seconds and every caller only reads the result. Callers must not sort the returned slice in place.
+
+### cmd/internal/auditshared
+
+The analysis helpers shared by the auditors: the projected individual-tool descriptions (a projection over `mcpsurface.IndividualTools`), owner-package resolution, the usage and description quality checks that `cmd/audit_1to1` R-META and `cmd/audit_discovery_completeness` both apply, and `NewStubGitLabClient`, the offline client the eight audit commands construct — a thin delegation to `mcpsurface.NewStubClientWithToken` so that the audits and the generators share one definition of what "no instance, no credentials" means.
 
 ## CI gate targets
 

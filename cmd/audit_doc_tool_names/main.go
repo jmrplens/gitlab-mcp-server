@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -13,18 +12,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
-	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
-)
-
-const (
-	auditServerName = "audit-doc-tool-names"
-	auditClientName = "audit-doc-tool-names-client"
-	auditVersion    = "0.0.1"
 )
 
 // docRoots are the trees whose Markdown mentions are audited.
@@ -143,53 +133,25 @@ func run(check bool, roots []string, collectNames func() map[string]struct{}, st
 // function just made, so a failure here would mean the committed catalog is
 // broken, which the docs audit can neither report usefully nor work around.
 func registeredToolNames() map[string]struct{} {
-	client, cleanup := auditclient.NewMock()
+	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	defer cleanup()
 
 	names := make(map[string]struct{})
 
-	// Mirror cmd/server's registerToolSurface, so gitlab_server and the
-	// gitlab_server_* individual tools are in the collected set. Registering
-	// only the catalog would make this audit report those names as unknown.
-	individual := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion},
-		&mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
-	tools.RegisterAll(individual, client, edition.Ultimate)
-	collect(individual, names)
-
-	meta := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion},
-		&mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
-	cmdutil.MustDo(tools.RegisterAllMeta(meta, client, edition.Ultimate))
-	tools.RegisterMCPMeta(meta, client)
-	tools.RegisterMetaStandaloneTools(meta, client)
-	collect(meta, names)
-
-	collect(dynamicServer(client), names)
+	// [mcpsurface] registers what cmd/server registers for each surface, so
+	// gitlab_server and the gitlab_server_* individual tools are in the
+	// collected set. Registering only the catalog would make this audit report
+	// those names as unknown.
+	collect(mcpsurface.IndividualTools(client, edition.Ultimate), names)
+	collect(mcpsurface.MetaTools(client, edition.Ultimate), names)
+	collect(mcpsurface.DynamicTools(client), names)
 
 	return names
 }
 
-// dynamicServer registers the two-tool dynamic surface.
-func dynamicServer(client *gitlabclient.Client) *mcp.Server {
-	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion},
-		&mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
-
-	catalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true}))
-	catalog = cmdutil.Must(dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{}))
-	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
-	return server
-}
-
-// collect connects to server in memory and adds its tool names to names.
-func collect(server *mcp.Server, names map[string]struct{}) {
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	cmdutil.Must(server.Connect(ctx, st, nil))
-	client := mcp.NewClient(&mcp.Implementation{Name: auditClientName, Version: auditVersion}, nil)
-	session := cmdutil.Must(client.Connect(ctx, ct, nil))
-	defer session.Close()
-
-	for _, tool := range cmdutil.Must(session.ListTools(ctx, nil)).Tools {
+// collect adds the names of listed to names.
+func collect(listed []*mcp.Tool, names map[string]struct{}) {
+	for _, tool := range listed {
 		names[tool.Name] = struct{}{}
 	}
 }

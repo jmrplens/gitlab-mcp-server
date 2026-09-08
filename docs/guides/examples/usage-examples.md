@@ -214,7 +214,7 @@ Use this flow when startup context or visible tool count matters. It reaches the
 
 ## Meta-Tool Discovery
 
-With `GITLAB_MCP_TOOL_SURFACE=meta`, 32 domain-level meta-tools (38 on Premium, 49 on self-managed Ultimate, 50 on GitLab.com Premium/Ultimate with Orbit) provide domain dispatcher tools:
+With `GITLAB_MCP_TOOL_SURFACE=meta`, 34 meta-tools on Free/CE provide domain dispatcher tools. The rest of the catalog is tiered: 40 on self-managed Premium and 51 on self-managed Ultimate, and one more of each on GitLab.com, where `gitlab_orbit` is served from Premium up — 41 on GitLab.com Premium, 52 on GitLab.com Ultimate.
 
 ```text
 Resource: gitlab://tools/gitlab_project
@@ -226,7 +226,7 @@ Call: gitlab_merge_request(action="list", params={project_id:"42"})
 
 A meta-tool accepts only the top-level keys `action` and `params`; anything else is rejected as an unknown property.
 
-Available meta-tool domains: `access`, `admin`, `branch`, `ci_catalog`, `ci_variable`, `custom_emoji`, `environment`, `feature_flags`, `group`, `issue`, `job`, `merge_request`, `model_registry`, `mr_review`, `package`, `pipeline`, `project`, `release`, `repository`, `runner`, `search`, `server`, `snippet`, `storage_move`, `tag`, `template`, `user`, `wiki` — plus `discover_project` and the four `interactive_*` creation flows, which are standalone tools rather than domain dispatchers. Labels, milestones and members are actions on `gitlab_project` and `gitlab_group` (`label_list`, `milestone_get`, `members`); MR diffs and discussions are actions on `gitlab_mr_review` (`changes_get`, `discussion_list`); CI lint is `gitlab_template` with `action: lint`.
+Available meta-tool domains: `access`, `achievement`, `admin`, `branch`, `ci_catalog`, `ci_variable`, `custom_emoji`, `environment`, `feature_flags`, `group`, `issue`, `job`, `merge_request`, `model_registry`, `mr_review`, `package`, `pipeline`, `project`, `release`, `repository`, `runner`, `search`, `server`, `snippet`, `storage_move`, `tag`, `template`, `user`, `wiki` — plus `discover_project` and the four `interactive_*` creation flows, which are standalone tools rather than domain dispatchers. Labels, milestones and members are actions on `gitlab_project` and `gitlab_group` (`label_list`, `milestone_get`, `members`); MR diffs and discussions are actions on `gitlab_mr_review` (`changes_get`, `discussion_list`); CI lint is `gitlab_template` with `action: lint`.
 
 ## Error Handling
 

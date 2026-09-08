@@ -23,7 +23,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
@@ -39,7 +39,7 @@ import (
 func newAuditMetricsClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
 	sharedClientOnce.Do(func() {
-		sharedClient, _ = auditclient.NewMock()
+		sharedClient, _ = auditshared.NewStubGitLabClient(auditshared.StubToken)
 	})
 	return sharedClient
 }

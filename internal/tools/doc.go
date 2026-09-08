@@ -37,8 +37,11 @@
 // action catalog. [BuildActionCatalog] builds the catalog used by
 // [RegisterIndividualCatalogTools], [RegisterMetaCatalog], and dynamic
 // mode. [RegisterAllMeta] preserves the meta registration entry point by
-// building and registering that catalog. [SafeModePreview] describes the
-// preview payload returned when safe mode intercepts mutating calls.
+// building and registering that catalog, one tool short of the meta surface
+// cmd/server serves: the binary asks [BuildActionCatalog] for the
+// gitlab_server diagnostics group through [ActionCatalogOptions].IncludeMCP,
+// which [RegisterAllMeta] does not. [SafeModePreview] describes the preview
+// payload returned when safe mode intercepts mutating calls.
 //
 // Domain packages document the official GitLab API pages they wrap. Keeping
 // those references in package documentation preserves pkgsite

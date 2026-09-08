@@ -7,7 +7,7 @@ is deterministic — no build from source is required.
 ## What this server is
 
 A single-binary MCP server (Go) exposing the GitLab REST API v4 and GraphQL
-as MCP tools: ~854 tools on Free/CE, ~1007 on Premium, up to ~1079 on Ultimate,
+as MCP tools: ~866 tools on Free/CE, ~1019 on Premium, up to ~1091 on Ultimate,
 with three selectable tool surfaces, 45 MCP resources, and 37 prompts. It
 talks to GitLab.com or any self-managed GitLab instance over stdio.
 
@@ -119,7 +119,7 @@ Add these to the `env` block (and, for Docker, a matching `-e NAME` in
 
 | Variable                 | Default   | Purpose                                                                                          |
 | ------------------------ | --------- | ------------------------------------------------------------------------------------------------ |
-| `GITLAB_MCP_TOOL_SURFACE`           | `dynamic` | Tool surface: `dynamic` (2 find/execute tools, lowest token use), `meta` (~32 consolidated domain tools), `individual` (one tool per action) |
+| `GITLAB_MCP_TOOL_SURFACE`           | `dynamic` | Tool surface: `dynamic` (2 find/execute tools, lowest token use), `meta` (34 consolidated domain tools), `individual` (one tool per action) |
 | `GITLAB_MCP_TIER`            | detected  | Force `free`, `premium`, or `ultimate`; skips license detection                                   |
 | `GITLAB_MCP_READ_ONLY`       | `false`   | Disable all mutating tools                                                                        |
 | `GITLAB_MCP_SAFE_MODE`       | `false`   | Mutating tools return a JSON preview instead of executing                                         |
@@ -132,7 +132,7 @@ Full reference: <https://jmrp.io/docs/gitlab-mcp-server/configuration/>
 
 1. Restart or reload the MCP client so it picks up the new configuration.
 2. The server should appear as connected with either 2 tools (default
-   `dynamic` surface) or ~32 tools (`meta` surface). Both are correct.
+   `dynamic` surface) or 34 tools (`meta` surface). Both are correct.
 3. Smoke test: call `gitlab_find_action` with `query: "get current user"`,
    then `gitlab_execute_action` with the returned action id
    (`user.current`). On the `meta` surface call `gitlab_user` with

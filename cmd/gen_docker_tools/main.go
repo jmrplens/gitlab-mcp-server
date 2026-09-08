@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -12,9 +11,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
 // dockerArg describes one top-level argument in the Docker MCP Registry format.
@@ -66,29 +64,18 @@ func run(args []string, stdout io.Writer) error {
 	client, closeStub := auditshared.NewStubGitLabClient("gen-docker-tools-token") //#nosec G101 -- dummy token, no real credential
 	defer closeStub()
 
-	opts := &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}}
-	server := mcp.NewServer(&mcp.Implementation{Name: "gen-docker-tools", Version: "0.0.1"}, opts)
-
+	var listed []*mcp.Tool
 	switch {
 	case *individual:
-		tools.RegisterAll(server, client, edition.Ultimate)
+		listed = mcpsurface.IndividualTools(client, edition.Ultimate)
 	case *enterprise:
-		cmdutil.MustDo(tools.RegisterAllMeta(server, client, edition.Ultimate))
+		listed = mcpsurface.MetaTools(client, edition.Ultimate)
 	default:
-		cmdutil.MustDo(tools.RegisterAllMeta(server, client, edition.Free))
+		listed = mcpsurface.MetaTools(client, edition.Free)
 	}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	cmdutil.Must(server.Connect(ctx, st, nil))
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "gen-docker-tools-client", Version: "0.0.1"}, nil)
-	session := cmdutil.Must(mcpClient.Connect(ctx, ct, nil))
-	defer func() { _ = session.Close() }()
-
-	result := cmdutil.Must(session.ListTools(ctx, nil))
-
-	out := make([]dockerTool, 0, len(result.Tools))
-	for _, t := range result.Tools {
+	out := make([]dockerTool, 0, len(listed))
+	for _, t := range listed {
 		out = append(out, dockerTool{
 			Name:        t.Name,
 			Description: t.Description,

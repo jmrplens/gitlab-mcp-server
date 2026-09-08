@@ -38,7 +38,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/structs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 )
@@ -172,7 +171,7 @@ func Analyze(root string, gapsOnly bool) (Report, error) {
 	}
 	sdkEnums := collectSDKEnums(clientGo)
 
-	client, cleanup := auditclient.NewMock()
+	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	defer cleanup()
 	offered := collectOffered(auditshared.CachedActionSpecs(client, true))
 

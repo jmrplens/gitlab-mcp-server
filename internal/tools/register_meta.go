@@ -11,12 +11,17 @@ import (
 
 // RegisterAllMeta wires meta-tools to the MCP server.
 //
-// Free/CE registers 32 tools: 27 domain meta-tools, gitlab_discover_project
+// Free/CE registers 33 tools: 28 domain meta-tools, gitlab_discover_project
 // and the four gitlab_interactive_* elicitation tools. Premium adds 6
-// meta-tools (38), self-managed Ultimate 11 more (49), and GitLab.com
-// Ultimate adds gitlab_orbit (50). The counts are pinned by the tests in
-// register_test.go; gitlab_server, the diagnostics tool, is registered on
-// top of every one of them and is not in these figures.
+// meta-tools (39), self-managed Ultimate 11 more (50), and GitLab.com
+// Ultimate adds gitlab_orbit (51). The counts are pinned by the tests in
+// register_test.go.
+//
+// These are one short of what the binary serves on the meta surface, which
+// is 34/40/51/52: cmd/server builds its catalog with
+// [ActionCatalogOptions].IncludeMCP, so the served surface also carries the
+// gitlab_server diagnostics tool. This function does not, because the
+// catalog it builds here asks for no MCP group.
 //
 // Each meta-tool dispatches to the underlying handler based on the
 // "action" parameter. This reduces token usage for LLMs while preserving

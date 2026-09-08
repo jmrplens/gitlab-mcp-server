@@ -6,7 +6,7 @@
   },
   "dynamic": {
     "visible_tools": 2,
-    "tool_schema_tokens": 1520
+    "tool_schema_tokens": 1524
   },
   "individual": {
     "free": {
@@ -17,12 +17,12 @@
     "premium": {
       "visible_tools": 1019,
       "tool_schema_tokens": 614941,
-      "reduction_factor_vs_dynamic": 405
+      "reduction_factor_vs_dynamic": 404
     },
     "ultimate": {
       "visible_tools": 1085,
       "tool_schema_tokens": 644830,
-      "reduction_factor_vs_dynamic": 424
+      "reduction_factor_vs_dynamic": 423
     }
   }
 }
