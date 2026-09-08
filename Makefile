@@ -631,20 +631,21 @@ analyze:
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo "Enterprise e2e analysis: $(GO_ANALYSIS_ENTERPRISE_PKGS) with $(GO_ANALYSIS_ENTERPRISE_TAGS)"; \
 	echo ""; \
-	run_check "[1/14] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/14] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/14] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/14] golangci-lint run (Enterprise e2e half)" golangci-lint run --build-tags $(GO_ANALYSIS_ENTERPRISE_TAGS) $(GO_ANALYSIS_ENTERPRISE_PKGS); \
-	run_check "[5/14] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/14] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[7/14] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/14] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/14] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/14] Markdown escaping" go run ./cmd/audit_md_escaping --check; \
-	run_check "[11/14] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[12/14] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[13/14] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[14/14] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[1/15] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/15] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/15] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/15] golangci-lint run (Enterprise e2e half)" golangci-lint run --build-tags $(GO_ANALYSIS_ENTERPRISE_TAGS) $(GO_ANALYSIS_ENTERPRISE_PKGS); \
+	run_check "[5/15] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/15] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[7/15] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/15] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/15] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/15] Markdown escaping" go run ./cmd/audit_md_escaping --check; \
+	run_check "[11/15] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[12/15] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[13/15] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[14/15] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[15/15] pinned GitLab API record" go run ./cmd/gen_api_shapes/ --check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1049,14 +1050,16 @@ publish-lobehub: check-lhm-manifest
 gen-readme: gen-footprint gen-stats
 
 ## update-all: run every generator, the brand assets included, then the table formatter.
-## Generates: brand vectors, token footprint, repo stats, site stats, llms.txt, LobeHub manifest, testing docs, action catalog manifest, markdown table formatting.
+## Generates: brand vectors, token footprint, repo stats, site stats, llms.txt, LobeHub manifest, testing docs, action catalog manifest, benchmark charts and tables, markdown table formatting.
 # One generator at a time, in the recipe rather than as prerequisites: brand
 # rewrites internal/toolutil/brandmark_gen.go, which the generators after it
 # compile, and gen-footprint and gen-stats both rewrite README.md, so make -j
-# would interleave them. brand-rasters stays out: it needs rsvg-convert and
-# cwebp, which only the maintainer's machine has.
+# would interleave them. bench-resources-render is in because it redraws from
+# the committed record and measures nothing, which is what check-bench-resources
+# then compares; bench-resources itself stays out, and so does brand-rasters,
+# which needs rsvg-convert and cwebp that only the maintainer's machine has.
 update-all:
-	@for target in brand gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-testing-docs gen-action-catalog-manifest; do \
+	@for target in brand gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-testing-docs gen-action-catalog-manifest bench-resources-render; do \
 		$(MAKE) --no-print-directory $$target || exit 1; \
 	done
 	go run ./cmd/format_md_tables/
