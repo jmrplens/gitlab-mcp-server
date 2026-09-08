@@ -42,7 +42,7 @@ Root runtime registration is catalog-backed:
 
 Package-local `RegisterTools` files have been removed from ordinary GitLab API domains. New ordinary GitLab actions must use domain-local `ActionSpecs` and catalog-backed projection rather than introducing package-local registration functions. Package-level `RegisterMeta` is not an approved path for ordinary GitLab API actions.
 
-`GITLAB_MCP_TOOL_SURFACE` is the canonical tool selector. `GITLAB_MCP_META_TOOLS` remains a deprecated compatibility fallback for one compatibility window when `GITLAB_MCP_TOOL_SURFACE` is absent.
+`GITLAB_MCP_TOOL_SURFACE` is the canonical tool selector. `GITLAB_MCP_META_TOOLS` was its deprecated compatibility fallback and was removed in 3.0.0, so the surface has one selector.
 
 `GITLAB_MCP_META_PARAM_SCHEMA=opaque|compact|full` remains a meta-tool `tools/list` schema strategy only. It does not change handler validation, the `gitlab://tools` manifest, dynamic discovery output, or individual tool schemas.
 
@@ -80,7 +80,7 @@ Action-specific aliases and parameter aliases belong to the spec/catalog compati
 - [x] `RegisterAll` does not call per-domain `RegisterTools` for ordinary GitLab actions.
 - [x] Ordinary GitLab API domains no longer define package-local `RegisterTools` functions.
 - [x] Meta-tools, Dynamic, tool manifest resources, and individual projection consume the canonical catalog.
-- [x] `GITLAB_MCP_TOOL_SURFACE` is documented as canonical; `GITLAB_MCP_META_TOOLS` is compatibility only.
+- [x] `GITLAB_MCP_TOOL_SURFACE` is documented as canonical; `GITLAB_MCP_META_TOOLS` is gone since 3.0.0.
 - [x] Dynamic compatibility aliases and parameter aliases are catalog/spec policy data.
 - [x] AI instructions, skills, and ADR index point future contributors to the catalog-first workflow.
 

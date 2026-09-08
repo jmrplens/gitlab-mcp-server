@@ -41,23 +41,13 @@ Meta-tools are available as an explicit tool surface. New configurations should 
 GITLAB_MCP_TOOL_SURFACE=meta
 ```
 
-The legacy boolean selector remains supported for one compatibility window, but new configuration should not use it:
-
-```env
-GITLAB_MCP_META_TOOLS=true
-```
-
-To switch from meta-tools to individual tools, use the explicit selector:
+To switch from meta-tools to individual tools, name that surface instead:
 
 ```env
 GITLAB_MCP_TOOL_SURFACE=individual
 ```
 
-The old `GITLAB_MCP_META_TOOLS=false` spelling still maps to `GITLAB_MCP_TOOL_SURFACE=individual` when `GITLAB_MCP_TOOL_SURFACE` is absent.
-
-```env
-GITLAB_MCP_META_TOOLS=false
-```
+The boolean `META_TOOLS` selector these replaced was removed in 3.0.0.
 
 To return to the default dynamic surface, unset `GITLAB_MCP_TOOL_SURFACE` (or set `GITLAB_MCP_TOOL_SURFACE=dynamic`).
 
