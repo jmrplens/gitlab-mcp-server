@@ -198,7 +198,7 @@ The consolidated surface reduces:
 ### Implementation Pattern
 
 Meta-tools are registered from the canonical action catalog built by `internal/tools.BuildActionCatalog()`.
-`RegisterAllMeta()` registers visible domain dispatchers from that catalog.
+`RegisterAllMeta()` registers visible domain dispatchers from that catalog. It builds without `ActionCatalogOptions.IncludeMCP` and so registers 33 tools on Free/CE, one short of the 34 the binary serves: `cmd/server` asks for the MCP group, which adds `gitlab_server`. Count the served surface from a `tools/list` round-trip, not from `RegisterAllMeta()`.
 Developers define action metadata through `ActionSpec` and `CatalogGroupSpec`; meta-tools use that metadata for parameter schemas, output schemas, destructive flags, aliases, usage hints, individual projection policy, and result formatting.
 
 All meta-tools use the shared infrastructure in `internal/toolutil/meta_tool.go`:
