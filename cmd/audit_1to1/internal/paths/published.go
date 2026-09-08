@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apishapes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apishapes"
 )
 
 // publishedType is one output type and the field names it puts in front of a

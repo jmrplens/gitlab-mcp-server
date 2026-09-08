@@ -8,8 +8,8 @@ import (
 
 	"github.com/vektah/gqlparser/v2/ast"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqldocs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 )
 
 // coordinate names one place in a schema our documents depend on: a type, one

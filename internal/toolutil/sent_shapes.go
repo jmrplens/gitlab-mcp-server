@@ -3,7 +3,7 @@ package toolutil
 import (
 	"time"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
 // The shapes in this file are what GitLab sends on an object that the

@@ -14,10 +14,10 @@ import (
 
 	"github.com/vektah/gqlparser/v2/ast"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqldocs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqlintrospect"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqlintrospect"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 )
 
 // prefix names this command on every line it writes, so a failure in a

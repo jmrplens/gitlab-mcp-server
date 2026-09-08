@@ -23,11 +23,11 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupmembers"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupmembers"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
 )
 
 // groupExtrasDeveloperAccess and groupExtrasMaintainerAccess are the GitLab

@@ -1,6 +1,6 @@
 ---
 name: increase-test-coverage
-description: 'Increase Go test coverage to 100% per touched package using a Research → Plan → Implement pipeline, with seams for the branches real input cannot reach. Analyzes coverage gaps, generates table-driven tests with httptest mocks, and validates results with go test -coverprofile. Designed for Go MCP server projects using the official go-sdk and gitlab.com/gitlab-org/api/client-go/v2.'
+description: 'Increase Go test coverage to 100% per touched package using a Research → Plan → Implement pipeline, with seams for the branches real input cannot reach. Analyzes coverage gaps, generates table-driven tests with httptest mocks, and validates results with go test -coverprofile. Designed for Go MCP server projects using the official go-sdk and gitlab.com/gitlab-org/api/client-go/v3.'
 ---
 
 # Increase Test Coverage

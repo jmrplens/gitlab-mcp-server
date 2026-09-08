@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const hintVerifyEnterpriseUser = "verify user_id with gitlab_enterprise_user action 'list' or gitlab_list_enterprise_users; enterprise user actions only apply to users managed by the group's enterprise namespace"

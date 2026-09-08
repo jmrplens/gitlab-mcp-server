@@ -233,7 +233,7 @@ func assertResourceIdentifiesTheProcess(t *testing.T, signal string, attrs []otl
 func assertInstrumentationScope(t *testing.T, resourceSpans otlpResourceSpans) {
 	t.Helper()
 
-	const want = "github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
+	const want = "github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	scopes := make([]string, 0, len(resourceSpans.ScopeSpans))
 	for _, scopeSpans := range resourceSpans.ScopeSpans {
 		scopes = append(scopes, scopeSpans.Scope.Name)

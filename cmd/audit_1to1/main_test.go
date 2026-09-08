@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/enums"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/enums"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
 // runScope runs one scope the way the command runs it with -gaps-only and no

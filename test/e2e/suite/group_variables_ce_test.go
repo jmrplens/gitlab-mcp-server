@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupvariables"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupvariables"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestMeta_GroupVariables exercises group CI variable CRUD via the

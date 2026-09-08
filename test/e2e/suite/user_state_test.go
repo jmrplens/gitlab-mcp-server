@@ -10,10 +10,10 @@ import (
 	"fmt"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/notifications"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/notifications"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/users"
 )
 
 // CurrentUserStateSnapshot captures mutable current-user settings touched by E2E tests.

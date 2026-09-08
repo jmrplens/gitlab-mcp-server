@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deployments"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/environments"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/freezeperiods"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/protectedenvs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/deployments"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/environments"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/freezeperiods"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/protectedenvs"
 )
 
 // TestMeta_EnvironmentsProtected exercises protected environment actions

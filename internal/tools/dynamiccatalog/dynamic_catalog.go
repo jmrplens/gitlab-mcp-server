@@ -3,11 +3,11 @@ package dynamiccatalog
 import (
 	"fmt"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
-	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 )
 
 // Build builds the executable catalog for low-token dynamic mode. Filters run

@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 )
 
 const schemaVersion = 1

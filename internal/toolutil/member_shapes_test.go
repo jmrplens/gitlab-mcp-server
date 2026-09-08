@@ -3,7 +3,7 @@ package toolutil
 import (
 	"testing"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // TestNewMemberUserOutput pins the created_by conversion: nil SDK input maps

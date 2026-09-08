@@ -7,10 +7,10 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
 // outputJSON switches stdout output from human-readable markdown to structured

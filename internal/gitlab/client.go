@@ -15,13 +15,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 	"golang.org/x/oauth2"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 )
 
 // Client wraps the official GitLab API client with project-specific configuration.
@@ -713,7 +713,7 @@ func (t *resilienceTransport) RoundTrip(req *http.Request) (*http.Response, erro
 }
 
 // dotUnescapeTransport reverses the percent-encoding of dots (%2E → .) in URL
-// paths. The gitlab client-go/v2 library's PathEscape intentionally encodes
+// paths. The gitlab client-go/v3 library's PathEscape intentionally encodes
 // dots, but some GitLab instances (behind certain reverse proxies or WAFs)
 // reject %2E-encoded URLs with 403 Forbidden.
 type dotUnescapeTransport struct {

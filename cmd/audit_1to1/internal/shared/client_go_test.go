@@ -18,7 +18,7 @@ import (
 // and its fallbacks for paths outside the tools tree.
 func TestShortPackage_ExtractsDomain(t *testing.T) {
 	cases := map[string]string{
-		"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/branches": "branches",
+		"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/branches": "branches",
 		"github.com/x/internal/tools/group/sub":                            "group/sub",
 		"flat":                                                             "flat",
 		"a/b/c":                                                            "c",
@@ -210,10 +210,10 @@ type Client struct {
 `
 
 // sdkPath is where a fixture module keeps its stand-in client-go.
-const sdkPath = "gitlab.com/gitlab-org/api/client-go/v2/sdk.go"
+const sdkPath = "gitlab.com/gitlab-org/api/client-go/v3/sdk.go"
 
 // sdkImport is the import line a fixture tool package uses to reach it.
-const sdkImport = "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v2"
+const sdkImport = "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
 
 // sdkModule writes a throwaway module whose internal/tools tree calls the
 // stand-in client-go, and returns its root.

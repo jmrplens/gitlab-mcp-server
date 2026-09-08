@@ -16,22 +16,22 @@
 package suite
 
 import (
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/accessrequests"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/accesstokens"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/awardemoji"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/badges"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/clusteragents"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/customemoji"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deploytokens"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupmarkdownuploads"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/integrations"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/labels"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrdraftnotes"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/resourceevents"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/usergpgkeys"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/accessrequests"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/accesstokens"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/awardemoji"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/badges"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/clusteragents"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/customemoji"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/deploytokens"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupmarkdownuploads"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/integrations"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/labels"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrdraftnotes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/resourceevents"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/usergpgkeys"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/users"
 )
 
 // The time-tracking suites send human durations ("2h", "30m") and GitLab

@@ -15,7 +15,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 )
 
 // loadMode is everything this audit needs: syntax to walk, and types so a

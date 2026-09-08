@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/auditevents"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/auditevents"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
 )
 
 // aeExtrasRetryable classifies audit-event list retry states: transient API

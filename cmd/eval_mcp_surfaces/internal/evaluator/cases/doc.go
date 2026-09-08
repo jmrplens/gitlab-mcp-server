@@ -16,7 +16,7 @@
 // A case ID is unique across the whole catalog, not per partition or per case
 // set. Partitions are not namespaces: [All] concatenates them into one slice,
 // and everything downstream keys on the bare ID. The --task flag selects by
-// ID, [github.com/jmrplens/gitlab-mcp-server/v2/cmd/eval_mcp_surfaces/internal/evaluator.CaseByID]
+// ID, [github.com/jmrplens/gitlab-mcp-server/v3/cmd/eval_mcp_surfaces/internal/evaluator.CaseByID]
 // resolves by ID, and report rows are labeled by ID. A reused ID therefore
 // does not merely look untidy: --task runs both cases, the lookup can only
 // ever return the first, and a report cannot tell the two results apart.

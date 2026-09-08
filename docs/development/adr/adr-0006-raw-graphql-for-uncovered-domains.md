@@ -15,7 +15,7 @@ superseded_by: ""
 
 ## Context
 
-The project uses the official GitLab Go client (`gitlab.com/gitlab-org/api/client-go/v2`) as its primary interface to the GitLab API. This client wraps most GitLab REST API v4 endpoints with typed Go methods and response structs, covering approximately 95% of the API surface; most domain sub-packages use REST exclusively.
+The project uses the official GitLab Go client (`gitlab.com/gitlab-org/api/client-go/v3`) as its primary interface to the GitLab API. This client wraps most GitLab REST API v4 endpoints with typed Go methods and response structs, covering approximately 95% of the API surface; most domain sub-packages use REST exclusively.
 
 However, several GitLab API domains are **only available via GraphQL** and have no corresponding service wrapper in `client-go`:
 
@@ -155,4 +155,4 @@ This decision admits raw GraphQL **for a domain without a wrapper**, so the wrap
 - [ADR-0004: Modular tools sub-packages](adr-0004-modular-tools-subpackages.md)
 - [GraphQL Integration Architecture](../../concepts/graphql.md)
 - [GitLab GraphQL API](https://docs.gitlab.com/api/graphql/)
-- [client-go GraphQL service](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2#GraphQLService)
+- [client-go GraphQL service](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v3#GraphQLService)

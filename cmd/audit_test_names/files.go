@@ -36,7 +36,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/testsource"
 )
 
 // testFileSuffix is the suffix that makes a Go file a test file, and the

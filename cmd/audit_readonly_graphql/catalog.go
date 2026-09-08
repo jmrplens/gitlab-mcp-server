@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 )
 
 // catalogActions returns every action in the canonical catalog at the widest

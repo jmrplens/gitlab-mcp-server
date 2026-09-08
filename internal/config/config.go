@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 )
 
 // DefaultMaxFileSize and MaxFileSize define the default and upper bound for

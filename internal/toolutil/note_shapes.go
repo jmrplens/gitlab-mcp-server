@@ -1,7 +1,7 @@
 package toolutil
 
 import (
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // NoteUserOutput mirrors GitLab's UserBasic entity, which is what a note's

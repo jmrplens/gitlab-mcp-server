@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // TestNewCustomAttributeOutputs pins the custom-attribute conversion:

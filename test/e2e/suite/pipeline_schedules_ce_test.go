@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelineschedules"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelineschedules"
 )
 
 // TestIndividual_PipelineSchedules exercises the pipeline schedule lifecycle using individual tools:

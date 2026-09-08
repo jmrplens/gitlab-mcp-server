@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apiexposes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apiexposes"
 )
 
 const (

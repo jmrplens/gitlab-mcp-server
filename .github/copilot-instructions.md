@@ -8,7 +8,7 @@ This project implements a **Model Context Protocol (MCP) server** that exposes G
 
 - **Language**: Go 1.27.1
 - **MCP SDK**: `github.com/modelcontextprotocol/go-sdk/mcp` v1.7.0
-- **GitLab Client**: `gitlab.com/gitlab-org/api/client-go/v2` v2.62.0 (official client, migrated from deprecated `xanzy/go-gitlab`)
+- **GitLab Client**: `gitlab.com/gitlab-org/api/client-go/v3` v2.62.0 (official client, migrated from deprecated `xanzy/go-gitlab`)
 - **Transport**: stdio (primary), HTTP (optional)
 - **Cross-platform**: Windows, Linux & macOS, amd64 & arm64
 

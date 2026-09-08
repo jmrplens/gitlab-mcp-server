@@ -3,11 +3,11 @@ package tools
 import (
 	"log/slog"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncompat"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/health"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncompat"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/health"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // mcpHealthActionSpecs is the health domain's action specs, as a variable so a

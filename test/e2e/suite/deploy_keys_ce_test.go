@@ -15,7 +15,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deploykeys"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/deploykeys"
 )
 
 // generateTestSSHKey generates a fresh ED25519 SSH public key for deploy key tests.

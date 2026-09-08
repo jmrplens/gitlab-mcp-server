@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/repository"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/repositorysubmodules"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/commits"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/repository"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/repositorysubmodules"
 )
 
 // repoExtrasBlobSHA resolves the blob SHA of a file at the repository root by

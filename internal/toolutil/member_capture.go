@@ -1,7 +1,7 @@
 package toolutil
 
 import (
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
 // CapturedMember reads, off the captured answer to a request for one member,

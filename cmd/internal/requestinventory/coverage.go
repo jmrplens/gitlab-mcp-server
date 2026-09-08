@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 )
 
 // ToolsDir is where a domain package lives, and the prefix a recorded package

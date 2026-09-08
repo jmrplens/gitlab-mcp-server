@@ -1,6 +1,6 @@
 package toolutil
 
-import gl "gitlab.com/gitlab-org/api/client-go/v2"
+import gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 // accessLevelNames maps GitLab access level values to human-readable labels.
 var accessLevelNames = map[gl.AccessLevelValue]string{

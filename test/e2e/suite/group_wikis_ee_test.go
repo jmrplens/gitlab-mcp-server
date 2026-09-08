@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupwikis"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupwikis"
 )
 
 // TestMeta_GroupWikis exercises the group wikis meta-tool lifecycle

@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runnercontrollers"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runners"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/runnercontrollers"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/runners"
 )
 
 // TestEE_MetaRunnerManagement exercises runner management on GitLab

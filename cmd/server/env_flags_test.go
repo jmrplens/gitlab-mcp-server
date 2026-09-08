@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
 // withFreshFlagSet swaps in a clean flag set, so a test can register and parse

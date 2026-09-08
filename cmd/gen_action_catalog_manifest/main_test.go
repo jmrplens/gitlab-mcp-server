@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
 )
 
 // TestDiscoverActionSpecGroupBuilders_SortsBuilders verifies DiscoverActionSpecGroupBuilders sorts builders.

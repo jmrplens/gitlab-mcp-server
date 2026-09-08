@@ -37,7 +37,7 @@ This project is a **Model Context Protocol (MCP) server** in Go exposing GitLab 
 | ------------------ | ------------------------------------------------------- |
 | Language           | Go 1.27.1                                               |
 | MCP SDK            | `github.com/modelcontextprotocol/go-sdk/mcp` v1.7.0    |
-| GitLab Client      | `gitlab.com/gitlab-org/api/client-go/v2` v2.62.0 (check `go.mod`, it moves with every dependency bump) |
+| GitLab Client      | `gitlab.com/gitlab-org/api/client-go/v3` v2.62.0 (check `go.mod`, it moves with every dependency bump) |
 | Transport          | stdio (primary), HTTP (optional)                        |
 | Architecture       | 177 packages under `internal/tools/` (168 with `action_specs.go`); canonical action catalog at `internal/tools/action_catalog.go` projects everything into meta, dynamic, `gitlab://tools`, audits, LLM files, and individual tool surfaces (ADR-0004) |
 | Test Infrastructure| `net/http/httptest` mocks, `testutil.NewTestClient`     |
@@ -73,7 +73,7 @@ You operate in different modes depending on the type of plan requested. Always i
 **Key questions to investigate**:
 
 - Does a similar tool/domain already exist? → Follow its patterns
-- Does the GitLab API endpoint exist in `client-go/v2`? → Use Context7 to verify
+- Does the GitLab API endpoint exist in `client-go/v3`? → Use Context7 to verify
 - Are new shared utilities needed in `toolutil/`?
 - Does the meta-tool for this domain need updating?
 - What documentation files need updating?

@@ -12,9 +12,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // telemetryIdentityRotationFlag holds --telemetry-identity-rotation. A pointer,

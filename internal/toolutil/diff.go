@@ -1,6 +1,6 @@
 package toolutil
 
-import gl "gitlab.com/gitlab-org/api/client-go/v2"
+import gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 // DiffOutput represents a single file diff from the GitLab API.
 // It is used by both commit diff and repository compare operations.

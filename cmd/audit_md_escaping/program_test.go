@@ -122,8 +122,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_md_escaping/fixture/mdsafe"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_md_escaping/fixture/mdsafe"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Item is the shape a GitLab response fills.
@@ -352,7 +352,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Item is the shape a GitLab response fills.

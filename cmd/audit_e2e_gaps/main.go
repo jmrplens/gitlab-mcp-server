@@ -11,8 +11,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 )
 
 // metaActionWindow is how many lines after a "gitlab_x" tool literal an

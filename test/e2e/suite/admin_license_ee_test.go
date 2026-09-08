@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/license"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/license"
 )
 
 // adminLicenseCachedKey returns the Base64 license string the provisioning

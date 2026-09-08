@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/boards"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/boards"
 )
 
 // TestMeta_Boards exercises issue board CRUD via the gitlab_project

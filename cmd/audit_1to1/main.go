@@ -14,15 +14,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/actions"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/enums"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/merge"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/metadata"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/paths"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/sdk"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/structs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/actions"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/enums"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/merge"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/metadata"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/paths"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/sdk"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
 // Seams for what a test cannot otherwise reach: the process exit behind a

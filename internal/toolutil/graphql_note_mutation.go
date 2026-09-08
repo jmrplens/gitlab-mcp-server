@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // GraphQLNoteMutation describes one work item note mutation call

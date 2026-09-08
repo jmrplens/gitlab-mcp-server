@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqlintrospect"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqlintrospect"
 )
 
 // queryOnly is an introspection payload carrying one object type that is also

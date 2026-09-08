@@ -25,7 +25,7 @@ const loadMode = packages.NeedName | packages.NeedFiles | packages.NeedCompiledG
 // toolutilPath is the import path of the package that owns ActionSpec, the
 // route constructors, and the shared GraphQL executors. Resolution keys on the
 // path rather than on the package name so an import alias cannot fool it.
-const toolutilPath = "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+const toolutilPath = "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 
 // program is the loaded, indexed source the audit reasons over.
 type program struct {

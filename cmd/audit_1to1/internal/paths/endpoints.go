@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apidocs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/requestinventory"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
 
 // Endpoint is one recorded REST request, named the way a report lists it.

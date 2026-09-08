@@ -15,8 +15,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/testsource"
 )
 
 // Marker constants for the stats section of README.md, plus generator paths.

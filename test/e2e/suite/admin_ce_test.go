@@ -11,10 +11,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobtokenscope"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/settings"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/topics"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobtokenscope"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/settings"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/topics"
 )
 
 // TestMeta_Admin exercises read-only admin-level meta-tool actions (topics,

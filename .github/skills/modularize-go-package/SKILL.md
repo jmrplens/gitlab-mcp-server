@@ -46,13 +46,13 @@ Scan the source package and classify every file:
 
 ### CRITICAL: Dynamic Discovery
 
-The **client-go API library** (`gitlab.com/gitlab-org/api/client-go/v2`) is the source of truth for domain organization, structures, and field definitions. Do NOT rely only on the tables in this skill or on user-facing tool documentation.
+The **client-go API library** (`gitlab.com/gitlab-org/api/client-go/v3`) is the source of truth for domain organization, structures, and field definitions. Do NOT rely only on the tables in this skill or on user-facing tool documentation.
 
 Before starting migration, run this discovery sequence:
 
 ```bash
 # 1. Discover ALL client-go services (defines the universe of possible domains)
-go doc gitlab.com/gitlab-org/api/client-go/v2.Client | rg '\s+\w+\s+\*\w+Service'
+go doc gitlab.com/gitlab-org/api/client-go/v3.Client | rg '\s+\w+\s+\*\w+Service'
 
 # 2. List all non-test handler files in the source package (what we actually implement)
 rg --files "${sourcePackage}" -g '*.go' -g '!*_test.go' | rg -v '/(errors|pagination|logging|markdown|text|metatool|string_or_int|fileutils|time_helpers|register|helpers)\.go$'
@@ -60,7 +60,7 @@ rg --files "${sourcePackage}" -g '*.go' -g '!*_test.go' | rg -v '/(errors|pagina
 
 Compare the result against the domain mapping table in this skill. For any file NOT in the table:
 
-1. **Check client-go types first**: Run `go doc gitlab.com/gitlab-org/api/client-go/v2.{Type}` to understand the canonical struct fields and API contracts for that domain
+1. **Check client-go types first**: Run `go doc gitlab.com/gitlab-org/api/client-go/v3.{Type}` to understand the canonical struct fields and API contracts for that domain
 2. **Check `client.GL().{Service}.*` calls** in the source file → determines the sub-package name
 3. **Check `action_specs.go` and catalog aggregation** → determines canonical runtime surface status
 4. **Check the `docs/reference/tools/` page that owns the domain** IF one exists (`docs/reference/tools/doc-ownership.json` maps tool-name prefixes to pages) → supplementary user-facing context
@@ -93,7 +93,7 @@ For each extracted file:
    // DEPRECATED: forwarding stub — will be removed when all domains are migrated.
    package tools
 
-   import "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+   import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 
    var wrapErr = toolutil.WrapErr
    ```
@@ -137,8 +137,8 @@ Create `${sourcePackage}/{domain}/action_specs.go`:
 package {domain}
 
 import (
-   gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-   "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+   gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+   "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // ActionSpecs returns canonical specs for {domain} actions.
@@ -196,7 +196,7 @@ After ALL domains are migrated:
 Verify `cmd/server/main.go` needs no change for the moved domain: it builds the catalog through `internal/tools` (`gitlabtools.RegisterAll(server, client, tier)` for the individual surface, `BuildActionCatalog` plus the `dynamiccatalog` / `dynamic` packages for the default surface) and imports only the surface-level packages (`internal/tools`, `internal/tools/actioncatalog`, `internal/tools/dynamic`, `internal/tools/dynamiccatalog`) plus `internal/tools/health` for the server's own health probe; no GitLab API domain package is imported there:
 
 ```go
-import gitlabtools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+import gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 
 // gitlabtools.RegisterAll(server, client, tier) projects the catalog; a new domain arrives through action_specs.go
 ```
@@ -275,7 +275,7 @@ When modularizing `internal/tools/`, use this mapping to understand which files 
 
 ### Service-to-SubPackage Mapping
 
-The project uses `gitlab.com/gitlab-org/api/client-go/v2` v2.62.0 (see `go.mod`). Each `client.GL().{Service}` call tells you which API domain a handler belongs to. The table records the original monolith-to-sub-package mapping; the migration is complete and `internal/tools/` now holds 177 packages, so treat it as the pattern, not the inventory:
+The project uses `gitlab.com/gitlab-org/api/client-go/v3` v2.62.0 (see `go.mod`). Each `client.GL().{Service}` call tells you which API domain a handler belongs to. The table records the original monolith-to-sub-package mapping; the migration is complete and `internal/tools/` now holds 177 packages, so treat it as the pattern, not the inventory:
 
 | Sub-Package | client-go Services Used | Source Files |
 |---|---|---|
@@ -312,9 +312,9 @@ After migration, each sub-package will import:
 
 ```go
 import (
-    gl "gitlab.com/gitlab-org/api/client-go/v2"
-   gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-   "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+    gl "gitlab.com/gitlab-org/api/client-go/v3"
+   gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+   "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 ```
 
@@ -335,7 +335,7 @@ The **client-go API library** is the source of truth for domain structure and fi
 
 Before migrating each domain:
 
-1. **Inspect client-go types**: Run `go doc gitlab.com/gitlab-org/api/client-go/v2.{Type}` for the domain's key types (e.g., `gl.Environment`, `gl.CreateEnvironmentOptions`). This defines the canonical fields, types, and API contract.
+1. **Inspect client-go types**: Run `go doc gitlab.com/gitlab-org/api/client-go/v3.{Type}` for the domain's key types (e.g., `gl.Environment`, `gl.CreateEnvironmentOptions`). This defines the canonical fields, types, and API contract.
 2. **Read the source file(s)** in `internal/tools/{domain}.go` — shows our implementation: which client-go fields we expose, our Input/Output structs, and `client.GL().{Service}` calls.
 3. **Check `action_specs.go` and catalog aggregation** for runtime exposure. Files absent from the catalog are in-progress — still migrate them, but note the gap.
 4. **Read the `docs/reference/tools/` page that owns the domain IF one exists** (`docs/reference/tools/doc-ownership.json` maps tool-name prefixes to pages) — supplementary user-facing context. If no doc exists, the combination of steps 1+2 provides everything needed.

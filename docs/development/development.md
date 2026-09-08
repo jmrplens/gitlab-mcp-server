@@ -120,7 +120,7 @@ graph TD
 ```
 
 1. **Config** loads settings from environment variables, then `GITLAB_MCP_ENV_FILE`, then `~/.gitlab-mcp-server.env`; the repository's own `.env` is for the Makefile targets, not for the server
-2. **GitLab Client** wraps the official `gitlab.com/gitlab-org/api/client-go/v2`
+2. **GitLab Client** wraps the official `gitlab.com/gitlab-org/api/client-go/v3`
 3. **Tools** are projected from domain-local `ActionSpecs` through the canonical action catalog
 4. **Meta-tools** group catalog actions into 34 base tools (51 on self-managed Ultimate, 52 on GitLab.com Ultimate with Orbit) (via ADR-0005)
 5. **Resources** register read-only data via `AddResource()` / `AddResourceTemplate()`
@@ -518,7 +518,7 @@ Install the Go extension and add to `.vscode/mcp.json`:
 | Dependency                               | Version | Purpose                         |
 | ---------------------------------------- | ------- | ------------------------------- |
 | `github.com/modelcontextprotocol/go-sdk` | v1.7.0  | MCP server framework            |
-| `gitlab.com/gitlab-org/api/client-go/v2` | v2.62.0 | Official GitLab REST API client |
+| `gitlab.com/gitlab-org/api/client-go/v3` | v2.62.0 | Official GitLab REST API client |
 | `github.com/joho/godotenv`               | v1.5.1  | .env file loading for dev       |
 
 ## External References
@@ -529,5 +529,5 @@ Install the Go extension and add to `.vscode/mcp.json`:
 | MCP Go SDK (pkg.go.dev)        | <https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk> |
 | MCP Go SDK Repository          | <https://github.com/modelcontextprotocol/go-sdk>            |
 | GitLab REST API v4             | <https://docs.gitlab.com/ee/api/rest/>                      |
-| GitLab Go Client (pkg.go.dev)  | <https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2> |
+| GitLab Go Client (pkg.go.dev)  | <https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v3> |
 | GitLab Go Client Repository    | <https://gitlab.com/gitlab-org/api/client-go>               |

@@ -17,16 +17,16 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/cicatalog"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deploymentmergerequests"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deployments"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/environments"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrchanges"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/releases"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/tags"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/workitems"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/cicatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/deploymentmergerequests"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/deployments"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/environments"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/mrchanges"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/releases"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/tags"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/workitems"
 )
 
 // TestIndividual_ReleaseGetLatest exercises gitlab_release_latest via the

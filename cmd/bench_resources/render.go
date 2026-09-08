@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
 )
 
 // Markers for the generated block. The Markdown page uses HTML comments, the

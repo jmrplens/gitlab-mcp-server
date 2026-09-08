@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/environments"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/environments"
 )
 
 // TestIndividual_Environments exercises the environment lifecycle using

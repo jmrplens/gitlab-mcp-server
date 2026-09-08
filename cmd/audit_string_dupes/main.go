@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/testsource"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/testsource"
 )
 
 // walkFiles is testsource.WalkFiles, indirected so a test can drive the

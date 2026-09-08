@@ -40,7 +40,7 @@ const (
 
 	// modulePath is this module, trimmed off a recorded package so a row says
 	// internal/tools/issues rather than repeating the module in every line.
-	modulePath = "github.com/jmrplens/gitlab-mcp-server/v2"
+	modulePath = "github.com/jmrplens/gitlab-mcp-server/v3"
 
 	// testPackageSuffix is what the compiler appends to the import path of an
 	// external test package. The requests a `package issues_test` file issues

@@ -25,8 +25,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securityscanprofiles"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securityscanprofiles"
 )
 
 // TestMeta_SecurityScanProfiles exercises the full attach → list → detach scan

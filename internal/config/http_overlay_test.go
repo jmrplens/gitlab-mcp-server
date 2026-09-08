@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 )
 
 // TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing verifies the property the

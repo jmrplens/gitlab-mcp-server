@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/jsonschema-go/jsonschema"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/gatewaycompat"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/gatewaycompat"
 )
 
 // captureOutput redirects the command's stdout and stderr into buffers for

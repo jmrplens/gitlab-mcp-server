@@ -25,12 +25,12 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 	"go.opentelemetry.io/otel/log/global"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 )
 
 // captureSlog redirects slog to a buffer for the duration of the test.

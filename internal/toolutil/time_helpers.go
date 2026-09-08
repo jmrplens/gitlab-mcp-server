@@ -3,7 +3,7 @@ package toolutil
 import (
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // ParseOptionalTime parses an RFC3339 string and returns a *time.Time.

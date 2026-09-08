@@ -165,7 +165,7 @@ MCP Client → MCP Server → Tool Handler → GitLab Client → GitLab API → 
 ```markdown
 # Package: [name]
 
-**Import path**: `github.com/jmrplens/gitlab-mcp-server/v2/internal/[name]`
+**Import path**: `github.com/jmrplens/gitlab-mcp-server/v3/internal/[name]`
 **Responsibility**: [one-sentence description]
 
 ## Overview

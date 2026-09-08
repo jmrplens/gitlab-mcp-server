@@ -15,9 +15,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/resources"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/subscriptions"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
 // mcpSession registers the real resource surface against a mock GitLab and

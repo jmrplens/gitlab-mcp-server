@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/eval_mcp_surfaces/internal/evalrun"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/eval_mcp_surfaces/internal/evalrun"
 )
 
 var (

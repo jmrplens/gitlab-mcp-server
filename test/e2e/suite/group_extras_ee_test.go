@@ -18,13 +18,13 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/grouplabels"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupmembers"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/resourceevents"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/grouplabels"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupmembers"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/resourceevents"
 )
 
 // geExtrasCreateUser creates a disposable user through the raw admin API and

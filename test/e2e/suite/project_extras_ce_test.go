@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/members"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectmirrors"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/uploads"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/members"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projectmirrors"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/uploads"
 )
 
 // projectExtrasPNGBase64 is a valid 1x1 transparent PNG. GitLab validates

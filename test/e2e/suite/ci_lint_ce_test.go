@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/cilint"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/cilint"
 )
 
 // TestIndividual_CILint exercises CI lint operations using individual MCP

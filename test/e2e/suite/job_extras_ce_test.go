@@ -18,10 +18,10 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobs"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobs"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
 )
 
 // Job names, artifact path/content, and repeated tool names shared by the

@@ -12,12 +12,12 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/branches"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/branchrules"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/cicatalog"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deployments"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/featureflags"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/ffuserlists"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/branches"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/branchrules"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/cicatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/deployments"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/featureflags"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/ffuserlists"
 )
 
 // TestMeta_FeatureFlags exercises feature flag listing via the

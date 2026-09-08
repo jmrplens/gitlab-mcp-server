@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
 // TestCapturedReaders_ReadWhatTheSDKDoesNotModel verifies each single-object

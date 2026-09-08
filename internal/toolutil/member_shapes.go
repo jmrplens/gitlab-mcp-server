@@ -1,7 +1,7 @@
 package toolutil
 
 import (
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // MemberUserOutput mirrors gl.MemberCreatedBy (the created_by object).

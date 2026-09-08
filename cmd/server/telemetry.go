@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 )
 
 // telemetryFlag holds --telemetry. It is a pointer so that "not passed" is

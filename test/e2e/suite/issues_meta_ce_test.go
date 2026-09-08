@@ -16,20 +16,20 @@ import (
 	"testing"
 	"time"
 
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/awardemoji"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupiterations"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issuelinks"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issuenotes"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issuestatistics"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/labels"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/milestones"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectiterations"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/resourceevents"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/awardemoji"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupiterations"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issuelinks"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issuenotes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issuestatistics"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/labels"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/milestones"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projectiterations"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/resourceevents"
 )
 
 // TestMeta_IssuesDeep exercises gitlab_issue meta-tool actions not covered

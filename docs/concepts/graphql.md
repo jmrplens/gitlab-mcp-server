@@ -10,7 +10,7 @@
 
 gitlab-mcp-server uses two API strategies to communicate with GitLab:
 
-1. **REST API v4** — the primary approach, used by the majority of tools via the [client-go](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2) service wrappers
+1. **REST API v4** — the primary approach, used by the majority of tools via the [client-go](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v3) service wrappers
 2. **GraphQL API** — used for domains where REST endpoints are deprecated, unavailable, or significantly less efficient
 
 This document explains when and how the GraphQL integration is used, the patterns involved, and the architectural rationale behind the design.
@@ -354,5 +354,5 @@ Four limits are inherent to validating at this layer rather than at GitLab's, an
 
 - [GitLab GraphQL API Reference](https://docs.gitlab.com/ee/api/graphql/reference/)
 - [GitLab GraphQL Explorer](https://docs.gitlab.com/ee/api/graphql/#interactive-graphql-explorer)
-- [client-go GraphQL.Do()](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2#GraphQL.Do)
+- [client-go GraphQL.Do()](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v3#GraphQL.Do)
 - [ADR-0006: Raw GraphQL.Do() for Uncovered Domains](../development/adr/adr-0006-raw-graphql-for-uncovered-domains.md)

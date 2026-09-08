@@ -11,7 +11,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apishapes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apishapes"
 )
 
 const (

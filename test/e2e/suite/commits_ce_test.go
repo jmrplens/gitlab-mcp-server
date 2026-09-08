@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/files"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/commits"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/files"
 )
 
 // TestIndividual_Commits exercises commit and file operations using

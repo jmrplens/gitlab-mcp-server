@@ -1,7 +1,7 @@
 package groupepicboards
 
 import (
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
 // Canonical output shapes for group epic boards. The data source is the REST

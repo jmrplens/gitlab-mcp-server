@@ -1,4 +1,4 @@
-module github.com/jmrplens/gitlab-mcp-server/v2
+module github.com/jmrplens/gitlab-mcp-server/v3
 
 go 1.27.1
 
@@ -12,7 +12,7 @@ require (
 	github.com/shirou/gopsutil/v4 v4.26.8
 	github.com/tiktoken-go/tokenizer v0.8.1
 	github.com/vektah/gqlparser/v2 v2.5.28
-	gitlab.com/gitlab-org/api/client-go/v2 v2.64.0
+	gitlab.com/gitlab-org/api/client-go/v3 v3.0.0
 	go.opentelemetry.io/contrib/bridges/otelslog v0.20.1
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.22.0

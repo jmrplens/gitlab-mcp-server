@@ -19,7 +19,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/jmrplens/gitlab-mcp-server/ci.yml?branch=main&style=flat&logo=githubactions&logoColor=white&label=CI)](https://github.com/jmrplens/gitlab-mcp-server/actions/workflows/ci.yml)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=alert_status)](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=coverage)](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server)
-[![Go Reference](https://pkg.go.dev/badge/github.com/jmrplens/gitlab-mcp-server/v2.svg)](https://pkg.go.dev/github.com/jmrplens/gitlab-mcp-server/v2)
+[![Go Reference](https://pkg.go.dev/badge/github.com/jmrplens/gitlab-mcp-server/v3.svg)](https://pkg.go.dev/github.com/jmrplens/gitlab-mcp-server/v3)
 
 </p>
 
@@ -439,7 +439,7 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | ------------- | ------------------------------------------------ |
 | Language      | Go 1.27+                                         |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.7.0  |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.59.0 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v3` v2.59.0 |
 | Transport     | stdio (default), HTTP (Streamable HTTP)          |
 
 ## Privacy Policy

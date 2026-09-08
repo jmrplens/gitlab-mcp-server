@@ -15,8 +15,8 @@ package tools
 import (
 	"log/slog"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
 
 // WithheldActions records the catalog actions a filter removed, split by whose

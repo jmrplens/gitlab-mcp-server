@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/requestinventory"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
 
 // catalogActions is a variable so the failure branch stays reachable from a

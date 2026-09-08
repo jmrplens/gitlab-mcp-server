@@ -14,7 +14,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupsshcerts"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groupsshcerts"
 )
 
 // TestMeta_GroupSSHCerts exercises group SSH certificate lifecycle

@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apishapes"
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/requestinventory"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apishapes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
 
 // ShapeCheck is what GitLab's own OpenAPI document says about the endpoints we
