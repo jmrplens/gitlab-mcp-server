@@ -122,9 +122,9 @@ Security fixes are issued for the latest stable release line on `main`. Older re
 
 | Version                | Supported           |
 | ---------------------- | ------------------- |
-| Latest `2.x` release   | :white_check_mark:  |
-| Older `2.x` releases   | :x: (please update) |
-| `1.x` and `0.x`        | :x:                 |
+| Latest `3.x` release   | :white_check_mark:  |
+| Older `3.x` releases   | :x: (please update) |
+| `2.x`, `1.x` and `0.x` | :x:                 |
 
 We strongly recommend running the most recent release. Updates arrive through whichever channel you installed from (npm, Homebrew, the container image, the Claude Desktop extension, winget, or a fresh download); the server never replaces its own binary.
 

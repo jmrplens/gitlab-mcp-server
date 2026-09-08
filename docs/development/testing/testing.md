@@ -18,10 +18,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,057 |
-| Unit test functions                                   | 14,454 |
+| Total test functions                                  | 15,051 |
+| Unit test functions                                   | 14,448 |
 | E2E test functions                                    |    603 |
-| cmd test functions                                    |  3,000 |
+| cmd test functions                                    |  2,999 |
 | Test files (internal/)                                |    523 |
 | Test files (cmd/)                                     |    208 |
 | Test files (test/e2e/)                                |    240 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,911 | 79.1% |
-| `TestFunc` (no underscore)             |    977 |  6.5% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,169 | 14.4% |
+| `TestFunc_Scenario` (2-part)           | 11,904 | 79.1% |
+| `TestFunc` (no underscore)             |    975 |  6.5% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,172 | 14.4% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,464 |        148 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,457 |        148 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,652 |        359 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,654 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            603 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          3,000 |        208 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,057** |    **971** |                                                                                                 |
+| cmd packages            |          2,999 |        208 | server entry point and developer command utilities                                              |
+| **Total**               |     **15,051** |    **971** |                                                                                                 |
 
 ### Core Packages
 
@@ -61,7 +61,7 @@
 | clientcompat  |        18 |   100.0% | Package clientcompat applies per-client response compatibility profiles to MCP results.                                                                                                                                                                            |
 | cmdutil       |         8 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                                                                          |
 | completions   |       101 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                           |
-| config        |       116 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                   |
+| config        |       109 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                   |
 | edition       |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                      |
 | elicitation   |       129 |    98.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                       |
 | gatewaycompat |        19 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions. |
@@ -77,7 +77,7 @@
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        94 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
 | toolutil      |       877 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,464** |          |                                                                                                                                                                                                                                                                    |
+| **Subtotal**  | **2,457** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -104,7 +104,7 @@
 | pipelineschedules |    94 |    99.7% |    11 |
 | groupmilestones   |    90 |   100.0% |     8 |
 | snippets          |    89 |    99.5% |    15 |
-| integrations      |    87 |    99.6% |    12 |
+| integrations      |    88 |    99.6% |    12 |
 | groupmembers      |    85 |   100.0% |    10 |
 | files             |    84 |   100.0% |     8 |
 | mrapprovals       |    84 |   100.0% |     7 |
@@ -170,7 +170,7 @@
 | errortracking           |        25 |          2 |   100.0% |         5 |
 | events                  |        52 |          2 |   100.0% |         2 |
 | externalstatuschecks    |        51 |          3 |   100.0% |         8 |
-| featureflags            |        44 |          2 |   100.0% |         5 |
+| featureflags            |        45 |          2 |   100.0% |         5 |
 | features                |        23 |          2 |    98.0% |         4 |
 | ffuserlists             |        33 |          2 |   100.0% |         5 |
 | files                   |        84 |          2 |   100.0% |         8 |
@@ -204,7 +204,7 @@
 | impersonationtokens     |        43 |          2 |   100.0% |         5 |
 | importservice           |        31 |          1 |   100.0% |         5 |
 | instancevariables       |        41 |          2 |   100.0% |         5 |
-| integrations            |        87 |          4 |    99.6% |        12 |
+| integrations            |        88 |          4 |    99.6% |        12 |
 | invites                 |        43 |          1 |   100.0% |         4 |
 | issuediscussions        |        45 |          2 |   100.0% |         6 |
 | issuelinks              |        68 |          3 |   100.0% |         4 |
@@ -293,7 +293,7 @@
 | wikis                   |        61 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,652** |    **359** |          | **1,187** |
+| **Total**               | **8,654** |    **359** |          | **1,187** |
 
 </details>
 
