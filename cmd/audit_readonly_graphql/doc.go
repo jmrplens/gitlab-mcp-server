@@ -58,6 +58,18 @@
 // sends opens with its keyword, including the four assembled from a shared
 // fragment, and a string that does not is not a document GitLab would accept.
 //
+// The keyword's position is not the only place the pre-filter is narrower. It
+// also refuses a brace-wrapped single word with no space in it, the shape an
+// OpenTelemetry unit annotation is written in, and a brace whose first entry
+// binds a name to a quoted string, which is a JSON object and never GraphQL.
+// Both guards exist because without them a metric unit and a mocked API
+// response are reported as broken documents, and both cost this rule a shape it
+// would have accepted: `{__typename}` is a legal one-field document, and
+// written without spaces it never reaches the inventory. Nothing in this
+// repository writes one, and nothing here would say so if something started to,
+// so the pre-filter is what to read when a document is written in a shape none
+// of the others use.
+//
 // The pre-filter is also the looser one, for a literal written inside a
 // function body: it may read one as a document that classifyDocument then
 // classifies as none, in which case the body walk places nothing at its
