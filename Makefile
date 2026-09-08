@@ -1050,14 +1050,16 @@ publish-lobehub: check-lhm-manifest
 gen-readme: gen-footprint gen-stats
 
 ## update-all: run every generator, the brand assets included, then the table formatter.
-## Generates: brand vectors, token footprint, repo stats, site stats, llms.txt, LobeHub manifest, testing docs, action catalog manifest, markdown table formatting.
+## Generates: brand vectors, token footprint, repo stats, site stats, llms.txt, LobeHub manifest, testing docs, action catalog manifest, benchmark charts and tables, markdown table formatting.
 # One generator at a time, in the recipe rather than as prerequisites: brand
 # rewrites internal/toolutil/brandmark_gen.go, which the generators after it
 # compile, and gen-footprint and gen-stats both rewrite README.md, so make -j
-# would interleave them. brand-rasters stays out: it needs rsvg-convert and
-# cwebp, which only the maintainer's machine has.
+# would interleave them. bench-resources-render is in because it redraws from
+# the committed record and measures nothing, which is what check-bench-resources
+# then compares; bench-resources itself stays out, and so does brand-rasters,
+# which needs rsvg-convert and cwebp that only the maintainer's machine has.
 update-all:
-	@for target in brand gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-testing-docs gen-action-catalog-manifest; do \
+	@for target in brand gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-testing-docs gen-action-catalog-manifest bench-resources-render; do \
 		$(MAKE) --no-print-directory $$target || exit 1; \
 	done
 	go run ./cmd/format_md_tables/

@@ -232,12 +232,16 @@ jobs:
       # valid) bytes than the maintainer machine for a handful of icons, so
       # the gate only holds on the machine that committed the assets. It
       # stays maintainer tooling, run with gen-icon-webp after icon edits.
-      # The charts and tables of the benchmark pages against the committed
-      # measurement record, which is a comparison of two committed artifacts
-      # and so needs no benchmark run and no freshness gate. It was documented
-      # as a CI gate and wired nowhere until the cmd/ consolidation study read
-      # the table; seconds, since nothing is measured.
+      #
+      # The benchmark pages take their numbers from the committed measurement
+      # record, so nothing is measured here and the step costs seconds. It is a
+      # freshness gate all the same, because the drawing around those numbers
+      # comes from the source tree: the palette from site/src/styles/theme.css
+      # and the chart and table strings from the command itself, either of
+      # which makes the committed SVGs and page blocks stale. update-all
+      # redraws them, so a stack refreshes them once at its top like the rest.
       - name: Check the committed benchmark charts and tables
+        if: env.FRESHNESS == 'checked'
         run: make check-bench-resources
       - name: Check action catalog manifest
         if: env.FRESHNESS == 'checked'
