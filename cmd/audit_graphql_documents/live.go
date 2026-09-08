@@ -56,13 +56,13 @@ func liveSchema(ctx context.Context, endpoint, token, tokenWithheld string) (*as
 	if err != nil {
 		return nil, "", fmt.Errorf("%s: the converted schema does not parse: %w", endpoint, err)
 	}
-	provenance := fmt.Sprintf("%d types from %s (GitLab %s), fetched now, not the pinned schema",
+	judgedBy := fmt.Sprintf("%d types from %s (GitLab %s), fetched now, not the pinned schema",
 		len(introspected.Types), endpoint, version)
 	// An unknown version has two causes and they are not equally interesting.
 	// Saying which one this was keeps somebody from concluding the instance is
 	// unhelpful when the run simply declined to hand it a credential.
 	if tokenWithheld != "" {
-		provenance += "; " + tokenWithheld
+		judgedBy += "; " + tokenWithheld
 	}
-	return schema, provenance, nil
+	return schema, judgedBy, nil
 }

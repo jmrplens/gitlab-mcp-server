@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/apishapes"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/provenance"
 )
 
 const (
@@ -28,11 +29,6 @@ const (
 	// inventory it is compared with. It is the package's own constant so the
 	// generator and every reader join on one directory.
 	defaultDir = apishapes.DefaultDir
-	// maxAge is how long a record may stand before --check refuses it. GitLab
-	// ships monthly and narrows fields in place, so half a year is roughly six
-	// releases of drift, the same window the pinned GraphQL schema stands for
-	// and for the same reason.
-	maxAge = 180 * 24 * time.Hour
 	// fetchTimeout bounds one whole download. The document is under 4 MB.
 	fetchTimeout = 2 * time.Minute
 	// note is written into the record so a reader who opens it first learns
@@ -55,13 +51,6 @@ type genRun struct {
 	// now supplies the day recorded, as a parameter so a test can assert on
 	// the record it produced.
 	now func() time.Time
-}
-
-func (c genRun) clock() time.Time {
-	if c.now == nil {
-		return time.Now()
-	}
-	return c.now()
 }
 
 func (c genRun) target() string {
@@ -105,7 +94,7 @@ func checkRecord(cfg genRun, out, errOut io.Writer) int {
 		return 1
 	}
 
-	problems := recordProblems(doc, cfg.clock())
+	problems := recordProblems(doc, provenance.Clock(cfg.now))
 	if len(problems) > 0 {
 		for _, problem := range problems {
 			fmt.Fprintln(errOut, prefix, problem)
@@ -132,32 +121,10 @@ func recordProblems(doc apishapes.Document, now time.Time) []string {
 		problems = append(problems,
 			"the record does not say which ref it came from or what it hashed: nothing can then say which GitLab the gate speaks for")
 	}
-	switch age, err := recordAge(doc, now); {
-	case err != nil:
-		problems = append(problems, fmt.Sprintf(
-			"the record says it was taken on %q, which is not a date: nothing can then say how old the gate is",
-			doc.Source.RetrievedAt,
-		))
-	case age < 0:
-		problems = append(problems, fmt.Sprintf(
-			"the record says it was taken on %s, which has not happened yet: no regeneration writes a day in the future",
-			doc.Source.RetrievedAt,
-		))
-	case age > maxAge:
-		problems = append(problems, fmt.Sprintf(
-			"the record is %d days old and the window is %d: GitLab narrows fields in place, so one this old can no longer report a field that changed since",
-			int(age.Hours()/24), int(maxAge.Hours()/24),
-		))
-	}
-	return problems
-}
-
-func recordAge(doc apishapes.Document, now time.Time) (time.Duration, error) {
-	retrieved, err := time.Parse(time.DateOnly, doc.Source.RetrievedAt)
-	if err != nil {
-		return 0, err
-	}
-	return now.UTC().Sub(retrieved), nil
+	return append(problems, provenance.Problems(provenance.Subject{
+		Noun:        "record",
+		Consequence: "GitLab narrows fields in place, so one this old can no longer report a field that changed since",
+	}, doc.Source.RetrievedAt, now)...)
 }
 
 // generate is the network half: fetch, extract, and write.
@@ -192,7 +159,7 @@ func generate(cfg genRun, out, errOut io.Writer) int {
 		Source: apishapes.Source{
 			URL:            url,
 			Ref:            cfg.ref,
-			RetrievedAt:    cfg.clock().UTC().Format(time.DateOnly),
+			RetrievedAt:    provenance.Clock(cfg.now).UTC().Format(time.DateOnly),
 			SHA256:         hex.EncodeToString(digest[:]),
 			OpenAPIVersion: openAPIVersion,
 			APIVersion:     apiVersion,

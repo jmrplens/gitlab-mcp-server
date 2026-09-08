@@ -9,6 +9,7 @@ import (
 	"github.com/vektah/gqlparser/v2/ast"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/graphqldocs"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/provenance"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/graphqlschema"
 )
 
@@ -78,14 +79,15 @@ func driftReport(pinned, probed *ast.Schema, documents []graphqldocs.Document, p
 
 // pinAge renders how long ago the pin was taken, or "" when its record carries
 // a date nothing can subtract. An unparseable date is left to the record's own
-// decoding, which has already accepted it, rather than turned into a second
-// complaint about the same field.
+// decoding, which has already accepted it, and to gen_graphql_schema's --check,
+// which refuses it, rather than turned into a second complaint about the same
+// field here.
 func pinAge(pin graphqlschema.Source, now time.Time) string {
-	retrieved, err := time.Parse(time.DateOnly, pin.RetrievedAt)
+	age, err := provenance.Age(pin.RetrievedAt, now)
 	if err != nil {
 		return ""
 	}
-	return fmt.Sprintf(", %d day(s) ago", int(now.UTC().Sub(retrieved).Hours()/24))
+	return fmt.Sprintf(", %d day(s) ago", provenance.Days(age))
 }
 
 // touchedCoordinates returns every coordinate the documents depend on, sorted.

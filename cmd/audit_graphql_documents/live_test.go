@@ -56,7 +56,7 @@ func answeringInstance(t *testing.T, body string) string {
 func TestLiveSchema_AnInstanceThatAnswersInFull_IsWhatJudgesTheDocuments(t *testing.T) {
 	endpoint := answeringInstance(t, introspectionAnswer(queryOnly))
 
-	schema, provenance, err := liveSchema(context.Background(), endpoint, "", "")
+	schema, judgedBy, err := liveSchema(context.Background(), endpoint, "", "")
 	if err != nil {
 		t.Fatalf("liveSchema() error = %v, want nil", err)
 	}
@@ -66,8 +66,8 @@ func TestLiveSchema_AnInstanceThatAnswersInFull_IsWhatJudgesTheDocuments(t *test
 	}
 	for _, want := range []string{"fetched now", "not the pinned schema", "GitLab unknown"} {
 		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(provenance, want) {
-				t.Errorf("the provenance line %q does not contain %q", provenance, want)
+			if !strings.Contains(judgedBy, want) {
+				t.Errorf("the provenance line %q does not contain %q", judgedBy, want)
 			}
 		})
 	}
@@ -104,13 +104,13 @@ func TestLiveSchema_AnInstanceThatCannotBeJudgedBy_IsRefused(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			schema, provenance, err := liveSchema(context.Background(), answeringInstance(t, testCase.body), "", "")
+			schema, judgedBy, err := liveSchema(context.Background(), answeringInstance(t, testCase.body), "", "")
 
 			if err == nil {
 				t.Fatalf("liveSchema() error = nil, want one naming %q", testCase.want)
 			}
-			if schema != nil || provenance != "" {
-				t.Errorf("liveSchema() returned %v and %q, want nothing to judge by on failure", schema, provenance)
+			if schema != nil || judgedBy != "" {
+				t.Errorf("liveSchema() returned %v and %q, want nothing to judge by on failure", schema, judgedBy)
 			}
 			if !strings.Contains(err.Error(), testCase.want) {
 				t.Errorf("liveSchema() error = %q, want it to name %q", err, testCase.want)
@@ -137,7 +137,7 @@ func TestLiveSchema_ATokenIsOffered_ReachesTheInstance(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	_, provenance, err := liveSchema(context.Background(), server.URL, "secret", "")
+	_, judgedBy, err := liveSchema(context.Background(), server.URL, "secret", "")
 	if err != nil {
 		t.Fatalf("liveSchema() error = %v, want nil", err)
 	}
@@ -145,8 +145,8 @@ func TestLiveSchema_ATokenIsOffered_ReachesTheInstance(t *testing.T) {
 	if seen != "Bearer secret" {
 		t.Errorf("Authorization = %q, want the bearer credential", seen)
 	}
-	if !strings.Contains(provenance, "GitLab 19.4.0-ee") {
-		t.Errorf("the provenance line %q does not name the version the instance reported", provenance)
+	if !strings.Contains(judgedBy, "GitLab 19.4.0-ee") {
+		t.Errorf("the provenance line %q does not name the version the instance reported", judgedBy)
 	}
 }
 
@@ -174,7 +174,7 @@ func TestLiveSchema_ATokenIsWithheld_ReachesNobodyAndIsExplained(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	const reason = "GITLAB_TOKEN belongs to https://gitlab.com and this run asks elsewhere"
-	_, provenance, err := liveSchema(context.Background(), server.URL, "", reason)
+	_, judgedBy, err := liveSchema(context.Background(), server.URL, "", reason)
 	if err != nil {
 		t.Fatalf("liveSchema() error = %v, want nil: a withheld token must not stop the judgement", err)
 	}
@@ -182,10 +182,10 @@ func TestLiveSchema_ATokenIsWithheld_ReachesNobodyAndIsExplained(t *testing.T) {
 	if authorized {
 		t.Error("the instance received an Authorization header for a run that withheld the token")
 	}
-	if !strings.Contains(provenance, "GitLab unknown") {
-		t.Errorf("the provenance line %q does not report the version as unknown", provenance)
+	if !strings.Contains(judgedBy, "GitLab unknown") {
+		t.Errorf("the provenance line %q does not report the version as unknown", judgedBy)
 	}
-	if !strings.Contains(provenance, reason) {
-		t.Errorf("the provenance line %q does not say why the token was withheld", provenance)
+	if !strings.Contains(judgedBy, reason) {
+		t.Errorf("the provenance line %q does not say why the token was withheld", judgedBy)
 	}
 }

@@ -21,6 +21,13 @@
 // resolved to different commits, which a push to master between two downloads
 // produces, is refused rather than recorded as one tree.
 //
+// -check reads the committed record without the network and refuses one that
+// is truncated, unprovenanced or too old. The age half of that — the window
+// and the three ways a retrieval date fails — is
+// [github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/provenance]'s, shared
+// with the OpenAPI record and the GraphQL pin, which are taken from the same
+// GitLab at the same cadence.
+//
 // Usage:
 //
 //	go run ./cmd/gen_api_exposes/                       # fetch master and write the record
