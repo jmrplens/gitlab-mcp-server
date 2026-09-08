@@ -1106,6 +1106,10 @@ func buildGlobalListOptions(input ListGlobalInput) (*gl.ListMergeRequestsOptions
 	return opts, nil
 }
 
+// globalMRListFilters reads the global list input; see [groupMRListFilters]
+// for why its twin is not a copy of it.
+//
+//nolint:dupl // distinct input types; see groupMRListFilters.
 func globalMRListFilters(input ListGlobalInput) mergeRequestListFilters {
 	return mergeRequestListFilters{
 		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,
@@ -1314,6 +1318,14 @@ func buildGroupListOptions(input ListGroupInput) (*gl.ListGroupMergeRequestsOpti
 	return opts, nil
 }
 
+// groupMRListFilters is textually identical to [globalMRListFilters] and is
+// not a copy of it: the two read different input types, whose fields happen to
+// carry the same names, and they diverged by one line until the `approved`
+// filter left with client-go v3. Unifying them would mean an embedded input
+// struct shared by two published tool schemas, which is a larger change than
+// the repetition costs.
+//
+//nolint:dupl // distinct input types; see the comment above.
 func groupMRListFilters(input ListGroupInput) mergeRequestListFilters {
 	return mergeRequestListFilters{
 		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,
