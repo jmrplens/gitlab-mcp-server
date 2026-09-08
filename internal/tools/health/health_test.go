@@ -705,12 +705,14 @@ func TestCheck_BaseURLWithUserinfo_ReportsTheURLWithoutIt(t *testing.T) {
 		t.Errorf(fmtStatusWant, out.Status, "degraded")
 	}
 	for _, secret := range []string{"proxyuser", "s3cret"} {
-		if strings.Contains(out.GitLabURL, secret) {
-			t.Errorf("GitLabURL = %q, must not carry %q", out.GitLabURL, secret)
-		}
-		if strings.Contains(out.Error, secret) {
-			t.Errorf("Error = %q, must not carry %q", out.Error, secret)
-		}
+		t.Run(secret, func(t *testing.T) {
+			if strings.Contains(out.GitLabURL, secret) {
+				t.Errorf("GitLabURL = %q, must not carry %q", out.GitLabURL, secret)
+			}
+			if strings.Contains(out.Error, secret) {
+				t.Errorf("Error = %q, must not carry %q", out.Error, secret)
+			}
+		})
 	}
 	if !strings.HasPrefix(out.GitLabURL, "http://"+parsed.Host+"/") {
 		t.Errorf("GitLabURL = %q, want the instance host %q", out.GitLabURL, parsed.Host)
