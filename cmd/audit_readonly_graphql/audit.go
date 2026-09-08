@@ -42,7 +42,11 @@ type exception struct {
 
 // finding is one reason the audit fails.
 type finding struct {
-	// action is the catalog action ID the finding is about.
+	// action is the catalog action ID the finding is about, or, for a finding
+	// about a document no action can be tied to, the package or directory it
+	// lives in. It is never printed: it is the first sort key, so the findings
+	// of one action stay together and a CI log diff shows a changed finding
+	// rather than a reshuffled report.
 	action string
 	// message is the whole explanation, already formatted.
 	message string
@@ -304,6 +308,10 @@ func staleExceptions(prog *program, exceptions map[string]exception, used map[st
 // reaches a mutation" while a mutation sat in a file the walk never opened.
 // The repository writes every document as a named constant today, so this is
 // silent, and the day one moves it says so instead of going quiet.
+//
+// These findings belong to no action, by construction: not being able to name
+// the handler is what they report. The package the document lives in stands in
+// as their sort key, which is all the field is used for.
 func unattributedFindings(prog *program, root string) []finding {
 	findings := make([]finding, 0, len(prog.unattributed))
 	for _, document := range prog.unattributed {
