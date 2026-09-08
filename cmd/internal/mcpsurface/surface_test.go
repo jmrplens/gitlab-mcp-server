@@ -364,20 +364,24 @@ func TestIndividualTools_ProjectsTheDeclaredToolNames(t *testing.T) {
 // listings can only reach the quiet branch while listPageSize covers them, so
 // the loud one is driven directly.
 func TestRequireCompleteListing_CursorPresent_Panics(t *testing.T) {
-	defer func() {
-		recovered := recover()
-		if recovered == nil {
-			t.Fatal("requireCompleteListing with a next cursor did not panic")
-		}
-		message, _ := recovered.(string)
-		for _, want := range []string{"individual tools", "stopped after 1000 entries", "listPageSize"} {
+	var recovered any
+	func() {
+		defer func() { recovered = recover() }()
+		requireCompleteListing("individual tools", "next-page", mcp.DefaultPageSize)
+	}()
+
+	if recovered == nil {
+		t.Fatal("requireCompleteListing with a next cursor did not panic")
+	}
+	message, _ := recovered.(string)
+
+	for _, want := range []string{"individual tools", "stopped after 1000 entries", "listPageSize"} {
+		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(message, want) {
 				t.Errorf("panic message %q does not mention %q", message, want)
 			}
-		}
-	}()
-
-	requireCompleteListing("individual tools", "next-page", mcp.DefaultPageSize)
+		})
+	}
 }
 
 // TestRequireCompleteListing_NoCursor_Returns verifies a complete listing is
