@@ -80,6 +80,137 @@ type rawOutput struct {
 	}
 }
 
+// writeShared puts one Go source file under the shared shapes package of a
+// tree writePackage began.
+func writeShared(t *testing.T, root, source string) {
+	t.Helper()
+	dir := filepath.Join(root, sharedDir)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "shapes.go"), []byte(source), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+}
+
+// TestPublishedTypes_SharedShapes_ResolveWhereverAPackageNamesThem verifies
+// the one cross-package edge the parse follows. A domain package takes a
+// user, a role or a milestone from internal/toolutil, as a field of that
+// type, as an embed, or as an alias under its own name, and until this was
+// read none of those fields counted as published: a package whose only user
+// object is the shared one was reported as failing to surface `username`.
+// The shared struct is flattened within its own package, a field of one
+// shared shape typed as another resolves too, an alias is published under
+// the package's name, and the hints type stays out, since its next steps are
+// the server's and not GitLab's.
+func TestPublishedTypes_SharedShapes_ResolveWhereverAPackageNamesThem(t *testing.T) {
+	root := writePackage(t, "sample", `package sample
+
+import "example.com/toolutil"
+
+type Output struct {
+	toolutil.HintableOutput
+	ID     int64                   `+"`json:\"id\"`"+`
+	Author toolutil.BasicUserOutput `+"`json:\"author\"`"+`
+	Role   MemberRoleOutput         `+"`json:\"role\"`"+`
+	Other  elsewhere.Thing          `+"`json:\"other\"`"+`
+}
+
+type MemberRoleOutput = toolutil.MemberRoleOutput
+
+type ActorOutput struct {
+	toolutil.BasicUserOutput
+	Kind string `+"`json:\"kind\"`"+`
+}
+
+type NoteOutput = toolutil.NoteOutput
+
+type DiscussionOutput struct {
+	toolutil.HintableOutput
+	Notes []toolutil.NoteOutput `+"`json:\"notes\"`"+`
+}
+
+type TimeStatsOutput = toolutil.TimeStatsOutput
+
+type DeleteOutput = toolutil.DeleteOutput
+
+type Hints = toolutil.HintableOutput
+
+func Remove() (DeleteOutput, error) { return DeleteOutput{}, nil }
+
+func (o Output) Stats() TimeStatsOutput { return TimeStatsOutput{} }
+
+func toStats() TimeStatsOutput { return TimeStatsOutput{} }
+`)
+	writeShared(t, root, `package toolutil
+
+type HintableOutput struct {
+	NextSteps []string `+"`json:\"next_steps,omitempty\"`"+`
+}
+
+type identity struct {
+	ID       int64  `+"`json:\"id\"`"+`
+	Username string `+"`json:\"username\"`"+`
+}
+
+type BasicUserOutput struct {
+	identity
+	Name string `+"`json:\"name\"`"+`
+}
+
+type MemberRoleOutput struct {
+	ID    int64            `+"`json:\"id\"`"+`
+	Owner *BasicUserOutput `+"`json:\"owner\"`"+`
+}
+
+type NoteOutput struct {
+	HintableOutput
+	Body string `+"`json:\"body\"`"+`
+}
+
+type TimeStatsOutput struct {
+	TimeEstimate int `+"`json:\"time_estimate\"`"+`
+}
+
+type DeleteOutput struct {
+	Status string `+"`json:\"status\"`"+`
+}
+
+type MergeRequestOutput struct {
+	TimeStats TimeStatsOutput `+"`json:\"time_stats\"`"+`
+	Deleted   DeleteOutput    `+"`json:\"deleted\"`"+`
+}
+`)
+
+	types := publishedTypes(root)
+
+	// NoteOutput is an alias the package keeps for its converters while the
+	// field naming the shape is typed toolutil.NoteOutput: nested under either
+	// name, and without the hints the shared shape embeds. TimeStatsOutput is
+	// named by nothing in the package and by a shared shape, and returned only
+	// by a method and an unexported function, so it is nested too; DeleteOutput
+	// is named by that same shared shape and returned by an exported function,
+	// which makes it a response of the package's own; and an alias of the
+	// hints type resolves to nothing and is not published.
+	want := []publishedType{
+		{Package: "internal/tools/sample", Name: "ActorOutput", Fields: []string{"id", "kind", "name", "username"}},
+		{Package: "internal/tools/sample", Name: "DeleteOutput", Fields: []string{"status"}},
+		{Package: "internal/tools/sample", Name: "DiscussionOutput", Fields: []string{"notes"}, Nested: map[string]nestedType{
+			"notes": {Name: "toolutil.NoteOutput", Fields: []string{"body"}},
+		}},
+		{Package: "internal/tools/sample", Name: "MemberRoleOutput", Fields: []string{"id", "owner"}, Inner: true},
+		{Package: "internal/tools/sample", Name: "NoteOutput", Fields: []string{"body"}, Inner: true},
+		{Package: "internal/tools/sample", Name: "Output", Fields: []string{"author", "id", "other", "role"}, Nested: map[string]nestedType{
+			"author": {Name: "toolutil.BasicUserOutput", Fields: []string{"id", "name", "username"}},
+			"role":   {Name: "MemberRoleOutput", Fields: []string{"id", "owner"}},
+		}},
+		{Package: "internal/tools/sample", Name: "TimeStatsOutput", Fields: []string{"time_estimate"}, Inner: true},
+	}
+	if !reflect.DeepEqual(types, want) {
+		t.Errorf("publishedTypes() = %+v, want %+v", types, want)
+	}
+}
+
 // TestPublishedTypes_ATreeWithoutTools_ReadsNothing verifies the shape a caller
 // pointed at the wrong root meets: nothing, rather than a panic or a finding.
 func TestPublishedTypes_ATreeWithoutTools_ReadsNothing(t *testing.T) {
@@ -110,7 +241,7 @@ func TestPublishedTypes_AFileThatDoesNotParse_ContributesNothing(t *testing.T) {
 func TestPublishedTypesIn_ADirectoryThatCannotBeRead_ContributesNothing(t *testing.T) {
 	gone := filepath.Join(t.TempDir(), "removed-between-the-two-listings")
 
-	if types := publishedTypesIn(gone, "internal/tools/gone"); len(types) != 0 {
+	if types := publishedTypesIn(gone, "internal/tools/gone", nil, nil); len(types) != 0 {
 		t.Errorf("publishedTypesIn() = %+v, want nothing", types)
 	}
 }
@@ -153,7 +284,8 @@ func TestJSONTags_ATagThatIsNotAQuotedString_PublishesNothing(t *testing.T) {
 // marshaled however it is tagged, a tag naming no key keeps the Go field name,
 // "-" publishes nothing, an embed tagged with a name is keyed by that name,
 // and an embed tagged with none or not tagged at all is one whose fields are
-// promoted, while an embed from another package is neither. The check exists
+// promoted, a shared shape among them under its qualified name, which is
+// what flatten resolves or, for the hints type, drops. The check exists
 // because a name this reads and GitLab never receives is a phantom finding,
 // and a name it drops that GitLab does receive is a missed one.
 func TestJSONTags_FollowsEncodingJSON(t *testing.T) {
@@ -182,8 +314,8 @@ func TestJSONTags_FollowsEncodingJSON(t *testing.T) {
 	if !reflect.DeepEqual(fieldTypes, want) {
 		t.Errorf("jsonTags() field types = %v, want %v", fieldTypes, want)
 	}
-	if !reflect.DeepEqual(embeds, []string{"Promoted", "PromotedToo"}) {
-		t.Errorf("jsonTags() embeds = %v, want the two local embeds carrying no json name", embeds)
+	if !reflect.DeepEqual(embeds, []string{"Promoted", "PromotedToo", "toolutil.HintableOutput"}) {
+		t.Errorf("jsonTags() embeds = %v, want the two local embeds and the shared one, none carrying a json name", embeds)
 	}
 }
 
