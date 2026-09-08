@@ -343,7 +343,7 @@ Prefer compact metadata that teaches the distinction rather than broad synonyms 
 
 | Concern              | Meta-tools                                                                              | Dynamic toolset                                    |
 | -------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Initial tool count   | 32/38/49/50                                                                             | 2                                                  |
+| Initial tool count   | 34/40/51/52                                                                             | 2                                                  |
 | Model selection      | Choose a domain tool and action                                                         | Find an action with schema, execute                |
 | Schema discovery     | `action` enum plus `gitlab://tools/{id}` or `GITLAB_MCP_META_PARAM_SCHEMA=compact/full` | `gitlab_find_action` returns action schemas inline |
 | Minimal capabilities | Keeps `gitlab://tools` and omits optional prompts and data resources                    | Keeps action schema discovery through find         |

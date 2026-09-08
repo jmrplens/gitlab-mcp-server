@@ -67,7 +67,7 @@ graph TD
         MAIN[main.go<br/>Entry point]
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
-        SPECS[domain ActionSpecs<br/>177 internal/tools packages<br/>(168 with action_specs.go)]
+        SPECS[domain ActionSpecs<br/>178 internal/tools packages<br/>(168 with action_specs.go)]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
         IND[individual projection<br/>866 Free/CE / 1019 Premium / 1085 Ultimate / 1091 GitLab.com Ultimate tools]
@@ -581,7 +581,7 @@ sequenceDiagram
 | Go with official MCP SDK                | Type safety, single binary, cross-compilation                                                                                                                  | —                                                                             |
 | Official GitLab client library          | Maintained by GitLab, complete API coverage                                                                                                                    | —                                                                             |
 | Modular tools sub-packages              | Domain isolation, independent testing, clean imports                                                                                                           | [ADR-0004](../development/adr/adr-0004-modular-tools-subpackages.md)          |
-| Meta-tool consolidation (32/38/49/50)   | Reduce tool count for LLM token efficiency; Premium adds 6 and Ultimate 11 more self-managed meta-tools, and GitLab.com adds the experimental Orbit one on top | [ADR-0005](../development/adr/adr-0005-meta-tool-consolidation.md)            |
+| Meta-tool consolidation (34/40/51/52)   | Reduce tool count for LLM token efficiency; Premium adds 6 and Ultimate 11 more self-managed meta-tools, and GitLab.com adds the experimental Orbit one on top | [ADR-0005](../development/adr/adr-0005-meta-tool-consolidation.md)            |
 | Struct-based I/O                        | Type safety + automatic JSON Schema generation                                                                                                                 | Go SDK convention                                                             |
 | Dual response format                    | JSON for LLM tool-chaining + Markdown for display                                                                                                              | See [Output Format](../reference/output-format.md)                            |
 | Content annotations                     | Audience targeting + priority for display optimization                                                                                                         | See [Output Format](../reference/output-format.md)                            |

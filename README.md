@@ -371,7 +371,7 @@ Full documentation is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs
 | [Output Format](docs/reference/output-format.md)      | The response contract every tool follows: content blocks, pagination, next steps                                                                |
 | [Error Handling](docs/concepts/error-handling.md)     | Error classification, GitLab message extraction, and the hints tools return                                                                     |
 | [Tools Reference](docs/reference/tools/README.md)     | All individual tools with input/output schemas, including GitLab.com-only Orbit                                                                 |
-| [Meta-Tools](docs/concepts/meta-tools.md)             | 32/49/50 domain meta-tools with action dispatching                                                                                              |
+| [Meta-Tools](docs/concepts/meta-tools.md)             | 34/51/52 domain meta-tools with action dispatching                                                                                              |
 | [Dynamic Toolset](docs/concepts/dynamic-tools.md)     | 2-tool low-token mode with canonical action catalog, safety model, and examples                                                                 |
 | [Resources](docs/reference/resources.md)              | All 45 resources with URI templates                                                                                                             |
 | [Prompts](docs/reference/prompts.md)                  | All 37 prompts with arguments and output format                                                                                                 |
