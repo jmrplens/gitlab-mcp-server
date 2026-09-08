@@ -21,10 +21,10 @@
 | ------------- | --------------------------------------------------- |
 | Language      | Go 1.27.1                                           |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.7.0 |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v3` v2.62.0       |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v3` v3.0.0        |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 2.7.5                                               |
+| Version       | 3.0.0                                               |
 
 ### Scale
 
@@ -190,7 +190,7 @@ gitlab-mcp-server/
 │   ├── skills/                  # 19 reusable skill templates
 │   └── instructions/            # 8 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (2.7.5)
+└── VERSION                      # Semantic version (3.0.0)
 ```
 
 ## Editing files
