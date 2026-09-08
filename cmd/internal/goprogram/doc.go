@@ -26,7 +26,11 @@
 //
 // [github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared.LoadToolPackages]
 // is deliberately not folded in. It loads with NeedDeps, so it pays for the
-// dependency tree these four refuse to pay for, and it filters rather than
-// refuses: it returns the tool packages that typed and drops the ones that did
-// not. That is a different contract, not a different wording of this one.
+// dependency tree these four refuse to pay for, and it refuses more widely
+// than [Load] does: it collects every error of every loaded package, the
+// dependencies included, and aborts on all of them at once, where [Load]
+// stops at the first error of a package the caller asked for. It also returns
+// a subset rather than what it loaded, keeping the packages under
+// internal/tools and dropping the rest, and memoizes that result per root.
+// That is a different contract, not a different wording of this one.
 package goprogram

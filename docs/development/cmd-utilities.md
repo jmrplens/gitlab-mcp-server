@@ -1752,7 +1752,7 @@ The refusal is why this is a package rather than four tidy copies. Each gate ans
 
 The `overlay` parameter is not a convenience. It is how three of the gates' tests supply a fixture package written in the test file itself, type-checked against the real packages it imports, so the classifiers are exercised on the shapes they have to handle rather than on a mock of them. Production passes `nil`, and so does `audit_graphql_shapes`, whose fixtures are written to a module on disk.
 
-`cmd/audit_1to1/internal/shared.LoadToolPackages` is deliberately not folded in: it loads with `NeedDeps`, and it filters rather than refuses: it returns the tool packages that typed and drops the ones that did not. That is a different contract, not a different wording of this one.
+`cmd/audit_1to1/internal/shared.LoadToolPackages` is deliberately not folded in. It loads with `NeedDeps`, so it pays for the dependency tree these four refuse to pay for, and it refuses more widely than `Load` does, collecting every error of every loaded package (the dependencies included) and aborting on all of them at once where `Load` stops at the first error of a package the caller asked for. It also returns a subset rather than what it loaded, keeping the packages under `internal/tools` and dropping the rest, and memoizes that result per root. That is a different contract, not a different wording of this one.
 
 ## CI gate targets
 
