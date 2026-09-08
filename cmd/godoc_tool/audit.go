@@ -15,10 +15,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/golist"
 )
 
 const (
@@ -53,11 +54,10 @@ const (
 // Seams over the toolchain and standard library, so a test can drive the
 // failure branches a toolchain and filesystem the tests own, and run as root,
 // never produce on their own: a `go list` whose rows are blank or missing a
-// tab, a Windows GOOS, a doc build that rejects its options, and a JSON marshal
-// of a report that cannot be encoded.
+// tab, a doc build that rejects its options, and a JSON marshal of a report
+// that cannot be encoded.
 var (
 	goListOutput    = defaultGoListOutput
-	runtimeGOOS     = runtime.GOOS
 	newDocFromFiles = doc.NewFromFiles
 	marshalIndent   = json.MarshalIndent
 )
@@ -65,8 +65,8 @@ var (
 // defaultGoListOutput runs `go list` and returns its raw output. It is the
 // production value of the goListOutput seam.
 func defaultGoListOutput(ctx context.Context) ([]byte, error) {
-	// #nosec G204 -- goExecutable returns the fixed Go tool path from the active runtime installation.
-	cmd := exec.CommandContext(ctx, goExecutable(), "list", "-f", "{{.Dir}}\t{{.ImportPath}}\t{{.Name}}", "./...")
+	// #nosec G204 -- golist.Executable returns the fixed Go tool path from the active runtime installation.
+	cmd := exec.CommandContext(ctx, golist.Executable(), "list", "-f", golist.Format, "./...")
 	return cmd.Output()
 }
 
@@ -83,16 +83,6 @@ type options struct {
 	includeTests   bool
 	failOnFindings bool
 	ignoreInternal bool
-}
-
-// packageInfo identifies one Go package returned by go list.
-//
-// Dir is the absolute directory of the package; ImportPath is its module
-// path; Name is the short package identifier from the package clause.
-type packageInfo struct {
-	Dir        string `json:"dir"`
-	ImportPath string `json:"import_path"`
-	Name       string `json:"name"`
 }
 
 // finding describes one documentation issue found in a package.
@@ -213,7 +203,11 @@ func auditRepository(opts options) (report, error) {
 }
 
 // listPackages returns all packages in the current module using go list.
-func listPackages() ([]packageInfo, error) {
+//
+// The 30-second bound is this command's own: the audit lists the whole module
+// once and then reads it, so a toolchain that never answers should end the run
+// rather than hang it.
+func listPackages() ([]golist.PackageInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -221,36 +215,11 @@ func listPackages() ([]packageInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("go list: %w", err)
 	}
-
-	packages := []packageInfo{}
-	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		if line == "" {
-			continue
-		}
-		dir, remainder, ok := strings.Cut(line, "\t")
-		if !ok {
-			return nil, fmt.Errorf("unexpected go list row: %q", line)
-		}
-		importPath, name, ok := strings.Cut(remainder, "\t")
-		if !ok {
-			return nil, fmt.Errorf("unexpected go list row: %q", line)
-		}
-		packages = append(packages, packageInfo{Dir: dir, ImportPath: importPath, Name: name})
-	}
-	return packages, nil
-}
-
-// goExecutable returns the absolute Go tool path from the runtime installation.
-func goExecutable() string {
-	name := "go"
-	if runtimeGOOS == "windows" {
-		name += ".exe"
-	}
-	return filepath.Join(runtime.GOROOT(), "bin", name) //nolint:staticcheck // Avoid PATH lookup for Sonar go:S4036.
+	return golist.ParseRows(out)
 }
 
 // auditPackage parses source files for one package and checks documentation.
-func auditPackage(pkg packageInfo, includeTests bool) ([]finding, error) {
+func auditPackage(pkg golist.PackageInfo, includeTests bool) ([]finding, error) {
 	parsed, err := parsePackageFiles(pkg)
 	if err != nil {
 		return nil, err
@@ -276,7 +245,7 @@ type parsedPackage struct {
 	testFiles   map[string]*ast.File
 }
 
-func parsePackageFiles(pkg packageInfo) (parsedPackage, error) {
+func parsePackageFiles(pkg golist.PackageInfo) (parsedPackage, error) {
 	entries, err := os.ReadDir(pkg.Dir)
 	if err != nil {
 		return parsedPackage{}, fmt.Errorf("read package dir %s: %w", pkg.Dir, err)
@@ -308,7 +277,7 @@ func parsePackageFiles(pkg packageInfo) (parsedPackage, error) {
 	return parsed, nil
 }
 
-func checkPackageDocs(pkg packageInfo, files map[string]*ast.File, findings *[]finding) {
+func checkPackageDocs(pkg golist.PackageInfo, files map[string]*ast.File, findings *[]finding) {
 	packageDocs := packageDocFiles(files)
 	if len(packageDocs) == 0 {
 		*findings = append(*findings, newFinding(categoryPackageDocMissing, pkg, "", pkg.Name, "missing package documentation"))
@@ -357,7 +326,7 @@ func validPackageDoc(packageName, docText string) bool {
 	return strings.HasPrefix(docText, "Package "+packageName)
 }
 
-func checkExportedDocs(pkg packageInfo, parsed parsedPackage, findings *[]finding) error {
+func checkExportedDocs(pkg golist.PackageInfo, parsed parsedPackage, findings *[]finding) error {
 	files := make([]*ast.File, 0, len(parsed.sourceFiles))
 	for _, file := range parsed.sourceFiles {
 		files = append(files, file)
@@ -393,7 +362,7 @@ func checkExportedDocs(pkg packageInfo, parsed parsedPackage, findings *[]findin
 	return nil
 }
 
-func checkNamedDoc(pkg packageInfo, missingCategory, formCategory, kind, name, docText string, findings *[]finding) {
+func checkNamedDoc(pkg golist.PackageInfo, missingCategory, formCategory, kind, name, docText string, findings *[]finding) {
 	docText = strings.TrimSpace(docText)
 	if docText == "" {
 		*findings = append(*findings, newFinding(missingCategory, pkg, "", name, fmt.Sprintf("missing %s documentation", kind)))
@@ -404,7 +373,7 @@ func checkNamedDoc(pkg packageInfo, missingCategory, formCategory, kind, name, d
 	}
 }
 
-func checkValueDoc(pkg packageInfo, missingCategory, formCategory, kind string, names []string, docText string, findings *[]finding) {
+func checkValueDoc(pkg golist.PackageInfo, missingCategory, formCategory, kind string, names []string, docText string, findings *[]finding) {
 	exportedNames := exportedNames(names)
 	if len(exportedNames) == 0 {
 		return
@@ -436,7 +405,7 @@ func exportedNames(names []string) []string {
 	return out
 }
 
-func checkTestDocs(pkg packageInfo, files map[string]*ast.File, findings *[]finding) {
+func checkTestDocs(pkg golist.PackageInfo, files map[string]*ast.File, findings *[]finding) {
 	paths := make([]string, 0, len(files))
 	for path := range files {
 		paths = append(paths, path)
@@ -454,7 +423,7 @@ func checkTestDocs(pkg packageInfo, files map[string]*ast.File, findings *[]find
 	}
 }
 
-func checkTestFunctionDoc(pkg packageInfo, path string, fn *ast.FuncDecl, findings *[]finding) {
+func checkTestFunctionDoc(pkg golist.PackageInfo, path string, fn *ast.FuncDecl, findings *[]finding) {
 	name := fn.Name.Name
 	missingCategory, formCategory, ok := testDocCategories(name)
 	if !ok {
@@ -501,7 +470,7 @@ func hasExampleOutput(docText string) bool {
 	return false
 }
 
-func newFinding(category string, pkg packageInfo, path, name, detail string) finding {
+func newFinding(category string, pkg golist.PackageInfo, path, name, detail string) finding {
 	return finding{
 		Category:   category,
 		ImportPath: pkg.ImportPath,

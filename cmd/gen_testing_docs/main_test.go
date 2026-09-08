@@ -561,9 +561,6 @@ func TestGoEnvironment_ModuleVersion_PinsToolchain(t *testing.T) {
 			}
 		})
 	}
-	if got := goExecutable(); !filepath.IsAbs(got) || strings.TrimSuffix(filepath.Base(got), ".exe") != "go" || filepath.Base(filepath.Dir(got)) != "bin" {
-		t.Fatalf("goExecutable() = %q, want an absolute .../bin/go path", got)
-	}
 }
 
 // TestRepositoryRoot_DeletedWorkingDirectory_FallsBackToDot verifies a

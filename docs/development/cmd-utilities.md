@@ -1779,6 +1779,16 @@ What stays with each command is what makes its record its own: its `Source` type
 
 Two nearby commands are deliberately not members. [`gen_request_inventory`](#gen_request_inventory) commits no provenance at all: its `-check` is byte equality against a fresh recording of the unit suite, so there is no date to judge and no window to share. [`audit_graphql_documents`](#audit_graphql_documents) owns no record either; it reads the pinned schema's, and calls `Age` only to say how long ago the pin was taken in its drift report, where an unreadable date stays silent rather than becoming a second complaint about a field `check-graphql-schema` already refuses.
 
+### cmd/internal/golist
+
+The row shape two commands ask `go list` for and read back (`Format`, `PackageInfo`, `ParseRows`), and the one answer to which `go` binary they run (`Executable`).
+
+Two commands enumerate this module's packages from the toolchain: [`godoc_tool`](#godoc_tool) lists `./...` because it audits every package's doc comments, and [`gen_testing_docs`](#gen_testing_docs) lists `./cmd/...`, `./internal/...` and `./test/e2e/...` with the e2e build tags because it describes those packages. Both need the same three fields — the directory to read the files out of, the import path to name the package by, and the package clause's own name, which neither of the other two implies — and both had written the template, the tab-separated parse, the `unexpected go list row` refusal and the struct for themselves, in a different field order each.
+
+`Executable` is the reason this is a package rather than two tidy copies. Neither command may resolve `go` through `PATH`, because a lookup in a directory list the environment controls is what Sonar's `go:S4036` refuses; the function joins it out of `GOROOT` instead, appends the Windows suffix, and carries the `//nolint` comment and the `runtimeGOOS` seam that makes the Windows branch reachable from a Linux test. Written twice, that is a rule that holds until one copy is edited by somebody who did not read the other.
+
+Running the command is deliberately not shared. `godoc_tool` wants one listing's stdout under a 30-second bound; `gen_testing_docs` runs `go test` and `go tool cover` through the same runner, which pins `GOTOOLCHAIN` to the `go` directive of `go.mod` and merges stderr into the output so a failure is reported with its tail — which is also why its warning rows reach `ParseRows`, and why refusing a row that is not exactly three fields matters rather than being pedantry. [`gen_stats`](#gen_stats) is not a member and cannot become one: it discovers packages through `git ls-files` so that `check-stats` stays a function of what is committed, which is a different universe rather than a different parse.
+
 ## CI gate targets
 
 The following utilities expose a verification mode (`--check` or `-check`, or an invariant/error exit) that CI runs to guard against drift. The combined documentation gate is `make audit-docs`, which chains markdownlint, the table formatter, the llms, LobeHub-manifest, testing-docs and site-stats checks, the local-link check, the godoc, surface-quality and alias audits, and the site's own `check`, `build` and `lint`.
