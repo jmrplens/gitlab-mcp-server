@@ -16,32 +16,36 @@ import (
 )
 
 // TestNewNoteUserOutputFromAuthor pins the additive author conversion
-// (always non-nil; full NoteAuthor field coverage).
+// (always non-nil; every NoteAuthor field, plus the two UserBasic fields the
+// captured response adds and the email GitLab does not send left out).
 func TestNewNoteUserOutputFromAuthor(t *testing.T) {
 	got := NewNoteUserOutputFromAuthor(gl.NoteAuthor{
 		ID: 1, Username: "alice", Email: "alice@example.com",
 		Name: "Alice", State: "active",
 		AvatarURL: "https://example.com/a.png", WebURL: "https://example.com/alice",
-	})
+	}, NoteUserExtra{PublicEmail: "alice@public.example", Locked: true})
 	if got == nil {
 		t.Fatal("NewNoteUserOutputFromAuthor returned nil for a populated author")
 	}
-	if got.ID != 1 || got.Username != "alice" || got.Email != "alice@example.com" ||
-		got.Name != "Alice" || got.State != "active" ||
-		got.AvatarURL != "https://example.com/a.png" || got.WebURL != "https://example.com/alice" {
-		t.Errorf("NewNoteUserOutputFromAuthor field mismatch: %+v", got)
+	want := &NoteUserOutput{
+		ID: 1, Username: "alice", PublicEmail: "alice@public.example", Name: "Alice", State: "active", Locked: true,
+		AvatarURL: "https://example.com/a.png", WebURL: "https://example.com/alice",
+	}
+	if *got != *want {
+		t.Errorf("NewNoteUserOutputFromAuthor() = %+v, want %+v", got, want)
 	}
 }
 
 // TestNewNoteUserOutputFromResolvedBy verifies the nil-on-empty contract
 // (the resolved_by JSON key must be absent when no user has resolved the
-// note, per the locked canonical-key convention).
+// note, per the locked canonical-key convention) and that the captured
+// fields reach a populated resolver.
 func TestNewNoteUserOutputFromResolvedBy(t *testing.T) {
-	if got := NewNoteUserOutputFromResolvedBy(gl.NoteResolvedBy{}); got != nil {
+	if got := NewNoteUserOutputFromResolvedBy(gl.NoteResolvedBy{}, NoteUserExtra{Locked: true}); got != nil {
 		t.Errorf("empty resolved-by must return nil, got %+v", got)
 	}
-	got := NewNoteUserOutputFromResolvedBy(gl.NoteResolvedBy{ID: 7, Username: "bob"})
-	if got == nil || got.ID != 7 || got.Username != "bob" {
+	got := NewNoteUserOutputFromResolvedBy(gl.NoteResolvedBy{ID: 7, Username: "bob"}, NoteUserExtra{PublicEmail: "bob@public.example"})
+	if got == nil || got.ID != 7 || got.Username != "bob" || got.PublicEmail != "bob@public.example" {
 		t.Errorf("populated resolved-by: %+v", got)
 	}
 }
@@ -112,9 +116,6 @@ func assertNoteOutputScalars(t *testing.T, got NoteOutput) {
 	}{
 		{"ID==42", got.ID == 42},
 		{"Body", got.Body == "hello"},
-		{"Attachment", got.Attachment == "file.txt"},
-		{"Title", got.Title == "T"},
-		{"FileName", got.FileName == "f.txt"},
 		{"System", got.System},
 		{"Internal", got.Internal},
 		{"Resolvable", got.Resolvable},
@@ -125,8 +126,12 @@ func assertNoteOutputScalars(t *testing.T, got NoteOutput) {
 		{"CommitID", got.CommitID == "abc"},
 		{"Type", got.Type == "DiffNote"},
 		{"ProjectID==99", got.ProjectID == 99},
-		// Confidential must mirror Internal (1:1 audit policy for MR/issue notes).
-		{"Confidential==Internal", got.Confidential},
+		// Confidential is GitLab's own value, read from the captured response.
+		{"Confidential", got.Confidential},
+		{"Imported", got.Imported},
+		{"ImportedFrom", got.ImportedFrom == "github"},
+		{"CommandsChanges", got.CommandsChanges["label"] == "bug"},
+		{"Suggestions", len(got.Suggestions) == 1 && got.Suggestions[0].ID == 5 && got.Suggestions[0].ToContent == "fixed"},
 	} {
 		if !c.ok {
 			t.Errorf("NoteOutputFromGitLab: field %s mismatch in %+v", c.name, got)
@@ -134,20 +139,15 @@ func assertNoteOutputScalars(t *testing.T, got NoteOutput) {
 	}
 }
 
-// TestNoteOutputFromGitLab_FieldMapping verifies that all gl.Note fields are
-// mapped to their canonical output keys by NoteOutputFromGitLab, including the
-// dual Confidential=Internal mapping and RFC 3339 timestamp formatting.
-func TestNoteOutputFromGitLab_FieldMapping(t *testing.T) {
+// fullNote is a note carrying every field the two converters read, on the
+// SDK side and on the captured side.
+func fullNote() (*gl.Note, NoteExtra) {
 	ts := testTimePtr("2026-01-15T10:00:00Z")
-	n := &gl.Note{
+	note := &gl.Note{
 		ID:           42,
 		Body:         "hello",
-		Attachment:   "file.txt",
-		Title:        "T",
-		FileName:     "f.txt",
 		CreatedAt:    ts,
 		UpdatedAt:    ts,
-		ExpiresAt:    ts,
 		System:       true,
 		Internal:     true,
 		Resolvable:   true,
@@ -162,17 +162,127 @@ func TestNoteOutputFromGitLab_FieldMapping(t *testing.T) {
 		Author:       gl.NoteAuthor{ID: 1, Username: "alice", Name: "Alice"},
 		ResolvedBy:   gl.NoteResolvedBy{ID: 2, Username: "bob"},
 	}
-	got := NoteOutputFromGitLab(n)
+	extra := NoteExtra{
+		Confidential:    true,
+		Imported:        true,
+		ImportedFrom:    "github",
+		CommandsChanges: map[string]any{"label": "bug"},
+		Suggestions:     []SuggestionOutput{{ID: 5, FromLine: 1, ToLine: 2, Appliable: true, FromContent: "broken", ToContent: "fixed"}},
+		Author:          NoteUserExtra{PublicEmail: "alice@public.example", Locked: true},
+		ResolvedBy:      NoteUserExtra{Locked: false},
+	}
+	return note, extra
+}
+
+// TestNoteOutputFromGitLab_FieldMapping verifies that every gl.Note field
+// and every captured field is mapped to its canonical output key by
+// NoteOutputFromGitLab, with RFC 3339 timestamp formatting.
+func TestNoteOutputFromGitLab_FieldMapping(t *testing.T) {
+	n, extra := fullNote()
+
+	got := NoteOutputFromGitLab(n, extra)
+
 	assertNoteOutputScalars(t, got)
-	if got.Author == nil || got.Author.Username != "alice" {
+	if got.Author == nil || got.Author.Username != "alice" || !got.Author.Locked || got.Author.PublicEmail != "alice@public.example" {
 		t.Errorf("NoteOutputFromGitLab: Author missing or wrong: %+v", got.Author)
 	}
-	if got.ResolvedBy == nil || got.ResolvedBy.Username != "bob" {
+	if got.ResolvedBy == nil || got.ResolvedBy.Username != "bob" || got.ResolvedBy.Locked {
 		t.Errorf("NoteOutputFromGitLab: ResolvedBy missing or wrong: %+v", got.ResolvedBy)
 	}
-	if got.CreatedAt == "" || got.UpdatedAt == "" || got.ExpiresAt == "" || got.ResolvedAt == "" {
-		t.Errorf("NoteOutputFromGitLab: zero timestamp: created=%q updated=%q expires=%q resolved=%q",
-			got.CreatedAt, got.UpdatedAt, got.ExpiresAt, got.ResolvedAt)
+	if got.CreatedAt == "" || got.UpdatedAt == "" || got.ResolvedAt == "" {
+		t.Errorf("NoteOutputFromGitLab: zero timestamp: created=%q updated=%q resolved=%q",
+			got.CreatedAt, got.UpdatedAt, got.ResolvedAt)
+	}
+}
+
+// TestDiscussionThreadNoteOutputFromGitLab_FieldMapping verifies the thread
+// note converter reads what client-go decoded: the scalars, the timestamps
+// and the two users.
+func TestDiscussionThreadNoteOutputFromGitLab_FieldMapping(t *testing.T) {
+	n, extra := fullNote()
+
+	got := DiscussionThreadNoteOutputFromGitLab(n, extra)
+
+	if got.ID != 42 || got.Body != "hello" || !got.Resolved || !got.Resolvable || got.Type != "DiffNote" || got.ProjectID != 99 ||
+		got.CreatedAt == "" || got.UpdatedAt == "" || got.ResolvedAt == "" ||
+		got.Author == nil || got.Author.Username != "alice" || got.ResolvedBy == nil || got.ResolvedBy.Username != "bob" {
+		t.Errorf("DiscussionThreadNoteOutputFromGitLab() = %+v, want the SDK's half of the note", got)
+	}
+}
+
+// TestDiscussionThreadNoteOutputFromGitLab_CapturedHalf verifies the same
+// converter reads what the capture decoded beside the SDK: the fields
+// client-go does not model, on the note and on its author.
+func TestDiscussionThreadNoteOutputFromGitLab_CapturedHalf(t *testing.T) {
+	n, extra := fullNote()
+
+	got := DiscussionThreadNoteOutputFromGitLab(n, extra)
+
+	if !got.Confidential || !got.Imported || got.ImportedFrom != "github" || got.CommandsChanges["label"] != "bug" ||
+		len(got.Suggestions) != 1 || got.Author == nil || !got.Author.Locked {
+		t.Errorf("DiscussionThreadNoteOutputFromGitLab() = %+v, want the captured half of the note", got)
+	}
+}
+
+// TestDiscussionThreadNoteOutputFromGitLab_NilNote verifies a nil note, which
+// the SDK's []*gl.Note can hold, converts to the zero value rather than a
+// dereference.
+func TestDiscussionThreadNoteOutputFromGitLab_NilNote(t *testing.T) {
+	_, extra := fullNote()
+
+	zero := DiscussionThreadNoteOutputFromGitLab(nil, extra)
+
+	if zero.ID != 0 || zero.Author != nil {
+		t.Errorf("a nil note converted to %+v, want the zero value", zero)
+	}
+}
+
+// TestDiscussionThreadOutputFromGitLab_ReadsBothHalves verifies the thread
+// converter: the thread's own resolution state from the capture, one extra
+// per note by position, a note beyond what the capture holds converted with
+// none, a nil discussion to the zero value, and the list form keeping the
+// pairing by position with a short list of extras.
+func TestDiscussionThreadOutputFromGitLab_ReadsBothHalves(t *testing.T) {
+	n, extra := fullNote()
+	discussion := &gl.Discussion{ID: "d1", IndividualNote: true, Notes: []*gl.Note{n, {ID: 43}, nil}}
+	threadExtra := DiscussionExtra{Resolvable: true, Resolved: true, Notes: []NoteExtra{extra, {Imported: true}}}
+
+	got := DiscussionThreadOutputFromGitLab(discussion, threadExtra)
+
+	if got.ID != "d1" || !got.IndividualNote || !got.Resolvable || !got.Resolved || len(got.Notes) != 3 {
+		t.Fatalf("DiscussionThreadOutputFromGitLab() = %+v, want the thread with three notes", got)
+	}
+	if got.Notes[0].ID != 42 || !got.Notes[0].Confidential || got.Notes[1].ID != 43 || !got.Notes[1].Imported || got.Notes[2].ID != 0 {
+		t.Errorf("notes = %+v, %+v, %+v; want each paired with its extra by position", got.Notes[0], got.Notes[1], got.Notes[2])
+	}
+	if zero := DiscussionThreadOutputFromGitLab(nil, threadExtra); zero.ID != "" || zero.Notes != nil {
+		t.Errorf("a nil discussion converted to %+v, want the zero value", zero)
+	}
+
+	list := DiscussionThreadOutputsFromGitLab([]*gl.Discussion{discussion, {ID: "d2"}}, []DiscussionExtra{threadExtra})
+	if len(list) != 2 || !list[0].Resolvable || list[1].ID != "d2" || list[1].Resolvable {
+		t.Errorf("DiscussionThreadOutputsFromGitLab() = %+v, want the first paired and the second without extras", list)
+	}
+}
+
+// TestDiscussionThreadOutput_Markdown verifies the view models: the author
+// is named by username, an absent author by nothing, and a nil note in a
+// thread is left out rather than dereferenced.
+func TestDiscussionThreadOutput_Markdown(t *testing.T) {
+	thread := DiscussionThreadOutput{ID: "d1", Notes: []*DiscussionThreadNoteOutput{
+		{ID: 1, Body: "first", Author: &NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-15T10:00:00Z"},
+		{ID: 2, Body: "second"},
+		nil,
+	}}
+
+	got := DiscussionThreadOutputMarkdowns([]DiscussionThreadOutput{thread})
+
+	want := []DiscussionMarkdown{{ID: "d1", Notes: []DiscussionNoteMarkdown{
+		{ID: 1, Body: "first", Author: "alice", CreatedAt: "2026-01-15T10:00:00Z"},
+		{ID: 2, Body: "second"},
+	}}}
+	if len(got) != 1 || got[0].ID != want[0].ID || len(got[0].Notes) != 2 || got[0].Notes[0] != want[0].Notes[0] || got[0].Notes[1] != want[0].Notes[1] {
+		t.Errorf("DiscussionThreadOutputMarkdowns() = %+v, want %+v", got, want)
 	}
 }
 
@@ -180,7 +290,7 @@ func TestNoteOutputFromGitLab_FieldMapping(t *testing.T) {
 // returns a valid zero-value NoteOutput (no panic) and leaves optional
 // sub-objects nil when the note has no author ID, no resolver, no position.
 func TestNoteOutputFromGitLab_ZeroNote(t *testing.T) {
-	got := NoteOutputFromGitLab(&gl.Note{})
+	got := NoteOutputFromGitLab(&gl.Note{}, NoteExtra{})
 	if got.ID != 0 || got.Body != "" {
 		t.Errorf("NoteOutputFromGitLab zero-note: unexpected non-zero fields: %+v", got)
 	}

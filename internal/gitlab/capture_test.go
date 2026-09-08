@@ -197,6 +197,21 @@ func TestResponseCapture_Decode_ReportsABodyTheTypeCannotHold(t *testing.T) {
 	}
 }
 
+// TestCapturedBody_IsACaptureAlreadyAnswered verifies the seam a reader's
+// test decodes from: the capture holds the body as if a request under it had
+// been answered with it, so Decode reads it and never reports the empty case.
+func TestCapturedBody_IsACaptureAlreadyAnswered(t *testing.T) {
+	var got struct {
+		N int `json:"n"`
+	}
+
+	err := CapturedBody([]byte(`{"n":4}`)).Decode(&got)
+
+	if err != nil || got.N != 4 {
+		t.Errorf("CapturedBody().Decode() = %+v, %v; want the body decoded", got, err)
+	}
+}
+
 // TestClient_ResponseCapture_ReadsWhatTheSDKDecoded verifies the mechanism
 // end to end through the real client: an SDK call made under a capture
 // answers with its own struct as always, the capture holds the same body for

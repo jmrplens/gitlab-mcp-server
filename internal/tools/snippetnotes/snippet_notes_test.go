@@ -654,22 +654,52 @@ func TestToOutput_FullFields(t *testing.T) {
 // assertFullNoteScalars checks the additive scalar fields and author object.
 func assertFullNoteScalars(t *testing.T, out Output) {
 	t.Helper()
-	if out.Author == nil || out.Author.ID != 7 || out.Author.Email != "a@x.io" || out.Author.WebURL != "http://a/alice" {
+	if out.Author == nil || out.Author.ID != 7 || out.Author.WebURL != "http://a/alice" {
 		t.Errorf("Author = %+v, want fully populated", out.Author)
-	}
-	if out.Attachment != "file.txt" || out.Title != "t" || out.FileName != "snippet.rb" {
-		t.Errorf("scalar fields not mapped: %+v", out)
 	}
 	if !out.Internal || !out.Resolvable || !out.Confidential {
 		t.Errorf("flags not mapped: internal=%v resolvable=%v confidential=%v", out.Internal, out.Resolvable, out.Confidential)
 	}
-	if out.CommitID != "abc123" || out.ExpiresAt != "2027-01-01T00:00:00Z" {
-		t.Errorf("commit_id/expires_at not mapped: %q %q", out.CommitID, out.ExpiresAt)
+	if out.CommitID != "abc123" {
+		t.Errorf("commit_id not mapped: %q", out.CommitID)
 	}
 	if out.NoteableIID != 2 || out.ProjectID != 42 {
 		t.Errorf("noteable_iid/project_id not mapped: %d %d", out.NoteableIID, out.ProjectID)
 	}
 	assertFullNoteResolution(t, out)
+}
+
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler here: GitLab's answer
+// decodes for the SDK and not for the fields this package reads beside it,
+// which is a fault in the type naming them and is reported rather than
+// swallowed. A string where `imported` is a bool is the shape.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		note := `{"id":1,"body":"x","author":{"id":1,"username":"u"},"imported":"not-a-bool"}`
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/myproject/snippets/1/notes" {
+			note = "[" + note + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, note)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "create", Call: func() error {
+			_, err := Create(t.Context(), client, CreateInput{ProjectID: testProjectID, SnippetID: 1, Body: "x"})
+			return err
+		}},
+		{Name: "list", Call: func() error {
+			_, err := List(t.Context(), client, ListInput{ProjectID: testProjectID, SnippetID: 1})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			_, err := Get(t.Context(), client, GetInput{ProjectID: testProjectID, SnippetID: 1, NoteID: 1})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			_, err := Update(t.Context(), client, UpdateInput{ProjectID: testProjectID, SnippetID: 1, NoteID: 1, Body: "x"})
+			return err
+		}},
+	})
 }
 
 // assertFullNoteResolution checks the additive type / resolution sub-fields.

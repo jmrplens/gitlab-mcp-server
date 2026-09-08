@@ -51,36 +51,11 @@ type DeleteInput struct {
 	NoteID    int64                `json:"note_id"     jsonschema:"ID of the note to delete,required"`
 }
 
-// Output represents a note (comment) on a snippet. Per the 1:1 audit policy it
-// mirrors every field of gl.Note, surfacing the full author / position
-// sub-objects. Per the locked canonical-key convention the full
-// *NoteUserOutput author object is surfaced on the canonical `author` key.
-type Output struct {
-	toolutil.HintableOutput
-	ID           int64                        `json:"id"`
-	Body         string                       `json:"body"`
-	Author       *toolutil.NoteUserOutput     `json:"author,omitempty"`
-	Attachment   string                       `json:"attachment,omitempty"`
-	Title        string                       `json:"title,omitempty"`
-	FileName     string                       `json:"file_name,omitempty"`
-	CreatedAt    string                       `json:"created_at"`
-	UpdatedAt    string                       `json:"updated_at,omitempty"`
-	ExpiresAt    string                       `json:"expires_at,omitempty"`
-	System       bool                         `json:"system"`
-	Internal     bool                         `json:"internal"`
-	Resolvable   bool                         `json:"resolvable,omitempty"`
-	Resolved     bool                         `json:"resolved,omitempty"`
-	ResolvedAt   string                       `json:"resolved_at,omitempty"`
-	ResolvedBy   *toolutil.NoteUserOutput     `json:"resolved_by,omitempty"`
-	Type         string                       `json:"type,omitempty"`
-	CommitID     string                       `json:"commit_id,omitempty"`
-	Position     *toolutil.NotePositionOutput `json:"position,omitempty"`
-	NoteableType string                       `json:"noteable_type,omitempty"`
-	NoteableID   int64                        `json:"noteable_id,omitempty"`
-	NoteableIID  int64                        `json:"noteable_iid,omitempty"`
-	ProjectID    int64                        `json:"project_id,omitempty"`
-	Confidential bool                         `json:"confidential"`
-}
+// Output is an alias of [toolutil.NoteOutput], the canonical REST note
+// shape shared with issuenotes and mrnotes: every field GitLab's Note entity
+// sends, the author as the UserBasic object it is. Until 2.8.0 this package
+// carried a copy of that shape with `updated_at` omitted when empty.
+type Output = toolutil.NoteOutput
 
 // ListOutput holds a paginated list of snippet notes.
 type ListOutput struct {
@@ -89,38 +64,11 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// toOutput converts a GitLab API [gl.Note] to the MCP tool output format. Per
-// the locked canonical-key convention it surfaces the full author object on the
-// canonical `author` key, while additively surfacing the position sub-object and
-// every other gl.Note field (1:1 audit policy). Timestamps are formatted as
-// RFC 3339 strings.
-func toOutput(n *gl.Note) Output {
-	out := Output{
-		ID:           n.ID,
-		Body:         n.Body,
-		Author:       toolutil.NewNoteUserOutputFromAuthor(n.Author),
-		Attachment:   n.Attachment,
-		Title:        n.Title,
-		FileName:     n.FileName,
-		System:       n.System,
-		Internal:     n.Internal,
-		Resolvable:   n.Resolvable,
-		Resolved:     n.Resolved,
-		ResolvedBy:   toolutil.NewNoteUserOutputFromResolvedBy(n.ResolvedBy),
-		Type:         string(n.Type),
-		CommitID:     n.CommitID,
-		Position:     toolutil.NewNotePositionOutput(n.Position),
-		NoteableType: n.NoteableType,
-		NoteableID:   n.NoteableID,
-		NoteableIID:  n.NoteableIID,
-		ProjectID:    n.ProjectID,
-		Confidential: n.Confidential, //nolint:staticcheck // mirror deprecated SDK field for 1:1 fidelity
-	}
-	out.CreatedAt = toolutil.FormatTimePtr(n.CreatedAt)
-	out.UpdatedAt = toolutil.FormatTimePtr(n.UpdatedAt)
-	out.ExpiresAt = toolutil.FormatTimePtr(n.ExpiresAt)
-	out.ResolvedAt = toolutil.FormatTimePtr(n.ResolvedAt)
-	return out
+// toOutput converts a GitLab API [gl.Note], and what the captured response
+// adds to it, to the MCP tool output format, through the shared conversion
+// in [toolutil.NoteOutputFromGitLab].
+func toOutput(n *gl.Note, extra toolutil.NoteExtra) Output {
+	return toolutil.NoteOutputFromGitLab(n, extra)
 }
 
 // List retrieves a paginated list of notes on a snippet.
@@ -142,14 +90,19 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.Sort = &input.Sort
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	notes, resp, err := client.GL().Notes.ListSnippetNotes(string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippetNoteList", err, http.StatusNotFound,
 			"verify project_id and snippet_id with gitlab_snippet_list; private snippets require Reporter role on the project")
 	}
+	extras, err := toolutil.CapturedNotes(captured, len(notes))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("snippetNoteList", err)
+	}
 	out := make([]Output, len(notes))
 	for i, n := range notes {
-		out[i] = toOutput(n)
+		out[i] = toOutput(n, extras[i])
 	}
 	return ListOutput{Notes: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -168,12 +121,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.NoteID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("snippetNoteGet", "note_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	n, _, err := client.GL().Notes.GetSnippetNote(string(input.ProjectID), input.SnippetID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippetNoteGet", err, http.StatusNotFound,
 			"verify project_id, snippet_id, and note_id with gitlab_snippet_note_list")
 	}
-	return toOutput(n), nil
+	extra, err := toolutil.CapturedNote(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("snippetNoteGet", err)
+	}
+	return toOutput(n, extra), nil
 }
 
 // Create adds a new note to a snippet.
@@ -197,12 +155,17 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if t := toolutil.ParseOptionalTime(input.CreatedAt); t != nil {
 		opts.CreatedAt = t
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	n, _, err := client.GL().Notes.CreateSnippetNote(string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippetNoteCreate", err, http.StatusBadRequest,
 			"body is required and rendered as GitLab Flavored Markdown (max 1MB); requires Reporter role on the project")
 	}
-	return toOutput(n), nil
+	extra, err := toolutil.CapturedNote(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("snippetNoteCreate", err)
+	}
+	return toOutput(n, extra), nil
 }
 
 // Update modifies the body of an existing snippet note.
@@ -220,6 +183,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.ErrRequiredInt64("snippetNoteUpdate", "note_id")
 	}
 	body := toolutil.NormalizeText(input.Body)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	n, _, err := client.GL().Notes.UpdateSnippetNote(string(input.ProjectID), input.SnippetID, input.NoteID, &gl.UpdateSnippetNoteOptions{
 		Body: &body,
 	}, gl.WithContext(ctx))
@@ -227,7 +191,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.WrapErrWithStatusHint("snippetNoteUpdate", err, http.StatusForbidden,
 			"only the note author or a Maintainer/Owner can edit; verify note_id with gitlab_snippet_note_list; system notes cannot be edited")
 	}
-	return toOutput(n), nil
+	extra, err := toolutil.CapturedNote(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("snippetNoteUpdate", err)
+	}
+	return toOutput(n, extra), nil
 }
 
 // Delete removes a note from a snippet.

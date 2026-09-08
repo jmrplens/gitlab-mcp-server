@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 14,946 |
-| Unit test functions                                   | 14,343 |
+| Total test functions                                  | 14,958 |
+| Unit test functions                                   | 14,355 |
 | E2E test functions                                    |    603 |
 | cmd test functions                                    |  2,949 |
 | Test files (internal/)                                |    520 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,873 | 79.4% |
-| `TestFunc` (no underscore)             |    980 |  6.6% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,093 | 14.0% |
+| `TestFunc_Scenario` (2-part)           | 11,881 | 79.4% |
+| `TestFunc` (no underscore)             |    977 |  6.5% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,100 | 14.0% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,446 |        145 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,451 |        145 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,610 |        359 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,617 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            603 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,949 |        204 | server entry point and developer command utilities                                              |
-| **Total**               |     **14,946** |    **964** |                                                                                                 |
+| **Total**               |     **14,958** |    **964** |                                                                                                 |
 
 ### Core Packages
 
@@ -65,7 +65,7 @@
 | edition       |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                      |
 | elicitation   |       129 |    98.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                       |
 | gatewaycompat |        19 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions. |
-| gitlab        |        92 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                            |
+| gitlab        |        93 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                            |
 | graphqlschema |        20 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                   |
 | mcpotel       |        87 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                               |
 | oauth         |        78 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                            |
@@ -76,8 +76,8 @@
 | subscriptions |        99 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        90 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
-| toolutil      |       864 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,446** |          |                                                                                                                                                                                                                                                                    |
+| toolutil      |       868 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
+| **Subtotal**  | **2,451** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -141,7 +141,7 @@
 | civariables             |        46 |          2 |   100.0% |         5 |
 | ciyamltemplates         |        23 |          1 |   100.0% |         2 |
 | clusteragents           |        42 |          1 |   100.0% |         8 |
-| commitdiscussions       |        39 |          3 |   100.0% |         6 |
+| commitdiscussions       |        40 |          3 |   100.0% |         6 |
 | commits                 |       114 |          1 |    99.8% |        13 |
 | compliancepolicy        |         6 |          1 |   100.0% |         2 |
 | containerregistry       |       101 |          4 |   100.0% |        16 |
@@ -206,9 +206,9 @@
 | instancevariables       |        41 |          2 |   100.0% |         5 |
 | integrations            |        87 |          4 |    99.6% |        12 |
 | invites                 |        43 |          1 |   100.0% |         4 |
-| issuediscussions        |        44 |          2 |   100.0% |         6 |
+| issuediscussions        |        45 |          2 |   100.0% |         6 |
 | issuelinks              |        68 |          3 |   100.0% |         4 |
-| issuenotes              |        48 |          2 |   100.0% |         5 |
+| issuenotes              |        49 |          2 |   100.0% |         5 |
 | issues                  |       223 |          2 |   100.0% |        21 |
 | issuestatistics         |        43 |          1 |   100.0% |         3 |
 | iterationdata           |         8 |          1 |   100.0% |         0 |
@@ -231,9 +231,9 @@
 | mrapprovalsettings      |         9 |          2 |   100.0% |         4 |
 | mrchanges               |        37 |          1 |   100.0% |         4 |
 | mrcontextcommits        |        22 |          1 |   100.0% |         3 |
-| mrdiscussions           |        58 |          1 |   100.0% |         7 |
+| mrdiscussions           |        59 |          1 |   100.0% |         7 |
 | mrdraftnotes            |        71 |          2 |   100.0% |         7 |
-| mrnotes                 |        49 |          2 |   100.0% |         5 |
+| mrnotes                 |        50 |          2 |   100.0% |         5 |
 | namespaces              |        37 |          1 |    99.3% |         4 |
 | notifications           |        29 |          1 |   100.0% |         6 |
 | orbit                   |        57 |          4 |   100.0% |         6 |
@@ -274,8 +274,8 @@
 | securitysettings        |        32 |          3 |   100.0% |         3 |
 | settings                |        17 |          1 |    94.4% |         2 |
 | sidekiq                 |        18 |          2 |   100.0% |         4 |
-| snippetdiscussions      |        36 |          2 |   100.0% |         6 |
-| snippetnotes            |        48 |          2 |   100.0% |         5 |
+| snippetdiscussions      |        37 |          2 |   100.0% |         6 |
+| snippetnotes            |        49 |          2 |   100.0% |         5 |
 | snippets                |        89 |          3 |    99.5% |        15 |
 | snippetstoragemoves     |        41 |          2 |   100.0% |         6 |
 | systemhooks             |        36 |          2 |   100.0% |         8 |
@@ -293,7 +293,7 @@
 | wikis                   |        61 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,610** |    **359** |          | **1,187** |
+| **Total**               | **8,617** |    **359** |          | **1,187** |
 
 </details>
 

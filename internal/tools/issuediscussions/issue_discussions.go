@@ -72,11 +72,16 @@ type DeleteNoteInput struct {
 
 // Output types.
 
-// NoteOutput represents a single note within a discussion.
-type NoteOutput = toolutil.DiscussionNoteOutput
+// NoteOutput is an alias of [toolutil.DiscussionThreadNoteOutput], the note
+// shape used within discussion threads: every field GitLab's Note entity
+// sends, the author as the UserBasic object it is. Until 2.8.0 this package
+// published a six-field note with the author's username as a string.
+type NoteOutput = toolutil.DiscussionThreadNoteOutput
 
-// Output represents a discussion thread.
-type Output = toolutil.DiscussionOutput
+// Output is an alias of [toolutil.DiscussionThreadOutput], the discussion
+// thread shape with full note payloads and the thread's own resolution
+// state.
+type Output = toolutil.DiscussionThreadOutput
 
 // ListOutput holds a list of issue discussions.
 type ListOutput struct {
@@ -102,12 +107,17 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		OrderBy: input.OrderBy, Sort: input.Sort,
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	discussions, resp, err := client.GL().Discussions.ListIssueDiscussions(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("issue_discussion_list", err, http.StatusNotFound,
 			"verify project_id and issue_iid with gitlab_issue_get")
 	}
-	return toListOutput(discussions, resp), nil
+	threads, err := toolutil.CapturedThreads("issue_discussion_list", discussions, captured)
+	if err != nil {
+		return ListOutput{}, err
+	}
+	return ListOutput{Discussions: threads, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // Get gets a single issue discussion.
@@ -124,12 +134,13 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.DiscussionID == "" {
 		return Output{}, errors.New("issue_discussion_get: discussion_id is required")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Discussions.GetIssueDiscussion(string(input.ProjectID), input.IssueIID, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("issue_discussion_get", err, http.StatusNotFound,
 			"verify discussion_id with gitlab_list_issue_discussions")
 	}
-	return toolutil.DiscussionOutputFromGitLab(d), nil
+	return toolutil.CapturedThread("issue_discussion_get", d, captured)
 }
 
 // Create creates a new issue discussion thread.
@@ -147,12 +158,13 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		Body:      new(input.Body),
 		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Discussions.CreateIssueDiscussion(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("issue_discussion_create", err, http.StatusNotFound,
 			"verify project_id and issue_iid with gitlab_issue_get; creating discussions requires Reporter role or higher")
 	}
-	return toolutil.DiscussionOutputFromGitLab(d), nil
+	return toolutil.CapturedThread("issue_discussion_create", d, captured)
 }
 
 // AddNote adds a note to an existing issue discussion.
@@ -173,12 +185,13 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 		Body:      new(input.Body),
 		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	note, _, err := client.GL().Discussions.AddIssueDiscussionNote(string(input.ProjectID), input.IssueIID, input.DiscussionID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("issue_discussion_add_note", err, http.StatusNotFound,
 			"verify discussion_id with gitlab_list_issue_discussions")
 	}
-	return toolutil.DiscussionNoteOutputFromGitLab(note), nil
+	return toolutil.CapturedThreadNote("issue_discussion_add_note", note, captured)
 }
 
 // UpdateNote updates an existing issue discussion note.
@@ -202,12 +215,13 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 		Body:      new(input.Body),
 		CreatedAt: toolutil.ParseOptionalTime(input.CreatedAt),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	note, _, err := client.GL().Discussions.UpdateIssueDiscussionNote(string(input.ProjectID), input.IssueIID, input.DiscussionID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("issue_discussion_update_note", err, http.StatusForbidden,
 			"only the note author can edit a discussion note")
 	}
-	return toolutil.DiscussionNoteOutputFromGitLab(note), nil
+	return toolutil.CapturedThreadNote("issue_discussion_update_note", note, captured)
 }
 
 // DeleteNote deletes an issue discussion note.
@@ -233,16 +247,6 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 			"only the note author or a Maintainer can delete a discussion note")
 	}
 	return nil
-}
-
-// Converters.
-
-// toListOutput converts the GitLab API response to the tool output format.
-func toListOutput(discussions []*gl.Discussion, resp *gl.Response) ListOutput {
-	return ListOutput{
-		Discussions: toolutil.DiscussionOutputsFromGitLab(discussions),
-		Pagination:  toolutil.PaginationFromResponse(resp),
-	}
 }
 
 // Formatters.

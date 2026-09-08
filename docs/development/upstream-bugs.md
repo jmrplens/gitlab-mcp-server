@@ -94,6 +94,7 @@ readable without opening the tracker:
 | 26 | client-go | [The invitations wrapper is missing two parameters and a response field](#the-invitations-wrapper-is-missing-two-parameters-and-a-response-field) | No | No | No | No | Yes |
 | 27 | client-go | [The achievements fragments select less than the schema offers](#the-achievements-fragments-select-less-than-the-schema-offers) | No | No | No | No | None possible |
 | 28 | client-go | [The epics wrapper is missing two filters and twelve response fields](#the-epics-wrapper-is-missing-two-filters-and-twelve-response-fields) | No | No | No | Was yes | Yes |
+| 29 | client-go | [The note and discussion structs miss what GitLab sends and declare what it does not](#the-note-and-discussion-structs-miss-what-gitlab-sends-and-declare-what-it-does-not) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-05.
 
@@ -548,6 +549,66 @@ the parameter to gitlab.com and reading the array back.
 `json` tags). The labels type is the one breaking change: a dual-shape field
 needs either its own type with an `UnmarshalJSON`, as this repository carries,
 or a second `LabelDetails` field beside the names.
+
+### The note and discussion structs miss what GitLab sends and declare what it does not
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes. The missing fields are read from the captured response
+  beside the SDK's own decode ([ADR-0021](adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)):
+  `internal/toolutil/note_capture.go` decodes a note, a discussion or a list
+  of either into `NoteExtra`, `DiscussionExtra` and `NoteUserExtra`, and the
+  converters in `internal/toolutil/note_shapes.go` take both halves. Seven
+  packages carry it: `issuenotes`, `mrnotes`, `snippetnotes`,
+  `commitdiscussions`, `mrdiscussions`, `issuediscussions` and
+  `snippetdiscussions`. Retire the extras, the readers and the capture in
+  those handlers once the wrapper carries the fields; the phantoms need no
+  workaround, since this server's output shapes simply do not name them.
+
+**What**: three structs in `notes.go` and `discussions.go`, held against the
+Grape entities that render them at the pinned commit `1c8ac034` of
+gitlab-org/gitlab (`docs/development/gitlab-api-exposes.json`).
+
+- `Note` declares four fewer fields than `lib/api/entities/note.rb` exposes:
+  `imported` and `imported_from`, sent on every note; `commands_changes`, sent
+  on every note and carrying the quick actions a create or update applied,
+  which is the one place a caller learns that `/label ~bug` in the body did
+  something; and `suggestions`, an array of `lib/api/entities/suggestion.rb`
+  objects (`id`, `from_line`, `to_line`, `appliable`, `applied`,
+  `from_content`, `to_content`) sent on a merge request diff note, which is
+  the only way to read a suggestion's id in order to apply it.
+- `Note` also declares four fields no note endpoint sends: `attachment`,
+  `title`, `file_name` and `expires_at`. None is exposed by the entity, none
+  is in the OpenAPI record for any note operation, and anything reading them
+  off a decoded `Note` reads a zero. They look like the residue of an older
+  snippet shape.
+- `NoteAuthor` and `NoteResolvedBy` both render through
+  `lib/api/entities/user_basic.rb`, which exposes `id`, `username`,
+  `public_email`, `name`, `state`, `locked`, `avatar_url` and `web_url`
+  (`avatar_path` and `custom_attributes` too, under options no note endpoint
+  passes). Both structs declare `email`, which the entity never sends and
+  which the example bodies of
+  [doc/api/notes.md](https://docs.gitlab.com/api/notes/) print on every
+  author, so the page is where the field came from; neither declares
+  `public_email` or `locked`.
+- `Discussion` declares `id`, `individual_note` and `notes`, and
+  `lib/api/entities/discussion.rb` exposes `resolvable` beside them on every
+  discussion and `resolved` on a resolvable one. A caller listing the threads
+  of a merge request cannot tell an open thread from a resolved one without
+  walking its notes.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), which
+holds each output type against the entity its endpoints render, with the
+entity's own condition on each field; the four phantoms came from the same
+run's type grain, and the `email` one from reading `user_basic.rb`.
+
+**Effort**: small for the eight missing fields, all additive struct members
+with `json` tags, and `suggestions` needs one new type. The four phantoms and
+`email` are removals, so a deprecation note is the likely upstream shape for
+them.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

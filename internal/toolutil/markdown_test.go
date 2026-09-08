@@ -510,15 +510,15 @@ func TestFormatDiscussionListMarkdown(t *testing.T) {
 // TestDiscussionMarkdownHelpers verifies shared discussion renderers and mapper
 // wrappers used by REST and GraphQL discussion tool packages.
 func TestDiscussionMarkdownHelpers(t *testing.T) {
-	restDiscussion := DiscussionOutput{
+	restDiscussion := DiscussionThreadOutput{
 		ID: "rest-1",
-		Notes: []DiscussionNoteOutput{
-			{ID: 11, Body: "hello", Author: "alice", CreatedAt: "2026-05-17T12:00:00Z"},
+		Notes: []*DiscussionThreadNoteOutput{
+			{ID: 11, Body: "hello", Author: &NoteUserOutput{Username: "alice"}, CreatedAt: "2026-05-17T12:00:00Z"},
 		},
 	}
 	renderer := NewDiscussionRenderer("REST Discussions", "No discussions found.\n", "Open a discussion", "Reply to discussion", "Edit note")
 
-	restList := renderer.FormatRESTList(DiscussionOutputMarkdowns([]DiscussionOutput{restDiscussion}), PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1})
+	restList := renderer.FormatRESTList(DiscussionThreadOutputMarkdowns([]DiscussionThreadOutput{restDiscussion}), PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1})
 	for _, want := range []string{"## REST Discussions (1)", "### Discussion rest-1", "Open a discussion"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(restList, want) {
@@ -564,7 +564,7 @@ func TestDiscussionMarkdownHelpers(t *testing.T) {
 		})
 	}
 
-	restWrapper := FormatRESTDiscussionListMarkdown([]DiscussionOutput{restDiscussion}, PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}, DiscussionOutput.MarkdownDiscussion, "Wrapped Discussions", "No discussions found.\n", "Wrapped hint")
+	restWrapper := FormatRESTDiscussionListMarkdown([]DiscussionThreadOutput{restDiscussion}, PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}, DiscussionThreadOutput.MarkdownDiscussion, "Wrapped Discussions", "No discussions found.\n", "Wrapped hint")
 	if !strings.Contains(restWrapper, "Wrapped hint") {
 		t.Errorf("REST wrapper markdown missing hint:\n%s", restWrapper)
 	}

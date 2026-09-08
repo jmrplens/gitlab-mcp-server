@@ -443,16 +443,16 @@ func TestFormatListMarkdownString_Populated(t *testing.T) {
 			{
 				ID:             "disc1",
 				IndividualNote: false,
-				Notes: []NoteOutput{
-					{ID: 1, Body: "First note", Author: "alice", CreatedAt: "2026-01-01T00:00:00Z"},
-					{ID: 2, Body: "Second note", Author: "bob", CreatedAt: "2026-01-02T00:00:00Z"},
+				Notes: []*NoteOutput{
+					{ID: 1, Body: "First note", Author: &toolutil.NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z"},
+					{ID: 2, Body: "Second note", Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02T00:00:00Z"},
 				},
 			},
 			{
 				ID:             "disc2",
 				IndividualNote: true,
-				Notes: []NoteOutput{
-					{ID: 3, Body: "Solo note", Author: "carol", CreatedAt: "2026-01-03T00:00:00Z"},
+				Notes: []*NoteOutput{
+					{ID: 3, Body: "Solo note", Author: &toolutil.NoteUserOutput{Username: "carol"}, CreatedAt: "2026-01-03T00:00:00Z"},
 				},
 			},
 		},
@@ -481,9 +481,9 @@ func TestFormatMarkdownString_Populated(t *testing.T) {
 	out := Output{
 		ID:             "disc-abc",
 		IndividualNote: false,
-		Notes: []NoteOutput{
-			{ID: 10, Body: "Hello world", Author: "alice", CreatedAt: "2026-01-01T00:00:00Z"},
-			{ID: 11, Body: "Reply here", Author: "bob", CreatedAt: "2026-01-02T00:00:00Z"},
+		Notes: []*NoteOutput{
+			{ID: 10, Body: "Hello world", Author: &toolutil.NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z"},
+			{ID: 11, Body: "Reply here", Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02T00:00:00Z"},
 		},
 	}
 	md := FormatMarkdownString(out)
@@ -518,7 +518,7 @@ func TestFormatNoteMarkdownString_Populated(t *testing.T) {
 	out := NoteOutput{
 		ID:        42,
 		Body:      "Great work!",
-		Author:    "reviewer",
+		Author:    &toolutil.NoteUserOutput{Username: "reviewer"},
 		CreatedAt: "2026-03-01T10:00:00Z",
 	}
 	md := FormatNoteMarkdownString(out)
@@ -590,8 +590,8 @@ func TestNoteToOutput_AllFields(t *testing.T) {
 	if n.Body != "Full note" {
 		t.Errorf("Body = %q, want %q", n.Body, "Full note")
 	}
-	if n.Author != "alice" {
-		t.Errorf("Author = %q, want %q", n.Author, "alice")
+	if n.Author == nil || n.Author.Username != "alice" {
+		t.Errorf("Author = %+v, want username %q", n.Author, "alice")
 	}
 	if !n.System {
 		t.Error("System = false, want true")
@@ -632,8 +632,8 @@ func TestNoteToOutput_NoUpdatedAt(t *testing.T) {
 	if n.UpdatedAt != "" {
 		t.Errorf("UpdatedAt = %q, want empty when not provided", n.UpdatedAt)
 	}
-	if n.Author != "tester" {
-		t.Errorf("Author = %q, want %q", n.Author, "tester")
+	if n.Author == nil || n.Author.Username != "tester" {
+		t.Errorf("Author = %+v, want username %q", n.Author, "tester")
 	}
 	if n.CreatedAt != "2026-01-15T10:30:00Z" {
 		t.Errorf("CreatedAt = %q, want %q", n.CreatedAt, "2026-01-15T10:30:00Z")
@@ -664,9 +664,54 @@ func TestNoteToOutput_EmptyAuthor(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	n := out.Notes[0]
-	if n.Author != "" {
-		t.Errorf("Author = %q, want empty for empty author", n.Author)
+	// The author object is always present on a note; an empty one has no
+	// username.
+	if n.Author == nil || n.Author.Username != "" {
+		t.Errorf("Author = %+v, want an empty author object", n.Author)
 	}
+}
+
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler here: GitLab's answer
+// decodes for the SDK and not for the fields this package reads beside it,
+// which is a fault in the type naming them and is reported rather than
+// swallowed. A string where a note's `imported` is a bool is the shape, on
+// a note alone, inside a thread, and inside a list of threads.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		note := `{"id":1,"body":"x","author":{"id":1,"username":"u"},"imported":"not-a-bool"}`
+		thread := `{"id":"d1","individual_note":false,"notes":[` + note + `]}`
+		body := thread
+		switch {
+		case strings.Contains(r.URL.Path, "/notes"):
+			body = note
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/discussions"):
+			body = "[" + thread + "]"
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := List(t.Context(), client, ListInput{ProjectID: "42", IssueIID: 10})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			_, err := Get(t.Context(), client, GetInput{ProjectID: "42", IssueIID: 10, DiscussionID: "d1"})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", IssueIID: 10, Body: "x"})
+			return err
+		}},
+		{Name: "add note", Call: func() error {
+			_, err := AddNote(t.Context(), client, AddNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: "d1", Body: "x"})
+			return err
+		}},
+		{Name: "update note", Call: func() error {
+			_, err := UpdateNote(t.Context(), client, UpdateNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: "d1", NoteID: 1, Body: "x"})
+			return err
+		}},
+	})
 }
 
 // TestToOutput_MultipleNotes verifies the ToOutput_MultipleNotes handler.
@@ -699,11 +744,11 @@ func TestToOutput_MultipleNotes(t *testing.T) {
 	if len(out.Notes) != 3 {
 		t.Fatalf("got %d notes, want 3", len(out.Notes))
 	}
-	if out.Notes[0].Author != "alice" {
-		t.Errorf("Notes[0].Author = %q, want %q", out.Notes[0].Author, "alice")
+	if out.Notes[0].Author == nil || out.Notes[0].Author.Username != "alice" {
+		t.Errorf("Notes[0].Author = %+v, want username %q", out.Notes[0].Author, "alice")
 	}
-	if out.Notes[2].Author != "carol" {
-		t.Errorf("Notes[2].Author = %q, want %q", out.Notes[2].Author, "carol")
+	if out.Notes[2].Author == nil || out.Notes[2].Author.Username != "carol" {
+		t.Errorf("Notes[2].Author = %+v, want username %q", out.Notes[2].Author, "carol")
 	}
 }
 

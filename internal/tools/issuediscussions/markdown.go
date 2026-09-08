@@ -30,11 +30,11 @@ func FormatNoteMarkdownString(out NoteOutput) string {
 }
 
 func toMarkdownDiscussion(out Output) toolutil.DiscussionMarkdown {
-	return toolutil.NewDiscussionMarkdown(out.ID, toolutil.DiscussionNoteMarkdowns(out.Notes, toMarkdownNote))
+	return out.MarkdownDiscussion()
 }
 
 func toMarkdownNote(out NoteOutput) toolutil.DiscussionNoteMarkdown {
-	return toolutil.NewDiscussionNoteMarkdown(out.ID, out.Body, out.Author, out.CreatedAt)
+	return out.MarkdownNote()
 }
 
 func init() {
