@@ -252,7 +252,7 @@ func TestWriteReport_StdoutIsClosed_ReturnsTheWriteError(t *testing.T) {
 	os.Stdout = file
 	t.Cleanup(func() { os.Stdout = previous })
 
-	if writeErr := WriteReport("-", []byte("{}\n")); writeErr == nil {
+	if WriteReport("-", []byte("{}\n")) == nil {
 		t.Error("WriteReport(-) error = nil, want the closed-file write error")
 	}
 }

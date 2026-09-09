@@ -168,9 +168,14 @@ type gqlBranchRuleNode struct {
 	} `json:"externalStatusChecks"`
 }
 
-// branchRuleNode is what the list decodes a node as: either edition's shape,
-// each knowing how to become the one output item.
-type branchRuleNode interface {
+// branchRuleConverter is what the list decodes a node as: either edition's
+// shape, each knowing how to become the one output item. It is named for the
+// role it fills rather than for the shape it admits, which is the convention
+// the rest of this repository follows for an interface with one method
+// (promptAdder, errorReporter, modelProvider); the previous spelling named the
+// shape, and a reader met a constraint whose name did not say what the generic
+// code was going to do with it.
+type branchRuleConverter interface {
 	item() BranchRuleItem
 }
 
@@ -276,7 +281,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // Building the variables here rather than in the caller is what keeps the check
 // honest: the pair is checked against the document this call will actually
 // send, not against the one a tier decision happened to pick first.
-func listWith[N branchRuleNode](ctx context.Context, client *gitlabclient.Client, query string, input ListInput) (ListOutput, error) {
+func listWith[N branchRuleConverter](ctx context.Context, client *gitlabclient.Client, query string, input ListInput) (ListOutput, error) {
 	vars, err := input.Variables(query)
 	if err != nil {
 		return ListOutput{}, fmt.Errorf("list_branch_rules: %w", err)
@@ -290,19 +295,19 @@ func listWith[N branchRuleNode](ctx context.Context, client *gitlabclient.Client
 //
 // Pagination is the forward half alone, because both documents select that
 // half alone: Project.branchRules accepts first and after and nothing else.
-type gqlBranchRulesConnection[N branchRuleNode] struct {
+type gqlBranchRulesConnection[N branchRuleConverter] struct {
 	Nodes    []N                                `json:"nodes"`
 	PageInfo toolutil.GraphQLRawForwardPageInfo `json:"pageInfo"`
 }
 
 // gqlProjectBranchRules wraps the branch rules connection inside a project.
-type gqlProjectBranchRules[N branchRuleNode] struct {
+type gqlProjectBranchRules[N branchRuleConverter] struct {
 	BranchRules gqlBranchRulesConnection[N] `json:"branchRules"`
 }
 
 // gqlResponse is the GraphQL response envelope for branch rules, with each
 // node decoded as N.
-type gqlResponse[N branchRuleNode] struct {
+type gqlResponse[N branchRuleConverter] struct {
 	Data struct {
 		Project *gqlProjectBranchRules[N] `json:"project"`
 	} `json:"data"`
@@ -310,7 +315,7 @@ type gqlResponse[N branchRuleNode] struct {
 }
 
 // doGraphQLList executes a branch rules GraphQL query and returns the output.
-func doGraphQLList[N branchRuleNode](ctx context.Context, client *gitlabclient.Client, query string, vars map[string]any, projectPath string) (ListOutput, error) {
+func doGraphQLList[N branchRuleConverter](ctx context.Context, client *gitlabclient.Client, query string, vars map[string]any, projectPath string) (ListOutput, error) {
 	var resp gqlResponse[N]
 
 	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{

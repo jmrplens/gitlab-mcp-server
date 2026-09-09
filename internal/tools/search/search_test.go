@@ -2478,7 +2478,7 @@ func TestSnippets_AuthorAndTimestamps_AreCopiedOnlyWhenSent(t *testing.T) {
 			if snippet.Author != tt.wantAuthor {
 				t.Errorf("Author = %q, want %q", snippet.Author, tt.wantAuthor)
 			}
-			if gotTimestamp := snippet.CreatedAt != "" && snippet.UpdatedAt != ""; gotTimestamp != tt.wantTimestamp {
+			if (snippet.CreatedAt != "" && snippet.UpdatedAt != "") != tt.wantTimestamp {
 				t.Errorf("timestamps = %q/%q, want them set: %t", snippet.CreatedAt, snippet.UpdatedAt, tt.wantTimestamp)
 			}
 			if snippet.Title != "scratch" {

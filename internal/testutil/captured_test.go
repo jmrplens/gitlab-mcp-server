@@ -79,7 +79,7 @@ func TestAssertCapturedDecodeFailure_ReportsAnythingElse(t *testing.T) {
 				Call: func() error { return testCase.err },
 			})
 
-			if reported := len(reporter.reported) == 1; reported != testCase.wantReport {
+			if (len(reporter.reported) == 1) != testCase.wantReport {
 				t.Errorf("reported = %v, want %t", reporter.reported, testCase.wantReport)
 			}
 			if testCase.wantReport && !strings.Contains(reporter.reported[0], "want the capture's decode failure") {
