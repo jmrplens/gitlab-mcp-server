@@ -216,6 +216,26 @@ func (f sentField) key() string { return sentKey(f.Package, f.SchemaType, f.Fiel
 // built the same way.
 func sentKey(pkg, schemaType, field string) string { return pkg + "." + schemaType + "." + field }
 
+// objectPosition is one place in the walk where a GraphQL object meets the Go
+// struct that decodes it: the schema type, that struct's fields, the selection
+// set the document wrote there, what it selected and what of that it decoded,
+// whether the struct reads a leaf of its own rather than only the next hop, the
+// dotted path a finding is named by, and the Go type itself.
+//
+// The walk carries them as one value because they describe one position and
+// are never passed apart; spelled out they are eight arguments in a row, of
+// which two are maps of the same type and one is a bare bool.
+type objectPosition struct {
+	gqlType    *ast.Type
+	fields     []goField
+	selections ast.SelectionSet
+	selected   map[string]bool
+	decoded    map[string]bool
+	readsLeaf  bool
+	path       string
+	goType     types.Type
+}
+
 // askSchema reports the fields the schema offers at one object this server
 // decodes and the document does not select, records what the document did
 // select as the evidence that cancels a sibling document's finding, and gates
@@ -235,18 +255,18 @@ func sentKey(pkg, schemaType, field string) string { return pkg + "." + schemaTy
 // Pipeline and User, every one of them a domain R-PATH already asks the sent
 // question of against GitLab's own OpenAPI record, with a tier-aware oracle
 // this one does not have.
-func (j *judge) askSchema(gqlType *ast.Type, fields []goField, selections ast.SelectionSet, selected, decoded map[string]bool, readsLeaf bool, path string, goType types.Type) {
-	definition := j.schema.Types[gqlType.NamedType]
+func (j *judge) askSchema(at objectPosition) {
+	definition := j.schema.Types[at.gqlType.NamedType]
 	if definition == nil || j.isRoot(definition) || definition.Name == pageInfoType {
 		return
 	}
-	pkg := decoderPackage(goType, j.pairing.Package)
-	j.recordSelected(pkg, definition, decoded)
-	j.gateMutationErrors(definition, fields, path)
+	pkg := decoderPackage(at.goType, j.pairing.Package)
+	j.recordSelected(pkg, definition, at.decoded)
+	j.gateMutationErrors(definition, at.fields, at.path)
 
 	j.coverage.Reached++
 	switch {
-	case !readsLeaf:
+	case !at.readsLeaf:
 		j.coverage.Traversed++
 		return
 	case j.asked[definition.Name]:
@@ -257,9 +277,9 @@ func (j *judge) askSchema(gqlType *ast.Type, fields []goField, selections ast.Se
 	j.coverage.Asked++
 
 	reported := map[string]bool{}
-	for _, offering := range j.offering(definition, selections) {
+	for _, offering := range j.offering(definition, at.selections) {
 		for _, field := range offering.Fields {
-			if selected[field.Name] || reported[field.Name] || skipSentField(field) {
+			if at.selected[field.Name] || reported[field.Name] || skipSentField(field) {
 				continue
 			}
 			reported[field.Name] = true
@@ -268,9 +288,9 @@ func (j *judge) askSchema(gqlType *ast.Type, fields []goField, selections ast.Se
 				Package:    pkg,
 				Document:   j.pairing.Label(),
 				Operation:  j.operation,
-				Path:       path,
+				Path:       at.path,
 				SchemaType: definition.Name,
-				Type:       typeString(goType),
+				Type:       typeString(at.goType),
 				Field:      field.Name,
 				FieldType:  field.Type.String(),
 				Class:      j.classOf(field.Type),

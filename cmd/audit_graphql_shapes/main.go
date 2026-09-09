@@ -138,7 +138,26 @@ func run(cfg auditRun, out, errOut io.Writer) int {
 		return 1
 	}
 
-	return report(cfg, out, errOut, provenance, pairings, findings, problems, stale)
+	return report(cfg, out, errOut, auditResult{
+		provenance: provenance,
+		pairings:   pairings,
+		findings:   findings,
+		problems:   problems,
+		stale:      stale,
+	})
+}
+
+// auditResult is everything one run produced, gathered so the renderer takes
+// the run rather than a row of positional arguments: the provenance line every
+// summary ends with, the pairings that were judged, the findings filed under
+// them, the problems that belong to no pairing, and the declarations that no
+// longer answer anything.
+type auditResult struct {
+	provenance string
+	pairings   []pairing
+	findings   []finding
+	problems   []problem
+	stale      []string
 }
 
 // reportSent classifies what the schema offers and nobody selects, writes the
@@ -248,16 +267,16 @@ func unpairedDocuments(cfg auditRun, judged map[string]bool) ([]problem, error) 
 // goes to stdout under -v, and a pairing with nothing at all is one "ok" line
 // there. Every problem, and every declaration that no longer answers
 // anything, is a stderr line of its own.
-func report(cfg auditRun, out, errOut io.Writer, provenance string, pairings []pairing, findings []finding, problems []problem, stale []string) int {
+func report(cfg auditRun, out, errOut io.Writer, result auditResult) int {
 	root := absolute(cfg.dir)
-	byPairing := make(map[*pairing][]finding, len(pairings))
-	for _, f := range findings {
+	byPairing := make(map[*pairing][]finding, len(result.pairings))
+	for _, f := range result.findings {
 		byPairing[f.pairing] = append(byPairing[f.pairing], f)
 	}
 
 	disagreements, unread := 0, 0
-	for i := range pairings {
-		p := &pairings[i]
+	for i := range result.pairings {
+		p := &result.pairings[i]
 		group := byPairing[p]
 		fails := false
 		for _, f := range group {
@@ -277,24 +296,24 @@ func report(cfg auditRun, out, errOut io.Writer, provenance string, pairings []p
 			fmt.Fprintf(out, "    ok  %s\n", heading(root, p))
 		}
 	}
-	for _, trouble := range problems {
+	for _, trouble := range result.problems {
 		fmt.Fprintf(errOut, "%s (%s): %s\n", trouble.Package, relative(trouble.Position, root), trouble.Message)
 	}
-	for _, message := range stale {
+	for _, message := range result.stale {
 		fmt.Fprintf(errOut, "sent_declarations.go: %s\n", message)
 	}
 
 	switch {
-	case len(pairings) == 0:
+	case len(result.pairings) == 0:
 		fmt.Fprintf(errOut, "\n%s found no send to judge under %s\n", prefix, strings.Join(cfg.patterns, " "))
 		return 1
-	case disagreements > 0 || len(problems) > 0 || len(stale) > 0:
+	case disagreements > 0 || len(result.problems) > 0 || len(result.stale) > 0:
 		fmt.Fprintf(errOut, "\n%s %d disagreement(s) in %d pairing(s), %d unpaired or unjudged, %d stale declaration(s) (%s)\n",
-			prefix, disagreements, len(pairings), len(problems), len(stale), provenance)
+			prefix, disagreements, len(result.pairings), len(result.problems), len(result.stale), result.provenance)
 		return 1
 	default:
 		fmt.Fprintf(out, "%s %d pairing(s) agree with their documents, %d selection(s) nothing reads (%s)\n",
-			prefix, len(pairings), unread, provenance)
+			prefix, len(result.pairings), unread, result.provenance)
 		return 0
 	}
 }

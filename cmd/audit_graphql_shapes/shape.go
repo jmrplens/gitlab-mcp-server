@@ -357,7 +357,16 @@ func (j *judge) judgeStruct(body *types.Struct, gqlType *ast.Type, goType types.
 			j.fail(path+"."+field.name, "decoded from a field the document never selects, so it is always empty")
 		}
 	}
-	j.askSchema(gqlType, fields, selections, selected, decoded, readsLeaf, path, goType)
+	j.askSchema(objectPosition{
+		gqlType:    gqlType,
+		fields:     fields,
+		selections: selections,
+		selected:   selected,
+		decoded:    decoded,
+		readsLeaf:  readsLeaf,
+		path:       path,
+		goType:     goType,
+	})
 }
 
 // merged flattens a selection set into one field per response key, with
