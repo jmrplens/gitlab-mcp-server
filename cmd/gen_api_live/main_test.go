@@ -621,3 +621,57 @@ func firstLine(recorded string) string {
 	line, _, _ := strings.Cut(recorded, "\n")
 	return line
 }
+
+// TestWaitForRails_WhenTheApplicationNeverAnswers_SaysTheContainerIsUp
+// verifies the message the twenty-minute expiry carries, which is the one a
+// maintainer reads when a boot went wrong in a way docker cannot see: the
+// container is running and gitlab-rails runner is not answering, which is a
+// different problem from a container that died.
+func TestWaitForRails_WhenTheApplicationNeverAnswers_SaysTheContainerIsUp(t *testing.T) {
+	docker := stubDocker(t, `case "$1" in
+  exec) exit 1 ;;
+  inspect) echo true ;;
+esac
+`)
+	previous := bootTimeout
+	t.Cleanup(func() { bootTimeout = previous })
+	bootTimeout = -time.Second
+
+	err := waitForRails(context.Background(), docker)
+
+	if err == nil {
+		t.Fatal("waitForRails returned no error past its deadline")
+	}
+	if !strings.Contains(err.Error(), "does not answer") {
+		t.Errorf("error = %q, want it to say the application never answered", err)
+	}
+}
+
+// TestWaitForRails_WhenTheRunIsCancelled_StopsWaiting verifies the interrupt
+// path: the container is up and the application is not ready, and the wait
+// ends on the context rather than sitting out the rest of the twenty minutes.
+func TestWaitForRails_WhenTheRunIsCancelled_StopsWaiting(t *testing.T) {
+	docker := stubDocker(t, `case "$1" in
+  exec) exit 1 ;;
+  inspect) echo true ;;
+esac
+`)
+	previousPoll := pollInterval
+	t.Cleanup(func() { pollInterval = previousPoll })
+	pollInterval = time.Hour
+
+	// Cancelled on a timer rather than up front: an already-cancelled context
+	// makes the very first docker call fail, and the wait would then report the
+	// container as stopped instead of reaching the interrupt this is about.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	err := waitForRails(ctx, docker)
+
+	if err == nil {
+		t.Fatal("waitForRails returned no error for a cancelled run")
+	}
+	if !strings.Contains(err.Error(), "waiting for the application") {
+		t.Errorf("error = %q, want it to name what it was waiting for", err)
+	}
+}

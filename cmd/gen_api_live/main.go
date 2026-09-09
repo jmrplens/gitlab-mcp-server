@@ -322,7 +322,15 @@ func (d dockerPath) command(ctx context.Context, args ...string) *exec.Cmd {
 
 // bootTimeout bounds the wait for Rails. A first boot pulls three gigabytes
 // and reconfigures; a second is under a minute.
-const bootTimeout = 20 * time.Minute
+//
+// A variable rather than a constant so a test can reach the expiry, which is
+// the one branch here that says something a maintainer will read at three in
+// the morning: the container is up and the application is not answering.
+var bootTimeout = 20 * time.Minute //nolint:gochecknoglobals // a seam, restored by the test that moves it
+
+// pollInterval is how long the wait sleeps between attempts, for the same
+// reason and with the same shape.
+var pollInterval = 10 * time.Second //nolint:gochecknoglobals // a seam, restored by the test that moves it
 
 // waitForRails polls until gitlab-rails runner answers, which is a stricter
 // readiness than the container's own health check: the health check passes
@@ -340,7 +348,7 @@ func waitForRails(ctx context.Context, docker dockerPath) error {
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("waiting for the application: %w", ctx.Err())
-		case <-time.After(10 * time.Second):
+		case <-time.After(pollInterval):
 		}
 	}
 	return fmt.Errorf("the application was not ready within %s: the container is up but gitlab-rails runner does not answer", bootTimeout)
