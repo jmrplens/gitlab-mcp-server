@@ -1009,11 +1009,22 @@ func TestList_UndecodableBody_IsTheOperationError(t *testing.T) {
 // approver filter is left off the request rather than sent empty. The three
 // length guards in buildListOptions are what decides that, and a boundary
 // mutation of any of them turns "the caller asked for this" into "always".
+//
+// Both spellings of each ID filter are checked because the SDK's encoder picks
+// between them by the value it was given: the Any and None literals are written
+// with the bare key, and a list of user IDs with the bracketed one. Watching for
+// only one of the two would leave whichever half the encoder chose next
+// unguarded. Their wire forms are pinned in TestApproverIDsFilter_Encoding.
 func TestList_EmptyApproverFilters_ReachNoQueryParameter(t *testing.T) {
+	approverKeys := []string{
+		"approver_ids", "approver_ids[]",
+		"approved_by_ids", "approved_by_ids[]",
+		"approved_by_usernames",
+	}
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if q.Has("approver_ids") || q.Has("approved_by_ids") || q.Has("approved_by_usernames") {
-			t.Errorf("an approver filter reached the query with none set: %v", q)
+		if i := slices.IndexFunc(approverKeys, q.Has); i >= 0 {
+			t.Errorf("approver filter %q reached the query with none set: %v", approverKeys[i], q)
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
