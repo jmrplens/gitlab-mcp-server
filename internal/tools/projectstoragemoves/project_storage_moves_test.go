@@ -32,9 +32,10 @@ const storageMoveJSON = `{
 
 const storageMoveNoProjectJSON = `{
 	"id": 2,
-	"state": "scheduled",
+	"state": "failed",
 	"source_storage_name": "default",
-	"destination_storage_name": "storage3"
+	"destination_storage_name": "storage3",
+	"error_message": "destination storage is full"
 }`
 
 // assertFullMove validates that the first move in a ListOutput mirrors the
@@ -117,8 +118,11 @@ func TestRetrieveAll(t *testing.T) {
 				if !out.Moves[0].CreatedAt.IsZero() {
 					t.Errorf("expected zero CreatedAt, got %v", out.Moves[0].CreatedAt)
 				}
-				if out.Moves[0].State != "scheduled" {
-					t.Errorf("State = %q, want %q", out.Moves[0].State, "scheduled")
+				if out.Moves[0].State != "failed" {
+					t.Errorf("State = %q, want %q", out.Moves[0].State, "failed")
+				}
+				if out.Moves[0].ErrorMessage != "destination storage is full" {
+					t.Errorf("ErrorMessage = %q, want why the move failed", out.Moves[0].ErrorMessage)
 				}
 			},
 		},

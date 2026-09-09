@@ -415,6 +415,25 @@ func CapturedFeatureDefinitions(capture *gitlabclient.ResponseCapture, decoded i
 	return capturedList[FeatureDefinitionExtra](capture, decoded, "feature definitions")
 }
 
+// FeatureExtra reaches the same two keys where a feature carries its
+// definition under a key of its own, which is the shape the feature list
+// answers with.
+type FeatureExtra struct {
+	Definition FeatureDefinitionExtra `json:"definition"`
+}
+
+// CapturedFeatures reads them off the captured answer to a list of features,
+// one extra per feature in order, the count held to what the SDK decoded.
+func CapturedFeatures(capture *gitlabclient.ResponseCapture, decoded int) ([]FeatureExtra, error) {
+	return capturedList[FeatureExtra](capture, decoded, "features")
+}
+
+// CapturedFeature reads them off the captured answer to a request that set one
+// feature flag.
+func CapturedFeature(capture *gitlabclient.ResponseCapture) (FeatureExtra, error) {
+	return capturedOne[FeatureExtra](capture)
+}
+
 // FeatureFlagUserListExtra is where a user list lives in GitLab's own web
 // interface, both exposed under no condition.
 type FeatureFlagUserListExtra struct {

@@ -59,6 +59,7 @@ type Output struct {
 	State                  string         `json:"state"`
 	SourceStorageName      string         `json:"source_storage_name"`
 	DestinationStorageName string         `json:"destination_storage_name"`
+	ErrorMessage           string         `json:"error_message,omitempty"`
 	Project                *ProjectOutput `json:"project,omitempty"`
 }
 
@@ -101,15 +102,20 @@ func RetrieveAll(ctx context.Context, client *gitlabclient.Client, in ListInput)
 	if in.Sort != "" {
 		opts.Sort = in.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	moves, resp, err := client.GL().ProjectRepositoryStorageMove.RetrieveAllStorageMoves(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("retrieve all project storage moves", err, http.StatusForbidden,
 			"requires administrator access; self-managed only; storage moves are repository shard migrations between Gitaly nodes")
 	}
+	extras, err := toolutil.CapturedStorageMoves(captured, len(moves))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("retrieve all project storage moves", err)
+	}
 
 	out := ListOutput{Moves: make([]Output, 0, len(moves))}
-	for _, m := range moves {
-		out.Moves = append(out.Moves, toOutput(m))
+	for i, m := range moves {
+		out.Moves = append(out.Moves, toOutput(m, extras[i]))
 	}
 	out.Pagination = toolutil.PaginationFromResponse(resp)
 	return out, nil
@@ -132,15 +138,20 @@ func RetrieveForProject(ctx context.Context, client *gitlabclient.Client, in Lis
 	if in.Sort != "" {
 		opts.Sort = in.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	moves, resp, err := client.GL().ProjectRepositoryStorageMove.RetrieveAllStorageMovesForProject(in.ProjectID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("retrieve project storage moves", err, http.StatusNotFound,
 			"requires admin; verify project_id (numeric) exists; only storage moves for the given project are returned")
 	}
+	extras, err := toolutil.CapturedStorageMoves(captured, len(moves))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("retrieve project storage moves", err)
+	}
 
 	out := ListOutput{Moves: make([]Output, 0, len(moves))}
-	for _, m := range moves {
-		out.Moves = append(out.Moves, toOutput(m))
+	for i, m := range moves {
+		out.Moves = append(out.Moves, toOutput(m, extras[i]))
 	}
 	out.Pagination = toolutil.PaginationFromResponse(resp)
 	return out, nil
@@ -155,12 +166,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, in IDInput) (Output, 
 		return Output{}, toolutil.ErrFieldRequired("id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	move, _, err := client.GL().ProjectRepositoryStorageMove.GetStorageMove(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get project storage move", err, http.StatusNotFound,
 			"requires admin; verify id with gitlab_retrieve_all_project_storage_moves; the move record may have been pruned after completion")
 	}
-	return toOutput(move), nil
+	extra, err := toolutil.CapturedStorageMove(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("get project storage move", err)
+	}
+	return toOutput(move, extra), nil
 }
 
 // GetForProject retrieves a single storage move for a specific project.
@@ -175,12 +191,17 @@ func GetForProject(ctx context.Context, client *gitlabclient.Client, in ProjectM
 		return Output{}, toolutil.ErrFieldRequired("id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	move, _, err := client.GL().ProjectRepositoryStorageMove.GetStorageMoveForProject(in.ProjectID, in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get project storage move for project", err, http.StatusNotFound,
 			"requires admin; verify project_id + id combination with gitlab_get_project_storage_move_for_project")
 	}
-	return toOutput(move), nil
+	extra, err := toolutil.CapturedStorageMove(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("get project storage move for project", err)
+	}
+	return toOutput(move, extra), nil
 }
 
 // Schedule schedules a repository storage move for a project.
@@ -195,12 +216,17 @@ func Schedule(ctx context.Context, client *gitlabclient.Client, in ScheduleInput
 	opts := gl.ScheduleStorageMoveForProjectOptions{
 		DestinationStorageName: in.DestinationStorageName,
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	move, _, err := client.GL().ProjectRepositoryStorageMove.ScheduleStorageMoveForProject(in.ProjectID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("schedule project storage move", err, http.StatusBadRequest,
 			"requires admin; destination_storage_name must reference an existing Gitaly storage shard configured on the instance; cannot move to the same shard the project is already on")
 	}
-	return toOutput(move), nil
+	extra, err := toolutil.CapturedStorageMove(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("schedule project storage move", err)
+	}
+	return toOutput(move, extra), nil
 }
 
 // ScheduleAll schedules storage moves for all projects on a storage shard.
@@ -221,12 +247,13 @@ func ScheduleAll(ctx context.Context, client *gitlabclient.Client, in ScheduleAl
 	return ScheduleAllOutput{Message: "All project repository storage moves have been scheduled"}, nil
 }
 
-func toOutput(m *gl.ProjectRepositoryStorageMove) Output {
+func toOutput(m *gl.ProjectRepositoryStorageMove, extra toolutil.StorageMoveExtra) Output {
 	o := Output{
 		ID:                     m.ID,
 		State:                  m.State,
 		SourceStorageName:      m.SourceStorageName,
 		DestinationStorageName: m.DestinationStorageName,
+		ErrorMessage:           extra.ErrorMessage,
 	}
 	if m.CreatedAt != nil {
 		o.CreatedAt = *m.CreatedAt

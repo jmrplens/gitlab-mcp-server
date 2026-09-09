@@ -30,6 +30,10 @@ type DefinitionItem struct {
 	Type            string `json:"type,omitempty"`
 	Group           string `json:"group,omitempty"`
 	DefaultEnabled  bool   `json:"default_enabled"`
+	// FeatureIssueURL and IntendedToRolloutBy are the issue tracking the flag
+	// and the milestone it is meant to be gone by.
+	FeatureIssueURL     string `json:"feature_issue_url,omitempty"`
+	IntendedToRolloutBy string `json:"intended_to_rollout_by,omitempty"`
 }
 
 // FeatureItem represents a feature flag.
@@ -90,25 +94,36 @@ func toGateItem(g gl.Gate) GateItem {
 	return GateItem{Key: g.Key, Value: g.Value}
 }
 
-// toDefinitionItem converts the GitLab API response to the tool output format.
-func toDefinitionItem(d *gl.FeatureDefinition) *DefinitionItem {
+// toDefinitionItem converts the GitLab API response to the tool output format,
+// filling from the decoded definition and from what the capture read beside
+// it.
+func toDefinitionItem(d *gl.FeatureDefinition, extra toolutil.FeatureDefinitionExtra) *DefinitionItem {
 	if d == nil {
 		return nil
 	}
-	return &DefinitionItem{
-		Name:            d.Name,
-		IntroducedByURL: d.IntroducedByURL,
-		RolloutIssueURL: d.RolloutIssueURL,
-		Milestone:       d.Milestone,
-		LogStateChanges: d.LogStateChanges,
-		Type:            d.Type,
-		Group:           d.Group,
-		DefaultEnabled:  d.DefaultEnabled,
+	item := definitionItem(*d, extra)
+	return &item
+}
+
+// definitionItem is the same conversion by value, for the list of definitions,
+// which has no pointer to guard.
+func definitionItem(d gl.FeatureDefinition, extra toolutil.FeatureDefinitionExtra) DefinitionItem {
+	return DefinitionItem{
+		Name:                d.Name,
+		IntroducedByURL:     d.IntroducedByURL,
+		RolloutIssueURL:     d.RolloutIssueURL,
+		Milestone:           d.Milestone,
+		LogStateChanges:     d.LogStateChanges,
+		Type:                d.Type,
+		Group:               d.Group,
+		DefaultEnabled:      d.DefaultEnabled,
+		FeatureIssueURL:     extra.FeatureIssueURL,
+		IntendedToRolloutBy: extra.IntendedToRolloutBy,
 	}
 }
 
 // toFeatureItem converts the GitLab API response to the tool output format.
-func toFeatureItem(f *gl.Feature) FeatureItem {
+func toFeatureItem(f *gl.Feature, extra toolutil.FeatureExtra) FeatureItem {
 	gates := make([]GateItem, 0, len(f.Gates))
 	for _, g := range f.Gates {
 		gates = append(gates, toGateItem(g))
@@ -117,7 +132,7 @@ func toFeatureItem(f *gl.Feature) FeatureItem {
 		Name:       f.Name,
 		State:      f.State,
 		Gates:      gates,
-		Definition: toDefinitionItem(f.Definition),
+		Definition: toDefinitionItem(f.Definition, extra.Definition),
 	}
 }
 
@@ -125,39 +140,40 @@ func toFeatureItem(f *gl.Feature) FeatureItem {
 
 // List retrieves all feature flags.
 func List(ctx context.Context, client *gitlabclient.Client, _ ListInput) (ListOutput, error) {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	features, _, err := client.GL().Features.ListFeatures(gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("feature_list", err, http.StatusForbidden,
 			"requires administrator access; feature flags are instance-wide on self-managed; only set features (not all definitions) are returned. Use feature_list_definitions for the catalog")
 	}
+	extras, err := toolutil.CapturedFeatures(captured, len(features))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("feature_list", err)
+	}
 
 	items := make([]FeatureItem, 0, len(features))
-	for _, f := range features {
-		items = append(items, toFeatureItem(f))
+	for i, f := range features {
+		items = append(items, toFeatureItem(f, extras[i]))
 	}
 	return ListOutput{Features: items}, nil
 }
 
 // ListDefinitions retrieves all feature definitions.
 func ListDefinitions(ctx context.Context, client *gitlabclient.Client, _ ListDefinitionsInput) (ListDefinitionsOutput, error) {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	defs, _, err := client.GL().Features.ListFeatureDefinitions(gl.WithContext(ctx))
 	if err != nil {
 		return ListDefinitionsOutput{}, toolutil.WrapErrWithStatusHint("feature_list_definitions", err, http.StatusForbidden,
 			"requires administrator access; returns the full catalog of available feature flags including not-yet-set ones")
 	}
+	extras, err := toolutil.CapturedFeatureDefinitions(captured, len(defs))
+	if err != nil {
+		return ListDefinitionsOutput{}, toolutil.WrapErr("feature_list_definitions", err)
+	}
 
 	items := make([]DefinitionItem, 0, len(defs))
-	for _, d := range defs {
-		items = append(items, DefinitionItem{
-			Name:            d.Name,
-			IntroducedByURL: d.IntroducedByURL,
-			RolloutIssueURL: d.RolloutIssueURL,
-			Milestone:       d.Milestone,
-			LogStateChanges: d.LogStateChanges,
-			Type:            d.Type,
-			Group:           d.Group,
-			DefaultEnabled:  d.DefaultEnabled,
-		})
+	for i, d := range defs {
+		items = append(items, definitionItem(*d, extras[i]))
 	}
 	return ListDefinitionsOutput{Definitions: items}, nil
 }
@@ -199,6 +215,7 @@ func Set(ctx context.Context, client *gitlabclient.Client, input SetInput) (SetO
 	if err != nil {
 		return SetOutput{}, toolutil.WrapErrWithMessage("feature_set", err)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	req = req.WithContext(ctx)
 
 	var feature gl.Feature
@@ -206,7 +223,11 @@ func Set(ctx context.Context, client *gitlabclient.Client, input SetInput) (SetO
 		return SetOutput{}, toolutil.WrapErrWithStatusHint("feature_set", err, http.StatusBadRequest,
 			"requires administrator access; value can be 0/1, true/false, or 0-100 percentage; feature_group/user/group/project/repository scope mutually exclusive with global value")
 	}
-	return SetOutput{Feature: toFeatureItem(&feature)}, nil
+	extra, err := toolutil.CapturedFeature(captured)
+	if err != nil {
+		return SetOutput{}, toolutil.WrapErr("feature_set", err)
+	}
+	return SetOutput{Feature: toFeatureItem(&feature, extra)}, nil
 }
 
 // Delete removes a feature flag.

@@ -34,7 +34,9 @@ const userListJSON = `{
 	"iid": 10,
 	"project_id": 42,
 	"created_at": "2026-01-01T00:00:00Z",
-	"updated_at": "2026-01-02T00:00:00Z"
+	"updated_at": "2026-01-02T00:00:00Z",
+	"path": "/group/project/-/feature_flags_user_lists/10",
+	"edit_path": "/group/project/-/feature_flags_user_lists/10/edit"
 }`
 
 // userListArrayJSON identifies the user list array JSON constant used by this package.
@@ -98,6 +100,12 @@ func TestGetUserList_Success(t *testing.T) {
 	}
 	if out.UserXIDs != "user1,user2,user3" {
 		t.Errorf("expected user_xids 'user1,user2,user3', got %q", out.UserXIDs)
+	}
+	if out.Path != "/group/project/-/feature_flags_user_lists/10" {
+		t.Errorf("expected the list's own path, got %q", out.Path)
+	}
+	if out.EditPath != "/group/project/-/feature_flags_user_lists/10/edit" {
+		t.Errorf("expected the list's edit path, got %q", out.EditPath)
 	}
 }
 

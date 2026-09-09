@@ -82,7 +82,7 @@ func TestListDefinitions_Success(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[
 			{"name":"def1","introduced_by_url":"https://example.com","type":"development","group":"group::ide","milestone":"15.0","default_enabled":true,"log_state_changes":false,"rollout_issue_url":""},
-			{"name":"def2","introduced_by_url":"","type":"ops","group":"group::ops","milestone":"16.0","default_enabled":false,"log_state_changes":true,"rollout_issue_url":"https://rollout.example.com"}
+			{"name":"def2","introduced_by_url":"","type":"ops","group":"group::ops","milestone":"16.0","default_enabled":false,"log_state_changes":true,"rollout_issue_url":"https://rollout.example.com","feature_issue_url":"https://issue.example.com","intended_to_rollout_by":"17.0"}
 		]`)
 	}))
 
@@ -98,6 +98,12 @@ func TestListDefinitions_Success(t *testing.T) {
 	}
 	if !out.Definitions[0].DefaultEnabled {
 		t.Error("expected default_enabled true")
+	}
+	if out.Definitions[1].FeatureIssueURL != "https://issue.example.com" {
+		t.Errorf("expected the feature issue URL, got %q", out.Definitions[1].FeatureIssueURL)
+	}
+	if out.Definitions[1].IntendedToRolloutBy != "17.0" {
+		t.Errorf("expected intended_to_rollout_by 17.0, got %q", out.Definitions[1].IntendedToRolloutBy)
 	}
 }
 
