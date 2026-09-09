@@ -317,8 +317,11 @@ func describedRoutes(paired []string, routes map[string][]sdkRoute, index *opera
 func (d *describedResponses) absorb(operation operation) {
 	for _, name := range operation.Response {
 		d.Known[name] = true
-		if operation.Entity != "" && d.EntityOf[name] == "" {
-			d.EntityOf[name] = operation.Entity
+		// The entity this key came from, not the operation's own: a shape that
+		// merged two routes answers for keys of both, and the one it is named
+		// for does not expose all of them.
+		if from := operation.EntityOf[name]; from != "" && d.EntityOf[name] == "" {
+			d.EntityOf[name] = from
 		}
 	}
 	for property, names := range operation.Nested {

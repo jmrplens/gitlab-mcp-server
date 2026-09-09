@@ -194,7 +194,7 @@ func shapeCheck(root string, requests []requestinventory.Row, published []publis
 		for _, name := range operation.Response {
 			fields[name] = true
 		}
-		sources.note(request.Package, request.Method+" "+request.Path, operation.Entity, operation.Response)
+		sources.note(request.Package, request.Method+" "+request.Path, operation.EntityOf, operation.Response)
 	}
 
 	check.Untemplated = sortedSegments(segments)
@@ -295,6 +295,15 @@ type operation struct {
 	Entity string
 	// Response is the keys the entity sends, sorted.
 	Response []string
+	// EntityOf names, per key, the entity that renders it.
+	//
+	// One entity per operation would be enough if an operation were one route,
+	// and it is not: two routes collapse to one shape when their placeholders
+	// differ only in name, and the shape's response is the union of theirs. A
+	// union is not one entity's field list, so a key looked up on the entity
+	// that happens to be first is answered with that entity's condition, which
+	// is a wrong answer rather than a missing one.
+	EntityOf map[string]string
 	// Nested is, per field rendering an entity of its own, the keys that child
 	// sends.
 	Nested map[string][]string
@@ -332,9 +341,11 @@ func newOperationIndex(record apilive.Document) *operationIndex {
 	}
 	for _, route := range record.Routes {
 		normalized := apilive.NormalizePath(route.Path)
+		response := record.FieldNames(route.Entity)
 		built := operation{
 			Entity:   route.Entity,
-			Response: record.FieldNames(route.Entity),
+			Response: response,
+			EntityOf: entityOf(route.Entity, response),
 			Nested:   record.NestedNames(route.Entity),
 		}
 		if _, taken := index.byPath[route.Method+" "+normalized]; !taken {
@@ -343,16 +354,48 @@ func newOperationIndex(record apilive.Document) *operationIndex {
 		shapeKey := route.Method + " " + pathShape(normalized)
 		merged := index.byShape[shapeKey]
 		merged.Response = union(merged.Response, built.Response)
+		merged.EntityOf = unionEntityOf(merged.EntityOf, built.EntityOf)
 		merged.Nested = unionNested(merged.Nested, built.Nested)
-		// The entity is the first one a route of this shape named. Two routes
-		// sharing a shape nearly always render one entity, and a merged name
-		// would resolve to no class at all.
+		// The entity is the first one a route of this shape named, and is what
+		// a reader is shown for the operation as a whole. Which entity answers
+		// for a given key is EntityOf's business, because those two are not the
+		// same question once a shape merges two routes.
 		if merged.Entity == "" {
 			merged.Entity = built.Entity
 		}
 		index.byShape[shapeKey] = merged
 	}
 	return index
+}
+
+// entityOf attributes every key of one route's response to the entity that
+// renders it, which is the whole response for an unmerged route.
+func entityOf(entity string, response []string) map[string]string {
+	if entity == "" || len(response) == 0 {
+		return nil
+	}
+	byField := make(map[string]string, len(response))
+	for _, name := range response {
+		byField[name] = entity
+	}
+	return byField
+}
+
+// unionEntityOf merges two attributions, the first entity to render a key
+// keeping it. Two routes of one shape agree on almost every key they share,
+// and where they do not, the first is the one the operation is named for.
+func unionEntityOf(a, b map[string]string) map[string]string {
+	if len(a) == 0 {
+		return b
+	}
+	out := make(map[string]string, len(a)+len(b))
+	maps.Copy(out, a)
+	for name, entity := range b {
+		if out[name] == "" {
+			out[name] = entity
+		}
+	}
+	return out
 }
 
 // lookup finds the operation a recorded request names, and says how. When the

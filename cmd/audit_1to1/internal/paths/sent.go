@@ -153,7 +153,7 @@ type responseSources map[string]map[string]*fieldSources
 
 // note records that a package's request to operation returned a response
 // carrying the named fields.
-func (s responseSources) note(pkg, operation, entity string, fields []string) {
+func (s responseSources) note(pkg, operation string, entityOf map[string]string, fields []string) {
 	byField := s[pkg]
 	if byField == nil {
 		byField = map[string]*fieldSources{}
@@ -166,11 +166,14 @@ func (s responseSources) note(pkg, operation, entity string, fields []string) {
 			byField[field] = sources
 		}
 		sources.operations[operation] = true
-		// The first operation naming a component for the field, not the
-		// first carrying the field: one that names none would otherwise hold
-		// the answer to unknown however many after it name one.
-		if sources.entity == "" && entity != "" {
-			sources.entity = entity
+		// The entity that renders this key, taken from the first operation
+		// that named one for it rather than from the operation as a whole: an
+		// operation is a merged shape wherever two routes differ only in what
+		// they call their placeholders, and it then answers for keys of two
+		// entities. Reading a key on the wrong one returns that entity's
+		// condition, which is a wrong answer rather than a missing one.
+		if sources.entity == "" {
+			sources.entity = entityOf[field]
 		}
 	}
 }
