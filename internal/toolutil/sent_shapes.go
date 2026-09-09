@@ -453,6 +453,228 @@ func CapturedFeatureFlagUserLists(capture *gitlabclient.ResponseCapture, decoded
 	return capturedList[FeatureFlagUserListExtra](capture, decoded, "feature flag user lists")
 }
 
+// CommitCommentExtra is when a commit comment was written, which GitLab's
+// commit note entity exposes under no condition.
+type CommitCommentExtra struct {
+	CreatedAt *time.Time `json:"created_at"`
+}
+
+// CapturedCommitComment reads it off the captured answer to a request that
+// returned one comment.
+func CapturedCommitComment(capture *gitlabclient.ResponseCapture) (CommitCommentExtra, error) {
+	return capturedOne[CommitCommentExtra](capture)
+}
+
+// CapturedCommitComments reads the same off a list answer, one extra per
+// comment in order, the count held to what the SDK decoded.
+func CapturedCommitComments(capture *gitlabclient.ResponseCapture, decoded int) ([]CommitCommentExtra, error) {
+	return capturedList[CommitCommentExtra](capture, decoded, "commit comments")
+}
+
+// DependencyExtra is whether a dependency is known malware, which GitLab
+// exposes to a caller allowed to read the project's vulnerabilities and only
+// while the instance has the feature enabled.
+type DependencyExtra struct {
+	Malware bool `json:"malware"`
+}
+
+// CapturedDependencies reads it off the captured answer to a list of
+// dependencies, one extra per dependency in order, the count held to what the
+// SDK decoded.
+func CapturedDependencies(capture *gitlabclient.ResponseCapture, decoded int) ([]DependencyExtra, error) {
+	return capturedList[DependencyExtra](capture, decoded, "dependencies")
+}
+
+// DeploymentApprovalOutput is one approval or rejection recorded against a
+// deployment, as lib/api/entities/deployments/approval.rb renders it.
+type DeploymentApprovalOutput struct {
+	User      *UserBasicOutput `json:"user,omitempty"`
+	Status    string           `json:"status"`
+	CreatedAt *time.Time       `json:"created_at"`
+	Comment   string           `json:"comment,omitempty"`
+}
+
+// DeploymentApprovalRuleOutput is one rule of the approval summary: who may
+// approve, how many approvals it needs, and what has been recorded against it.
+type DeploymentApprovalRuleOutput struct {
+	ID                     int64                      `json:"id"`
+	UserID                 int64                      `json:"user_id,omitempty"`
+	GroupID                int64                      `json:"group_id,omitempty"`
+	AccessLevel            int64                      `json:"access_level,omitempty"`
+	AccessLevelDescription string                     `json:"access_level_description,omitempty"`
+	RequiredApprovals      int64                      `json:"required_approvals"`
+	GroupInheritanceType   int64                      `json:"group_inheritance_type,omitempty"`
+	DeploymentApprovals    []DeploymentApprovalOutput `json:"deployment_approvals,omitempty"`
+}
+
+// DeploymentApprovalSummaryOutput is the rules a deployment must satisfy
+// before it may run.
+type DeploymentApprovalSummaryOutput struct {
+	Rules []DeploymentApprovalRuleOutput `json:"rules,omitempty"`
+}
+
+// DeploymentExtra is what GitLab's extended deployment entity sends that
+// client-go's Deployment does not carry: the approvals recorded so far, how
+// many are still outstanding, and the rules they are counted against. All
+// three are exposed under no condition, so a deployment that needs no approval
+// carries them empty rather than not at all.
+type DeploymentExtra struct {
+	Approvals            []DeploymentApprovalOutput       `json:"approvals"`
+	ApprovalSummary      *DeploymentApprovalSummaryOutput `json:"approval_summary"`
+	PendingApprovalCount int64                            `json:"pending_approval_count"`
+}
+
+// CapturedDeployment reads them off the captured answer to a request for one
+// deployment.
+func CapturedDeployment(capture *gitlabclient.ResponseCapture) (DeploymentExtra, error) {
+	return capturedOne[DeploymentExtra](capture)
+}
+
+// CapturedDeployments reads the same off a list answer, one extra per
+// deployment in order, the count held to what the SDK decoded.
+func CapturedDeployments(capture *gitlabclient.ResponseCapture, decoded int) ([]DeploymentExtra, error) {
+	return capturedList[DeploymentExtra](capture, decoded, "deployments")
+}
+
+// PagesCertificateExpirationOutput is when a Pages domain's certificate stops
+// being valid, and whether it already has.
+type PagesCertificateExpirationOutput struct {
+	Expired    bool       `json:"expired"`
+	Expiration *time.Time `json:"expiration"`
+}
+
+// PagesDomainExtra is that object on the domain, which GitLab exposes only on
+// a domain that has a certificate at all.
+type PagesDomainExtra struct {
+	CertificateExpiration *PagesCertificateExpirationOutput `json:"certificate_expiration"`
+}
+
+// CapturedPagesDomain reads it off the captured answer to a request for one
+// domain.
+func CapturedPagesDomain(capture *gitlabclient.ResponseCapture) (PagesDomainExtra, error) {
+	return capturedOne[PagesDomainExtra](capture)
+}
+
+// CapturedPagesDomains reads the same off a list answer, one extra per domain
+// in order, the count held to what the SDK decoded.
+func CapturedPagesDomains(capture *gitlabclient.ResponseCapture, decoded int) ([]PagesDomainExtra, error) {
+	return capturedList[PagesDomainExtra](capture, decoded, "pages domains")
+}
+
+// ResourceStateEventExtra is what GitLab's resource state event entity sends
+// that client-go's StateEvent does not carry: the commit that closed the
+// issue, and the merge request that did, each empty when something else did.
+type ResourceStateEventExtra struct {
+	SourceCommit         string `json:"source_commit"`
+	SourceMergeRequestID int64  `json:"source_merge_request_id"`
+}
+
+// CapturedResourceStateEvent reads them off the captured answer to a request
+// for one event.
+func CapturedResourceStateEvent(capture *gitlabclient.ResponseCapture) (ResourceStateEventExtra, error) {
+	return capturedOne[ResourceStateEventExtra](capture)
+}
+
+// CapturedResourceStateEvents reads the same off a list answer, one extra per
+// event in order, the count held to what the SDK decoded.
+func CapturedResourceStateEvents(capture *gitlabclient.ResponseCapture, decoded int) ([]ResourceStateEventExtra, error) {
+	return capturedList[ResourceStateEventExtra](capture, decoded, "resource state events")
+}
+
+// ResourceMilestoneEventExtra is the issue or merge request's own state at the
+// moment the milestone changed, which the milestone event entity exposes under
+// no condition.
+type ResourceMilestoneEventExtra struct {
+	State string `json:"state"`
+}
+
+// CapturedResourceMilestoneEvent reads it off the captured answer to a request
+// for one event.
+func CapturedResourceMilestoneEvent(capture *gitlabclient.ResponseCapture) (ResourceMilestoneEventExtra, error) {
+	return capturedOne[ResourceMilestoneEventExtra](capture)
+}
+
+// CapturedResourceMilestoneEvents reads the same off a list answer, one extra
+// per event in order, the count held to what the SDK decoded.
+func CapturedResourceMilestoneEvents(capture *gitlabclient.ResponseCapture, decoded int) ([]ResourceMilestoneEventExtra, error) {
+	return capturedList[ResourceMilestoneEventExtra](capture, decoded, "resource milestone events")
+}
+
+// NamespaceBasicOutput mirrors lib/api/entities/namespace_basic.rb, the group
+// object GitLab renders on a todo raised in a group rather than a project.
+type NamespaceBasicOutput struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	Kind      string `json:"kind"`
+	FullPath  string `json:"full_path"`
+	ParentID  int64  `json:"parent_id,omitempty"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+	WebURL    string `json:"web_url,omitempty"`
+}
+
+// TodoExtra is what GitLab's todo entity sends that client-go's Todo does not
+// carry: when the todo last changed, and the group it belongs to, which is
+// present only on a todo raised in a group rather than a project.
+type TodoExtra struct {
+	UpdatedAt *time.Time            `json:"updated_at"`
+	Group     *NamespaceBasicOutput `json:"group"`
+}
+
+// CapturedTodo reads them off the captured answer to a request that returned
+// one todo.
+func CapturedTodo(capture *gitlabclient.ResponseCapture) (TodoExtra, error) {
+	return capturedOne[TodoExtra](capture)
+}
+
+// CapturedTodos reads the same off a list answer, one extra per todo in order,
+// the count held to what the SDK decoded.
+func CapturedTodos(capture *gitlabclient.ResponseCapture, decoded int) ([]TodoExtra, error) {
+	return capturedList[TodoExtra](capture, decoded, "todos")
+}
+
+// BasicGroupDetailsOutput is the group reference GitLab renders on a board,
+// which carries three keys and not a whole group.
+type BasicGroupDetailsOutput struct {
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	WebURL string `json:"web_url,omitempty"`
+}
+
+// BoardExtra is that reference on the board, which GitLab exposes under no
+// condition and leaves null on a board that belongs to a project.
+type BoardExtra struct {
+	Group *BasicGroupDetailsOutput `json:"group"`
+}
+
+// CapturedBoard reads it off the captured answer to a request for one board.
+func CapturedBoard(capture *gitlabclient.ResponseCapture) (BoardExtra, error) {
+	return capturedOne[BoardExtra](capture)
+}
+
+// CapturedBoards reads the same off a list answer, one extra per board in
+// order, the count held to what the SDK decoded.
+func CapturedBoards(capture *gitlabclient.ResponseCapture, decoded int) ([]BoardExtra, error) {
+	return capturedList[BoardExtra](capture, decoded, "boards")
+}
+
+// BridgeProjectOutput is the project object GitLab renders on a job, which
+// carries one key: whether the job token can reach outside this project.
+type BridgeProjectOutput struct {
+	CIJobTokenScopeEnabled bool `json:"ci_job_token_scope_enabled"`
+}
+
+// BridgeExtra is that object on a bridge job, exposed under no condition.
+type BridgeExtra struct {
+	Project *BridgeProjectOutput `json:"project"`
+}
+
+// CapturedBridges reads it off the captured answer to a list of bridges, one
+// extra per bridge in order, the count held to what the SDK decoded.
+func CapturedBridges(capture *gitlabclient.ResponseCapture, decoded int) ([]BridgeExtra, error) {
+	return capturedList[BridgeExtra](capture, decoded, "bridges")
+}
+
 // MilestoneExtra is what GitLab's milestone entity sends that a group
 // milestone struct does not carry: the milestone's own page, exposed under no
 // condition, and the project a project-scoped milestone belongs to, exposed

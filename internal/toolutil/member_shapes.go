@@ -76,6 +76,11 @@ type MemberExtra struct {
 	GroupSAMLIdentity *SAMLIdentityOutput `json:"group_saml_identity"`
 	GroupSCIMIdentity *SCIMIdentityOutput `json:"group_scim_identity"`
 	Override          *bool               `json:"override"`
+	// AvatarPath is the avatar as a path on the instance rather than a full
+	// URL, and CustomAttributes the attributes an administrator who asked for
+	// them receives. Both come from the user object merged into the member.
+	AvatarPath       string                  `json:"avatar_path"`
+	CustomAttributes []CustomAttributeOutput `json:"custom_attributes"`
 }
 
 // MemberRoleOutput mirrors gl.MemberRole (the member_role object). Custom

@@ -502,9 +502,12 @@ func TestConvertRepository_AllFields(t *testing.T) {
 			{Name: "v1.0", Path: "g/p/img:v1.0", Location: "loc:v1.0", TotalSize: 2048},
 		},
 	}
-	out := convertRepository(r)
+	out := convertRepository(r, toolutil.RegistryRepositoryExtra{Size: 4096, DeleteAPIPath: "/api/v4/registry/repositories/1"})
 	if out.CreatedAt == "" {
 		t.Error("expected CreatedAt to be set")
+	}
+	if out.Size != 4096 || out.DeleteAPIPath != "/api/v4/registry/repositories/1" {
+		t.Errorf("size and delete path = %d and %q, want what was read beside the decode", out.Size, out.DeleteAPIPath)
 	}
 	if out.CleanupPolicyStartedAt == "" {
 		t.Error("expected CleanupPolicyStartedAt to be set")
@@ -522,7 +525,7 @@ func TestConvertRepository_AllFields(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestConvertRepository_NilOptionalFields(t *testing.T) {
 	r := &gl.RegistryRepository{ID: 1, Name: "n", Path: "p", ProjectID: 1}
-	out := convertRepository(r)
+	out := convertRepository(r, toolutil.RegistryRepositoryExtra{})
 	if out.CreatedAt != "" {
 		t.Errorf("expected empty CreatedAt, got %s", out.CreatedAt)
 	}
