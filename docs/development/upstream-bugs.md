@@ -929,20 +929,100 @@ GitLab says each of its Grape entities exposes. Each finding carries
 key added to the fixture of an existing test.
 
 **The gap is usually in GitLab's own documentation too, and that is a second
-merge request.** A code owner asked for it on `!3045` rather than opening it
-himself, so cross-checking all eight fields against `doc/api/` was worth doing:
-two of the eight, `file_extension` and `is_receptive`, appeared nowhere on
-their page, and a third page showed `public_email` in none of its fourteen
-example responses. Three documentation merge requests went to
-`gitlab-org/gitlab` from its own
+merge request.** A code owner asked for it on
+[!3045](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3045)
+rather than opening it himself, so cross-checking all eight fields against
+`doc/api/` was worth doing: two of the eight, `file_extension` and
+`is_receptive`, appeared nowhere on their page, and a third page showed
+`public_email` in none of its fourteen example responses. Nine documentation
+merge requests have gone to `gitlab-org/gitlab` from its own
 [community fork](https://gitlab.com/gitlab-community/gitlab-org/gitlab):
 [!254507](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254507),
-[!254511](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254511) and
-[!254519](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254519).
+[!254511](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254511),
+[!254519](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254519),
+[!254538](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254538),
+[!254540](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254540),
+[!254542](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254542),
+[!254543](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254543),
+[!254547](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254547) and
+[!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552).
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
 response attribute tables as well as the examples, and the other entities
 sharing the page that must not gain the field.
+
+Three of those nine fixed a documentation defect found on the way rather than
+the field that prompted them: three `fingerprint_sha256` keys on the deploy
+keys page had lost their name and sat as `""`, one snippet example's `raw_url`
+pointed at a different snippet, and the packages page showed a `pipelines`
+array inside `versions` where the entity exposes a single `pipeline` and omits
+`tags`.
+
+**The second batch, and the cadence a maintainer asked for.** Six more merge
+requests carry the structs behind the fields this server published in the
+member and Geo tranches:
+[!3048](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3048)
+(`Hook`),
+[!3049](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3049)
+(both deploy key structs),
+[!3050](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3050)
+(both event structs),
+[!3051](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3051)
+(`Namespace`),
+[!3052](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3052)
+(`Package`, plus the `GetProjectPackage` wrapper the versions field needs and
+which the library did not have) and
+[!3053](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3053)
+(`Snippet`).
+
+On the last of those, a code owner asked to stop opening one merge request per
+struct: keep an issue with the missing fields, update it, and send larger merge
+requests once a chunk is pre-approved, so three maintainers validate a chunk
+rather than a stream. That is now the rule, and the umbrella issue they were
+asking for already existed as issue 2300, referenced from every one of these in
+a `Related to` line at the bottom where a reviewer never looks. Nothing further
+goes upstream until they say which chunks they want.
+
+**Four findings from that batch that are not merge requests**, because sending
+them would have been wrong:
+
+- `projects_with_write_access` and `projects_with_readonly_access` are gated on
+  presenter options that `lib/api/deploy_keys.rb` passes on `GET /deploy_keys`
+  alone, so the project-scope routes never send them. `InstanceDeployKey` is
+  already correct and `ProjectDeployKey` must not gain them.
+- `Package.project_id` and `project_path` are already modelled, on
+  `GroupPackage`, which embeds `Package` and is what `ListGroupPackages`
+  returns. Adding them to `Package` would shadow those.
+- `ContributionEvent.Title`, `ProjectEvent.Title` and `ProjectEvent.Data` are
+  phantoms: `API::Entities::Event` exposes no `title` and no `data`. Removing
+  them is a breaking change, so it is recorded rather than done.
+- `PackagePipeline` is missing `iid`, `project_id` and `source` of the eleven
+  keys `API::Entities::Package::Pipeline` exposes.
+
+**Three more gaps are recorded and not yet sent**, held back by the batching
+the maintainer asked for above. Each is a field this server now reads from the
+captured response, so each carries a live workaround:
+
+- `PendingInvite` has no `invite_token`, which
+  `lib/api/entities/invitation.rb` exposes with no condition. The same struct
+  declares an `ID` the entity does not expose, which the audit already reports
+  as a phantom in the other direction, so one merge request settles both.
+- `BillableGroupMember` has no `public_email` and no `locked`, both exposed
+  unconditionally through the `UserBasic` that
+  `ee/lib/api/entities/billable_member.rb` inherits (`locked` through
+  `access_locked?`).
+- `AccessRequest` is missing six unconditional fields, `public_email`,
+  `locked`, `avatar_url` and `web_url` from the merged `UserBasic`, and
+  `expires_at` and `membership_state` from the `Member` that
+  `lib/api/entities/access_requester.rb` inherits. The conditional ones,
+  `created_by`, `email`, both identities, `override` and `member_role`, belong
+  in the same merge request as a second group.
+
+One lead rather than a finding, because nothing has measured it: the record's
+`API::Entities::MemberRole` exposes about fifty permission flags where
+`gl.MemberRole` and this server's own member role output mirror twenty-two. The
+audit's nested comparison does not reach that object, so it is unmeasured
+rather than measured and clean.
 
 **Where these merge requests come from**: the
 [community fork](https://gitlab.com/gitlab-community/gitlab-org/api/client-go),

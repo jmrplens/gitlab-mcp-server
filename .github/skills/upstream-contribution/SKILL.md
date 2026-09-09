@@ -77,11 +77,13 @@ Putting the reference only at the bottom is what went wrong on 2026-09-09. A cod
 
 ## Batch, do not drip
 
-**One merge request per struct is the wrong shape, and the maintainers said so.** The request, in their words on [!3053](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3053): create an issue with the missing fields, keep updating it until there is a good point to send merge requests that may be a bit larger, so they can approve chunks ahead of time and then only check that the merge request matches the chunk. Three maintainers cannot validate a stream of small ones, and they will tell you the descriptions read as machine-written, which is true and is not the complaint: the complaint is the count.
+**One merge request per struct is the wrong shape, and the maintainers said so.** The request, in their words on [!3053](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3053): create an issue with the missing fields, keep updating it until there is a good point to send merge requests that may be a bit larger, so they can approve chunks ahead of time and then only check that the merge request matches the chunk.
 
 So the loop is: keep 2300 current, ask the maintainers which chunks they are happy to pre-approve, and send **one merge request per approved chunk**, not per struct. Nothing goes out that the issue does not already describe.
 
-Two consequences worth keeping. **Never have more open than they asked for**; if in doubt, ask on the issue before opening anything. And **say plainly how the work is produced** when asked, along with what that does and does not guarantee: the entity, line and condition are read out of a booted GitLab rather than recalled, and each is checked against current `master`, which narrows what a reviewer must distrust without pretending it removes the review.
+**What actually stung was the burst, not the count.** Asked directly, the same maintainer said there was no reason to close the ones already in front of reviewers, that they would get through them, and that he was reacting to a second large set of pings arriving on top of an overnight one. So the rule to follow is about the rate at which you demand attention, not a ceiling on open merge requests: batch the work, and above all do not fire a round of `@gitlab-bot ready` commands in one sitting. Offering to withdraw work already under review was the wrong instinct and was declined.
+
+**Say plainly how the work is produced** when asked, along with what that does and does not guarantee: the entity, line and condition are read out of a booted GitLab rather than recalled, and each is checked against current `master`, which narrows what a reviewer must distrust without pretending it removes the review. They will notice on their own, and being told is better than being reassured.
 
 Two separate mechanisms read that line, and confusing them is what produced the wrong rule this replaces.
 
