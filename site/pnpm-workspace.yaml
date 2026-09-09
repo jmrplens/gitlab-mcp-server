@@ -26,8 +26,13 @@ overrides:
   # dev/build deps only (pa11y-ci > puppeteer > socks-proxy-agent > socks).
   "ip-address@<10.3.1": 10.3.1
   # js-yaml quadratic CPU consumption in !!omap resolution (GHSA-5p4m-2wfm-xmqj,
-  # CVE-2026-59870); build deps only (@astrojs/internal-helpers and friends).
-  "js-yaml@>=4.0.0 <4.3.1": 4.3.1
+  # CVE-2026-59870), and then maxTotalMergeKeys not bounding CPU for empty
+  # merge sources (GHSA-2883-xcg3-v3hh), which the 4.3.1 this line used to pin
+  # is itself vulnerable to. Build deps only (@astrojs/internal-helpers and
+  # friends). 4.3.2 is the v4-legacy tag: the 4.x line is what Astro depends
+  # on, and pinning 5.x onto it is a major bump an advisory fix should not drag
+  # in.
+  "js-yaml@>=4.0.0 <4.3.2": 4.3.2
 
 auditConfig:
   ignoreGhsas:
@@ -36,6 +41,12 @@ auditConfig:
     # Dev-only path (pa11y-ci > puppeteer > @puppeteer/browsers). Remove this
     # exception once extract-zip publishes a fixed release.
     - GHSA-jmr9-qjv8-65gv
+    # extract-zip arbitrary file writes through symlink archive entries: the
+    # same package, the same dev-only path, and the same absence of anywhere to
+    # go. This one records no patched version at all, and 2.0.1 is still the
+    # last release published. Both exceptions retire together, on the release
+    # that fixes either.
+    - GHSA-7pqw-9j4j-h8q3
 
 peerDependencyRules:
   allowedVersions:
