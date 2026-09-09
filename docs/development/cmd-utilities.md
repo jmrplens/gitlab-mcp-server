@@ -34,7 +34,6 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_test_goroutines`        | Source quality audits         | `testing.T` aborts made off the test goroutine                                                                                                                                                                                                 | `make check-test-goroutines`                                                        |
 | `audit_test_subtests`          | Source quality audits         | Case loops that assert without a `t.Run` subtest; `-fix` rewrites the unambiguous ones                                                                                                                                                         | `make check-test-subtests`                                                          |
 | `audit_md_escaping`            | Source quality audits         | Values a Markdown formatter interpolates into a table cell, heading, list item or link without an escaping helper                                                                                                                              | `make check-md-escaping`                                                            |
-| `audit_string_dupes`           | Source quality audits         | Finds duplicated string literals missing `const`/`var` declarations                                                                                                                                                                            | —                                                                                   |
 | `audit_supply_chain`           | Release & supply-chain audits | Five release-configuration invariants: pinned actions, credentialed jobs that run no run-time-resolved code, stated Dependabot cooldowns, a current security policy, signature-verifying installers                                            | `make check-supply-chain`                                                           |
 | `audit_install_buttons`        | Release & supply-chain audits | Decodes every one-click install button and holds the buttons to one configuration per command                                                                                                                                                  | `make check-install-buttons`                                                        |
 | `gen_action_catalog_manifest`  | Generators                    | Generates the ActionSpec group-builder manifest                                                                                                                                                                                                | `make gen-action-catalog-manifest`                                                  |
@@ -43,7 +42,6 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `gen_request_inventory`        | Generators                    | Merges the requests the unit suite records into `docs/development/request-inventory.json`                                                                                                                                                      | `make gen-request-inventory`                                                        |
 | `gen_stats`                    | Generators                    | Regenerates the managed repository statistics section in `README.md`                                                                                                                                                                           | `make gen-stats`                                                                    |
 | `gen_testing_docs`             | Generators                    | Regenerates the test-metrics block in `docs/development/testing/testing.md`                                                                                                                                                                    | `make gen-testing-docs`                                                             |
-| `gen_docker_tools`             | Generators                    | Generates a Docker MCP Registry-compatible `tools.json`                                                                                                                                                                                        | —                                                                                   |
 | `gen_brand`                    | Generators                    | Emits every vector brand asset from one parametric geometry                                                                                                                                                                                    | `make brand`, `make brand-check`                                                    |
 | `gen_icon_webp`                | Generators                    | Rasterizes the SVG icons into light/dark WebP fallbacks (maintainer-only)                                                                                                                                                                      | `make gen-icon-webp`                                                                |
 | `format_md_tables`             | Formatters                    | Normalizes Markdown pipe tables in `README.md`, `docs/` and `site/src/content/docs/`                                                                                                                                                           | part of `make audit-docs`                                                           |
@@ -1010,48 +1008,6 @@ Findings grouped by package, each naming the file, line, formatter, construct, v
 - `make audit-md-escaping` — report plus `plan/md-escaping-backlog.json`.
 - `make check-md-escaping` — CI gate; also step [10/16] of `make analyze`.
 
-### audit_string_dupes
-
-Scans non-test Go source for string literals appearing often enough (default: three or more times) and long enough (default: three or more characters) that are not already `const`/`var` values.
-
-A directory argument is walked through `cmd/internal/testsource`, so the corpus is the shared one: the two tracked non-test Go files under `testdata` (`cmd/bench_resources/testdata/standin/main.go` and `cmd/server/testdata/peer/main.go`) are fixtures rather than source this repository holds to its conventions, and their literals are no longer reported. A file named directly is always scanned.
-
-#### Usage
-
-```bash
-go run ./cmd/audit_string_dupes/ ./internal/tools/branches/
-
-# Custom thresholds
-go run ./cmd/audit_string_dupes/ -threshold 4 -min-length 5 ./internal/
-```
-
-#### Flags
-
-| Flag          | Type  | Default | Description                                                   |
-| ------------- | ----- | ------- | ------------------------------------------------------------- |
-| `-threshold`  | `int` | `3`     | Minimum occurrence count to report a duplicate (must be >= 1) |
-| `-min-length` | `int` | `3`     | Minimum string length to consider (must be >= 1)              |
-
-Pass one or more positional path arguments after the flags.
-
-#### Positional arguments
-
-| Argument             | Type       | Description   |
-| -------------------- | ---------- | ------------- |
-| `<dir&#124;file>...` | positional | Paths to scan |
-
-#### Output
-
-Per-file sections to stdout using a `[Ndx] "value"` format that shows the occurrence count and index of each duplicate literal.
-
-#### Exit code
-
-`0` when every path named on the command line was read, whatever the report found; duplicates are a result, not a failure. A path that could not be stat'd, and a directory whose walk stopped part way through because something under it could not be read, are each named on stderr, cost only their own subtree, and make the exit code `1`. That distinction is the point: a truncated duplicate report reads exactly like a clean one, so the exit code is what says the tree was not fully read.
-
-#### Make targets
-
-None. Run directly with `go run`.
-
 ## Release & supply-chain audits
 
 ### audit_supply_chain
@@ -1507,38 +1463,6 @@ Rewrites the managed sections of `docs/development/testing/testing.md`.
   The check runs in `make audit-docs` and in the CI `Test` job, beside the
   other generated-artifact gates.
 
-### gen_docker_tools
-
-Generates a Docker MCP Registry-compatible `tools.json` (flattened name/description/arguments) by introspecting the chosen surface.
-
-#### Usage
-
-```bash
-# Meta-tools (the generator's default output; the server's default surface is dynamic, which this generator does not emit)
-go run ./cmd/gen_docker_tools/
-
-# Include enterprise meta-tools
-go run ./cmd/gen_docker_tools/ --enterprise
-
-# Emit individual tools instead
-go run ./cmd/gen_docker_tools/ --individual
-```
-
-#### Flags
-
-| Flag           | Type   | Default | Description                                 |
-| -------------- | ------ | ------- | ------------------------------------------- |
-| `--enterprise` | `bool` | `false` | Include enterprise meta-tools               |
-| `--individual` | `bool` | `false` | Emit individual tools instead of meta-tools |
-
-#### Output
-
-A JSON array to stdout.
-
-#### Make targets
-
-None. Run directly with `go run`.
-
 ### gen_brand
 
 Emits every vector brand asset from one parametric geometry, so the mark cannot drift between its surfaces. The mark is the "fan-out": a source node projecting three branch arcs, each ending in a node, which reads as a git graph and as the project's architecture (one canonical action catalog projected to three tool surfaces). The geometry lives in the command as constants; every emitter renders the same arcs at its own scale, so editing a curve edits every asset in the same run.
@@ -1780,7 +1704,7 @@ All three had drifted, and the drift was not theoretical. `gen_stats` required a
 
 A root is entered whatever it is called, so a scan pointed straight at a fixtures or dot directory scans it, and whatever it is: `filepath.WalkDir` lstats its root, so `WalkFiles` resolves a root that is a symlink to a directory before walking it and reports every path back under the name the caller gave. Without that, a tree named through a link is handed to the callback as a plain file, a report comes back empty and `-check-files` certifies it clean. Below the root nothing is resolved; a link that resolves to nothing is a read error rather than an empty corpus.
 
-`WalkFiles` stops at the first error and returns it, whether the walk raised it (an absent root, a directory the process may not read) or the visitor did, and there is deliberately no best-effort mode. Every caller but one is a gate, and a gate that skipped an unreadable directory would certify a tree it never read; the files gathered before such an error are a prefix of the tree and look exactly like the whole of it. A caller that wants to continue past a failure swallows it inside its own visitor, where it can say which file it gave up on. What no caller may do is discard the returned error, because by then the walk has already stopped: `audit_string_dupes` was doing that, and now names the tree it could not finish and exits non-zero.
+`WalkFiles` stops at the first error and returns it, whether the walk raised it (an absent root, a directory the process may not read) or the visitor did, and there is deliberately no best-effort mode. Every caller is a gate or the input to one, and a gate that skipped an unreadable directory would certify a tree it never read; the files gathered before such an error are a prefix of the tree and look exactly like the whole of it. A caller that wants to continue past a failure swallows it inside its own visitor, where it can say which file it gave up on. What no caller may do is discard the returned error, because by then the walk has already stopped and a truncated report reads exactly like a complete one.
 
 What the package deliberately does **not** own is discovery. `gen_stats` keeps asking git (`git ls-files`) so `check-stats` stays a function of what is committed, and `gen_testing_docs` keeps enumerating packages through `go list` because it describes packages; sharing the input universe would break both.
 
