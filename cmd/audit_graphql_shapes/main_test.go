@@ -532,7 +532,7 @@ func TestRun_FixtureWhereDecodersDisagree_NamesEveryDisagreementAndFails(t *test
 		"    - data.project.mystery: Mystery is a scalar this audit has no serialization for",
 		"    - data.project.extra: decoded from a field the document never selects, so it is always empty",
 		"    ~ data.project.meta: selected and never decoded",
-		"audit_graphql_shapes: 11 disagreement(s) in 2 pairing(s), 0 unpaired or unjudged (",
+		"audit_graphql_shapes: 11 disagreement(s) in 2 pairing(s), 0 unpaired or unjudged, 0 stale declaration(s) (",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(errOut, want) {

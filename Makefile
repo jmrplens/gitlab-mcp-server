@@ -13,7 +13,7 @@
 	audit-md-escaping check-md-escaping \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
-	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes \
+	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent \
 	gen-api-shapes check-api-shapes gen-api-exposes check-api-exposes check-meta-descriptions \
 	gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
@@ -1431,6 +1431,27 @@ check-graphql-shapes:
 ## selection nothing reads.
 audit-graphql-shapes:
 	go run ./cmd/audit_graphql_shapes/ -v
+
+## audit-graphql-sent: the reverse question, written to plan/graphql-sent.json.
+## What does the pinned schema offer at an object one of our decoders reads that
+## no document of the package decoding it ever selects? It is the sent question
+## R-PATH asks of REST against GitLab's OpenAPI record, asked of GraphQL, where
+## the eleven GraphQL-only domains contribute nothing to that record because
+## their output types pair with no client-go struct. The claim is package-wide
+## on purpose: a CE and an EE document of one package differ deliberately, and
+## judging each alone reports the sibling's selections as gaps. It REPORTS and
+## does not gate: a field GitLab offers and this server does not surface is a
+## candidate for the surface, and this dimension has no tier and no deprecation
+## oracle to sort the candidates with, both of which the report states. It reads
+## ./internal/... like check-graphql-documents, so the operations client-go
+## builds are outside it, and the report names that set from the request
+## inventory rather than leaving it unsaid. The one sub-class that gates, a
+## mutation payload whose errors no field of the decoder reads, gates in the
+## shape check above and so on every run. The record is deliberately not
+## committed and not freshness-gated: a schema re-pin would churn it every time.
+audit-graphql-sent:
+	@mkdir -p plan
+	go run ./cmd/audit_graphql_shapes/ -report plan/graphql-sent.json
 
 ## check-graphql-documents-live: judge every document against a schema fetched
 ## from a live instance right now rather than the pinned one, and report where

@@ -48,7 +48,10 @@ type pairing struct {
 	// Origin is where the document was handed to the wrapper, when the call
 	// received it through a parameter rather than naming it itself. It is
 	// the zero position for a call that names its own document.
-	Origin token.Position
+	// OriginPackage is the package that handed it over, which is the domain a
+	// document sent through a shared wrapper belongs to.
+	Origin        token.Position
+	OriginPackage string
 }
 
 // Label names the document for a report line.
@@ -454,7 +457,9 @@ func (p *program) callers(w wrapper, depth int) ([]pairing, []problem) {
 					Text:     handed.text,
 					Response: w.response,
 					TypeArgs: bindings(w.typeArgs, instantiation(pkg, callee, w.fn)),
-					Origin:   position,
+
+					Origin:        position,
+					OriginPackage: pkg.PkgPath,
 				})
 			}
 		}
