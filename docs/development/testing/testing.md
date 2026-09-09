@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,219 |
-| Unit test functions                                   | 14,614 |
+| Total test functions                                  | 15,258 |
+| Unit test functions                                   | 14,653 |
 | E2E test functions                                    |    605 |
 | cmd test functions                                    |  2,990 |
 | Test files (internal/)                                |    524 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,065 | 79.3% |
+| `TestFunc_Scenario` (2-part)           | 12,068 | 79.1% |
 | `TestFunc` (no underscore)             |    975 |  6.4% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,179 | 14.3% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,215 | 14.5% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,459 |        148 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,462 |        148 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,827 |        360 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,863 |        360 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            605 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,990 |        203 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,219** |    **967** |                                                                                                 |
+| **Total**               |     **15,258** |    **967** |                                                                                                 |
 
 ### Core Packages
 
@@ -76,8 +76,8 @@
 | subscriptions |        99 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        94 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
-| toolutil      |       879 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,459** |          |                                                                                                                                                                                                                                                                    |
+| toolutil      |       882 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
+| **Subtotal**  | **2,462** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -85,14 +85,14 @@
 | ----------------- | ----: | -------: | ----: |
 | projects          |   393 |   100.0% |    57 |
 | groups            |   277 |   100.0% |    37 |
-| mergerequests     |   245 |   100.0% |    30 |
-| issues            |   223 |   100.0% |    21 |
+| mergerequests     |   257 |   100.0% |    30 |
+| issues            |   233 |   100.0% |    21 |
 | users             |   212 |   100.0% |    38 |
 | dynamic           |   176 |    99.9% |     2 |
 | jobs              |   152 |   100.0% |    17 |
 | packages          |   148 |    99.0% |     9 |
+| search            |   126 |   100.0% |    10 |
 | workitems         |   120 |   100.0% |     6 |
-| search            |   118 |   100.0% |    10 |
 | commits           |   115 |    99.8% |    13 |
 | resourceevents    |   115 |   100.0% |    17 |
 | awardemoji        |   113 |   100.0% |    24 |
@@ -152,7 +152,7 @@
 | dependencyfirewall      |        19 |          3 |   100.0% |         1 |
 | dependencyproxy         |         5 |          1 |   100.0% |         1 |
 | deploykeys              |        76 |          2 |   100.0% |         9 |
-| deploymentmergerequests |        25 |          1 |   100.0% |         1 |
+| deploymentmergerequests |        31 |          1 |   100.0% |         1 |
 | deployments             |        65 |          2 |   100.0% |         6 |
 | deploytokens            |        68 |          2 |   100.0% |         9 |
 | dockerfiletemplates     |        15 |          1 |   100.0% |         2 |
@@ -209,7 +209,7 @@
 | issuediscussions        |        45 |          2 |   100.0% |         6 |
 | issuelinks              |        68 |          3 |   100.0% |         4 |
 | issuenotes              |        49 |          2 |   100.0% |         5 |
-| issues                  |       223 |          2 |   100.0% |        21 |
+| issues                  |       233 |          2 |   100.0% |        21 |
 | issuestatistics         |        43 |          1 |   100.0% |         3 |
 | iterationdata           |         8 |          1 |   100.0% |         0 |
 | jobs                    |       152 |          4 |   100.0% |        17 |
@@ -222,7 +222,7 @@
 | markdown                |         8 |          1 |   100.0% |         1 |
 | memberroles             |        47 |          3 |   100.0% |         6 |
 | members                 |        63 |          2 |   100.0% |         6 |
-| mergerequests           |       245 |          3 |   100.0% |        30 |
+| mergerequests           |       257 |          3 |   100.0% |        30 |
 | mergetrains             |        16 |          2 |   100.0% |         4 |
 | metadata                |         8 |          1 |   100.0% |         1 |
 | milestones              |        73 |          1 |   100.0% |         7 |
@@ -265,7 +265,7 @@
 | runnercontrollerscopes  |        34 |          2 |   100.0% |         5 |
 | runnercontrollertokens  |        41 |          2 |   100.0% |         5 |
 | runners                 |       113 |          2 |   100.0% |        19 |
-| search                  |       118 |          1 |   100.0% |        10 |
+| search                  |       126 |          1 |   100.0% |        10 |
 | securefiles             |        30 |          2 |   100.0% |         4 |
 | securityattributes      |        24 |          1 |   100.0% |         5 |
 | securitycategories      |        16 |          1 |   100.0% |         3 |
@@ -293,7 +293,7 @@
 | wikis                   |        62 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,827** |    **360** |          | **1,187** |
+| **Total**               | **8,863** |    **360** |          | **1,187** |
 
 </details>
 
