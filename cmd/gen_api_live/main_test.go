@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -736,5 +739,70 @@ esac
 	}
 	if !strings.Contains(err.Error(), "waiting for the application") {
 		t.Errorf("error = %q, want it to name what it was waiting for", err)
+	}
+}
+
+// TestRunnerDetail_ReportsTheStderrThatNamesTheFailure verifies the detail a
+// failed runner contributes to the error: nothing at all when the failure was
+// not the command's own or it said nothing, the whole of a short complaint, and
+// the last lines of a long one, since a Rails backtrace is long and the failure
+// is named at its end rather than at its start.
+func TestRunnerDetail_ReportsTheStderrThatNamesTheFailure(t *testing.T) {
+	t.Parallel()
+
+	longStderr := make([]string, 0, runnerStderrLines+5)
+	for i := range cap(longStderr) {
+		longStderr = append(longStderr, fmt.Sprintf("line %d", i))
+	}
+
+	tests := []struct {
+		name        string
+		err         error
+		want        string
+		wantMissing string
+	}{
+		{
+			name: "a failure that is not the command's own contributes nothing",
+			err:  errors.New("dial tcp: connection refused"),
+			want: "",
+		},
+		{
+			name: "a command that said nothing on stderr contributes nothing",
+			err:  &exec.ExitError{Stderr: nil},
+			want: "",
+		},
+		{
+			name: "a short complaint is reported whole",
+			err:  &exec.ExitError{Stderr: []byte("  PG::UndefinedTable: relation \"application_settings\" does not exist\n")},
+			want: ": PG::UndefinedTable: relation \"application_settings\" does not exist",
+		},
+		{
+			name:        "a long one keeps its last lines",
+			err:         &exec.ExitError{Stderr: []byte(strings.Join(longStderr, "\n"))},
+			want:        fmt.Sprintf("line %d", cap(longStderr)-1),
+			wantMissing: "line 0\n",
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			got := runnerDetail(testCase.err)
+			if testCase.want == "" {
+				if got != "" {
+					t.Fatalf("runnerDetail() = %q, want no detail", got)
+				}
+				return
+			}
+			if !strings.Contains(got, testCase.want) {
+				t.Errorf("runnerDetail() = %q, want it to carry %q", got, testCase.want)
+			}
+			if testCase.wantMissing != "" && strings.Contains(got, testCase.wantMissing) {
+				t.Errorf("runnerDetail() kept %q, want only the last %d lines", testCase.wantMissing, runnerStderrLines)
+			}
+			if lines := strings.Count(got, "\n") + 1; lines > runnerStderrLines {
+				t.Errorf("runnerDetail() reported %d lines, want at most %d", lines, runnerStderrLines)
+			}
+		})
 	}
 }
