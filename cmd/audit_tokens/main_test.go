@@ -33,6 +33,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/freshness"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -1507,18 +1508,74 @@ func readReplica(t *testing.T, root, path string) string {
 	return string(data)
 }
 
-// TestRunFootprintCheck_CommittedTargets_AreCurrent verifies the check mode
-// accepts the committed README blocks, reference doc and site data for the
-// live measurement, which is the exact call `make check-footprint` makes, and
-// says how many rows it compared.
-func TestRunFootprintCheck_CommittedTargets_AreCurrent(t *testing.T) {
-	rows := measuredFootprintRows(t)
-	stubFootprintRows(t, rows)
+// useCommittedFootprintTargets points a footprint check at the committed
+// README blocks, reference doc and site data: it stubs the measurement with
+// the live rows and makes the repository root the working directory, and
+// returns that root.
+//
+// It defers to the harness first, before the measurement it would otherwise
+// pay for, because these are the targets a stack refreshes once at its top
+// (issue 644). The failure tests around it use a replica instead and are not
+// deferred, so a stale artifact still fails the check on every run.
+func useCommittedFootprintTargets(t *testing.T) string {
+	t.Helper()
+	freshness.SkipIfDeferred(t)
+	stubFootprintRows(t, measuredFootprintRows(t))
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
 		t.Fatalf("locate repository root: %v", err)
 	}
 	t.Chdir(root)
+	return root
+}
+
+// TestUseCommittedFootprintTargets_DefersOnlyWhenAsked verifies the harness
+// switch in both directions: with the variable set the committed targets are
+// left alone, and with it set to "checked" the helper prepares them, which is
+// what keeps the footprint gated where the refresh lands.
+//
+// The "checked" leg asserts what the helper did and compares no committed
+// content, deliberately. A test that pins the variable to "checked" is exempt
+// from the deferral by construction, so comparing an artifact there would fail
+// on exactly the stacked layer this whole arrangement exists to exempt. The
+// first version of this test did compare, and did fail that way.
+func TestUseCommittedFootprintTargets_DefersOnlyWhenAsked(t *testing.T) {
+	var skipped bool
+	t.Run("deferred", func(t *testing.T) {
+		t.Setenv(freshness.EnvVar, "deferred")
+		defer func() { skipped = t.Skipped() }()
+		useCommittedFootprintTargets(t)
+	})
+	if !skipped {
+		t.Error("useCommittedFootprintTargets() read the committed targets the harness asked it to leave alone")
+	}
+
+	skipped = true
+	t.Run("checked", func(t *testing.T) {
+		t.Setenv(freshness.EnvVar, "checked")
+		defer func() { skipped = t.Skipped() }()
+		root := useCommittedFootprintTargets(t)
+		if root == "" {
+			t.Error("useCommittedFootprintTargets() named no repository root")
+		}
+		// Stat the README relatively: the check resolves its targets against
+		// the working directory, so this is the fact the helper establishes,
+		// and it reads no content, only that the target is there.
+		if _, err := os.Stat(readmePath); err != nil {
+			t.Errorf("stat %s from the prepared working directory: %v", readmePath, err)
+		}
+	})
+	if skipped {
+		t.Error("useCommittedFootprintTargets() skipped the preparation the harness asked for")
+	}
+}
+
+// TestRunFootprintCheck_CommittedTargets_AreCurrent verifies the check mode
+// accepts the committed README blocks, reference doc and site data for the
+// live measurement, which is the exact call `make check-footprint` makes, and
+// says how many rows it compared.
+func TestRunFootprintCheck_CommittedTargets_AreCurrent(t *testing.T) {
+	useCommittedFootprintTargets(t)
 
 	var checkErr error
 	output := captureStdoutAudit(t, func() {
@@ -1658,12 +1715,7 @@ func TestRunFootprint_Failures_ReturnErrors(t *testing.T) {
 // without it the targets are written.
 func TestRunFootprintMode_CheckFlag_SelectsCheckOrWrite(t *testing.T) {
 	t.Run("check verifies the committed targets", func(t *testing.T) {
-		stubFootprintRows(t, measuredFootprintRows(t))
-		root, err := cmdutil.RepositoryRoot(".")
-		if err != nil {
-			t.Fatalf("locate repository root: %v", err)
-		}
-		t.Chdir(root)
+		root := useCommittedFootprintTargets(t)
 		before := readReplica(t, root, readmePath)
 
 		var modeErr error
@@ -1729,12 +1781,7 @@ func TestRun_FootprintMode_ReportsTheOutcomeAndExitCode(t *testing.T) {
 	})
 
 	t.Run("current targets exit zero", func(t *testing.T) {
-		stubFootprintRows(t, measuredFootprintRows(t))
-		root, err := cmdutil.RepositoryRoot(".")
-		if err != nil {
-			t.Fatalf("locate repository root: %v", err)
-		}
-		t.Chdir(root)
+		useCommittedFootprintTargets(t)
 
 		code := 0
 		var stderr bytes.Buffer

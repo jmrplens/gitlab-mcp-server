@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/freshness"
 )
 
 // minimalManifest is the smallest input generate accepts: the three required
@@ -293,8 +295,15 @@ func TestManifestResources_SortedByName(t *testing.T) {
 // lhm.plugin.json matches the registered surface.
 //
 // This is the same gate CI runs; failing here means the manifest needs
-// regenerating before the marketplace listing goes stale.
+// regenerating before the marketplace listing goes stale. Being the same gate,
+// it is deferred the same way: ci.yml skips its "Check LobeHub manifest" step
+// below the top of a stack, where the manifest is stale on purpose, and this
+// test used to fail there instead (issue 644). The comparison is not lost, it
+// runs where the manifest is refreshed. Every other test in this file uses a
+// throwaway project root and is not deferred, so a manifest the generator
+// would rewrite still fails check mode on every run.
 func TestRun_CheckModeAcceptsCommittedManifest(t *testing.T) {
+	freshness.SkipIfDeferred(t)
 	if err := run(true); err != nil {
 		t.Fatalf("run(true) error: %v", err)
 	}

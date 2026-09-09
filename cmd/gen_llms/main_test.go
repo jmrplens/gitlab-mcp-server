@@ -23,6 +23,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/freshness"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -514,10 +515,7 @@ func TestRun_RealSurfaceReproducesCommittedFiles(t *testing.T) {
 
 	for _, name := range generatedFileNames {
 		t.Run(name, func(t *testing.T) {
-			got := string(docgen.NormalizeNewlines([]byte(readGenerated(t, dir, name))))
-			if got != committed[name] {
-				t.Errorf("%s differs from the committed file (%d vs %d bytes); run go run ./cmd/gen_llms/", name, len(got), len(committed[name]))
-			}
+			compareToCommittedFile(t, dir, name, committed[name])
 		})
 	}
 	t.Run("gitlab.com enterprise meta surface adds orbit", func(t *testing.T) {
@@ -543,6 +541,52 @@ func TestRun_RealSurfaceReproducesCommittedFiles(t *testing.T) {
 			t.Errorf("GitLab.com individual tools = %d, want more than the %d self-managed ones", gitLabCom, selfManaged)
 		}
 	})
+}
+
+// compareToCommittedFile holds one generated file to the committed one, line
+// endings normalized, and names the command that refreshes it.
+//
+// It defers to the harness first ([freshness.SkipIfDeferred]), because the
+// committed llms files are refreshed once at the top of a stack and every
+// layer below carries them stale on purpose (issue 644). Only the comparison
+// is deferred: the surface facts the caller asserts beside it are not about a
+// committed artifact and keep running.
+func compareToCommittedFile(t *testing.T, dir, name, committed string) {
+	t.Helper()
+	freshness.SkipIfDeferred(t)
+	got := string(docgen.NormalizeNewlines([]byte(readGenerated(t, dir, name))))
+	if got != committed {
+		t.Errorf("%s differs from the committed file (%d vs %d bytes); run go run ./cmd/gen_llms/", name, len(got), len(committed))
+	}
+}
+
+// TestCompareToCommittedFile_DefersOnlyWhenAsked verifies the harness switch in
+// both directions: with the variable set the comparison is skipped before it
+// reads the generated file, which a missing one would otherwise turn into a
+// failure; with it set to "checked" the file is read and compared, which is
+// what keeps a stale llms file failing where the refresh lands.
+func TestCompareToCommittedFile_DefersOnlyWhenAsked(t *testing.T) {
+	var skipped bool
+	t.Run("deferred", func(t *testing.T) {
+		t.Setenv(freshness.EnvVar, "deferred")
+		defer func() { skipped = t.Skipped() }()
+		compareToCommittedFile(t, t.TempDir(), llmsFileName, "never read")
+	})
+	if !skipped {
+		t.Error("compareToCommittedFile() read a generated file the harness asked it to leave alone")
+	}
+
+	skipped = true
+	t.Run("checked", func(t *testing.T) {
+		t.Setenv(freshness.EnvVar, "checked")
+		defer func() { skipped = t.Skipped() }()
+		dir := t.TempDir()
+		writeFile(t, dir, llmsFileName, "# Generated\r\n")
+		compareToCommittedFile(t, dir, llmsFileName, "# Generated\n")
+	})
+	if skipped {
+		t.Error("compareToCommittedFile() skipped a comparison the harness asked for")
+	}
 }
 
 // TestReadVersion_UsesProjectRoot verifies readVersion reads VERSION from the

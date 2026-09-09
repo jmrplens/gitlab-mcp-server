@@ -29,6 +29,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/freshness"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
@@ -3020,34 +3021,14 @@ func buildSnapshots(t *testing.T, tools []*mcp.Tool) []toolSnapshot {
 	return snaps
 }
 
-// snapshotParityEnv is the harness setting that defers the golden comparison.
-// CI sets it to "deferred" on every layer of a stack below its top, and on a
-// pull request outside a stack whose base is another feature branch, because
-// the generated artifacts are refreshed once at the top of a stack and every
-// layer below would fail on drift the top overwrites; at the top of a stack,
-// on a pull request to main and on a push to main the comparison runs.
-// Test-only, like GITLAB_MCP_TEST_INVENTORY_DIR, and read by nothing in the
-// server.
-const snapshotParityEnv = "GITLAB_MCP_TEST_SNAPSHOT_PARITY"
-
-// skipDeferredSnapshotParity skips the calling test when the harness defers
-// golden comparisons, and says why, so a reader of the log knows the artifact
-// is checked where it lands rather than never.
-func skipDeferredSnapshotParity(t *testing.T) {
-	t.Helper()
-	if os.Getenv(snapshotParityEnv) == "deferred" {
-		t.Skip("snapshot parity is deferred below the top of a stack: the generated artifacts are refreshed once at the top and compared there, and on main")
-	}
-}
-
 // compareOrUpdate either updates the golden file or compares current
 // output against it, reporting a clear diff on mismatch. It does neither when
-// snapshot parity is deferred (GITLAB_MCP_TEST_SNAPSHOT_PARITY=deferred): the
-// test is skipped before the golden file is read or written, so a stacked
-// pull request is neither failed by a stale snapshot nor allowed to refresh it.
+// the harness deferred the comparison ([freshness.SkipIfDeferred]): the test is
+// skipped before the golden file is read or written, so a stacked pull request
+// is neither failed by a stale snapshot nor allowed to refresh it.
 func compareOrUpdate(t *testing.T, goldenPath string, current []toolSnapshot) {
 	t.Helper()
-	skipDeferredSnapshotParity(t)
+	freshness.SkipIfDeferred(t)
 
 	got, err := json.MarshalIndent(current, "", "  ")
 	if err != nil {
@@ -3095,15 +3076,16 @@ func compareOrUpdate(t *testing.T, goldenPath string, current []toolSnapshot) {
 	}
 }
 
-// TestSkipDeferredSnapshotParity_DefersOnlyWhenAsked verifies the harness
-// switch in both directions: with the variable set, a comparison is skipped
-// before it reads the golden file, which a missing file would otherwise turn
-// into a failure; without it, the helper lets the comparison run, which every
-// other test in this file then proves.
-func TestSkipDeferredSnapshotParity_DefersOnlyWhenAsked(t *testing.T) {
+// TestCompareOrUpdate_DefersOnlyWhenAsked verifies the harness switch in both
+// directions at the two comparison helpers of this package: with the variable
+// set, a comparison is skipped before it reads the golden file, which a missing
+// file would otherwise turn into a failure; with it set to "checked", the
+// comparison runs and reports the drift it was handed, which is what keeps a
+// stale artifact failing where the refresh lands.
+func TestCompareOrUpdate_DefersOnlyWhenAsked(t *testing.T) {
 	var skipped bool
 	t.Run("deferred", func(t *testing.T) {
-		t.Setenv(snapshotParityEnv, "deferred")
+		t.Setenv(freshness.EnvVar, "deferred")
 		defer func() { skipped = t.Skipped() }()
 		compareOrUpdate(t, filepath.Join(t.TempDir(), "never-written.json"), nil)
 	})
@@ -3113,7 +3095,7 @@ func TestSkipDeferredSnapshotParity_DefersOnlyWhenAsked(t *testing.T) {
 
 	skipped = false
 	t.Run("deferred projection", func(t *testing.T) {
-		t.Setenv(snapshotParityEnv, "deferred")
+		t.Setenv(freshness.EnvVar, "deferred")
 		defer func() { skipped = t.Skipped() }()
 		compareSnapshotSlices(t, filepath.Join(t.TempDir(), "never-written.json"), nil, []toolSnapshot{{Name: "only-on-one-side"}})
 	})
@@ -3121,13 +3103,24 @@ func TestSkipDeferredSnapshotParity_DefersOnlyWhenAsked(t *testing.T) {
 		t.Error("compareSnapshotSlices() compared what the harness asked it to leave alone")
 	}
 
+	skipped = true
 	t.Run("checked", func(t *testing.T) {
-		t.Setenv(snapshotParityEnv, "")
-		skipDeferredSnapshotParity(t)
-		if t.Skipped() {
-			t.Error("skipDeferredSnapshotParity() skipped without being asked to")
+		t.Setenv(freshness.EnvVar, "checked")
+		defer func() { skipped = t.Skipped() }()
+		current := []toolSnapshot{{Name: "gitlab_example"}}
+		golden := filepath.Join(t.TempDir(), "golden.json")
+		body, err := json.MarshalIndent(current, "", "  ")
+		if err != nil {
+			t.Fatalf("marshal snapshots: %v", err)
 		}
+		if writeErr := os.WriteFile(golden, body, 0o600); writeErr != nil {
+			t.Fatalf("write golden file: %v", writeErr)
+		}
+		compareOrUpdate(t, golden, current)
 	})
+	if skipped {
+		t.Error("compareOrUpdate() skipped a comparison the harness asked for")
+	}
 }
 
 // snapshotComparison classifies how a golden file relates to the freshly

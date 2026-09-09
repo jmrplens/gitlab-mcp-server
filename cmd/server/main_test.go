@@ -10540,15 +10540,17 @@ func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
 // for two readers: the test transport, which judges every document a test
 // sends, and the audit that judges the ones no test reaches. Neither runs in
 // the server. internal/testutil carries that schema plus net/http/httptest and
-// is imported only from _test.go files.
+// is imported only from _test.go files. internal/freshness reads the harness
+// setting that defers a committed-artifact comparison and imports testing for
+// the skip it performs, which belongs in a test binary and nowhere else.
 //
-// Today both stay out by accident, because nothing in the server's import graph
-// happens to reach them. This makes it hold on purpose: the day somebody
+// Today all three stay out by accident, because nothing in the server's import
+// graph happens to reach them. This makes it hold on purpose: the day somebody
 // imports test support from production code, this is the check that says so,
 // and it says so before the binary grows.
 func TestDependencies_TestSupport_NeverReachesTheServerBinary(t *testing.T) {
 	const modulePrefix = "github.com/jmrplens/gitlab-mcp-server/v3/"
-	forbidden := []string{"internal/testutil", "internal/graphqlschema"}
+	forbidden := []string{"internal/testutil", "internal/graphqlschema", "internal/freshness"}
 
 	// The package list is asked of the toolchain rather than derived from the
 	// source, because an indirect import through any of the 250 packages in
