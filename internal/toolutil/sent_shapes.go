@@ -242,3 +242,24 @@ func CapturedPipeline(capture *gitlabclient.ResponseCapture) (PipelineExtra, err
 	}
 	return extra, nil
 }
+
+// TopicExtra is the organization a topic belongs to, which GitLab's topic
+// entity exposes under no condition and so sends on every topic.
+type TopicExtra struct {
+	OrganizationID int64 `json:"organization_id"`
+}
+
+// CapturedTopic reads it off the captured answer to a request for one topic.
+func CapturedTopic(capture *gitlabclient.ResponseCapture) (TopicExtra, error) {
+	var extra TopicExtra
+	if err := capture.Decode(&extra); err != nil {
+		return TopicExtra{}, err
+	}
+	return extra, nil
+}
+
+// CapturedTopics reads the same off a list answer, one extra per topic in
+// order, the count held to what the SDK decoded.
+func CapturedTopics(capture *gitlabclient.ResponseCapture, decoded int) ([]TopicExtra, error) {
+	return capturedList[TopicExtra](capture, decoded, "topics")
+}

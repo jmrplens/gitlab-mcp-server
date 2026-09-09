@@ -23,7 +23,7 @@ const errExpNonNilResult = "expected non-nil result"
 const fmtUnexpErr = "unexpected error: %v"
 
 // topicJSON identifies the topic JSON constant used by this package.
-const topicJSON = `{"id":1,"name":"go","title":"Go","description":"The Go programming language","total_projects_count":42,"avatar_url":"https://example.com/go.png"}`
+const topicJSON = `{"id":1,"name":"go","title":"Go","description":"The Go programming language","total_projects_count":42,"organization_id":7,"avatar_url":"https://example.com/go.png"}`
 
 // pathTopics identifies the path topics constant used by this package.
 const pathTopics = "/api/v4/topics"
@@ -65,6 +65,9 @@ func TestList_Success(t *testing.T) {
 	}
 	if out.Topics[0].TotalProjectsCount != 42 {
 		t.Errorf("expected 42 projects, got %d", out.Topics[0].TotalProjectsCount)
+	}
+	if out.Topics[0].OrganizationID != 7 {
+		t.Errorf("expected organization ID 7, got %d", out.Topics[0].OrganizationID)
 	}
 }
 
@@ -159,6 +162,9 @@ func TestGet_Success(t *testing.T) {
 	}
 	if out.Topic.Title != "Go" {
 		t.Errorf("expected title 'Go', got %q", out.Topic.Title)
+	}
+	if out.Topic.OrganizationID != 7 {
+		t.Errorf("expected organization ID 7, got %d", out.Topic.OrganizationID)
 	}
 }
 
