@@ -9635,6 +9635,21 @@
       "package": "internal/tools/namespaces",
       "kind": "rest",
       "method": "GET",
+      "path": "/namespaces/group1"
+    },
+    {
+      "package": "internal/tools/namespaces",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/namespaces/group1/exists",
+      "query": [
+        "parent_id"
+      ]
+    },
+    {
+      "package": "internal/tools/namespaces",
+      "kind": "rest",
+      "method": "GET",
       "path": "/namespaces/missing"
     },
     {

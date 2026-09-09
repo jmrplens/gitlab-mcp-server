@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,089 |
-| Unit test functions                                   | 14,484 |
+| Total test functions                                  | 15,152 |
+| Unit test functions                                   | 14,547 |
 | E2E test functions                                    |    605 |
 | cmd test functions                                    |  2,990 |
 | Test files (internal/)                                |    523 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,937 | 79.1% |
-| `TestFunc` (no underscore)             |    975 |  6.5% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,177 | 14.4% |
+| `TestFunc_Scenario` (2-part)           | 11,998 | 79.2% |
+| `TestFunc` (no underscore)             |    975 |  6.4% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,179 | 14.4% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,459 |        148 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,697 |        359 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,760 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            605 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,990 |        203 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,089** |    **966** |                                                                                                 |
+| **Total**               |     **15,152** |    **966** |                                                                                                 |
 
 ### Core Packages
 
@@ -90,7 +90,7 @@
 | users             |   212 |   100.0% |    38 |
 | dynamic           |   176 |    99.9% |     2 |
 | jobs              |   152 |   100.0% |    17 |
-| packages          |   131 |    99.0% |     9 |
+| packages          |   148 |    99.0% |     9 |
 | workitems         |   120 |   100.0% |     6 |
 | search            |   118 |   100.0% |    10 |
 | commits           |   115 |    99.8% |    13 |
@@ -98,12 +98,12 @@
 | awardemoji        |   113 |   100.0% |    24 |
 | pipelines         |   113 |   100.0% |    12 |
 | runners           |   113 |   100.0% |    19 |
+| snippets          |   107 |    99.6% |    15 |
 | containerregistry |   102 |   100.0% |    16 |
 | accesstokens      |   100 |   100.0% |    18 |
 | branches          |    98 |   100.0% |    10 |
 | pipelineschedules |    94 |    99.7% |    11 |
 | groupmilestones   |    91 |   100.0% |     8 |
-| snippets          |    89 |    99.5% |    15 |
 | integrations      |    88 |    99.6% |    12 |
 | groupmembers      |    85 |   100.0% |    10 |
 | files             |    84 |   100.0% |     8 |
@@ -151,7 +151,7 @@
 | dependencies            |        17 |          2 |   100.0% |         4 |
 | dependencyfirewall      |        19 |          3 |   100.0% |         1 |
 | dependencyproxy         |         5 |          1 |   100.0% |         1 |
-| deploykeys              |        71 |          2 |   100.0% |         9 |
+| deploykeys              |        76 |          2 |   100.0% |         9 |
 | deploymentmergerequests |        25 |          1 |   100.0% |         1 |
 | deployments             |        65 |          2 |   100.0% |         6 |
 | deploytokens            |        68 |          2 |   100.0% |         9 |
@@ -168,7 +168,7 @@
 | epics                   |        72 |          2 |   100.0% |         6 |
 | epicworkitems           |         3 |          1 |   100.0% |         0 |
 | errortracking           |        25 |          2 |   100.0% |         5 |
-| events                  |        52 |          2 |   100.0% |         2 |
+| events                  |        62 |          2 |   100.0% |         2 |
 | externalstatuschecks    |        51 |          3 |   100.0% |         8 |
 | featureflags            |        45 |          2 |   100.0% |         5 |
 | features                |        24 |          2 |    98.2% |         4 |
@@ -234,10 +234,10 @@
 | mrdiscussions           |        59 |          1 |   100.0% |         7 |
 | mrdraftnotes            |        71 |          2 |   100.0% |         7 |
 | mrnotes                 |        50 |          2 |   100.0% |         5 |
-| namespaces              |        37 |          1 |    99.3% |         4 |
+| namespaces              |        44 |          1 |    99.4% |         4 |
 | notifications           |        29 |          1 |   100.0% |         6 |
 | orbit                   |        57 |          4 |   100.0% |         6 |
-| packages                |       131 |          6 |    99.0% |         9 |
+| packages                |       148 |          6 |    99.0% |         9 |
 | pages                   |        55 |          2 |   100.0% |         9 |
 | pipelines               |       113 |          3 |   100.0% |        12 |
 | pipelineschedules       |        94 |          2 |    99.7% |        11 |
@@ -276,9 +276,9 @@
 | sidekiq                 |        18 |          2 |   100.0% |         4 |
 | snippetdiscussions      |        37 |          2 |   100.0% |         6 |
 | snippetnotes            |        49 |          2 |   100.0% |         5 |
-| snippets                |        89 |          3 |    99.5% |        15 |
+| snippets                |       107 |          3 |    99.6% |        15 |
 | snippetstoragemoves     |        42 |          2 |   100.0% |         6 |
-| systemhooks             |        36 |          2 |   100.0% |         8 |
+| systemhooks             |        42 |          2 |   100.0% |         8 |
 | tags                    |        83 |          2 |   100.0% |         9 |
 | terraformstates         |        18 |          1 |   100.0% |         6 |
 | todos                   |        36 |          2 |   100.0% |         3 |
@@ -293,7 +293,7 @@
 | wikis                   |        62 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,697** |    **359** |          | **1,187** |
+| **Total**               | **8,760** |    **359** |          | **1,187** |
 
 </details>
 
@@ -513,7 +513,7 @@
 | mrdiscussions           |   100.0% |
 | mrdraftnotes            |   100.0% |
 | mrnotes                 |   100.0% |
-| namespaces              |    99.3% |
+| namespaces              |    99.4% |
 | notifications           |   100.0% |
 | orbit                   |   100.0% |
 | packages                |    99.0% |
@@ -555,7 +555,7 @@
 | sidekiq                 |   100.0% |
 | snippetdiscussions      |   100.0% |
 | snippetnotes            |   100.0% |
-| snippets                |    99.5% |
+| snippets                |    99.6% |
 | snippetstoragemoves     |   100.0% |
 | systemhooks             |   100.0% |
 | tags                    |   100.0% |
