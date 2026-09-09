@@ -27,7 +27,11 @@ type RepositoryOutput struct {
 	CleanupPolicyStartedAt string                     `json:"cleanup_policy_started_at,omitempty"`
 	Status                 gl.ContainerRegistryStatus `json:"status,omitempty"`
 	TagsCount              int64                      `json:"tags_count"`
-	Tags                   []TagOutput                `json:"tags,omitempty"`
+	// Size is sent when the caller asked for it, and DeleteAPIPath to a caller
+	// allowed to administer the images in this repository.
+	Size          int64       `json:"size,omitempty"`
+	DeleteAPIPath string      `json:"delete_api_path,omitempty"`
+	Tags          []TagOutput `json:"tags,omitempty"`
 }
 
 // RepositoryListOutput represents a paginated list of registry repositories.
@@ -57,15 +61,19 @@ type TagListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// convertRepository maps a GitLab container registry repository into MCP output.
-func convertRepository(r *gl.RegistryRepository) RepositoryOutput {
+// convertRepository maps a GitLab container registry repository into MCP
+// output, filling from the decoded repository and from what the capture read
+// beside it.
+func convertRepository(r *gl.RegistryRepository, extra toolutil.RegistryRepositoryExtra) RepositoryOutput {
 	o := RepositoryOutput{
-		ID:        r.ID,
-		Name:      r.Name,
-		Path:      r.Path,
-		ProjectID: r.ProjectID,
-		Location:  r.Location,
-		TagsCount: r.TagsCount,
+		ID:            r.ID,
+		Name:          r.Name,
+		Path:          r.Path,
+		ProjectID:     r.ProjectID,
+		Location:      r.Location,
+		TagsCount:     r.TagsCount,
+		Size:          extra.Size,
+		DeleteAPIPath: extra.DeleteAPIPath,
 	}
 	if r.CreatedAt != nil {
 		o.CreatedAt = r.CreatedAt.Format(time.RFC3339)
@@ -137,6 +145,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	if input.TagsCount {
 		opts.TagsCount = new(true)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	repos, resp, err := client.GL().ContainerRegistry.ListProjectRegistryRepositories(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
@@ -144,9 +153,13 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 		return RepositoryListOutput{}, toolutil.WrapErrWithStatusHint("registry_list_project", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get; the project may have container registry disabled or no repositories yet")
 	}
+	extras, err := toolutil.CapturedRegistryRepositories(captured, len(repos))
+	if err != nil {
+		return RepositoryListOutput{}, toolutil.WrapErr("registry_list_project", err)
+	}
 	out := RepositoryListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, r := range repos {
-		out.Repositories = append(out.Repositories, convertRepository(r))
+	for i, r := range repos {
+		out.Repositories = append(out.Repositories, convertRepository(r, extras[i]))
 	}
 	return out, nil
 }
@@ -177,6 +190,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	repos, resp, err := client.GL().ContainerRegistry.ListGroupRegistryRepositories(
 		string(input.GroupID), opts, gl.WithContext(ctx),
 	)
@@ -184,9 +198,13 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 		return RepositoryListOutput{}, toolutil.WrapErrWithStatusHint("registry_list_group", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get; the group may have no projects with container registry enabled")
 	}
+	extras, err := toolutil.CapturedRegistryRepositories(captured, len(repos))
+	if err != nil {
+		return RepositoryListOutput{}, toolutil.WrapErr("registry_list_group", err)
+	}
 	out := RepositoryListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, r := range repos {
-		out.Repositories = append(out.Repositories, convertRepository(r))
+	for i, r := range repos {
+		out.Repositories = append(out.Repositories, convertRepository(r, extras[i]))
 	}
 	return out, nil
 }
@@ -214,6 +232,7 @@ func GetRepository(ctx context.Context, client *gitlabclient.Client, input GetRe
 	if input.TagsCount {
 		opts.TagsCount = new(true)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	repo, _, err := client.GL().ContainerRegistry.GetSingleRegistryRepository(
 		input.RepositoryID, opts, gl.WithContext(ctx),
 	)
@@ -221,7 +240,11 @@ func GetRepository(ctx context.Context, client *gitlabclient.Client, input GetRe
 		return RepositoryOutput{}, toolutil.WrapErrWithStatusHint("registry_get_repository", err, http.StatusNotFound,
 			"verify repository_id with gitlab_registry_list_project; container repositories must be queried by ID, not name")
 	}
-	return convertRepository(repo), nil
+	extra, err := toolutil.CapturedRegistryRepository(captured)
+	if err != nil {
+		return RepositoryOutput{}, toolutil.WrapErr("registry_get_repository", err)
+	}
+	return convertRepository(repo, extra), nil
 }
 
 // ---------------------------------------------------------------------------

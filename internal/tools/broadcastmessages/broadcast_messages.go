@@ -25,12 +25,15 @@ type MessageItem struct {
 	BroadcastType      string  `json:"broadcast_type,omitempty"`
 	Dismissable        bool    `json:"dismissable"`
 	Theme              string  `json:"theme,omitempty"`
+	Color              string  `json:"color,omitempty"`
 }
 
-// toItem converts the GitLab API response to the tool output format.
-func toItem(m *gl.BroadcastMessage) MessageItem {
+// toItem converts the GitLab API response to the tool output format, filling
+// from the decoded message and from what the capture read beside it.
+func toItem(m *gl.BroadcastMessage, extra toolutil.BroadcastMessageExtra) MessageItem {
 	item := MessageItem{
 		ID:            m.ID,
+		Color:         extra.Color,
 		Message:       m.Message,
 		Font:          m.Font,
 		Active:        m.Active,
@@ -76,15 +79,20 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	msgs, resp, err := client.GL().BroadcastMessage.ListBroadcastMessages(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("broadcast_message_list", err, http.StatusForbidden,
 			"this is an instance-wide endpoint and may require administrator access on self-managed instances; not available on GitLab.com SaaS for non-admins")
 	}
+	extras, err := toolutil.CapturedBroadcastMessages(captured, len(msgs))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("broadcast_message_list", err)
+	}
 
 	items := make([]MessageItem, 0, len(msgs))
-	for _, m := range msgs {
-		items = append(items, toItem(m))
+	for i, m := range msgs {
+		items = append(items, toItem(m, extras[i]))
 	}
 	return ListOutput{
 		Messages:   items,
@@ -125,12 +133,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	if input.ID <= 0 {
 		return GetOutput{}, toolutil.ErrRequiredInt64("broadcast_message_get", "id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	m, _, err := client.GL().BroadcastMessage.GetBroadcastMessage(input.ID, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("broadcast_message_get", err, http.StatusNotFound,
 			"verify id with gitlab_list_broadcast_messages; the message may have been deleted")
 	}
-	return GetOutput{Message: toItem(m)}, nil
+	extra, err := toolutil.CapturedBroadcastMessage(captured)
+	if err != nil {
+		return GetOutput{}, toolutil.WrapErr("broadcast_message_get", err)
+	}
+	return GetOutput{Message: toItem(m, extra)}, nil
 }
 
 // Create.
@@ -196,12 +209,17 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		opts.Theme = new(input.Theme)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	m, _, err := client.GL().BroadcastMessage.CreateBroadcastMessage(opts, gl.WithContext(ctx))
 	if err != nil {
 		return CreateOutput{}, toolutil.WrapErrWithStatusHint("broadcast_message_create", err, http.StatusBadRequest,
 			"broadcast_type must be 'banner' or 'notification'; theme must be one of indigo, light-indigo, blue, light-blue, green, light-green, red, light-red; starts_at < ends_at; access levels: 10/15/20/25/30/40/50 (Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner)")
 	}
-	return CreateOutput{Message: toItem(m)}, nil
+	extra, err := toolutil.CapturedBroadcastMessage(captured)
+	if err != nil {
+		return CreateOutput{}, toolutil.WrapErr("broadcast_message_create", err)
+	}
+	return CreateOutput{Message: toItem(m, extra)}, nil
 }
 
 // Update.
@@ -236,12 +254,17 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return UpdateOutput{}, toolutil.WrapErrWithMessage("broadcast_message_update", err)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	m, _, err := client.GL().BroadcastMessage.UpdateBroadcastMessage(input.ID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return UpdateOutput{}, toolutil.WrapErrWithStatusHint("broadcast_message_update", err, http.StatusNotFound,
 			"verify id with gitlab_list_broadcast_messages; the message may have been deleted or you lack access")
 	}
-	return UpdateOutput{Message: toItem(m)}, nil
+	extra, err := toolutil.CapturedBroadcastMessage(captured)
+	if err != nil {
+		return UpdateOutput{}, toolutil.WrapErr("broadcast_message_update", err)
+	}
+	return UpdateOutput{Message: toItem(m, extra)}, nil
 }
 
 // buildUpdateOpts maps UpdateInput fields to the GitLab API update options.

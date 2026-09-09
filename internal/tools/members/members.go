@@ -52,6 +52,11 @@ type Output struct {
 	MembershipState   string              `json:"membership_state,omitempty" tier:"premium"`
 	MemberRole        *MemberRoleOutput   `json:"member_role,omitempty" tier:"ultimate"`
 	IsUsingSeat       bool                `json:"is_using_seat,omitempty"`
+	// AvatarPath is the avatar as a path on the instance rather than a full
+	// URL, and CustomAttributes what an administrator who asked for them
+	// receives.
+	AvatarPath       string                           `json:"avatar_path,omitempty"`
+	CustomAttributes []toolutil.CustomAttributeOutput `json:"custom_attributes,omitempty"`
 }
 
 // CreatedByOutput mirrors [gl.MemberCreatedBy], the user who created the
@@ -119,6 +124,8 @@ func ToOutput(m *gl.ProjectMember, extra toolutil.MemberExtra) Output {
 		Override:          extra.Override,
 		MembershipState:   extra.MembershipState,
 		MemberRole:        memberRoleOutput(m.MemberRole),
+		AvatarPath:        extra.AvatarPath,
+		CustomAttributes:  extra.CustomAttributes,
 	}
 	if m.CreatedAt != nil {
 		out.CreatedAt = m.CreatedAt.Format(time.RFC3339)

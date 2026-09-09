@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -17,7 +18,7 @@ import (
 func TestList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestPath(t, r, "/api/v4/templates/licenses")
-		testutil.RespondJSON(w, http.StatusOK, `[{"key":"mit","name":"MIT License","featured":true}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"key":"mit","name":"MIT License","featured":true,"popular":true}]`)
 	})
 	client := testutil.NewTestClient(t, handler)
 	out, err := List(t.Context(), client, ListInput{})
@@ -27,8 +28,8 @@ func TestList(t *testing.T) {
 	if len(out.Licenses) != 1 {
 		t.Fatalf("len = %d, want 1", len(out.Licenses))
 	}
-	if !out.Licenses[0].Featured {
-		t.Error("Featured = false, want true")
+	if !out.Licenses[0].Popular {
+		t.Error("Popular = false, want the popular template the answer describes")
 	}
 }
 
@@ -87,7 +88,7 @@ func TestGet_Error(t *testing.T) {
 
 // TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{Licenses: []LicenseItem{{Key: "mit", Name: "MIT", Featured: true}}})
+	md := FormatListMarkdown(ListOutput{Licenses: []LicenseItem{{Key: "mit", Name: "MIT", Popular: true}}})
 	if !strings.Contains(md, "MIT") {
 		t.Error("missing")
 	}
@@ -425,14 +426,15 @@ func TestBoolString_TrueAndFalse(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// FormatListMarkdown — non-featured license
+// FormatListMarkdown — unpopular license
 // ---------------------------------------------------------------------------
 
-// TestFormatListMarkdown_NonFeaturedLicense verifies that non-featured
-// licenses render the literal "false" attribute string via boolString.
-func TestFormatListMarkdown_NonFeaturedLicense(t *testing.T) {
+// TestFormatListMarkdown_UnpopularLicense verifies that a template GitLab does
+// not list among the popular ones renders the literal "false" attribute string
+// via boolString.
+func TestFormatListMarkdown_UnpopularLicense(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Licenses: []LicenseItem{
-		{Key: "gpl-3.0", Name: "GPL 3.0", Featured: false},
+		{Key: "gpl-3.0", Name: "GPL 3.0", Popular: false},
 	}})
 	if !strings.Contains(md, "gpl-3.0") {
 		t.Errorf("missing license key in markdown: %s", md)
@@ -462,6 +464,33 @@ func newLicenseRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 
 	client := testutil.NewTestClient(t, handler)
 	return licenseTemplateSpecsByTool(ActionSpecs(client))
+}
+
+// TestLicenseTemplates_UnreadableCapturedPopular verifies that both license
+// template handlers return an error rather than a half-filled template when
+// GitLab sends popular as something that is not a boolean. The SDK ignores the
+// key its own LicenseTemplate does not model, so the read of the captured
+// response is the only thing that can notice.
+func TestLicenseTemplates_UnreadableCapturedPopular(t *testing.T) {
+	// A list answers with an array and a get with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"key":"mit","name":"MIT License","popular":"yes"}]`)
+			_, err := List(context.Background(), client, ListInput{})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"key":"mit","name":"MIT License","popular":"yes"}`)
+			_, err := Get(context.Background(), client, GetInput{Key: "mit"})
+			return err
+		}},
+	})
 }
 
 // licenseTemplateSpecsByTool supports license template specs by tool assertions in licensetemplates tests.

@@ -9,13 +9,13 @@ import (
 
 // FormatOutputMarkdown renders a single SCIM identity as Markdown.
 func FormatOutputMarkdown(o Output) string {
-	if o.UserID == 0 && o.ExternalUID == "" {
+	if o.UserID == 0 && o.ExternUID == "" {
 		return ""
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "## SCIM Identity\n\n")
 	// The external UID is whatever the identity provider sent for the user.
-	fmt.Fprintf(&b, "- **External UID**: `%s`\n", toolutil.EscapeMdTableCell(o.ExternalUID))
+	fmt.Fprintf(&b, "- **External UID**: `%s`\n", toolutil.EscapeMdTableCell(o.ExternUID))
 	fmt.Fprintf(&b, "- **User ID**: %d\n", o.UserID)
 	fmt.Fprintf(&b, "- **Active**: %t\n", o.Active)
 	toolutil.WriteHints(
@@ -36,7 +36,7 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| External UID | User ID | Active |\n")
 	b.WriteString("| ------------ | ------: | ------ |\n")
 	for _, id := range out.Identities {
-		fmt.Fprintf(&b, "| `%s` | %d | %t |\n", toolutil.EscapeMdTableCell(id.ExternalUID), id.UserID, id.Active)
+		fmt.Fprintf(&b, "| `%s` | %d | %t |\n", toolutil.EscapeMdTableCell(id.ExternUID), id.UserID, id.Active)
 	}
 	toolutil.WriteHints(
 		&b,

@@ -30,6 +30,9 @@ type BoardOutput struct {
 	HideBacklogList bool                  `json:"hide_backlog_list"`
 	HideClosedList  bool                  `json:"hide_closed_list"`
 	Lists           []BoardListOutput     `json:"lists,omitempty"`
+	// Group is the group reference GitLab renders on a board, null on one that
+	// belongs to a project.
+	Group *toolutil.BasicGroupDetailsOutput `json:"group,omitempty"`
 }
 
 // BoardListOutput represents a single list within a board. Sub-objects (label,
@@ -89,7 +92,8 @@ type boardListAPI struct {
 // during json decoding.
 type issueBoardAPI struct {
 	gl.IssueBoard
-	Lists []*boardListAPI `json:"lists"`
+	Lists []*boardListAPI                   `json:"lists"`
+	Group *toolutil.BasicGroupDetailsOutput `json:"group"`
 }
 
 // rawGetBoard issues a raw REST GET for a single issue board, decoding the full
@@ -128,7 +132,7 @@ func rawListBoardLists(ctx context.Context, client *gitlabclient.Client, project
 
 // convertBoard maps a GitLab project issue board into the MCP output shape,
 // surfacing the full project/milestone/assignee/label sub-objects.
-func convertBoard(b *gl.IssueBoard) BoardOutput {
+func convertBoard(b *gl.IssueBoard, extra toolutil.BoardExtra) BoardOutput {
 	out := BoardOutput{
 		ID:              b.ID,
 		Name:            b.Name,
@@ -139,6 +143,7 @@ func convertBoard(b *gl.IssueBoard) BoardOutput {
 		Labels:          labelDetailsOutputs(b.Labels),
 		HideBacklogList: b.HideBacklogList,
 		HideClosedList:  b.HideClosedList,
+		Group:           extra.Group,
 	}
 	for _, l := range b.Lists {
 		out.Lists = append(out.Lists, convertBoardList(l))
@@ -159,6 +164,7 @@ func convertBoardAPI(b *issueBoardAPI) BoardOutput {
 		Labels:          labelDetailsOutputs(b.Labels),
 		HideBacklogList: b.HideBacklogList,
 		HideClosedList:  b.HideClosedList,
+		Group:           b.Group,
 	}
 	for _, l := range b.Lists {
 		out.Lists = append(out.Lists, convertBoardListAPI(l))
@@ -228,14 +234,19 @@ func ListBoards(ctx context.Context, client *gitlabclient.Client, input ListBoar
 	opts := &gl.ListIssueBoardsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	boards, resp, err := client.GL().Boards.ListIssueBoards(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListBoardsOutput{}, toolutil.WrapErrWithStatusHint("board_list", err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get. Issue boards must be enabled in project settings")
 	}
+	extras, err := toolutil.CapturedBoards(captured, len(boards))
+	if err != nil {
+		return ListBoardsOutput{}, toolutil.WrapErr("board_list", err)
+	}
 	out := ListBoardsOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, b := range boards {
-		out.Boards = append(out.Boards, convertBoard(b))
+	for i, b := range boards {
+		out.Boards = append(out.Boards, convertBoard(b, extras[i]))
 	}
 	return out, nil
 }
@@ -281,6 +292,7 @@ func CreateBoard(ctx context.Context, client *gitlabclient.Client, input CreateB
 	opts := &gl.CreateIssueBoardOptions{
 		Name: new(input.Name),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	board, _, err := client.GL().Boards.CreateIssueBoard(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -290,7 +302,11 @@ func CreateBoard(ctx context.Context, client *gitlabclient.Client, input CreateB
 		return BoardOutput{}, toolutil.WrapErrWithStatusHint("board_create", err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get and that you have Reporter+ role")
 	}
-	return convertBoard(board), nil
+	extra, err := toolutil.CapturedBoard(captured)
+	if err != nil {
+		return BoardOutput{}, toolutil.WrapErr("board_create", err)
+	}
+	return convertBoard(board, extra), nil
 }
 
 // UpdateBoardInput represents input for updating a board.
@@ -337,6 +353,7 @@ func UpdateBoard(ctx context.Context, client *gitlabclient.Client, input UpdateB
 	if input.HideClosedList != nil {
 		opts.HideClosedList = input.HideClosedList
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	board, _, err := client.GL().Boards.UpdateIssueBoard(string(input.ProjectID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -346,7 +363,11 @@ func UpdateBoard(ctx context.Context, client *gitlabclient.Client, input UpdateB
 		return BoardOutput{}, toolutil.WrapErrWithStatusHint("board_update", err, http.StatusNotFound,
 			"verify board_id with gitlab_board_list")
 	}
-	return convertBoard(board), nil
+	extra, err := toolutil.CapturedBoard(captured)
+	if err != nil {
+		return BoardOutput{}, toolutil.WrapErr("board_update", err)
+	}
+	return convertBoard(board, extra), nil
 }
 
 // DeleteBoardInput represents input for deleting a board.

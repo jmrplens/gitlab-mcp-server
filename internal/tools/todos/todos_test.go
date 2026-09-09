@@ -307,7 +307,7 @@ func TestTodoList_AllFilters(t *testing.T) {
 // TestToOutput_NilTargetProjectAuthorCreatedAt verifies ToOutput when nil target project author created at.
 func TestToOutput_NilTargetProjectAuthorCreatedAt(t *testing.T) {
 	todo := todoWithNils()
-	out := toOutput(&todo)
+	out := toOutput(&todo, toolutil.TodoExtra{})
 	if out.Target != nil {
 		t.Errorf("expected nil Target, got %+v", out.Target)
 	}
@@ -579,7 +579,7 @@ func TestToOutput_FullNestedTarget(t *testing.T) {
 			ImageURL:             "https://x/design.png",
 		},
 	}
-	out := toOutput(todo)
+	out := toOutput(todo, toolutil.TodoExtra{})
 	if out.Project == nil || out.Project.PathWithNamespace != "g/proj" || out.Project.CreatedAt == "" {
 		t.Fatalf("project not mapped: %+v", out.Project)
 	}
@@ -637,7 +637,7 @@ func assertTargetNested(t *testing.T, tgt *TodoTargetOut) {
 func TestMilestoneOut_NilDates(t *testing.T) {
 	out := toOutput(&gl.Todo{
 		Target: &gl.TodoTarget{Milestone: &gl.Milestone{ID: 1, Title: "M"}},
-	})
+	}, toolutil.TodoExtra{})
 	if out.Target == nil || out.Target.Milestone == nil {
 		t.Fatal("expected milestone")
 	}
@@ -722,6 +722,23 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ---------------------------------------------------------------------------
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
+
+// TestList_UnreadableCapturedGroup verifies that the todo list handler returns
+// an error rather than a half-filled list when GitLab sends the group object as
+// something that is not an object. The SDK ignores the key its own Todo does
+// not model, so the read of the captured response is the only thing that can
+// notice.
+func TestList_UnreadableCapturedGroup(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"action_name":"assigned","state":"pending","group":"not-an-object"}]`)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := List(context.Background(), client, ListInput{})
+			return err
+		}},
+	})
+}
 
 // TestActionSpecs_CallRoutes covers ActionSpecs with table-driven subtests for call routes.
 func TestActionSpecs_CallRoutes(t *testing.T) {

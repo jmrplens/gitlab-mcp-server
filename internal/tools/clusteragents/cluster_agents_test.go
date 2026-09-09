@@ -11,6 +11,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -524,7 +525,7 @@ func TestListAgents_KeysetAndOrdering(t *testing.T) {
 				}
 			})
 		}
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"agent1","created_at":"2024-01-02T03:04:05Z","created_by_user_id":10,"config_project":{"id":99,"name":"cfg","path_with_namespace":"grp/cfg","created_at":"2023-01-01T00:00:00Z"}}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"agent1","created_at":"2024-01-02T03:04:05Z","created_by_user_id":10,"is_receptive":true,"config_project":{"id":99,"name":"cfg","path_with_namespace":"grp/cfg","created_at":"2023-01-01T00:00:00Z"}}]`)
 	}))
 	out, err := ListAgents(t.Context(), client, ListAgentsInput{
 		ProjectID:  "1",
@@ -541,6 +542,9 @@ func TestListAgents_KeysetAndOrdering(t *testing.T) {
 	a := out.Agents[0]
 	if a.CreatedAt != "2024-01-02T03:04:05Z" {
 		t.Errorf("CreatedAt = %q", a.CreatedAt)
+	}
+	if !a.IsReceptive {
+		t.Error("IsReceptive = false, want the receptive agent the answer describes")
 	}
 	if a.ConfigProject.ID != 99 || a.ConfigProject.PathWithNamespace != "grp/cfg" || a.ConfigProject.CreatedAt == "" {
 		t.Errorf("ConfigProject = %#v", a.ConfigProject)
@@ -917,4 +921,51 @@ func clusterAgentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[stri
 		byTool[toolName] = spec
 	}
 	return byTool
+}
+
+// TestFormatAgentMarkdown_Receptive verifies that an agent GitLab reports as
+// receptive says so in the rendered Markdown, and that an ordinary agent does
+// not. The flag is read off the captured response because the SDK does not
+// model it, and it decides which way the connection is made.
+func TestFormatAgentMarkdown_Receptive(t *testing.T) {
+	receptive := FormatAgentMarkdown(AgentItem{ID: 1, Name: "prod", IsReceptive: true})
+	if !strings.Contains(receptive, "**Receptive**: yes") {
+		t.Errorf("markdown missing the receptive line:\n%s", receptive)
+	}
+	ordinary := FormatAgentMarkdown(AgentItem{ID: 1, Name: "prod"})
+	if strings.Contains(ordinary, "**Receptive**") {
+		t.Errorf("markdown calls an ordinary agent receptive:\n%s", ordinary)
+	}
+}
+
+// TestClusterAgents_UnreadableCapturedIsReceptive verifies that every agent
+// handler reading is_receptive off the captured answer returns an error rather
+// than a half-filled agent when GitLab sends the flag as something that is not
+// a boolean. The SDK ignores the key its own Agent does not model, so the
+// captured read is the only thing that can notice.
+func TestClusterAgents_UnreadableCapturedIsReceptive(t *testing.T) {
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"id":1,"name":"prod","is_receptive":"maybe"}]`)
+			_, err := ListAgents(context.Background(), client, ListAgentsInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"name":"prod","is_receptive":"maybe"}`)
+			_, err := GetAgent(context.Background(), client, GetAgentInput{ProjectID: "42", AgentID: 1})
+			return err
+		}},
+		{Name: "register", Call: func() error {
+			client := poisoned(`{"id":1,"name":"prod","is_receptive":"maybe"}`)
+			_, err := RegisterAgent(context.Background(), client, RegisterAgentInput{ProjectID: "42", Name: "prod"})
+			return err
+		}},
+	})
 }

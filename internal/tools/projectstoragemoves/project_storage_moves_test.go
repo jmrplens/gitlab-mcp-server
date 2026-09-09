@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -32,9 +33,10 @@ const storageMoveJSON = `{
 
 const storageMoveNoProjectJSON = `{
 	"id": 2,
-	"state": "scheduled",
+	"state": "failed",
 	"source_storage_name": "default",
-	"destination_storage_name": "storage3"
+	"destination_storage_name": "storage3",
+	"error_message": "destination storage is full"
 }`
 
 // assertFullMove validates that the first move in a ListOutput mirrors the
@@ -117,8 +119,11 @@ func TestRetrieveAll(t *testing.T) {
 				if !out.Moves[0].CreatedAt.IsZero() {
 					t.Errorf("expected zero CreatedAt, got %v", out.Moves[0].CreatedAt)
 				}
-				if out.Moves[0].State != "scheduled" {
-					t.Errorf("State = %q, want %q", out.Moves[0].State, "scheduled")
+				if out.Moves[0].State != "failed" {
+					t.Errorf("State = %q, want %q", out.Moves[0].State, "failed")
+				}
+				if out.Moves[0].ErrorMessage != "destination storage is full" {
+					t.Errorf("ErrorMessage = %q, want why the move failed", out.Moves[0].ErrorMessage)
 				}
 			},
 		},
@@ -882,6 +887,49 @@ func TestFormatScheduleAllMarkdown(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestProjectStorageMoves_UnreadableCapturedErrorMessage verifies that every
+// project storage move handler returns an error rather than a half-filled move
+// when GitLab sends error_message as something that is not a string. The SDK
+// ignores the key its own ProjectRepositoryStorageMove does not model, so the
+// read of the captured response is the only thing that can notice, and a failed
+// move published without its message reads as one that failed for no reason.
+func TestProjectStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
+	// A retrieve answers with an array and the rest with an object, so each
+	// case drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "retrieve_all", Call: func() error {
+			client := poisoned(`[{"id":1,"state":"failed","error_message":42}]`)
+			_, err := RetrieveAll(context.Background(), client, ListInput{})
+			return err
+		}},
+		{Name: "retrieve_for_project", Call: func() error {
+			client := poisoned(`[{"id":1,"state":"failed","error_message":42}]`)
+			_, err := RetrieveForProject(context.Background(), client, ListForProjectInput{ProjectID: 42})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"state":"failed","error_message":42}`)
+			_, err := Get(context.Background(), client, IDInput{ID: 1})
+			return err
+		}},
+		{Name: "get_for_project", Call: func() error {
+			client := poisoned(`{"id":1,"state":"failed","error_message":42}`)
+			_, err := GetForProject(context.Background(), client, ProjectMoveInput{ProjectID: 42, ID: 1})
+			return err
+		}},
+		{Name: "schedule", Call: func() error {
+			client := poisoned(`{"id":1,"state":"scheduled","error_message":42}`)
+			_, err := Schedule(context.Background(), client, ScheduleInput{ProjectID: 42})
+			return err
+		}},
+	})
 }
 
 func mustParseTime(s string) time.Time {

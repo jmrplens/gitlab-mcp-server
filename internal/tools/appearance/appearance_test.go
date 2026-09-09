@@ -18,6 +18,7 @@ import (
 
 // appearanceJSON identifies the appearance JSON constant used by this package.
 const appearanceJSON = `{
+	"site_name": "Example GitLab",
 	"title": "GitLab CE",
 	"description": "Open source self-hosted Git management",
 	"pwa_name": "GitLab",
@@ -61,6 +62,9 @@ func TestGet_Success(t *testing.T) {
 	}
 	if out.Appearance.HeaderMessage != "Welcome" {
 		t.Errorf("expected header_message 'Welcome', got %q", out.Appearance.HeaderMessage)
+	}
+	if out.Appearance.SiteName != "Example GitLab" {
+		t.Errorf("expected site_name 'Example GitLab', got %q", out.Appearance.SiteName)
 	}
 }
 
@@ -350,4 +354,38 @@ func newAppearanceRouteClient(t *testing.T) *gitlabclient.Client {
 	})
 
 	return testutil.NewTestClient(t, handler)
+}
+
+// TestFormatGetMarkdown_SiteName verifies the site name reaches the rendered
+// table. It is the one appearance field the SDK does not model and the handler
+// reads off the captured response, so a formatter that dropped it would leave
+// the whole captured read with nothing to show for itself.
+func TestFormatGetMarkdown_SiteName(t *testing.T) {
+	result := FormatGetMarkdown(GetOutput{Appearance: Item{SiteName: "Example GitLab", Title: "GitLab CE"}})
+	content := result.Content[0].(*mcp.TextContent).Text
+	if !strings.Contains(content, "| Site Name | Example GitLab |") {
+		t.Errorf("markdown missing the site name row:\n%s", content)
+	}
+}
+
+// TestAppearance_UnreadableCapturedSiteName verifies that both appearance
+// handlers return an error rather than a half-filled result when GitLab sends
+// site_name as something that is not a string. The SDK ignores the key its own
+// Appearance struct does not model, so the read of the captured response is the
+// only thing that can notice, and a handler that swallowed its failure would
+// publish an appearance with no site name and no complaint.
+func TestAppearance_UnreadableCapturedSiteName(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"title":"GitLab CE","site_name":42}`)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "get", Call: func() error {
+			_, err := Get(t.Context(), client, GetInput{})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			_, err := Update(t.Context(), client, UpdateInput{Title: "test"})
+			return err
+		}},
+	})
 }

@@ -1486,6 +1486,30 @@ func TestActionSpecs_DeploymentGetRoute(t *testing.T) {
 	}
 }
 
+// TestDeployments_UnreadableCapturedPendingApprovalCount verifies that the two
+// deployment handlers reading the approval fields off the captured answer
+// return an error rather than a half-filled deployment when GitLab sends
+// pending_approval_count as something that is not a number. The SDK ignores the
+// key its own Deployment does not model, so the captured read is the only thing
+// that can notice, and a deployment reported without its pending approvals
+// would read as one that needs none.
+func TestDeployments_UnreadableCapturedPendingApprovalCount(t *testing.T) {
+	const body = `{"id":1,"iid":1,"ref":"main","status":"created","pending_approval_count":"many"}`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "create", Call: func() error {
+			_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Environment: "production", Ref: "main", SHA: "abc123"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", DeploymentID: 1, Status: "success"})
+			return err
+		}},
+	})
+}
+
 // deploymentSpecsByTool supports deployment specs by tool assertions in deployments tests.
 func deploymentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()

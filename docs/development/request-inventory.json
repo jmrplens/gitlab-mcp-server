@@ -6506,6 +6506,12 @@
       "package": "internal/tools/groupscim",
       "kind": "rest",
       "method": "GET",
+      "path": "/groups/:group_id/scim/user-1"
+    },
+    {
+      "package": "internal/tools/groupscim",
+      "kind": "rest",
+      "method": "GET",
       "path": "/groups/mygroup/scim/identities"
     },
     {
@@ -6527,6 +6533,30 @@
       "path": "/groups/mygroup/scim/uid-123",
       "body": [
         "extern_uid"
+      ]
+    },
+    {
+      "package": "internal/tools/groupserviceaccounts",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/groups/:group_id/service_accounts"
+    },
+    {
+      "package": "internal/tools/groupserviceaccounts",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/groups/:group_id/service_accounts",
+      "body": [
+        "name"
+      ]
+    },
+    {
+      "package": "internal/tools/groupserviceaccounts",
+      "kind": "rest",
+      "method": "PATCH",
+      "path": "/groups/:group_id/service_accounts/:service_account_id",
+      "body": [
+        "name"
       ]
     },
     {
@@ -7135,6 +7165,21 @@
         "masked",
         "protected",
         "raw",
+        "value"
+      ]
+    },
+    {
+      "package": "internal/tools/instancevariables",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/admin/ci/variables/TOKEN"
+    },
+    {
+      "package": "internal/tools/instancevariables",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/admin/ci/variables/TOKEN",
+      "body": [
         "value"
       ]
     },
@@ -14197,6 +14242,7 @@
       "method": "PUT",
       "path": "/projects/:project_id/wikis/home",
       "body": [
+        "content",
         "title"
       ]
     },

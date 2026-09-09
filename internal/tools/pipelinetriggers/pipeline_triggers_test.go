@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -979,6 +980,58 @@ func TestFormatRunOutputMarkdown_AllFields(t *testing.T) {
 	}
 }
 
+// TestFormatTriggerMarkdown_ExpiresAt verifies the expiry reaches the rendered
+// table. It is read off the captured response because the SDK does not model
+// it, and a trigger shown without it reads as one that never expires.
+func TestFormatTriggerMarkdown_ExpiresAt(t *testing.T) {
+	withExpiry := FormatTriggerMarkdown(Output{ID: 1, Description: "nightly", ExpiresAt: "2026-05-05T00:00:00Z"})
+	if !strings.Contains(withExpiry, "| Expires At |") {
+		t.Errorf("markdown missing the expiry row:\n%s", withExpiry)
+	}
+	without := FormatTriggerMarkdown(Output{ID: 1, Description: "nightly"})
+	if strings.Contains(without, "| Expires At |") {
+		t.Errorf("markdown shows an expiry GitLab did not send:\n%s", without)
+	}
+}
+
+// TestPipelineTriggers_UnreadableCapturedExpiresAt verifies that every trigger
+// handler reading expires_at off the captured answer returns an error rather
+// than a half-filled trigger when GitLab sends it as something that is not a
+// timestamp. The SDK ignores the key its own PipelineTrigger does not model, so
+// the captured read is the only thing that can notice, and a trigger published
+// without its expiry reads as one that never expires.
+func TestPipelineTriggers_UnreadableCapturedExpiresAt(t *testing.T) {
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"id":1,"description":"nightly","expires_at":"never"}]`)
+			_, err := ListTriggers(context.Background(), client, ListInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"description":"nightly","expires_at":"never"}`)
+			_, err := GetTrigger(context.Background(), client, GetInput{ProjectID: "42", TriggerID: 1})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			client := poisoned(`{"id":1,"description":"nightly","expires_at":"never"}`)
+			_, err := CreateTrigger(context.Background(), client, CreateInput{ProjectID: "42", Description: "nightly"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			client := poisoned(`{"id":1,"description":"nightly","expires_at":"never"}`)
+			_, err := UpdateTrigger(context.Background(), client, UpdateInput{ProjectID: "42", TriggerID: 1, Description: "renamed"})
+			return err
+		}},
+	})
+}
+
 // TestGet_WithAllTimestamps verifies convertTrigger covers UpdatedAt and LastUsed nil guards.
 func TestGet_WithAllTimestamps(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -987,7 +1040,8 @@ func TestGet_WithAllTimestamps(t *testing.T) {
 			"owner":{"id":1,"name":"Admin"},
 			"created_at":"2026-01-15T10:00:00Z",
 			"updated_at":"2026-02-01T12:00:00Z",
-			"last_used":"2026-03-01T08:30:00Z"
+			"last_used":"2026-03-01T08:30:00Z",
+			"expires_at":"2026-12-31T23:59:59Z"
 		}`)
 	}))
 	out, err := GetTrigger(context.Background(), client, GetInput{ProjectID: "42", TriggerID: 10})
@@ -999,5 +1053,8 @@ func TestGet_WithAllTimestamps(t *testing.T) {
 	}
 	if out.LastUsed == "" {
 		t.Error("expected LastUsed to be set")
+	}
+	if out.ExpiresAt == "" {
+		t.Error("expected ExpiresAt to be set from the captured answer")
 	}
 }

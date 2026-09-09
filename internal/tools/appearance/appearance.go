@@ -12,6 +12,7 @@ import (
 
 // Item represents the application appearance in output.
 type Item struct {
+	SiteName                    string `json:"site_name,omitempty"`
 	Title                       string `json:"title"`
 	Description                 string `json:"description,omitempty"`
 	PWAName                     string `json:"pwa_name,omitempty"`
@@ -31,9 +32,11 @@ type Item struct {
 	EmailHeaderAndFooterEnabled bool   `json:"email_header_and_footer_enabled"`
 }
 
-// toItem converts the GitLab API response to the tool output format.
-func toItem(a *gl.Appearance) Item {
+// toItem converts the GitLab API response to the tool output format, filling
+// from the decoded appearance and from what the capture read beside it.
+func toItem(a *gl.Appearance, extra toolutil.AppearanceExtra) Item {
 	return Item{
+		SiteName:                    extra.SiteName,
 		Title:                       a.Title,
 		Description:                 a.Description,
 		PWAName:                     a.PWAName,
@@ -67,11 +70,16 @@ type GetOutput struct {
 
 // Get retrieves the current application appearance (admin-only).
 func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutput, error) {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	a, _, err := client.GL().Appearance.GetAppearance(gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("appearance_get", err, http.StatusForbidden, "appearance settings require administrator access")
 	}
-	return GetOutput{Appearance: toItem(a)}, nil
+	extra, err := toolutil.CapturedAppearance(captured)
+	if err != nil {
+		return GetOutput{}, toolutil.WrapErr("appearance_get", err)
+	}
+	return GetOutput{Appearance: toItem(a, extra)}, nil
 }
 
 // Update.
@@ -104,8 +112,13 @@ type UpdateOutput struct {
 	Appearance Item `json:"appearance"`
 }
 
-// Update changes the application appearance (admin-only).
-func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (UpdateOutput, error) {
+// changeAppearanceOptions copies the fields the caller set into the SDK's
+// options struct, leaving the rest nil so GitLab keeps their current values.
+//
+// It is a function of its own because the copy is one branch per field, and
+// with them inline the request and its two failure modes sat at the bottom of
+// eighteen of them.
+func changeAppearanceOptions(input UpdateInput) *gl.ChangeAppearanceOptions {
 	opts := &gl.ChangeAppearanceOptions{}
 	if input.Title != "" {
 		opts.Title = new(input.Title)
@@ -161,10 +174,21 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.ProfileImageGuidelines != "" {
 		opts.ProfileImageGuidelines = new(input.ProfileImageGuidelines)
 	}
+	return opts
+}
 
+// Update changes the application appearance (admin-only).
+func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (UpdateOutput, error) {
+	opts := changeAppearanceOptions(input)
+
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	a, _, err := client.GL().Appearance.ChangeAppearance(opts, gl.WithContext(ctx))
 	if err != nil {
 		return UpdateOutput{}, toolutil.WrapErrWithStatusHint("appearance_update", err, http.StatusForbidden, "updating appearance requires administrator access")
 	}
-	return UpdateOutput{Appearance: toItem(a)}, nil
+	extra, err := toolutil.CapturedAppearance(captured)
+	if err != nil {
+		return UpdateOutput{}, toolutil.WrapErr("appearance_update", err)
+	}
+	return UpdateOutput{Appearance: toItem(a, extra)}, nil
 }

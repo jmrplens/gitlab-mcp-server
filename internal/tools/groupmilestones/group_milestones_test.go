@@ -1935,6 +1935,47 @@ func TestActionSpecs_GroupMilestoneGetRoute(t *testing.T) {
 	}
 }
 
+// TestGroupMilestones_UnreadableCapturedWebURL verifies that every group
+// milestone handler returns an error rather than a half-filled milestone when
+// GitLab sends web_url as something that is not a string. The SDK ignores the
+// key its own GroupMilestone does not model, so the read of the captured
+// response is the only thing that can notice.
+func TestGroupMilestones_UnreadableCapturedWebURL(t *testing.T) {
+	const (
+		one  = `{"id":1,"iid":10,"title":"v1","web_url":42}`
+		many = `[{"id":1,"iid":10,"title":"v1","web_url":42}]`
+	)
+	// A collection GET is either the list itself or the IID-to-ID lookup Get
+	// and Update make before their own request; everything else is the request
+	// under test and gets the single poisoned milestone.
+	routed := func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/milestones") {
+			testutil.RespondJSON(w, http.StatusOK, many)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, one)
+	}
+	client := testutil.NewTestClient(t, http.HandlerFunc(routed))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := List(context.Background(), client, ListInput{GroupID: "42"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			_, err := Get(context.Background(), client, GetInput{GroupID: "42", MilestoneIID: 10})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			_, err := Create(context.Background(), client, CreateInput{GroupID: "42", Title: "v1"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			_, err := Update(context.Background(), client, UpdateInput{GroupID: "42", MilestoneIID: 10, Title: "v2"})
+			return err
+		}},
+	})
+}
+
 // groupMilestoneSpecsByTool supports group milestone specs by tool assertions in groupmilestones tests.
 func groupMilestoneSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()

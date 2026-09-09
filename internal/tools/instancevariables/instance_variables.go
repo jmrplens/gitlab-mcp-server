@@ -12,6 +12,8 @@ import (
 
 // Operation names used by error wrappers (kept as constants to satisfy S1192).
 const (
+	opListInstanceVariables  = "list instance variables"
+	opGetInstanceVariable    = "get instance variable"
 	opCreateInstanceVariable = "create instance variable"
 	opUpdateInstanceVariable = "update instance variable"
 	opDeleteInstanceVariable = "delete instance variable"
@@ -74,6 +76,10 @@ type Output struct {
 	Masked       bool   `json:"masked"`
 	Raw          bool   `json:"raw"`
 	Description  string `json:"description"`
+	// EnvironmentScope is the environments the value applies to, and Hidden
+	// whether the value is withheld from every reader once set.
+	EnvironmentScope string `json:"environment_scope,omitempty"`
+	Hidden           bool   `json:"hidden"`
 }
 
 // ListOutput represents a paginated list of instance CI/CD variables.
@@ -85,16 +91,19 @@ type ListOutput struct {
 
 // ---------- Converter ----------.
 
-// toOutput converts the GitLab API response to the tool output format.
-func toOutput(v *gl.InstanceVariable) Output {
+// toOutput converts the GitLab API response to the tool output format, filling
+// from the decoded variable and from what the capture read beside it.
+func toOutput(v *gl.InstanceVariable, extra toolutil.CIVariableExtra) Output {
 	return Output{
-		Key:          v.Key,
-		Value:        v.Value,
-		VariableType: string(v.VariableType),
-		Protected:    v.Protected,
-		Masked:       v.Masked,
-		Raw:          v.Raw,
-		Description:  v.Description,
+		Key:              v.Key,
+		Value:            v.Value,
+		VariableType:     string(v.VariableType),
+		Protected:        v.Protected,
+		Masked:           v.Masked,
+		Raw:              v.Raw,
+		Description:      v.Description,
+		EnvironmentScope: extra.EnvironmentScope,
+		Hidden:           extra.Hidden,
 	}
 }
 
@@ -103,7 +112,7 @@ func toOutput(v *gl.InstanceVariable) Output {
 // List retrieves a paginated list of instance-level CI/CD variables.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list instance variables", err)
+		return ListOutput{}, toolutil.WrapErrWithMessage(opListInstanceVariables, err)
 	}
 
 	opts := &gl.ListInstanceVariablesOptions{}
@@ -115,15 +124,20 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.Sort = input.Sort
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	vars, resp, err := client.GL().InstanceVariables.ListVariables(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list instance variables", err, http.StatusForbidden,
+		return ListOutput{}, toolutil.WrapErrWithStatusHint(opListInstanceVariables, err, http.StatusForbidden,
 			"instance-level CI/CD variables are admin-only. Verify your token has admin scope")
+	}
+	extras, err := toolutil.CapturedCIVariables(captured, len(vars))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr(opListInstanceVariables, err)
 	}
 
 	out := ListOutput{Variables: make([]Output, 0, len(vars))}
-	for _, v := range vars {
-		out.Variables = append(out.Variables, toOutput(v))
+	for i, v := range vars {
+		out.Variables = append(out.Variables, toOutput(v, extras[i]))
 	}
 	out.Pagination = toolutil.PaginationFromResponse(resp)
 	return out, nil
@@ -135,15 +149,20 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.ErrFieldRequired("key")
 	}
 	if err := ctx.Err(); err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get instance variable", err)
+		return Output{}, toolutil.WrapErrWithMessage(opGetInstanceVariable, err)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	v, _, err := client.GL().InstanceVariables.GetVariable(input.Key, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("get instance variable", err, http.StatusNotFound,
+		return Output{}, toolutil.WrapErrWithStatusHint(opGetInstanceVariable, err, http.StatusNotFound,
 			"verify the variable key exists with gitlab_instance_variable_list; admin-only API")
 	}
-	return toOutput(v), nil
+	extra, err := toolutil.CapturedCIVariable(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(opGetInstanceVariable, err)
+	}
+	return toOutput(v, extra), nil
 }
 
 // Create creates a new instance-level CI/CD variable.
@@ -179,6 +198,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		opts.Raw = input.Raw
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	v, _, err := client.GL().InstanceVariables.CreateVariable(opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -188,7 +208,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, toolutil.WrapErrWithStatusHint(opCreateInstanceVariable, err, http.StatusBadRequest,
 			"key must match /^[A-Za-z0-9_]{1,255}$/; valid variable_type: env_var (default) or file; the key may already exist")
 	}
-	return toOutput(v), nil
+	extra, err := toolutil.CapturedCIVariable(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(opCreateInstanceVariable, err)
+	}
+	return toOutput(v, extra), nil
 }
 
 // Update modifies an existing instance-level CI/CD variable.
@@ -221,6 +245,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.Raw = input.Raw
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	v, _, err := client.GL().InstanceVariables.UpdateVariable(input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -230,7 +255,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.WrapErrWithStatusHint(opUpdateInstanceVariable, err, http.StatusNotFound,
 			"verify the variable key exists with gitlab_instance_variable_list")
 	}
-	return toOutput(v), nil
+	extra, err := toolutil.CapturedCIVariable(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(opUpdateInstanceVariable, err)
+	}
+	return toOutput(v, extra), nil
 }
 
 // Delete removes an instance-level CI/CD variable by key.

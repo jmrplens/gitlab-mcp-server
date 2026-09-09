@@ -11,6 +11,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -82,7 +83,7 @@ func TestListDefinitions_Success(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[
 			{"name":"def1","introduced_by_url":"https://example.com","type":"development","group":"group::ide","milestone":"15.0","default_enabled":true,"log_state_changes":false,"rollout_issue_url":""},
-			{"name":"def2","introduced_by_url":"","type":"ops","group":"group::ops","milestone":"16.0","default_enabled":false,"log_state_changes":true,"rollout_issue_url":"https://rollout.example.com"}
+			{"name":"def2","introduced_by_url":"","type":"ops","group":"group::ops","milestone":"16.0","default_enabled":false,"log_state_changes":true,"rollout_issue_url":"https://rollout.example.com","feature_issue_url":"https://issue.example.com","intended_to_rollout_by":"17.0"}
 		]`)
 	}))
 
@@ -98,6 +99,12 @@ func TestListDefinitions_Success(t *testing.T) {
 	}
 	if !out.Definitions[0].DefaultEnabled {
 		t.Error("expected default_enabled true")
+	}
+	if out.Definitions[1].FeatureIssueURL != "https://issue.example.com" {
+		t.Errorf("expected the feature issue URL, got %q", out.Definitions[1].FeatureIssueURL)
+	}
+	if out.Definitions[1].IntendedToRolloutBy != "17.0" {
+		t.Errorf("expected intended_to_rollout_by 17.0, got %q", out.Definitions[1].IntendedToRolloutBy)
 	}
 }
 
@@ -341,6 +348,41 @@ func TestFormatFeatureMarkdown_NoDefinition(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Set — NewRequest error when the body contains a non-JSON-serializable value
 // ---------------------------------------------------------------------------.
+
+// TestFeatures_UnreadableCapturedDefinition verifies that every feature handler
+// returns an error rather than a half-filled feature when GitLab sends one of
+// the definition fields the shape carries as something that is not a string.
+// The SDK's own FeatureDefinition models neither feature_issue_url nor
+// intended_to_rollout_by and ignores both, so the read of the captured response
+// is the only thing that can notice. The poison sits on one of those two keys
+// rather than on the definition object itself, which gl.Feature does model and
+// would therefore refuse inside the SDK, before the captured read runs.
+func TestFeatures_UnreadableCapturedDefinition(t *testing.T) {
+	// A list answers with an array and a set with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"name":"flag1","state":"on","definition":{"name":"flag1","feature_issue_url":42}}]`)
+			_, err := List(context.Background(), client, ListInput{})
+			return err
+		}},
+		{Name: "list_definitions", Call: func() error {
+			client := poisoned(`[{"name":"flag1","feature_issue_url":42}]`)
+			_, err := ListDefinitions(context.Background(), client, ListDefinitionsInput{})
+			return err
+		}},
+		{Name: "set", Call: func() error {
+			client := poisoned(`{"name":"flag1","state":"on","definition":{"name":"flag1","feature_issue_url":42}}`)
+			_, err := Set(context.Background(), client, SetInput{Name: "flag1", Value: true})
+			return err
+		}},
+	})
+}
 
 // TestSet_NewRequestErrorOnUnserializableValue verifies that Set surfaces an
 // error when the user-supplied value field cannot be marshaled to JSON (for

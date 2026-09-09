@@ -17,6 +17,9 @@ func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 	sb.WriteString(toolutil.MarkdownTableHeader("Property", "Value"))
 	// Every field here is free text an administrator typed into the appearance
 	// settings, and the two messages are rendered as Markdown by GitLab itself.
+	if a.SiteName != "" {
+		fmt.Fprintf(&sb, "| Site Name | %s |\n", toolutil.EscapeMdTableCell(a.SiteName))
+	}
 	fmt.Fprintf(&sb, "| Title | %s |\n", toolutil.EscapeMdTableCell(a.Title))
 	fmt.Fprintf(&sb, "| Description | %s |\n", toolutil.EscapeMdTableCell(a.Description))
 	if a.PWAName != "" {

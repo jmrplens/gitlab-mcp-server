@@ -658,6 +658,41 @@ func newProjectServiceAccountCatalogClient(t *testing.T) *gitlabclient.Client {
 	}))
 }
 
+// TestProjectServiceAccounts_UnreadableCapturedPublicEmail verifies that every
+// service account handler returns an error rather than a half-filled account
+// when GitLab sends public_email as something that is not a string. The SDK
+// ignores the key its own ServiceAccount does not model, so the read of the
+// captured response is the only thing that can notice.
+func TestProjectServiceAccounts_UnreadableCapturedPublicEmail(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list", `[{"id":1,"username":"svc","name":"Service","public_email":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{ProjectID: "42"})
+			return err
+		}},
+		{"create", `{"id":1,"username":"svc","name":"Service","public_email":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{ProjectID: "42", Name: "Service"})
+			return err
+		}},
+		{"update", `{"id":1,"username":"svc","name":"Service","public_email":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Update(ctx, c, UpdateInput{ProjectID: "42", ServiceAccountID: 1, Name: "Renamed"})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
+}
+
 func assertErrorContains(t *testing.T, err error, want string) {
 	t.Helper()
 	if err == nil {

@@ -12,6 +12,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -502,9 +503,12 @@ func TestConvertRepository_AllFields(t *testing.T) {
 			{Name: "v1.0", Path: "g/p/img:v1.0", Location: "loc:v1.0", TotalSize: 2048},
 		},
 	}
-	out := convertRepository(r)
+	out := convertRepository(r, toolutil.RegistryRepositoryExtra{Size: 4096, DeleteAPIPath: "/api/v4/registry/repositories/1"})
 	if out.CreatedAt == "" {
 		t.Error("expected CreatedAt to be set")
+	}
+	if out.Size != 4096 || out.DeleteAPIPath != "/api/v4/registry/repositories/1" {
+		t.Errorf("size and delete path = %d and %q, want what was read beside the decode", out.Size, out.DeleteAPIPath)
 	}
 	if out.CleanupPolicyStartedAt == "" {
 		t.Error("expected CleanupPolicyStartedAt to be set")
@@ -522,7 +526,7 @@ func TestConvertRepository_AllFields(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestConvertRepository_NilOptionalFields(t *testing.T) {
 	r := &gl.RegistryRepository{ID: 1, Name: "n", Path: "p", ProjectID: 1}
-	out := convertRepository(r)
+	out := convertRepository(r, toolutil.RegistryRepositoryExtra{})
 	if out.CreatedAt != "" {
 		t.Errorf("expected empty CreatedAt, got %s", out.CreatedAt)
 	}
@@ -1494,6 +1498,38 @@ func TestListTags_KeysetAndOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
+}
+
+// TestRegistryRepositories_UnreadableCapturedDeleteAPIPath verifies that every
+// registry repository handler returns an error rather than a half-filled
+// repository when GitLab sends delete_api_path as something that is not a
+// string. The SDK ignores the key its own RegistryRepository does not model, so
+// the read of the captured response is the only thing that can notice.
+func TestRegistryRepositories_UnreadableCapturedDeleteAPIPath(t *testing.T) {
+	// A list answers with an array and a get with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list_project", Call: func() error {
+			client := poisoned(`[{"id":1,"name":"app","delete_api_path":42}]`)
+			_, err := ListProject(context.Background(), client, ListProjectInput{ProjectID: "10"})
+			return err
+		}},
+		{Name: "list_group", Call: func() error {
+			client := poisoned(`[{"id":1,"name":"app","delete_api_path":42}]`)
+			_, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: "7"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"name":"app","delete_api_path":42}`)
+			_, err := GetRepository(context.Background(), client, GetRepositoryInput{RepositoryID: 1})
+			return err
+		}},
+	})
 }
 
 // TestDeleteTagsBulk_AllCriteria verifies that DeleteTagsBulk forwards every

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1577,4 +1578,36 @@ func boardSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]tool
 		byTool[spec.IndividualTool.Name] = spec
 	}
 	return byTool
+}
+
+// TestBoards_UnreadableCapturedGroup verifies that every board handler reading
+// the group object off the captured answer returns an error rather than a
+// half-filled board when GitLab sends group as something that is not an object.
+// The SDK ignores the key its own IssueBoard does not model, so the captured
+// read is the only thing that can notice.
+func TestBoards_UnreadableCapturedGroup(t *testing.T) {
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"id":1,"name":"dev","group":"not-an-object"}]`)
+			_, err := ListBoards(context.Background(), client, ListBoardsInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			client := poisoned(`{"id":1,"name":"dev","group":"not-an-object"}`)
+			_, err := CreateBoard(context.Background(), client, CreateBoardInput{ProjectID: "42", Name: "dev"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			client := poisoned(`{"id":1,"name":"dev","group":"not-an-object"}`)
+			_, err := UpdateBoard(context.Background(), client, UpdateBoardInput{ProjectID: "42", BoardID: 1, Name: "renamed"})
+			return err
+		}},
+	})
 }

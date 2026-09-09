@@ -160,10 +160,15 @@ func TestBridgeToOutput_OptionalFields(t *testing.T) {
 		FinishedAt: &now,
 		ErasedAt:   &now,
 	}
-	out := BridgeToOutput(bridge)
+	out := BridgeToOutput(bridge, toolutil.BridgeExtra{
+		Project: &toolutil.BridgeProjectOutput{CIJobTokenScopeEnabled: true},
+	})
 
 	if out.ErasedAt == "" {
 		t.Error("expected ErasedAt to be set")
+	}
+	if out.Project == nil || !out.Project.CIJobTokenScopeEnabled {
+		t.Error("expected the project object read beside the decode")
 	}
 
 	if out.User == nil || out.User.Username != "deployer" {

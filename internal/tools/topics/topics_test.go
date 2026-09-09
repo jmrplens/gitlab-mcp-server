@@ -4,6 +4,7 @@
 package topics
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -23,7 +25,7 @@ const errExpNonNilResult = "expected non-nil result"
 const fmtUnexpErr = "unexpected error: %v"
 
 // topicJSON identifies the topic JSON constant used by this package.
-const topicJSON = `{"id":1,"name":"go","title":"Go","description":"The Go programming language","total_projects_count":42,"avatar_url":"https://example.com/go.png"}`
+const topicJSON = `{"id":1,"name":"go","title":"Go","description":"The Go programming language","total_projects_count":42,"organization_id":7,"avatar_url":"https://example.com/go.png"}`
 
 // pathTopics identifies the path topics constant used by this package.
 const pathTopics = "/api/v4/topics"
@@ -65,6 +67,9 @@ func TestList_Success(t *testing.T) {
 	}
 	if out.Topics[0].TotalProjectsCount != 42 {
 		t.Errorf("expected 42 projects, got %d", out.Topics[0].TotalProjectsCount)
+	}
+	if out.Topics[0].OrganizationID != 7 {
+		t.Errorf("expected organization ID 7, got %d", out.Topics[0].OrganizationID)
 	}
 }
 
@@ -159,6 +164,9 @@ func TestGet_Success(t *testing.T) {
 	}
 	if out.Topic.Title != "Go" {
 		t.Errorf("expected title 'Go', got %q", out.Topic.Title)
+	}
+	if out.Topic.OrganizationID != 7 {
+		t.Errorf("expected organization ID 7, got %d", out.Topic.OrganizationID)
 	}
 }
 
@@ -486,6 +494,43 @@ func TestFormatTopicMarkdown_MinimalFields(t *testing.T) {
 	if strings.Contains(text, "Avatar") {
 		t.Error("should not contain Avatar for empty avatar URL")
 	}
+}
+
+// TestTopics_UnreadableCapturedOrganizationID verifies that every topic handler
+// returns an error rather than a half-filled topic when GitLab sends
+// organization_id as something that is not a number. The SDK ignores the key
+// its own Topic does not model, so the read of the captured response is the
+// only thing that can notice.
+func TestTopics_UnreadableCapturedOrganizationID(t *testing.T) {
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"id":1,"name":"go","title":"Go","organization_id":"not-a-number"}]`)
+			_, err := List(context.Background(), client, ListInput{})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"name":"go","title":"Go","organization_id":"not-a-number"}`)
+			_, err := Get(context.Background(), client, GetInput{TopicID: 1})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			client := poisoned(`{"id":1,"name":"go","title":"Go","organization_id":"not-a-number"}`)
+			_, err := Create(context.Background(), client, CreateInput{Name: "go", Title: "Go"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			client := poisoned(`{"id":1,"name":"go","title":"Go","organization_id":"not-a-number"}`)
+			_, err := Update(context.Background(), client, UpdateInput{TopicID: 1, Title: "Golang"})
+			return err
+		}},
+	})
 }
 
 // TestFormatDelegatorMarkdown_GetCreateUpdate verifies the thin

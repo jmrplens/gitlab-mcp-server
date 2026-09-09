@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -769,6 +770,44 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestInstanceVariables_UnreadableCapturedHidden verifies that every instance
+// variable handler returns an error rather than a half-filled variable when
+// GitLab sends hidden as something that is not a boolean. The SDK ignores the
+// key its own InstanceVariable does not model, so the read of the captured
+// response is the only thing that can notice, and a hidden variable published
+// as visible is exactly the mistake this flag exists to prevent.
+func TestInstanceVariables_UnreadableCapturedHidden(t *testing.T) {
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"key":"TOKEN","value":"x","hidden":"maybe"}]`)
+			_, err := List(context.Background(), client, ListInput{})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"key":"TOKEN","value":"x","hidden":"maybe"}`)
+			_, err := Get(context.Background(), client, GetInput{Key: "TOKEN"})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			client := poisoned(`{"key":"TOKEN","value":"x","hidden":"maybe"}`)
+			_, err := Create(context.Background(), client, CreateInput{Key: "TOKEN", Value: "x"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			client := poisoned(`{"key":"TOKEN","value":"x","hidden":"maybe"}`)
+			_, err := Update(context.Background(), client, UpdateInput{Key: "TOKEN", Value: "y"})
+			return err
+		}},
+	})
 }
 
 // TestFormatListMarkdown_EscapesTableCells verifies the ListMarkdown_EscapesTableCells Markdown formatter for a representative list_escapestablecells input.

@@ -8,12 +8,12 @@ import (
 func FormatListMarkdown(out ListOutput) string {
 	items := make([]toolutil.TemplateAttributeListMarkdownItem, 0, len(out.Licenses))
 	for _, license := range out.Licenses {
-		items = append(items, toolutil.TemplateAttributeListMarkdownItem{Key: license.Key, Name: license.Name, Attribute: boolString(license.Featured)})
+		items = append(items, toolutil.TemplateAttributeListMarkdownItem{Key: license.Key, Name: license.Name, Attribute: boolString(license.Popular)})
 	}
 	return toolutil.FormatTemplateAttributeListMarkdown(items, toolutil.TemplateAttributeListMarkdownOptions{
 		Title:           "License Templates",
 		EmptyMessage:    "No license templates found.",
-		AttributeHeader: "Featured",
+		AttributeHeader: "Popular",
 		Pagination:      out.Pagination,
 		Hints:           []string{"Use `gitlab_get_license_template` to view a specific template"},
 	})

@@ -267,6 +267,16 @@ type ProjectObject struct {
 	CIJobTokenScopeEnabled bool `json:"ci_job_token_scope_enabled"`
 }
 
+// bridgeProjectObject converts what the capture read under a bridge's project
+// key into the same shape a job's project takes, returning nil when GitLab
+// sent none.
+func bridgeProjectObject(p *toolutil.BridgeProjectOutput) *ProjectObject {
+	if p == nil {
+		return nil
+	}
+	return &ProjectObject{CIJobTokenScopeEnabled: p.CIJobTokenScopeEnabled}
+}
+
 // projectObject converts a *gl.Project to its output shape, returning nil when
 // the SDK value is nil.
 func projectObject(p *gl.Project) *ProjectObject {

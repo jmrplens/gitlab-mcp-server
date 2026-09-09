@@ -95,6 +95,9 @@ type Output struct {
 	KubernetesNamespace string `json:"kubernetes_namespace,omitempty"`
 	FluxResourcePath    string `json:"flux_resource_path,omitempty"`
 
+	// Project is the project the environment belongs to, as the basic project
+	// details GitLab renders under it.
+	Project *ProjectOutput `json:"project,omitempty"`
 	// ClusterAgent is the cluster agent associated with the environment, when set.
 	ClusterAgent *ClusterAgentOutput `json:"cluster_agent,omitempty"`
 	// LastDeployment is the most recent deployment to this environment, when present.
@@ -125,6 +128,7 @@ func toOutput(e *gl.Environment) Output {
 		AutoStopSetting:     e.AutoStopSetting,
 		KubernetesNamespace: e.KubernetesNamespace,
 		FluxResourcePath:    e.FluxResourcePath,
+		Project:             projectOutput(e.Project),
 		ClusterAgent:        clusterAgentOutput(e.ClusterAgent),
 		LastDeployment:      deploymentOutput(e.LastDeployment),
 	}

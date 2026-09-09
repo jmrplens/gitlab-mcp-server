@@ -137,7 +137,20 @@ func TestCreateBranch_InvalidInput(t *testing.T) {
 
 ### Verification Technique
 
-After writing tests, perform a **mutation check**: mentally (or actually) change one key value in the source code and confirm the test would fail. If it wouldn't, the test is a false pass.
+A mutation check is the technique, and it is **run, not imagined**. Reading a test and deciding it would fail is how a whole tranche of false passes shipped: every one of them executed the line it was credited with, so coverage said 100% while the assertion accepted any error at all.
+
+Two commands do it properly, and both are already in the Makefile:
+
+```bash
+make coverage-mutants PKG=./internal/tools/topics      # gremlins, mutation testing
+make coverage-conditions PKG=./internal/tools/topics   # gobco, condition coverage
+```
+
+**The gate on a package you changed is `Lived 0` and `Not covered 0`.** A mutant that LIVED is a change to the source that no test noticed, which is a missing assertion rather than a missing line. A mutant NOT COVERED is a line no test reaches at all. `--invert-logical` is on, so `&&` and `||` are checked for independence and a test that only ever takes one side of a condition is reported.
+
+`coverage-conditions` answers the neighbouring question: which boolean conditions were never evaluated both ways. Its operands count separately, so a line it reports is a missing test case rather than a missing line of coverage.
+
+Neither is optional on new code. Line coverage tells you the test ran; these tell you the test would have noticed.
 
 ## Workflow
 

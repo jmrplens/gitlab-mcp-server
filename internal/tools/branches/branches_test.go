@@ -14,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -531,7 +532,7 @@ func TestBranchDelete_APIError(t *testing.T) {
 func TestProtectedBranchGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProtectedBranches+"/main" {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"main","push_access_levels":[{"access_level":0}],"merge_access_levels":[{"access_level":40}],"allow_force_push":false,"code_owner_approval_required":true}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"main","push_access_levels":[{"access_level":0}],"merge_access_levels":[{"access_level":40}],"allow_force_push":false,"code_owner_approval_required":true,"inherited":true}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -555,6 +556,9 @@ func TestProtectedBranchGet_Success(t *testing.T) {
 	}
 	if !out.CodeOwnerApprovalRequired {
 		t.Error("CodeOwnerApprovalRequired = false, want true")
+	}
+	if !out.Inherited {
+		t.Error("Inherited = false, want the group-level rule the answer describes")
 	}
 }
 
@@ -1126,7 +1130,7 @@ func TestToOutput_NilCommit(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestProtectedToOutput_EmptyAccessLevels(t *testing.T) {
 	pb := &gl.ProtectedBranch{ID: 1, Name: "main"}
-	out := ProtectedToOutput(pb)
+	out := ProtectedToOutput(pb, toolutil.ProtectedBranchExtra{})
 	if out.PushAccessLevels != nil {
 		t.Errorf("PushAccessLevels = %+v, want nil for empty access levels", out.PushAccessLevels)
 	}
@@ -2154,4 +2158,80 @@ func branchSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]too
 		byTool[spec.IndividualTool.Name] = spec
 	}
 	return byTool
+}
+
+// TestFormatProtectedMarkdown_Inherited verifies that a rule GitLab reports as
+// inherited says so in the rendered Markdown, and that a rule of the project's
+// own does not. The flag is read off the captured response because the SDK does
+// not model it, and it is the difference between a rule that can be edited here
+// and one that has to be edited on the group.
+func TestFormatProtectedMarkdown_Inherited(t *testing.T) {
+	inherited := FormatProtectedMarkdown(ProtectedOutput{ID: 1, Name: "main", Inherited: true})
+	if !strings.Contains(inherited, "**Inherited**: yes") {
+		t.Errorf("markdown missing the inherited line:\n%s", inherited)
+	}
+	own := FormatProtectedMarkdown(ProtectedOutput{ID: 1, Name: "main"})
+	if strings.Contains(own, "**Inherited**") {
+		t.Errorf("markdown claims a project's own rule is inherited:\n%s", own)
+	}
+}
+
+// TestProtectedBranches_UnreadableCapturedInherited verifies that every
+// protected-branch handler reading the inherited flag off the captured answer
+// returns an error rather than a half-filled rule when GitLab sends it as
+// something that is not a boolean. The SDK ignores the key its own
+// ProtectedBranch does not model, so the captured read is the only thing that
+// can notice.
+func TestProtectedBranches_UnreadableCapturedInherited(t *testing.T) {
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "protect", Call: func() error {
+			client := poisoned(`{"id":1,"name":"main","inherited":"yes"}`)
+			_, err := Protect(context.Background(), client, ProtectInput{ProjectID: "42", BranchName: "main"})
+			return err
+		}},
+		{Name: "protected_list", Call: func() error {
+			client := poisoned(`[{"id":1,"name":"main","inherited":"yes"}]`)
+			_, err := ProtectedList(context.Background(), client, ProtectedListInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "protected_get", Call: func() error {
+			client := poisoned(`{"id":1,"name":"main","inherited":"yes"}`)
+			_, err := ProtectedGet(context.Background(), client, ProtectedGetInput{ProjectID: "42", BranchName: "main"})
+			return err
+		}},
+		{Name: "protected_update", Call: func() error {
+			client := poisoned(`{"id":1,"name":"main","inherited":"yes"}`)
+			_, err := ProtectedUpdate(context.Background(), client, ProtectedUpdateInput{ProjectID: "42", BranchName: "main", Name: "main-2"})
+			return err
+		}},
+	})
+}
+
+// TestProtect_UnreadableCapturedInheritedOnConflict covers the other captured
+// read in Protect: a 409 means the rule already exists, so the handler fetches
+// it and answers with that instead. The rule it fetched is read from the same
+// capture, and an inherited flag GitLab sends as something other than a boolean
+// must fail the call rather than reach the caller as a silent false.
+func TestProtect_UnreadableCapturedInheritedOnConflict(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			testutil.RespondJSON(w, http.StatusConflict, `{"message":"Protected branch 'main' already exists"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"main","inherited":"yes"}`)
+	}))
+
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "protect on conflict", Call: func() error {
+			_, err := Protect(context.Background(), client, ProtectInput{ProjectID: "42", BranchName: "main"})
+			return err
+		}},
+	})
 }

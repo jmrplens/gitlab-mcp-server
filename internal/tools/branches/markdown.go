@@ -94,6 +94,9 @@ func FormatProtectedMarkdown(pb ProtectedOutput) string {
 	fmt.Fprintf(&b, "- **Merge Access Levels**: %s\n", accessLevelsSummary(pb.MergeAccessLevels))
 	fmt.Fprintf(&b, "- **Unprotect Access Levels**: %s\n", accessLevelsSummary(pb.UnprotectAccessLevels))
 	fmt.Fprintf(&b, "- **Allow Force Push**: %v\n", pb.AllowForcePush)
+	if pb.Inherited {
+		b.WriteString("- **Inherited**: yes (this rule comes from the group, not the project)\n")
+	}
 	toolutil.WriteHints(
 		&b,
 		"Use the selected tool surface's branch get_protected action with the same project_id and branch_name when a workflow asks to fetch this protection before updating it",

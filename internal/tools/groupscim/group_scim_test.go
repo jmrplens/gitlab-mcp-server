@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -31,8 +32,8 @@ func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/scim/identities" {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"external_uid":"ext-1","user_id":10,"active":true},
-				{"external_uid":"ext-2","user_id":20,"active":false}
+				{"extern_uid":"ext-1","user_id":10,"active":true},
+				{"extern_uid":"ext-2","user_id":20,"active":false}
 			]`)
 			return
 		}
@@ -48,8 +49,8 @@ func TestList_Success(t *testing.T) {
 	if len(out.Identities) != 2 {
 		t.Fatalf("expected 2 identities, got %d", len(out.Identities))
 	}
-	if out.Identities[0].ExternalUID != "ext-1" {
-		t.Errorf("expected external_uid ext-1, got %s", out.Identities[0].ExternalUID)
+	if out.Identities[0].ExternUID != "ext-1" {
+		t.Errorf("expected external_uid ext-1, got %s", out.Identities[0].ExternUID)
 	}
 	if out.Identities[1].UserID != 20 {
 		t.Errorf("expected user_id 20, got %d", out.Identities[1].UserID)
@@ -112,7 +113,7 @@ func TestList_APIError(t *testing.T) {
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/scim/uid-123" {
-			testutil.RespondJSON(w, http.StatusOK, `{"external_uid":"uid-123","user_id":42,"active":true}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"extern_uid":"uid-123","user_id":42,"active":true}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -125,8 +126,8 @@ func TestGet_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get() error: %v", err)
 	}
-	if out.ExternalUID != "uid-123" {
-		t.Errorf("expected external_uid uid-123, got %s", out.ExternalUID)
+	if out.ExternUID != "uid-123" {
+		t.Errorf("expected external_uid uid-123, got %s", out.ExternUID)
 	}
 	if out.UserID != 42 {
 		t.Errorf("expected user_id 42, got %d", out.UserID)
@@ -375,6 +376,34 @@ func TestDelete_CancelledContext(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
 	}
+}
+
+// TestSCIMIdentities_UnreadableCapturedExternUID verifies that both SCIM
+// identity read handlers return an error rather than a half-filled identity
+// when GitLab sends extern_uid as something that is not a string. The SDK
+// models the identity under another name and ignores this key, so the read of
+// the captured response is the only thing that can notice, and an identity
+// published without its external uid names nobody.
+func TestSCIMIdentities_UnreadableCapturedExternUID(t *testing.T) {
+	// A list answers with an array and a get with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"user_id":1,"active":true,"extern_uid":42}]`)
+			_, err := List(context.Background(), client, ListInput{GroupID: "42"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"user_id":1,"active":true,"extern_uid":42}`)
+			_, err := Get(context.Background(), client, GetInput{GroupID: "42", UID: "user-1"})
+			return err
+		}},
+	})
 }
 
 // TestDelete_APIError verifies that Delete returns a wrapped error when the GitLab API responds with an error status.

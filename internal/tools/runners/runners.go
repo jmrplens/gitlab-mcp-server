@@ -1088,6 +1088,9 @@ type ManagerOutput struct {
 	ContactedAt  string `json:"contacted_at,omitempty"`
 	IPAddress    string `json:"ip_address"`
 	Status       string `json:"status"`
+	// JobExecutionStatus is what the manager is doing now. A runner's own
+	// status is the aggregate of its managers'.
+	JobExecutionStatus string `json:"job_execution_status,omitempty"`
 }
 
 // ManagerListOutput holds a list of runner managers.
@@ -1110,30 +1113,37 @@ func ListManagers(ctx context.Context, client *gitlabclient.Client, input ListMa
 		return ManagerListOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	managers, _, err := client.GL().Runners.ListRunnerManagers(int(input.RunnerID), gl.WithContext(ctx))
 	if err != nil {
 		return ManagerListOutput{}, toolutil.WrapErrWithStatusHint("list runner managers", err, http.StatusNotFound,
 			hintRunnerNotFound)
 	}
+	extras, err := toolutil.CapturedRunnerManagers(captured, len(managers))
+	if err != nil {
+		return ManagerListOutput{}, toolutil.WrapErr("list runner managers", err)
+	}
 
 	items := make([]ManagerOutput, len(managers))
 	for i, m := range managers {
-		items[i] = toManagerOutput(m)
+		items[i] = toManagerOutput(m, extras[i])
 	}
 	return ManagerListOutput{Managers: items}, nil
 }
 
-// toManagerOutput converts the GitLab API response to the tool output format.
-func toManagerOutput(m *gl.RunnerManager) ManagerOutput {
+// toManagerOutput converts the GitLab API response to the tool output format,
+// filling from the decoded manager and from what the capture read beside it.
+func toManagerOutput(m *gl.RunnerManager, extra toolutil.RunnerManagerExtra) ManagerOutput {
 	out := ManagerOutput{
-		ID:           m.ID,
-		SystemID:     m.SystemID,
-		Version:      m.Version,
-		Revision:     m.Revision,
-		Platform:     m.Platform,
-		Architecture: m.Architecture,
-		IPAddress:    m.IPAddress,
-		Status:       m.Status,
+		ID:                 m.ID,
+		SystemID:           m.SystemID,
+		Version:            m.Version,
+		Revision:           m.Revision,
+		Platform:           m.Platform,
+		Architecture:       m.Architecture,
+		IPAddress:          m.IPAddress,
+		Status:             m.Status,
+		JobExecutionStatus: extra.JobExecutionStatus,
 	}
 	if m.CreatedAt != nil {
 		out.CreatedAt = m.CreatedAt.Format(time.RFC3339)

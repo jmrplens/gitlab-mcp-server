@@ -295,6 +295,14 @@ After writing tests for a phase:
 3. **Run tests**: `go test -v ./internal/[package]/...`
 4. **Measure coverage**: `go test -coverprofile=coverage.out ./internal/[package]/...`
 5. **Check coverage**: `go tool cover -func=coverage.out | grep [package]`
+6. **Mutation-test the package**: `make coverage-mutants PKG=./internal/[package]`
+7. **Check the conditions**: `make coverage-conditions PKG=./internal/[package]`
+
+**Steps 6 and 7 are the ones that decide whether the tests are worth anything, and they are not optional.** Coverage says a line ran. It cannot say an assertion would have noticed a change, and a test that asserts only `err != nil` executes every line of the error path while proving nothing about which error it was. A tranche of tests shipped exactly that way here: 100% of the new lines covered, and an SDK failure before the code under test would have passed them all.
+
+The gate on a package you changed is **`Lived 0` and `Not covered 0`**. A LIVED mutant is a change to the source no test noticed, so it names a missing assertion; a NOT COVERED one names a line no test reaches. `coverage-mutants` runs with `--invert-logical`, so `&&` and `||` are checked for independence too.
+
+`coverage-conditions` reports the boolean conditions never evaluated both ways, counting each operand separately. Every line it names is a test case you have not written.
 
 If tests fail:
 

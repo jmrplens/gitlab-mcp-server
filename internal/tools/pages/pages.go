@@ -119,6 +119,9 @@ type DomainOutput struct {
 	VerificationCode string            `json:"verification_code"`
 	EnabledUntil     string            `json:"enabled_until,omitempty"`
 	Certificate      CertificateOutput `json:"certificate"`
+	// CertificateExpiration is the top-level object GitLab sends on a domain
+	// that has a certificate, beside the certificate itself.
+	CertificateExpiration *toolutil.PagesCertificateExpirationOutput `json:"certificate_expiration,omitempty"`
 }
 
 // ListDomainsOutput wraps a list of Pages domains with pagination.
@@ -209,15 +212,20 @@ func UnpublishPages(ctx context.Context, client *gitlabclient.Client, input Unpu
 // instance via the GitLab Pages domains admin API
 // (GET /pages/domains). Requires administrator access.
 func ListAllDomains(ctx context.Context, client *gitlabclient.Client, _ ListAllDomainsInput) (ListAllDomainsOutput, error) {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	domains, _, err := client.GL().PagesDomains.ListAllPagesDomains(gl.WithContext(ctx))
 	if err != nil {
 		return ListAllDomainsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_pages_domain_list_all", err, http.StatusForbidden,
 			"listing all Pages domains requires admin token")
 	}
+	extras, err := toolutil.CapturedPagesDomains(captured, len(domains))
+	if err != nil {
+		return ListAllDomainsOutput{}, toolutil.WrapErr("gitlab_pages_domain_list_all", err)
+	}
 
 	out := ListAllDomainsOutput{Domains: make([]DomainOutput, 0, len(domains))}
-	for _, d := range domains {
-		out.Domains = append(out.Domains, toDomainOutput(d))
+	for i, d := range domains {
+		out.Domains = append(out.Domains, toDomainOutput(d, extras[i]))
 	}
 
 	return out, nil
@@ -240,18 +248,23 @@ func ListDomains(ctx context.Context, client *gitlabclient.Client, input ListDom
 		opts.Sort = input.Sort
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	domains, resp, err := client.GL().PagesDomains.ListPagesDomains(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListDomainsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_pages_domain_list", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get; the project may have no Pages domains configured")
 	}
 
+	extras, err := toolutil.CapturedPagesDomains(captured, len(domains))
+	if err != nil {
+		return ListDomainsOutput{}, toolutil.WrapErr("gitlab_pages_domain_list", err)
+	}
 	out := ListDomainsOutput{
 		Domains:    make([]DomainOutput, 0, len(domains)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
-	for _, d := range domains {
-		out.Domains = append(out.Domains, toDomainOutput(d))
+	for i, d := range domains {
+		out.Domains = append(out.Domains, toDomainOutput(d, extras[i]))
 	}
 
 	return out, nil
@@ -267,13 +280,18 @@ func GetDomain(ctx context.Context, client *gitlabclient.Client, input GetDomain
 		return DomainOutput{}, toolutil.ErrFieldRequired("domain")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	domain, _, err := client.GL().PagesDomains.GetPagesDomain(string(input.ProjectID), input.Domain, gl.WithContext(ctx))
 	if err != nil {
 		return DomainOutput{}, toolutil.WrapErrWithStatusHint("gitlab_pages_domain_get", err, http.StatusNotFound,
 			"verify domain with gitlab_pages_domain_list; the domain may have been removed")
 	}
+	extra, err := toolutil.CapturedPagesDomain(captured)
+	if err != nil {
+		return DomainOutput{}, toolutil.WrapErr("gitlab_pages_domain_get", err)
+	}
 
-	return toDomainOutput(domain), nil
+	return toDomainOutput(domain, extra), nil
 }
 
 // CreateDomain adds a new custom domain to a project's Pages
@@ -301,13 +319,18 @@ func CreateDomain(ctx context.Context, client *gitlabclient.Client, input Create
 		opts.Key = new(input.Key)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	domain, _, err := client.GL().PagesDomains.CreatePagesDomain(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return DomainOutput{}, toolutil.WrapErrWithStatusHint("gitlab_pages_domain_create", err, http.StatusBadRequest,
 			"domain must be a valid FQDN and not in use by another project; certificate and key must be PEM-encoded matching pair when provided; auto_ssl_enabled requires DNS A/AAAA record pointing to GitLab Pages; requires Maintainer role")
 	}
+	extra, err := toolutil.CapturedPagesDomain(captured)
+	if err != nil {
+		return DomainOutput{}, toolutil.WrapErr("gitlab_pages_domain_create", err)
+	}
 
-	return toDomainOutput(domain), nil
+	return toDomainOutput(domain, extra), nil
 }
 
 // UpdateDomain updates the auto-SSL flag and/or custom certificate
@@ -332,13 +355,18 @@ func UpdateDomain(ctx context.Context, client *gitlabclient.Client, input Update
 		opts.Key = new(input.Key)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	domain, _, err := client.GL().PagesDomains.UpdatePagesDomain(string(input.ProjectID), input.Domain, opts, gl.WithContext(ctx))
 	if err != nil {
 		return DomainOutput{}, toolutil.WrapErrWithStatusHint("gitlab_pages_domain_update", err, http.StatusBadRequest,
 			"certificate and key must be PEM-encoded matching pair when provided; cannot set both auto_ssl_enabled and a custom certificate; requires Maintainer role")
 	}
+	extra, err := toolutil.CapturedPagesDomain(captured)
+	if err != nil {
+		return DomainOutput{}, toolutil.WrapErr("gitlab_pages_domain_update", err)
+	}
 
-	return toDomainOutput(domain), nil
+	return toDomainOutput(domain, extra), nil
 }
 
 // DeleteDomain removes a custom Pages domain from a project via the
@@ -394,17 +422,18 @@ func toPagesOutput(p *gl.Pages) Output {
 // package's [DomainOutput], formatting the optional EnabledUntil
 // and certificate expiration timestamps with
 // [toolutil.DateTimeFormat].
-func toDomainOutput(d *gl.PagesDomain) DomainOutput {
+func toDomainOutput(d *gl.PagesDomain, extra toolutil.PagesDomainExtra) DomainOutput {
 	if d == nil {
 		return DomainOutput{}
 	}
 	out := DomainOutput{
-		Domain:           d.Domain,
-		AutoSslEnabled:   d.AutoSslEnabled,
-		URL:              d.URL,
-		ProjectID:        d.ProjectID,
-		Verified:         d.Verified,
-		VerificationCode: d.VerificationCode,
+		Domain:                d.Domain,
+		AutoSslEnabled:        d.AutoSslEnabled,
+		URL:                   d.URL,
+		ProjectID:             d.ProjectID,
+		Verified:              d.Verified,
+		VerificationCode:      d.VerificationCode,
+		CertificateExpiration: extra.CertificateExpiration,
 		Certificate: CertificateOutput{
 			Subject:         d.Certificate.Subject,
 			Expired:         d.Certificate.Expired,

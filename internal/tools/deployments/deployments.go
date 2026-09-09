@@ -15,6 +15,7 @@ import (
 const (
 	errDeploymentIDRequired = "deployment_id is required and must be > 0"
 	opCreateDeployment      = "create deployment"
+	opUpdateDeployment      = "update deployment"
 )
 
 // ---------------------------------------------------------------------------
@@ -85,6 +86,13 @@ type Output struct {
 	User        *UserOutput        `json:"user,omitempty"`
 	Environment *EnvironmentOutput `json:"environment,omitempty"`
 	Deployable  *DeployableOutput  `json:"deployable,omitempty"`
+	// Approvals is what has been recorded against the deployment,
+	// ApprovalSummary the rules it is counted against, and
+	// PendingApprovalCount how many are still outstanding. A deployment that
+	// needs no approval carries them empty.
+	Approvals            []toolutil.DeploymentApprovalOutput       `json:"approvals,omitempty"`
+	ApprovalSummary      *toolutil.DeploymentApprovalSummaryOutput `json:"approval_summary,omitempty"`
+	PendingApprovalCount int64                                     `json:"pending_approval_count"`
 }
 
 // ListOutput represents a paginated list of deployments.
@@ -111,6 +119,11 @@ type ListOutput struct {
 type deploymentAPI struct {
 	gitlab.Deployment
 	Deployable deployableAPI `json:"deployable"`
+	// The extended deployment entity sends these three on every deployment and
+	// the SDK's struct carries none of them.
+	Approvals            []toolutil.DeploymentApprovalOutput       `json:"approvals"`
+	ApprovalSummary      *toolutil.DeploymentApprovalSummaryOutput `json:"approval_summary"`
+	PendingApprovalCount int64                                     `json:"pending_approval_count"`
 }
 
 // deployableAPI is the raw-fetch superset of gl.DeploymentDeployable. It embeds
@@ -156,19 +169,23 @@ func rawListDeployments(ctx context.Context, client *gitlabclient.Client, path s
 // Converter
 // ---------------------------------------------------------------------------.
 
-// toOutput converts the GitLab API response to the tool output format.
-func toOutput(d *gitlab.Deployment) Output {
+// toOutput converts the GitLab API response to the tool output format, filling
+// from the decoded deployment and from what the capture read beside it.
+func toOutput(d *gitlab.Deployment, extra toolutil.DeploymentExtra) Output {
 	return Output{
-		ID:          int(d.ID),
-		IID:         int(d.IID),
-		Ref:         d.Ref,
-		SHA:         d.SHA,
-		Status:      d.Status,
-		CreatedAt:   toolutil.FormatTimePtr(d.CreatedAt),
-		UpdatedAt:   toolutil.FormatTimePtr(d.UpdatedAt),
-		User:        projectUserOutput(d.User),
-		Environment: environmentOutput(d.Environment),
-		Deployable:  deployableOutput(d.Deployable, nil),
+		ID:                   int(d.ID),
+		IID:                  int(d.IID),
+		Ref:                  d.Ref,
+		SHA:                  d.SHA,
+		Status:               d.Status,
+		Approvals:            extra.Approvals,
+		ApprovalSummary:      extra.ApprovalSummary,
+		PendingApprovalCount: extra.PendingApprovalCount,
+		CreatedAt:            toolutil.FormatTimePtr(d.CreatedAt),
+		UpdatedAt:            toolutil.FormatTimePtr(d.UpdatedAt),
+		User:                 projectUserOutput(d.User),
+		Environment:          environmentOutput(d.Environment),
+		Deployable:           deployableOutput(d.Deployable, nil),
 	}
 }
 
@@ -187,6 +204,10 @@ func toOutputAPI(d *deploymentAPI) Output {
 		User:        projectUserOutput(d.User),
 		Environment: environmentOutput(d.Environment),
 		Deployable:  deployableOutput(d.Deployable.DeploymentDeployable, d.Deployable.Project),
+
+		Approvals:            d.Approvals,
+		ApprovalSummary:      d.ApprovalSummary,
+		PendingApprovalCount: d.PendingApprovalCount,
 	}
 }
 
@@ -301,6 +322,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		opts.Status = &status
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Deployments.CreateProjectDeployment(string(input.ProjectID), opts, gitlab.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -323,8 +345,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		}
 		return Output{}, toolutil.WrapErrWithMessage(opCreateDeployment, err)
 	}
+	extra, err := toolutil.CapturedDeployment(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(opCreateDeployment, err)
+	}
 
-	return toOutput(d), nil
+	return toOutput(d, extra), nil
 }
 
 // Update updates resources for the deployments package.
@@ -347,17 +373,22 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		Status: &status,
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	d, _, err := client.GL().Deployments.UpdateProjectDeployment(string(input.ProjectID), int64(input.DeploymentID), opts, gitlab.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint("update deployment", err,
+			return Output{}, toolutil.WrapErrWithHint(opUpdateDeployment, err,
 				"status must be one of: created, running, success, failed, canceled, blocked. Transitions out of terminal states are not allowed")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("update deployment", err, http.StatusNotFound,
+		return Output{}, toolutil.WrapErrWithStatusHint(opUpdateDeployment, err, http.StatusNotFound,
 			"verify deployment_id with gitlab_deployment_list")
 	}
+	extra, err := toolutil.CapturedDeployment(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(opUpdateDeployment, err)
+	}
 
-	return toOutput(d), nil
+	return toOutput(d, extra), nil
 }
 
 // Delete deletes resources for the deployments package.

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -34,7 +35,9 @@ const userListJSON = `{
 	"iid": 10,
 	"project_id": 42,
 	"created_at": "2026-01-01T00:00:00Z",
-	"updated_at": "2026-01-02T00:00:00Z"
+	"updated_at": "2026-01-02T00:00:00Z",
+	"path": "/group/project/-/feature_flags_user_lists/10",
+	"edit_path": "/group/project/-/feature_flags_user_lists/10/edit"
 }`
 
 // userListArrayJSON identifies the user list array JSON constant used by this package.
@@ -98,6 +101,12 @@ func TestGetUserList_Success(t *testing.T) {
 	}
 	if out.UserXIDs != "user1,user2,user3" {
 		t.Errorf("expected user_xids 'user1,user2,user3', got %q", out.UserXIDs)
+	}
+	if out.Path != "/group/project/-/feature_flags_user_lists/10" {
+		t.Errorf("expected the list's own path, got %q", out.Path)
+	}
+	if out.EditPath != "/group/project/-/feature_flags_user_lists/10/edit" {
+		t.Errorf("expected the list's edit path, got %q", out.EditPath)
 	}
 }
 
@@ -542,6 +551,43 @@ func TestDeleteUserList_APIError(t *testing.T) {
 // ---------------------------------------------------------------------------
 // FormatUserListMarkdown — with CreatedAt / UpdatedAt
 // ---------------------------------------------------------------------------.
+
+// TestUserLists_UnreadableCapturedPath verifies that every feature flag user
+// list handler returns an error rather than a half-filled list when GitLab
+// sends path as something that is not a string. The SDK ignores the key its own
+// FeatureFlagUserList does not model, so the read of the captured response is
+// the only thing that can notice.
+func TestUserLists_UnreadableCapturedPath(t *testing.T) {
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"id":1,"iid":10,"name":"cov-list","path":42}]`)
+			_, err := ListUserLists(context.Background(), client, ListInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"iid":10,"name":"cov-list","path":42}`)
+			_, err := GetUserList(context.Background(), client, GetInput{ProjectID: "42", IID: 10})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			client := poisoned(`{"id":1,"iid":10,"name":"cov-list","path":42}`)
+			_, err := CreateUserList(context.Background(), client, CreateInput{ProjectID: "42", Name: "cov-list", UserXIDs: "a,b"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			client := poisoned(`{"id":1,"iid":10,"name":"cov-list","path":42}`)
+			_, err := UpdateUserList(context.Background(), client, UpdateInput{ProjectID: "42", IID: 10, Name: "renamed"})
+			return err
+		}},
+	})
+}
 
 // TestFormatUserListMarkdown_WithDates verifies the UserListMarkdown_WithDates Markdown formatter for a representative userlist_withdates input.
 // The test exercises the GET path of the underlying GitLab API call.

@@ -12,7 +12,9 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestGetPages_Success verifies GetPages when success.
@@ -205,7 +207,7 @@ func TestToDomainOutput_FullCertificate(t *testing.T) {
 			Certificate:     "-----BEGIN CERTIFICATE-----",
 			CertificateText: "Certificate:\n    Data:",
 		},
-	})
+	}, toolutil.PagesDomainExtra{})
 	if out.Certificate.Certificate != "-----BEGIN CERTIFICATE-----" {
 		t.Errorf("Certificate = %q, want PEM body", out.Certificate.Certificate)
 	}
@@ -798,7 +800,7 @@ func TestConverters_EdgeCases(t *testing.T) {
 		t.Fatalf("toPagesOutput(nil) = %+v, want zero output", out)
 	}
 
-	if out := toDomainOutput(nil); out.Domain != "" || out.ProjectID != 0 {
+	if out := toDomainOutput(nil, toolutil.PagesDomainExtra{}); out.Domain != "" || out.ProjectID != 0 {
 		t.Fatalf("toDomainOutput(nil) = %+v, want zero output", out)
 	}
 
@@ -813,6 +815,8 @@ func TestConverters_EdgeCases(t *testing.T) {
 			Subject:    testDomain,
 			Expiration: &expiration,
 		},
+	}, toolutil.PagesDomainExtra{
+		CertificateExpiration: &toolutil.PagesCertificateExpirationOutput{Expired: true, Expiration: &expiration},
 	})
 	if out.EnabledUntil == "" {
 		t.Fatal("expected EnabledUntil to be formatted")
@@ -820,6 +824,52 @@ func TestConverters_EdgeCases(t *testing.T) {
 	if out.Certificate.Expiration == "" {
 		t.Fatal("expected certificate expiration to be formatted")
 	}
+	if out.CertificateExpiration == nil || !out.CertificateExpiration.Expired {
+		t.Fatal("expected the certificate_expiration object read beside the decode")
+	}
+}
+
+// TestPagesDomains_UnreadableCapturedCertificateExpiration verifies that every
+// Pages domain handler returns an error rather than a half-filled domain when
+// GitLab sends certificate_expiration as something that is not an object. The
+// SDK ignores the key its own PagesDomain does not model, so the read of the
+// captured response is the only thing that can notice, and a certificate whose
+// expiry silently disappears is the one fact this field is read for.
+func TestPagesDomains_UnreadableCapturedCertificateExpiration(t *testing.T) {
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list_all", Call: func() error {
+			client := poisoned(`[{"domain":"example.com","certificate_expiration":"soon"}]`)
+			_, err := ListAllDomains(context.Background(), client, ListAllDomainsInput{})
+			return err
+		}},
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"domain":"example.com","certificate_expiration":"soon"}]`)
+			_, err := ListDomains(context.Background(), client, ListDomainsInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"domain":"example.com","certificate_expiration":"soon"}`)
+			_, err := GetDomain(context.Background(), client, GetDomainInput{ProjectID: "42", Domain: "example.com"})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			client := poisoned(`{"domain":"example.com","certificate_expiration":"soon"}`)
+			_, err := CreateDomain(context.Background(), client, CreateDomainInput{ProjectID: "42", Domain: "example.com"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			client := poisoned(`{"domain":"example.com","certificate_expiration":"soon"}`)
+			_, err := UpdateDomain(context.Background(), client, UpdateDomainInput{ProjectID: "42", Domain: "example.com"})
+			return err
+		}},
+	})
 }
 
 // TestGetDomain_ReturnsProjectID verifies GetDomain surfaces the numeric project ID from the API.

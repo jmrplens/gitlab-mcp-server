@@ -28,6 +28,7 @@ type Output struct {
 	UpdatedAt   string      `json:"updated_at,omitempty"`
 	DeletedAt   string      `json:"deleted_at,omitempty"`
 	LastUsed    string      `json:"last_used,omitempty"`
+	ExpiresAt   string      `json:"expires_at,omitempty"`
 }
 
 // ListOutput represents a paginated list of pipeline triggers.
@@ -138,6 +139,7 @@ func ListTriggers(ctx context.Context, client *gitlabclient.Client, input ListIn
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	triggers, resp, err := client.GL().PipelineTriggers.ListPipelineTriggers(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
@@ -145,12 +147,16 @@ func ListTriggers(ctx context.Context, client *gitlabclient.Client, input ListIn
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_list", err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get and that you have Maintainer+ role (trigger tokens are sensitive)")
 	}
+	extras, err := toolutil.CapturedPipelineTriggers(captured, len(triggers))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("pipeline_trigger_list", err)
+	}
 	out := ListOutput{
 		Triggers:   make([]Output, 0, len(triggers)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
-	for _, t := range triggers {
-		out.Triggers = append(out.Triggers, convertTrigger(t))
+	for i, t := range triggers {
+		out.Triggers = append(out.Triggers, convertTrigger(t, extras[i]))
 	}
 	return out, nil
 }
@@ -163,6 +169,7 @@ func GetTrigger(ctx context.Context, client *gitlabclient.Client, input GetInput
 	if input.TriggerID == 0 {
 		return Output{}, toolutil.WrapErrWithMessage("pipeline_trigger_get", toolutil.ErrFieldRequired("trigger_id"))
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	t, _, err := client.GL().PipelineTriggers.GetPipelineTrigger(
 		string(input.ProjectID), input.TriggerID, gl.WithContext(ctx),
 	)
@@ -170,7 +177,11 @@ func GetTrigger(ctx context.Context, client *gitlabclient.Client, input GetInput
 		return Output{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_get", err, http.StatusNotFound,
 			"verify trigger_id with gitlab_pipeline_trigger_list. Trigger tokens are scoped to a single project")
 	}
-	return convertTrigger(t), nil
+	extra, err := toolutil.CapturedPipelineTrigger(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("pipeline_trigger_get", err)
+	}
+	return convertTrigger(t, extra), nil
 }
 
 // CreateTrigger creates a new pipeline trigger.
@@ -184,6 +195,7 @@ func CreateTrigger(ctx context.Context, client *gitlabclient.Client, input Creat
 	opts := &gl.AddPipelineTriggerOptions{
 		Description: new(input.Description),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	t, _, err := client.GL().PipelineTriggers.AddPipelineTrigger(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
@@ -195,7 +207,11 @@ func CreateTrigger(ctx context.Context, client *gitlabclient.Client, input Creat
 		return Output{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_create", err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get")
 	}
-	return convertTrigger(t), nil
+	extra, err := toolutil.CapturedPipelineTrigger(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("pipeline_trigger_create", err)
+	}
+	return convertTrigger(t, extra), nil
 }
 
 // UpdateTrigger updates a pipeline trigger.
@@ -210,6 +226,7 @@ func UpdateTrigger(ctx context.Context, client *gitlabclient.Client, input Updat
 	if input.Description != "" {
 		opts.Description = new(input.Description)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	t, _, err := client.GL().PipelineTriggers.EditPipelineTrigger(
 		string(input.ProjectID), input.TriggerID, opts, gl.WithContext(ctx),
 	)
@@ -221,7 +238,11 @@ func UpdateTrigger(ctx context.Context, client *gitlabclient.Client, input Updat
 		return Output{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_update", err, http.StatusNotFound,
 			"verify trigger_id with gitlab_pipeline_trigger_list")
 	}
-	return convertTrigger(t), nil
+	extra, err := toolutil.CapturedPipelineTrigger(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("pipeline_trigger_update", err)
+	}
+	return convertTrigger(t, extra), nil
 }
 
 // DeleteTrigger deletes a pipeline trigger.
@@ -300,7 +321,7 @@ func RunTrigger(ctx context.Context, client *gitlabclient.Client, input RunInput
 
 // convertTrigger maps a GitLab pipeline trigger into the MCP output shape,
 // surfacing the full owner user object on the canonical owner key.
-func convertTrigger(t *gl.PipelineTrigger) Output {
+func convertTrigger(t *gl.PipelineTrigger, extra toolutil.PipelineTriggerExtra) Output {
 	return Output{
 		ID:          t.ID,
 		Description: t.Description,
@@ -310,6 +331,7 @@ func convertTrigger(t *gl.PipelineTrigger) Output {
 		UpdatedAt:   toolutil.FormatTimePtr(t.UpdatedAt),
 		DeletedAt:   toolutil.FormatTimePtr(t.DeletedAt),
 		LastUsed:    toolutil.FormatTimePtr(t.LastUsed),
+		ExpiresAt:   toolutil.FormatTimePtr(extra.ExpiresAt),
 	}
 }
 

@@ -25,6 +25,9 @@ type Output struct {
 	UserXIDs  string `json:"user_xids"`
 	CreatedAt string `json:"created_at,omitempty"`
 	UpdatedAt string `json:"updated_at,omitempty"`
+	// Path and EditPath are where the list lives in GitLab's own interface.
+	Path     string `json:"path,omitempty"`
+	EditPath string `json:"edit_path,omitempty"`
 }
 
 // ListOutput represents a paginated list of feature flag user lists.
@@ -95,6 +98,7 @@ func ListUserLists(ctx context.Context, client *gitlabclient.Client, input ListI
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	lists, resp, err := client.GL().FeatureFlagUserLists.ListFeatureFlagUserLists(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
@@ -106,12 +110,16 @@ func ListUserLists(ctx context.Context, client *gitlabclient.Client, input ListI
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("ff_user_list_list", err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get")
 	}
+	extras, err := toolutil.CapturedFeatureFlagUserLists(captured, len(lists))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("ff_user_list_list", err)
+	}
 	out := ListOutput{
 		UserLists:  make([]Output, 0, len(lists)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
-	for _, l := range lists {
-		out.UserLists = append(out.UserLists, convertUserList(l))
+	for i, l := range lists {
+		out.UserLists = append(out.UserLists, convertUserList(l, extras[i]))
 	}
 	return out, nil
 }
@@ -124,6 +132,7 @@ func GetUserList(ctx context.Context, client *gitlabclient.Client, input GetInpu
 	if input.IID == 0 {
 		return Output{}, toolutil.WrapErrWithMessage("ff_user_list_get", toolutil.ErrFieldRequired("user_list_iid"))
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().FeatureFlagUserLists.GetFeatureFlagUserList(
 		string(input.ProjectID), input.IID, gl.WithContext(ctx),
 	)
@@ -131,7 +140,11 @@ func GetUserList(ctx context.Context, client *gitlabclient.Client, input GetInpu
 		return Output{}, toolutil.WrapErrWithStatusHint("ff_user_list_get", err, http.StatusNotFound,
 			"verify user_list_iid with gitlab_ff_user_list_list. User lists are scoped per-project and require Premium/Ultimate")
 	}
-	return convertUserList(l), nil
+	extra, err := toolutil.CapturedFeatureFlagUserList(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("ff_user_list_get", err)
+	}
+	return convertUserList(l, extra), nil
 }
 
 // CreateUserList creates a new feature flag user list.
@@ -146,6 +159,7 @@ func CreateUserList(ctx context.Context, client *gitlabclient.Client, input Crea
 		Name:     input.Name,
 		UserXIDs: input.UserXIDs,
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().FeatureFlagUserLists.CreateFeatureFlagUserList(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
@@ -160,7 +174,11 @@ func CreateUserList(ctx context.Context, client *gitlabclient.Client, input Crea
 		}
 		return Output{}, toolutil.WrapErrWithMessage("ff_user_list_create", err)
 	}
-	return convertUserList(l), nil
+	extra, err := toolutil.CapturedFeatureFlagUserList(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("ff_user_list_create", err)
+	}
+	return convertUserList(l, extra), nil
 }
 
 // UpdateUserList updates an existing feature flag user list.
@@ -175,6 +193,7 @@ func UpdateUserList(ctx context.Context, client *gitlabclient.Client, input Upda
 		Name:     input.Name,
 		UserXIDs: input.UserXIDs,
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().FeatureFlagUserLists.UpdateFeatureFlagUserList(
 		string(input.ProjectID), input.IID, opts, gl.WithContext(ctx),
 	)
@@ -186,7 +205,11 @@ func UpdateUserList(ctx context.Context, client *gitlabclient.Client, input Upda
 		return Output{}, toolutil.WrapErrWithStatusHint("ff_user_list_update", err, http.StatusNotFound,
 			"verify user_list_iid with gitlab_ff_user_list_list")
 	}
-	return convertUserList(l), nil
+	extra, err := toolutil.CapturedFeatureFlagUserList(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("ff_user_list_update", err)
+	}
+	return convertUserList(l, extra), nil
 }
 
 // DeleteUserList deletes a feature flag user list.
@@ -224,13 +247,15 @@ func deleteUserListOutput(ctx context.Context, client *gitlabclient.Client, inpu
 // ──────────────────────────────────────────────.
 
 // convertUserList maps a GitLab feature flag user list into MCP output.
-func convertUserList(l *gl.FeatureFlagUserList) Output {
+func convertUserList(l *gl.FeatureFlagUserList, extra toolutil.FeatureFlagUserListExtra) Output {
 	out := Output{
 		ID:        l.ID,
 		IID:       l.IID,
 		ProjectID: l.ProjectID,
 		Name:      l.Name,
 		UserXIDs:  l.UserXIDs,
+		Path:      extra.Path,
+		EditPath:  extra.EditPath,
 	}
 	if l.CreatedAt != nil {
 		out.CreatedAt = l.CreatedAt.Format(time.RFC3339)

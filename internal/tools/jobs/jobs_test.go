@@ -2433,6 +2433,23 @@ func TestActionSpecs_JobGetRoute(t *testing.T) {
 	}
 }
 
+// TestListBridges_UnreadableCapturedProject verifies that the bridge list
+// handler returns an error rather than a half-filled bridge when GitLab sends
+// the project object as something that is not an object. The SDK ignores the
+// key its own Bridge does not model, so the read of the captured response is
+// the only thing that can notice.
+func TestListBridges_UnreadableCapturedProject(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"trigger","status":"success","project":"not-an-object"}]`)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list_bridges", Call: func() error {
+			_, err := ListBridges(context.Background(), client, BridgeListInput{ProjectID: "42", PipelineID: 7})
+			return err
+		}},
+	})
+}
+
 // jobSpecsByTool supports job specs by tool assertions in jobs tests.
 func jobSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -822,6 +823,49 @@ func TestRetrieveForSnippet_OrderingAndKeyset(t *testing.T) {
 	if len(out.Moves) != 1 {
 		t.Fatalf("expected 1 move, got %d", len(out.Moves))
 	}
+}
+
+// TestSnippetStorageMoves_UnreadableCapturedErrorMessage verifies that every
+// snippet storage move handler returns an error rather than a half-filled move
+// when GitLab sends error_message as something that is not a string. The SDK
+// ignores the key its own SnippetRepositoryStorageMove does not model, so the
+// read of the captured response is the only thing that can notice, and a failed
+// move published without its message reads as one that failed for no reason.
+func TestSnippetStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
+	// A retrieve answers with an array and the rest with an object, so each
+	// case drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "retrieve_all", Call: func() error {
+			client := poisoned(`[{"id":1,"state":"failed","error_message":42}]`)
+			_, err := RetrieveAll(context.Background(), client, ListInput{})
+			return err
+		}},
+		{Name: "retrieve_for_snippet", Call: func() error {
+			client := poisoned(`[{"id":1,"state":"failed","error_message":42}]`)
+			_, err := RetrieveForSnippet(context.Background(), client, ListForSnippetInput{SnippetID: 3})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"state":"failed","error_message":42}`)
+			_, err := Get(context.Background(), client, IDInput{ID: 1})
+			return err
+		}},
+		{Name: "get_for_snippet", Call: func() error {
+			client := poisoned(`{"id":1,"state":"failed","error_message":42}`)
+			_, err := GetForSnippet(context.Background(), client, SnippetMoveInput{SnippetID: 3, ID: 1})
+			return err
+		}},
+		{Name: "schedule", Call: func() error {
+			client := poisoned(`{"id":1,"state":"scheduled","error_message":42}`)
+			_, err := Schedule(context.Background(), client, ScheduleInput{SnippetID: 3})
+			return err
+		}},
+	})
 }
 
 // TestFormatScheduleAllMarkdown verifies the schedule-all confirmation message

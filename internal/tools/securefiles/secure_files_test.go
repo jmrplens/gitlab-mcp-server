@@ -4,6 +4,7 @@
 package securefiles
 
 import (
+	"context"
 	"encoding/base64"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -60,7 +62,7 @@ func TestShow(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"key.pem","checksum":"abc","checksum_algorithm":"sha256"}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"key.pem","checksum":"abc","checksum_algorithm":"sha256","file_extension":"pem"}`)
 	}))
 	out, err := Show(t.Context(), client, ShowInput{ProjectID: "1", FileID: 1})
 	if err != nil {
@@ -68,6 +70,9 @@ func TestShow(t *testing.T) {
 	}
 	if out.Name != testFileName {
 		t.Errorf("expected key.pem, got %s", out.Name)
+	}
+	if out.FileExtension != "pem" {
+		t.Errorf("expected file_extension 'pem', got %q", out.FileExtension)
 	}
 }
 
@@ -436,6 +441,53 @@ func TestFormatShowMarkdown_FullMetadata(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestFormatShowMarkdown_FileExtension verifies the file extension reaches the
+// rendered detail. It is read off the captured response because the SDK does
+// not model it, so a formatter that dropped it would leave that read with
+// nothing to show for itself.
+func TestFormatShowMarkdown_FileExtension(t *testing.T) {
+	withExt := FormatShowMarkdown(SecureFileItem{ID: 1, Name: "keystore.jks", FileExtension: "jks"})
+	if !strings.Contains(withExt, "- **File Extension**: jks") {
+		t.Errorf("markdown missing the file extension line:\n%s", withExt)
+	}
+	without := FormatShowMarkdown(SecureFileItem{ID: 1, Name: "keystore"})
+	if strings.Contains(without, "**File Extension**") {
+		t.Errorf("markdown shows an extension GitLab did not send:\n%s", without)
+	}
+}
+
+// TestSecureFiles_UnreadableCapturedFileExtension verifies that every secure
+// file handler returns an error rather than a half-filled file when GitLab
+// sends file_extension as something that is not a string. The SDK ignores the
+// key its own SecureFile does not model, so the read of the captured response
+// is the only thing that can notice.
+func TestSecureFiles_UnreadableCapturedFileExtension(t *testing.T) {
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"id":1,"name":"keystore.jks","file_extension":42}]`)
+			_, err := List(context.Background(), client, ListInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "show", Call: func() error {
+			client := poisoned(`{"id":1,"name":"keystore.jks","file_extension":42}`)
+			_, err := Show(context.Background(), client, ShowInput{ProjectID: "42", FileID: 1})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			client := poisoned(`{"id":1,"name":"keystore.jks","file_extension":42}`)
+			_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Name: "keystore.jks", ContentBase64: "aGVsbG8="})
+			return err
+		}},
+	})
 }
 
 // TestFormatListMarkdown_ExpiresColumn verifies the list table renders the

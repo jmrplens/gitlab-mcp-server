@@ -156,17 +156,19 @@ func FormatManagerListMarkdown(out ManagerListOutput) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Runner Managers (%d)\n\n", len(out.Managers))
-	b.WriteString("| ID | System ID | Version | Platform | Arch | Status | IP |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
+	b.WriteString("| ID | System ID | Version | Platform | Arch | Status | Job Status | IP |\n")
+	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, m := range out.Managers {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s | %s | %s |\n",
 			// The version, platform and architecture come out of the info
 			// payload the runner process posts, which GitLab length-checks and
 			// nothing else, and this server's own runner.register writes them.
 			//gitlab:allow-unescaped m.Status: a manager status GitLab derives from when the manager last contacted it (online, offline, stale, never_contacted).
+			//gitlab:allow-unescaped m.JobExecutionStatus: a job execution status GitLab derives from the manager's running builds (active, idle).
 			//gitlab:allow-unescaped m.IPAddress: GitLab fills this from the address the manager connected from, never from the info payload beside it.
 			m.ID, toolutil.EscapeMdTableCell(m.SystemID), toolutil.EscapeMdTableCell(m.Version),
-			toolutil.EscapeMdTableCell(m.Platform), toolutil.EscapeMdTableCell(m.Architecture), m.Status, m.IPAddress)
+			toolutil.EscapeMdTableCell(m.Platform), toolutil.EscapeMdTableCell(m.Architecture), m.Status,
+			m.JobExecutionStatus, m.IPAddress)
 	}
 	toolutil.WriteHints(&b, "Use action 'get' with runner_id for full runner information")
 	return b.String()

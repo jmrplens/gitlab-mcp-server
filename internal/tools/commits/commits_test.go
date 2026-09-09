@@ -13,6 +13,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -2480,7 +2481,7 @@ func TestCommentToOutput_AuthorNameFallback(t *testing.T) {
 		Note:   "test",
 		Author: gl.Author{Name: "John"},
 	}
-	out := commentToOutput(c)
+	out := commentToOutput(c, toolutil.CommitCommentExtra{})
 	if out.Author == nil || out.Author.Name != "John" {
 		t.Errorf("Author = %v, want Name %q", out.Author, "John")
 	}
@@ -2723,6 +2724,33 @@ func TestPipelineInfoToOutput_Nil(t *testing.T) {
 	if got := pipelineInfoToOutput(nil); got != nil {
 		t.Errorf("pipelineInfoToOutput(nil) = %+v, want nil", got)
 	}
+}
+
+// TestCommitComments_UnreadableCapturedCreatedAt verifies that both commit
+// comment handlers return an error rather than a half-filled comment when
+// GitLab sends created_at as something that is not a timestamp. The SDK ignores
+// the key its own CommitComment does not model, so the read of the captured
+// response is the only thing that can notice.
+func TestCommitComments_UnreadableCapturedCreatedAt(t *testing.T) {
+	// A list answers with an array and a post with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"note":"looks good","created_at":"tomorrow"}]`)
+			_, err := GetComments(context.Background(), client, CommentsInput{ProjectID: "42", SHA: "abc123"})
+			return err
+		}},
+		{Name: "post", Call: func() error {
+			client := poisoned(`{"note":"looks good","created_at":"tomorrow"}`)
+			_, err := PostComment(context.Background(), client, PostCommentInput{ProjectID: "42", SHA: "abc123", Note: "looks good"})
+			return err
+		}},
+	})
 }
 
 // TestCommitActionSpecs_DiscoveryMetadata verifies every individual commit tool

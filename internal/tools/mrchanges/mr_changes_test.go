@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -125,6 +126,7 @@ const diffVersionGetResponse = `{
   "merge_request_id":1,
   "state":"collected",
   "real_size":"5",
+  "patch_id_sha":"9f2c1d0",
   "commits":[
     {"id":"jkl012abc","short_id":"jkl012a","title":"Fix bug","author_name":"Dev","created_at":"2026-01-16T09:00:00Z"}
   ],
@@ -212,6 +214,9 @@ func TestGetDiffVersion_Success(t *testing.T) {
 	}
 	if out.HeadCommitSHA != "jkl012" {
 		t.Errorf("HeadCommitSHA = %q, want %q", out.HeadCommitSHA, "jkl012")
+	}
+	if out.PatchIDSHA != "9f2c1d0" {
+		t.Errorf("PatchIDSHA = %q, want %q", out.PatchIDSHA, "9f2c1d0")
 	}
 	if len(out.Commits) != 1 {
 		t.Fatalf("len(Commits) = %d, want 1", len(out.Commits))
@@ -952,6 +957,33 @@ func TestDecorateMRChangeMeta_UnknownTool(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------.
+
+// TestDiffVersions_UnreadableCapturedPatchIDSHA verifies that both diff version
+// handlers return an error rather than a half-filled version when GitLab sends
+// patch_id_sha as something that is not a string. The SDK ignores the key its
+// own MergeRequestDiffVersion does not model, so the read of the captured
+// response is the only thing that can notice.
+func TestDiffVersions_UnreadableCapturedPatchIDSHA(t *testing.T) {
+	// A list answers with an array and a get with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"id":1,"head_commit_sha":"abc","patch_id_sha":42}]`)
+			_, err := ListDiffVersions(context.Background(), client, DiffVersionsListInput{ProjectID: "42", MRIID: 7})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"head_commit_sha":"abc","patch_id_sha":42}`)
+			_, err := GetDiffVersion(context.Background(), client, DiffVersionGetInput{ProjectID: "42", MRIID: 7, VersionID: 1})
+			return err
+		}},
+	})
+}
 
 // newMRChangesActionSpecs builds canonical action specs backed by a mock GitLab API.
 func newMRChangesActionSpecs(t *testing.T) []toolutil.ActionSpec {

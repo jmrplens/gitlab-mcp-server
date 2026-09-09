@@ -24,6 +24,9 @@ func FormatTriggerMarkdown(out Output) string {
 	if out.LastUsed != "" {
 		fmt.Fprintf(&b, "| Last Used | %s |\n", toolutil.FormatTime(out.LastUsed))
 	}
+	if out.ExpiresAt != "" {
+		fmt.Fprintf(&b, "| Expires At | %s |\n", toolutil.FormatTime(out.ExpiresAt))
+	}
 	toolutil.WriteHints(
 		&b,
 		"Use the selected tool surface's pipeline-trigger update action with the same project_id and trigger_id to modify this trigger",

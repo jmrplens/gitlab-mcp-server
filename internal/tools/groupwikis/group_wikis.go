@@ -18,6 +18,10 @@ type Output struct {
 	Format   string `json:"format"`
 	Content  string `json:"content,omitempty"`
 	Encoding string `json:"encoding,omitempty"`
+	// WikiPageMetaID identifies the page's metadata record, and FrontMatter is
+	// the YAML front matter parsed out of the page.
+	WikiPageMetaID int64          `json:"wiki_page_meta_id,omitempty"`
+	FrontMatter    map[string]any `json:"front_matter,omitempty"`
 }
 
 // ListOutput is the result of the List action containing all wiki pages for a group.
@@ -26,13 +30,17 @@ type ListOutput struct {
 	WikiPages []Output `json:"wiki_pages"`
 }
 
-func toOutput(w *gl.GroupWiki) Output {
+// toOutput converts a GitLab API [gl.GroupWiki] to MCP output format, filling
+// from the decoded page and from what the capture read beside it.
+func toOutput(w *gl.GroupWiki, extra toolutil.WikiExtra) Output {
 	return Output{
-		Title:    w.Title,
-		Slug:     w.Slug,
-		Format:   string(w.Format),
-		Content:  w.Content,
-		Encoding: w.Encoding,
+		Title:          w.Title,
+		Slug:           w.Slug,
+		Format:         string(w.Format),
+		Content:        w.Content,
+		Encoding:       w.Encoding,
+		WikiPageMetaID: extra.WikiPageMetaID,
+		FrontMatter:    extra.FrontMatter,
 	}
 }
 
@@ -85,14 +93,19 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.WithContent {
 		opts.WithContent = new(true)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	pages, _, err := client.GL().GroupWikis.ListGroupWikis(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("listGroupWikis", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get; group wikis require GitLab Premium or higher")
 	}
+	extras, err := toolutil.CapturedWikis(captured, len(pages))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("listGroupWikis", err)
+	}
 	out := make([]Output, len(pages))
 	for i, w := range pages {
-		out[i] = toOutput(w)
+		out[i] = toOutput(w, extras[i])
 	}
 	return ListOutput{WikiPages: out}, nil
 }
@@ -115,12 +128,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.Version != "" {
 		opts.Version = new(input.Version)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	w, _, err := client.GL().GroupWikis.GetGroupWikiPage(string(input.GroupID), input.Slug, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("getGroupWikiPage", err, http.StatusNotFound,
 			"verify slug with gitlab_group_wiki_list; slugs are case-sensitive and use hyphens for spaces")
 	}
-	return toOutput(w), nil
+	extra, err := toolutil.CapturedWiki(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("getGroupWikiPage", err)
+	}
+	return toOutput(w, extra), nil
 }
 
 // Create creates a new wiki page in a GitLab group.
@@ -145,12 +163,17 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		f := gl.WikiFormatValue(input.Format)
 		opts.Format = &f
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	w, _, err := client.GL().GroupWikis.CreateGroupWikiPage(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("createGroupWikiPage", err, http.StatusBadRequest,
 			"title and content are required; format must be 'markdown', 'rdoc', 'asciidoc', or 'org'; group wikis require GitLab Premium or higher")
 	}
-	return toOutput(w), nil
+	extra, err := toolutil.CapturedWiki(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("createGroupWikiPage", err)
+	}
+	return toOutput(w, extra), nil
 }
 
 // Edit updates an existing wiki page in a GitLab group.
@@ -175,12 +198,17 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ou
 		f := gl.WikiFormatValue(input.Format)
 		opts.Format = &f
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	w, _, err := client.GL().GroupWikis.EditGroupWikiPage(string(input.GroupID), input.Slug, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("editGroupWikiPage", err, http.StatusNotFound,
 			"verify slug with gitlab_group_wiki_list; slugs are case-sensitive")
 	}
-	return toOutput(w), nil
+	extra, err := toolutil.CapturedWiki(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("editGroupWikiPage", err)
+	}
+	return toOutput(w, extra), nil
 }
 
 // Delete removes a wiki page from a GitLab group.

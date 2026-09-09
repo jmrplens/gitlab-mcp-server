@@ -26,6 +26,8 @@ type Output struct {
 	Username         string `json:"username"`
 	Email            string `json:"email"`
 	UnconfirmedEmail string `json:"unconfirmed_email,omitempty"`
+	// PublicEmail is the address the account shows publicly.
+	PublicEmail string `json:"public_email,omitempty"`
 }
 
 // ListOutput holds a paginated list of project service accounts.
@@ -64,13 +66,16 @@ type ListPATOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-func toOutput(account *gl.ProjectServiceAccount) Output {
+// toOutput converts the GitLab API response to the tool output format, filling
+// from the decoded account and from what the capture read beside it.
+func toOutput(account *gl.ProjectServiceAccount, extra toolutil.ServiceAccountExtra) Output {
 	return Output{
 		ID:               account.ID,
 		Name:             account.Name,
 		Username:         account.Username,
 		Email:            account.Email,
 		UnconfirmedEmail: account.UnconfirmedEmail,
+		PublicEmail:      extra.PublicEmail,
 	}
 }
 
@@ -127,13 +132,18 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.Sort = &input.Sort
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	accounts, resp, err := client.GL().Projects.ListProjectServiceAccounts(input.ProjectID.String(), opts, gl.WithContext(ctx))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("list project service accounts", err)
+	}
+	extras, err := toolutil.CapturedServiceAccounts(captured, len(accounts))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErr("list project service accounts", err)
 	}
 	out := make([]Output, len(accounts))
 	for i, account := range accounts {
-		out[i] = toOutput(account)
+		out[i] = toOutput(account, extras[i])
 	}
 	return ListOutput{Accounts: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -165,11 +175,16 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Email != "" {
 		opts.Email = &input.Email
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	account, _, err := client.GL().Projects.CreateProjectServiceAccount(input.ProjectID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithMessage("create project service account", err)
 	}
-	return toOutput(account), nil
+	extra, err := toolutil.CapturedServiceAccount(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("create project service account", err)
+	}
+	return toOutput(account, extra), nil
 }
 
 // UpdateInput holds parameters for updating a project service account.
@@ -203,11 +218,16 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Email != "" {
 		opts.Email = &input.Email
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	account, _, err := client.GL().Projects.UpdateProjectServiceAccount(input.ProjectID.String(), input.ServiceAccountID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithMessage("update project service account", err)
 	}
-	return toOutput(account), nil
+	extra, err := toolutil.CapturedServiceAccount(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("update project service account", err)
+	}
+	return toOutput(account, extra), nil
 }
 
 // DeleteInput holds parameters for deleting a project service account.

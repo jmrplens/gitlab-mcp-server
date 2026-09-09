@@ -63,6 +63,7 @@ type Output struct {
 	State                  string         `json:"state"`
 	SourceStorageName      string         `json:"source_storage_name"`
 	DestinationStorageName string         `json:"destination_storage_name"`
+	ErrorMessage           string         `json:"error_message,omitempty"`
 	Snippet                *SnippetOutput `json:"snippet,omitempty"`
 }
 
@@ -106,15 +107,20 @@ func RetrieveAll(ctx context.Context, client *gitlabclient.Client, in ListInput)
 		OrderBy: in.OrderBy, Sort: in.Sort,
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	moves, resp, err := client.GL().SnippetRepositoryStorageMove.RetrieveAllStorageMoves(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("retrieve all snippet storage moves", err, http.StatusForbidden,
 			"requires administrator access; self-managed only; storage moves are repository shard migrations between Gitaly nodes")
 	}
+	extras, err := toolutil.CapturedStorageMoves(captured, len(moves))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("retrieve all snippet storage moves", err)
+	}
 
 	out := ListOutput{Moves: make([]Output, 0, len(moves))}
-	for _, m := range moves {
-		out.Moves = append(out.Moves, toOutput(m))
+	for i, m := range moves {
+		out.Moves = append(out.Moves, toOutput(m, extras[i]))
 	}
 	out.Pagination = toolutil.PaginationFromResponse(resp)
 	return out, nil
@@ -133,15 +139,20 @@ func RetrieveForSnippet(ctx context.Context, client *gitlabclient.Client, in Lis
 		OrderBy: in.OrderBy, Sort: in.Sort,
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	moves, resp, err := client.GL().SnippetRepositoryStorageMove.RetrieveAllStorageMovesForSnippet(in.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("retrieve snippet storage moves", err, http.StatusNotFound,
 			"requires admin; verify snippet_id exists; only storage moves for the given snippet are returned")
 	}
+	extras, err := toolutil.CapturedStorageMoves(captured, len(moves))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("retrieve snippet storage moves", err)
+	}
 
 	out := ListOutput{Moves: make([]Output, 0, len(moves))}
-	for _, m := range moves {
-		out.Moves = append(out.Moves, toOutput(m))
+	for i, m := range moves {
+		out.Moves = append(out.Moves, toOutput(m, extras[i]))
 	}
 	out.Pagination = toolutil.PaginationFromResponse(resp)
 	return out, nil
@@ -156,12 +167,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, in IDInput) (Output, 
 		return Output{}, toolutil.ErrFieldRequired("id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	move, _, err := client.GL().SnippetRepositoryStorageMove.GetStorageMove(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get snippet storage move", err, http.StatusNotFound,
 			"requires admin; verify id with gitlab_retrieve_all_snippet_storage_moves; the move record may have been pruned after completion")
 	}
-	return toOutput(move), nil
+	extra, err := toolutil.CapturedStorageMove(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("get snippet storage move", err)
+	}
+	return toOutput(move, extra), nil
 }
 
 // GetForSnippet retrieves a single storage move for a specific snippet.
@@ -176,12 +192,17 @@ func GetForSnippet(ctx context.Context, client *gitlabclient.Client, in SnippetM
 		return Output{}, toolutil.ErrFieldRequired("id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	move, _, err := client.GL().SnippetRepositoryStorageMove.GetStorageMoveForSnippet(in.SnippetID, in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get snippet storage move for snippet", err, http.StatusNotFound,
 			"requires admin; verify snippet_id + id combination with gitlab_get_snippet_storage_move_for_snippet")
 	}
-	return toOutput(move), nil
+	extra, err := toolutil.CapturedStorageMove(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("get snippet storage move for snippet", err)
+	}
+	return toOutput(move, extra), nil
 }
 
 // Schedule schedules a repository storage move for a snippet.
@@ -196,12 +217,17 @@ func Schedule(ctx context.Context, client *gitlabclient.Client, in ScheduleInput
 	opts := gl.ScheduleStorageMoveForSnippetOptions{
 		DestinationStorageName: in.DestinationStorageName,
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	move, _, err := client.GL().SnippetRepositoryStorageMove.ScheduleStorageMoveForSnippet(in.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("schedule snippet storage move", err, http.StatusBadRequest,
 			"requires admin; destination_storage_name must reference an existing Gitaly storage shard configured on the instance; cannot move to the same shard the snippet is already on")
 	}
-	return toOutput(move), nil
+	extra, err := toolutil.CapturedStorageMove(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("schedule snippet storage move", err)
+	}
+	return toOutput(move, extra), nil
 }
 
 // ScheduleAll schedules storage moves for all snippets on a storage shard.
@@ -222,12 +248,13 @@ func ScheduleAll(ctx context.Context, client *gitlabclient.Client, in ScheduleAl
 	return ScheduleAllOutput{Message: "All snippet repository storage moves have been scheduled"}, nil
 }
 
-func toOutput(m *gl.SnippetRepositoryStorageMove) Output {
+func toOutput(m *gl.SnippetRepositoryStorageMove, extra toolutil.StorageMoveExtra) Output {
 	o := Output{
 		ID:                     m.ID,
 		State:                  m.State,
 		SourceStorageName:      m.SourceStorageName,
 		DestinationStorageName: m.DestinationStorageName,
+		ErrorMessage:           extra.ErrorMessage,
 	}
 	if m.CreatedAt != nil {
 		o.CreatedAt = *m.CreatedAt

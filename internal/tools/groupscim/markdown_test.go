@@ -4,6 +4,8 @@ package groupscim
 import (
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestFormatOutputMarkdown verifies single SCIM identity rendering covers
@@ -18,9 +20,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		{
 			name: "active identity with all fields",
 			input: Output{
-				ExternalUID: "ext-uid-123",
-				UserID:      42,
-				Active:      true,
+				ExternUID: "ext-uid-123",
+				UserID:    42,
+				Active:    true,
 			},
 			contains: []string{
 				"SCIM Identity",
@@ -34,9 +36,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		{
 			name: "inactive identity",
 			input: Output{
-				ExternalUID: "ext-uid-456",
-				UserID:      99,
-				Active:      false,
+				ExternUID: "ext-uid-456",
+				UserID:    99,
+				Active:    false,
 			},
 			contains: []string{
 				"ext-uid-456",
@@ -97,7 +99,7 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "single identity",
 			input: ListOutput{
 				Identities: []Output{
-					{ExternalUID: "uid-1", UserID: 10, Active: true},
+					{ExternUID: "uid-1", UserID: 10, Active: true},
 				},
 			},
 			contains: []string{
@@ -115,9 +117,9 @@ func TestFormatListMarkdown(t *testing.T) {
 			name: "multiple identities",
 			input: ListOutput{
 				Identities: []Output{
-					{ExternalUID: "uid-1", UserID: 10, Active: true},
-					{ExternalUID: "uid-2", UserID: 20, Active: false},
-					{ExternalUID: "uid-3", UserID: 30, Active: true},
+					{ExternUID: "uid-1", UserID: 10, Active: true},
+					{ExternUID: "uid-2", UserID: 20, Active: false},
+					{ExternUID: "uid-3", UserID: 30, Active: true},
 				},
 			},
 			contains: []string{
@@ -147,9 +149,9 @@ func TestFormatListMarkdown(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestToOutput_Nil(t *testing.T) {
-	out := toOutput(nil)
-	if out.ExternalUID != "" {
-		t.Errorf("expected empty ExternalUID, got %q", out.ExternalUID)
+	out := toOutput(nil, toolutil.SCIMIdentityExtra{})
+	if out.ExternUID != "" {
+		t.Errorf("expected empty ExternUID, got %q", out.ExternUID)
 	}
 	if out.UserID != 0 {
 		t.Errorf("expected UserID 0, got %d", out.UserID)
@@ -166,7 +168,7 @@ func TestFormatOutputMarkdown_EmptyAndPopulated(t *testing.T) {
 	if got := FormatOutputMarkdown(Output{}); got != "" {
 		t.Errorf("FormatOutputMarkdown(zero) = %q, want empty", got)
 	}
-	got := FormatOutputMarkdown(Output{ExternalUID: "uid-1", UserID: 7, Active: true})
+	got := FormatOutputMarkdown(Output{ExternUID: "uid-1", UserID: 7, Active: true})
 	for _, want := range []string{"## SCIM Identity", "`uid-1`", "**User ID**: 7", "**Active**: true"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(got, want) {
@@ -184,8 +186,8 @@ func TestFormatListMarkdown_EmptyAndRows(t *testing.T) {
 		t.Errorf("FormatListMarkdown(empty) = %q", got)
 	}
 	got := FormatListMarkdown(ListOutput{Identities: []Output{
-		{ExternalUID: "a", UserID: 1, Active: true},
-		{ExternalUID: "b", UserID: 2},
+		{ExternUID: "a", UserID: 1, Active: true},
+		{ExternUID: "b", UserID: 2},
 	}})
 	for _, want := range []string{"## SCIM Identities (2)", "| `a` | 1 | true |", "| `b` | 2 | false |"} {
 		t.Run(want, func(t *testing.T) {

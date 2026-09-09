@@ -28,7 +28,7 @@ type LicenseItem struct {
 	Key         string   `json:"key"`
 	Name        string   `json:"name"`
 	Nickname    string   `json:"nickname,omitempty"`
-	Featured    bool     `json:"featured"`
+	Popular     bool     `json:"popular"`
 	HTMLURL     string   `json:"html_url,omitempty"`
 	SourceURL   string   `json:"source_url,omitempty"`
 	Description string   `json:"description,omitempty"`
@@ -60,13 +60,18 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Popular != nil {
 		opts.Popular = input.Popular
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	items, resp, err := client.GL().LicenseTemplates.ListLicenseTemplates(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_license_templates", err, http.StatusForbidden, "verify your token has read_api scope")
 	}
+	extras, err := toolutil.CapturedLicenseTemplates(captured, len(items))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("list_license_templates", err)
+	}
 	licenses := make([]LicenseItem, 0, len(items))
-	for _, l := range items {
-		licenses = append(licenses, licenseFromGL(l))
+	for i, l := range items {
+		licenses = append(licenses, licenseFromGL(l, extras[i]))
 	}
 	return ListOutput{
 		Licenses:   licenses,
@@ -102,22 +107,28 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	if input.Fullname != nil {
 		opts.Fullname = input.Fullname
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	l, _, err := client.GL().LicenseTemplates.GetLicenseTemplate(input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_license_template", err, http.StatusNotFound, "verify key with gitlab_list_license_templates")
 	}
-	return GetOutput{LicenseItem: licenseFromGL(l)}, nil
+	extra, err := toolutil.CapturedLicenseTemplate(captured)
+	if err != nil {
+		return GetOutput{}, toolutil.WrapErr("get_license_template", err)
+	}
+	return GetOutput{LicenseItem: licenseFromGL(l, extra)}, nil
 }
 
 // licenseFromGL converts a [gl.LicenseTemplate] into the package's
 // [LicenseItem], copying the key, name, metadata, conditions,
-// permissions, limitations, and rendered content.
-func licenseFromGL(l *gl.LicenseTemplate) LicenseItem {
+// permissions, limitations, and rendered content, plus what the capture read
+// beside the decode.
+func licenseFromGL(l *gl.LicenseTemplate, extra toolutil.LicenseTemplateExtra) LicenseItem {
 	return LicenseItem{
 		Key:         l.Key,
 		Name:        l.Name,
 		Nickname:    l.Nickname,
-		Featured:    l.Featured,
+		Popular:     extra.Popular,
 		HTMLURL:     l.HTMLURL,
 		SourceURL:   l.SourceURL,
 		Description: l.Description,

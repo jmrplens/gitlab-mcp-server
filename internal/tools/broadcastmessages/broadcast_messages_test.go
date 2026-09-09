@@ -13,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -21,7 +22,7 @@ import (
 const fmtUnexpErr = "unexpected error: %v"
 
 // messageJSON identifies the message JSON constant used by this package.
-const messageJSON = `{"id":1,"message":"System maintenance tonight","starts_at":"2026-01-01T00:00:00Z","ends_at":"2026-01-02T00:00:00Z","font":"","active":true,"target_access_levels":[],"target_path":"","broadcast_type":"banner","dismissable":true,"theme":"indigo"}`
+const messageJSON = `{"id":1,"message":"System maintenance tonight","starts_at":"2026-01-01T00:00:00Z","ends_at":"2026-01-02T00:00:00Z","font":"","active":true,"target_access_levels":[],"target_path":"","broadcast_type":"banner","dismissable":true,"theme":"indigo","color":"#e75e40"}`
 
 const (
 	// pathBroadcastMessages identifies the path broadcast messages constant used by this package.
@@ -147,6 +148,9 @@ func TestGet_Success(t *testing.T) {
 	}
 	if out.Message.BroadcastType != testBannerType {
 		t.Errorf("expected type 'banner', got %q", out.Message.BroadcastType)
+	}
+	if out.Message.Color != "#e75e40" {
+		t.Errorf("expected color '#e75e40', got %q", out.Message.Color)
 	}
 }
 
@@ -735,4 +739,53 @@ func broadcastMessageSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[
 		byTool[toolName] = spec
 	}
 	return byTool
+}
+
+// TestFormatMessageMarkdown_Color verifies the color reaches the rendered
+// table. It is the one broadcast message field the SDK does not model and the
+// handler reads off the captured response, so a formatter that dropped it would
+// leave that read with nothing to show for itself.
+func TestFormatMessageMarkdown_Color(t *testing.T) {
+	result := FormatMessageMarkdown(MessageItem{ID: 1, Message: "hello", Color: "#e75e40"})
+	content := result.Content[0].(*mcp.TextContent).Text
+	if !strings.Contains(content, "| Color | #e75e40 |") {
+		t.Errorf("markdown missing the color row:\n%s", content)
+	}
+}
+
+// TestBroadcastMessages_UnreadableCapturedColor verifies that every broadcast
+// message handler reading the color off the captured answer returns an error
+// rather than a half-filled message when GitLab sends color as something that
+// is not a string. The SDK ignores the key its own BroadcastMessage does not
+// model, so the captured read is the only thing that can notice.
+func TestBroadcastMessages_UnreadableCapturedColor(t *testing.T) {
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"id":1,"message":"hello","color":7}]`)
+			_, err := List(context.Background(), client, ListInput{})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"message":"hello","color":7}`)
+			_, err := Get(context.Background(), client, GetInput{ID: 1})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			client := poisoned(`{"id":1,"message":"hello","color":7}`)
+			_, err := Create(context.Background(), client, CreateInput{Message: "hello"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			client := poisoned(`{"id":1,"message":"hello","color":7}`)
+			_, err := Update(context.Background(), client, UpdateInput{ID: 1, Message: "hello again"})
+			return err
+		}},
+	})
 }

@@ -11,6 +11,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -802,7 +803,7 @@ func TestCovtoLabelEventOutput_Nil(t *testing.T) {
 
 // TestCovtoMilestoneEventOutput_Nil verifies CovtoMilestoneEventOutput when nil.
 func TestCovtoMilestoneEventOutput_Nil(t *testing.T) {
-	out := toMilestoneEventOutput(nil)
+	out := toMilestoneEventOutput(nil, toolutil.ResourceMilestoneEventExtra{})
 	if out.ID != 0 {
 		t.Error("expected zero value for nil event")
 	}
@@ -811,7 +812,7 @@ func TestCovtoMilestoneEventOutput_Nil(t *testing.T) {
 // TestCovtoMilestoneEventOutput_NilUserAndMilestone verifies CovtoMilestoneEventOutput when nil user and milestone.
 func TestCovtoMilestoneEventOutput_NilUserAndMilestone(t *testing.T) {
 	e := &gl.MilestoneEvent{ID: 1, Action: "add"}
-	out := toMilestoneEventOutput(e)
+	out := toMilestoneEventOutput(e, toolutil.ResourceMilestoneEventExtra{State: "closed"})
 	if out.User != nil || out.Milestone != nil {
 		t.Error("expected nil user/milestone for nil event sub-objects")
 	}
@@ -819,7 +820,7 @@ func TestCovtoMilestoneEventOutput_NilUserAndMilestone(t *testing.T) {
 
 // TestCovtoStateEventOutput_Nil verifies CovtoStateEventOutput when nil.
 func TestCovtoStateEventOutput_Nil(t *testing.T) {
-	out := toStateEventOutput(nil)
+	out := toStateEventOutput(nil, toolutil.ResourceStateEventExtra{})
 	if out.ID != 0 {
 		t.Error("expected zero value for nil event")
 	}
@@ -828,12 +829,15 @@ func TestCovtoStateEventOutput_Nil(t *testing.T) {
 // TestCovtoStateEventOutput_NilUser verifies CovtoStateEventOutput when nil user.
 func TestCovtoStateEventOutput_NilUser(t *testing.T) {
 	e := &gl.StateEvent{ID: 1, State: "opened"}
-	out := toStateEventOutput(e)
+	out := toStateEventOutput(e, toolutil.ResourceStateEventExtra{SourceCommit: "abc123"})
 	if out.User != nil {
 		t.Error("expected nil user for nil event user")
 	}
 	if out.State != "opened" {
 		t.Errorf("expected opened, got %q", out.State)
+	}
+	if out.SourceCommit != "abc123" {
+		t.Errorf("SourceCommit = %q, want what was read beside the decode", out.SourceCommit)
 	}
 }
 
@@ -1336,6 +1340,63 @@ func TestGetGroupEpicLabelEvent_NotFound_HintsGitLab19Removal(t *testing.T) {
 	if !strings.Contains(err.Error(), "GitLab 19 removed the legacy epic REST API") {
 		t.Errorf("error = %q, want GitLab 19 removal hint", err.Error())
 	}
+}
+
+// TestResourceEvents_UnreadableCapturedExtras verifies that every milestone and
+// state event handler returns an error rather than a half-filled event when
+// GitLab sends one of the captured fields as something the shape cannot hold:
+// the milestone event's state, and the state event's source_commit. The SDK
+// ignores the keys its own event structs do not model, so the read of the
+// captured response is the only thing that can notice.
+func TestResourceEvents_UnreadableCapturedExtras(t *testing.T) {
+	const (
+		milestoneList = `[{"id":1,"action":"add","state":42}]`
+		milestoneOne  = `{"id":1,"action":"add","state":42}`
+		stateList     = `[{"id":1,"state":"closed","source_commit":42}]`
+		stateOne      = `{"id":1,"state":"closed","source_commit":42}`
+	)
+	// A list answers with an array and a get with an object, and the two event
+	// kinds are poisoned on different keys, so each case drives a client of its
+	// own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "issue_milestone_list", Call: func() error {
+			_, err := ListIssueMilestoneEvents(context.Background(), poisoned(milestoneList), ListIssueMilestoneEventsInput{ProjectID: "42", IssueIID: 7})
+			return err
+		}},
+		{Name: "issue_milestone_get", Call: func() error {
+			_, err := GetIssueMilestoneEvent(context.Background(), poisoned(milestoneOne), GetIssueMilestoneEventInput{ProjectID: "42", IssueIID: 7, MilestoneEventID: 1})
+			return err
+		}},
+		{Name: "mr_milestone_list", Call: func() error {
+			_, err := ListMRMilestoneEvents(context.Background(), poisoned(milestoneList), ListMRMilestoneEventsInput{ProjectID: "42", MRIID: 7})
+			return err
+		}},
+		{Name: "mr_milestone_get", Call: func() error {
+			_, err := GetMRMilestoneEvent(context.Background(), poisoned(milestoneOne), GetMRMilestoneEventInput{ProjectID: "42", MRIID: 7, MilestoneEventID: 1})
+			return err
+		}},
+		{Name: "issue_state_list", Call: func() error {
+			_, err := ListIssueStateEvents(context.Background(), poisoned(stateList), ListIssueStateEventsInput{ProjectID: "42", IssueIID: 7})
+			return err
+		}},
+		{Name: "issue_state_get", Call: func() error {
+			_, err := GetIssueStateEvent(context.Background(), poisoned(stateOne), GetIssueStateEventInput{ProjectID: "42", IssueIID: 7, StateEventID: 1})
+			return err
+		}},
+		{Name: "mr_state_list", Call: func() error {
+			_, err := ListMRStateEvents(context.Background(), poisoned(stateList), ListMRStateEventsInput{ProjectID: "42", MRIID: 7})
+			return err
+		}},
+		{Name: "mr_state_get", Call: func() error {
+			_, err := GetMRStateEvent(context.Background(), poisoned(stateOne), GetMRStateEventInput{ProjectID: "42", MRIID: 7, StateEventID: 1})
+			return err
+		}},
+	})
 }
 
 // TestGetGroupEpicLabelEvent_Success verifies GetGroupEpicLabelEvent hits the

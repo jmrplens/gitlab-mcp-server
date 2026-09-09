@@ -2123,8 +2123,8 @@ func TestListManagers_Success(t *testing.T) {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[
-			{"id":10,"system_id":"sys-01","version":"16.0","platform":"linux","architecture":"amd64","ip_address":"10.0.0.1","status":"online"},
-			{"id":11,"system_id":"sys-02","version":"16.0","platform":"darwin","architecture":"arm64","ip_address":"10.0.0.2","status":"offline"}
+			{"id":10,"system_id":"sys-01","version":"16.0","platform":"linux","architecture":"amd64","ip_address":"10.0.0.1","status":"online","job_execution_status":"running"},
+			{"id":11,"system_id":"sys-02","version":"16.0","platform":"darwin","architecture":"arm64","ip_address":"10.0.0.2","status":"offline","job_execution_status":"idle"}
 		]`)
 	}))
 	out, err := ListManagers(context.Background(), client, ListManagersInput{RunnerID: 1})
@@ -2136,6 +2136,10 @@ func TestListManagers_Success(t *testing.T) {
 	}
 	if out.Managers[0].SystemID != "sys-01" {
 		t.Errorf("SystemID = %q, want %q", out.Managers[0].SystemID, "sys-01")
+	}
+	if out.Managers[0].JobExecutionStatus != "running" || out.Managers[1].JobExecutionStatus != "idle" {
+		t.Errorf("JobExecutionStatus = %q and %q, want running and idle",
+			out.Managers[0].JobExecutionStatus, out.Managers[1].JobExecutionStatus)
 	}
 }
 
@@ -2195,6 +2199,21 @@ func TestFormatManagerListMarkdown_Empty(t *testing.T) {
 }
 
 // TestToManagerOutput_Timestamps verifies timestamp fields are formatted when present.
+// TestListManagers_UnreadableCapturedJobExecutionStatus verifies that the
+// runner manager list handler returns an error rather than a half-filled
+// manager when GitLab sends job_execution_status as something that is not a
+// string. The SDK ignores the key its own RunnerManager does not model, so the
+// read of the captured response is the only thing that can notice.
+func TestListManagers_UnreadableCapturedJobExecutionStatus(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"system_id":"s_1","job_execution_status":42}]`)
+	}))
+
+	if _, err := ListManagers(context.Background(), client, ListManagersInput{RunnerID: 1}); err == nil {
+		t.Fatal("error = nil, want the captured decode to fail")
+	}
+}
+
 func TestToManagerOutput_Timestamps(t *testing.T) {
 	createdAt := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
 	contactedAt := time.Date(2026, 1, 15, 11, 30, 0, 0, time.UTC)
@@ -2202,7 +2221,7 @@ func TestToManagerOutput_Timestamps(t *testing.T) {
 		ID:          10,
 		CreatedAt:   &createdAt,
 		ContactedAt: &contactedAt,
-	})
+	}, toolutil.RunnerManagerExtra{})
 	if out.CreatedAt != "2026-01-15T10:00:00Z" {
 		t.Fatalf("CreatedAt = %q, want RFC3339 timestamp", out.CreatedAt)
 	}
