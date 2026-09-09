@@ -2,25 +2,178 @@ package paths
 
 import (
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apishapes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
 
-// recordIn writes a GitLab API record a test can join against.
-func recordIn(t *testing.T, operations map[string]apishapes.Operation) string {
+// response is what a test says one endpoint answers with, written the way a
+// reader of the test wants to see it rather than the way the record stores it.
+//
+// The record keeps the answer in an entity and the endpoint in a route, and a
+// fixture that spelled both would say the same thing twice; recordIn builds the
+// pair, inventing an entity name where a test does not need one.
+type response struct {
+	// Response is the keys the endpoint sends. An endpoint with none is one
+	// the record gives no entity, which is a case in its own right.
+	Response []string
+	// Nested is, per key carrying an object, the keys that object sends.
+	Nested map[string][]string
+	// Entity names the entity, for a test whose subject is the name itself:
+	// a declaration keyed on it, or two routes that must share one.
+	Entity string
+	// Conditions gate a field of this response, by field name. A field with
+	// none is one GitLab always sends.
+	Conditions map[string][]apilive.Condition
+}
+
+// recordIn writes a live GitLab record a test can join against, from a map of
+// endpoints to what each answers with.
+//
+// The key is "METHOD /path" in either spelling a test finds natural, with or
+// without the /api/v4 prefix a caller writes; the record's own mount prefix is
+// what actually goes on disk.
+func recordIn(t *testing.T, operations map[string]response) string {
 	t.Helper()
 	root := t.TempDir()
-	dir := filepath.Join(root, apishapes.DefaultDir)
-	if err := apishapes.Write(dir, apishapes.Document{
-		Source:     apishapes.Source{Ref: "master", RetrievedAt: "2026-09-07", SHA256: "abc", Operations: len(operations)},
-		Operations: operations,
-	}); err != nil {
+	if err := apilive.Write(filepath.Join(root, apilive.DefaultDir), fixtureDocument(operations)); err != nil {
 		t.Fatalf("prepare the record: %v", err)
 	}
 	return root
+}
+
+// fixtureDocument builds the record a fixture describes, in memory, so a test
+// that only needs the two views of it never writes a file.
+func fixtureDocument(operations map[string]response) apilive.Document {
+	doc := apilive.Document{
+		SchemaVersion: apilive.SchemaVersion,
+		Source:        apilive.Source{Image: "gitlab/gitlab-ee:test", Version: "19.3.1-ee", RetrievedAt: "2026-09-09", SHA256: "abc"},
+		Entities:      map[string]apilive.Entity{},
+		Features:      map[string]string{"repository_mirrors": apilive.TierPremium},
+	}
+	for key, answer := range operations {
+		method, path, found := strings.Cut(key, " ")
+		if !found {
+			continue
+		}
+		route := apilive.Route{Method: method, Path: apilive.EndpointPrefix + trimAPIPrefix(path)}
+		if len(answer.Response) > 0 || answer.Entity != "" {
+			route.Entity = answer.Entity
+			if route.Entity == "" {
+				route.Entity = "API::Entities::" + entityFixtureName(key)
+			}
+			doc.Entities[route.Entity] = fixtureEntity(route.Entity, answer, doc.Entities)
+		}
+		doc.Routes = append(doc.Routes, route)
+	}
+	sort.Slice(doc.Routes, func(i, j int) bool {
+		if doc.Routes[i].Path != doc.Routes[j].Path {
+			return doc.Routes[i].Path < doc.Routes[j].Path
+		}
+		return doc.Routes[i].Method < doc.Routes[j].Method
+	})
+	doc.Source.Entities = len(doc.Entities)
+	doc.Source.Routes = len(doc.Routes)
+	doc.Source.Fields = doc.FieldCount()
+	doc.Source.Features = len(doc.Features)
+	return doc
+}
+
+// fixtureRecord is the two views of one fixture the checks take: the endpoint
+// index and the conditions, both read off the same entities, which is the
+// property the port bought and a test should not be able to break.
+func fixtureRecord(operations map[string]response) (*operationIndex, *conditionIndex) {
+	doc := fixtureDocument(operations)
+	return newOperationIndex(doc), newConditionIndex(doc)
+}
+
+// typedCheckOf runs the type grain against a fixture.
+func typedCheckOf(root string, operations map[string]response, published []publishedType) TypedShapeCheck {
+	index, conditions := fixtureRecord(operations)
+	return typedShapeCheck(root, index, conditions, published)
+}
+
+// fixtureEntity turns one fixture answer into the entity that renders it,
+// writing a child entity for each key carrying an object.
+func fixtureEntity(parent string, answer response, entities map[string]apilive.Entity) apilive.Entity {
+	entity := apilive.Entity{}
+	for _, name := range answer.Response {
+		field := apilive.Field{Name: name, Conditions: answer.Conditions[name]}
+		if under, nested := answer.Nested[name]; nested {
+			// Named after the parent as well as the property: two endpoints
+			// that share a shape each write their own child, and a name from
+			// the property alone would have the second overwrite the first,
+			// which is the very union the shape index is being tested for.
+			child := parent + "::" + strings.ToUpper(name[:1]) + name[1:] + "Fixture"
+			fields := make([]apilive.Field, 0, len(under))
+			for _, key := range under {
+				fields = append(fields, apilive.Field{Name: key})
+			}
+			entities[child] = apilive.Entity{Fields: fields}
+			field.Using = child
+		}
+		entity.Fields = append(entity.Fields, field)
+	}
+	return entity
+}
+
+// entityFixtureName invents a stable entity name from an endpoint key, so a
+// fixture that does not care what the entity is called does not have to say.
+func entityFixtureName(key string) string {
+	var out strings.Builder
+	upper := true
+	for _, r := range key {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			if upper {
+				out.WriteString(strings.ToUpper(string(r)))
+				upper = false
+				continue
+			}
+			out.WriteRune(r)
+		default:
+			upper = true
+		}
+	}
+	return out.String()
+}
+
+// trimAPIPrefix accepts a fixture path written the way GitLab's documentation
+// spells it, with the mount prefix and braced placeholders, and returns the
+// path Grape holds.
+//
+// The conversion is a fixture convenience and lives only here: the record's own
+// routes already spell a placeholder `:id`, which is why the production reader
+// has no such translation to do.
+func trimAPIPrefix(path string) string {
+	for _, prefix := range []string{"/api/v4", "/api"} {
+		if trimmed, found := strings.CutPrefix(path, prefix); found {
+			path = trimmed
+			break
+		}
+	}
+	if path == "" {
+		return "/"
+	}
+	var out strings.Builder
+	for i := 0; i < len(path); i++ {
+		if path[i] != '{' {
+			out.WriteByte(path[i])
+			continue
+		}
+		end := strings.IndexByte(path[i:], '}')
+		if end < 0 {
+			out.WriteString(path[i:])
+			break
+		}
+		out.WriteByte(':')
+		out.WriteString(path[i+1 : i+end])
+		i += end
+	}
+	return out.String()
 }
 
 // TestShapeCheck_JoinsOurSpellingToGitLabs verifies the three ways an endpoint
@@ -28,7 +181,7 @@ func recordIn(t *testing.T, operations map[string]apishapes.Operation) string {
 // does not match contributes no names, and a package whose rows all miss would
 // have every field of its output reported as one GitLab does not send.
 func TestShapeCheck_JoinsOurSpellingToGitLabs(t *testing.T) {
-	root := recordIn(t, map[string]apishapes.Operation{
+	root := recordIn(t, map[string]response{
 		"GET /api/v4/projects/{id}/issues/{issue_iid}": {Response: []string{"iid", "state", "title"}},
 		"GET /api/v4/version":                          {Response: []string{"revision", "version"}},
 	})
@@ -88,7 +241,7 @@ func TestShapeCheck_JoinsOurSpellingToGitLabs(t *testing.T) {
 // publishing fields GitLab's own document does not list for any endpoint the
 // package calls.
 func TestShapeCheck_APublishedFieldNoEndpointSends_IsReported(t *testing.T) {
-	root := recordIn(t, map[string]apishapes.Operation{
+	root := recordIn(t, map[string]response{
 		"GET /api/v4/projects/{id}/merge_requests/{iid}/approvals": {
 			Response: []string{"approved", "approved_by", "user_can_approve", "user_has_approved"},
 		},
@@ -126,7 +279,7 @@ func TestShapeCheck_APublishedFieldNoEndpointSends_IsReported(t *testing.T) {
 // rather than that it sends nothing: reporting against one would call every
 // field of that package's output a field GitLab never sends.
 func TestShapeCheck_APackageWhoseEndpointsDeclareNothing_IsNotJudged(t *testing.T) {
-	root := recordIn(t, map[string]apishapes.Operation{
+	root := recordIn(t, map[string]response{
 		"DELETE /api/v4/projects/{id}/silent": {},
 	})
 	rows := []requestinventory.Row{{Package: "internal/tools/quiet", Kind: "rest", Method: "DELETE", Path: "/projects/:project_id/silent"}}
@@ -146,7 +299,7 @@ func TestShapeCheck_APackageWhoseEndpointsDeclareNothing_IsNotJudged(t *testing.
 // where the record holds one, and a reader weighing the finding would credit it
 // with evidence that was never there.
 func TestShapeCheck_AnEndpointWithNoDescribedResponse_IsNotCountedAsSearched(t *testing.T) {
-	root := recordIn(t, map[string]apishapes.Operation{
+	root := recordIn(t, map[string]response{
 		"GET /api/v4/projects/{id}/thing":    {Response: []string{"described"}},
 		"DELETE /api/v4/projects/{id}/thing": {},
 	})
@@ -175,7 +328,7 @@ func TestShapeCheck_AnEndpointWithNoDescribedResponse_IsNotCountedAsSearched(t *
 // operation there and counting it as unmatched would report a miss that is only
 // about looking in the wrong document.
 func TestShapeCheck_GraphQLRows_AreNotJoined(t *testing.T) {
-	root := recordIn(t, map[string]apishapes.Operation{"GET /api/v4/version": {Response: []string{"version"}}})
+	root := recordIn(t, map[string]response{"GET /api/v4/version": {Response: []string{"version"}}})
 	rows := []requestinventory.Row{{Package: "internal/tools/epics", Kind: "graphql", Method: "POST", Path: "/graphql", Operation: "query"}}
 
 	check := shapeCheck(root, rows, nil)
@@ -205,7 +358,7 @@ func TestShapeCheck_NoRecord_DoesNotRun(t *testing.T) {
 // arbitrarily would report the other's fields as unpublished, which is a
 // finding about the lookup rather than about GitLab.
 func TestShapeCheck_TwoOperationsShareAShape_UnionTheirResponses(t *testing.T) {
-	root := recordIn(t, map[string]apishapes.Operation{
+	root := recordIn(t, map[string]response{
 		"GET /api/v4/groups/{id}/thing":    {Response: []string{"from_groups"}},
 		"GET /api/v4/groups/{name}/thing":  {Response: []string{"from_name"}},
 		"GET /api/v4/projects/{id}/absent": {},
@@ -227,7 +380,7 @@ func TestShapeCheck_TwoOperationsShareAShape_UnionTheirResponses(t *testing.T) {
 // an entry nothing can address contributes no response names, and inventing a
 // method for it would answer a lookup with somebody else's fields.
 func TestShapeCheck_ARecordKeyThatNamesNoMethod_IsSkipped(t *testing.T) {
-	root := recordIn(t, map[string]apishapes.Operation{
+	root := recordIn(t, map[string]response{
 		"malformed-key-with-no-method": {Response: []string{"never_seen"}},
 		"GET /api/v4/version":          {Response: []string{"version"}},
 	})

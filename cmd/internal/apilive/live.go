@@ -199,6 +199,12 @@ func Write(dir string, doc Document) error {
 		return fmt.Errorf("encoding the live API record: %w", err)
 	}
 	encoded = append(encoded, '\n')
+	// The directory is created rather than required: the generator writes into
+	// a checkout that has it, and a test writes into a temporary root that does
+	// not, and neither should have to know which case it is in.
+	if dirErr := os.MkdirAll(dir, 0o750); dirErr != nil {
+		return fmt.Errorf("preparing the directory for the live API record: %w", dirErr)
+	}
 	if writeErr := os.WriteFile(Path(dir), encoded, 0o600); writeErr != nil {
 		return fmt.Errorf("writing the live API record: %w", writeErr)
 	}

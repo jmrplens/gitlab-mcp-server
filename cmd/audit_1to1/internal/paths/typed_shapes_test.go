@@ -8,14 +8,9 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apishapes"
 )
 
 // indexOf builds the operation index a type-grain comparison looks up in.
-func indexOf(operations map[string]apishapes.Operation) *operationIndex {
-	return newOperationIndex(apishapes.Document{Operations: operations})
-}
-
 // stubTypeGrainInputs replaces the two loaders the real tree resolves: the
 // typed package load that costs twenty seconds and the client-go source in a
 // module cache.
@@ -41,7 +36,7 @@ func stubTypeGrainInputs(t *testing.T, pairings structs.Pairings, loadErr error,
 // the type used to publish beside them are the response of the POST at
 // /approvals, which was deprecated in GitLab 16.0 and which client-go no longer
 // has a method for.
-var approvalOperations = map[string]apishapes.Operation{
+var approvalOperations = map[string]response{
 	"GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals": {
 		Response: []string{"approved", "approved_by", "user_can_approve", "user_has_approved"},
 	},
@@ -94,7 +89,7 @@ func TestTypedShapeCheck_TheShapeIssue580Fixed_IsTheOneItWasBuiltFor(t *testing.
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			check := typedShapeCheck("", indexOf(approvalOperations), []publishedType{{
+			check := typedCheckOf("", approvalOperations,[]publishedType{{
 				Package: "internal/tools/mrapprovals", Name: "ConfigOutput", Fields: testCase.fields,
 			}})
 
@@ -161,7 +156,7 @@ func TestTypedShapeCheck_ATypeNamedAsAField_IsJudgedWhenAConverterPairsIt(t *tes
 		t.Run(testCase.name, func(t *testing.T) {
 			stubTypeGrainInputs(t, testCase.pairings, nil, approvalRoutes)
 
-			check := typedShapeCheck("", indexOf(approvalOperations), []publishedType{{
+			check := typedCheckOf("", approvalOperations,[]publishedType{{
 				Package: "internal/tools/mrapprovals", Name: "ConfigOutput",
 				Fields: []string{"approved", "title"}, Inner: true, Payload: testCase.payload,
 			}})
@@ -188,7 +183,7 @@ func TestTypedShapeCheck_ATypeNamedAsAField_IsJudgedWhenAConverterPairsIt(t *tes
 func TestTypedShapeCheck_AFinding_NamesWhatWasSearched(t *testing.T) {
 	stubTypeGrainInputs(t, approvalPairing, nil, approvalRoutes)
 
-	check := typedShapeCheck("", indexOf(approvalOperations), []publishedType{{
+	check := typedCheckOf("", approvalOperations,[]publishedType{{
 		Package: "internal/tools/mrapprovals", Name: "ConfigOutput", Fields: []string{"approved", "title"},
 	}})
 
@@ -224,7 +219,7 @@ func TestTypedShapeCheck_WhatItRefusesToJudge_IsCountedAndNotReported(t *testing
 		name       string
 		pairings   structs.Pairings
 		routes     map[string][]sdkRoute
-		operations map[string]apishapes.Operation
+		operations map[string]response
 		want       TypedShapeCheck
 	}{
 		{
@@ -251,7 +246,7 @@ func TestTypedShapeCheck_WhatItRefusesToJudge_IsCountedAndNotReported(t *testing
 			name:       "the document carries none of the routes",
 			pairings:   approvalPairing,
 			routes:     approvalRoutes,
-			operations: map[string]apishapes.Operation{"GET /api/v4/version": {Response: []string{"version"}}},
+			operations: map[string]response{"GET /api/v4/version": {Response: []string{"version"}}},
 			want: TypedShapeCheck{
 				Ran: true, SkippedNoSchema: 1,
 				Skipped: SkippedTypes{NoSchema: []string{"mrapprovals.ConfigOutput"}},
@@ -261,7 +256,7 @@ func TestTypedShapeCheck_WhatItRefusesToJudge_IsCountedAndNotReported(t *testing
 			name:     "the document names the routes and no response for them",
 			pairings: approvalPairing,
 			routes:   approvalRoutes,
-			operations: map[string]apishapes.Operation{
+			operations: map[string]response{
 				"GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals": {},
 				"POST /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approve":  {},
 			},
@@ -275,7 +270,7 @@ func TestTypedShapeCheck_WhatItRefusesToJudge_IsCountedAndNotReported(t *testing
 		t.Run(testCase.name, func(t *testing.T) {
 			stubTypeGrainInputs(t, testCase.pairings, nil, testCase.routes)
 
-			check := typedShapeCheck("", indexOf(testCase.operations), []publishedType{{
+			check := typedCheckOf("", testCase.operations,[]publishedType{{
 				Package: "internal/tools/mrapprovals", Name: "ConfigOutput", Fields: []string{"invented"},
 			}})
 
@@ -296,11 +291,11 @@ func TestTypedShapeCheck_ALooseMatch_IsNotAccepted(t *testing.T) {
 		"MergeRequestApprovals": {{Method: "GET", Path: "/projects/:/merge_requests/:/approvals/extra"}},
 	})
 
-	check := typedShapeCheck("", indexOf(map[string]apishapes.Operation{
+	check := typedCheckOf("", map[string]response{
 		"GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals/{approval_id}": {
 			Response: []string{"approved"},
 		},
-	}), []publishedType{{
+	}, []publishedType{{
 		Package: "internal/tools/mrapprovals", Name: "ConfigOutput", Fields: []string{"approved"},
 	}})
 
@@ -322,10 +317,10 @@ func TestTypedShapeCheck_ARouteNothingWasSearchedIn_IsNotNamed(t *testing.T) {
 		{Method: "GET", Path: "/projects/:/merge_requests/:/approval_state"},
 	}})
 
-	check := typedShapeCheck("", indexOf(map[string]apishapes.Operation{
+	check := typedCheckOf("", map[string]response{
 		"GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals": {Response: []string{"approved"}},
 		"POST /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approve":  {},
-	}), []publishedType{{
+	}, []publishedType{{
 		Package: "internal/tools/mrapprovals", Name: "ConfigOutput", Fields: []string{"title"},
 	}})
 
@@ -364,10 +359,10 @@ func TestTypedShapeCheck_OneTypeFromSeveralSDKStructs_UnionsTheirOperations(t *t
 		"GroupLabel": {{Method: "GET", Path: "/groups/:/labels", Many: true}},
 	})
 
-	check := typedShapeCheck("", indexOf(map[string]apishapes.Operation{
+	check := typedCheckOf("", map[string]response{
 		"GET /api/v4/projects/{id}/labels": {Response: []string{"id", "name"}},
 		"GET /api/v4/groups/{id}/labels":   {Response: []string{"id", "subscribed"}},
-	}), []publishedType{{
+	}, []publishedType{{
 		Package: "internal/tools/labeldata", Name: "Output",
 		Fields: []string{"id", "invented", "name", "subscribed"},
 	}})
@@ -401,7 +396,7 @@ func TestTypedShapeCheck_WithoutItsInputs_DoesNotRun(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			stubTypeGrainInputs(t, testCase.pairings, testCase.err, approvalRoutes)
 
-			check := typedShapeCheck("", indexOf(approvalOperations), []publishedType{{
+			check := typedCheckOf("", approvalOperations,[]publishedType{{
 				Package: "internal/tools/mrapprovals", Name: "ConfigOutput", Fields: []string{"title"},
 			}})
 
@@ -439,7 +434,7 @@ func TestShapeCheck_BothGrains_AreReportedTogether(t *testing.T) {
 // gives the object under approved_by. It is the shape the nested level was
 // added for: approved_by carries a user and a timestamp, and holding the type
 // that models it against the top-level names would condemn both.
-var approvedByOperations = map[string]apishapes.Operation{
+var approvedByOperations = map[string]response{
 	"GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals": {
 		Response: []string{"approved", "approved_by", "user_can_approve", "user_has_approved"},
 		Nested:   map[string][]string{"approved_by": {"approved_at", "user"}},
@@ -466,7 +461,7 @@ var approvalConfigWithApprovers = publishedType{
 func TestTypedShapeCheck_ANestedType_IsJudgedUnderItsOwnProperty(t *testing.T) {
 	stubTypeGrainInputs(t, approvalPairing, nil, approvalRoutes)
 
-	check := typedShapeCheck("", indexOf(approvedByOperations), []publishedType{approvalConfigWithApprovers})
+	check := typedCheckOf("", approvedByOperations,[]publishedType{approvalConfigWithApprovers})
 
 	if check.NestedCompared != 1 {
 		t.Errorf("NestedCompared = %d, want the one nested type held against approved_by", check.NestedCompared)
@@ -487,7 +482,7 @@ func TestTypedShapeCheck_ANestedFieldTheObjectDoesNotCarry_IsReportedUnderIt(t *
 		"approved_by": {Name: "ApproverOutput", Fields: []string{"approved_at", "invented", "user"}},
 	}
 
-	check := typedShapeCheck("", indexOf(approvedByOperations), []publishedType{candidate})
+	check := typedCheckOf("", approvedByOperations,[]publishedType{candidate})
 
 	want := []UnpublishedField{{
 		Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ApproverOutput",
@@ -507,7 +502,7 @@ func TestTypedShapeCheck_ANestedFieldTheObjectDoesNotCarry_IsReportedUnderIt(t *
 func TestTypedShapeCheck_ANestedPropertyTheRecordDescribesNoObjectFor_IsNotJudged(t *testing.T) {
 	stubTypeGrainInputs(t, approvalPairing, nil, approvalRoutes)
 
-	check := typedShapeCheck("", indexOf(approvalOperations), []publishedType{approvalConfigWithApprovers})
+	check := typedCheckOf("", approvalOperations,[]publishedType{approvalConfigWithApprovers})
 
 	if check.Compared != 1 {
 		t.Errorf("Compared = %d, want the top-level type still judged", check.Compared)
@@ -524,7 +519,7 @@ func TestTypedShapeCheck_ANestedPropertyTheRecordDescribesNoObjectFor_IsNotJudge
 // union was written to avoid.
 func TestTypedShapeCheck_TwoOperationsSharingAShape_UnionTheirNestedProperties(t *testing.T) {
 	stubTypeGrainInputs(t, approvalPairing, nil, approvalRoutes)
-	operations := map[string]apishapes.Operation{
+	operations := map[string]response{
 		"GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals": {
 			Response: []string{"approved_by"},
 			Nested:   map[string][]string{"approved_by": {"user"}},
@@ -537,7 +532,7 @@ func TestTypedShapeCheck_TwoOperationsSharingAShape_UnionTheirNestedProperties(t
 	candidate := approvalConfigWithApprovers
 	candidate.Fields = []string{"approved_by"}
 
-	check := typedShapeCheck("", indexOf(operations), []publishedType{candidate})
+	check := typedCheckOf("", operations,[]publishedType{candidate})
 
 	if len(check.Nested) != 0 {
 		t.Errorf("nested findings = %+v, want none: between them the two operations name both properties", check.Nested)

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apishapes"
 )
 
 // TypedShapeCheck is the same question [ShapeCheck] asks, at type grain: not
@@ -171,14 +170,13 @@ var (
 
 // typedShapeCheck compares each output type with the responses of the
 // operations its client-go struct models.
-func typedShapeCheck(root string, index *operationIndex, published []publishedType) TypedShapeCheck {
+func typedShapeCheck(root string, index *operationIndex, conditions *conditionIndex, published []publishedType) TypedShapeCheck {
 	pairings, err := collectPairings(root)
 	if err != nil || pairings.ClientGoDir == "" {
 		return TypedShapeCheck{}
 	}
 	routes := readRoutes(pairings.ClientGoDir)
 	sdkTypes := pairedSDKTypes(pairings.Outputs)
-	conditions := newConditionIndex(root)
 
 	check := TypedShapeCheck{Ran: true}
 	for _, candidate := range published {
@@ -298,15 +296,15 @@ func describedRoutes(paired []string, routes map[string][]sdkRoute, index *opera
 			// also right on its own terms for this join: a client-go route is a
 			// template, so its placeholders are already placeholders, and there
 			// is no fixture value in one for a loose match to be evidence about.
-			operation, quality, _ := index.lookup(route.Method, route.Path)
-			if quality != matchExact || len(operation.Response) == 0 {
+			answer, quality, _ := index.lookup(route.Method, route.Path)
+			if quality != matchExact || len(answer.Response) == 0 {
 				continue
 			}
 			if name := route.operation(); !seen[name] {
 				seen[name] = true
 				described.Operations = append(described.Operations, name)
 			}
-			described.absorb(operation)
+			described.absorb(answer)
 		}
 	}
 	sort.Strings(described.Operations)
@@ -316,7 +314,7 @@ func describedRoutes(paired []string, routes map[string][]sdkRoute, index *opera
 // absorb adds what one searched response says: the component it named, when
 // none was named yet, its top-level property names, and the names under each
 // property that carries an object.
-func (d *describedResponses) absorb(operation apishapes.Operation) {
+func (d *describedResponses) absorb(operation operation) {
 	for _, name := range operation.Response {
 		d.Known[name] = true
 		if operation.Entity != "" && d.EntityOf[name] == "" {

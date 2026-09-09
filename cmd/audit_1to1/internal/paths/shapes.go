@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apishapes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
 
@@ -142,13 +142,13 @@ func (f UnpublishedField) declared() bool { return f.Category != "" }
 // The record is read from the repository rather than fetched, so this needs no
 // network and runs wherever the rest of the scope runs.
 func shapeCheck(root string, requests []requestinventory.Row, published []publishedType) ShapeCheck {
-	record, err := apishapes.Read(recordDir(root))
+	record, err := apilive.Read(recordDir(root))
 	if err != nil {
 		return ShapeCheck{Ran: false}
 	}
 
 	index := newOperationIndex(record)
-	check := ShapeCheck{Ran: true, Record: apishapes.FileName}
+	check := ShapeCheck{Ran: true, Record: apilive.FileName}
 
 	segments := map[string]*UntemplatedSegment{}
 	byPackage := map[string]map[string]bool{}
@@ -199,8 +199,9 @@ func shapeCheck(root string, requests []requestinventory.Row, published []publis
 
 	check.Untemplated = sortedSegments(segments)
 	check.Unpublished = unpublishedFields(published, byPackage, endpointsPerPackage)
-	check.Typed = typedShapeCheck(root, index, published)
-	check.Sent = sentCheck(root, sources, published)
+	conditions := newConditionIndex(record)
+	check.Typed = typedShapeCheck(root, index, conditions, published)
+	check.Sent = sentCheck(conditions, sources, published)
 	check.Sent.Unsurfaced, check.Typed.Unsurfaced, check.Sent.UnusedDeclarations = classifySentFindings(declaredUnsurfaced, check.Sent.Unsurfaced, check.Typed.Unsurfaced)
 	return check
 }
@@ -278,46 +279,76 @@ const (
 	matchLoose
 )
 
+// operation is one endpoint of the live record in the shape the joins here ask
+// for: what GitLab answers it with, and the entity that answer renders.
+//
+// It is assembled rather than stored, because the record keeps the two apart:
+// a route names an entity and the entity holds the fields, which is the edge a
+// generated document flattens away. Assembling it here is what lets a nested
+// comparison join on `expose :author, using: UserBasic` rather than on a
+// property that happened to look like an object.
+type operation struct {
+	// Entity is the endpoint's `desc … success/entity` annotation, as the Ruby
+	// name the record keys entities by. Empty for an endpoint annotated with
+	// none, which is not a finding: 685 of 2110 routes render something the
+	// annotation does not name.
+	Entity string
+	// Response is the keys the entity sends, sorted.
+	Response []string
+	// Nested is, per field rendering an entity of its own, the keys that child
+	// sends.
+	Nested map[string][]string
+}
+
 // operationIndex looks an endpoint up by method and path.
 type operationIndex struct {
 	// byPath is keyed on the path with placeholder names kept, which is the
-	// exact match.
-	byPath map[string]apishapes.Operation
+	// exact match. Grape's placeholders are already spelled the way the
+	// inventory records them, so this hits far more often than it did against
+	// a generated document.
+	byPath map[string]operation
 	// byShape is keyed on the path with every placeholder collapsed to one
-	// token, which is what lets our `:project_id` meet GitLab's `{id}`. Two
-	// operations can share a shape, so the value is the union of their
-	// responses: taking one arbitrarily would report the other's fields as
-	// unpublished.
-	byShape map[string]apishapes.Operation
+	// token, which is what lets our `:project_id` meet Grape's `:id`. Two
+	// routes can share a shape, so the value is the union of their responses:
+	// taking one arbitrarily would report the other's fields as unpublished.
+	byShape map[string]operation
 }
 
 // placeholder is the token every identifier segment collapses to when a path is
 // reduced to its shape.
 const placeholder = ":"
 
-func newOperationIndex(record apishapes.Document) *operationIndex {
+// newOperationIndex indexes every mounted route by the path a caller writes.
+//
+// A route with no entity annotation is indexed too, and deliberately: the join
+// quality it reports is about whether this server's request reached an endpoint
+// GitLab has, and dropping the unannotated ones would count a real endpoint as
+// one GitLab does not serve. Whether there was an answer to search is a
+// separate question, asked of the operation afterwards.
+func newOperationIndex(record apilive.Document) *operationIndex {
 	index := &operationIndex{
-		byPath:  make(map[string]apishapes.Operation, len(record.Operations)),
-		byShape: make(map[string]apishapes.Operation, len(record.Operations)),
+		byPath:  make(map[string]operation, len(record.Routes)),
+		byShape: make(map[string]operation, len(record.Routes)),
 	}
-	for key, operation := range record.Operations {
-		method, path, found := strings.Cut(key, " ")
-		if !found {
-			continue
+	for _, route := range record.Routes {
+		normalized := apilive.NormalizePath(route.Path)
+		built := operation{
+			Entity:   route.Entity,
+			Response: record.FieldNames(route.Entity),
+			Nested:   record.NestedNames(route.Entity),
 		}
-		normalized := apishapes.NormalizePath(path)
-		index.byPath[method+" "+normalized] = operation
-		shapeKey := method + " " + pathShape(normalized)
+		if _, taken := index.byPath[route.Method+" "+normalized]; !taken {
+			index.byPath[route.Method+" "+normalized] = built
+		}
+		shapeKey := route.Method + " " + pathShape(normalized)
 		merged := index.byShape[shapeKey]
-		merged.Response = union(merged.Response, operation.Response)
-		merged.Params = union(merged.Params, operation.Params)
-		merged.Body = union(merged.Body, operation.Body)
-		merged.Nested = unionNested(merged.Nested, operation.Nested)
-		// The component is the first one an operation of this shape named.
-		// Two operations sharing a shape nearly always render one entity,
-		// and a merged name would join the conditions record on nothing.
+		merged.Response = union(merged.Response, built.Response)
+		merged.Nested = unionNested(merged.Nested, built.Nested)
+		// The entity is the first one a route of this shape named. Two routes
+		// sharing a shape nearly always render one entity, and a merged name
+		// would resolve to no class at all.
 		if merged.Entity == "" {
-			merged.Entity = operation.Entity
+			merged.Entity = built.Entity
 		}
 		index.byShape[shapeKey] = merged
 	}
@@ -325,15 +356,15 @@ func newOperationIndex(record apishapes.Document) *operationIndex {
 }
 
 // lookup finds the operation a recorded request names, and says how. When the
-// match needed a literal segment of ours to stand where GitLab has a
+// match needed a literal segment of ours to stand where Grape has a
 // placeholder, that segment is returned: it is a fixture value the recorder
 // failed to recognize as an identifier.
-func (index *operationIndex) lookup(method, path string) (apishapes.Operation, matchQuality, string) {
-	if operation, ok := index.byPath[method+" "+path]; ok {
-		return operation, matchExact, ""
+func (index *operationIndex) lookup(method, path string) (operation, matchQuality, string) {
+	if found, ok := index.byPath[method+" "+path]; ok {
+		return found, matchExact, ""
 	}
-	if operation, ok := index.byShape[method+" "+pathShape(path)]; ok {
-		return operation, matchExact, ""
+	if found, ok := index.byShape[method+" "+pathShape(path)]; ok {
+		return found, matchExact, ""
 	}
 
 	// One literal segment at a time, because two would stop being evidence
@@ -347,11 +378,11 @@ func (index *operationIndex) lookup(method, path string) (apishapes.Operation, m
 		trial := make([]string, len(segments))
 		copy(trial, segments)
 		trial[i] = placeholder
-		if operation, ok := index.byShape[method+" "+pathShape(strings.Join(trial, "/"))]; ok {
-			return operation, matchLoose, segment
+		if found, ok := index.byShape[method+" "+pathShape(strings.Join(trial, "/"))]; ok {
+			return found, matchLoose, segment
 		}
 	}
-	return apishapes.Operation{}, matchNone, ""
+	return operation{}, matchNone, ""
 }
 
 // pathShape reduces a path to its segments with every placeholder collapsed, so
