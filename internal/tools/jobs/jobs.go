@@ -477,6 +477,9 @@ type BridgeOutput struct {
 	Pipeline           *PipelineInfoObject `json:"pipeline,omitempty"`
 	User               *UserObject         `json:"user,omitempty"`
 	DownstreamPipeline *PipelineInfoObject `json:"downstream_pipeline,omitempty"`
+	// Project carries the one key GitLab renders under it on a job: whether
+	// the job token may reach outside this project.
+	Project *ProjectObject `json:"project,omitempty"`
 }
 
 // BridgeListOutput holds a paginated list of bridge jobs.
@@ -491,7 +494,7 @@ type BridgeListOutput struct {
 // the embedded commit, pipeline, user, and downstream_pipeline sub-objects
 // on their canonical keys (nested objects trimmed to the documented Jobs API
 // field set per doc/api/jobs.md).
-func BridgeToOutput(b *gl.Bridge) BridgeOutput {
+func BridgeToOutput(b *gl.Bridge, extra toolutil.BridgeExtra) BridgeOutput {
 	out := BridgeOutput{
 		ID:                 b.ID,
 		Name:               b.Name,
@@ -509,6 +512,7 @@ func BridgeToOutput(b *gl.Bridge) BridgeOutput {
 		Pipeline:           pipelineInfoValueObject(b.Pipeline),
 		User:               userObject(b.User),
 		DownstreamPipeline: pipelineInfoObject(b.DownstreamPipeline),
+		Project:            bridgeProjectObject(extra.Project),
 	}
 	if b.CreatedAt != nil {
 		out.CreatedAt = b.CreatedAt.Format(time.RFC3339)
@@ -546,14 +550,19 @@ func ListBridges(ctx context.Context, client *gitlabclient.Client, input BridgeL
 	}
 	applyListOpts(opts, input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	bridges, resp, err := client.GL().Jobs.ListPipelineBridges(string(input.ProjectID), input.PipelineID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return BridgeListOutput{}, toolutil.WrapErrWithStatusHint("jobListBridges", err, http.StatusNotFound,
 			"verify pipeline_id with gitlab_pipeline_list. Bridges only exist for pipelines that trigger downstream/multi-project pipelines")
 	}
+	extras, err := toolutil.CapturedBridges(captured, len(bridges))
+	if err != nil {
+		return BridgeListOutput{}, toolutil.WrapErr("jobListBridges", err)
+	}
 	out := make([]BridgeOutput, len(bridges))
 	for i, b := range bridges {
-		out[i] = BridgeToOutput(b)
+		out[i] = BridgeToOutput(b, extras[i])
 	}
 	return BridgeListOutput{Bridges: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }

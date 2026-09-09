@@ -59,6 +59,9 @@ type Output struct {
 	DependencyFilePath string                `json:"dependency_file_path"`
 	Vulnerabilities    []VulnerabilityOutput `json:"vulnerabilities,omitempty"`
 	Licenses           []LicenseOutput       `json:"licenses,omitempty"`
+	// Malware is sent to a caller allowed to read the project's
+	// vulnerabilities, and only while the instance has the flag enabled.
+	Malware bool `json:"malware,omitempty"`
 }
 
 // ListOutput holds a paginated list of dependencies.
@@ -83,12 +86,15 @@ type DownloadOutput struct {
 	Content string `json:"content"`
 }
 
-func toOutput(d *gl.Dependency) Output {
+// toOutput converts the GitLab API response to the tool output format, filling
+// from the decoded dependency and from what the capture read beside it.
+func toOutput(d *gl.Dependency, extra toolutil.DependencyExtra) Output {
 	o := Output{
 		Name:               d.Name,
 		Version:            d.Version,
 		PackageManager:     string(d.PackageManager),
 		DependencyFilePath: d.DependencyFilePath,
+		Malware:            extra.Malware,
 	}
 	for _, v := range d.Vulnerabilities {
 		o.Vulnerabilities = append(o.Vulnerabilities, VulnerabilityOutput{
@@ -136,14 +142,19 @@ func ListDeps(ctx context.Context, client *gitlabclient.Client, input ListInput)
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	deps, resp, err := client.GL().Dependencies.ListProjectDependencies(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("dependencyList", err, http.StatusForbidden,
 			"requires Developer role + Ultimate license (dependency scanning is Ultimate-only); verify project_id with gitlab_project_list; package_manager filter values: bundler, yarn, npm, maven, composer, pip, etc.")
 	}
+	extras, err := toolutil.CapturedDependencies(captured, len(deps))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("dependencyList", err)
+	}
 	out := make([]Output, len(deps))
 	for i, d := range deps {
-		out[i] = toOutput(d)
+		out[i] = toOutput(d, extras[i])
 	}
 	return ListOutput{Dependencies: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }

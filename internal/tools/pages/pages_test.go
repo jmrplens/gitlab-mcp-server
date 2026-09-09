@@ -12,6 +12,8 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -205,7 +207,7 @@ func TestToDomainOutput_FullCertificate(t *testing.T) {
 			Certificate:     "-----BEGIN CERTIFICATE-----",
 			CertificateText: "Certificate:\n    Data:",
 		},
-	})
+	}, toolutil.PagesDomainExtra{})
 	if out.Certificate.Certificate != "-----BEGIN CERTIFICATE-----" {
 		t.Errorf("Certificate = %q, want PEM body", out.Certificate.Certificate)
 	}
@@ -798,7 +800,7 @@ func TestConverters_EdgeCases(t *testing.T) {
 		t.Fatalf("toPagesOutput(nil) = %+v, want zero output", out)
 	}
 
-	if out := toDomainOutput(nil); out.Domain != "" || out.ProjectID != 0 {
+	if out := toDomainOutput(nil, toolutil.PagesDomainExtra{}); out.Domain != "" || out.ProjectID != 0 {
 		t.Fatalf("toDomainOutput(nil) = %+v, want zero output", out)
 	}
 
@@ -813,12 +815,17 @@ func TestConverters_EdgeCases(t *testing.T) {
 			Subject:    testDomain,
 			Expiration: &expiration,
 		},
+	}, toolutil.PagesDomainExtra{
+		CertificateExpiration: &toolutil.PagesCertificateExpirationOutput{Expired: true, Expiration: &expiration},
 	})
 	if out.EnabledUntil == "" {
 		t.Fatal("expected EnabledUntil to be formatted")
 	}
 	if out.Certificate.Expiration == "" {
 		t.Fatal("expected certificate expiration to be formatted")
+	}
+	if out.CertificateExpiration == nil || !out.CertificateExpiration.Expired {
+		t.Fatal("expected the certificate_expiration object read beside the decode")
 	}
 }
 
