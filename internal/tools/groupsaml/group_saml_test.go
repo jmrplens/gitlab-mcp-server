@@ -14,13 +14,18 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestToSAMLUserOutput_AllFields verifies the 1:1 user conversion surfaces every
 // standard user field, formats all timestamp and IP fields, maps the identities,
-// scim_identities, custom_attributes, and created_by sub-objects, and skips nil
-// slice element pointers while mapping valid ones.
+// scim_identities, custom_attributes, and created_by sub-objects, skips nil
+// slice element pointers while mapping valid ones, and copies every key of the
+// captured extra onto the output. The extra is checked here rather than in its
+// own test because a key added to toolutil.UserExtra and not copied would be a
+// schema field nothing fills.
 func TestToSAMLUserOutput_AllFields(t *testing.T) {
+	followers, following, followed := int64(12), int64(34), true
 	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	confirmed := time.Date(2026, 1, 2, 4, 0, 0, 0, time.UTC)
 	lastAct := gl.ISOTime(time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC))
@@ -72,22 +77,41 @@ func TestToSAMLUserOutput_AllFields(t *testing.T) {
 			AvatarURL: "https://x/admin.png", WebURL: "https://x/admin",
 			CreatedAt: creatorCreated.Format(time.RFC3339),
 		},
+		CommitEmail: "commit@example.com", Discord: "jdoe#1", GitHub: "jdoe",
+		LocalTime: "2:30 PM", PreferredLanguage: "en", Pronouns: "she/her",
+		WorkInformation: "Org", Followers: &followers, Following: &following,
+		IsFollowed: &followed,
 	}
-	if out := toSAMLUserOutput(u); !reflect.DeepEqual(out, want) {
+	extra := toolutil.UserExtra{
+		CommitEmail: "commit@example.com", Discord: "jdoe#1", GitHub: "jdoe",
+		LocalTime: "2:30 PM", PreferredLanguage: "en", Pronouns: "she/her",
+		WorkInformation: "Org", Followers: &followers, Following: &following,
+		IsFollowed: &followed,
+	}
+	if out := toSAMLUserOutput(u, extra); !reflect.DeepEqual(out, want) {
 		t.Errorf("toSAMLUserOutput mismatch:\n got %+v\nwant %+v", out, want)
 	}
 }
 
 // TestToSAMLUserOutput_NilOptionals verifies the converter leaves optional
-// pointer-backed fields zero-valued when the upstream user omits them, and that
-// created_by stays nil.
+// pointer-backed fields zero-valued when the upstream user omits them, that
+// created_by stays nil, and that a response GitLab sent none of the captured
+// keys on leaves the three counts nil rather than zero: a caller who may not
+// read the profile is told nothing, not that the user has no followers.
 func TestToSAMLUserOutput_NilOptionals(t *testing.T) {
-	out := toSAMLUserOutput(&gl.User{ID: 1, Username: "min"})
+	out := toSAMLUserOutput(&gl.User{ID: 1, Username: "min"}, toolutil.UserExtra{})
 	if out.ConfirmedAt != "" || out.CurrentSignInIP != "" || out.LastSignInAt != "" || out.LastSignInIP != "" {
 		t.Errorf("expected empty optional time/IP fields, got %+v", out)
 	}
 	if out.CreatedBy != nil || out.Identities != nil || out.CustomAttributes != nil {
 		t.Errorf("expected nil slices/created_by, got %+v", out)
+	}
+	if out.Followers != nil || out.Following != nil || out.IsFollowed != nil {
+		t.Errorf("follow counts = %v/%v/%v, want all nil", out.Followers, out.Following, out.IsFollowed)
+	}
+	if out.CommitEmail != "" || out.Discord != "" || out.GitHub != "" || out.LocalTime != "" ||
+		out.PreferredLanguage != "" || out.Pronouns != "" || out.WorkInformation != "" {
+		t.Errorf("profile keys = %+v, want every one empty", out)
 	}
 }
 
@@ -147,6 +171,69 @@ func TestSAMLUsersList_Success(t *testing.T) {
 	md := FormatSAMLUsersListMarkdown(out)
 	if !strings.Contains(md, "[jdoe](https://gitlab.example.com/jdoe)") {
 		t.Errorf("expected clickable username link in markdown, got: %s", md)
+	}
+}
+
+// TestSAMLUsersList_PairsTheCapturedKeysByPosition verifies the ten keys
+// lib/api/entities/user_public.rb sends that client-go's User declares on no
+// field of its own reach the output, one captured extra per row in order, and
+// that a row GitLab sent no follow counts on leaves them absent rather than
+// zero. GitLab presents this endpoint `with: ::API::Entities::UserPublic`, so
+// these ten are the whole set it can carry.
+func TestSAMLUsersList_PairsTheCapturedKeysByPosition(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/saml_users" {
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id":42,"username":"jdoe","commit_email":"c@example.com","discord":"jdoe#1","github":"jdoe",
+				 "local_time":"2:30 PM","preferred_language":"en","pronouns":"she/her","work_information":"Org",
+				 "followers":12,"following":34,"is_followed":true},
+				{"id":43,"username":"bob"}
+			]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := SAMLUsersList(context.Background(), client, SAMLUsersListInput{GroupID: "mygroup"})
+	if err != nil {
+		t.Fatalf("SAMLUsersList() unexpected error: %v", err)
+	}
+	if len(out.Users) != 2 {
+		t.Fatalf("got %d users, want 2", len(out.Users))
+	}
+	assertSAMLUserCapturedKeys(t, out.Users[0])
+	if out.Users[1].CommitEmail != "" || out.Users[1].Followers != nil || out.Users[1].IsFollowed != nil {
+		t.Errorf("Users[1] = %+v, want the second row left empty", out.Users[1])
+	}
+}
+
+// assertSAMLUserCapturedKeys holds one row to the ten keys the captured
+// response carries, so the list test stays one assertion per row.
+func assertSAMLUserCapturedKeys(t *testing.T, u SAMLUserOutput) {
+	t.Helper()
+	if u.CommitEmail != "c@example.com" || u.Discord != "jdoe#1" || u.GitHub != "jdoe" {
+		t.Errorf("row = %+v, want the commit address and the two account names", u)
+	}
+	if u.LocalTime != "2:30 PM" || u.PreferredLanguage != "en" || u.Pronouns != "she/her" || u.WorkInformation != "Org" {
+		t.Errorf("row = %+v, want the four profile keys", u)
+	}
+	if u.Followers == nil || *u.Followers != 12 || u.Following == nil || *u.Following != 34 ||
+		u.IsFollowed == nil || !*u.IsFollowed {
+		t.Errorf("row counts = %v/%v/%v, want 12, 34 and true", u.Followers, u.Following, u.IsFollowed)
+	}
+}
+
+// TestSAMLUsersList_ACapturedFieldTheTypeCannotHold_IsReported verifies a body
+// that decodes for the SDK and not for the keys read beside it is the
+// operation's error rather than a page of users with those keys silently empty.
+func TestSAMLUsersList_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":42,"username":"jdoe","followers":"not-a-number"}]`)
+	}))
+
+	_, err := SAMLUsersList(context.Background(), client, SAMLUsersListInput{GroupID: "mygroup"})
+	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("SAMLUsersList() error = %v, want the capture's decode failure", err)
 	}
 }
 

@@ -103,6 +103,21 @@ type Output struct {
 	Locked                         bool                    `json:"locked"`
 	CreatedBy                      *BasicUserOutput        `json:"created_by,omitempty"`
 	CreatedAt                      string                  `json:"created_at,omitempty"`
+	// The keys lib/api/entities/user_public.rb sends that client-go's User
+	// does not model, read from the captured response beside the SDK's own
+	// decode (ADR-0021) and described on toolutil.UserExtra. Both enterprise
+	// user routes present UserPublic, so the seven profile keys are on every
+	// response and the three counts on one whose caller may read the profile.
+	CommitEmail       string `json:"commit_email,omitempty"`
+	Discord           string `json:"discord,omitempty"`
+	GitHub            string `json:"github,omitempty"`
+	LocalTime         string `json:"local_time,omitempty"`
+	PreferredLanguage string `json:"preferred_language,omitempty"`
+	Pronouns          string `json:"pronouns,omitempty"`
+	WorkInformation   string `json:"work_information,omitempty"`
+	Followers         *int64 `json:"followers,omitempty"`
+	Following         *int64 `json:"following,omitempty"`
+	IsFollowed        *bool  `json:"is_followed,omitempty"`
 }
 
 // IdentityOutput mirrors gl.UserIdentity, a provider/extern_uid pair linking a
@@ -135,7 +150,9 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-func toOutput(u *gl.User) Output {
+// toOutput converts a GitLab User to the enterprise-user output, filling from
+// extra the keys client-go's User declares on no field of its own (ADR-0021).
+func toOutput(u *gl.User, extra toolutil.UserExtra) Output {
 	if u == nil {
 		return Output{}
 	}
@@ -180,6 +197,16 @@ func toOutput(u *gl.User) Output {
 		SCIMIdentities:                 toSCIMIdentityOutputs(u.SCIMIdentities),
 		CustomAttributes:               toCustomAttributeOutputs(u.CustomAttributes),
 		CreatedBy:                      toBasicUserOutput(u.CreatedBy),
+		CommitEmail:                    extra.CommitEmail,
+		Discord:                        extra.Discord,
+		GitHub:                         extra.GitHub,
+		LocalTime:                      extra.LocalTime,
+		PreferredLanguage:              extra.PreferredLanguage,
+		Pronouns:                       extra.Pronouns,
+		WorkInformation:                extra.WorkInformation,
+		Followers:                      extra.Followers,
+		Following:                      extra.Following,
+		IsFollowed:                     extra.IsFollowed,
 	}
 	if u.CreatedAt != nil {
 		o.CreatedAt = u.CreatedAt.Format(time.RFC3339)
@@ -296,16 +323,21 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 		}
 		opts.CreatedBefore = &t
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	users, resp, err := client.GL().EnterpriseUsers.ListEnterpriseUsers(in.GroupID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list enterprise users", err, http.StatusNotFound, "verify group_id; enterprise users require Ultimate license")
+	}
+	extras, err := toolutil.CapturedUsers(captured, len(users))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("list enterprise users", err)
 	}
 	out := ListOutput{
 		Users:      make([]Output, 0, len(users)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
-	for _, u := range users {
-		out.Users = append(out.Users, toOutput(u))
+	for i, u := range users {
+		out.Users = append(out.Users, toOutput(u, extras[i]))
 	}
 	return out, nil
 }
@@ -321,11 +353,16 @@ func Get(ctx context.Context, client *gitlabclient.Client, in GetInput) (Output,
 	if in.UserID == 0 {
 		return Output{}, toolutil.ErrFieldRequired("user_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	u, _, err := client.GL().EnterpriseUsers.GetEnterpriseUser(in.GroupID.String(), in.UserID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithHint("get enterprise user", err, hintVerifyEnterpriseUser)
 	}
-	return toOutput(u), nil
+	extra, err := toolutil.CapturedUser(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("get enterprise user", err)
+	}
+	return toOutput(u, extra), nil
 }
 
 // Disable2FA disables two-factor authentication for an enterprise user.

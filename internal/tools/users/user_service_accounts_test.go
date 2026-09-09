@@ -65,6 +65,36 @@ func TestCreateServiceAccount_Success(t *testing.T) {
 	if out.ID != 42 {
 		t.Errorf("out.ID = %d, want 42", out.ID)
 	}
+	// The state condition's absent side: this account has no address change
+	// pending, so lib/api/entities/service_account.rb exposes no
+	// unconfirmed_email and the output must not invent one.
+	if out.UnconfirmedEmail != "" {
+		t.Errorf("out.UnconfirmedEmail = %q, want empty when nothing is pending", out.UnconfirmedEmail)
+	}
+}
+
+// TestCreateServiceAccount_ReadsThePendingAddress verifies the one key
+// lib/api/entities/service_account.rb sends beyond what client-go's User
+// models, on the side of its condition where the account does have an address
+// change waiting to be confirmed. POST /service_accounts is the only route
+// reaching this output type that presents a service account rather than a user.
+func TestCreateServiceAccount_ReadsThePendingAddress(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/service_accounts" {
+			testutil.RespondJSON(w, http.StatusCreated,
+				`{"id":42,"username":"svc-bot","name":"Service","email":"svc@example.com","unconfirmed_email":"new@example.com"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := CreateServiceAccount(context.Background(), client, CreateServiceAccountInput{Username: "svc-bot"})
+	if err != nil {
+		t.Fatalf("CreateServiceAccount() unexpected error: %v", err)
+	}
+	if out.UnconfirmedEmail != "new@example.com" {
+		t.Errorf("out.UnconfirmedEmail = %q, want the pending address", out.UnconfirmedEmail)
+	}
 }
 
 // TestListServiceAccounts_Success verifies ListServiceAccounts returns the

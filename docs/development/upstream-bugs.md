@@ -102,6 +102,7 @@ readable without opening the tracker:
 | 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, open | No | No | Yes |
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | No | No | No | No | Partial |
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | No | No | No | No | Partial |
+| 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-05, except entry 34,
 whose merge requests were opened on 2026-09-09.
@@ -1164,6 +1165,79 @@ change [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditional
 already opened for another set of structs. The two return types are breaking
 changes to exported API, so they belong to a major version or to a new method
 beside the old one.
+
+### The User struct models one user entity and GitLab serves six
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. Every gap is worked around.
+- **Workaround**: yes. The fifteen keys are read from the captured response
+  beside the SDK's decode (ADR-0021), through `toolutil.CapturedUser` for the
+  ten every route sends and `toolutil.CapturedInstanceUser` for those plus the
+  five only the instance-wide routes reach.
+
+**What**: `User` in client-go v3.0.0's `users.go` carries 48 keys and is the
+one struct every user-returning method decodes into, measured against the
+`v19.3.1-ee` entities the committed live record was taken from. GitLab serves
+six different user entities through those methods, and the struct models the
+union of none of them.
+
+- Ten keys are missing from
+  [lib/api/entities/user_public.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/user_public.rb)
+  and the `User` it inherits, which together are what `GET /user`,
+  `GET /groups/:id/enterprise_users`, `GET /groups/:id/provisioned_users` and
+  `GET /groups/:id/saml_users` all answer with: `commit_email`,
+  `preferred_language`, `discord`, `github`, `local_time`, `pronouns` and
+  `work_information` are exposed with no condition at all, and `followers`,
+  `following` and `is_followed` under `Ability.allowed?(current_user,
+  :read_user_profile, user)`. Seven keys sent on every user of every one of
+  those four endpoints, and a caller reading a user through the SDK sees none
+  of them.
+- `bio_html` is missing from
+  [lib/api/entities/user_profile.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/user_profile.rb),
+  which is what `GET /users/:id` answers with. It is the same entity plus the
+  `Users::BioHtml` concern, exposed with no condition.
+- Three keys are missing from
+  [ee/lib/ee/api/entities/user_with_admin.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/ee/api/entities/user_with_admin.rb),
+  which `POST /users` and `PUT /users/:id` answer with: `provisioned_by_group_id`
+  under `License.feature_available?(:group_saml)`, and `enterprise_group_id`
+  and `enterprise_group_associated_at` under
+  `License.feature_available?(:domain_verification)`. Both features resolve to
+  Premium in the record's own licensed-feature table, so an administrator on a
+  licensed instance creates a user and is handed back a struct that cannot say
+  which enterprise group owns it.
+- `unconfirmed_email` is missing on this path for a different reason:
+  `CreateServiceAccountUser` returns `*User` and sends
+  `POST /service_accounts`, which answers with
+  [lib/api/entities/service_account.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/service_account.rb),
+  a six-key object rather than a user. The SDK does model that key, on
+  `ServiceAccount`, which the same file's `UpdateInstanceServiceAccount`
+  returns; so one endpoint's response is modelled twice upstream and only the
+  narrower struct carries the key. That unevenness is the same shape
+  [entry 36](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with)
+  records for the merge request structs.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), whose
+oracle is `docs/development/gitlab-api-live.json`. The user family was 64 of
+its findings across four output types, and the split is the interesting part:
+because all four pair with this one struct, the audit unions all eleven
+endpoints its methods reach in front of every one of them, so each type was
+held to the same sixteen keys. Only ten of the sixteen are reachable on the
+three group-scoped types, whose endpoints GitLab presents `with:
+::API::Entities::UserPublic`; the other five are answered by declarations in
+`cmd/audit_1to1/internal/paths/sent_declarations.go` rather than published
+there. One key, `avatar_path`, is reachable on none of them: `UserBasic`
+exposes it under the `only_path` presenter option, which is not a request
+parameter, and no route in the whole 2110-route record declares it.
+
+**Effort**: additive and small. Fifteen fields on one struct, all of them
+`omitempty`-safe, which is the same change
+[entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+already opened for another set of structs. The conditional ones want pointers
+rather than values, since a zero follower count and a profile the caller may
+not read are different answers.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

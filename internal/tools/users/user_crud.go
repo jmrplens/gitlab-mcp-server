@@ -73,12 +73,13 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	opts := buildCreateUserOptions(input)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	u, _, err := client.GL().Users.CreateUser(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("create_user", err, http.StatusForbidden,
 			createUserForbiddenHint)
 	}
-	return toOutput(u), nil
+	return userOutput("create_user", u, captured)
 }
 
 // ModifyInput holds parameters for modifying an existing GitLab user (admin only).
@@ -124,12 +125,13 @@ func Modify(ctx context.Context, client *gitlabclient.Client, input ModifyInput)
 
 	opts := buildModifyUserOptions(input)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	u, _, err := client.GL().Users.ModifyUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("modify_user", err, http.StatusForbidden,
 			"modifying users requires admin token; verify user_id with gitlab_get_user; email/username changes must remain unique")
 	}
-	return toOutput(u), nil
+	return userOutput("modify_user", u, captured)
 }
 
 // DeleteInput holds parameters for deleting a GitLab user (admin only).

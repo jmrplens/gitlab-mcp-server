@@ -110,6 +110,22 @@ type SAMLUserOutput struct {
 	SCIMIdentities                 []SCIMIdentityOutput    `json:"scim_identities,omitempty"`
 	CustomAttributes               []CustomAttributeOutput `json:"custom_attributes,omitempty"`
 	CreatedBy                      *BasicUserOutput        `json:"created_by,omitempty"`
+	// The keys lib/api/entities/user_public.rb sends that client-go's User
+	// does not model, read from the captured response beside the SDK's own
+	// decode (ADR-0021) and described on toolutil.UserExtra. GitLab presents
+	// GET /groups/:id/saml_users with UserPublic, so the seven profile keys
+	// are on every response and the three counts on one whose caller may read
+	// the profile.
+	CommitEmail       string `json:"commit_email,omitempty"`
+	Discord           string `json:"discord,omitempty"`
+	GitHub            string `json:"github,omitempty"`
+	LocalTime         string `json:"local_time,omitempty"`
+	PreferredLanguage string `json:"preferred_language,omitempty"`
+	Pronouns          string `json:"pronouns,omitempty"`
+	WorkInformation   string `json:"work_information,omitempty"`
+	Followers         *int64 `json:"followers,omitempty"`
+	Following         *int64 `json:"following,omitempty"`
+	IsFollowed        *bool  `json:"is_followed,omitempty"`
 }
 
 // SCIMIdentityOutput represents a SCIM identity associated with a SAML user.
@@ -143,8 +159,10 @@ type BasicUserOutput struct {
 }
 
 // toSAMLUserOutput maps a GitLab API user into the MCP output, mirroring the
-// canonical gl.User representation so every standard user field is surfaced 1:1.
-func toSAMLUserOutput(u *gl.User) SAMLUserOutput {
+// canonical gl.User representation so every standard user field is surfaced
+// 1:1, and filling from extra the keys client-go's User declares on no field of
+// its own (ADR-0021).
+func toSAMLUserOutput(u *gl.User, extra toolutil.UserExtra) SAMLUserOutput {
 	out := SAMLUserOutput{
 		ID:                             u.ID,
 		Username:                       u.Username,
@@ -182,6 +200,16 @@ func toSAMLUserOutput(u *gl.User) SAMLUserOutput {
 		NamespaceID:                    u.NamespaceID,
 		SharedRunnersMinutesLimit:      u.SharedRunnersMinutesLimit,
 		ExtraSharedRunnersMinutesLimit: u.ExtraSharedRunnersMinutesLimit,
+		CommitEmail:                    extra.CommitEmail,
+		Discord:                        extra.Discord,
+		GitHub:                         extra.GitHub,
+		LocalTime:                      extra.LocalTime,
+		PreferredLanguage:              extra.PreferredLanguage,
+		Pronouns:                       extra.Pronouns,
+		WorkInformation:                extra.WorkInformation,
+		Followers:                      extra.Followers,
+		Following:                      extra.Following,
+		IsFollowed:                     extra.IsFollowed,
 	}
 	if u.CreatedAt != nil {
 		out.CreatedAt = u.CreatedAt.Format(time.RFC3339)
@@ -298,16 +326,21 @@ func SAMLUsersList(ctx context.Context, client *gitlabclient.Client, input SAMLU
 	}
 	opts.CreatedAfter = toolutil.ParseOptionalTime(input.CreatedAfter)
 	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	users, resp, err := client.GL().Groups.ListSAMLUsers(input.GroupID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return SAMLUsersListOutput{}, toolutil.WrapErrWithHint("list group SAML users", err, groupSAMLLinkHint)
+	}
+	extras, err := toolutil.CapturedUsers(captured, len(users))
+	if err != nil {
+		return SAMLUsersListOutput{}, toolutil.WrapErr("list group SAML users", err)
 	}
 	out := SAMLUsersListOutput{
 		Users:      make([]SAMLUserOutput, len(users)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
 	for i, u := range users {
-		out.Users[i] = toSAMLUserOutput(u)
+		out.Users[i] = toSAMLUserOutput(u, extras[i])
 	}
 	return out, nil
 }
