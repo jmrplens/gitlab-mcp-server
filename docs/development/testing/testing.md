@@ -18,11 +18,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,199 |
-| Unit test functions                                   | 14,594 |
+| Total test functions                                  | 15,219 |
+| Unit test functions                                   | 14,614 |
 | E2E test functions                                    |    605 |
 | cmd test functions                                    |  2,990 |
-| Test files (internal/)                                |    523 |
+| Test files (internal/)                                |    524 |
 | Test files (cmd/)                                     |    203 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,045 | 79.2% |
+| `TestFunc_Scenario` (2-part)           | 12,065 | 79.3% |
 | `TestFunc` (no underscore)             |    975 |  6.4% |
 | `TestFunc_Scenario_Expected` (3+ part) |  2,179 | 14.3% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,459 |        148 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,807 |        359 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,827 |        360 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            605 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,990 |        203 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,199** |    **966** |                                                                                                 |
+| **Total**               |     **15,219** |    **967** |                                                                                                 |
 
 ### Core Packages
 
@@ -175,7 +175,7 @@
 | ffuserlists             |        34 |          2 |   100.0% |         5 |
 | files                   |        84 |          2 |   100.0% |         8 |
 | freezeperiods           |        36 |          2 |   100.0% |         5 |
-| geo                     |        54 |          2 |   100.0% |         8 |
+| geo                     |        74 |          3 |    98.3% |         8 |
 | gitignoretemplates      |        15 |          1 |   100.0% |         2 |
 | groupanalytics          |         8 |          2 |   100.0% |         3 |
 | groupboards             |        65 |          2 |   100.0% |        10 |
@@ -293,7 +293,7 @@
 | wikis                   |        62 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,807** |    **359** |          | **1,187** |
+| **Total**               | **8,827** |    **360** |          | **1,187** |
 
 </details>
 
@@ -454,7 +454,7 @@
 | ffuserlists             |   100.0% |
 | files                   |   100.0% |
 | freezeperiods           |   100.0% |
-| geo                     |   100.0% |
+| geo                     |    98.3% |
 | gitignoretemplates      |   100.0% |
 | groupanalytics          |   100.0% |
 | groupboards             |   100.0% |
