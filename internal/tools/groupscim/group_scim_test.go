@@ -31,8 +31,8 @@ func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/scim/identities" {
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"external_uid":"ext-1","user_id":10,"active":true},
-				{"external_uid":"ext-2","user_id":20,"active":false}
+				{"extern_uid":"ext-1","user_id":10,"active":true},
+				{"extern_uid":"ext-2","user_id":20,"active":false}
 			]`)
 			return
 		}
@@ -48,8 +48,8 @@ func TestList_Success(t *testing.T) {
 	if len(out.Identities) != 2 {
 		t.Fatalf("expected 2 identities, got %d", len(out.Identities))
 	}
-	if out.Identities[0].ExternalUID != "ext-1" {
-		t.Errorf("expected external_uid ext-1, got %s", out.Identities[0].ExternalUID)
+	if out.Identities[0].ExternUID != "ext-1" {
+		t.Errorf("expected external_uid ext-1, got %s", out.Identities[0].ExternUID)
 	}
 	if out.Identities[1].UserID != 20 {
 		t.Errorf("expected user_id 20, got %d", out.Identities[1].UserID)
@@ -112,7 +112,7 @@ func TestList_APIError(t *testing.T) {
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/scim/uid-123" {
-			testutil.RespondJSON(w, http.StatusOK, `{"external_uid":"uid-123","user_id":42,"active":true}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"extern_uid":"uid-123","user_id":42,"active":true}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -125,8 +125,8 @@ func TestGet_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get() error: %v", err)
 	}
-	if out.ExternalUID != "uid-123" {
-		t.Errorf("expected external_uid uid-123, got %s", out.ExternalUID)
+	if out.ExternUID != "uid-123" {
+		t.Errorf("expected external_uid uid-123, got %s", out.ExternUID)
 	}
 	if out.UserID != 42 {
 		t.Errorf("expected user_id 42, got %d", out.UserID)

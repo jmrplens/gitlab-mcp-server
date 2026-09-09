@@ -27,9 +27,6 @@ func TestList(t *testing.T) {
 	if len(out.Licenses) != 1 {
 		t.Fatalf("len = %d, want 1", len(out.Licenses))
 	}
-	if !out.Licenses[0].Featured {
-		t.Error("Featured = false, want true")
-	}
 	if !out.Licenses[0].Popular {
 		t.Error("Popular = false, want the popular template the answer describes")
 	}
@@ -90,7 +87,7 @@ func TestGet_Error(t *testing.T) {
 
 // TestFormatListMarkdown verifies FormatListMarkdown.
 func TestFormatListMarkdown(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{Licenses: []LicenseItem{{Key: "mit", Name: "MIT", Featured: true}}})
+	md := FormatListMarkdown(ListOutput{Licenses: []LicenseItem{{Key: "mit", Name: "MIT", Popular: true}}})
 	if !strings.Contains(md, "MIT") {
 		t.Error("missing")
 	}
@@ -428,14 +425,15 @@ func TestBoolString_TrueAndFalse(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// FormatListMarkdown — non-featured license
+// FormatListMarkdown — unpopular license
 // ---------------------------------------------------------------------------
 
-// TestFormatListMarkdown_NonFeaturedLicense verifies that non-featured
-// licenses render the literal "false" attribute string via boolString.
-func TestFormatListMarkdown_NonFeaturedLicense(t *testing.T) {
+// TestFormatListMarkdown_UnpopularLicense verifies that a template GitLab does
+// not list among the popular ones renders the literal "false" attribute string
+// via boolString.
+func TestFormatListMarkdown_UnpopularLicense(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Licenses: []LicenseItem{
-		{Key: "gpl-3.0", Name: "GPL 3.0", Featured: false},
+		{Key: "gpl-3.0", Name: "GPL 3.0", Popular: false},
 	}})
 	if !strings.Contains(md, "gpl-3.0") {
 		t.Errorf("missing license key in markdown: %s", md)

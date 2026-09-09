@@ -28,7 +28,6 @@ type LicenseItem struct {
 	Key         string   `json:"key"`
 	Name        string   `json:"name"`
 	Nickname    string   `json:"nickname,omitempty"`
-	Featured    bool     `json:"featured"`
 	Popular     bool     `json:"popular"`
 	HTMLURL     string   `json:"html_url,omitempty"`
 	SourceURL   string   `json:"source_url,omitempty"`
@@ -129,7 +128,6 @@ func licenseFromGL(l *gl.LicenseTemplate, extra toolutil.LicenseTemplateExtra) L
 		Key:         l.Key,
 		Name:        l.Name,
 		Nickname:    l.Nickname,
-		Featured:    l.Featured,
 		Popular:     extra.Popular,
 		HTMLURL:     l.HTMLURL,
 		SourceURL:   l.SourceURL,

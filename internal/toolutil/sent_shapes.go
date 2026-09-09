@@ -399,3 +399,76 @@ type RunnerManagerExtra struct {
 func CapturedRunnerManagers(capture *gitlabclient.ResponseCapture, decoded int) ([]RunnerManagerExtra, error) {
 	return capturedList[RunnerManagerExtra](capture, decoded, "runner managers")
 }
+
+// FeatureDefinitionExtra is where a feature flag's definition points a reader:
+// the issue that tracks it and the milestone it is meant to roll out by. The
+// definition entity exposes both under no condition.
+type FeatureDefinitionExtra struct {
+	FeatureIssueURL     string `json:"feature_issue_url"`
+	IntendedToRolloutBy string `json:"intended_to_rollout_by"`
+}
+
+// CapturedFeatureDefinitions reads them off the captured answer to a list of
+// definitions, one extra per definition in order, the count held to what the
+// SDK decoded.
+func CapturedFeatureDefinitions(capture *gitlabclient.ResponseCapture, decoded int) ([]FeatureDefinitionExtra, error) {
+	return capturedList[FeatureDefinitionExtra](capture, decoded, "feature definitions")
+}
+
+// FeatureFlagUserListExtra is where a user list lives in GitLab's own web
+// interface, both exposed under no condition.
+type FeatureFlagUserListExtra struct {
+	Path     string `json:"path"`
+	EditPath string `json:"edit_path"`
+}
+
+// CapturedFeatureFlagUserList reads them off the captured answer to a request
+// for one user list.
+func CapturedFeatureFlagUserList(capture *gitlabclient.ResponseCapture) (FeatureFlagUserListExtra, error) {
+	return capturedOne[FeatureFlagUserListExtra](capture)
+}
+
+// CapturedFeatureFlagUserLists reads the same off a list answer, one extra per
+// user list in order, the count held to what the SDK decoded.
+func CapturedFeatureFlagUserLists(capture *gitlabclient.ResponseCapture, decoded int) ([]FeatureFlagUserListExtra, error) {
+	return capturedList[FeatureFlagUserListExtra](capture, decoded, "feature flag user lists")
+}
+
+// StorageMoveExtra is why a repository storage move failed, exposed under no
+// condition by the group, project and snippet storage move entities alike and
+// empty on a move that did not fail.
+type StorageMoveExtra struct {
+	ErrorMessage string `json:"error_message"`
+}
+
+// CapturedStorageMove reads it off the captured answer to a request for one
+// storage move.
+func CapturedStorageMove(capture *gitlabclient.ResponseCapture) (StorageMoveExtra, error) {
+	return capturedOne[StorageMoveExtra](capture)
+}
+
+// CapturedStorageMoves reads the same off a list answer, one extra per move in
+// order, the count held to what the SDK decoded.
+func CapturedStorageMoves(capture *gitlabclient.ResponseCapture, decoded int) ([]StorageMoveExtra, error) {
+	return capturedList[StorageMoveExtra](capture, decoded, "storage moves")
+}
+
+// ServiceAccountExtra is what GitLab's service account entity sends beside the
+// name and username: the public email always, and the unconfirmed one while a
+// change of address is waiting to be confirmed.
+type ServiceAccountExtra struct {
+	PublicEmail      string `json:"public_email"`
+	UnconfirmedEmail string `json:"unconfirmed_email"`
+}
+
+// CapturedServiceAccount reads them off the captured answer to a request for
+// one service account.
+func CapturedServiceAccount(capture *gitlabclient.ResponseCapture) (ServiceAccountExtra, error) {
+	return capturedOne[ServiceAccountExtra](capture)
+}
+
+// CapturedServiceAccounts reads the same off a list answer, one extra per
+// account in order, the count held to what the SDK decoded.
+func CapturedServiceAccounts(capture *gitlabclient.ResponseCapture, decoded int) ([]ServiceAccountExtra, error) {
+	return capturedList[ServiceAccountExtra](capture, decoded, "service accounts")
+}

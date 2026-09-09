@@ -19,10 +19,10 @@ import (
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/groups/42/scim/identities", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"external_uid":"uid-1","user_id":1,"active":true}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"extern_uid":"uid-1","user_id":1,"active":true}]`)
 	})
 	handler.HandleFunc("GET /api/v4/groups/42/scim/uid-1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"external_uid":"uid-1","user_id":1,"active":true}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"extern_uid":"uid-1","user_id":1,"active":true}`)
 	})
 	handler.HandleFunc("PATCH /api/v4/groups/42/scim/uid-1", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
