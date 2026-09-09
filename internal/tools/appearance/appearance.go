@@ -112,8 +112,13 @@ type UpdateOutput struct {
 	Appearance Item `json:"appearance"`
 }
 
-// Update changes the application appearance (admin-only).
-func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (UpdateOutput, error) {
+// changeAppearanceOptions copies the fields the caller set into the SDK's
+// options struct, leaving the rest nil so GitLab keeps their current values.
+//
+// It is a function of its own because the copy is one branch per field, and
+// with them inline the request and its two failure modes sat at the bottom of
+// eighteen of them.
+func changeAppearanceOptions(input UpdateInput) *gl.ChangeAppearanceOptions {
 	opts := &gl.ChangeAppearanceOptions{}
 	if input.Title != "" {
 		opts.Title = new(input.Title)
@@ -169,6 +174,12 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.ProfileImageGuidelines != "" {
 		opts.ProfileImageGuidelines = new(input.ProfileImageGuidelines)
 	}
+	return opts
+}
+
+// Update changes the application appearance (admin-only).
+func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (UpdateOutput, error) {
+	opts := changeAppearanceOptions(input)
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	a, _, err := client.GL().Appearance.ChangeAppearance(opts, gl.WithContext(ctx))

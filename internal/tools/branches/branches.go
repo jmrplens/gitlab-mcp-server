@@ -164,16 +164,7 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 	if err != nil {
 		// 409 Conflict means branch is already protected — idempotent success
 		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
-			existing, _, getErr := client.GL().ProtectedBranches.GetProtectedBranch(string(input.ProjectID), input.BranchName, gl.WithContext(ctx))
-			if getErr != nil {
-				return ProtectedOutput{}, toolutil.WrapErrWithHint("branchProtect", err,
-					"protected branch rule already exists but could not retrieve current settings. Use gitlab_protected_branch_get to view current rules, or gitlab_protected_branch_update to modify them")
-			}
-			existingExtra, captureErr := toolutil.CapturedProtectedBranch(captured)
-			if captureErr != nil {
-				return ProtectedOutput{}, toolutil.WrapErr("branchProtect", captureErr)
-			}
-			return ProtectedToOutput(existing, existingExtra), nil
+			return protectedBranchAlreadyExists(ctx, client, input, captured, err)
 		}
 		return ProtectedOutput{}, toolutil.WrapErrWithStatusHint("branchProtect", err, http.StatusForbidden,
 			"protecting branches requires Maintainer or Owner role")
@@ -183,6 +174,33 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 		return ProtectedOutput{}, toolutil.WrapErr("branchProtect", err)
 	}
 	return ProtectedToOutput(b, extra), nil
+}
+
+// protectedBranchAlreadyExists answers the 409 the protect call returns when
+// the rule is already there, by reading the rule that exists and reporting it
+// as the success it amounts to. protectErr is the original refusal, kept so a
+// failure to read the existing rule is reported as what it is rather than as a
+// bare not-found.
+//
+// It sits apart from Protect because the read has its own two failure modes and
+// nesting them inside the error branch of another call buries both.
+func protectedBranchAlreadyExists(
+	ctx context.Context,
+	client *gitlabclient.Client,
+	input ProtectInput,
+	captured *gitlabclient.ResponseCapture,
+	protectErr error,
+) (ProtectedOutput, error) {
+	existing, _, err := client.GL().ProtectedBranches.GetProtectedBranch(string(input.ProjectID), input.BranchName, gl.WithContext(ctx))
+	if err != nil {
+		return ProtectedOutput{}, toolutil.WrapErrWithHint("branchProtect", protectErr,
+			"protected branch rule already exists but could not retrieve current settings. Use gitlab_protected_branch_get to view current rules, or gitlab_protected_branch_update to modify them")
+	}
+	extra, err := toolutil.CapturedProtectedBranch(captured)
+	if err != nil {
+		return ProtectedOutput{}, toolutil.WrapErr("branchProtect", err)
+	}
+	return ProtectedToOutput(existing, extra), nil
 }
 
 // UnprotectOutput holds the result of an unprotect operation.

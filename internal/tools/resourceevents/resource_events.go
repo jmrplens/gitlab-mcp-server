@@ -330,6 +330,8 @@ func GetGroupEpicLabelEvent(ctx context.Context, client *gitlabclient.Client, in
 // ---------------------------------------------------------------------------.
 
 // ListIssueMilestoneEvents lists milestone events for an issue.
+//
+//nolint:dupl // ResourceMilestoneEvents and ResourceStateEvents are distinct SDK services with no shared interface, and each handler carries its own input type, output type and not-found hint; the parallel shape is the API's.
 func ListIssueMilestoneEvents(ctx context.Context, client *gitlabclient.Client, input ListIssueMilestoneEventsInput) (ListMilestoneEventsOutput, error) {
 	if input.ProjectID == "" {
 		return ListMilestoneEventsOutput{}, toolutil.ErrFieldRequired("project_id")
@@ -377,6 +379,8 @@ func GetIssueMilestoneEvent(ctx context.Context, client *gitlabclient.Client, in
 }
 
 // ListMRMilestoneEvents lists milestone events for a merge request.
+//
+//nolint:dupl // ResourceMilestoneEvents and ResourceStateEvents are distinct SDK services with no shared interface, and each handler carries its own input type, output type and not-found hint; the parallel shape is the API's.
 func ListMRMilestoneEvents(ctx context.Context, client *gitlabclient.Client, input ListMRMilestoneEventsInput) (ListMilestoneEventsOutput, error) {
 	if input.ProjectID == "" {
 		return ListMilestoneEventsOutput{}, toolutil.ErrFieldRequired("project_id")
@@ -428,6 +432,8 @@ func GetMRMilestoneEvent(ctx context.Context, client *gitlabclient.Client, input
 // ---------------------------------------------------------------------------.
 
 // ListIssueStateEvents lists state events for an issue.
+//
+//nolint:dupl // ResourceMilestoneEvents and ResourceStateEvents are distinct SDK services with no shared interface, and each handler carries its own input type, output type and not-found hint; the parallel shape is the API's.
 func ListIssueStateEvents(ctx context.Context, client *gitlabclient.Client, input ListIssueStateEventsInput) (ListStateEventsOutput, error) {
 	if input.ProjectID == "" {
 		return ListStateEventsOutput{}, toolutil.ErrFieldRequired("project_id")
@@ -475,6 +481,8 @@ func GetIssueStateEvent(ctx context.Context, client *gitlabclient.Client, input 
 }
 
 // ListMRStateEvents lists state events for a merge request.
+//
+//nolint:dupl // ResourceMilestoneEvents and ResourceStateEvents are distinct SDK services with no shared interface, and each handler carries its own input type, output type and not-found hint; the parallel shape is the API's.
 func ListMRStateEvents(ctx context.Context, client *gitlabclient.Client, input ListMRStateEventsInput) (ListStateEventsOutput, error) {
 	if input.ProjectID == "" {
 		return ListStateEventsOutput{}, toolutil.ErrFieldRequired("project_id")

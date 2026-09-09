@@ -175,6 +175,8 @@ func TestCapturedTokenListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 // decodes its shape off the keys GitLab spells, and each reports a capture
 // nothing ran under. A reader whose shape is only ever read as a list is
 // exercised through its list reader, since the two share the shape.
+//
+//nolint:gocognit,gocyclo,maintidx // the score is one small closure per entity in a table, so it tracks the number of readers rather than any branching a reader could hide; splitting the table would group entities by nothing.
 func TestCapturedReaders_ReadEachTailEntity(t *testing.T) {
 	_, untouched := gitlabclient.WithResponseCapture(t.Context())
 	// first reads one element out of a list reader, so a shape with no

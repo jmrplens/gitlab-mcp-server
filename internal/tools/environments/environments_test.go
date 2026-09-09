@@ -1525,7 +1525,7 @@ const envProjectJSON = `{
 		"last_activity_at":"2026-02-03T04:05:06Z",
 		"visibility":"internal",
 		"namespace":{"id":5,"name":"Acme","path":"acme","kind":"group","full_path":"acme","parent_id":2,"avatar_url":"https://example.com/uploads/group.png","web_url":"https://example.com/groups/acme"},
-		"custom_attributes":[{"key":"cost_centre","value":"platform"}],
+		"custom_attributes":[{"key":"cost_center","value":"platform"}],
 		"repository_storage":"nfs-01"
 	}
 }`
@@ -1596,7 +1596,7 @@ func TestEnvironmentGet_ProjectObject(t *testing.T) {
 			AvatarURL: "https://example.com/uploads/group.png",
 			WebURL:    "https://example.com/groups/acme",
 		}},
-		{"custom_attributes", p.CustomAttributes, []toolutil.CustomAttributeOutput{{Key: "cost_centre", Value: "platform"}}},
+		{"custom_attributes", p.CustomAttributes, []toolutil.CustomAttributeOutput{{Key: "cost_center", Value: "platform"}}},
 		{"repository_storage", p.RepositoryStorage, "nfs-01"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
