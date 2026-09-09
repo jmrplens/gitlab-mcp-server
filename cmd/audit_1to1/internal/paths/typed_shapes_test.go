@@ -10,7 +10,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
 )
 
-// indexOf builds the operation index a type-grain comparison looks up in.
 // stubTypeGrainInputs replaces the two loaders the real tree resolves: the
 // typed package load that costs twenty seconds and the client-go source in a
 // module cache.
