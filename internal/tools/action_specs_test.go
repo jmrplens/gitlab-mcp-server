@@ -13,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/freshness"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
@@ -627,10 +628,11 @@ func individualSpecsByToolNameMap(groups []ActionSpecGroup) map[string][]tooluti
 }
 
 // compareSnapshotSlices compares expected and projected tool snapshots and
-// reports only non-allowlisted drift.
+// reports only non-allowlisted drift. It compares nothing when the harness
+// deferred the comparison ([freshness.SkipIfDeferred]).
 func compareSnapshotSlices(t *testing.T, goldenPath string, want, got []toolSnapshot) {
 	t.Helper()
-	skipDeferredSnapshotParity(t)
+	freshness.SkipIfDeferred(t)
 	sortToolSnapshots(want)
 	sortToolSnapshots(got)
 	if len(want) != len(got) {

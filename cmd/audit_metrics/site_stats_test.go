@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/freshness"
 )
 
 // newSiteStats builds the stats payload from a mock self-managed client and a
@@ -70,12 +71,54 @@ func TestSiteStatsTierOrdering(t *testing.T) {
 	}
 }
 
+// committedSiteStatsPath returns the path of the committed site stats file.
+//
+// It defers to the harness first ([freshness.SkipIfDeferred]), before the
+// payload it would otherwise generate: this file is refreshed once at the top
+// of a stack and every layer below carries it stale on purpose (issue 644).
+// The failure tests below use a temporary file instead and are not deferred,
+// so a stale file still fails the check itself on every run.
+func committedSiteStatsPath(t *testing.T) string {
+	t.Helper()
+	freshness.SkipIfDeferred(t)
+	return filepath.Join(repositoryRoot(), "site", "src", "data", "stats.json")
+}
+
+// TestCommittedSiteStatsPath_DefersOnlyWhenAsked verifies the harness switch in
+// both directions: with the variable set the committed file is left alone, and
+// with it set to "checked" the path is resolved and the file behind it is
+// there to be compared, which is what keeps the stats gated where the refresh
+// lands.
+func TestCommittedSiteStatsPath_DefersOnlyWhenAsked(t *testing.T) {
+	var skipped bool
+	t.Run("deferred", func(t *testing.T) {
+		t.Setenv(freshness.EnvVar, "deferred")
+		defer func() { skipped = t.Skipped() }()
+		committedSiteStatsPath(t)
+	})
+	if !skipped {
+		t.Error("committedSiteStatsPath() named the committed file the harness asked it to leave alone")
+	}
+
+	skipped = true
+	t.Run("checked", func(t *testing.T) {
+		t.Setenv(freshness.EnvVar, "checked")
+		defer func() { skipped = t.Skipped() }()
+		if _, err := os.Stat(committedSiteStatsPath(t)); err != nil {
+			t.Errorf("stat the committed stats file: %v", err)
+		}
+	})
+	if skipped {
+		t.Error("committedSiteStatsPath() skipped a comparison the harness asked for")
+	}
+}
+
 // TestSiteStatsMatchesCommittedFile verifies the committed
 // site/src/data/stats.json equals the freshly generated payload. This is the
 // in-repo guard mirroring `audit_metrics -site-stats ... -check`.
 func TestSiteStatsMatchesCommittedFile(t *testing.T) {
+	path := committedSiteStatsPath(t)
 	want := renderSiteStatsJSON(newSiteStats(t))
-	path := filepath.Join(repositoryRoot(), "site", "src", "data", "stats.json")
 	got, err := os.ReadFile(path) //#nosec G304 -- fixed in-repo path
 	if err != nil {
 		t.Fatalf("read committed stats.json: %v", err)
@@ -89,7 +132,7 @@ func TestSiteStatsMatchesCommittedFile(t *testing.T) {
 // mode accepts the committed stats file for the live payload, which is the
 // exact call `make check-site-stats` makes.
 func TestWriteOrCheckSiteStats_CommittedFile_PassesCheck(t *testing.T) {
-	path := filepath.Join(repositoryRoot(), "site", "src", "data", "stats.json")
+	path := committedSiteStatsPath(t)
 	if err := writeOrCheckSiteStats(path, newSiteStats(t), true); err != nil {
 		t.Fatalf("writeOrCheckSiteStats(check) error: %v", err)
 	}

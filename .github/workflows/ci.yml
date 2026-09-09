@@ -907,6 +907,14 @@ jobs:
         run: go install gotest.tools/gotestsum
       - name: Unit suite
         shell: bash
+        # The same freshness answer the coverage job passes. This job asks the
+        # platform question and none of the generated-artifact ones, but the
+        # suite it runs carries a handful of tests that compare a committed
+        # artifact with what the tree generates now, and with the variable
+        # unset they compared on all three platforms even on a layer the
+        # policy exempts, three times over (issue 644).
+        env:
+          GITLAB_MCP_TEST_SNAPSHOT_PARITY: ${{ env.FRESHNESS }}
         run: bash .github/scripts/go-test-crash-aware.sh test-results/unit-suite -count=1 -timeout=30m ./cmd/... ./internal/...
       # The two transport modules need neither GitLab nor a credential, and
       # they are why this is not a build-only check: they start the real binary

@@ -18,15 +18,15 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,258 |
-| Unit test functions                                   | 14,653 |
+| Total test functions                                  | 15,264 |
+| Unit test functions                                   | 14,659 |
 | E2E test functions                                    |    605 |
-| cmd test functions                                    |  2,990 |
-| Test files (internal/)                                |    524 |
+| cmd test functions                                    |  2,993 |
+| Test files (internal/)                                |    525 |
 | Test files (cmd/)                                     |    203 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
-| Core packages tested                                  |     21 |
+| Core packages tested                                  |     22 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  98.4% |
 | Overall coverage (`go test ./internal/...`)           |  98.6% |
 | Average package coverage                              |  98.7% |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,068 | 79.1% |
+| `TestFunc_Scenario` (2-part)           | 12,074 | 79.1% |
 | `TestFunc` (no underscore)             |    975 |  6.4% |
 | `TestFunc_Scenario_Expected` (3+ part) |  2,215 | 14.5% |
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,462 |        148 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,465 |        149 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (177) |          8,863 |        360 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            605 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,990 |        203 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,258** |    **967** |                                                                                                 |
+| cmd packages            |          2,993 |        203 | server entry point and developer command utilities                                              |
+| **Total**               |     **15,264** |    **968** |                                                                                                 |
 
 ### Core Packages
 
@@ -64,6 +64,7 @@
 | config        |       109 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                   |
 | edition       |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                      |
 | elicitation   |       129 |    98.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                       |
+| freshness     |         3 |      n/a | Package freshness reads the one harness setting that decides whether a test comparing a committed, generated artifact runs that comparison now or leaves it to the run where the artifact is refreshed.                                                            |
 | gatewaycompat |        19 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions. |
 | gitlab        |        93 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                            |
 | graphqlschema |        20 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                   |
@@ -77,7 +78,7 @@
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        94 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
 | toolutil      |       882 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,462** |          |                                                                                                                                                                                                                                                                    |
+| **Subtotal**  | **2,465** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -376,6 +377,7 @@
 | config        |   100.0% |
 | edition       |    87.0% |
 | elicitation   |    98.3% |
+| freshness     |      n/a |
 | gatewaycompat |    99.4% |
 | gitlab        |   100.0% |
 | graphqlschema |   100.0% |
