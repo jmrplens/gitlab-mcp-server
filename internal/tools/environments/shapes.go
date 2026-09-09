@@ -313,3 +313,113 @@ func deployableOutput(d gl.DeploymentDeployable) *DeployableOutput {
 	}
 	return out
 }
+
+// ProjectOutput mirrors the project object GitLab renders on an environment,
+// which is lib/api/entities/basic_project_details.rb and not a whole project:
+// twenty-four keys, every one of them carried by the SDK's own Project.
+type ProjectOutput struct {
+	ID                int64                            `json:"id"`
+	Description       string                           `json:"description,omitempty"`
+	Name              string                           `json:"name"`
+	NameWithNamespace string                           `json:"name_with_namespace,omitempty"`
+	Path              string                           `json:"path,omitempty"`
+	PathWithNamespace string                           `json:"path_with_namespace,omitempty"`
+	CreatedAt         string                           `json:"created_at,omitempty"`
+	DefaultBranch     string                           `json:"default_branch,omitempty"`
+	TagList           []string                         `json:"tag_list,omitempty"`
+	Topics            []string                         `json:"topics,omitempty"`
+	SSHURLToRepo      string                           `json:"ssh_url_to_repo,omitempty"`
+	HTTPURLToRepo     string                           `json:"http_url_to_repo,omitempty"`
+	WebURL            string                           `json:"web_url,omitempty"`
+	ReadmeURL         string                           `json:"readme_url,omitempty"`
+	ForksCount        int64                            `json:"forks_count"`
+	LicenseURL        string                           `json:"license_url,omitempty"`
+	License           *ProjectLicenseOutput            `json:"license,omitempty"`
+	AvatarURL         string                           `json:"avatar_url,omitempty"`
+	StarCount         int64                            `json:"star_count"`
+	LastActivityAt    string                           `json:"last_activity_at,omitempty"`
+	Visibility        string                           `json:"visibility,omitempty"`
+	Namespace         *ProjectNamespaceOutput          `json:"namespace,omitempty"`
+	CustomAttributes  []toolutil.CustomAttributeOutput `json:"custom_attributes,omitempty"`
+	RepositoryStorage string                           `json:"repository_storage,omitempty"`
+}
+
+// ProjectLicenseOutput mirrors the license object under that project.
+type ProjectLicenseOutput struct {
+	Key       string `json:"key"`
+	Name      string `json:"name"`
+	Nickname  string `json:"nickname,omitempty"`
+	HTMLURL   string `json:"html_url,omitempty"`
+	SourceURL string `json:"source_url,omitempty"`
+}
+
+// ProjectNamespaceOutput mirrors the namespace object under that project.
+type ProjectNamespaceOutput struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Path      string `json:"path,omitempty"`
+	Kind      string `json:"kind,omitempty"`
+	FullPath  string `json:"full_path,omitempty"`
+	ParentID  int64  `json:"parent_id,omitempty"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+	WebURL    string `json:"web_url,omitempty"`
+}
+
+// projectOutput converts the SDK's project into the shape GitLab renders under
+// an environment, returning nil when the environment carries none.
+func projectOutput(p *gl.Project) *ProjectOutput {
+	if p == nil {
+		return nil
+	}
+	out := &ProjectOutput{
+		ID:                p.ID,
+		Description:       p.Description,
+		Name:              p.Name,
+		NameWithNamespace: p.NameWithNamespace,
+		Path:              p.Path,
+		PathWithNamespace: p.PathWithNamespace,
+		CreatedAt:         toolutil.FormatTimePtr(p.CreatedAt),
+		DefaultBranch:     p.DefaultBranch,
+		TagList:           p.TagList,
+		Topics:            p.Topics,
+		SSHURLToRepo:      p.SSHURLToRepo,
+		HTTPURLToRepo:     p.HTTPURLToRepo,
+		WebURL:            p.WebURL,
+		ReadmeURL:         p.ReadmeURL,
+		ForksCount:        p.ForksCount,
+		LicenseURL:        p.LicenseURL,
+		AvatarURL:         p.AvatarURL,
+		StarCount:         p.StarCount,
+		LastActivityAt:    toolutil.FormatTimePtr(p.LastActivityAt),
+		Visibility:        string(p.Visibility),
+		RepositoryStorage: p.RepositoryStorage,
+	}
+	if p.License != nil {
+		out.License = &ProjectLicenseOutput{
+			Key:       p.License.Key,
+			Name:      p.License.Name,
+			Nickname:  p.License.Nickname,
+			HTMLURL:   p.License.HTMLURL,
+			SourceURL: p.License.SourceURL,
+		}
+	}
+	if p.Namespace != nil {
+		out.Namespace = &ProjectNamespaceOutput{
+			ID:        p.Namespace.ID,
+			Name:      p.Namespace.Name,
+			Path:      p.Namespace.Path,
+			Kind:      p.Namespace.Kind,
+			FullPath:  p.Namespace.FullPath,
+			ParentID:  p.Namespace.ParentID,
+			AvatarURL: p.Namespace.AvatarURL,
+			WebURL:    p.Namespace.WebURL,
+		}
+	}
+	for _, a := range p.CustomAttributes {
+		if a == nil {
+			continue
+		}
+		out.CustomAttributes = append(out.CustomAttributes, toolutil.CustomAttributeOutput{Key: a.Key, Value: a.Value})
+	}
+	return out
+}
