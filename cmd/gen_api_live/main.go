@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -61,11 +62,12 @@ var interrupted = func() (context.Context, context.CancelFunc) {
 
 func main() {
 	var (
-		check = flag.Bool("check", false, "verify the committed record without Docker and without network, and exit non-zero when it cannot be rested on")
-		dump  = flag.String("dump", "", "build the record from an introspection dump already on disk instead of booting")
-		image = flag.String("image", "gitlab/gitlab-ee:latest", "image to boot; Enterprise, because its entity set is the superset")
-		keep  = flag.Bool("keep", false, "leave the container running afterwards")
-		dir   = flag.String("dir", "", "directory holding the record (default: the repository's docs/development)")
+		check  = flag.Bool("check", false, "verify the committed record without Docker and without network, and exit non-zero when it cannot be rested on")
+		dump   = flag.String("dump", "", "build the record from an introspection dump already on disk instead of booting")
+		digest = flag.String("digest", "", "with -dump, the repository digest of the image the dump was taken from")
+		image  = flag.String("image", "gitlab/gitlab-ee:latest", "image to boot; Enterprise, because its entity set is the superset")
+		keep   = flag.Bool("keep", false, "leave the container running afterwards")
+		dir    = flag.String("dir", "", "directory holding the record (default: the repository's docs/development)")
 	)
 	flag.Parse()
 
@@ -84,7 +86,7 @@ func main() {
 		}
 		return
 	}
-	if err := runGenerate(recordDir, *dump, *image, *keep); err != nil {
+	if err := runGenerate(recordDir, dumpFrom{path: *dump, digest: *digest}, *image, *keep); err != nil {
 		cmdutil.Fatalf("%v", err)
 	}
 }
@@ -149,9 +151,22 @@ func floorProblems(doc apilive.Document) []string {
 	return problems
 }
 
+// dumpFrom is an introspection already taken, and where it was taken from.
+//
+// The digest travels beside the path because the split this flag exists for is
+// a split across machines: the boot happens where there is memory for a GitLab
+// and the record is built in the checkout, and only the first of those two can
+// ask Docker what the image really was. Without it a record built this way
+// silently names a tag and no digest, which is the one provenance field a tag
+// cannot replace.
+type dumpFrom struct {
+	path   string
+	digest string
+}
+
 // runGenerate produces the record, from a dump on disk or from a boot.
-func runGenerate(dir, dumpPath, image string, keep bool) error {
-	raw, source, err := introspection(dumpPath, image, keep)
+func runGenerate(dir string, dump dumpFrom, image string, keep bool) error {
+	raw, source, err := introspection(dump, image, keep)
 	if err != nil {
 		return err
 	}
@@ -214,13 +229,13 @@ type origin struct {
 // A dump is not a convenience: it separates the part that needs Docker from
 // the part that has rules in it, so the second can be tested and re-run
 // without the first.
-func introspection(dumpPath, image string, keep bool) ([]byte, origin, error) {
-	if dumpPath != "" {
-		raw, err := os.ReadFile(dumpPath)
+func introspection(dump dumpFrom, image string, keep bool) ([]byte, origin, error) {
+	if dump.path != "" {
+		raw, err := os.ReadFile(dump.path)
 		if err != nil {
 			return nil, origin{}, fmt.Errorf("reading the introspection dump: %w", err)
 		}
-		return raw, origin{image: image}, nil
+		return raw, origin{image: image, digest: dump.digest}, nil
 	}
 	return runner(image, keep)
 }
@@ -289,10 +304,35 @@ func dockerRun(image string, keep bool) ([]byte, origin, error) {
 	run := docker.command(ctx, "exec", containerName, "gitlab-rails", "runner", "/tmp/introspect.rb")
 	out, err := run.Output()
 	if err != nil {
-		return nil, origin{}, fmt.Errorf("running the introspection: %w", err)
+		return nil, origin{}, fmt.Errorf("running the introspection: %w%s", err, runnerDetail(err))
 	}
 	return out, origin{image: image, digest: imageDigest(ctx, docker, image)}, nil
 }
+
+// runnerDetail is the tail of what the runner wrote to stderr, ready to append
+// to the error that reports its exit status, and nothing when it wrote none or
+// the failure was not the runner's own exit.
+//
+// Only stdout is the answer, so stderr is discarded on a good run and carries
+// Rails deprecation warnings nobody wants. On a bad one it holds the only
+// account of what happened: a script that raises exits 1 and says why there,
+// and reporting the status alone leaves a reader with a boot to repeat and
+// nothing to go on. Bounded because a Rails backtrace is long and the last
+// lines are the ones that name the failure.
+func runnerDetail(err error) string {
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || len(exit.Stderr) == 0 {
+		return ""
+	}
+	detail := strings.TrimSpace(string(exit.Stderr))
+	if lines := strings.Split(detail, "\n"); len(lines) > runnerStderrLines {
+		detail = strings.Join(lines[len(lines)-runnerStderrLines:], "\n")
+	}
+	return ": " + detail
+}
+
+// runnerStderrLines is how much of the runner's stderr a failure reports.
+const runnerStderrLines = 20
 
 // dockerPath is the docker binary, as one absolute path resolved at the start
 // of a run rather than as a name looked up again on each of the dozen calls a
@@ -338,7 +378,8 @@ var pollInterval = 10 * time.Second //nolint:gochecknoglobals // a seam, restore
 func waitForRails(ctx context.Context, docker dockerPath) error {
 	deadline := time.Now().Add(bootTimeout)
 	for time.Now().Before(deadline) {
-		if err := docker.command(ctx, "exec", containerName, "gitlab-rails", "runner", "puts 1").Run(); err == nil {
+		if out, err := docker.command(ctx, "exec", containerName, "gitlab-rails", "runner", readyProbe).Output(); err == nil &&
+			strings.TrimSpace(string(out)) == readyAnswer {
 			return nil
 		}
 		// Before asking whether the container is up, because that question is
@@ -361,6 +402,22 @@ func waitForRails(ctx context.Context, docker dockerPath) error {
 	}
 	return fmt.Errorf("the application was not ready within %s: the container is up but gitlab-rails runner does not answer", bootTimeout)
 }
+
+// readyProbe is what the wait asks the container, and readyAnswer is the only
+// answer that ends it.
+//
+// It asks a question of the database on purpose. The probe used to be
+// `puts 1`, which only proves the environment loaded, and the environment can
+// load against a database whose migrations have not run: a boot that never
+// reaches a table cannot notice the table is missing. The introspection does
+// reach one, so it failed with `relation "application_settings" does not
+// exist` on a container this wait had already called ready, twice, each time
+// after a five-minute boot. Asking for a table the application always has
+// makes the wait cover the same ground the run afterwards will.
+const (
+	readyProbe  = `puts(ApplicationSetting.table_exists? ? "ready" : "migrating")`
+	readyAnswer = "ready"
+)
 
 // running reports whether the container is still up, so a boot that died is
 // reported with its logs rather than waited out.

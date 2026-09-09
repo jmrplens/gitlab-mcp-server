@@ -36,7 +36,12 @@ import (
 
 // SchemaVersion is the shape of this record. A reader refuses a version it was
 // not written for rather than guessing at a field that moved.
-const SchemaVersion = 1
+//
+// Version 2 records [Field.Merge]. The bump is not cosmetic: version 1 spelled
+// a merged exposure exactly like a nested one, so a reader of an old record
+// would resolve it into the wrong keys and never know, which is the one
+// failure a version guard exists to stop.
+const SchemaVersion = 2
 
 // DefaultDir is where the record lives, beside the other pinned records.
 const DefaultDir = "docs/development"
@@ -118,6 +123,17 @@ type Field struct {
 	// Document.Entities. It is the edge that makes the record a tree rather
 	// than a list.
 	Using string `json:"using,omitempty"`
+	// Merge is set for an exposure whose value is merged into the object
+	// around it instead of being placed under Name: `expose :user, merge:
+	// true, using: UserBasic` on a member sends the user's own keys on the
+	// member, and no `user` key at all.
+	//
+	// Recording it is what keeps the record from reading as the opposite of
+	// what GitLab sends. Without it a member said it carries a `user` object
+	// and said nothing about the id, username and name it really carries, so
+	// an audit reported the one key GitLab never sends as missing and the
+	// nine it does send as invented.
+	Merge bool `json:"merge,omitempty"`
 	// Conditions gate the field. Empty means GitLab sends it with every
 	// response of every endpoint that renders this entity.
 	Conditions []Condition `json:"conditions,omitempty"`
