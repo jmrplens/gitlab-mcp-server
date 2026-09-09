@@ -803,6 +803,12 @@ func CapturedStorageMoves(capture *gitlabclient.ResponseCapture, decoded int) ([
 // ServiceAccountExtra is what GitLab's service account entity sends beside the
 // name and username: the public email always, and the unconfirmed one while a
 // change of address is waiting to be confirmed.
+//
+// Both keys are read here for the group endpoint, whose GroupServiceAccount
+// carries neither. The project endpoint's ServiceAccount already models the
+// unconfirmed address, so that package takes it from the SDK and only the
+// public email from here: the same GitLab entity, modeled twice upstream and
+// unevenly.
 type ServiceAccountExtra struct {
 	PublicEmail      string `json:"public_email"`
 	UnconfirmedEmail string `json:"unconfirmed_email"`

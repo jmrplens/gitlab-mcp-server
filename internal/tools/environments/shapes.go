@@ -416,11 +416,6 @@ func projectOutput(p *gl.Project) *ProjectOutput {
 			WebURL:    p.Namespace.WebURL,
 		}
 	}
-	for _, a := range p.CustomAttributes {
-		if a == nil {
-			continue
-		}
-		out.CustomAttributes = append(out.CustomAttributes, toolutil.CustomAttributeOutput{Key: a.Key, Value: a.Value})
-	}
+	out.CustomAttributes = toolutil.NewCustomAttributeOutputs(p.CustomAttributes)
 	return out
 }
