@@ -1159,6 +1159,8 @@ The boot is a generator and never an audit. It needs Docker and takes a few minu
 
 Floors refuse a boot that half ran, before anything is written: fewer than 400 entities, 5000 exposed fields, 1500 routes or 150 licensed features, or any entity that refused to describe itself. An introspection that half ran does not fail, it returns less, and written down that record says GitLab stopped sending things while every audit downstream reports the difference as a gap in this server.
 
+Thirty-four of the 1425 annotated routes name an entity the record does not hold, and none of them is a defect in GitLab. Eight annotate `File`, which is how GitLab marks a route that answers with bytes rather than an object: the raw file read, the four upload downloads, the repository snapshot, a Terraform module and a Terraform state version. The other twenty-six name classes outside the `API::Entities::` namespace this walk collects, which are the `GitlabSubscriptions::API::Entities::Internal` family, the VS Code settings entities, and the Rails serializers that render a few responses (`ProjectEntity`, `TestReportEntity`, `Vulnerabilities::FindingEntity`). The first group is a fact about the route and belongs in the record as one; the second is this walk's own limit and closes by collecting every `Grape::Entity` subclass rather than filtering on the namespace.
+
 #### Usage
 
 ```bash
