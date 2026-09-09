@@ -65,7 +65,7 @@ Answer the breaking-change heading honestly rather than with a flat "no". Correc
 
 Say the gap was found while developing this MCP server and link the repository: the backlink is the point of contributing from here.
 
-**Always reference the drift issue.** Every merge request that comes out of the field-by-field review carries this line, on a line of its own, at the end of the description:
+**Always reference the drift issue, and do it in the opening line.** Every merge request that comes out of the field-by-field review names issue 2300 in the first paragraph of "What does this MR do?", and carries the machine-readable form on a line of its own at the end:
 
 ```text
 Related to https://gitlab.com/gitlab-org/api/client-go/-/issues/2300
@@ -73,12 +73,24 @@ Related to https://gitlab.com/gitlab-org/api/client-go/-/issues/2300
 
 Issue 2300 is the umbrella: it publishes the method, the per-struct lists of fields GitLab sends that the library does not model, and the table of what has been sent so far. `Related to` is deliberate and `Closes` would be wrong, because the umbrella has to survive the first merge rather than be closed by it.
 
+Putting the reference only at the bottom is what went wrong on 2026-09-09. A code owner asked, on [!3053](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3053), for exactly the issue that already existed and that every one of those merge requests linked. A `Related to` line under the fold is a machine-readable trailer, not a thing a reviewer reads.
+
+## Batch, do not drip
+
+**One merge request per struct is the wrong shape, and the maintainers said so.** The request, in their words on [!3053](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3053): create an issue with the missing fields, keep updating it until there is a good point to send merge requests that may be a bit larger, so they can approve chunks ahead of time and then only check that the merge request matches the chunk. Three maintainers cannot validate a stream of small ones, and they will tell you the descriptions read as machine-written, which is true and is not the complaint: the complaint is the count.
+
+So the loop is: keep 2300 current, ask the maintainers which chunks they are happy to pre-approve, and send **one merge request per approved chunk**, not per struct. Nothing goes out that the issue does not already describe.
+
+Two consequences worth keeping. **Never have more open than they asked for**; if in doubt, ask on the issue before opening anything. And **say plainly how the work is produced** when asked, along with what that does and does not guarantee: the entity, line and condition are read out of a booted GitLab rather than recalled, and each is checked against current `master`, which narrows what a reviewer must distrust without pretending it removes the review.
+
 Two separate mechanisms read that line, and confusing them is what produced the wrong rule this replaces.
 
 - **`apply_labels_from_related_issue.rb`** copies the first `type::` label off the referenced issue, and only onto a merge request that carries none, so a label already asked for by comment is not overwritten. It re-fires whenever the description is edited. The reference must start a line with one of `related to`, `relates to`, `relate to`, `contributes to`, `contribute to`, `closes`, `close`, `see`; `fixes`, `resolves` and `updates` are **not** in that list, and merge requests using them merged with no `type::` label ever. Issue 2300 carries no `type::` label of its own, having been opened by an account that cannot set labels, so referencing it copies nothing.
 - **The contributor platform** applies a `linked-issue` label of its own a few minutes after creation, when the merge request's GraphQL `linked_work_items` connection is non-empty. A `MENTIONED` link is enough; it does not have to be `CLOSES`. That label is what carries the linked-issue point bonus, which is why one umbrella issue referenced from every merge request scores nearly the same as opening a throwaway issue per merge request, and reads as evidence rather than as noise.
 
-`CONTRIBUTING.md` asks for no issue before a merge request, and a maintainer has said per-merge-request issues are noise. One well-evidenced umbrella is the shape that satisfies both.
+`CONTRIBUTING.md` asks for no issue before a merge request in as many words: "When you are up for writing a MR to solve the issue you encountered, it's not needed to first open a separate issue." So do not open one per merge request. One umbrella carrying the evidence, referenced from each, is the shape that respects that and still earns the link.
+
+Nobody upstream has endorsed issue 2300. It is ours, opened to answer a question their own issue 2269 left open, and no maintainer has replied to it. Do not describe it, in a description or a comment, as anything a maintainer agreed to.
 
 ### 5. Do not set fields the account cannot set
 
