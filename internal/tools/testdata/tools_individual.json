@@ -16088,6 +16088,15 @@
           },
           "type": "object"
         },
+        "blob_download_timeout": {
+          "type": "integer"
+        },
+        "checksum_mismatch_report_threshold": {
+          "type": "integer"
+        },
+        "checksum_mismatch_self_heal_cooldown_minutes": {
+          "type": "integer"
+        },
         "container_repositories_max_capacity": {
           "type": "integer"
         },
@@ -16128,6 +16137,15 @@
           "type": "integer"
         },
         "selective_sync_namespace_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "selective_sync_organization_ids": {
           "items": {
             "type": "integer"
           },
@@ -16177,7 +16195,10 @@
         "container_repositories_max_capacity",
         "minimum_reverification_interval",
         "sync_object_storage",
-        "_links"
+        "_links",
+        "blob_download_timeout",
+        "checksum_mismatch_report_threshold",
+        "checksum_mismatch_self_heal_cooldown_minutes"
       ],
       "type": "object"
     },
@@ -28930,6 +28951,15 @@
           },
           "type": "object"
         },
+        "blob_download_timeout": {
+          "type": "integer"
+        },
+        "checksum_mismatch_report_threshold": {
+          "type": "integer"
+        },
+        "checksum_mismatch_self_heal_cooldown_minutes": {
+          "type": "integer"
+        },
         "container_repositories_max_capacity": {
           "type": "integer"
         },
@@ -28970,6 +29000,15 @@
           "type": "integer"
         },
         "selective_sync_namespace_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "selective_sync_organization_ids": {
           "items": {
             "type": "integer"
           },
@@ -29019,7 +29058,10 @@
         "container_repositories_max_capacity",
         "minimum_reverification_interval",
         "sync_object_storage",
-        "_links"
+        "_links",
+        "blob_download_timeout",
+        "checksum_mismatch_report_threshold",
+        "checksum_mismatch_self_heal_cooldown_minutes"
       ],
       "type": "object"
     },
@@ -41034,6 +41076,15 @@
           },
           "type": "object"
         },
+        "blob_download_timeout": {
+          "type": "integer"
+        },
+        "checksum_mismatch_report_threshold": {
+          "type": "integer"
+        },
+        "checksum_mismatch_self_heal_cooldown_minutes": {
+          "type": "integer"
+        },
         "container_repositories_max_capacity": {
           "type": "integer"
         },
@@ -41074,6 +41125,15 @@
           "type": "integer"
         },
         "selective_sync_namespace_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "selective_sync_organization_ids": {
           "items": {
             "type": "integer"
           },
@@ -41123,7 +41183,10 @@
         "container_repositories_max_capacity",
         "minimum_reverification_interval",
         "sync_object_storage",
-        "_links"
+        "_links",
+        "blob_download_timeout",
+        "checksum_mismatch_report_threshold",
+        "checksum_mismatch_self_heal_cooldown_minutes"
       ],
       "type": "object"
     },
@@ -47645,6 +47708,10 @@
           },
           "type": "object"
         },
+        "additional_fields": {
+          "additionalProperties": true,
+          "type": "object"
+        },
         "ci_secure_files_checksum_failed_count": {
           "type": "integer"
         },
@@ -48146,6 +48213,77 @@
         "proxy_remote_requests_event_count_weekly": {
           "type": "integer"
         },
+        "replicables": {
+          "additionalProperties": {
+            "additionalProperties": false,
+            "properties": {
+              "checksum_failed_count": {
+                "type": "integer"
+              },
+              "checksum_total_count": {
+                "type": "integer"
+              },
+              "checksummed_count": {
+                "type": "integer"
+              },
+              "count": {
+                "type": "integer"
+              },
+              "failed_count": {
+                "type": "integer"
+              },
+              "oldest_unsynced_time": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "registry_count": {
+                "type": "integer"
+              },
+              "replication_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "synced_count": {
+                "type": "integer"
+              },
+              "synced_in_percentage": {
+                "type": "string"
+              },
+              "verification_failed_count": {
+                "type": "integer"
+              },
+              "verification_total_count": {
+                "type": "integer"
+              },
+              "verified_count": {
+                "type": "integer"
+              },
+              "verified_in_percentage": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "count",
+              "registry_count",
+              "synced_count",
+              "failed_count",
+              "checksummed_count",
+              "checksum_failed_count",
+              "checksum_total_count",
+              "verified_count",
+              "verification_failed_count",
+              "verification_total_count",
+              "synced_in_percentage",
+              "verified_in_percentage"
+            ],
+            "type": "object"
+          },
+          "type": "object"
+        },
         "replication_slots_count": {
           "type": "integer"
         },
@@ -48166,6 +48304,9 @@
         },
         "repositories_checked_in_percentage": {
           "type": "string"
+        },
+        "repositories_count": {
+          "type": "integer"
         },
         "revision": {
           "type": "string"
@@ -48208,6 +48349,24 @@
         },
         "snippet_repositories_verified_in_percentage": {
           "type": "string"
+        },
+        "storage_shards": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "storage_shards_match": {
           "type": "boolean"
@@ -48294,6 +48453,7 @@
       "required": [
         "geo_node_id",
         "projects_count",
+        "repositories_count",
         "container_repositories_replication_enabled",
         "lfs_objects_count",
         "lfs_objects_checksum_total_count",
@@ -108411,6 +108571,15 @@
                 },
                 "type": "object"
               },
+              "blob_download_timeout": {
+                "type": "integer"
+              },
+              "checksum_mismatch_report_threshold": {
+                "type": "integer"
+              },
+              "checksum_mismatch_self_heal_cooldown_minutes": {
+                "type": "integer"
+              },
               "container_repositories_max_capacity": {
                 "type": "integer"
               },
@@ -108451,6 +108620,15 @@
                 "type": "integer"
               },
               "selective_sync_namespace_ids": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "selective_sync_organization_ids": {
                 "items": {
                   "type": "integer"
                 },
@@ -108500,7 +108678,10 @@
               "container_repositories_max_capacity",
               "minimum_reverification_interval",
               "sync_object_storage",
-              "_links"
+              "_links",
+              "blob_download_timeout",
+              "checksum_mismatch_report_threshold",
+              "checksum_mismatch_self_heal_cooldown_minutes"
             ],
             "type": "object"
           },
@@ -117728,6 +117909,10 @@
                 },
                 "type": "object"
               },
+              "additional_fields": {
+                "additionalProperties": true,
+                "type": "object"
+              },
               "ci_secure_files_checksum_failed_count": {
                 "type": "integer"
               },
@@ -118229,6 +118414,77 @@
               "proxy_remote_requests_event_count_weekly": {
                 "type": "integer"
               },
+              "replicables": {
+                "additionalProperties": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "checksum_failed_count": {
+                      "type": "integer"
+                    },
+                    "checksum_total_count": {
+                      "type": "integer"
+                    },
+                    "checksummed_count": {
+                      "type": "integer"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "failed_count": {
+                      "type": "integer"
+                    },
+                    "oldest_unsynced_time": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "registry_count": {
+                      "type": "integer"
+                    },
+                    "replication_enabled": {
+                      "type": [
+                        "null",
+                        "boolean"
+                      ]
+                    },
+                    "synced_count": {
+                      "type": "integer"
+                    },
+                    "synced_in_percentage": {
+                      "type": "string"
+                    },
+                    "verification_failed_count": {
+                      "type": "integer"
+                    },
+                    "verification_total_count": {
+                      "type": "integer"
+                    },
+                    "verified_count": {
+                      "type": "integer"
+                    },
+                    "verified_in_percentage": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "count",
+                    "registry_count",
+                    "synced_count",
+                    "failed_count",
+                    "checksummed_count",
+                    "checksum_failed_count",
+                    "checksum_total_count",
+                    "verified_count",
+                    "verification_failed_count",
+                    "verification_total_count",
+                    "synced_in_percentage",
+                    "verified_in_percentage"
+                  ],
+                  "type": "object"
+                },
+                "type": "object"
+              },
               "replication_slots_count": {
                 "type": "integer"
               },
@@ -118249,6 +118505,9 @@
               },
               "repositories_checked_in_percentage": {
                 "type": "string"
+              },
+              "repositories_count": {
+                "type": "integer"
               },
               "revision": {
                 "type": "string"
@@ -118291,6 +118550,24 @@
               },
               "snippet_repositories_verified_in_percentage": {
                 "type": "string"
+              },
+              "storage_shards": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "storage_shards_match": {
                 "type": "boolean"
@@ -118377,6 +118654,7 @@
             "required": [
               "geo_node_id",
               "projects_count",
+              "repositories_count",
               "container_repositories_replication_enabled",
               "lfs_objects_count",
               "lfs_objects_checksum_total_count",
@@ -196164,6 +196442,15 @@
           },
           "type": "object"
         },
+        "blob_download_timeout": {
+          "type": "integer"
+        },
+        "checksum_mismatch_report_threshold": {
+          "type": "integer"
+        },
+        "checksum_mismatch_self_heal_cooldown_minutes": {
+          "type": "integer"
+        },
         "container_repositories_max_capacity": {
           "type": "integer"
         },
@@ -196204,6 +196491,15 @@
           "type": "integer"
         },
         "selective_sync_namespace_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "selective_sync_organization_ids": {
           "items": {
             "type": "integer"
           },
@@ -196253,7 +196549,10 @@
         "container_repositories_max_capacity",
         "minimum_reverification_interval",
         "sync_object_storage",
-        "_links"
+        "_links",
+        "blob_download_timeout",
+        "checksum_mismatch_report_threshold",
+        "checksum_mismatch_self_heal_cooldown_minutes"
       ],
       "type": "object"
     },

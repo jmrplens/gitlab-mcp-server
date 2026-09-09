@@ -66,23 +66,20 @@ func geoDeleteSpec(name string, route toolutil.ActionRoute, individualTool strin
 // decorateGeoMeta fills non-generic Usage, natural-language Aliases,
 // RelatedActions, and the "Returns: … See also: …" individual-tool
 // description for each Geo site action (1:1 audit R-META).
+//
+// Each of the four is copied without asking whether the entry filled it:
+// every entry of [geoActionMeta] carries all four, which
+// TestGeoActionMeta_EveryEntryIsComplete holds it to, so a guard here could
+// not change a result and no input could tell it from its own negation.
 func decorateGeoMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	meta, ok := geoActionMeta[individualTool]
 	if !ok {
 		return
 	}
-	if meta.usage != "" {
-		options.Usage = meta.usage
-	}
-	if len(meta.aliases) > 0 {
-		options.Aliases = append([]string(nil), meta.aliases...)
-	}
-	if len(meta.related) > 0 {
-		options.RelatedActions = append([]string(nil), meta.related...)
-	}
-	if meta.description != "" {
-		options.IndividualTool.Description = meta.description
-	}
+	options.Usage = meta.usage
+	options.Aliases = append([]string(nil), meta.aliases...)
+	options.RelatedActions = append([]string(nil), meta.related...)
+	options.IndividualTool.Description = meta.description
 }
 
 // geoActionMetaEntry is the discovery metadata for one Geo site action.

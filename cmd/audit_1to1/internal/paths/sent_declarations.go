@@ -40,6 +40,10 @@ const (
 	// option of the presenter, which no endpoint of the package passes: the
 	// record marks it sent-when, and on these routes the when never holds.
 	categoryOptionNeverPassed = "entity-option-no-endpoint-passes"
+	// categoryEntityPublishedElsewhere is an entity the package does surface,
+	// on another type or under a shape of this server's own, so the field
+	// names the comparison looks for are not the names the caller reads.
+	categoryEntityPublishedElsewhere = "entity-published-by-another-type-or-shape"
 )
 
 // The member-family package paths, spelled once because several declarations
@@ -159,6 +163,24 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	// project member lists do declare show_seat_info, so the same key on those
 	// types is published from the SDK rather than answered here.
 	{Package: accessRequestsPkg, Entity: memberEntity, Field: "is_using_seat", Category: categoryOptionNeverPassed, Reason: reasonShowSeatInfoNeverPassed},
+
+	{
+		Package:  toolsDir + "/geo",
+		Entity:   "API::Entities::GeoSiteStatus",
+		Field:    declaredSegment,
+		Category: categoryEntityPublishedElsewhere,
+		Reason: "ee/lib/api/entities/geo_site_status.rb builds most of this entity by looping over " +
+			"GeoNodeStatus::RESOURCE_STATUS_FIELDS, which is thirteen metrics for each of the 44 replicator " +
+			"classes flattened into key names, so 573 of its 605 distinct keys are one matrix. `geo.StatusOutput` " +
+			"publishes that matrix as `replicables`, keyed by replicable, where `lfs_objects_synced_count` is " +
+			"`replicables.lfs_objects.synced_count`: the values are read off the captured response and reach the " +
+			"caller, under names the record cannot match. The entity is compared against `geo.Output` as well, " +
+			"which models a site rather than a status, because client-go declares RepairGeoSite as returning " +
+			"*GeoSite while POST /geo_sites/:id/repair is annotated `success Entities::GeoSiteStatus` and presents " +
+			"a status; that puts the status entity into the union of the five endpoints readSDKRoutes reads for " +
+			"gl.GeoSite, and the four that do answer with a site send none of these keys, so publishing them on " +
+			"the site type would invent them. Both halves are recorded in docs/development/upstream-bugs.md.",
+	},
 }
 
 // covers reports whether this declaration accounts for one finding.

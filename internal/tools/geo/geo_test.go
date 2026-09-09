@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -27,7 +28,11 @@ const geoSiteJSON = `{
 	"container_repositories_max_capacity": 10,
 	"sync_object_storage": false,
 	"selective_sync_type": "",
+	"selective_sync_organization_ids": [7, 9],
 	"minimum_reverification_interval": 7,
+	"blob_download_timeout": 28800,
+	"checksum_mismatch_report_threshold": 5,
+	"checksum_mismatch_self_heal_cooldown_minutes": 60,
 	"web_edit_url": "https://primary.example.com/admin/geo/sites/1/edit",
 	"web_geo_replication_details_url": "https://primary.example.com/admin/geo/replication",
 	"_links": {
@@ -45,6 +50,9 @@ const geoSiteStatusJSON = `{
 	"missing_oauth_application": false,
 	"db_replication_lag_seconds": 0,
 	"projects_count": 42,
+	"repositories_count": 19,
+	"storage_shards": [{"name": "default"}, {"name": "nvme"}],
+	"lfs_objects_oldest_unsynced_time": "2026-01-15T09:00:00Z",
 	"lfs_objects_synced_in_percentage": "100.00%",
 	"job_artifacts_synced_in_percentage": "99.50%",
 	"uploads_synced_in_percentage": "100.00%",
@@ -731,25 +739,31 @@ func TestListStatus_WithPagination(t *testing.T) {
 // populated fields including optional InternalURL, SelectiveSyncType, and WebEditURL.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	out := Output{
-		ID:                               1,
-		Name:                             "primary-site",
-		URL:                              "https://primary.example.com",
-		InternalURL:                      "https://primary.internal",
-		Primary:                          true,
-		Enabled:                          true,
-		Current:                          true,
-		FilesMaxCapacity:                 10,
-		ReposMaxCapacity:                 25,
-		VerificationMaxCapacity:          100,
-		ContainerRepositoriesMaxCapacity: 10,
-		SyncObjectStorage:                false,
-		SelectiveSyncType:                "namespaces",
-		WebEditURL:                       "https://primary.example.com/admin/geo/sites/1/edit",
+		ID:                                      1,
+		Name:                                    "primary-site",
+		URL:                                     "https://primary.example.com",
+		InternalURL:                             "https://primary.internal",
+		Primary:                                 true,
+		Enabled:                                 true,
+		Current:                                 true,
+		FilesMaxCapacity:                        10,
+		ReposMaxCapacity:                        25,
+		VerificationMaxCapacity:                 100,
+		ContainerRepositoriesMaxCapacity:        10,
+		SyncObjectStorage:                       false,
+		SelectiveSyncType:                       "namespaces",
+		WebEditURL:                              "https://primary.example.com/admin/geo/sites/1/edit",
+		BlobDownloadTimeout:                     28800,
+		ChecksumMismatchReportThreshold:         5,
+		ChecksumMismatchSelfHealCooldownMinutes: 60,
 	}
 	md := FormatOutputMarkdown(out)
 
 	checks := []string{
 		"## Geo Site: primary-site",
+		"| Blob Download Timeout | 28800s |",
+		"| Checksum Mismatch Report Threshold | 5 |",
+		"| Checksum Mismatch Self-Heal Cooldown | 60 min |",
 		"| ID | 1 |",
 		"| Name | primary-site |",
 		"| URL | https://primary.example.com |",
@@ -887,6 +901,13 @@ func TestFormatStatusMarkdown_AllFields(t *testing.T) {
 		Version:                        "16.5.0",
 		Revision:                       "abc123",
 		StorageShardsMatch:             true,
+		RepositoriesCount:              19,
+		StorageShards:                  []StorageShard{{Name: "default"}, {Name: "nvme"}},
+		Replicables: map[string]ReplicableStatus{
+			"lfs_objects":     {Count: 120},
+			"job_artifacts":   {Count: 8},
+			"ci_secure_files": {Count: 7},
+		},
 	}
 	// Set UpdatedAt to exercise the non-zero branch
 	out.UpdatedAt = out.UpdatedAt.AddDate(2026, 0, 15)
@@ -907,6 +928,9 @@ func TestFormatStatusMarkdown_AllFields(t *testing.T) {
 		"| Version | 16.5.0 |",
 		"| Revision | abc123 |",
 		"| Storage Shards Match | true |",
+		"| Repositories Count | 19 |",
+		"| Replicables Tracked | 3 |",
+		"| Storage Shards | default, nvme |",
 		"| Updated At |",
 	}
 	for _, c := range checks {
@@ -940,6 +964,12 @@ func TestFormatStatusMarkdown_MinimalFields(t *testing.T) {
 	}
 	if strings.Contains(md, "Updated At") {
 		t.Error("should not contain Updated At when zero")
+	}
+	if strings.Contains(md, "Replicables Tracked") {
+		t.Error("should not contain Replicables Tracked when the matrix is empty")
+	}
+	if strings.Contains(md, "| Storage Shards |") {
+		t.Error("should not contain Storage Shards when the site reported none")
 	}
 }
 
@@ -1167,6 +1197,196 @@ func TestGetStatus_MirrorsFullStruct(t *testing.T) {
 	if out.Links.Self == "" || out.Links.Site == "" {
 		t.Errorf("status _links not mirrored: %+v", out.Links)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Fields client-go does not model, read from the captured response (ADR-0021)
+// ---------------------------------------------------------------------------
+
+// TestGet_PublishesTheSiteFieldsTheSDKDrops verifies the four fields
+// ee/lib/api/entities/geo_site.rb exposes that client-go's GeoSite has no room
+// for reach the caller: the organization ids of a selective sync, the blob
+// download timeout and the two checksum mismatch settings.
+func TestGet_PublishesTheSiteFieldsTheSDKDrops(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/1" {
+			testutil.RespondJSON(w, http.StatusOK, geoSiteJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, IDInput{ID: 1})
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
+	checks := map[string]struct{ got, want int64 }{
+		"blob_download_timeout":                        {out.BlobDownloadTimeout, 28800},
+		"checksum_mismatch_report_threshold":           {out.ChecksumMismatchReportThreshold, 5},
+		"checksum_mismatch_self_heal_cooldown_minutes": {out.ChecksumMismatchSelfHealCooldownMinutes, 60},
+	}
+	for name, check := range checks {
+		t.Run(name, func(t *testing.T) {
+			if check.got != check.want {
+				t.Errorf("%s = %d, want %d", name, check.got, check.want)
+			}
+		})
+	}
+	if !reflect.DeepEqual(out.SelectiveSyncOrganizationIDs, []int64{7, 9}) {
+		t.Errorf("SelectiveSyncOrganizationIDs = %v, want [7 9]", out.SelectiveSyncOrganizationIDs)
+	}
+}
+
+// TestList_PublishesTheSiteFieldsTheSDKDrops verifies the list handler pairs
+// each site with its own captured extras rather than dropping them.
+func TestList_PublishesTheSiteFieldsTheSDKDrops(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites" {
+			testutil.RespondJSON(w, http.StatusOK, `[`+geoSiteJSON+`]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(out.Sites) != 1 {
+		t.Fatalf("expected 1 site, got %d", len(out.Sites))
+	}
+	if out.Sites[0].BlobDownloadTimeout != 28800 {
+		t.Errorf("BlobDownloadTimeout = %d, want 28800", out.Sites[0].BlobDownloadTimeout)
+	}
+}
+
+// TestRepair_PublishesNoSiteExtras verifies the one site handler that reads no
+// capture: POST /geo_sites/:id/repair is annotated `success
+// Entities::GeoSiteStatus` and presents a status, so there are no site fields
+// in that answer to read, whatever client-go's *GeoSite return type suggests.
+func TestRepair_PublishesNoSiteExtras(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/geo_sites/1/repair" {
+			testutil.RespondJSON(w, http.StatusOK, geoSiteStatusJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Repair(context.Background(), client, IDInput{ID: 1})
+	if err != nil {
+		t.Fatalf("Repair() error: %v", err)
+	}
+	if out.BlobDownloadTimeout != 0 || out.SelectiveSyncOrganizationIDs != nil {
+		t.Errorf("Repair() read site extras off a status answer: %+v", out)
+	}
+}
+
+// TestGetStatus_PublishesTheReplicableMatrix verifies the flat per-replicable
+// keys of a status answer reach the caller as the replicables map, keyed by
+// the name GitLab prefixes them with, alongside the repository count and the
+// storage shards client-go does not model.
+func TestGetStatus_PublishesTheReplicableMatrix(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/1/status" {
+			testutil.RespondJSON(w, http.StatusOK, geoSiteStatusJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetStatus(context.Background(), client, IDInput{ID: 1})
+	if err != nil {
+		t.Fatalf("GetStatus() error: %v", err)
+	}
+	if out.RepositoriesCount != 19 {
+		t.Errorf("RepositoriesCount = %d, want 19", out.RepositoriesCount)
+	}
+	if !reflect.DeepEqual(out.StorageShards, []StorageShard{{Name: "default"}, {Name: "nvme"}}) {
+		t.Errorf("StorageShards = %+v, want the two shards", out.StorageShards)
+	}
+	lfs, ok := out.Replicables["lfs_objects"]
+	if !ok {
+		t.Fatalf("Replicables = %+v, want an lfs_objects entry", out.Replicables)
+	}
+	if lfs.Count != 120 || lfs.VerifiedCount != 118 || lfs.SyncedInPercentage != "100.00%" {
+		t.Errorf("lfs_objects = %+v, want the metrics of the answer", lfs)
+	}
+	if lfs.OldestUnsyncedTime == nil {
+		t.Error("lfs_objects.OldestUnsyncedTime is nil, want the time the answer carries")
+	}
+	if len(out.AdditionalFields) != 0 {
+		t.Errorf("AdditionalFields = %+v, want nothing left over from this answer", out.AdditionalFields)
+	}
+}
+
+// TestListStatus_PublishesTheReplicableMatrix verifies the status list handler
+// decomposes each element rather than only the first.
+func TestListStatus_PublishesTheReplicableMatrix(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/status" {
+			testutil.RespondJSON(w, http.StatusOK, `[`+geoSiteStatusJSON+`]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := ListStatus(context.Background(), client, ListStatusInput{})
+	if err != nil {
+		t.Fatalf("ListStatus() error: %v", err)
+	}
+	if len(out.Statuses) != 1 {
+		t.Fatalf("expected 1 status, got %d", len(out.Statuses))
+	}
+	if out.Statuses[0].Replicables["lfs_objects"].Count != 120 {
+		t.Errorf("Replicables = %+v, want the matrix of the one status", out.Statuses[0].Replicables)
+	}
+}
+
+// TestGeo_UnreadableCapturedFields verifies the six handlers that read a
+// capture report its decode failure rather than answering with an object
+// missing what GitLab sent. The body carries a timeout the site shape cannot
+// hold and a repository count the status shape cannot hold, both of them keys
+// client-go's own structs do not model, so the SDK's decode succeeds and only
+// the reader beside it fails.
+func TestGeo_UnreadableCapturedFields(t *testing.T) {
+	const unreadable = `{"id": 1, "name": "primary-site", "blob_download_timeout": "soon", "repositories_count": "x"}`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		collection := r.URL.Path == "/api/v4/geo_sites" || r.URL.Path == "/api/v4/geo_sites/status"
+		if collection && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `[`+unreadable+`]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, unreadable)
+	}))
+
+	name := "primary-site"
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "create", Call: func() error {
+			_, err := Create(context.Background(), client, CreateInput{Name: &name})
+			return err
+		}},
+		{Name: "list", Call: func() error {
+			_, err := List(context.Background(), client, ListInput{})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			_, err := Get(context.Background(), client, IDInput{ID: 1})
+			return err
+		}},
+		{Name: "edit", Call: func() error {
+			_, err := Edit(context.Background(), client, EditInput{ID: 1, Name: &name})
+			return err
+		}},
+		{Name: "get_status", Call: func() error {
+			_, err := GetStatus(context.Background(), client, IDInput{ID: 1})
+			return err
+		}},
+		{Name: "list_status", Call: func() error {
+			_, err := ListStatus(context.Background(), client, ListStatusInput{})
+			return err
+		}},
+	})
 }
 
 // ---------------------------------------------------------------------------
