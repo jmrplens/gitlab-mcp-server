@@ -125,6 +125,7 @@ const diffVersionGetResponse = `{
   "merge_request_id":1,
   "state":"collected",
   "real_size":"5",
+  "patch_id_sha":"9f2c1d0",
   "commits":[
     {"id":"jkl012abc","short_id":"jkl012a","title":"Fix bug","author_name":"Dev","created_at":"2026-01-16T09:00:00Z"}
   ],
@@ -212,6 +213,9 @@ func TestGetDiffVersion_Success(t *testing.T) {
 	}
 	if out.HeadCommitSHA != "jkl012" {
 		t.Errorf("HeadCommitSHA = %q, want %q", out.HeadCommitSHA, "jkl012")
+	}
+	if out.PatchIDSHA != "9f2c1d0" {
+		t.Errorf("PatchIDSHA = %q, want %q", out.PatchIDSHA, "9f2c1d0")
 	}
 	if len(out.Commits) != 1 {
 		t.Fatalf("len(Commits) = %d, want 1", len(out.Commits))

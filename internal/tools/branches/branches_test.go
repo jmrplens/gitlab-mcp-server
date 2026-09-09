@@ -531,7 +531,7 @@ func TestBranchDelete_APIError(t *testing.T) {
 func TestProtectedBranchGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProtectedBranches+"/main" {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"main","push_access_levels":[{"access_level":0}],"merge_access_levels":[{"access_level":40}],"allow_force_push":false,"code_owner_approval_required":true}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"main","push_access_levels":[{"access_level":0}],"merge_access_levels":[{"access_level":40}],"allow_force_push":false,"code_owner_approval_required":true,"inherited":true}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -555,6 +555,9 @@ func TestProtectedBranchGet_Success(t *testing.T) {
 	}
 	if !out.CodeOwnerApprovalRequired {
 		t.Error("CodeOwnerApprovalRequired = false, want true")
+	}
+	if !out.Inherited {
+		t.Error("Inherited = false, want the group-level rule the answer describes")
 	}
 }
 
@@ -1126,7 +1129,7 @@ func TestToOutput_NilCommit(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestProtectedToOutput_EmptyAccessLevels(t *testing.T) {
 	pb := &gl.ProtectedBranch{ID: 1, Name: "main"}
-	out := ProtectedToOutput(pb)
+	out := ProtectedToOutput(pb, toolutil.ProtectedBranchExtra{})
 	if out.PushAccessLevels != nil {
 		t.Errorf("PushAccessLevels = %+v, want nil for empty access levels", out.PushAccessLevels)
 	}

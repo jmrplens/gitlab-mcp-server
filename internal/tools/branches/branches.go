@@ -84,6 +84,7 @@ type ProtectedOutput struct {
 	UnprotectAccessLevels     []BranchAccessDescriptionOutput `json:"unprotect_access_levels,omitempty"`
 	AllowForcePush            bool                            `json:"allow_force_push"`
 	CodeOwnerApprovalRequired bool                            `json:"code_owner_approval_required"`
+	Inherited                 bool                            `json:"inherited"`
 }
 
 // UnprotectInput defines parameters for unprotecting a branch.
@@ -114,8 +115,8 @@ type ProtectedListOutput struct {
 
 // ProtectedToOutput converts a GitLab API [gl.ProtectedBranch] to the
 // MCP tool output format, surfacing the full push/merge/unprotect access-level
-// arrays.
-func ProtectedToOutput(b *gl.ProtectedBranch) ProtectedOutput {
+// arrays, and takes what the capture read beside the decode.
+func ProtectedToOutput(b *gl.ProtectedBranch, extra toolutil.ProtectedBranchExtra) ProtectedOutput {
 	return ProtectedOutput{
 		ID:                        b.ID,
 		Name:                      b.Name,
@@ -124,6 +125,7 @@ func ProtectedToOutput(b *gl.ProtectedBranch) ProtectedOutput {
 		UnprotectAccessLevels:     branchAccessDescriptionsToOutput(b.UnprotectAccessLevels),
 		AllowForcePush:            b.AllowForcePush,
 		CodeOwnerApprovalRequired: b.CodeOwnerApprovalRequired,
+		Inherited:                 extra.Inherited,
 	}
 }
 
@@ -157,6 +159,7 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 	opts.AllowedToPush = branchPermissionOptions(input.AllowedToPush)
 	opts.AllowedToMerge = branchPermissionOptions(input.AllowedToMerge)
 	opts.AllowedToUnprotect = branchPermissionOptions(input.AllowedToUnprotect)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	b, _, err := client.GL().ProtectedBranches.ProtectRepositoryBranches(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		// 409 Conflict means branch is already protected — idempotent success
@@ -166,12 +169,20 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 				return ProtectedOutput{}, toolutil.WrapErrWithHint("branchProtect", err,
 					"protected branch rule already exists but could not retrieve current settings. Use gitlab_protected_branch_get to view current rules, or gitlab_protected_branch_update to modify them")
 			}
-			return ProtectedToOutput(existing), nil
+			existingExtra, captureErr := toolutil.CapturedProtectedBranch(captured)
+			if captureErr != nil {
+				return ProtectedOutput{}, toolutil.WrapErr("branchProtect", captureErr)
+			}
+			return ProtectedToOutput(existing, existingExtra), nil
 		}
 		return ProtectedOutput{}, toolutil.WrapErrWithStatusHint("branchProtect", err, http.StatusForbidden,
 			"protecting branches requires Maintainer or Owner role")
 	}
-	return ProtectedToOutput(b), nil
+	extra, err := toolutil.CapturedProtectedBranch(captured)
+	if err != nil {
+		return ProtectedOutput{}, toolutil.WrapErr("branchProtect", err)
+	}
+	return ProtectedToOutput(b, extra), nil
 }
 
 // UnprotectOutput holds the result of an unprotect operation.
@@ -232,14 +243,19 @@ func ProtectedList(ctx context.Context, client *gitlabclient.Client, input Prote
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	branches, resp, err := client.GL().ProtectedBranches.ListProtectedBranches(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ProtectedListOutput{}, toolutil.WrapErrWithStatusHint("protectedBranchesList", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get")
 	}
+	extras, err := toolutil.CapturedProtectedBranches(captured, len(branches))
+	if err != nil {
+		return ProtectedListOutput{}, toolutil.WrapErr("protectedBranchesList", err)
+	}
 	out := make([]ProtectedOutput, len(branches))
 	for i, b := range branches {
-		out[i] = ProtectedToOutput(b)
+		out[i] = ProtectedToOutput(b, extras[i])
 	}
 	return ProtectedListOutput{Branches: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -425,12 +441,17 @@ func ProtectedGet(ctx context.Context, client *gitlabclient.Client, input Protec
 	if input.BranchName == "" {
 		return ProtectedOutput{}, toolutil.ErrRequiredString("protectedBranchGet", "branch_name")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	b, _, err := client.GL().ProtectedBranches.GetProtectedBranch(string(input.ProjectID), input.BranchName, gl.WithContext(ctx))
 	if err != nil {
 		return ProtectedOutput{}, toolutil.WrapErrWithStatusHint("protectedBranchGet", err, http.StatusNotFound,
 			"the branch may not be protected. Use gitlab_protected_branches_list to verify")
 	}
-	return ProtectedToOutput(b), nil
+	extra, err := toolutil.CapturedProtectedBranch(captured)
+	if err != nil {
+		return ProtectedOutput{}, toolutil.WrapErr("protectedBranchGet", err)
+	}
+	return ProtectedToOutput(b, extra), nil
 }
 
 // ProtectedUpdateInput defines parameters for updating a protected branch's
@@ -473,6 +494,7 @@ func ProtectedUpdate(ctx context.Context, client *gitlabclient.Client, input Pro
 	opts.AllowedToPush = branchPermissionOptions(input.AllowedToPush)
 	opts.AllowedToMerge = branchPermissionOptions(input.AllowedToMerge)
 	opts.AllowedToUnprotect = branchPermissionOptions(input.AllowedToUnprotect)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	b, _, err := client.GL().ProtectedBranches.UpdateProtectedBranch(string(input.ProjectID), input.BranchName, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -482,7 +504,11 @@ func ProtectedUpdate(ctx context.Context, client *gitlabclient.Client, input Pro
 		return ProtectedOutput{}, toolutil.WrapErrWithStatusHint("protectedBranchUpdate", err, http.StatusNotFound,
 			"the branch may not be protected. Use gitlab_branch_protect first")
 	}
-	return ProtectedToOutput(b), nil
+	extra, err := toolutil.CapturedProtectedBranch(captured)
+	if err != nil {
+		return ProtectedOutput{}, toolutil.WrapErr("protectedBranchUpdate", err)
+	}
+	return ProtectedToOutput(b, extra), nil
 }
 
 // ---------------------------------------------------------------------------

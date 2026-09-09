@@ -987,7 +987,8 @@ func TestGet_WithAllTimestamps(t *testing.T) {
 			"owner":{"id":1,"name":"Admin"},
 			"created_at":"2026-01-15T10:00:00Z",
 			"updated_at":"2026-02-01T12:00:00Z",
-			"last_used":"2026-03-01T08:30:00Z"
+			"last_used":"2026-03-01T08:30:00Z",
+			"expires_at":"2026-12-31T23:59:59Z"
 		}`)
 	}))
 	out, err := GetTrigger(context.Background(), client, GetInput{ProjectID: "42", TriggerID: 10})
@@ -999,5 +1000,8 @@ func TestGet_WithAllTimestamps(t *testing.T) {
 	}
 	if out.LastUsed == "" {
 		t.Error("expected LastUsed to be set")
+	}
+	if out.ExpiresAt == "" {
+		t.Error("expected ExpiresAt to be set from the captured answer")
 	}
 }

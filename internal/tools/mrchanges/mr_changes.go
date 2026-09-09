@@ -174,6 +174,7 @@ type DiffVersionOutput struct {
 	MergeRequestID int64                     `json:"merge_request_id,omitempty"`
 	State          string                    `json:"state,omitempty"`
 	RealSize       string                    `json:"real_size,omitempty"`
+	PatchIDSHA     string                    `json:"patch_id_sha,omitempty"`
 	Commits        []DiffVersionCommitOutput `json:"commits,omitempty"`
 	Diffs          []FileDiffOutput          `json:"diffs,omitempty"`
 }
@@ -185,8 +186,10 @@ type DiffVersionsListOutput struct {
 	Pagination   toolutil.PaginationOutput `json:"pagination"`
 }
 
-// diffVersionToOutput converts the GitLab API response to the tool output format.
-func diffVersionToOutput(v *gl.MergeRequestDiffVersion) DiffVersionOutput {
+// diffVersionToOutput converts the GitLab API response to the tool output
+// format, filling from the decoded version and from what the capture read
+// beside it.
+func diffVersionToOutput(v *gl.MergeRequestDiffVersion, extra toolutil.MergeRequestDiffExtra) DiffVersionOutput {
 	out := DiffVersionOutput{
 		ID:             v.ID,
 		HeadCommitSHA:  v.HeadCommitSHA,
@@ -195,6 +198,7 @@ func diffVersionToOutput(v *gl.MergeRequestDiffVersion) DiffVersionOutput {
 		MergeRequestID: v.MergeRequestID,
 		State:          v.State,
 		RealSize:       v.RealSize,
+		PatchIDSHA:     extra.PatchIDSHA,
 	}
 	if v.CreatedAt != nil {
 		out.CreatedAt = v.CreatedAt.Format(time.RFC3339)
@@ -270,15 +274,20 @@ func ListDiffVersions(ctx context.Context, client *gitlabclient.Client, input Di
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	versions, resp, err := client.GL().MergeRequests.GetMergeRequestDiffVersions(
 		string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx),
 	)
 	if err != nil {
 		return DiffVersionsListOutput{}, toolutil.WrapErrWithStatusHint("mrDiffVersionsList", err, http.StatusNotFound, hintVerifyMR)
 	}
+	extras, err := toolutil.CapturedMergeRequestDiffs(captured, len(versions))
+	if err != nil {
+		return DiffVersionsListOutput{}, toolutil.WrapErr("mrDiffVersionsList", err)
+	}
 	out := make([]DiffVersionOutput, len(versions))
 	for i, v := range versions {
-		out[i] = diffVersionToOutput(v)
+		out[i] = diffVersionToOutput(v, extras[i])
 	}
 	return DiffVersionsListOutput{
 		DiffVersions: out,
@@ -304,13 +313,18 @@ func GetDiffVersion(ctx context.Context, client *gitlabclient.Client, input Diff
 	if input.Unidiff {
 		opts.Unidiff = new(true)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	version, _, err := client.GL().MergeRequests.GetSingleMergeRequestDiffVersion(
 		string(input.ProjectID), input.MRIID, input.VersionID, opts, gl.WithContext(ctx),
 	)
 	if err != nil {
 		return DiffVersionOutput{}, toolutil.WrapErrWithStatusHint("mrDiffVersionGet", err, http.StatusNotFound, "verify version_id with gitlab_mr_diff_versions_list")
 	}
-	return diffVersionToOutput(version), nil
+	extra, err := toolutil.CapturedMergeRequestDiff(captured)
+	if err != nil {
+		return DiffVersionOutput{}, toolutil.WrapErr("mrDiffVersionGet", err)
+	}
+	return diffVersionToOutput(version, extra), nil
 }
 
 // ---------------------------------------------------------------------------
