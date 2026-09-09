@@ -62,10 +62,11 @@
 // whose fields are other requests rather than this response and which alone
 // offers seventeen thousand of the twenty-two thousand fields an unbounded
 // walk would report. And the object must be read rather than traversed, which
-// a struct decoding at least one scalar or enum shows. On top of those, six
-// exclusions each cost what sent.go records: connection plumbing, the cursor
-// object, the meta field, a field you must supply an argument to fetch, and
-// the mutation id nobody supplies. A union is asked once per member the
+// a struct decoding at least one scalar or enum shows. On top of those, four
+// exclusions each cost what sent.go records: connection plumbing, which is the
+// six names that move a page rather than carry it and includes the cursor, the
+// meta field, a field you must supply an argument to fetch, and the mutation id
+// nobody supplies. A union is asked once per member the
 // document names in a fragment and never about one it does not, which is what
 // keeps a security finding's location family without reporting every variant
 // of it.
