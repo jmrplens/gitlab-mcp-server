@@ -44,6 +44,13 @@ const (
 	// on another type or under a shape of this server's own, so the field
 	// names the comparison looks for are not the names the caller reads.
 	categoryEntityPublishedElsewhere = "entity-published-by-another-type-or-shape"
+	// categorySDKRouteNeverCalled is an entity that reached a type through
+	// client-go rather than through anything this server does: a service
+	// method answering with the struct the type pairs with sends to an
+	// endpoint no handler here calls, so [readSDKRoutes] puts that endpoint,
+	// and whatever entity it answers with, into the union in front of a type
+	// that has never held one of its responses.
+	categorySDKRouteNeverCalled = "sdk-route-no-handler-calls"
 )
 
 // The member-family package paths, spelled once because several declarations
@@ -52,6 +59,14 @@ const (
 	accessRequestsPkg = toolsDir + "/accessrequests"
 	groupMembersPkg   = toolsDir + "/groupmembers"
 	groupsPkg         = toolsDir + "/groups"
+)
+
+// The two packages whose Output is one and the same type,
+// toolutil.MergeRequestOutput, reported once under each package that aliases
+// it and so answered once under each.
+const (
+	mergeRequestsPkg           = toolsDir + "/mergerequests"
+	deploymentMergeRequestsPkg = toolsDir + "/deploymentmergerequests"
 )
 
 // memberEntity is the entity the billable members route annotates and the one
@@ -105,6 +120,41 @@ const reasonBillableMemberEntity = "ee/lib/api/groups.rb describes GET /groups/:
 	"A billable member is a user who costs a seat and not a membership record: it has no access level, no expiry, no " +
 	"creator and no role, so this key has never been on that response. The record holds both entities and only the " +
 	"route's annotation is wrong."
+
+// The two entities client-go drags in front of the merge request output type,
+// each named by the one service method that puts it there.
+//
+// Both endpoints exist and both send what the record says; nothing here calls
+// either. mrapprovals serves the approval endpoints through GetConfiguration,
+// which is the GET and answers with MergeRequestApprovals, and mrchanges serves
+// the diff through ListMergeRequestDiffs rather than the deprecated /changes.
+// So the entity in front of this type is one no request this server makes has
+// ever produced, and publishing an approval count or a diff on a merge request
+// list entry would invent a key GitLab does not send there.
+const (
+	reasonApprovalStateSDKRoute = "client-go declares MergeRequestApprovalsService.ChangeApprovalConfiguration as answering with *MergeRequest, and it " +
+		"sends POST /projects/:id/merge_requests/:merge_request_iid/approvals, whose desc annotates Entities::ApprovalState. readSDKRoutes therefore " +
+		"puts the approval state into the union of the eighteen endpoints it reads for the merge request structs, and the seventeen others answer with " +
+		"a merge request that carries none of these keys. No handler in this repository calls that method: the only recorded request to that path is " +
+		"the GET, from internal/tools/mrapprovals through GetConfiguration, which answers with Entities::MergeRequestApprovals and is published there."
+	reasonChangesSDKRoute = "client-go declares MergeRequestsService.GetMergeRequestChanges as answering with *MergeRequest, and it sends " +
+		"GET /projects/:id/merge_requests/:merge_request_iid/changes, whose desc annotates Entities::MergeRequestChanges. That entity's changes array " +
+		"and overflow flag join the union the same way the approval state does. The method is deprecated in client-go and no handler here calls it: " +
+		"internal/tools/mrchanges serves the diff through ListMergeRequestDiffs on /diffs, and the request inventory records no request to /changes at all."
+)
+
+// reasonRenderHTMLNeverPassed answers the two rendered-markup keys on the types
+// whose routes cannot ask for them.
+//
+// render_html is unlike the presenter options above in one way that does not
+// change the answer: it is a real request parameter, so a caller can ask for it
+// where an endpoint declares it. Of the 2110 routes in the record exactly three
+// do, and the only merge request one is the single-merge-request GET, which is
+// why toolutil.MergeRequestOutput publishes both keys and this type does not.
+const reasonRenderHTMLNeverPassed = "lib/api/entities/merge_request_basic.rb exposes title_html and description_html only when the presenter is given " +
+	"render_html. Neither GET /projects/:id/issues/:issue_iid/related_merge_requests nor GET /projects/:id/issues/:issue_iid/closed_by declares that " +
+	"parameter, so Grape passes the option on neither and the keys have never been on either response. The single-merge-request GET does declare it, " +
+	"which is where the same two keys are published rather than declared."
 
 // declaredUnsurfaced holds every field GitLab's document lists that the
 // endpoint does not send, each with the source that says so.
@@ -163,6 +213,24 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	// project member lists do declare show_seat_info, so the same key on those
 	// types is published from the SDK rather than answered here.
 	{Package: accessRequestsPkg, Entity: memberEntity, Field: "is_using_seat", Category: categoryOptionNeverPassed, Reason: reasonShowSeatInfoNeverPassed},
+
+	// The two entities client-go's own return types put in front of the merge
+	// request output, answered with a splat because every key the entity has is
+	// there for the same reason and neither entity is one these two packages
+	// ever receive. internal/tools/mrapprovals publishes the approval state it
+	// really does serve, under a package this pair of declarations cannot
+	// reach.
+	{Package: mergeRequestsPkg, Entity: "API::Entities::ApprovalState", Field: declaredSegment, Category: categorySDKRouteNeverCalled, Reason: reasonApprovalStateSDKRoute},
+	{Package: mergeRequestsPkg, Entity: "API::Entities::MergeRequestChanges", Field: declaredSegment, Category: categorySDKRouteNeverCalled, Reason: reasonChangesSDKRoute},
+	{Package: deploymentMergeRequestsPkg, Entity: "API::Entities::ApprovalState", Field: declaredSegment, Category: categorySDKRouteNeverCalled, Reason: reasonApprovalStateSDKRoute},
+	{Package: deploymentMergeRequestsPkg, Entity: "API::Entities::MergeRequestChanges", Field: declaredSegment, Category: categorySDKRouteNeverCalled, Reason: reasonChangesSDKRoute},
+
+	// The two rendered-markup keys on the issue package's merge request row,
+	// named one by one rather than with a splat: every other key of the same
+	// entity on that type is published, and a splat would swallow the next one
+	// GitLab adds.
+	{Package: toolsDir + "/issues", Entity: "API::Entities::MergeRequestBasic", Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
+	{Package: toolsDir + "/issues", Entity: "API::Entities::MergeRequestBasic", Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
 
 	{
 		Package:  toolsDir + "/geo",

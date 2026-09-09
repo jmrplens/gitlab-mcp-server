@@ -2281,8 +2281,15 @@ func TestBasicMRToOutput(t *testing.T) {
 		MergeAfter: &merged, PreparedAt: &created, ClosedAt: &merged,
 		WebURL: "https://gitlab.example.com/mr/1",
 	}
-	out := basicMRToOutput(mr)
+	approvals := int64(2)
+	out := basicMRToOutput(mr, toolutil.MergeRequestExtra{
+		ApprovalsBeforeMerge: &approvals,
+		MergeStatus:          "can_be_merged",
+		Reference:            "!2",
+		WorkInProgress:       true,
+	})
 
+	assertRelatedMRCapturedKeys(t, out)
 	if out.Author == nil || out.Author.Username != "alice" || out.Author.ID != 11 || out.Author.CreatedAt == "" {
 		t.Errorf("Author = %+v, want full alice user with created_at", out.Author)
 	}
@@ -2306,6 +2313,19 @@ func TestBasicMRToOutput(t *testing.T) {
 	assertRelatedMRTimestamps(t, out)
 	if out.WebURL != "https://gitlab.example.com/mr/1" {
 		t.Errorf("WebURL = %q, want correct URL", out.WebURL)
+	}
+}
+
+// assertRelatedMRCapturedKeys asserts the four keys the converter takes from
+// the captured response rather than from gl.BasicMergeRequest, which declares
+// none of them (ADR-0021).
+func assertRelatedMRCapturedKeys(t *testing.T, out RelatedMROutput) {
+	t.Helper()
+	if out.ApprovalsBeforeMerge == nil || *out.ApprovalsBeforeMerge != 2 {
+		t.Errorf("ApprovalsBeforeMerge = %v, want 2", out.ApprovalsBeforeMerge)
+	}
+	if out.MergeStatus != "can_be_merged" || out.Reference != "!2" || !out.WorkInProgress {
+		t.Errorf("captured keys = %q/%q/%t, want can_be_merged/!2/true", out.MergeStatus, out.Reference, out.WorkInProgress)
 	}
 }
 
@@ -2383,7 +2403,13 @@ func assertRelatedMRTimestamps(t *testing.T, out RelatedMROutput) {
 // references, time-stats, or task status.
 func TestBasicMRToOutput_NilAuthor(t *testing.T) {
 	mr := &gl.BasicMergeRequest{ID: 1, IID: 2}
-	out := basicMRToOutput(mr)
+	out := basicMRToOutput(mr, toolutil.MergeRequestExtra{})
+	if out.ApprovalsBeforeMerge != nil {
+		t.Errorf("ApprovalsBeforeMerge = %v, want nil when the response carried none", out.ApprovalsBeforeMerge)
+	}
+	if out.MergeStatus != "" || out.Reference != "" || out.WorkInProgress {
+		t.Errorf("captured keys must stay empty when the response carried none")
+	}
 	if out.Author != nil {
 		t.Errorf("Author = %+v, want nil for nil author", out.Author)
 	}
@@ -4213,5 +4239,289 @@ func TestToOutput_AdditiveSubObjects_NilSafe(t *testing.T) {
 	}
 	if out.ExternalID != "" || out.IssueLinkID != 0 || out.ServiceDeskReplyTo != "" {
 		t.Errorf("expected zero additive scalars")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Keys GitLab sends on a related merge request that client-go does not model
+// (ADR-0021)
+// ---------------------------------------------------------------------------.
+
+// relatedMRSentKeysResponse is what the closed-by and related-merge-requests
+// routes really answer with: a merge request carrying the four keys
+// lib/api/entities/merge_request_basic.rb sends unconditionally and
+// gl.BasicMergeRequest does not declare, plus the two rendered ones neither
+// route can ask for and that a response would therefore never carry.
+const relatedMRSentKeysResponse = `[{
+	"id":200,"iid":20,"project_id":42,"title":"Refactor auth","state":"opened",
+	"source_branch":"refactor-auth","target_branch":"main",
+	"approvals_before_merge":2,"merge_status":"can_be_merged",
+	"reference":"!20","work_in_progress":true
+}]`
+
+// TestListIssueMergeRequests_SentKeys_ReachEveryRow verifies both issue-to-MR
+// list handlers fill the four keys the SDK leaves behind. Both go through one
+// shared helper, so both are driven rather than one: the helper is where the
+// capture lives and a regression would take both with it.
+func TestListIssueMergeRequests_SentKeys_ReachEveryRow(t *testing.T) {
+	tests := []struct {
+		name    string
+		segment string
+		call    func(*gitlabclient.Client) (RelatedMRsOutput, error)
+	}{
+		{"closing", "/closed_by", func(c *gitlabclient.Client) (RelatedMRsOutput, error) {
+			return ListMRsClosing(context.Background(), c, ListMRsClosingInput{ProjectID: testProjectID, IssueIID: 10})
+		}},
+		{"related", "/related_merge_requests", func(c *gitlabclient.Client) (RelatedMRsOutput, error) {
+			return ListMRsRelated(context.Background(), c, ListMRsRelatedInput{ProjectID: testProjectID, IssueIID: 10})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == pathIssue10+tt.segment {
+					testutil.RespondJSON(w, http.StatusOK, relatedMRSentKeysResponse)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			out, err := tt.call(client)
+			if err != nil {
+				t.Fatalf("%s unexpected error: %v", tt.name, err)
+			}
+			if len(out.MergeRequests) != 1 {
+				t.Fatalf("%s returned %d rows, want 1", tt.name, len(out.MergeRequests))
+			}
+			row := out.MergeRequests[0]
+			if row.ApprovalsBeforeMerge == nil || *row.ApprovalsBeforeMerge != 2 {
+				t.Errorf("ApprovalsBeforeMerge = %v, want 2", row.ApprovalsBeforeMerge)
+			}
+			if row.MergeStatus != "can_be_merged" || row.Reference != "!20" || !row.WorkInProgress {
+				t.Errorf("captured keys = %q/%q/%t, want can_be_merged/!20/true", row.MergeStatus, row.Reference, row.WorkInProgress)
+			}
+		})
+	}
+}
+
+// TestListMRsRelated_RenderedKeys_DoNotReachTheOutput guards the two
+// declarations this package carries in
+// cmd/audit_1to1/internal/paths/sent_declarations.go: title_html and
+// description_html wait on the render_html option, and neither of the two
+// routes this type serves declares that parameter, so the shape does not read
+// them and a response carrying them still surfaces neither.
+func TestListMRsRelated_RenderedKeys_DoNotReachTheOutput(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathIssue10+"/related_merge_requests" {
+			testutil.RespondJSON(w, http.StatusOK, `[{
+				"id":200,"iid":20,"project_id":42,"title":"Refactor auth","state":"opened",
+				"merge_status":"can_be_merged","reference":"!20",
+				"title_html":"<h1>Refactor auth</h1>","description_html":"<p>body</p>"
+			}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := ListMRsRelated(context.Background(), client, ListMRsRelatedInput{ProjectID: testProjectID, IssueIID: 10})
+	if err != nil {
+		t.Fatalf("ListMRsRelated() unexpected error: %v", err)
+	}
+	if len(out.MergeRequests) != 1 {
+		t.Fatalf("ListMRsRelated() returned %d rows, want 1", len(out.MergeRequests))
+	}
+	encoded, marshalErr := json.Marshal(out.MergeRequests[0])
+	if marshalErr != nil {
+		t.Fatalf("marshal the row: %v", marshalErr)
+	}
+	for _, key := range []string{"title_html", "description_html"} {
+		t.Run(key, func(t *testing.T) {
+			if strings.Contains(string(encoded), `"`+key+`"`) {
+				t.Errorf("%q reached the related merge request output; neither route this type serves declares render_html", key)
+			}
+		})
+	}
+	if out.MergeRequests[0].MergeStatus != "can_be_merged" {
+		t.Errorf("MergeStatus = %q, want the response's own value", out.MergeRequests[0].MergeStatus)
+	}
+}
+
+// TestListIssueMergeRequests_UndecodableBody_IsTheOperationError verifies a
+// captured body the extra shape cannot decode is returned as the handler's
+// error rather than dropped.
+func TestListIssueMergeRequests_UndecodableBody_IsTheOperationError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathIssue10+"/related_merge_requests" {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"merge_status":7}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	if _, err := ListMRsRelated(context.Background(), client, ListMRsRelatedInput{ProjectID: testProjectID, IssueIID: 10}); err == nil {
+		t.Fatal("error = nil, want the undecodable captured body reported")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The branches only a partial response or a partial spec can reach
+// ---------------------------------------------------------------------------.
+
+// TestDecorateIssueMeta_EmptyEntry_LeavesEveryOptionAlone verifies each of the
+// four metadata fields is copied only when the entry supplies it. Every entry
+// in the real table fills all four, so nothing else reaches the other side of
+// those guards, and an action added with partial metadata would otherwise lose
+// whatever the generic options already carried.
+func TestDecorateIssueMeta_EmptyEntry_LeavesEveryOptionAlone(t *testing.T) {
+	const probe = "gitlab_issue_meta_probe"
+	issueActionMeta[probe] = issueActionMetaEntry{}
+	t.Cleanup(func() { delete(issueActionMeta, probe) })
+
+	options := toolutil.ActionSpecOptions{
+		Usage:          "generic usage",
+		Aliases:        []string{"generic alias"},
+		RelatedActions: []string{"generic.related"},
+	}
+	options.IndividualTool.Description = "generic description"
+	decorateIssueMeta(&options, probe)
+
+	if options.Usage != "generic usage" || options.IndividualTool.Description != "generic description" {
+		t.Errorf("usage/description = %q/%q, want the generic ones untouched", options.Usage, options.IndividualTool.Description)
+	}
+	if len(options.Aliases) != 1 || len(options.RelatedActions) != 1 {
+		t.Errorf("aliases/related = %v/%v, want each left as it was", options.Aliases, options.RelatedActions)
+	}
+}
+
+// TestGroupIssueReadSpec_OtherTool_KeepsTheGenericOptions verifies the group
+// spec builder enriches only gitlab_issue_list_group. It is the sole group
+// action today, so the guard's false side is reachable from nothing else, and a
+// second group action added later must not silently inherit the first one's
+// usage, aliases and parameter guidance.
+func TestGroupIssueReadSpec_OtherTool_KeepsTheGenericOptions(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, "[]")
+	}))
+	spec := groupIssueReadSpec("probe", toolutil.RouteAction(client, ListGroup), "gitlab_issue_group_probe")
+	if spec.Usage != "Use to execute issues domain action." {
+		t.Errorf("Usage = %q, want the generic group option", spec.Usage)
+	}
+	if len(spec.ParameterGuidance) != 0 {
+		t.Errorf("ParameterGuidance = %v, want none for a tool the builder does not enrich", spec.ParameterGuidance)
+	}
+}
+
+// TestSubscribe_NotModified_FallsBackToGet verifies the 304 GitLab answers when
+// the caller is already subscribed is read as "no change" rather than as a
+// failure. io.EOF covers the same case when the empty body reaches the decoder
+// first, and only one of the two can be exercised per response.
+func TestSubscribe_NotModified_FallsBackToGet(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == pathIssue10+"/subscribe":
+			testutil.RespondJSON(w, http.StatusNotModified, `{"message":"already subscribed"}`)
+		case r.Method == http.MethodGet && r.URL.Path == pathIssue10:
+			testutil.RespondJSON(w, http.StatusOK, issueJSONMinimal)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	out, err := Subscribe(context.Background(), client, SubscribeInput{ProjectID: testProjectID, IssueIID: 10})
+	if err != nil {
+		t.Fatalf("Subscribe() unexpected error: %v", err)
+	}
+	if out.IID != 10 {
+		t.Errorf("IID = %d, want the issue the fall-back Get fetched", out.IID)
+	}
+}
+
+// TestCreateTodo_WithoutTargetOrTimestamp_LeavesThemEmpty verifies the todo
+// converter reads the target and the creation time only when GitLab sent them.
+// A todo raised on an object the caller may not read carries no target, and one
+// answered from a cache carries no timestamp.
+func TestCreateTodo_WithoutTargetOrTimestamp_LeavesThemEmpty(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathIssue10+"/todo" {
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":7,"action_name":"marked","target_type":"Issue","state":"pending"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, IssueIID: 10})
+	if err != nil {
+		t.Fatalf("CreateTodo() unexpected error: %v", err)
+	}
+	if out.TargetTitle != "" || out.TargetURL != "" {
+		t.Errorf("target = %q/%q, want both empty when GitLab sent no target", out.TargetTitle, out.TargetURL)
+	}
+	if out.CreatedAt != "" {
+		t.Errorf("CreatedAt = %q, want empty when GitLab sent no timestamp", out.CreatedAt)
+	}
+	if out.ID != 7 || out.State != "pending" {
+		t.Errorf("out = %+v, want the todo's own id and state", out)
+	}
+}
+
+// TestAssigneeUsernames_NilEntry_IsSkipped verifies a nil assignee in the array
+// is passed over rather than dereferenced. The slice converter drops nil
+// entries, so only a hand-built output can carry one, and the guard is what
+// keeps a future converter change from panicking here.
+func TestAssigneeUsernames_NilEntry_IsSkipped(t *testing.T) {
+	names := assigneeUsernames(Output{Assignees: []*toolutil.IssueUserOutput{
+		nil,
+		{Username: "alice"},
+	}})
+	if len(names) != 1 || names[0] != "alice" {
+		t.Errorf("assigneeUsernames() = %v, want only the non-nil assignee", names)
+	}
+}
+
+// TestFormatMarkdown_EmptyOptionalValues_OmitsEveryRow verifies the four
+// detail rows whose object is present but whose value is empty are left out:
+// an empty full reference, the default issue type, a milestone with no title
+// and a task status counting no task. Each is the false side of a guard whose
+// object half every other test already satisfies.
+func TestFormatMarkdown_EmptyOptionalValues_OmitsEveryRow(t *testing.T) {
+	rendered := FormatMarkdown(Output{
+		IID: 10, Title: "Test issue", State: "opened", IssueType: "issue",
+		References:           &toolutil.ReferencesOutput{Short: "#10"},
+		Milestone:            &toolutil.MRMilestoneOutput{ID: 1},
+		TaskCompletionStatus: &toolutil.TaskCompletionStatusOutput{},
+	})
+	for _, absent := range []string{"**Reference**", "**Type**", "**Milestone**", "**Tasks**"} {
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(rendered, absent) {
+				t.Errorf("%s row rendered for an empty value:\n%s", absent, rendered)
+			}
+		})
+	}
+	if !strings.Contains(rendered, "Issue #10") {
+		t.Errorf("rendered markdown does not carry the issue heading:\n%s", rendered)
+	}
+}
+
+// TestChangeIssueSubscription_NotModifiedError_FallsBackToGet verifies the
+// 304 half of the fall-back guard, which no response reaching this server can
+// produce: client-go's CheckResponse returns nil for 304, so a real
+// already-subscribed answer arrives as the decoder's io.EOF on the empty body
+// and the second operand is never evaluated true. The SDK call is stubbed
+// because it is the only way to hand the guard the error it was written for,
+// and a client-go release that starts reporting the status must keep working.
+func TestChangeIssueSubscription_NotModifiedError_FallsBackToGet(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathIssue10 {
+			testutil.RespondJSON(w, http.StatusOK, issueJSONMinimal)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	notModified := &gl.ErrorResponse{
+		StatusCode: http.StatusNotModified,
+		Response:   &http.Response{StatusCode: http.StatusNotModified},
+	}
+	out, err := changeIssueSubscription(context.Background(), client, testProjectID, 10, "issueSubscribe",
+		func(string, int64) (*gl.Issue, *gl.Response, error) { return nil, nil, notModified })
+	if err != nil {
+		t.Fatalf("changeIssueSubscription() unexpected error: %v", err)
+	}
+	if out.IID != 10 {
+		t.Errorf("IID = %d, want the issue the fall-back Get fetched", out.IID)
 	}
 }

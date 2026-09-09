@@ -77207,6 +77207,12 @@
         "allow_maintainer_to_push": {
           "type": "boolean"
         },
+        "approvals_before_merge": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "assignee": {
           "additionalProperties": false,
           "properties": {
@@ -77378,6 +77384,9 @@
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "description_html": {
           "type": "string"
         },
         "detailed_merge_status": {
@@ -77689,6 +77698,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_status": {
+          "type": "string"
+        },
         "merge_user": {
           "additionalProperties": false,
           "properties": {
@@ -77903,6 +77915,9 @@
         "rebase_in_progress": {
           "type": "boolean"
         },
+        "reference": {
+          "type": "string"
+        },
         "references": {
           "additionalProperties": false,
           "properties": {
@@ -78050,6 +78065,9 @@
           ]
         },
         "title": {
+          "type": "string"
+        },
+        "title_html": {
           "type": "string"
         },
         "updated_at": {
@@ -90182,6 +90200,12 @@
               "allow_maintainer_to_push": {
                 "type": "boolean"
               },
+              "approvals_before_merge": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
               "assignee": {
                 "additionalProperties": false,
                 "properties": {
@@ -90438,6 +90462,9 @@
               "merge_commit_sha": {
                 "type": "string"
               },
+              "merge_status": {
+                "type": "string"
+              },
               "merge_user": {
                 "additionalProperties": false,
                 "properties": {
@@ -90586,6 +90613,9 @@
               },
               "project_id": {
                 "type": "integer"
+              },
+              "reference": {
+                "type": "string"
               },
               "references": {
                 "additionalProperties": false,
@@ -90753,6 +90783,9 @@
               },
               "web_url": {
                 "type": "string"
+              },
+              "work_in_progress": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -90799,7 +90832,8 @@
               "upvotes",
               "downvotes",
               "user_notes_count",
-              "web_url"
+              "web_url",
+              "work_in_progress"
             ],
             "type": "object"
           },
@@ -90932,6 +90966,12 @@
               "allow_maintainer_to_push": {
                 "type": "boolean"
               },
+              "approvals_before_merge": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
               "assignee": {
                 "additionalProperties": false,
                 "properties": {
@@ -91188,6 +91228,9 @@
               "merge_commit_sha": {
                 "type": "string"
               },
+              "merge_status": {
+                "type": "string"
+              },
               "merge_user": {
                 "additionalProperties": false,
                 "properties": {
@@ -91336,6 +91379,9 @@
               },
               "project_id": {
                 "type": "integer"
+              },
+              "reference": {
+                "type": "string"
               },
               "references": {
                 "additionalProperties": false,
@@ -91503,6 +91549,9 @@
               },
               "web_url": {
                 "type": "string"
+              },
+              "work_in_progress": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -91549,7 +91598,8 @@
               "upvotes",
               "downvotes",
               "user_notes_count",
-              "web_url"
+              "web_url",
+              "work_in_progress"
             ],
             "type": "object"
           },
@@ -106141,6 +106191,12 @@
               "allow_maintainer_to_push": {
                 "type": "boolean"
               },
+              "approvals_before_merge": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
               "assignee": {
                 "additionalProperties": false,
                 "properties": {
@@ -106312,6 +106368,9 @@
                 "type": "string"
               },
               "description": {
+                "type": "string"
+              },
+              "description_html": {
                 "type": "string"
               },
               "detailed_merge_status": {
@@ -106623,6 +106682,9 @@
               "merge_error": {
                 "type": "string"
               },
+              "merge_status": {
+                "type": "string"
+              },
               "merge_user": {
                 "additionalProperties": false,
                 "properties": {
@@ -106837,6 +106899,9 @@
               "rebase_in_progress": {
                 "type": "boolean"
               },
+              "reference": {
+                "type": "string"
+              },
               "references": {
                 "additionalProperties": false,
                 "properties": {
@@ -106984,6 +107049,9 @@
                 ]
               },
               "title": {
+                "type": "string"
+              },
+              "title_html": {
                 "type": "string"
               },
               "updated_at": {
@@ -124965,6 +125033,12 @@
         "allow_maintainer_to_push": {
           "type": "boolean"
         },
+        "approvals_before_merge": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "assignee": {
           "additionalProperties": false,
           "properties": {
@@ -125136,6 +125210,9 @@
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "description_html": {
           "type": "string"
         },
         "detailed_merge_status": {
@@ -125447,6 +125524,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_status": {
+          "type": "string"
+        },
         "merge_user": {
           "additionalProperties": false,
           "properties": {
@@ -125661,6 +125741,9 @@
         "rebase_in_progress": {
           "type": "boolean"
         },
+        "reference": {
+          "type": "string"
+        },
         "references": {
           "additionalProperties": false,
           "properties": {
@@ -125808,6 +125891,9 @@
           ]
         },
         "title": {
+          "type": "string"
+        },
+        "title_html": {
           "type": "string"
         },
         "updated_at": {
@@ -126408,6 +126494,12 @@
         "allow_maintainer_to_push": {
           "type": "boolean"
         },
+        "approvals_before_merge": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "assignee": {
           "additionalProperties": false,
           "properties": {
@@ -126579,6 +126671,9 @@
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "description_html": {
           "type": "string"
         },
         "detailed_merge_status": {
@@ -126890,6 +126985,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_status": {
+          "type": "string"
+        },
         "merge_user": {
           "additionalProperties": false,
           "properties": {
@@ -127104,6 +127202,9 @@
         "rebase_in_progress": {
           "type": "boolean"
         },
+        "reference": {
+          "type": "string"
+        },
         "references": {
           "additionalProperties": false,
           "properties": {
@@ -127251,6 +127352,9 @@
           ]
         },
         "title": {
+          "type": "string"
+        },
+        "title_html": {
           "type": "string"
         },
         "updated_at": {
@@ -127563,6 +127667,537 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "blocked_merge_request": {
+                "additionalProperties": false,
+                "properties": {
+                  "approvals_before_merge": {
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
+                  },
+                  "assignee": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "avatar_url": {
+                        "type": "string"
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "web_url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "username",
+                      "name",
+                      "state",
+                      "avatar_url",
+                      "web_url"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "assignees": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "name",
+                        "state",
+                        "avatar_url",
+                        "web_url"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "author": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "avatar_url": {
+                        "type": "string"
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "web_url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "username",
+                      "name",
+                      "state",
+                      "avatar_url",
+                      "web_url"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "auto_merge": {
+                    "type": "boolean"
+                  },
+                  "blocking_discussions_resolved": {
+                    "type": "boolean"
+                  },
+                  "closed_at": {
+                    "type": "string"
+                  },
+                  "closed_by": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "avatar_url": {
+                        "type": "string"
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "web_url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "username",
+                      "name",
+                      "state",
+                      "avatar_url",
+                      "web_url"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "detailed_merge_status": {
+                    "type": "string"
+                  },
+                  "discussion_locked": {
+                    "type": [
+                      "null",
+                      "boolean"
+                    ]
+                  },
+                  "downvotes": {
+                    "type": "integer"
+                  },
+                  "draft": {
+                    "type": "boolean"
+                  },
+                  "force_remove_source_branch": {
+                    "type": "boolean"
+                  },
+                  "has_conflicts": {
+                    "type": "boolean"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "imported": {
+                    "type": "boolean"
+                  },
+                  "imported_from": {
+                    "type": "string"
+                  },
+                  "labels": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "merge_after": {
+                    "type": "string"
+                  },
+                  "merge_commit_sha": {
+                    "type": "string"
+                  },
+                  "merge_status": {
+                    "type": "string"
+                  },
+                  "merge_user": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "avatar_url": {
+                        "type": "string"
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "web_url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "username",
+                      "name",
+                      "state",
+                      "avatar_url",
+                      "web_url"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "merge_when_pipeline_succeeds": {
+                    "type": "boolean"
+                  },
+                  "merged_at": {
+                    "type": "string"
+                  },
+                  "merged_by": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "avatar_url": {
+                        "type": "string"
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "web_url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "username",
+                      "name",
+                      "state",
+                      "avatar_url",
+                      "web_url"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "milestone": {
+                    "type": "string"
+                  },
+                  "prepared_at": {
+                    "type": "string"
+                  },
+                  "project_id": {
+                    "type": "integer"
+                  },
+                  "reference": {
+                    "type": "string"
+                  },
+                  "references": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "full": {
+                        "type": "string"
+                      },
+                      "relative": {
+                        "type": "string"
+                      },
+                      "short": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "short",
+                      "relative",
+                      "full"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "reviewers": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "name",
+                        "state",
+                        "avatar_url",
+                        "web_url"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "sha": {
+                    "type": "string"
+                  },
+                  "should_remove_source_branch": {
+                    "type": [
+                      "null",
+                      "boolean"
+                    ]
+                  },
+                  "source_branch": {
+                    "type": "string"
+                  },
+                  "source_project_id": {
+                    "type": "integer"
+                  },
+                  "squash": {
+                    "type": "boolean"
+                  },
+                  "squash_commit_sha": {
+                    "type": "string"
+                  },
+                  "squash_on_merge": {
+                    "type": "boolean"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "target_branch": {
+                    "type": "string"
+                  },
+                  "target_project_id": {
+                    "type": "integer"
+                  },
+                  "task_completion_status": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "completed_count": {
+                        "type": "integer"
+                      },
+                      "count": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "count",
+                      "completed_count"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "time_stats": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "human_time_estimate": {
+                        "type": "string"
+                      },
+                      "human_total_time_spent": {
+                        "type": "string"
+                      },
+                      "time_estimate": {
+                        "type": "integer"
+                      },
+                      "total_time_spent": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "human_time_estimate",
+                      "human_total_time_spent",
+                      "time_estimate",
+                      "total_time_spent"
+                    ],
+                    "type": [
+                      "null",
+                      "object"
+                    ]
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "upvotes": {
+                    "type": "integer"
+                  },
+                  "user_notes_count": {
+                    "type": "integer"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  },
+                  "work_in_progress": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "target_branch",
+                  "source_branch",
+                  "project_id",
+                  "title",
+                  "state",
+                  "upvotes",
+                  "downvotes",
+                  "source_project_id",
+                  "target_project_id",
+                  "labels",
+                  "description",
+                  "draft",
+                  "auto_merge",
+                  "detailed_merge_status",
+                  "sha",
+                  "merge_commit_sha",
+                  "squash_commit_sha",
+                  "user_notes_count",
+                  "force_remove_source_branch",
+                  "web_url",
+                  "squash",
+                  "has_conflicts",
+                  "blocking_discussions_resolved",
+                  "imported",
+                  "imported_from",
+                  "squash_on_merge",
+                  "work_in_progress",
+                  "merge_when_pipeline_succeeds",
+                  "reference",
+                  "merge_status"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "blocking_merge_request": {
                 "additionalProperties": false,
                 "properties": {
@@ -128172,6 +128807,537 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "blocked_merge_request": {
+          "additionalProperties": false,
+          "properties": {
+            "approvals_before_merge": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "assignee": {
+              "additionalProperties": false,
+              "properties": {
+                "avatar_url": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "username",
+                "name",
+                "state",
+                "avatar_url",
+                "web_url"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "assignees": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "author": {
+              "additionalProperties": false,
+              "properties": {
+                "avatar_url": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "username",
+                "name",
+                "state",
+                "avatar_url",
+                "web_url"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "auto_merge": {
+              "type": "boolean"
+            },
+            "blocking_discussions_resolved": {
+              "type": "boolean"
+            },
+            "closed_at": {
+              "type": "string"
+            },
+            "closed_by": {
+              "additionalProperties": false,
+              "properties": {
+                "avatar_url": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "username",
+                "name",
+                "state",
+                "avatar_url",
+                "web_url"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "detailed_merge_status": {
+              "type": "string"
+            },
+            "discussion_locked": {
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "downvotes": {
+              "type": "integer"
+            },
+            "draft": {
+              "type": "boolean"
+            },
+            "force_remove_source_branch": {
+              "type": "boolean"
+            },
+            "has_conflicts": {
+              "type": "boolean"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "iid": {
+              "type": "integer"
+            },
+            "imported": {
+              "type": "boolean"
+            },
+            "imported_from": {
+              "type": "string"
+            },
+            "labels": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "merge_after": {
+              "type": "string"
+            },
+            "merge_commit_sha": {
+              "type": "string"
+            },
+            "merge_status": {
+              "type": "string"
+            },
+            "merge_user": {
+              "additionalProperties": false,
+              "properties": {
+                "avatar_url": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "username",
+                "name",
+                "state",
+                "avatar_url",
+                "web_url"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "merge_when_pipeline_succeeds": {
+              "type": "boolean"
+            },
+            "merged_at": {
+              "type": "string"
+            },
+            "merged_by": {
+              "additionalProperties": false,
+              "properties": {
+                "avatar_url": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "web_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "username",
+                "name",
+                "state",
+                "avatar_url",
+                "web_url"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "milestone": {
+              "type": "string"
+            },
+            "prepared_at": {
+              "type": "string"
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "reference": {
+              "type": "string"
+            },
+            "references": {
+              "additionalProperties": false,
+              "properties": {
+                "full": {
+                  "type": "string"
+                },
+                "relative": {
+                  "type": "string"
+                },
+                "short": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "short",
+                "relative",
+                "full"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "reviewers": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "sha": {
+              "type": "string"
+            },
+            "should_remove_source_branch": {
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "source_branch": {
+              "type": "string"
+            },
+            "source_project_id": {
+              "type": "integer"
+            },
+            "squash": {
+              "type": "boolean"
+            },
+            "squash_commit_sha": {
+              "type": "string"
+            },
+            "squash_on_merge": {
+              "type": "boolean"
+            },
+            "state": {
+              "type": "string"
+            },
+            "target_branch": {
+              "type": "string"
+            },
+            "target_project_id": {
+              "type": "integer"
+            },
+            "task_completion_status": {
+              "additionalProperties": false,
+              "properties": {
+                "completed_count": {
+                  "type": "integer"
+                },
+                "count": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "count",
+                "completed_count"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "time_stats": {
+              "additionalProperties": false,
+              "properties": {
+                "human_time_estimate": {
+                  "type": "string"
+                },
+                "human_total_time_spent": {
+                  "type": "string"
+                },
+                "time_estimate": {
+                  "type": "integer"
+                },
+                "total_time_spent": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "human_time_estimate",
+                "human_total_time_spent",
+                "time_estimate",
+                "total_time_spent"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "upvotes": {
+              "type": "integer"
+            },
+            "user_notes_count": {
+              "type": "integer"
+            },
+            "web_url": {
+              "type": "string"
+            },
+            "work_in_progress": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "iid",
+            "target_branch",
+            "source_branch",
+            "project_id",
+            "title",
+            "state",
+            "upvotes",
+            "downvotes",
+            "source_project_id",
+            "target_project_id",
+            "labels",
+            "description",
+            "draft",
+            "auto_merge",
+            "detailed_merge_status",
+            "sha",
+            "merge_commit_sha",
+            "squash_commit_sha",
+            "user_notes_count",
+            "force_remove_source_branch",
+            "web_url",
+            "squash",
+            "has_conflicts",
+            "blocking_discussions_resolved",
+            "imported",
+            "imported_from",
+            "squash_on_merge",
+            "work_in_progress",
+            "merge_when_pipeline_succeeds",
+            "reference",
+            "merge_status"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "blocking_merge_request": {
           "additionalProperties": false,
           "properties": {
@@ -133518,6 +134684,12 @@
         "allow_maintainer_to_push": {
           "type": "boolean"
         },
+        "approvals_before_merge": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "assignee": {
           "additionalProperties": false,
           "properties": {
@@ -133689,6 +134861,9 @@
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "description_html": {
           "type": "string"
         },
         "detailed_merge_status": {
@@ -134000,6 +135175,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_status": {
+          "type": "string"
+        },
         "merge_user": {
           "additionalProperties": false,
           "properties": {
@@ -134214,6 +135392,9 @@
         "rebase_in_progress": {
           "type": "boolean"
         },
+        "reference": {
+          "type": "string"
+        },
         "references": {
           "additionalProperties": false,
           "properties": {
@@ -134361,6 +135542,9 @@
           ]
         },
         "title": {
+          "type": "string"
+        },
+        "title_html": {
           "type": "string"
         },
         "updated_at": {
@@ -135846,6 +137030,12 @@
               "allow_maintainer_to_push": {
                 "type": "boolean"
               },
+              "approvals_before_merge": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
               "assignee": {
                 "additionalProperties": false,
                 "properties": {
@@ -136017,6 +137207,9 @@
                 "type": "string"
               },
               "description": {
+                "type": "string"
+              },
+              "description_html": {
                 "type": "string"
               },
               "detailed_merge_status": {
@@ -136328,6 +137521,9 @@
               "merge_error": {
                 "type": "string"
               },
+              "merge_status": {
+                "type": "string"
+              },
               "merge_user": {
                 "additionalProperties": false,
                 "properties": {
@@ -136542,6 +137738,9 @@
               "rebase_in_progress": {
                 "type": "boolean"
               },
+              "reference": {
+                "type": "string"
+              },
               "references": {
                 "additionalProperties": false,
                 "properties": {
@@ -136689,6 +137888,9 @@
                 ]
               },
               "title": {
+                "type": "string"
+              },
+              "title_html": {
                 "type": "string"
               },
               "updated_at": {
@@ -137052,6 +138254,12 @@
               "allow_maintainer_to_push": {
                 "type": "boolean"
               },
+              "approvals_before_merge": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
               "assignee": {
                 "additionalProperties": false,
                 "properties": {
@@ -137223,6 +138431,9 @@
                 "type": "string"
               },
               "description": {
+                "type": "string"
+              },
+              "description_html": {
                 "type": "string"
               },
               "detailed_merge_status": {
@@ -137534,6 +138745,9 @@
               "merge_error": {
                 "type": "string"
               },
+              "merge_status": {
+                "type": "string"
+              },
               "merge_user": {
                 "additionalProperties": false,
                 "properties": {
@@ -137748,6 +138962,9 @@
               "rebase_in_progress": {
                 "type": "boolean"
               },
+              "reference": {
+                "type": "string"
+              },
               "references": {
                 "additionalProperties": false,
                 "properties": {
@@ -137895,6 +139112,9 @@
                 ]
               },
               "title": {
+                "type": "string"
+              },
+              "title_html": {
                 "type": "string"
               },
               "updated_at": {
@@ -138265,6 +139485,12 @@
               "allow_maintainer_to_push": {
                 "type": "boolean"
               },
+              "approvals_before_merge": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
               "assignee": {
                 "additionalProperties": false,
                 "properties": {
@@ -138436,6 +139662,9 @@
                 "type": "string"
               },
               "description": {
+                "type": "string"
+              },
+              "description_html": {
                 "type": "string"
               },
               "detailed_merge_status": {
@@ -138747,6 +139976,9 @@
               "merge_error": {
                 "type": "string"
               },
+              "merge_status": {
+                "type": "string"
+              },
               "merge_user": {
                 "additionalProperties": false,
                 "properties": {
@@ -138961,6 +140193,9 @@
               "rebase_in_progress": {
                 "type": "boolean"
               },
+              "reference": {
+                "type": "string"
+              },
               "references": {
                 "additionalProperties": false,
                 "properties": {
@@ -139108,6 +140343,9 @@
                 ]
               },
               "title": {
+                "type": "string"
+              },
+              "title_html": {
                 "type": "string"
               },
               "updated_at": {
@@ -139302,6 +140540,12 @@
         "allow_maintainer_to_push": {
           "type": "boolean"
         },
+        "approvals_before_merge": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "assignee": {
           "additionalProperties": false,
           "properties": {
@@ -139473,6 +140717,9 @@
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "description_html": {
           "type": "string"
         },
         "detailed_merge_status": {
@@ -139784,6 +141031,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_status": {
+          "type": "string"
+        },
         "merge_user": {
           "additionalProperties": false,
           "properties": {
@@ -139998,6 +141248,9 @@
         "rebase_in_progress": {
           "type": "boolean"
         },
+        "reference": {
+          "type": "string"
+        },
         "references": {
           "additionalProperties": false,
           "properties": {
@@ -140145,6 +141398,9 @@
           ]
         },
         "title": {
+          "type": "string"
+        },
+        "title_html": {
           "type": "string"
         },
         "updated_at": {
@@ -144354,6 +145610,12 @@
         "allow_maintainer_to_push": {
           "type": "boolean"
         },
+        "approvals_before_merge": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "assignee": {
           "additionalProperties": false,
           "properties": {
@@ -144525,6 +145787,9 @@
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "description_html": {
           "type": "string"
         },
         "detailed_merge_status": {
@@ -144836,6 +146101,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_status": {
+          "type": "string"
+        },
         "merge_user": {
           "additionalProperties": false,
           "properties": {
@@ -145050,6 +146318,9 @@
         "rebase_in_progress": {
           "type": "boolean"
         },
+        "reference": {
+          "type": "string"
+        },
         "references": {
           "additionalProperties": false,
           "properties": {
@@ -145197,6 +146468,9 @@
           ]
         },
         "title": {
+          "type": "string"
+        },
+        "title_html": {
           "type": "string"
         },
         "updated_at": {
@@ -145454,6 +146728,12 @@
         "allow_maintainer_to_push": {
           "type": "boolean"
         },
+        "approvals_before_merge": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "assignee": {
           "additionalProperties": false,
           "properties": {
@@ -145625,6 +146905,9 @@
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "description_html": {
           "type": "string"
         },
         "detailed_merge_status": {
@@ -145936,6 +147219,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_status": {
+          "type": "string"
+        },
         "merge_user": {
           "additionalProperties": false,
           "properties": {
@@ -146150,6 +147436,9 @@
         "rebase_in_progress": {
           "type": "boolean"
         },
+        "reference": {
+          "type": "string"
+        },
         "references": {
           "additionalProperties": false,
           "properties": {
@@ -146297,6 +147586,9 @@
           ]
         },
         "title": {
+          "type": "string"
+        },
+        "title_html": {
           "type": "string"
         },
         "updated_at": {
@@ -146495,6 +147787,12 @@
         "allow_maintainer_to_push": {
           "type": "boolean"
         },
+        "approvals_before_merge": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "assignee": {
           "additionalProperties": false,
           "properties": {
@@ -146666,6 +147964,9 @@
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "description_html": {
           "type": "string"
         },
         "detailed_merge_status": {
@@ -146977,6 +148278,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_status": {
+          "type": "string"
+        },
         "merge_user": {
           "additionalProperties": false,
           "properties": {
@@ -147191,6 +148495,9 @@
         "rebase_in_progress": {
           "type": "boolean"
         },
+        "reference": {
+          "type": "string"
+        },
         "references": {
           "additionalProperties": false,
           "properties": {
@@ -147338,6 +148645,9 @@
           ]
         },
         "title": {
+          "type": "string"
+        },
+        "title_html": {
           "type": "string"
         },
         "updated_at": {
@@ -205626,6 +206936,12 @@
               "allow_maintainer_to_push": {
                 "type": "boolean"
               },
+              "approvals_before_merge": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
               "assignee": {
                 "additionalProperties": false,
                 "properties": {
@@ -205797,6 +207113,9 @@
                 "type": "string"
               },
               "description": {
+                "type": "string"
+              },
+              "description_html": {
                 "type": "string"
               },
               "detailed_merge_status": {
@@ -206108,6 +207427,9 @@
               "merge_error": {
                 "type": "string"
               },
+              "merge_status": {
+                "type": "string"
+              },
               "merge_user": {
                 "additionalProperties": false,
                 "properties": {
@@ -206322,6 +207644,9 @@
               "rebase_in_progress": {
                 "type": "boolean"
               },
+              "reference": {
+                "type": "string"
+              },
               "references": {
                 "additionalProperties": false,
                 "properties": {
@@ -206469,6 +207794,9 @@
                 ]
               },
               "title": {
+                "type": "string"
+              },
+              "title_html": {
                 "type": "string"
               },
               "updated_at": {

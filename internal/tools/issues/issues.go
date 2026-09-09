@@ -1237,6 +1237,17 @@ type RelatedMROutput struct {
 	PreparedAt                  string                               `json:"prepared_at,omitempty"`
 	ClosedAt                    string                               `json:"closed_at,omitempty"`
 	WebURL                      string                               `json:"web_url"`
+	// The keys lib/api/entities/merge_request_basic.rb sends on every merge
+	// request that client-go's BasicMergeRequest does not model, read from the
+	// captured response (ADR-0021) and described on
+	// [toolutil.MergeRequestExtra]. Its title_html and description_html are not
+	// here: they wait on the render_html option, which neither the closed-by nor
+	// the related-merge-requests route declares, so this response has never
+	// carried them.
+	ApprovalsBeforeMerge *int64 `json:"approvals_before_merge,omitempty" tier:"premium"`
+	MergeStatus          string `json:"merge_status,omitempty"`
+	Reference            string `json:"reference,omitempty"`
+	WorkInProgress       bool   `json:"work_in_progress"`
 }
 
 // RelatedMRsOutput holds a paginated list of merge requests related to an issue.
@@ -1248,8 +1259,9 @@ type RelatedMRsOutput struct {
 
 // basicMRToOutput converts a gl.BasicMergeRequest into the full-fidelity
 // RelatedMROutput, surfacing every SDK field with nested user/milestone/
-// references/time-stats objects.
-func basicMRToOutput(mr *gl.BasicMergeRequest) RelatedMROutput {
+// references/time-stats objects and the keys the SDK does not model from what
+// the capture read beside it.
+func basicMRToOutput(mr *gl.BasicMergeRequest, extra toolutil.MergeRequestExtra) RelatedMROutput {
 	out := RelatedMROutput{
 		ID:              mr.ID,
 		IID:             mr.IID,
@@ -1304,18 +1316,27 @@ func basicMRToOutput(mr *gl.BasicMergeRequest) RelatedMROutput {
 		PreparedAt:                  toolutil.FormatTimePtr(mr.PreparedAt),
 		ClosedAt:                    toolutil.FormatTimePtr(mr.ClosedAt),
 		WebURL:                      mr.WebURL,
+		ApprovalsBeforeMerge:        extra.ApprovalsBeforeMerge,
+		MergeStatus:                 extra.MergeStatus,
+		Reference:                   extra.Reference,
+		WorkInProgress:              extra.WorkInProgress,
 	}
 	return out
 }
 
-// relatedMRsOutput converts a slice of basic merge requests into a
-// [RelatedMRsOutput] with pagination metadata derived from resp.
-func relatedMRsOutput(mrs []*gl.BasicMergeRequest, resp *gl.Response) RelatedMRsOutput {
+// relatedMRsOutput converts a page of basic merge requests into a
+// [RelatedMRsOutput] with pagination metadata derived from resp, one captured
+// extra per merge request in order.
+func relatedMRsOutput(op string, mrs []*gl.BasicMergeRequest, resp *gl.Response, capture *gitlabclient.ResponseCapture) (RelatedMRsOutput, error) {
+	extras, err := toolutil.CapturedMergeRequests(capture, len(mrs))
+	if err != nil {
+		return RelatedMRsOutput{}, toolutil.WrapErr(op, err)
+	}
 	out := make([]RelatedMROutput, len(mrs))
 	for i, mr := range mrs {
-		out[i] = basicMRToOutput(mr)
+		out[i] = basicMRToOutput(mr, extras[i])
 	}
-	return RelatedMRsOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}
+	return RelatedMRsOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // mrListOptions captures the shared list-query parameters (pagination, keyset,
@@ -1367,11 +1388,12 @@ func listIssueMergeRequests(ctx context.Context, args issueMergeRequestsListArgs
 	if args.issueIID <= 0 {
 		return RelatedMRsOutput{}, toolutil.ErrRequiredInt64(args.operation, "issue_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mrs, resp, err := args.list(string(args.projectID), args.issueIID, args.listOpts, gl.WithContext(ctx))
 	if err != nil {
 		return RelatedMRsOutput{}, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusNotFound, args.hint)
 	}
-	return relatedMRsOutput(mrs, resp), nil
+	return relatedMRsOutput(args.operation, mrs, resp, captured)
 }
 
 // ListMRsClosingInput defines parameters for listing MRs that close an issue on merge.

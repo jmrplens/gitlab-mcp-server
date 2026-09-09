@@ -85,14 +85,19 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mrs, resp, err := client.GL().DeploymentMergeRequests.ListDeploymentMergeRequests(string(input.ProjectID), input.DeploymentID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_deployment_merge_requests", err, http.StatusNotFound, "verify project_id and deployment_id with gitlab_deployment_list")
 	}
+	extras, err := toolutil.CapturedMergeRequests(captured, len(mrs))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("list_deployment_merge_requests", err)
+	}
 
 	items := make([]Output, 0, len(mrs))
-	for _, mr := range mrs {
-		items = append(items, toOutput(mr))
+	for i, mr := range mrs {
+		items = append(items, toOutput(mr, extras[i]))
 	}
 
 	return ListOutput{
@@ -237,7 +242,10 @@ func labelOptions(values []string) *gl.LabelOptions {
 // toOutput converts a gl.MergeRequest (the full deployment merge requests
 // payload) to the local Output mirror, surfacing every SDK field on its
 // canonical json key.
-func toOutput(m *gl.MergeRequest) Output {
+//
+// extra carries the keys GitLab's merge request entity sends that no client-go
+// merge request struct models, read from the captured response (ADR-0021).
+func toOutput(m *gl.MergeRequest, extra toolutil.MergeRequestExtra) Output {
 	out := Output{
 		ID:                          m.ID,
 		IID:                         m.IID,
@@ -289,7 +297,6 @@ func toOutput(m *gl.MergeRequest) Output {
 		DivergedCommitsCount:        m.DivergedCommitsCount,
 		Subscribed:                  m.Subscribed,
 		FirstContribution:           m.FirstContribution,
-		WorkInProgress:              m.WorkInProgress, //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use Draft.
 		User:                        mergeRequestUserOutputPtr(m.User),
 		Pipeline:                    toolutil.NewPipelineInfoOutput(m.Pipeline),
 		HeadPipeline:                toolutil.NewPipelineOutput(m.HeadPipeline),
@@ -313,5 +320,6 @@ func toOutput(m *gl.MergeRequest) Output {
 			StartSHA: m.DiffRefs.StartSha,
 		}
 	}
+	out.ApplyExtra(extra)
 	return out
 }

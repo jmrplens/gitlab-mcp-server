@@ -2729,6 +2729,12 @@
         "allow_maintainer_to_push": {
           "type": "boolean"
         },
+        "approvals_before_merge": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "assignee": {
           "additionalProperties": false,
           "properties": {
@@ -2900,6 +2906,9 @@
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "description_html": {
           "type": "string"
         },
         "detailed_merge_status": {
@@ -3211,6 +3220,9 @@
         "merge_error": {
           "type": "string"
         },
+        "merge_status": {
+          "type": "string"
+        },
         "merge_user": {
           "additionalProperties": false,
           "properties": {
@@ -3425,6 +3437,9 @@
         "rebase_in_progress": {
           "type": "boolean"
         },
+        "reference": {
+          "type": "string"
+        },
         "references": {
           "additionalProperties": false,
           "properties": {
@@ -3572,6 +3587,9 @@
           ]
         },
         "title": {
+          "type": "string"
+        },
+        "title_html": {
           "type": "string"
         },
         "updated_at": {

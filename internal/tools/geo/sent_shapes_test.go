@@ -189,7 +189,7 @@ func TestStatusExtraFrom_APrefixUnderTheThresholdIsNotAReplicable(t *testing.T) 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			extra := decompose(t, testCase.body)
-			if got := len(extra.Replicables) > 0; got != testCase.grasp {
+			if (len(extra.Replicables) > 0) != testCase.grasp {
 				t.Errorf("Replicables = %+v, want a replicable: %t", extra.Replicables, testCase.grasp)
 			}
 		})

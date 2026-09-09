@@ -815,3 +815,78 @@ func TestCapturedListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 		t.Errorf("CapturedLabels() with another count = %v, want the two numbers", err)
 	}
 }
+
+// TestCapturedMergeRequest_ReadsWhatTheSDKDoesNotModel verifies the merge
+// request reader decodes the six keys GitLab's merge request entity sends that
+// no client-go merge request struct declares, keeps an absent approval count
+// distinct from a zero one, and reports a capture nothing ran under.
+func TestCapturedMergeRequest_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	extra, err := CapturedMergeRequest(gitlabclient.CapturedBody([]byte(`{
+		"id":1,"approvals_before_merge":3,"merge_status":"can_be_merged","reference":"!1",
+		"work_in_progress":true,"title_html":"<h1>t</h1>","description_html":"<p>d</p>"
+	}`)))
+	if err != nil {
+		t.Fatalf("CapturedMergeRequest() unexpected error: %v", err)
+	}
+	if extra.ApprovalsBeforeMerge == nil || *extra.ApprovalsBeforeMerge != 3 {
+		t.Errorf("ApprovalsBeforeMerge = %v, want 3", extra.ApprovalsBeforeMerge)
+	}
+	if extra.MergeStatus != "can_be_merged" || extra.Reference != "!1" || !extra.WorkInProgress {
+		t.Errorf("extra = %+v, want the merge status, reference and draft flag", extra)
+	}
+	if extra.TitleHTML != "<h1>t</h1>" || extra.DescriptionHTML != "<p>d</p>" {
+		t.Errorf("rendered pair = %q/%q, want the response's own values", extra.TitleHTML, extra.DescriptionHTML)
+	}
+
+	// A null approval count must stay absent rather than arrive as zero, which
+	// is a number that means something else.
+	absent, err := CapturedMergeRequest(gitlabclient.CapturedBody([]byte(`{"id":1,"approvals_before_merge":null}`)))
+	if err != nil || absent.ApprovalsBeforeMerge != nil {
+		t.Errorf("CapturedMergeRequest() with a null count = %+v, %v; want the pointer left nil", absent, err)
+	}
+
+	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+	if _, err = CapturedMergeRequest(untouched); !errors.Is(err, gitlabclient.ErrNoResponseCaptured) {
+		t.Errorf("read on a capture nothing ran under = %v, want ErrNoResponseCaptured", err)
+	}
+}
+
+// TestCapturedMergeRequests_HoldsTheCountToTheSDKs verifies the list reader
+// pairs extras by position and refuses a count other than the SDK's, naming
+// both numbers.
+func TestCapturedMergeRequests_HoldsTheCountToTheSDKs(t *testing.T) {
+	extras, err := CapturedMergeRequests(gitlabclient.CapturedBody([]byte(`[{"id":1,"reference":"!1"},{"id":2}]`)), 2)
+	if err != nil || len(extras) != 2 || extras[0].Reference != "!1" || extras[1].Reference != "" {
+		t.Errorf("CapturedMergeRequests() = %+v, %v; want two extras in order", extras, err)
+	}
+	_, err = CapturedMergeRequests(gitlabclient.CapturedBody([]byte(`[{"id":1}]`)), 2)
+	if err == nil || !strings.Contains(err.Error(), "holds 1 merge requests and the SDK decoded 2") {
+		t.Errorf("CapturedMergeRequests() with another count = %v, want the two numbers", err)
+	}
+}
+
+// TestMergeRequestOutput_ApplyExtra_FillsEveryCapturedKey verifies ApplyExtra
+// writes all six keys onto the shared output shape. It is the one place the
+// four packages aliasing that shape rely on, so a key added to
+// MergeRequestExtra and forgotten here would be a schema field nothing fills.
+func TestMergeRequestOutput_ApplyExtra_FillsEveryCapturedKey(t *testing.T) {
+	approvals := int64(4)
+	var out MergeRequestOutput
+	out.ApplyExtra(MergeRequestExtra{
+		ApprovalsBeforeMerge: &approvals,
+		MergeStatus:          "cannot_be_merged",
+		Reference:            "!9",
+		WorkInProgress:       true,
+		TitleHTML:            "<h1>t</h1>",
+		DescriptionHTML:      "<p>d</p>",
+	})
+	if out.ApprovalsBeforeMerge == nil || *out.ApprovalsBeforeMerge != 4 {
+		t.Errorf("ApprovalsBeforeMerge = %v, want 4", out.ApprovalsBeforeMerge)
+	}
+	if out.MergeStatus != "cannot_be_merged" || out.Reference != "!9" || !out.WorkInProgress {
+		t.Errorf("out = %+v, want the merge status, reference and draft flag", out)
+	}
+	if out.TitleHTML != "<h1>t</h1>" || out.DescriptionHTML != "<p>d</p>" {
+		t.Errorf("rendered pair = %q/%q, want the extra's own values", out.TitleHTML, out.DescriptionHTML)
+	}
+}

@@ -5,6 +5,7 @@ package mergerequests
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
@@ -5296,5 +5297,472 @@ func TestListGlobalAndGroup_ApproverFilterInvalid_ReturnsError(t *testing.T) {
 				t.Errorf("error = %q, want it to name %s", err, tt.wantField)
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Keys GitLab sends that client-go does not model (ADR-0021)
+// ---------------------------------------------------------------------------.
+
+const (
+	// mrSentKeysJSON is a merge request carrying every key
+	// lib/api/entities/merge_request_basic.rb sends that no client-go merge
+	// request struct declares, beside detailed_merge_status, which the SDK does
+	// decode: the assertions check that one too, so a capture that replaced the
+	// decode rather than reading beside it would fail here.
+	mrSentKeysJSON = `{
+		"id":100,"iid":1,"project_id":42,"title":"Add login","state":"opened",
+		"detailed_merge_status":"mergeable","draft":false,
+		"approvals_before_merge":3,"merge_status":"can_be_merged","reference":"!1",
+		"work_in_progress":true,
+		"title_html":"<h1>Add login</h1>",
+		"description_html":"<p>body</p>"
+	}`
+	// mrSentKeysListJSON is what a list route really answers with: the same
+	// merge request without the rendered pair, since no list route declares
+	// render_html and Grape leaves both keys off the response entirely.
+	mrSentKeysListJSON = `{
+		"id":100,"iid":1,"project_id":42,"title":"Add login","state":"opened",
+		"detailed_merge_status":"mergeable","draft":false,
+		"approvals_before_merge":3,"merge_status":"can_be_merged","reference":"!1",
+		"work_in_progress":true
+	}`
+	// mrPhantomKeysJSON adds the keys of the two entities client-go's own
+	// return types drag in front of this output type: the approval state that
+	// POST /approvals answers with, and the changes the deprecated /changes
+	// endpoint answers with. No handler here calls either, so neither set may
+	// reach the surface.
+	mrPhantomKeysJSON = `{
+		"id":100,"iid":1,"project_id":42,"title":"Add login","state":"opened",
+		"merge_status":"can_be_merged","reference":"!1",
+		"approvals_required":2,"approvals_left":1,"approved":false,
+		"approved_by":[],"approvers":[],"approver_groups":[],
+		"suggested_approvers":[],"user_can_approve":true,"user_has_approved":false,
+		"has_approval_rules":true,"approval_rules_left":[],
+		"invalid_approvers_rules":[],"require_password_to_approve":false,
+		"merge_request_approvers_available":true,"multiple_approval_rules_available":true,
+		"changes":[{"old_path":"a.go","new_path":"a.go"}],"overflow":false
+	}`
+)
+
+// assertMRSentKeys checks that the four keys GitLab sends on every merge
+// request and the two it sends only under render_html all reached the output.
+func assertMRSentKeys(t *testing.T, out Output, wantRendered bool) {
+	t.Helper()
+	if out.DetailedMergeStatus != "mergeable" {
+		t.Errorf("DetailedMergeStatus = %q, want mergeable: the SDK's own decode must still fill it", out.DetailedMergeStatus)
+	}
+	if out.ApprovalsBeforeMerge == nil || *out.ApprovalsBeforeMerge != 3 {
+		t.Errorf("ApprovalsBeforeMerge = %v, want 3", out.ApprovalsBeforeMerge)
+	}
+	if out.MergeStatus != "can_be_merged" {
+		t.Errorf("MergeStatus = %q, want can_be_merged", out.MergeStatus)
+	}
+	if out.Reference != "!1" {
+		t.Errorf("Reference = %q, want !1", out.Reference)
+	}
+	if !out.WorkInProgress {
+		t.Errorf("WorkInProgress = false, want true")
+	}
+	wantTitle, wantDescription := "", ""
+	if wantRendered {
+		wantTitle, wantDescription = "<h1>Add login</h1>", "<p>body</p>"
+	}
+	if out.TitleHTML != wantTitle {
+		t.Errorf("TitleHTML = %q, want %q", out.TitleHTML, wantTitle)
+	}
+	if out.DescriptionHTML != wantDescription {
+		t.Errorf("DescriptionHTML = %q, want %q", out.DescriptionHTML, wantDescription)
+	}
+}
+
+// TestGet_SentKeys_ReachTheOutput verifies that the single-merge-request GET,
+// the one route in GitLab's whole record that declares render_html, surfaces
+// every key client-go leaves behind, the rendered title and description
+// included.
+func TestGet_SentKeys_ReachTheOutput(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathMR1 {
+			testutil.RespondJSON(w, http.StatusOK, mrSentKeysJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	renderHTML := true
+	out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, MRIID: 1, RenderHTML: &renderHTML})
+	if err != nil {
+		t.Fatalf(fmtMRGetErr, err)
+	}
+	assertMRSentKeys(t, out, true)
+}
+
+// TestList_SentKeys_ReachEveryRow verifies the list path, which decodes into
+// BasicMergeRequest and so had no work_in_progress at all before the capture,
+// fills the same keys on each row.
+func TestList_SentKeys_ReachEveryRow(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathMRs {
+			testutil.RespondJSON(w, http.StatusOK, "["+mrSentKeysListJSON+"]")
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := List(context.Background(), client, ListInput{ProjectID: testProjectID})
+	if err != nil {
+		t.Fatalf(fmtMRListErr, err)
+	}
+	if len(out.MergeRequests) != 1 {
+		t.Fatalf("List() returned %d rows, want 1", len(out.MergeRequests))
+	}
+	assertMRSentKeys(t, out.MergeRequests[0], false)
+}
+
+// TestMergeRequestHandlers_SentKeys_ReachEveryOutput drives every handler that
+// answers with a whole merge request, so a capture forgotten at one call site
+// cannot hide behind the ones that have it.
+func TestMergeRequestHandlers_SentKeys_ReachEveryOutput(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		call   func(*gitlabclient.Client) (Output, error)
+	}{
+		{"create", http.MethodPost, pathMRs, func(c *gitlabclient.Client) (Output, error) {
+			return Create(context.Background(), c, CreateInput{
+				ProjectID: testProjectID, SourceBranch: "a", TargetBranch: "b", Title: "t",
+			})
+		}},
+		{"update", http.MethodPut, pathMR1, func(c *gitlabclient.Client) (Output, error) {
+			return Update(context.Background(), c, UpdateInput{ProjectID: testProjectID, MRIID: 1, Title: "t"})
+		}},
+		{"cancel_auto_merge", http.MethodPost, pathMR1 + "/cancel_merge_when_pipeline_succeeds", func(c *gitlabclient.Client) (Output, error) {
+			return CancelAutoMerge(context.Background(), c, GetInput{ProjectID: testProjectID, MRIID: 1})
+		}},
+		{"subscribe", http.MethodPost, pathMR1 + "/subscribe", func(c *gitlabclient.Client) (Output, error) {
+			return Subscribe(context.Background(), c, GetInput{ProjectID: testProjectID, MRIID: 1})
+		}},
+		{"unsubscribe", http.MethodPost, pathMR1 + "/unsubscribe", func(c *gitlabclient.Client) (Output, error) {
+			return Unsubscribe(context.Background(), c, GetInput{ProjectID: testProjectID, MRIID: 1})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == tt.method && r.URL.Path == tt.path {
+					testutil.RespondJSON(w, http.StatusOK, mrSentKeysJSON)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			out, err := tt.call(client)
+			if err != nil {
+				t.Fatalf("%s() unexpected error: %v", tt.name, err)
+			}
+			assertMRSentKeys(t, out, true)
+		})
+	}
+}
+
+// TestMerge_SentKeys_ComeFromTheMergeAnswer verifies the merge handler reads
+// its own answer rather than the pre-fetch it makes first: the pre-fetch is
+// answered with a merge request carrying none of these keys.
+func TestMerge_SentKeys_ComeFromTheMergeAnswer(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == pathMR1:
+			testutil.RespondJSON(w, http.StatusOK, `{"id":100,"iid":1,"project_id":42,"state":"opened"}`)
+		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
+			testutil.RespondJSON(w, http.StatusOK, mrSentKeysJSON)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	out, err := Merge(context.Background(), client, MergeInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("Merge() unexpected error: %v", err)
+	}
+	assertMRSentKeys(t, out, true)
+}
+
+// TestListGlobalAndGroup_SentKeys_ReachEveryRow covers the two remaining list
+// handlers, which build their page through the same shared converter.
+func TestListGlobalAndGroup_SentKeys_ReachEveryRow(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		call func(*gitlabclient.Client) (ListOutput, error)
+	}{
+		{"global", pathGlobalMRs, func(c *gitlabclient.Client) (ListOutput, error) {
+			return ListGlobal(context.Background(), c, ListGlobalInput{})
+		}},
+		{"group", pathGroupMRs, func(c *gitlabclient.Client) (ListOutput, error) {
+			return ListGroup(context.Background(), c, ListGroupInput{GroupID: "99"})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == tt.path {
+					testutil.RespondJSON(w, http.StatusOK, "["+mrSentKeysListJSON+"]")
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			out, err := tt.call(client)
+			if err != nil {
+				t.Fatalf("%s list unexpected error: %v", tt.name, err)
+			}
+			if len(out.MergeRequests) != 1 {
+				t.Fatalf("%s list returned %d rows, want 1", tt.name, len(out.MergeRequests))
+			}
+			assertMRSentKeys(t, out.MergeRequests[0], false)
+		})
+	}
+}
+
+// TestGet_ApprovalStateAndChangesKeys_DoNotReachTheOutput guards the two
+// declarations in cmd/audit_1to1/internal/paths/sent_declarations.go: the
+// approval state and the changes array only reach this output type through
+// client-go's own return types, so a response carrying them must still
+// surface nothing of either.
+func TestGet_ApprovalStateAndChangesKeys_DoNotReachTheOutput(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathMR1 {
+			testutil.RespondJSON(w, http.StatusOK, mrPhantomKeysJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf(fmtMRGetErr, err)
+	}
+	encoded, marshalErr := json.Marshal(out)
+	if marshalErr != nil {
+		t.Fatalf("marshal the output: %v", marshalErr)
+	}
+	rendered := string(encoded)
+	for _, key := range []string{
+		"approvals_required", "approvals_left", "approved_by", "approvers", "approver_groups",
+		"suggested_approvers", "user_can_approve", "user_has_approved", "has_approval_rules",
+		"approval_rules_left", "invalid_approvers_rules", "require_password_to_approve",
+		"merge_request_approvers_available", "multiple_approval_rules_available",
+		"changes", "overflow",
+	} {
+		t.Run(key, func(t *testing.T) {
+			if strings.Contains(rendered, `"`+key+`"`) {
+				t.Errorf("%q reached the merge request output; it belongs to an endpoint no handler here calls", key)
+			}
+		})
+	}
+	// The keys this type really does serve are still there, so the assertion
+	// above cannot pass by the output being empty.
+	if out.MergeStatus != "can_be_merged" || out.Reference != "!1" {
+		t.Errorf("MergeStatus/Reference = %q/%q, want the response's own values", out.MergeStatus, out.Reference)
+	}
+}
+
+// TestGetDependencies_BlockedMergeRequest_ReachesTheOutput verifies the other
+// end of a dependency, which client-go's MergeRequestDependency does not model
+// at all, reaches the surface on the same shape as the blocking one.
+func TestGetDependencies_BlockedMergeRequest_ReachesTheOutput(t *testing.T) {
+	body := `[{
+		"id":1,"project_id":42,
+		"blocking_merge_request":{"id":100,"iid":10,"title":"Dep A","state":"opened"},
+		"blocked_merge_request":{"id":200,"iid":20,"title":"Blocked","state":"opened","merge_status":"can_be_merged"}
+	},{
+		"id":2,"project_id":42,
+		"blocking_merge_request":{"id":300,"iid":30,"title":"Dep B","state":"merged"}
+	}]`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathMR1+pathSuffixBlocks {
+			testutil.RespondJSON(w, http.StatusOK, body)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := GetDependencies(context.Background(), client, GetDependenciesInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("GetDependencies() unexpected error: %v", err)
+	}
+	if len(out.Dependencies) != 2 {
+		t.Fatalf("GetDependencies() returned %d deps, want 2", len(out.Dependencies))
+	}
+	blocked := out.Dependencies[0].BlockedMergeRequest
+	if blocked == nil || blocked.IID != 20 || blocked.Title != "Blocked" {
+		t.Errorf("dep[0].BlockedMergeRequest = %+v, want the blocked MR whole", blocked)
+	}
+	// GitLab omits the key from a caller who may not read that merge request,
+	// so the second row must carry nothing rather than an empty object.
+	if out.Dependencies[1].BlockedMergeRequest != nil {
+		t.Errorf("dep[1].BlockedMergeRequest = %+v, want nil when the response omitted it",
+			out.Dependencies[1].BlockedMergeRequest)
+	}
+}
+
+// TestCreateDependency_BlockedMergeRequest_ReachesTheOutput verifies the create
+// path reads the same key: it answers with the same entity, and publishing an
+// always-empty field on one of the two handlers would be the defect this whole
+// review exists to prevent.
+func TestCreateDependency_BlockedMergeRequest_ReachesTheOutput(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathMR1+pathSuffixBlocks {
+			testutil.RespondJSON(w, http.StatusCreated, `{
+				"id":1,"project_id":42,
+				"blocking_merge_request":{"id":100,"iid":10,"title":"Dep A","state":"opened"},
+				"blocked_merge_request":{"id":200,"iid":20,"title":"Blocked","state":"opened"}
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := CreateDependency(context.Background(), client, DependencyInput{
+		ProjectID: testProjectID, MRIID: 1, BlockingMergeRequestID: 100,
+	})
+	if err != nil {
+		t.Fatalf("CreateDependency() unexpected error: %v", err)
+	}
+	if out.BlockedMergeRequest == nil || out.BlockedMergeRequest.IID != 20 {
+		t.Errorf("BlockedMergeRequest = %+v, want the blocked MR", out.BlockedMergeRequest)
+	}
+}
+
+// TestMergeRequestHandlers_UndecodableBody_IsTheOperationError verifies a
+// captured body the extra shape cannot decode is returned as the handler's
+// error rather than dropped, on the single, list and dependency paths alike.
+func TestMergeRequestHandlers_UndecodableBody_IsTheOperationError(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+		status int
+		call   func(*gitlabclient.Client) error
+	}{
+		{"get", http.MethodGet, pathMR1, `{"id":1,"merge_status":7}`, http.StatusOK, func(c *gitlabclient.Client) error {
+			_, err := Get(context.Background(), c, GetInput{ProjectID: testProjectID, MRIID: 1})
+			return err
+		}},
+		{"list", http.MethodGet, pathMRs, `[{"id":1,"merge_status":7}]`, http.StatusOK, func(c *gitlabclient.Client) error {
+			_, err := List(context.Background(), c, ListInput{ProjectID: testProjectID})
+			return err
+		}},
+		{"dependencies", http.MethodGet, pathMR1 + pathSuffixBlocks, `[{"id":1,"blocked_merge_request":7}]`, http.StatusOK, func(c *gitlabclient.Client) error {
+			_, err := GetDependencies(context.Background(), c, GetDependenciesInput{ProjectID: testProjectID, MRIID: 1})
+			return err
+		}},
+		{"create_dependency", http.MethodPost, pathMR1 + pathSuffixBlocks, `{"id":1,"blocked_merge_request":7}`, http.StatusCreated, func(c *gitlabclient.Client) error {
+			_, err := CreateDependency(context.Background(), c, DependencyInput{ProjectID: testProjectID, MRIID: 1, BlockingMergeRequestID: 2})
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == tt.method && r.URL.Path == tt.path {
+					testutil.RespondJSON(w, tt.status, tt.body)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			if err := tt.call(client); err == nil {
+				t.Fatal("error = nil, want the undecodable captured body reported")
+			}
+		})
+	}
+}
+
+// TestCapturedDependencies_HoldsTheCountToTheSDKs verifies the dependency
+// reader pairs extras by position and refuses a count other than the SDK's,
+// naming both numbers. The two counts come from one body and so cannot differ
+// through a handler, which is why the reader is exercised directly.
+func TestCapturedDependencies_HoldsTheCountToTheSDKs(t *testing.T) {
+	body := `[{"id":1,"blocked_merge_request":{"id":200,"iid":20}},{"id":2}]`
+	extras, err := capturedDependencies(gitlabclient.CapturedBody([]byte(body)), 2)
+	if err != nil {
+		t.Fatalf("capturedDependencies() unexpected error: %v", err)
+	}
+	if len(extras) != 2 || extras[0].BlockedMergeRequest == nil || extras[1].BlockedMergeRequest != nil {
+		t.Errorf("capturedDependencies() = %+v, want two extras in order", extras)
+	}
+	if _, err = capturedDependencies(gitlabclient.CapturedBody([]byte(body)), 3); err == nil ||
+		!strings.Contains(err.Error(), "holds 2 dependencies and the SDK decoded 3") {
+		t.Errorf("capturedDependencies() with another count = %v, want the two numbers", err)
+	}
+	if _, err = capturedDependencies(gitlabclient.CapturedBody([]byte(`{"not":"a list"}`)), 1); err == nil {
+		t.Error("capturedDependencies() on a body that is not a list = nil, want an error")
+	}
+}
+
+// TestToOutput_DiffRefs_EachShaAloneProducesTheObject verifies diff_refs is
+// built whenever GitLab sends any one of the three SHAs and left off only when
+// it sends none. Each SHA alone is a case because the guard is a three-way
+// disjunction: a fixture setting all three cannot tell the operands apart.
+func TestToOutput_DiffRefs_EachShaAloneProducesTheObject(t *testing.T) {
+	tests := []struct {
+		name     string
+		diffRefs string
+		want     *DiffRefsOutput
+	}{
+		{"base only", `{"base_sha":"aaa"}`, &DiffRefsOutput{BaseSHA: "aaa"}},
+		{"head only", `{"head_sha":"bbb"}`, &DiffRefsOutput{HeadSHA: "bbb"}},
+		{"start only", `{"start_sha":"ccc"}`, &DiffRefsOutput{StartSHA: "ccc"}},
+		{"none", `{}`, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == pathMR1 {
+					testutil.RespondJSON(w, http.StatusOK, `{"id":100,"iid":1,"diff_refs":`+tt.diffRefs+`}`)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, MRIID: 1})
+			if err != nil {
+				t.Fatalf(fmtMRGetErr, err)
+			}
+			switch {
+			case tt.want == nil && out.DiffRefs != nil:
+				t.Errorf("DiffRefs = %+v, want nil when GitLab sent no SHA", out.DiffRefs)
+			case tt.want != nil && out.DiffRefs == nil:
+				t.Errorf("DiffRefs = nil, want %+v", tt.want)
+			case tt.want != nil && *out.DiffRefs != *tt.want:
+				t.Errorf("DiffRefs = %+v, want %+v", out.DiffRefs, tt.want)
+			}
+		})
+	}
+}
+
+// TestToggleSubscription_NotModifiedError_FallsBackToGet verifies the 304 half
+// of the fall-back guard, which no response reaching this server can produce:
+// client-go's CheckResponse returns nil for 304, so an already-subscribed
+// answer arrives as the decoder's io.EOF on the empty body and the second
+// operand is never evaluated true. The SDK call is stubbed because it is the
+// only way to hand the guard the error it was written for, and a client-go
+// release that starts reporting the status must keep working.
+func TestToggleSubscription_NotModifiedError_FallsBackToGet(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathMR1 {
+			testutil.RespondJSON(w, http.StatusOK, mrSentKeysListJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	notModified := &gl.ErrorResponse{
+		StatusCode: http.StatusNotModified,
+		Response:   &http.Response{StatusCode: http.StatusNotModified},
+	}
+	out, err := toggleSubscription(context.Background(), client, GetInput{ProjectID: testProjectID, MRIID: 1}, "mrSubscribe",
+		func(gl.MergeRequestsServiceInterface) func(any, int64, ...gl.RequestOptionFunc) (*gl.MergeRequest, *gl.Response, error) {
+			return func(any, int64, ...gl.RequestOptionFunc) (*gl.MergeRequest, *gl.Response, error) {
+				return nil, nil, notModified
+			}
+		})
+	if err != nil {
+		t.Fatalf("toggleSubscription() unexpected error: %v", err)
+	}
+	if out.IID != 1 {
+		t.Errorf("IID = %d, want the merge request the fall-back Get fetched", out.IID)
 	}
 }

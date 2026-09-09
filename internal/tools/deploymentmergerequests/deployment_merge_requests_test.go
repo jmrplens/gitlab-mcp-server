@@ -5,6 +5,7 @@ package deploymentmergerequests
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"slices"
@@ -904,5 +905,178 @@ func TestList_ApproverFilterInvalid_ReturnsError(t *testing.T) {
 				t.Errorf("List() error = %q, want it to name %s", err, tt.wantField)
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Keys GitLab sends that client-go does not model (ADR-0021)
+// ---------------------------------------------------------------------------.
+
+// TestList_SentKeys_ReachEveryRow verifies the four keys
+// lib/api/entities/merge_request_basic.rb sends on every merge request and no
+// client-go merge request struct declares reach each row of a deployment's
+// merge requests.
+func TestList_SentKeys_ReachEveryRow(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{
+			"id": 100, "iid": 10, "project_id": 42, "title": "Add feature X", "state": "merged",
+			"approvals_before_merge": 3, "merge_status": "can_be_merged",
+			"reference": "!10", "work_in_progress": true
+		}]`)
+	})
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{ProjectID: "42", DeploymentID: 7})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.MergeRequests) != 1 {
+		t.Fatalf("List() returned %d rows, want 1", len(out.MergeRequests))
+	}
+	row := out.MergeRequests[0]
+	if row.ApprovalsBeforeMerge == nil || *row.ApprovalsBeforeMerge != 3 {
+		t.Errorf("ApprovalsBeforeMerge = %v, want 3", row.ApprovalsBeforeMerge)
+	}
+	if row.MergeStatus != "can_be_merged" || row.Reference != "!10" || !row.WorkInProgress {
+		t.Errorf("captured keys = %q/%q/%t, want can_be_merged/!10/true", row.MergeStatus, row.Reference, row.WorkInProgress)
+	}
+	// This route declares no render_html, so a real response carries neither
+	// rendered key and both stay empty.
+	if row.TitleHTML != "" || row.DescriptionHTML != "" {
+		t.Errorf("rendered pair = %q/%q, want both empty on a route that cannot ask for them", row.TitleHTML, row.DescriptionHTML)
+	}
+}
+
+// TestList_ApprovalStateAndChangesKeys_DoNotReachTheOutput guards the two
+// declarations this package carries in
+// cmd/audit_1to1/internal/paths/sent_declarations.go. The approval state and
+// the changes array only reach this output type because client-go declares two
+// methods on those endpoints as answering with *MergeRequest; no handler here
+// calls either, so neither set may be surfaced.
+func TestList_ApprovalStateAndChangesKeys_DoNotReachTheOutput(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{
+			"id": 100, "iid": 10, "project_id": 42, "state": "merged", "merge_status": "can_be_merged",
+			"approvals_required": 2, "approvals_left": 1, "approved": false,
+			"approved_by": [], "approvers": [], "approver_groups": [], "suggested_approvers": [],
+			"user_can_approve": true, "user_has_approved": false, "has_approval_rules": true,
+			"approval_rules_left": [], "invalid_approvers_rules": [],
+			"require_password_to_approve": false, "merge_request_approvers_available": true,
+			"multiple_approval_rules_available": true,
+			"changes": [{"old_path": "a.go"}], "overflow": false
+		}]`)
+	})
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{ProjectID: "42", DeploymentID: 7})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.MergeRequests) != 1 {
+		t.Fatalf("List() returned %d rows, want 1", len(out.MergeRequests))
+	}
+	encoded, marshalErr := json.Marshal(out.MergeRequests[0])
+	if marshalErr != nil {
+		t.Fatalf("marshal the row: %v", marshalErr)
+	}
+	for _, key := range []string{
+		"approvals_required", "approvals_left", "approved_by", "approvers", "approver_groups",
+		"suggested_approvers", "user_can_approve", "user_has_approved", "has_approval_rules",
+		"approval_rules_left", "invalid_approvers_rules", "require_password_to_approve",
+		"merge_request_approvers_available", "multiple_approval_rules_available",
+		"changes", "overflow",
+	} {
+		t.Run(key, func(t *testing.T) {
+			if strings.Contains(string(encoded), `"`+key+`"`) {
+				t.Errorf("%q reached the deployment merge request output; it belongs to an endpoint no handler here calls", key)
+			}
+		})
+	}
+	if out.MergeRequests[0].MergeStatus != "can_be_merged" {
+		t.Errorf("MergeStatus = %q, want the response's own value", out.MergeRequests[0].MergeStatus)
+	}
+}
+
+// TestList_UndecodableBody_IsTheOperationError verifies a captured body the
+// extra shape cannot decode is returned as the handler's error rather than
+// dropped.
+func TestList_UndecodableBody_IsTheOperationError(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id": 1, "merge_status": 7}]`)
+	})
+	if _, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{ProjectID: "42", DeploymentID: 7}); err == nil {
+		t.Fatal("error = nil, want the undecodable captured body reported")
+	}
+}
+
+// TestList_EmptyApproverFilters_ReachNoQueryParameter verifies an unset
+// approver filter is left off the request rather than sent empty. The three
+// length guards in buildListOptions are what decides that, and a boundary
+// mutation of any of them turns "the caller asked for this" into "always".
+func TestList_EmptyApproverFilters_ReachNoQueryParameter(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Has("approver_ids") || q.Has("approved_by_ids") || q.Has("approved_by_usernames") {
+			t.Errorf("an approver filter reached the query with none set: %v", q)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	if _, err := List(context.Background(), client, ListInput{ProjectID: "1", DeploymentID: 2}); err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+}
+
+// TestToOutput_DiffRefs_EachShaAloneProducesTheObject verifies the diff_refs
+// object is built whenever GitLab sends any one of the three SHAs, and left
+// off only when it sends none. Each SHA alone is a case because the guard is a
+// three-way disjunction: a fixture setting all three cannot tell the operands
+// apart, and neither could a reader.
+func TestToOutput_DiffRefs_EachShaAloneProducesTheObject(t *testing.T) {
+	tests := []struct {
+		name     string
+		diffRefs string
+		want     *DiffRefsOutput
+	}{
+		{"base only", `{"base_sha":"aaa"}`, &DiffRefsOutput{BaseSHA: "aaa"}},
+		{"head only", `{"head_sha":"bbb"}`, &DiffRefsOutput{HeadSHA: "bbb"}},
+		{"start only", `{"start_sha":"ccc"}`, &DiffRefsOutput{StartSHA: "ccc"}},
+		{"none", `{}`, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":10,"diff_refs":`+tt.diffRefs+`}]`)
+			})
+			out, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{ProjectID: "1", DeploymentID: 2})
+			if err != nil {
+				t.Fatalf("List() unexpected error: %v", err)
+			}
+			if len(out.MergeRequests) != 1 {
+				t.Fatalf("List() returned %d rows, want 1", len(out.MergeRequests))
+			}
+			got := out.MergeRequests[0].DiffRefs
+			switch {
+			case tt.want == nil && got != nil:
+				t.Errorf("DiffRefs = %+v, want nil when GitLab sent no SHA", got)
+			case tt.want != nil && got == nil:
+				t.Errorf("DiffRefs = nil, want %+v", tt.want)
+			case tt.want != nil && *got != *tt.want:
+				t.Errorf("DiffRefs = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestFormatListMarkdown_NoAuthor_LeavesTheColumnEmpty verifies a merge
+// request GitLab sent without an author renders an empty author cell rather
+// than dereferencing nothing. GitLab omits the object on a merge request whose
+// author was deleted.
+func TestFormatListMarkdown_NoAuthor_LeavesTheColumnEmpty(t *testing.T) {
+	rendered := FormatListMarkdown(ListOutput{MergeRequests: []Output{{
+		IID: 10, Title: "Add feature X", State: "merged",
+		SourceBranch: "feature-x", TargetBranch: "main",
+	}}})
+	text := rendered.Content[0].(*mcp.TextContent).Text
+	if !strings.Contains(text, "| !10 |") {
+		t.Fatalf("rendered markdown does not carry the row: %s", text)
+	}
+	if !strings.Contains(text, "|  | feature-x -> main |") {
+		t.Errorf("author column = not empty, want an empty cell; rendered: %s", text)
 	}
 }
