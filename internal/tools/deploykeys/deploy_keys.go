@@ -19,14 +19,18 @@ import (
 // Output represents a project-level deploy key.
 type Output struct {
 	toolutil.HintableOutput
-	ID                int64  `json:"id"`
-	Title             string `json:"title"`
-	Key               string `json:"key"`
-	Fingerprint       string `json:"fingerprint,omitempty"`
-	FingerprintSHA256 string `json:"fingerprint_sha256,omitempty"`
-	CreatedAt         string `json:"created_at,omitempty"`
-	CanPush           bool   `json:"can_push"`
-	ExpiresAt         string `json:"expires_at,omitempty"`
+	ID                         int64            `json:"id"`
+	Title                      string           `json:"title"`
+	Key                        string           `json:"key"`
+	Fingerprint                string           `json:"fingerprint,omitempty"`
+	FingerprintSHA256          string           `json:"fingerprint_sha256,omitempty"`
+	CreatedAt                  string           `json:"created_at,omitempty"`
+	CanPush                    bool             `json:"can_push"`
+	ExpiresAt                  string           `json:"expires_at,omitempty"`
+	LastUsedAt                 string           `json:"last_used_at,omitempty"`
+	UsageType                  string           `json:"usage_type,omitempty"`
+	ProjectsWithWriteAccess    []ProjectSummary `json:"projects_with_write_access,omitempty"`
+	ProjectsWithReadonlyAccess []ProjectSummary `json:"projects_with_readonly_access,omitempty"`
 }
 
 // InstanceOutput represents an instance-level deploy key.
@@ -39,6 +43,8 @@ type InstanceOutput struct {
 	FingerprintSHA256          string           `json:"fingerprint_sha256,omitempty"`
 	CreatedAt                  string           `json:"created_at,omitempty"`
 	ExpiresAt                  string           `json:"expires_at,omitempty"`
+	LastUsedAt                 string           `json:"last_used_at,omitempty"`
+	UsageType                  string           `json:"usage_type,omitempty"`
 	ProjectsWithWriteAccess    []ProjectSummary `json:"projects_with_write_access,omitempty"`
 	ProjectsWithReadonlyAccess []ProjectSummary `json:"projects_with_readonly_access,omitempty"`
 }
@@ -93,17 +99,22 @@ func timeStr(t *time.Time) string {
 	return t.Format(time.RFC3339)
 }
 
-// toOutput converts the GitLab API response to the tool output format.
-func toOutput(k *gl.ProjectDeployKey) Output {
+// toOutput converts the GitLab API response to the tool output format,
+// filling from the decoded key and from what the capture read beside it.
+func toOutput(k *gl.ProjectDeployKey, extra toolutil.DeployKeyExtra) Output {
 	return Output{
-		ID:                k.ID,
-		Title:             k.Title,
-		Key:               k.Key,
-		Fingerprint:       k.Fingerprint,
-		FingerprintSHA256: k.FingerprintSHA256,
-		CreatedAt:         timeStr(k.CreatedAt),
-		CanPush:           k.CanPush,
-		ExpiresAt:         timeStr(k.ExpiresAt),
+		ID:                         k.ID,
+		Title:                      k.Title,
+		Key:                        k.Key,
+		Fingerprint:                k.Fingerprint,
+		FingerprintSHA256:          k.FingerprintSHA256,
+		CreatedAt:                  timeStr(k.CreatedAt),
+		CanPush:                    k.CanPush,
+		ExpiresAt:                  timeStr(k.ExpiresAt),
+		LastUsedAt:                 timeStr(extra.LastUsedAt),
+		UsageType:                  extra.UsageType,
+		ProjectsWithWriteAccess:    capturedProjectSummaries(extra.ProjectsWithWriteAccess),
+		ProjectsWithReadonlyAccess: capturedProjectSummaries(extra.ProjectsWithReadonlyAccess),
 	}
 }
 
@@ -120,8 +131,51 @@ func toProjectSummary(p *gl.DeployKeyProject) ProjectSummary {
 	}
 }
 
-// toInstanceOutput converts the GitLab API response to the tool output format.
-func toInstanceOutput(k *gl.InstanceDeployKey) InstanceOutput {
+// projectKeyListOutput pairs a page of project deploy keys with what the
+// capture read beside them, reporting under op an answer the output type
+// cannot hold. It is the whole tail of both project-scoped listings, which
+// differ only in the call they make.
+func projectKeyListOutput(
+	op string,
+	keys []*gl.ProjectDeployKey,
+	resp *gl.Response,
+	captured *gitlabclient.ResponseCapture,
+) (ListOutput, error) {
+	extras, err := toolutil.CapturedDeployKeys(captured, len(keys))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr(op, err)
+	}
+	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
+	for i, k := range keys {
+		out.DeployKeys = append(out.DeployKeys, toOutput(k, extras[i]))
+	}
+	return out, nil
+}
+
+// capturedProjectSummaries converts the projects read off the captured answer
+// into the same summary the SDK-decoded projects produce.
+func capturedProjectSummaries(projects []toolutil.DeployKeyProjectOutput) []ProjectSummary {
+	if len(projects) == 0 {
+		return nil
+	}
+	out := make([]ProjectSummary, len(projects))
+	for i, p := range projects {
+		out[i] = ProjectSummary{
+			ID:                p.ID,
+			Description:       p.Description,
+			Name:              p.Name,
+			NameWithNamespace: p.NameWithNamespace,
+			Path:              p.Path,
+			PathWithNamespace: p.PathWithNamespace,
+			CreatedAt:         timeStr(p.CreatedAt),
+		}
+	}
+	return out
+}
+
+// toInstanceOutput converts the GitLab API response to the tool output format,
+// filling from the decoded key and from what the capture read beside it.
+func toInstanceOutput(k *gl.InstanceDeployKey, extra toolutil.DeployKeyExtra) InstanceOutput {
 	out := InstanceOutput{
 		ID:                k.ID,
 		Title:             k.Title,
@@ -130,6 +184,8 @@ func toInstanceOutput(k *gl.InstanceDeployKey) InstanceOutput {
 		FingerprintSHA256: k.FingerprintSHA256,
 		CreatedAt:         timeStr(k.CreatedAt),
 		ExpiresAt:         timeStr(k.ExpiresAt),
+		LastUsedAt:        timeStr(extra.LastUsedAt),
+		UsageType:         extra.UsageType,
 	}
 	for _, p := range k.ProjectsWithWriteAccess {
 		out.ProjectsWithWriteAccess = append(out.ProjectsWithWriteAccess, toProjectSummary(p))
@@ -227,17 +283,13 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	applyOrdering(&opts.ListOptions, input.OrderBy, input.Sort)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	keys, resp, err := client.GL().DeployKeys.ListProjectDeployKeys(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("deploy_key_list_project", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get; deploy keys list requires Maintainer role")
 	}
-
-	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, k := range keys {
-		out.DeployKeys = append(out.DeployKeys, toOutput(k))
-	}
-	return out, nil
+	return projectKeyListOutput("deploy_key_list_project", keys, resp, captured)
 }
 
 // Get retrieves a single deploy key by ID.
@@ -249,13 +301,18 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.ErrFieldRequired("deploy_key_id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	key, _, err := client.GL().DeployKeys.GetDeployKey(string(input.ProjectID), input.DeployKeyID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("deploy_key_get", err, http.StatusNotFound,
 			"verify deploy_key_id with gitlab_deploy_key_list_project; the key must currently be enabled on this project")
 	}
+	extra, err := toolutil.CapturedDeployKey(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("deploy_key_get", err)
+	}
 
-	return toOutput(key), nil
+	return toOutput(key, extra), nil
 }
 
 // Add adds a deploy key to a project.
@@ -287,13 +344,18 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 		opts.ExpiresAt = &t
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	key, _, err := client.GL().DeployKeys.AddDeployKey(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("deploy_key_add", err, http.StatusBadRequest,
 			"key must be a valid SSH public key (ssh-rsa/ed25519/ecdsa) and unique within the instance; title must be unique within the project; requires Maintainer role")
 	}
+	extra, err := toolutil.CapturedDeployKey(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("deploy_key_add", err)
+	}
 
-	return toOutput(key), nil
+	return toOutput(key, extra), nil
 }
 
 // Update updates an existing deploy key.
@@ -313,13 +375,18 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.CanPush = input.CanPush
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	key, _, err := client.GL().DeployKeys.UpdateDeployKey(string(input.ProjectID), input.DeployKeyID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("deploy_key_update", err, http.StatusForbidden,
 			"updating deploy keys requires Maintainer role; only keys originally created in this project can be edited (not keys enabled from other projects)")
 	}
+	extra, err := toolutil.CapturedDeployKey(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("deploy_key_update", err)
+	}
 
-	return toOutput(key), nil
+	return toOutput(key, extra), nil
 }
 
 // Delete removes a deploy key from a project.
@@ -349,13 +416,18 @@ func Enable(ctx context.Context, client *gitlabclient.Client, input EnableInput)
 		return Output{}, toolutil.ErrFieldRequired("deploy_key_id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	key, _, err := client.GL().DeployKeys.EnableDeployKey(string(input.ProjectID), input.DeployKeyID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("deploy_key_enable", err, http.StatusNotFound,
 			"verify deploy_key_id exists at instance level via gitlab_deploy_key_list_all; the key may already be enabled")
 	}
+	extra, err := toolutil.CapturedDeployKey(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("deploy_key_enable", err)
+	}
 
-	return toOutput(key), nil
+	return toOutput(key, extra), nil
 }
 
 // ListAll lists all instance-level deploy keys.
@@ -367,15 +439,20 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 		opts.Public = input.Public
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	keys, resp, err := client.GL().DeployKeys.ListAllDeployKeys(opts, gl.WithContext(ctx))
 	if err != nil {
 		return InstanceListOutput{}, toolutil.WrapErrWithStatusHint("deploy_key_list_all", err, http.StatusForbidden,
 			"listing all instance deploy keys requires admin token")
 	}
+	extras, err := toolutil.CapturedDeployKeys(captured, len(keys))
+	if err != nil {
+		return InstanceListOutput{}, toolutil.WrapErr("deploy_key_list_all", err)
+	}
 
 	out := InstanceListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, k := range keys {
-		out.DeployKeys = append(out.DeployKeys, toInstanceOutput(k))
+	for i, k := range keys {
+		out.DeployKeys = append(out.DeployKeys, toInstanceOutput(k, extras[i]))
 	}
 	return out, nil
 }
@@ -402,13 +479,18 @@ func AddInstance(ctx context.Context, client *gitlabclient.Client, input AddInst
 		opts.ExpiresAt = &t
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	key, _, err := client.GL().DeployKeys.AddInstanceDeployKey(opts, gl.WithContext(ctx))
 	if err != nil {
 		return InstanceOutput{}, toolutil.WrapErrWithStatusHint("deploy_key_add_instance", err, http.StatusForbidden,
 			"creating instance-level deploy keys requires admin token; key must be unique")
 	}
+	extra, err := toolutil.CapturedDeployKey(captured)
+	if err != nil {
+		return InstanceOutput{}, toolutil.WrapErr("deploy_key_add_instance", err)
+	}
 
-	return toInstanceOutput(key), nil
+	return toInstanceOutput(key, extra), nil
 }
 
 // ListUserProject lists deploy keys for a specific user's projects.
@@ -421,17 +503,13 @@ func ListUserProject(ctx context.Context, client *gitlabclient.Client, input Lis
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	applyOrdering(&opts.ListOptions, input.OrderBy, input.Sort)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	keys, resp, err := client.GL().DeployKeys.ListUserProjectDeployKeys(string(input.UserID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("deploy_key_list_user_project", err, http.StatusNotFound,
 			"verify user_id with gitlab_get_user; admin token required to query other users' deploy keys")
 	}
-
-	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, k := range keys {
-		out.DeployKeys = append(out.DeployKeys, toOutput(k))
-	}
-	return out, nil
+	return projectKeyListOutput("deploy_key_list_user_project", keys, resp, captured)
 }
 
 // ---------------------------------------------------------------------------

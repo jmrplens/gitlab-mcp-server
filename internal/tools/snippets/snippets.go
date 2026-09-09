@@ -67,8 +67,14 @@ type Output struct {
 	RawURL            string               `json:"raw_url"`
 	RepositoryStorage string               `json:"repository_storage,omitempty" tier:"premium"`
 	Files             []FileOutput         `json:"files,omitempty"`
-	CreatedAt         *time.Time           `json:"created_at,omitempty"`
-	UpdatedAt         *time.Time           `json:"updated_at,omitempty"`
+	// SSHURLToRepo and HTTPURLToRepo clone the snippet's repository, and GitLab
+	// sends them once that repository exists.
+	SSHURLToRepo  string     `json:"ssh_url_to_repo,omitempty"`
+	HTTPURLToRepo string     `json:"http_url_to_repo,omitempty"`
+	Imported      bool       `json:"imported"`
+	ImportedFrom  string     `json:"imported_from,omitempty"`
+	CreatedAt     *time.Time `json:"created_at,omitempty"`
+	UpdatedAt     *time.Time `json:"updated_at,omitempty"`
 }
 
 // ListOutput represents a list of snippets with pagination.
@@ -94,8 +100,30 @@ type FileContentOutput struct {
 	Content   string `json:"content"`
 }
 
-// convertSnippet maps a GitLab snippet into the MCP output shape.
-func convertSnippet(s *gl.Snippet) Output {
+// snippetListOutput pairs a page of snippets with what the capture read
+// beside them, reporting under op an answer the output type cannot hold. It is
+// the whole tail of every snippet listing, which differ only in the call they
+// make.
+func snippetListOutput(
+	op string,
+	snippets []*gl.Snippet,
+	resp *gl.Response,
+	captured *gitlabclient.ResponseCapture,
+) (ListOutput, error) {
+	extras, err := toolutil.CapturedSnippets(captured, len(snippets))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr(op, err)
+	}
+	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
+	for i, s := range snippets {
+		out.Snippets = append(out.Snippets, convertSnippet(s, extras[i]))
+	}
+	return out, nil
+}
+
+// convertSnippet maps a GitLab snippet into the MCP output shape, filling
+// from the decoded snippet and from what the capture read beside it.
+func convertSnippet(s *gl.Snippet, extra toolutil.SnippetExtra) Output {
 	out := Output{
 		ID:                s.ID,
 		Title:             s.Title,
@@ -106,6 +134,10 @@ func convertSnippet(s *gl.Snippet) Output {
 		WebURL:            s.WebURL,
 		RawURL:            s.RawURL,
 		RepositoryStorage: s.RepositoryStorage,
+		SSHURLToRepo:      extra.SSHURLToRepo,
+		HTTPURLToRepo:     extra.HTTPURLToRepo,
+		Imported:          extra.Imported,
+		ImportedFrom:      extra.ImportedFrom,
 		CreatedAt:         s.CreatedAt,
 		UpdatedAt:         s.UpdatedAt,
 	}
@@ -212,11 +244,11 @@ func extractProjectPath(webURL string) string {
 	if err != nil || u.Scheme == "" {
 		return ""
 	}
-	idx := strings.Index(u.Path, marker)
-	if idx <= 0 {
+	before, _, found := strings.Cut(u.Path, marker)
+	if !found {
 		return ""
 	}
-	return strings.TrimPrefix(u.Path[:idx], "/")
+	return strings.TrimPrefix(before, "/")
 }
 
 // snippetsHaveProject reports whether any snippet output belongs to a project.
@@ -292,16 +324,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	opts := &gl.ListSnippetsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	snippets, resp, err := client.GL().Snippets.ListSnippets(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_list", err, http.StatusUnauthorized,
 			"this endpoint lists snippets owned by the authenticated user; ensure the access token has the 'api' scope")
 	}
-	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, s := range snippets {
-		out.Snippets = append(out.Snippets, convertSnippet(s))
-	}
-	return out, nil
+	return snippetListOutput("snippet_list", snippets, resp, captured)
 }
 
 // ListAllInput carries admin-only snippet listing filters, ordering, and
@@ -340,16 +369,13 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 			opts.CreatedBefore = &isoTime
 		}
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	snippets, resp, err := client.GL().Snippets.ListAllSnippets(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_list_all", err, http.StatusForbidden,
 			"listing all public snippets across the instance requires admin privileges")
 	}
-	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, s := range snippets {
-		out.Snippets = append(out.Snippets, convertSnippet(s))
-	}
-	return out, nil
+	return snippetListOutput("snippet_list_all", snippets, resp, captured)
 }
 
 // GetInput identifies a personal snippet by global snippet ID.
@@ -362,12 +388,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.SnippetID == 0 {
 		return Output{}, toolutil.ErrFieldRequired("snippet_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	snippet, _, err := client.GL().Snippets.GetSnippet(input.SnippetID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_get", err, http.StatusNotFound,
 			"verify snippet_id with gitlab_snippet_list; private snippets are only accessible to the author")
 	}
-	return convertSnippet(snippet), nil
+	extra, err := toolutil.CapturedSnippet(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("snippet_get", err)
+	}
+	return convertSnippet(snippet, extra), nil
 }
 
 // ContentInput identifies the single-file snippet content to retrieve.
@@ -453,12 +484,17 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if files := createSnippetFiles(input.Files); files != nil {
 		opts.Files = files
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	snippet, _, err := client.GL().Snippets.CreateSnippet(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_create", err, http.StatusBadRequest,
 			"title and content are required; visibility must be 'private', 'internal', or 'public'; instance may have disabled snippet creation")
 	}
-	return convertSnippet(snippet), nil
+	extra, err := toolutil.CapturedSnippet(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("snippet_create", err)
+	}
+	return convertSnippet(snippet, extra), nil
 }
 
 // UpdateInput identifies a personal snippet and the metadata or file operations to apply.
@@ -478,12 +514,17 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.ErrFieldRequired("snippet_id")
 	}
 	opts := buildUpdateOpts(input)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	snippet, _, err := client.GL().Snippets.UpdateSnippet(input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_update", err, http.StatusForbidden,
 			"updating a snippet requires being the author or having admin privileges; verify snippet_id with gitlab_snippet_list")
 	}
-	return convertSnippet(snippet), nil
+	extra, err := toolutil.CapturedSnippet(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("snippet_update", err)
+	}
+	return convertSnippet(snippet, extra), nil
 }
 
 // buildUpdateOpts constructs the request parameters from the input.
@@ -561,14 +602,11 @@ func Explore(ctx context.Context, client *gitlabclient.Client, input ExploreInpu
 	opts := &gl.ExploreSnippetsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	snippets, resp, err := client.GL().Snippets.ExploreSnippets(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_explore", err, http.StatusForbidden,
 			"exploring all public snippets may be restricted by instance configuration")
 	}
-	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, s := range snippets {
-		out.Snippets = append(out.Snippets, convertSnippet(s))
-	}
-	return out, nil
+	return snippetListOutput("snippet_explore", snippets, resp, captured)
 }

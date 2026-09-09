@@ -64,8 +64,8 @@ func FormatListMarkdown(out ListOutput) string {
 		b.WriteString("No packages found.\n")
 		return b.String()
 	}
-	b.WriteString("| ID | Name | Version | Type | Status | Pipeline |\n")
-	b.WriteString(toolutil.TblSep6Col)
+	b.WriteString("| ID | Name | Version | Type | Status | Creator | Pipeline |\n")
+	b.WriteString(toolutil.TblSep7Col)
 	for _, p := range out.Packages {
 		writePackageRow(&b, p, pipelineSummary(p))
 	}
@@ -81,20 +81,39 @@ func FormatListMarkdown(out ListOutput) string {
 }
 
 // writePackageRow writes one package table row, sharing the common
-// ID/name/version/type/status columns between the project and group
+// ID/name/version/type/status/creator columns between the project and group
 // package list renderers and appending the caller-supplied final column.
 func writePackageRow(b *strings.Builder, p ListItem, lastColumn string) {
 	fmt.Fprintf(
-		b, "| %d | %s | %s | %s | %s | %s |\n",
+		b, "| %d | %s | %s | %s | %s | %s | %s |\n",
 		p.ID,
 		toolutil.EscapeMdTableCell(p.Name),
-		toolutil.EscapeMdTableCell(p.Version),
+		toolutil.EscapeMdTableCell(versionSummary(p)),
 		//gitlab:allow-unescaped p.PackageType: the registry format GitLab stores the package under, one of its own enum values (generic, maven, npm and the rest).
 		p.PackageType,
 		//gitlab:allow-unescaped p.Status: a GitLab package status enum value (default, hidden, processing, error).
 		p.Status,
+		creatorSummary(p),
 		toolutil.EscapeMdTableCell(lastColumn),
 	)
+}
+
+// versionSummary names the package's version and how many others GitLab sent
+// beside it, which it does when one package is asked for rather than a page.
+func versionSummary(pkg ListItem) string {
+	if len(pkg.Versions) == 0 {
+		return pkg.Version
+	}
+	return fmt.Sprintf("%s (+%d)", pkg.Version, len(pkg.Versions))
+}
+
+// creatorSummary names the user who published the package, and nothing when
+// GitLab attributes it to no one.
+func creatorSummary(pkg ListItem) string {
+	if pkg.CreatorID == 0 {
+		return ""
+	}
+	return strconv.FormatInt(pkg.CreatorID, 10)
 }
 
 func pipelineSummary(pkg ListItem) string {
@@ -128,8 +147,8 @@ func FormatGroupListMarkdown(out GroupListOutput) string {
 		b.WriteString("No packages found.\n")
 		return b.String()
 	}
-	b.WriteString("| ID | Name | Version | Type | Status | Project |\n")
-	b.WriteString(toolutil.TblSep6Col)
+	b.WriteString("| ID | Name | Version | Type | Status | Creator | Project |\n")
+	b.WriteString(toolutil.TblSep7Col)
 	for _, p := range out.Packages {
 		writePackageRow(&b, p.ListItem, groupProjectSummary(p))
 	}

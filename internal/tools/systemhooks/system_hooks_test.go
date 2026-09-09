@@ -6,6 +6,7 @@ package systemhooks
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -13,7 +14,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // fmtUnexpPath identifies the fmt unexp path constant used by this package.
@@ -391,6 +394,8 @@ func TestSetURLVariable_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	if err := SetURLVariable(t.Context(), client, SetURLVariableInput{}); err == nil {
 		t.Fatal(errExpectedErrZeroID)
+	} else if !strings.Contains(err.Error(), "system_hook_set_url_variable: id is required") {
+		t.Fatalf("unexpected zero-id validation error: %v", err)
 	}
 	if err := SetURLVariable(t.Context(), client, SetURLVariableInput{ID: 1}); err == nil {
 		t.Fatal("expected error for empty key, got nil")
@@ -409,6 +414,8 @@ func TestDeleteURLVariable_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	if err := DeleteURLVariable(t.Context(), client, DeleteURLVariableInput{}); err == nil {
 		t.Fatal(errExpectedErrZeroID)
+	} else if !strings.Contains(err.Error(), "system_hook_delete_url_variable: id is required") {
+		t.Fatalf("unexpected zero-id validation error: %v", err)
 	}
 	if err := DeleteURLVariable(t.Context(), client, DeleteURLVariableInput{ID: 1}); err == nil {
 		t.Fatal("expected error for empty key, got nil")
@@ -530,8 +537,14 @@ func TestAdd_APIError(t *testing.T) {
 
 // TestAdd_AllOptionalFields verifies Add when all optional fields.
 func TestAdd_AllOptionalFields(t *testing.T) {
+	var sentBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
+			body, readErr := io.ReadAll(r.Body)
+			if readErr != nil {
+				t.Errorf("read request body: %v", readErr)
+			}
+			sentBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"url":"https://example.com/hook2","name":"Named Hook","description":"Hook desc","created_at":"2026-01-01T00:00:00Z","push_events":false,"tag_push_events":true,"merge_requests_events":true,"repository_update_events":true,"enable_ssl_verification":false}`)
 			return
 		}
@@ -566,6 +579,15 @@ func TestAdd_AllOptionalFields(t *testing.T) {
 	}
 	if out.Hook.Description != "Hook desc" {
 		t.Errorf("expected description 'Hook desc', got %s", out.Hook.Description)
+	}
+	// Every optional field the input carried has to reach the request, which
+	// only the body says: the answer is the fixture's and not the request's.
+	for _, want := range []string{`"description":"Hook desc"`, `"name":"Named Hook"`, `"token":"secret-token"`, `"push_events_branch_filter":"main"`} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(sentBody, want) {
+				t.Errorf("add request body missing %s: %s", want, sentBody)
+			}
+		})
 	}
 }
 
@@ -629,5 +651,254 @@ func TestFormatDelegatorMarkdown_GetAddEdit(t *testing.T) {
 				t.Errorf("%s delegator returned empty result", name)
 			}
 		})
+	}
+}
+
+// TestEdit_WithoutURL_LeavesTheURLOutOfTheRequest verifies that editing a hook
+// without a url sends no url at all, rather than sending an empty one that
+// would clear the hook's endpoint.
+func TestEdit_WithoutURL_LeavesTheURLOutOfTheRequest(t *testing.T) {
+	var sentBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Errorf("read request body: %v", readErr)
+		}
+		sentBody = string(body)
+		testutil.RespondJSON(w, http.StatusOK, hookJSON)
+	}))
+
+	if _, err := Edit(t.Context(), client, EditInput{ID: 1, Name: "Renamed"}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if strings.Contains(sentBody, `"url"`) {
+		t.Errorf("edit request body carries a url it was not given: %s", sentBody)
+	}
+	if !strings.Contains(sentBody, `"name":"Renamed"`) {
+		t.Errorf("edit request body missing the new name: %s", sentBody)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Fields GitLab sends beside the ones the SDK's own Hook models
+// ---------------------------------------------------------------------------.
+
+// hookSentJSON is one hook carrying every key the SDK's Hook leaves out: the
+// branch filter and the strategy that reads it, the alert status and how long
+// the hook stays disabled, the payload template, the custom headers and the
+// organization a system hook belongs to.
+const hookSentJSON = `{"id":1,"url":"https://example.com/hook","name":"My Hook",` +
+	`"created_at":"2026-01-01T00:00:00Z","push_events":true,` +
+	`"push_events_branch_filter":"release/*","branch_filter_strategy":"wildcard",` +
+	`"alert_status":"temporarily_disabled","disabled_until":"2026-02-03T04:05:06Z",` +
+	`"custom_webhook_template":"{\"event\":\"push\"}",` +
+	`"custom_headers":[{"key":"X-Env","value":"prod"}],"organization_id":7,` +
+	`"token_present":true,"signing_token_present":true}`
+
+// hookWithoutConditionalJSON is the same hook without the two keys GitLab
+// sends only under a condition: the headers a caller can ask to be left out,
+// and the organization only a system hook has.
+const hookWithoutConditionalJSON = `{"id":1,"url":"https://example.com/hook","name":"My Hook",` +
+	`"push_events":true,"push_events_branch_filter":"release/*","branch_filter_strategy":"wildcard",` +
+	`"alert_status":"executable","disabled_until":null,"custom_webhook_template":""}`
+
+// systemHookClient answers every request with body, which the caller writes as
+// an array for the list handler and as an object for the rest.
+func systemHookClient(t *testing.T, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+}
+
+// hookCalls are the four handlers that answer with a hook, each taking the
+// body its endpoint answers with and returning the hook it published.
+var hookCalls = []struct {
+	name string
+	call func(client *gitlabclient.Client) (HookItem, error)
+	// list says whether the endpoint answers with an array.
+	list bool
+}{
+	{name: "list", list: true, call: func(client *gitlabclient.Client) (HookItem, error) {
+		out, err := List(context.Background(), client, ListInput{})
+		if err != nil {
+			return HookItem{}, err
+		}
+		if len(out.Hooks) != 1 {
+			return HookItem{}, errNoHook
+		}
+		return out.Hooks[0], nil
+	}},
+	{name: "get", call: func(client *gitlabclient.Client) (HookItem, error) {
+		out, err := Get(context.Background(), client, GetInput{ID: 1})
+		return out.Hook, err
+	}},
+	{name: "add", call: func(client *gitlabclient.Client) (HookItem, error) {
+		out, err := Add(context.Background(), client, AddInput{URL: testHookURL})
+		return out.Hook, err
+	}},
+	{name: "edit", call: func(client *gitlabclient.Client) (HookItem, error) {
+		out, err := Edit(context.Background(), client, EditInput{ID: 1, URL: testHookURL})
+		return out.Hook, err
+	}},
+}
+
+// errNoHook reports a handler that answered without the single hook the body
+// carries, which would otherwise show up as a nil-index panic.
+var errNoHook = errors.New("the handler published no hook")
+
+// hookSentValues is what each string-valued key of hookSentJSON carries, so
+// one table checks them all.
+var hookSentValues = map[string]string{
+	"push_events_branch_filter": "release/*",
+	"branch_filter_strategy":    "wildcard",
+	"alert_status":              "temporarily_disabled",
+	"disabled_until":            "2026-02-03T04:05:06Z",
+	"custom_webhook_template":   `{"event":"push"}`,
+}
+
+// hookBodyFor wraps the object body in an array for a list endpoint.
+func hookBodyFor(list bool, body string) string {
+	if list {
+		return "[" + body + "]"
+	}
+	return body
+}
+
+// TestSystemHooks_PublishTheFieldsGitLabSendsBesideTheSDKs verifies that each
+// handler that answers with a hook publishes the seven keys the SDK's Hook
+// does not model, read off the captured response.
+func TestSystemHooks_PublishTheFieldsGitLabSendsBesideTheSDKs(t *testing.T) {
+	for _, hookCall := range hookCalls {
+		t.Run(hookCall.name, func(t *testing.T) {
+			hook, err := hookCall.call(systemHookClient(t, hookBodyFor(hookCall.list, hookSentJSON)))
+			if err != nil {
+				t.Fatalf("%s: %v", hookCall.name, err)
+			}
+			for field, got := range map[string]string{
+				"push_events_branch_filter": hook.PushEventsBranchFilter,
+				"branch_filter_strategy":    hook.BranchFilterStrategy,
+				"alert_status":              hook.AlertStatus,
+				"disabled_until":            hook.DisabledUntil,
+				"custom_webhook_template":   hook.CustomWebhookTemplate,
+			} {
+				t.Run(field, func(t *testing.T) {
+					if want := hookSentValues[field]; got != want {
+						t.Errorf("%s = %q, want %q", field, got, want)
+					}
+				})
+			}
+			if len(hook.CustomHeaders) != 1 || hook.CustomHeaders[0].Key != "X-Env" {
+				t.Errorf("custom_headers = %+v, want the one header GitLab sent", hook.CustomHeaders)
+			}
+			if hook.OrganizationID != 7 {
+				t.Errorf("organization_id = %d, want 7", hook.OrganizationID)
+			}
+		})
+	}
+}
+
+// TestSystemHooks_OmitTheConditionalFieldsGitLabDidNotSend verifies that a
+// hook answered without the headers and without the organization publishes
+// neither, and that the unconditional keys beside them still arrive.
+func TestSystemHooks_OmitTheConditionalFieldsGitLabDidNotSend(t *testing.T) {
+	for _, hookCall := range hookCalls {
+		t.Run(hookCall.name, func(t *testing.T) {
+			hook, err := hookCall.call(systemHookClient(t, hookBodyFor(hookCall.list, hookWithoutConditionalJSON)))
+			if err != nil {
+				t.Fatalf("%s: %v", hookCall.name, err)
+			}
+			if hook.CustomHeaders != nil {
+				t.Errorf("custom_headers = %+v, want none", hook.CustomHeaders)
+			}
+			if hook.OrganizationID != 0 {
+				t.Errorf("organization_id = %d, want none", hook.OrganizationID)
+			}
+			if hook.DisabledUntil != "" {
+				t.Errorf("disabled_until = %q, want none for a hook that is not disabled", hook.DisabledUntil)
+			}
+			if hook.AlertStatus != "executable" {
+				t.Errorf("alert_status = %q, want executable", hook.AlertStatus)
+			}
+		})
+	}
+}
+
+// TestSystemHooks_UnreadableCapturedFields verifies every handler that answers
+// with a hook reports the captured response's decode failure rather than a
+// half-filled hook. The SDK's own Hook has no organization_id, so only the
+// read beside it can notice that GitLab sent a string there.
+func TestSystemHooks_UnreadableCapturedFields(t *testing.T) {
+	const poisoned = `{"id":1,"url":"https://example.com/hook","organization_id":"not-a-number"}`
+	cases := make([]testutil.CapturedCase, 0, len(hookCalls))
+	for _, hookCall := range hookCalls {
+		cases = append(cases, testutil.CapturedCase{Name: hookCall.name, Call: func() error {
+			_, err := hookCall.call(systemHookClient(t, hookBodyFor(hookCall.list, poisoned)))
+			return err
+		}})
+	}
+	testutil.AssertCapturedDecodeFailures(t, cases)
+}
+
+// TestFormatHookMarkdown_SentFields verifies the hook Markdown names the
+// fields read off the captured response, and leaves each of them out of a
+// hook that carries none.
+func TestFormatHookMarkdown_SentFields(t *testing.T) {
+	full := FormatHookMarkdown(HookItem{
+		ID:                     1,
+		URL:                    testHookURL,
+		PushEventsBranchFilter: "release/*",
+		BranchFilterStrategy:   "wildcard",
+		AlertStatus:            "temporarily_disabled",
+		DisabledUntil:          "2026-02-03T04:05:06Z",
+		CustomWebhookTemplate:  `{"event":"push"}`,
+		CustomHeaders:          []HookCustomHeader{{Key: "X-Env"}},
+		OrganizationID:         7,
+	}).Content[0].(*mcp.TextContent).Text
+	for _, want := range []string{
+		"Push Events Branch Filter", "release/*",
+		"Branch Filter Strategy", "wildcard",
+		"Alert Status", "temporarily_disabled",
+		"Disabled Until", "3 Feb 2026 04:05 UTC",
+		"Custom Webhook Template",
+		"Custom Headers", "X-Env", toolutil.RedactedSecretValue,
+		"Organization ID", "| 7 |",
+	} {
+		t.Run("shows "+want, func(t *testing.T) {
+			if !strings.Contains(full, want) {
+				t.Errorf("FormatHookMarkdown missing %q: %s", want, full)
+			}
+		})
+	}
+
+	bare := FormatHookMarkdown(HookItem{ID: 1, URL: testHookURL}).Content[0].(*mcp.TextContent).Text
+	for _, unwanted := range []string{
+		"Push Events Branch Filter", "Branch Filter Strategy", "Alert Status",
+		"Disabled Until", "Custom Webhook Template", "Custom Headers", "Organization ID",
+		"URL Variables",
+	} {
+		t.Run("omits "+unwanted, func(t *testing.T) {
+			if strings.Contains(bare, unwanted) {
+				t.Errorf("FormatHookMarkdown shows %q for a hook that has none: %s", unwanted, bare)
+			}
+		})
+	}
+}
+
+// TestFormatHookMarkdown_CustomHeaderValuesRedacted verifies the custom header
+// table names each header and never its value, which GitLab masks and this
+// server does not surface.
+func TestFormatHookMarkdown_CustomHeaderValuesRedacted(t *testing.T) {
+	client := systemHookClient(t, hookSentJSON)
+	out, err := Get(t.Context(), client, GetInput{ID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	encoded, err := json.Marshal(out.Hook)
+	if err != nil {
+		t.Fatalf("marshal hook output: %v", err)
+	}
+	if strings.Contains(string(encoded), "prod") {
+		t.Errorf("hook output exposed a custom header value: %s", encoded)
 	}
 }

@@ -25,12 +25,19 @@ func FormatOutputMarkdown(o Output) string {
 		fmt.Fprintf(&b, "| SHA256 | %s |\n", o.FingerprintSHA256)
 	}
 	fmt.Fprintf(&b, "| Can Push | %t |\n", o.CanPush)
+	if o.UsageType != "" {
+		fmt.Fprintf(&b, "| Usage Type | %s |\n", toolutil.EscapeMdTableCell(o.UsageType))
+	}
 	if o.CreatedAt != "" {
 		fmt.Fprintf(&b, "| Created | %s |\n", toolutil.FormatTime(o.CreatedAt))
 	}
 	if o.ExpiresAt != "" {
 		fmt.Fprintf(&b, "| Expires | %s |\n", toolutil.FormatTime(o.ExpiresAt))
 	}
+	if o.LastUsedAt != "" {
+		fmt.Fprintf(&b, "| Last Used | %s |\n", toolutil.FormatTime(o.LastUsedAt))
+	}
+	writeProjectAccessTables(&b, o.ProjectsWithWriteAccess, o.ProjectsWithReadonlyAccess)
 	toolutil.WriteHints(
 		&b,
 		"If the workflow asks to fetch/get this key before update or delete, use the selected tool surface's deploy-key get action with the same project_id and this deploy_key_id next",
@@ -89,28 +96,41 @@ func FormatInstanceOutputMarkdown(o InstanceOutput) string {
 	if o.ExpiresAt != "" {
 		fmt.Fprintf(&b, "| Expires | %s |\n", toolutil.FormatTime(o.ExpiresAt))
 	}
-	if len(o.ProjectsWithWriteAccess) > 0 {
-		b.WriteString("\n### Projects with Write Access\n\n")
-		b.WriteString("| ID | Name | Path |\n|---|---|---|\n")
-		for _, p := range o.ProjectsWithWriteAccess {
-			fmt.Fprintf(&b, "| %d | %s | %s |\n", p.ID,
-				toolutil.EscapeMdTableCell(p.Name), toolutil.EscapeMdTableCell(p.PathWithNamespace))
-		}
+	if o.LastUsedAt != "" {
+		fmt.Fprintf(&b, "| Last Used | %s |\n", toolutil.FormatTime(o.LastUsedAt))
 	}
-	if len(o.ProjectsWithReadonlyAccess) > 0 {
-		b.WriteString("\n### Projects with Readonly Access\n\n")
-		b.WriteString("| ID | Name | Path |\n|---|---|---|\n")
-		for _, p := range o.ProjectsWithReadonlyAccess {
-			fmt.Fprintf(&b, "| %d | %s | %s |\n", p.ID,
-				toolutil.EscapeMdTableCell(p.Name), toolutil.EscapeMdTableCell(p.PathWithNamespace))
-		}
+	if o.UsageType != "" {
+		fmt.Fprintf(&b, "| Usage Type | %s |\n", toolutil.EscapeMdTableCell(o.UsageType))
 	}
+	writeProjectAccessTables(&b, o.ProjectsWithWriteAccess, o.ProjectsWithReadonlyAccess)
 	toolutil.WriteHints(
 		&b,
 		"Use the selected tool surface's deploy-key enable action with project_id and this deploy_key_id to grant this instance key to a project",
 		"Use the selected tool surface's deploy-key list action with project_id to verify project-level references before deletion workflows",
 	)
 	return b.String()
+}
+
+// writeProjectAccessTables writes one table per non-empty access list, which
+// a deploy key carries when the request asked for the projects it reaches.
+func writeProjectAccessTables(b *strings.Builder, write, readonly []ProjectSummary) {
+	for _, section := range []struct {
+		heading  string
+		projects []ProjectSummary
+	}{
+		{heading: "Projects with Write Access", projects: write},
+		{heading: "Projects with Readonly Access", projects: readonly},
+	} {
+		if len(section.projects) == 0 {
+			continue
+		}
+		fmt.Fprintf(b, "\n### %s\n\n", section.heading)
+		b.WriteString("| ID | Name | Path |\n|---|---|---|\n")
+		for _, p := range section.projects {
+			fmt.Fprintf(b, "| %d | %s | %s |\n", p.ID,
+				toolutil.EscapeMdTableCell(p.Name), toolutil.EscapeMdTableCell(p.PathWithNamespace))
+		}
+	}
 }
 
 // FormatInstanceListMarkdown formats a list of instance deploy keys.

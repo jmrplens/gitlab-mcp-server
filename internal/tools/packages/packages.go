@@ -261,17 +261,27 @@ type ListInput struct {
 // the GitLab Packages API [gl.Package] object, surfacing the full
 // nested _links, pipeline, pipelines, and tags sub-objects.
 type ListItem struct {
-	ID               int64          `json:"id"`
-	Name             string         `json:"name"`
-	Version          string         `json:"version"`
-	PackageType      string         `json:"package_type"`
-	Status           string         `json:"status"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	PackageType string `json:"package_type"`
+	Status      string `json:"status"`
+	// ConanPackageName is the recipe's own name, sent for a Conan package.
+	ConanPackageName string         `json:"conan_package_name,omitempty"`
 	Links            *LinksItem     `json:"_links,omitempty"`
 	Pipeline         *PipelineItem  `json:"pipeline,omitempty"`
 	Pipelines        []PipelineItem `json:"pipelines,omitempty"`
 	CreatedAt        string         `json:"created_at,omitempty"`
 	LastDownloadedAt string         `json:"last_downloaded_at,omitempty"`
+	CreatorID        int64          `json:"creator_id,omitempty"`
 	Tags             []TagItem      `json:"tags,omitempty"`
+	// Versions holds the package's other versions, which GitLab sends when one
+	// package is asked for rather than a page of them.
+	Versions []toolutil.PackageVersionOutput `json:"versions,omitempty"`
+	// ProjectID and ProjectPath name the owning project, which GitLab sends
+	// when the package is rendered in a group's listing.
+	ProjectID   int64  `json:"project_id,omitempty"`
+	ProjectPath string `json:"project_path,omitempty"`
 }
 
 // LinksItem mirrors the GitLab Packages API [gl.PackageLinks] object,
@@ -354,14 +364,20 @@ func buildListOptions(input ListInput) *gl.ListProjectPackagesOptions {
 
 // packageToListItem converts a GitLab Package API object into a ListItem.
 // packageToListItem converts a [gl.Package] into the package's
-// [ListItem] shape, flattening the optional pipeline metadata.
-func packageToListItem(p *gl.Package) ListItem {
+// [ListItem] shape, flattening the optional pipeline metadata and filling
+// from what the capture read beside the SDK's decode.
+func packageToListItem(p *gl.Package, extra toolutil.PackageExtra) ListItem {
 	item := ListItem{
-		ID:          p.ID,
-		Name:        p.Name,
-		Version:     p.Version,
-		PackageType: p.PackageType,
-		Status:      p.Status,
+		ID:               p.ID,
+		Name:             p.Name,
+		Version:          p.Version,
+		PackageType:      p.PackageType,
+		Status:           p.Status,
+		ConanPackageName: extra.ConanPackageName,
+		CreatorID:        extra.CreatorID,
+		Versions:         extra.Versions,
+		ProjectID:        extra.ProjectID,
+		ProjectPath:      extra.ProjectPath,
 	}
 	if p.Pipeline != nil {
 		item.Pipeline = packagePipelineToOutput(p.Pipeline)
@@ -459,15 +475,20 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("packageList: project_id is required")
 	}
 
-	pkgs, resp, err := client.GL().Packages.ListProjectPackages(string(input.ProjectID), buildListOptions(input))
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	pkgs, resp, err := client.GL().Packages.ListProjectPackages(string(input.ProjectID), buildListOptions(input), gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("packageList", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get; the project may have no packages yet or package registry may be disabled")
 	}
+	extras, err := toolutil.CapturedPackages(captured, len(pkgs))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("packageList", err)
+	}
 
 	items := make([]ListItem, 0, len(pkgs))
-	for _, p := range pkgs {
-		items = append(items, packageToListItem(p))
+	for i, p := range pkgs {
+		items = append(items, packageToListItem(p, extras[i]))
 	}
 
 	return ListOutput{
@@ -553,19 +574,24 @@ func GroupList(ctx context.Context, client *gitlabclient.Client, input GroupList
 		return GroupListOutput{}, errors.New("packageGroupList: group_id is required")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	pkgs, resp, err := client.GL().Packages.ListGroupPackages(string(input.GroupID), buildGroupListOptions(input), gl.WithContext(ctx))
 	if err != nil {
 		return GroupListOutput{}, toolutil.WrapErrWithStatusHint("packageGroupList", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get; the group may have no packages yet or package registry may be disabled")
 	}
+	extras, err := toolutil.CapturedPackages(captured, len(pkgs))
+	if err != nil {
+		return GroupListOutput{}, toolutil.WrapErr("packageGroupList", err)
+	}
 
 	items := make([]GroupListItem, 0, len(pkgs))
-	for _, p := range pkgs {
+	for i, p := range pkgs {
 		if p == nil {
 			continue
 		}
 		items = append(items, GroupListItem{
-			ListItem:    packageToListItem(&p.Package),
+			ListItem:    packageToListItem(&p.Package, extras[i]),
 			ProjectID:   p.ProjectID,
 			ProjectPath: p.ProjectPath,
 		})

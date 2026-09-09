@@ -105,6 +105,71 @@ func confineDownloadRoots(t *testing.T, dir string) {
 	t.Chdir(dir)
 }
 
+// TestDownload_UnusableOutputPath_RefusedBeforeGitLabIsAsked verifies a
+// download whose destination cannot hold a file is refused while the
+// destination is still being prepared, before any byte is requested: a parent
+// that is a file rather than a directory, and a destination that is itself a
+// directory.
+//
+// Which stage refuses the file-as-parent case is a platform property, so the
+// case accepts either. On Unix the path resolution itself fails, because a
+// component that is not a directory is ENOTDIR. Windows resolves that path and
+// refuses at the mkdir instead, which means the create branch this test was
+// first written to prove unreachable is in fact reached there. The invariant
+// the name states holds either way, and the handler is what enforces it:
+// GitLab is never asked.
+func TestDownload_UnusableOutputPath_RefusedBeforeGitLabIsAsked(t *testing.T) {
+	root := t.TempDir()
+	confineDownloadRoots(t, root)
+
+	fileAsParent := filepath.Join(root, "not-a-directory")
+	if err := os.WriteFile(fileAsParent, []byte("x"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	existingDir := filepath.Join(root, "already-a-directory")
+	makeDirs(t, existingDir)
+
+	for _, testCase := range []struct {
+		name    string
+		path    string
+		wantAny []string
+	}{
+		{
+			name:    "parent is a file",
+			path:    filepath.Join(fileAsParent, "out.bin"),
+			wantAny: []string{"resolve output path", "create output directory"},
+		},
+		{
+			name:    "destination is a directory",
+			path:    existingDir,
+			wantAny: []string{"already exists and is not a regular file"},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				t.Errorf("package file was requested for an unusable output_path %q", testCase.path)
+				w.WriteHeader(http.StatusForbidden)
+			}))
+			_, err := downloadTo(t, client, testCase.path)
+			if err == nil || !containsAny(err.Error(), testCase.wantAny) {
+				t.Errorf("Download(%q) error = %v, want one naming any of %q", testCase.path, err, testCase.wantAny)
+			}
+		})
+	}
+}
+
+// containsAny reports whether s contains any of the substrings, which lets a
+// case accept the several messages one refusal is spelled with across
+// platforms without weakening into a bare "an error happened".
+func containsAny(s string, substrings []string) bool {
+	for _, sub := range substrings {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
+
 // TestDownload_OutputPathOutsideAllowedDirs_Rejected verifies that a download
 // destination is confined to the allow-listed roots: a path outside them, a
 // parent-traversal escape and a symlinked parent are all refused, nothing is

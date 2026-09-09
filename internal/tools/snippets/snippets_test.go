@@ -6,6 +6,7 @@ package snippets
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -16,6 +17,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -549,6 +551,26 @@ func TestActionSpecs_Get404(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_GetForbidden verifies the personal snippet get reports a
+// refusal as an error rather than as a snippet that is not there: only a 404
+// means the snippet does not exist, and a 403 means it does and is not yours.
+func TestActionSpecs_GetForbidden(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"403 Forbidden"}`))
+	})
+	byTool := snippetSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, mux)))
+
+	result, err := byTool["gitlab_snippet_get"].Route.Handler(t.Context(), map[string]any{"snippet_id": 1})
+	if err == nil {
+		t.Fatalf("Route.Handler = %+v, want the refusal reported as an error", result)
+	}
+	if _, ok := result.(snippetNotFoundOutput); ok {
+		t.Error("a refused snippet was reported as one that does not exist")
+	}
+}
+
 // TestResolveProjectLabel_ZeroProjectID verifies that resolveProjectLabel
 // returns an empty string when the snippet has no associated project
 // (ProjectID == 0, indicating a personal snippet). This targets the early
@@ -722,5 +744,425 @@ func TestApplyOrderSort_NilOpts(t *testing.T) {
 func TestAuthorUsername_Nil(t *testing.T) {
 	if got := authorUsername(nil); got != "" {
 		t.Errorf("authorUsername(nil) = %q, want empty string", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Option builders: what a request carries and what it leaves out
+// ---------------------------------------------------------------------------.
+
+// TestSnippetVisibility_DefaultsToPrivate verifies a snippet created without a
+// visibility is private, and that a visibility the caller named is kept.
+func TestSnippetVisibility_DefaultsToPrivate(t *testing.T) {
+	for name, want := range map[string]string{"": "private", "public": "public", "internal": "internal"} {
+		t.Run("visibility "+name, func(t *testing.T) {
+			if got := snippetVisibility(name); got == nil || string(*got) != want {
+				t.Errorf("snippetVisibility(%q) = %v, want %q", name, got, want)
+			}
+		})
+	}
+}
+
+// TestBuildUpdateOpts_SendsOnlyWhatTheCallerGave verifies the personal snippet
+// update sends every field the caller named and nothing else, so an omitted
+// field keeps its current value rather than being cleared.
+func TestBuildUpdateOpts_SendsOnlyWhatTheCallerGave(t *testing.T) {
+	opts := buildUpdateOpts(UpdateInput{
+		SnippetID: 42, Title: "Renamed", FileName: "new.go", Description: "desc",
+		ContentBody: "package main", Visibility: "public",
+		Files: []UpdateFileInput{{Action: "update", FilePath: "new.go", Content: "x", PreviousPath: "old.go"}},
+	})
+	want := map[string]string{
+		"title": "Renamed", "file_name": "new.go", "description": "desc", "content": "package main",
+	}
+	for field, got := range map[string]*string{
+		"title":       opts.Title,
+		"file_name":   opts.FileName,
+		"description": opts.Description,
+		"content":     opts.Content,
+	} {
+		t.Run(field, func(t *testing.T) { assertStringPtr(t, field, got, want[field]) })
+	}
+	if opts.Visibility == nil || string(*opts.Visibility) != "public" {
+		t.Errorf("Visibility = %v, want public", opts.Visibility)
+	}
+	if opts.Files == nil || len(*opts.Files) != 1 {
+		t.Fatalf("Files = %v, want the one file operation", opts.Files)
+	}
+	file := (*opts.Files)[0]
+	assertStringPtr(t, "files[0].content", file.Content, "x")
+	assertStringPtr(t, "files[0].previous_path", file.PreviousPath, "old.go")
+}
+
+// assertStringPtr reports an optional request field that is missing or is not
+// the value the caller gave.
+func assertStringPtr(t *testing.T, field string, got *string, want string) {
+	t.Helper()
+	if got == nil || *got != want {
+		t.Errorf("%s = %v, want %q", field, got, want)
+	}
+}
+
+// TestBuildUpdateOpts_WithoutAnyFieldSendsNothing verifies an update naming no
+// field at all sends none, so every value the snippet has keeps its place.
+func TestBuildUpdateOpts_WithoutAnyFieldSendsNothing(t *testing.T) {
+	opts := buildUpdateOpts(UpdateInput{SnippetID: 42})
+	if opts.Title != nil || opts.FileName != nil || opts.Description != nil ||
+		opts.Content != nil || opts.Visibility != nil || opts.Files != nil {
+		t.Errorf("update options = %+v, want every field left alone", opts)
+	}
+}
+
+// TestBuildUpdateFileOpts_WithoutContentOrPreviousPath verifies a file
+// operation that names neither sends neither, which is what a delete is.
+func TestBuildUpdateFileOpts_WithoutContentOrPreviousPath(t *testing.T) {
+	files := buildUpdateFileOpts([]UpdateFileInput{{Action: "delete", FilePath: "gone.go"}})
+	if files == nil || len(*files) != 1 {
+		t.Fatalf("files = %v, want the one operation", files)
+	}
+	if (*files)[0].Content != nil || (*files)[0].PreviousPath != nil {
+		t.Errorf("file operation = %+v, want neither content nor a previous path", (*files)[0])
+	}
+}
+
+// TestListAll_CreatedFilters verifies the admin listing sends the two date
+// filters when they parse and leaves them out when they do not, since a
+// half-understood filter would silently narrow the answer.
+func TestListAll_CreatedFilters(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		input ListAllInput
+		want  []string
+		omit  []string
+	}{
+		{
+			name: "dates that parse",
+			input: ListAllInput{
+				CreatedAfter: "2026-01-01T00:00:00Z", CreatedBefore: "2026-02-01T00:00:00Z",
+				RepositoryStorage: "nfs-01",
+			},
+			want: []string{"created_after=2026-01-01", "created_before=2026-02-01", "repository_storage=nfs-01"},
+		},
+		{
+			name:  "dates that do not parse",
+			input: ListAllInput{CreatedAfter: "yesterday", CreatedBefore: "tomorrow"},
+			omit:  []string{"created_after", "created_before", "repository_storage"},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var query string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				query = r.URL.RawQuery
+				testutil.RespondJSON(w, http.StatusOK, `[`+snippetSentJSON+`]`)
+			}))
+			if _, err := ListAll(context.Background(), client, testCase.input); err != nil {
+				t.Fatalf("ListAll: %v", err)
+			}
+			for _, want := range testCase.want {
+				if !strings.Contains(query, want) {
+					t.Errorf("query %q missing %q", query, want)
+				}
+			}
+			for _, omit := range testCase.omit {
+				if strings.Contains(query, omit) {
+					t.Errorf("query %q carries %q it could not read", query, omit)
+				}
+			}
+		})
+	}
+}
+
+// TestCreate_SendsOnlyWhatTheCallerGave verifies the personal snippet create
+// sends the single-file fields and the description only when the caller named
+// them, and always names a visibility.
+func TestCreate_SendsOnlyWhatTheCallerGave(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		input CreateInput
+		want  []string
+		omit  []string
+	}{
+		{
+			name: "single file with a description",
+			input: CreateInput{
+				Title: "Test Snippet", FileName: "test.go", Description: "desc",
+				ContentBody: "package main", Visibility: "public",
+			},
+			want: []string{`"file_name":"test.go"`, `"description":"desc"`, `"content":"package main"`, `"visibility":"public"`},
+		},
+		{
+			name: "files array only",
+			input: CreateInput{
+				Title: "Test Snippet",
+				Files: []CreateFileInput{{FilePath: "a.go", Content: "package a"}},
+			},
+			want: []string{`"files"`, `"file_path":"a.go"`, `"visibility":"private"`},
+			// The content of the one file is inside files[], and the
+			// single-file keys beside it are not sent at all.
+			omit: []string{`"file_name"`, `"description"`},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var body string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				raw, readErr := io.ReadAll(r.Body)
+				if readErr != nil {
+					t.Errorf("read request body: %v", readErr)
+				}
+				body = string(raw)
+				testutil.RespondJSON(w, http.StatusCreated, snippetSentJSON)
+			}))
+			if _, err := Create(context.Background(), client, testCase.input); err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+			for _, want := range testCase.want {
+				if !strings.Contains(body, want) {
+					t.Errorf("create body %q missing %q", body, want)
+				}
+			}
+			for _, omit := range testCase.omit {
+				if strings.Contains(body, omit) {
+					t.Errorf("create body %q carries %q it was not given", body, omit)
+				}
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Fields GitLab sends beside the ones the SDK's own Snippet models
+// ---------------------------------------------------------------------------.
+
+// snippetSentJSON is one snippet as GitLab renders it once its repository
+// exists, carrying the keys the SDK's own Snippet leaves out: the two clone
+// URLs and where an imported snippet came from.
+const snippetSentJSON = `{"id":42,"title":"Test Snippet","file_name":"test.go","visibility":"private",` +
+	`"web_url":"https://gitlab.example.com/snippets/42",` +
+	`"ssh_url_to_repo":"git@gitlab.example.com:snippets/42.git",` +
+	`"http_url_to_repo":"https://gitlab.example.com/snippets/42.git",` +
+	`"imported":true,"imported_from":"github"}`
+
+// snippetWithoutRepoJSON is a snippet whose repository does not exist yet and
+// which was written here rather than imported.
+const snippetWithoutRepoJSON = `{"id":42,"title":"Test Snippet","file_name":"test.go",` +
+	`"visibility":"private","web_url":"https://gitlab.example.com/snippets/42",` +
+	`"imported":false,"imported_from":null}`
+
+// snippetsClient answers every snippet endpoint with body, which the caller
+// writes as an array for a list handler and as an object for the rest.
+func snippetsClient(t *testing.T, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+}
+
+// errNoSnippet reports a list handler that answered with no snippet.
+var errNoSnippet = errors.New("the handler published no snippet")
+
+// snippetCalls are every handler that answers with a snippet, personal and
+// project-scoped alike, since one shape serves both.
+var snippetCalls = []struct {
+	name string
+	list bool
+	call func(client *gitlabclient.Client) (Output, error)
+}{
+	{name: "list", list: true, call: func(client *gitlabclient.Client) (Output, error) {
+		return firstSnippet(List(context.Background(), client, ListInput{}))
+	}},
+	{name: "list_all", list: true, call: func(client *gitlabclient.Client) (Output, error) {
+		return firstSnippet(ListAll(context.Background(), client, ListAllInput{}))
+	}},
+	{name: "explore", list: true, call: func(client *gitlabclient.Client) (Output, error) {
+		return firstSnippet(Explore(context.Background(), client, ExploreInput{}))
+	}},
+	{name: "get", call: func(client *gitlabclient.Client) (Output, error) {
+		return Get(context.Background(), client, GetInput{SnippetID: 42})
+	}},
+	{name: "create", call: func(client *gitlabclient.Client) (Output, error) {
+		return Create(context.Background(), client, CreateInput{
+			Title: "Test Snippet", FileName: "test.go", ContentBody: "package main",
+		})
+	}},
+	{name: "update", call: func(client *gitlabclient.Client) (Output, error) {
+		return Update(context.Background(), client, UpdateInput{SnippetID: 42, Title: "Renamed"})
+	}},
+	{name: "project_list", list: true, call: func(client *gitlabclient.Client) (Output, error) {
+		return firstSnippet(ProjectList(context.Background(), client, ProjectListInput{ProjectID: "42"}))
+	}},
+	{name: "project_get", call: func(client *gitlabclient.Client) (Output, error) {
+		return ProjectGet(context.Background(), client, ProjectGetInput{ProjectID: "42", SnippetID: 42})
+	}},
+	{name: "project_create", call: func(client *gitlabclient.Client) (Output, error) {
+		return ProjectCreate(context.Background(), client, ProjectCreateInput{
+			ProjectID: "42", Title: "Test Snippet", FileName: "test.go", ContentBody: "package main",
+		})
+	}},
+	{name: "project_update", call: func(client *gitlabclient.Client) (Output, error) {
+		return ProjectUpdate(context.Background(), client, ProjectUpdateInput{
+			ProjectID: "42", SnippetID: 42, Title: "Renamed",
+		})
+	}},
+}
+
+// firstSnippet reduces a list answer to its single snippet, reporting a list
+// that carried none rather than panicking on the index.
+func firstSnippet(out ListOutput, err error) (Output, error) {
+	if err != nil {
+		return Output{}, err
+	}
+	if len(out.Snippets) != 1 {
+		return Output{}, errNoSnippet
+	}
+	return out.Snippets[0], nil
+}
+
+// snippetBodyFor wraps the object body in an array for a list endpoint.
+func snippetBodyFor(list bool, body string) string {
+	if list {
+		return "[" + body + "]"
+	}
+	return body
+}
+
+// TestSnippets_PublishTheFieldsGitLabSendsBesideTheSDKs verifies every handler
+// answering with a snippet publishes the two clone URLs and the import origin,
+// read off the captured response.
+func TestSnippets_PublishTheFieldsGitLabSendsBesideTheSDKs(t *testing.T) {
+	for _, snippetCall := range snippetCalls {
+		t.Run(snippetCall.name, func(t *testing.T) {
+			out, err := snippetCall.call(snippetsClient(t, snippetBodyFor(snippetCall.list, snippetSentJSON)))
+			if err != nil {
+				t.Fatalf("%s: %v", snippetCall.name, err)
+			}
+			if out.SSHURLToRepo != "git@gitlab.example.com:snippets/42.git" {
+				t.Errorf("ssh_url_to_repo = %q, want the clone URL GitLab sent", out.SSHURLToRepo)
+			}
+			if out.HTTPURLToRepo != "https://gitlab.example.com/snippets/42.git" {
+				t.Errorf("http_url_to_repo = %q, want the clone URL GitLab sent", out.HTTPURLToRepo)
+			}
+			if !out.Imported {
+				t.Error("imported = false, want true")
+			}
+			if out.ImportedFrom != "github" {
+				t.Errorf("imported_from = %q, want github", out.ImportedFrom)
+			}
+		})
+	}
+}
+
+// TestSnippets_OmitTheCloneURLsGitLabDidNotSend verifies a snippet whose
+// repository does not exist publishes neither clone URL, and one written here
+// says it was not imported.
+func TestSnippets_OmitTheCloneURLsGitLabDidNotSend(t *testing.T) {
+	for _, snippetCall := range snippetCalls {
+		t.Run(snippetCall.name, func(t *testing.T) {
+			out, err := snippetCall.call(snippetsClient(t, snippetBodyFor(snippetCall.list, snippetWithoutRepoJSON)))
+			if err != nil {
+				t.Fatalf("%s: %v", snippetCall.name, err)
+			}
+			if out.SSHURLToRepo != "" || out.HTTPURLToRepo != "" {
+				t.Errorf("clone URLs = %q / %q, want none", out.SSHURLToRepo, out.HTTPURLToRepo)
+			}
+			if out.Imported {
+				t.Error("imported = true, want false for a snippet written here")
+			}
+			if out.ImportedFrom != "" {
+				t.Errorf("imported_from = %q, want none", out.ImportedFrom)
+			}
+		})
+	}
+}
+
+// TestSnippets_UnreadableCapturedFields verifies every handler answering with
+// a snippet reports the captured response's decode failure rather than a
+// snippet missing what GitLab sent. The SDK's own Snippet has no imported
+// flag, so only the read beside it can notice GitLab sent a string there.
+func TestSnippets_UnreadableCapturedFields(t *testing.T) {
+	const poisoned = `{"id":42,"title":"Test Snippet","imported":"yes"}`
+	cases := make([]testutil.CapturedCase, 0, len(snippetCalls))
+	for _, snippetCall := range snippetCalls {
+		cases = append(cases, testutil.CapturedCase{Name: snippetCall.name, Call: func() error {
+			_, err := snippetCall.call(snippetsClient(t, snippetBodyFor(snippetCall.list, poisoned)))
+			return err
+		}})
+	}
+	testutil.AssertCapturedDecodeFailures(t, cases)
+}
+
+// TestFormatMarkdown_FilesAndHintsFollowTheSnippet verifies the file table is
+// written only for a snippet that has files, and that a project snippet is
+// given the project actions while a personal one is given the personal ones.
+func TestFormatMarkdown_FilesAndHintsFollowTheSnippet(t *testing.T) {
+	withFiles := FormatMarkdown(Output{
+		ID: 42, Title: "Test Snippet", ProjectID: 7,
+		Files: []FileOutput{{Path: "test.go", RawURL: "https://gitlab.example.com/raw/test.go"}},
+	})
+	if !strings.Contains(withFiles, "### Files") || !strings.Contains(withFiles, "test.go") {
+		t.Errorf("markdown missing the file table: %s", withFiles)
+	}
+	if !strings.Contains(withFiles, "project_delete") || strings.Contains(withFiles, "action 'content'") {
+		t.Errorf("a project snippet was given the personal actions: %s", withFiles)
+	}
+
+	personal := FormatMarkdown(Output{ID: 42, Title: "Test Snippet"})
+	if strings.Contains(personal, "### Files") {
+		t.Errorf("markdown shows a file table for a snippet with none: %s", personal)
+	}
+	if !strings.Contains(personal, "action 'content'") || strings.Contains(personal, "project_delete") {
+		t.Errorf("a personal snippet was given the project actions: %s", personal)
+	}
+}
+
+// TestApplySnippetMeta_WithoutAnEntryKeepsThePlaceholders verifies the
+// decorator leaves the generic usage, the tool-name alias and the empty
+// description in place for an entry that names none of them. No action reaches
+// that fallback today, so the applier is called directly.
+func TestApplySnippetMeta_WithoutAnEntryKeepsThePlaceholders(t *testing.T) {
+	options := toolutil.ActionSpecOptions{
+		Aliases: []string{"gitlab_snippet_get"},
+		Usage:   "Use to execute snippets domain action.",
+	}
+	applySnippetMeta(&options, snippetActionMetaEntry{})
+	if options.Usage != "Use to execute snippets domain action." {
+		t.Errorf("Usage = %q, want the placeholder", options.Usage)
+	}
+	if len(options.Aliases) != 1 || options.Aliases[0] != "gitlab_snippet_get" {
+		t.Errorf("Aliases = %v, want the tool name alone", options.Aliases)
+	}
+	if options.RelatedActions != nil || options.IndividualTool.Description != "" {
+		t.Errorf("options carry %v / %q, want neither", options.RelatedActions, options.IndividualTool.Description)
+	}
+}
+
+// TestFormatMarkdown_SentFields verifies the snippet Markdown names the clone
+// URLs and the import origin read off the captured answer, and leaves each of
+// them out of a snippet that carries none.
+func TestFormatMarkdown_SentFields(t *testing.T) {
+	full := FormatMarkdown(Output{
+		ID: 42, Title: "Test Snippet", Visibility: "private",
+		SSHURLToRepo:  "git@gitlab.example.com:snippets/42.git",
+		HTTPURLToRepo: "https://gitlab.example.com/snippets/42.git",
+		Imported:      true, ImportedFrom: "github",
+	})
+	for _, want := range []string{
+		"SSH URL to Repo", "git@gitlab.example.com:snippets/42.git",
+		"HTTP URL to Repo", "https://gitlab.example.com/snippets/42.git",
+		"Imported From", "github",
+	} {
+		t.Run("shows "+want, func(t *testing.T) {
+			if !strings.Contains(full, want) {
+				t.Errorf("FormatMarkdown missing %q: %s", want, full)
+			}
+		})
+	}
+
+	bare := FormatMarkdown(Output{ID: 42, Title: "Test Snippet", Visibility: "private"})
+	for _, unwanted := range []string{"SSH URL to Repo", "HTTP URL to Repo", "Imported From"} {
+		t.Run("omits "+unwanted, func(t *testing.T) {
+			if strings.Contains(bare, unwanted) {
+				t.Errorf("FormatMarkdown shows %q for a snippet that has none: %s", unwanted, bare)
+			}
+		})
 	}
 }

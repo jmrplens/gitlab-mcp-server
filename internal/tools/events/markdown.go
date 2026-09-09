@@ -29,6 +29,27 @@ func formatTarget(targetType string, targetIID int64, targetTitle, targetURL str
 	return " " + label
 }
 
+// formatWikiPage names the wiki page an event happened to, and nothing for an
+// event about anything else.
+func formatWikiPage(page *WikiPageOutput) string {
+	if page == nil {
+		return ""
+	}
+	return fmt.Sprintf(" wiki page %q", toolutil.EscapeMdTableCell(page.Title))
+}
+
+// formatOrigin says which platform an event was imported from, and nothing for
+// an event that happened on this instance.
+func formatOrigin(imported bool, importedFrom string) string {
+	if !imported {
+		return ""
+	}
+	if importedFrom == "" {
+		return " (imported)"
+	}
+	return fmt.Sprintf(" (imported from %s)", toolutil.EscapeMdTableCell(importedFrom))
+}
+
 type markdownEvent struct {
 	ActionName     string
 	TargetType     string
@@ -37,6 +58,9 @@ type markdownEvent struct {
 	TargetURL      string
 	AuthorUsername string
 	CreatedAt      string
+	WikiPage       *WikiPageOutput
+	Imported       bool
+	ImportedFrom   string
 }
 
 // FormatContributionListMarkdown formats contribution events as a Markdown CallToolResult.
@@ -70,7 +94,8 @@ func formatEventListMarkdown(title, emptyText string, events []markdownEvent, pa
 		target := formatTarget(e.TargetType, e.TargetIID, e.TargetTitle, e.TargetURL)
 		author := formatAuthor(e.AuthorUsername)
 		//gitlab:allow-unescaped e.ActionName: a contribution-event action GitLab writes from its own vocabulary (opened, closed, pushed to and the rest).
-		fmt.Fprintf(&b, "- **%s**%s by %s, %s\n", e.ActionName, target, toolutil.EscapeMdTableCell(author), toolutil.FormatTime(e.CreatedAt))
+		fmt.Fprintf(&b, "- **%s**%s%s by %s, %s%s\n", e.ActionName, target, formatWikiPage(e.WikiPage),
+			toolutil.EscapeMdTableCell(author), toolutil.FormatTime(e.CreatedAt), formatOrigin(e.Imported, e.ImportedFrom))
 	}
 	b.WriteString(toolutil.FormatPagination(pagination))
 	toolutil.WriteHints(
@@ -92,6 +117,9 @@ func contributionMarkdownEvents(events []ContributionEventOutput) []markdownEven
 			TargetURL:      event.TargetURL,
 			AuthorUsername: event.AuthorUsername,
 			CreatedAt:      event.CreatedAt,
+			WikiPage:       event.WikiPage,
+			Imported:       event.Imported,
+			ImportedFrom:   event.ImportedFrom,
 		}
 	}
 	return items
@@ -108,6 +136,9 @@ func projectMarkdownEvents(events []ProjectEventOutput) []markdownEvent {
 			TargetURL:      event.TargetURL,
 			AuthorUsername: event.AuthorUsername,
 			CreatedAt:      event.CreatedAt,
+			WikiPage:       event.WikiPage,
+			Imported:       event.Imported,
+			ImportedFrom:   event.ImportedFrom,
 		}
 	}
 	return items

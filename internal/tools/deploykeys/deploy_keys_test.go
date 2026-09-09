@@ -6,10 +6,13 @@ package deploykeys
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1110,6 +1113,23 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if byTool["gitlab_deploy_key_get"].ParameterGuidance["deploy_key_id"].SemanticRole == "" {
 		t.Fatal("gitlab_deploy_key_get should define deploy_key_id parameter guidance")
 	}
+	// The two listing actions carry a usage of their own, and every other
+	// action carries the shared one rather than either of theirs.
+	for tool, want := range map[string]string{
+		"gitlab_deploy_key_list_project": "not deploy tokens",
+		"gitlab_deploy_key_list_all":     "admin only",
+	} {
+		t.Run(tool, func(t *testing.T) {
+			if !strings.Contains(byTool[tool].Usage, want) {
+				t.Errorf("Usage for %s = %q, want it to mention %q", tool, byTool[tool].Usage, want)
+			}
+			for other, spec := range byTool {
+				if other != tool && strings.Contains(spec.Usage, want) {
+					t.Errorf("Usage for %s = %q, want %q only on %s", other, spec.Usage, want, tool)
+				}
+			}
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -1490,6 +1510,363 @@ func TestListUserProject_OrderingAndKeyset(t *testing.T) {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(query, want) {
 				t.Errorf("query %q missing %q", query, want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Fields GitLab sends beside the ones the SDK's own deploy key models
+// ---------------------------------------------------------------------------.
+
+// deployKeySentJSON is one deploy key as GitLab renders it, carrying the keys
+// the SDK's own structs leave out: when the key last reached the instance,
+// what it may be used for, and the projects it can write to or only read.
+const deployKeySentJSON = `{"id":1,"title":"my-key","key":"ssh-rsa AAAA","can_push":true,` +
+	`"created_at":"2026-01-01T00:00:00Z","last_used_at":"2026-04-07T08:09:10Z",` +
+	`"usage_type":"auth_and_signing",` +
+	`"projects_with_write_access":[{"id":11,"description":"the writer","name":"Writer",` +
+	`"name_with_namespace":"Group / Writer","path":"writer","path_with_namespace":"group/writer",` +
+	`"created_at":"2026-01-02T03:04:05Z"}],` +
+	`"projects_with_readonly_access":[{"id":12,"name":"Reader","path_with_namespace":"group/reader"}]}`
+
+// deployKeyWithoutProjectsJSON is the same key without the two project lists,
+// which GitLab sends only when the request asked for them.
+const deployKeyWithoutProjectsJSON = `{"id":1,"title":"my-key","key":"ssh-rsa AAAA","can_push":true,` +
+	`"last_used_at":"2026-04-07T08:09:10Z","usage_type":"auth"}`
+
+// deployKeyClient answers every deploy key endpoint with body, which the
+// caller writes as an array for a list handler and as an object for the rest.
+func deployKeyClient(t *testing.T, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+}
+
+// deployKeySent is what a handler published of the fields read off the
+// captured answer, normalized so the project-scoped and instance-scoped
+// handlers can be asserted in one table.
+type deployKeySent struct {
+	lastUsedAt string
+	usageType  string
+	write      []ProjectSummary
+	readonly   []ProjectSummary
+}
+
+// errNoDeployKey reports a list handler that answered with no key, which would
+// otherwise show up as a nil-index panic.
+var errNoDeployKey = errors.New("the handler published no deploy key")
+
+// deployKeyCalls are the handlers that answer with a deploy key, each
+// returning what it published of the captured fields.
+var deployKeyCalls = []struct {
+	name string
+	list bool
+	call func(client *gitlabclient.Client) (deployKeySent, error)
+}{
+	{name: "list_project", list: true, call: func(client *gitlabclient.Client) (deployKeySent, error) {
+		out, err := ListProject(context.Background(), client, ListProjectInput{ProjectID: "123"})
+		if err != nil {
+			return deployKeySent{}, err
+		}
+		if len(out.DeployKeys) != 1 {
+			return deployKeySent{}, errNoDeployKey
+		}
+		return projectKeySent(out.DeployKeys[0]), nil
+	}},
+	{name: "list_user_project", list: true, call: func(client *gitlabclient.Client) (deployKeySent, error) {
+		out, err := ListUserProject(context.Background(), client, ListUserProjectInput{UserID: "42"})
+		if err != nil {
+			return deployKeySent{}, err
+		}
+		if len(out.DeployKeys) != 1 {
+			return deployKeySent{}, errNoDeployKey
+		}
+		return projectKeySent(out.DeployKeys[0]), nil
+	}},
+	{name: "get", call: func(client *gitlabclient.Client) (deployKeySent, error) {
+		out, err := Get(context.Background(), client, GetInput{ProjectID: "123", DeployKeyID: 1})
+		return projectKeySent(out), err
+	}},
+	{name: "add", call: func(client *gitlabclient.Client) (deployKeySent, error) {
+		out, err := Add(context.Background(), client, AddInput{ProjectID: "123", Title: "my-key", Key: "ssh-rsa AAAA"})
+		return projectKeySent(out), err
+	}},
+	{name: "update", call: func(client *gitlabclient.Client) (deployKeySent, error) {
+		out, err := Update(context.Background(), client, UpdateInput{ProjectID: "123", DeployKeyID: 1, Title: "my-key"})
+		return projectKeySent(out), err
+	}},
+	{name: "enable", call: func(client *gitlabclient.Client) (deployKeySent, error) {
+		out, err := Enable(context.Background(), client, EnableInput{ProjectID: "123", DeployKeyID: 1})
+		return projectKeySent(out), err
+	}},
+	{name: "list_all", list: true, call: func(client *gitlabclient.Client) (deployKeySent, error) {
+		out, err := ListAll(context.Background(), client, ListAllInput{})
+		if err != nil {
+			return deployKeySent{}, err
+		}
+		if len(out.DeployKeys) != 1 {
+			return deployKeySent{}, errNoDeployKey
+		}
+		return instanceKeySent(out.DeployKeys[0]), nil
+	}},
+	{name: "add_instance", call: func(client *gitlabclient.Client) (deployKeySent, error) {
+		out, err := AddInstance(context.Background(), client, AddInstanceInput{Title: "my-key", Key: "ssh-rsa AAAA"})
+		return instanceKeySent(out), err
+	}},
+}
+
+// projectKeySent reads the captured fields off a project deploy key.
+func projectKeySent(out Output) deployKeySent {
+	return deployKeySent{
+		lastUsedAt: out.LastUsedAt,
+		usageType:  out.UsageType,
+		write:      out.ProjectsWithWriteAccess,
+		readonly:   out.ProjectsWithReadonlyAccess,
+	}
+}
+
+// instanceKeySent reads the same off an instance deploy key.
+func instanceKeySent(out InstanceOutput) deployKeySent {
+	return deployKeySent{
+		lastUsedAt: out.LastUsedAt,
+		usageType:  out.UsageType,
+		write:      out.ProjectsWithWriteAccess,
+		readonly:   out.ProjectsWithReadonlyAccess,
+	}
+}
+
+// deployKeyBodyFor wraps the object body in an array for a list endpoint.
+func deployKeyBodyFor(list bool, body string) string {
+	if list {
+		return "[" + body + "]"
+	}
+	return body
+}
+
+// TestDeployKeys_PublishTheFieldsGitLabSendsBesideTheSDKs verifies that every
+// handler answering with a deploy key publishes when the key was last used and
+// what it may be used for, and that the project-scoped ones publish the two
+// access lists GitLab sends beside them.
+func TestDeployKeys_PublishTheFieldsGitLabSendsBesideTheSDKs(t *testing.T) {
+	for _, keyCall := range deployKeyCalls {
+		t.Run(keyCall.name, func(t *testing.T) {
+			sent, err := keyCall.call(deployKeyClient(t, deployKeyBodyFor(keyCall.list, deployKeySentJSON)))
+			if err != nil {
+				t.Fatalf("%s: %v", keyCall.name, err)
+			}
+			if sent.lastUsedAt != "2026-04-07T08:09:10Z" {
+				t.Errorf("last_used_at = %q, want 2026-04-07T08:09:10Z", sent.lastUsedAt)
+			}
+			if sent.usageType != "auth_and_signing" {
+				t.Errorf("usage_type = %q, want auth_and_signing", sent.usageType)
+			}
+			if len(sent.write) != 1 {
+				t.Fatalf("projects_with_write_access = %+v, want the one project GitLab sent", sent.write)
+			}
+			writer := sent.write[0]
+			if writer.ID != 11 || writer.Name != "Writer" || writer.Path != "writer" ||
+				writer.NameWithNamespace != "Group / Writer" || writer.PathWithNamespace != "group/writer" ||
+				writer.Description != "the writer" || writer.CreatedAt != "2026-01-02T03:04:05Z" {
+				t.Errorf("projects_with_write_access[0] = %+v, want every field GitLab sent", writer)
+			}
+			if len(sent.readonly) != 1 || sent.readonly[0].ID != 12 ||
+				sent.readonly[0].PathWithNamespace != "group/reader" {
+				t.Errorf("projects_with_readonly_access = %+v, want the one project GitLab sent", sent.readonly)
+			}
+		})
+	}
+}
+
+// TestDeployKeys_OmitTheProjectListsGitLabDidNotSend verifies that a key
+// answered without the two access lists publishes neither, while the fields
+// GitLab always sends still arrive.
+func TestDeployKeys_OmitTheProjectListsGitLabDidNotSend(t *testing.T) {
+	for _, keyCall := range deployKeyCalls {
+		t.Run(keyCall.name, func(t *testing.T) {
+			sent, err := keyCall.call(deployKeyClient(t, deployKeyBodyFor(keyCall.list, deployKeyWithoutProjectsJSON)))
+			if err != nil {
+				t.Fatalf("%s: %v", keyCall.name, err)
+			}
+			if sent.write != nil || sent.readonly != nil {
+				t.Errorf("access lists = %+v / %+v, want none", sent.write, sent.readonly)
+			}
+			if sent.usageType != "auth" {
+				t.Errorf("usage_type = %q, want auth", sent.usageType)
+			}
+		})
+	}
+}
+
+// TestDeployKeys_UnreadableCapturedFields verifies every handler answering
+// with a deploy key reports the captured response's decode failure rather than
+// a key missing what GitLab sent. The SDK's own structs carry no usage_type,
+// so only the read beside them can notice GitLab sent a number there.
+func TestDeployKeys_UnreadableCapturedFields(t *testing.T) {
+	const poisoned = `{"id":1,"title":"my-key","key":"ssh-rsa AAAA","usage_type":7}`
+	cases := make([]testutil.CapturedCase, 0, len(deployKeyCalls))
+	for _, keyCall := range deployKeyCalls {
+		cases = append(cases, testutil.CapturedCase{Name: keyCall.name, Call: func() error {
+			_, err := keyCall.call(deployKeyClient(t, deployKeyBodyFor(keyCall.list, poisoned)))
+			return err
+		}})
+	}
+	testutil.AssertCapturedDecodeFailures(t, cases)
+}
+
+// TestDeployKeys_OptionalInputsReachTheRequest verifies that every optional
+// field a deploy key handler accepts is sent when it was given and left out
+// when it was not, which only the request the handler built can say.
+func TestDeployKeys_OptionalInputsReachTheRequest(t *testing.T) {
+	for _, testCase := range deployKeyOptionalInputCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var sent string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, readErr := io.ReadAll(r.Body)
+				if readErr != nil {
+					t.Errorf("read request body: %v", readErr)
+				}
+				sent = r.URL.RawQuery + string(body)
+				if r.Method == http.MethodGet {
+					testutil.RespondJSON(w, http.StatusOK, `[`+deployKeySentJSON+`]`)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, deployKeySentJSON)
+			}))
+			if err := testCase.call(client); err != nil {
+				t.Fatalf("%s: %v", testCase.name, err)
+			}
+			assertRequestCarries(t, sent, testCase.want, testCase.omit)
+		})
+	}
+}
+
+// assertRequestCarries reports every fragment the recorded request should hold
+// and every one it should not.
+func assertRequestCarries(t *testing.T, sent string, want, omit []string) {
+	t.Helper()
+	for _, fragment := range want {
+		if !strings.Contains(sent, fragment) {
+			t.Errorf("request %q missing %q", sent, fragment)
+		}
+	}
+	for _, fragment := range omit {
+		if strings.Contains(sent, fragment) {
+			t.Errorf("request %q carries %q it was not given", sent, fragment)
+		}
+	}
+}
+
+// deployKeyCanPush and deployKeyPublic are the optional booleans the cases
+// below hand to the handlers, which take them by pointer.
+var (
+	deployKeyCanPush = true
+	deployKeyPublic  = true
+)
+
+// deployKeyOptionalInputCases drive one handler each with an optional field
+// given and with it omitted.
+var deployKeyOptionalInputCases = []struct {
+	name string
+	call func(client *gitlabclient.Client) error
+	want []string
+	omit []string
+}{
+	{
+		name: "add with can_push",
+		call: func(client *gitlabclient.Client) error {
+			_, err := Add(context.Background(), client, AddInput{
+				ProjectID: "123", Title: "my-key", Key: "ssh-rsa AAAA", CanPush: &deployKeyCanPush,
+			})
+			return err
+		},
+		want: []string{`"can_push":true`, `"title":"my-key"`},
+	},
+	{
+		name: "add without can_push",
+		call: func(client *gitlabclient.Client) error {
+			_, err := Add(context.Background(), client, AddInput{ProjectID: "123", Title: "my-key", Key: "ssh-rsa AAAA"})
+			return err
+		},
+		omit: []string{`"can_push"`},
+	},
+	{
+		name: "update with title and can_push",
+		call: func(client *gitlabclient.Client) error {
+			_, err := Update(context.Background(), client, UpdateInput{
+				ProjectID: "123", DeployKeyID: 1, Title: "renamed", CanPush: &deployKeyCanPush,
+			})
+			return err
+		},
+		want: []string{`"title":"renamed"`, `"can_push":true`},
+	},
+	{
+		name: "update without either",
+		call: func(client *gitlabclient.Client) error {
+			_, err := Update(context.Background(), client, UpdateInput{ProjectID: "123", DeployKeyID: 1})
+			return err
+		},
+		omit: []string{`"title"`, `"can_push"`},
+	},
+	{
+		name: "list_all with public",
+		call: func(client *gitlabclient.Client) error {
+			_, err := ListAll(context.Background(), client, ListAllInput{Public: &deployKeyPublic})
+			return err
+		},
+		want: []string{"public=true"},
+	},
+	{
+		name: "list_all without public",
+		call: func(client *gitlabclient.Client) error {
+			_, err := ListAll(context.Background(), client, ListAllInput{})
+			return err
+		},
+		omit: []string{"public="},
+	},
+}
+
+// TestFormatDeployKeyMarkdown_SentFields verifies both single-key formatters
+// name the fields read off the captured answer, and leave each out of a key
+// that carries none.
+func TestFormatDeployKeyMarkdown_SentFields(t *testing.T) {
+	write := []ProjectSummary{{ID: 11, Name: "Writer", PathWithNamespace: "group/writer"}}
+	readonly := []ProjectSummary{{ID: 12, Name: "Reader", PathWithNamespace: "group/reader"}}
+	for name, rendered := range map[string]string{
+		"project": FormatOutputMarkdown(Output{
+			ID: 1, Title: "my-key", LastUsedAt: "2026-04-07T08:09:10Z", UsageType: "auth_and_signing",
+			ProjectsWithWriteAccess: write, ProjectsWithReadonlyAccess: readonly,
+		}),
+		"instance": FormatInstanceOutputMarkdown(InstanceOutput{
+			ID: 1, Title: "my-key", LastUsedAt: "2026-04-07T08:09:10Z", UsageType: "auth_and_signing",
+			ProjectsWithWriteAccess: write, ProjectsWithReadonlyAccess: readonly,
+		}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, want := range []string{
+				"Usage Type", "auth_and_signing", "Last Used", "7 Apr 2026 08:09 UTC",
+				"Projects with Write Access", "group/writer",
+				"Projects with Readonly Access", "group/reader",
+			} {
+				if !strings.Contains(rendered, want) {
+					t.Errorf("%s markdown missing %q: %s", name, want, rendered)
+				}
+			}
+		})
+	}
+
+	for name, rendered := range map[string]string{
+		"project":  FormatOutputMarkdown(Output{ID: 1, Title: "my-key"}),
+		"instance": FormatInstanceOutputMarkdown(InstanceOutput{ID: 1, Title: "my-key"}),
+	} {
+		t.Run(name+" without them", func(t *testing.T) {
+			for _, unwanted := range []string{
+				"Usage Type", "Last Used", "Projects with Write Access", "Projects with Readonly Access",
+			} {
+				if strings.Contains(rendered, unwanted) {
+					t.Errorf("%s markdown shows %q for a key that has none: %s", name, unwanted, rendered)
+				}
 			}
 		})
 	}

@@ -277,6 +277,135 @@ func TestPipelineSummary_Variants(t *testing.T) {
 	}
 }
 
+// TestVersionSummary_Variants verifies the version cell names the package's
+// own version, and counts the other versions beside it when GitLab sent them.
+func TestVersionSummary_Variants(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		pkg  ListItem
+		want string
+	}{
+		{name: "alone", pkg: ListItem{Version: "1.0.0"}, want: "1.0.0"},
+		{
+			name: "with others",
+			pkg:  ListItem{Version: "1.0.0", Versions: []toolutil.PackageVersionOutput{{ID: 9}, {ID: 8}}},
+			want: "1.0.0 (+2)",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := versionSummary(testCase.pkg); got != testCase.want {
+				t.Errorf("versionSummary() = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestCreatorSummary_Variants verifies the creator cell names the publishing
+// user and stays empty when GitLab attributed the package to no one.
+func TestCreatorSummary_Variants(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		pkg  ListItem
+		want string
+	}{
+		{name: "with a creator", pkg: ListItem{CreatorID: 57}, want: "57"},
+		{name: "without one", pkg: ListItem{}, want: ""},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := creatorSummary(testCase.pkg); got != testCase.want {
+				t.Errorf("creatorSummary() = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestFormatMarkdown_OmitTheChecksumsAndURLsGitLabDidNotSend verifies each
+// formatter that names a digest or a URL says nothing at all when the answer
+// carried neither, rather than printing an empty row.
+func TestFormatMarkdown_OmitTheChecksumsAndURLsGitLabDidNotSend(t *testing.T) {
+	for name, rendered := range map[string]string{
+		"publish":          FormatPublishMarkdown(PublishOutput{PackageFileID: 1, FileName: "app.bin"}),
+		"download":         FormatDownloadMarkdown(DownloadOutput{OutputPath: "/tmp/app.bin"}),
+		"publish and link": FormatPublishAndLinkMarkdown(PublishAndLinkOutput{}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, unwanted := range []string{"SHA256", "URL"} {
+				if strings.Contains(rendered, unwanted) {
+					t.Errorf("%s markdown names %q for an answer that carried none: %s", name, unwanted, rendered)
+				}
+			}
+		})
+	}
+}
+
+// TestFormatMarkdown_ShortensOnlyAChecksumLongerThanTheColumn verifies both
+// checksum columns leave a digest of exactly twelve characters whole and
+// shorten a longer one, so the ellipsis always means something was cut.
+func TestFormatMarkdown_ShortensOnlyAChecksumLongerThanTheColumn(t *testing.T) {
+	const exactly12 = "abcdef123456"
+	const longer = "abcdef1234567890"
+	t.Run("file list", func(t *testing.T) {
+		got := FormatFileListMarkdown(FileListOutput{
+			Files: []FileListItem{
+				{PackageFileID: 1, FileName: "short.bin", SHA256: exactly12},
+				{PackageFileID: 2, FileName: "long.bin", SHA256: longer},
+			},
+			Pagination: toolutil.PaginationOutput{TotalItems: 2},
+		})
+		if !strings.Contains(got, "| "+exactly12+" |") {
+			t.Errorf("FormatFileListMarkdown shortened a twelve-character digest: %s", got)
+		}
+		if !strings.Contains(got, "abcdef123456...") {
+			t.Errorf("FormatFileListMarkdown did not shorten a longer digest: %s", got)
+		}
+	})
+	t.Run("directory publish", func(t *testing.T) {
+		got := FormatPublishDirMarkdown(PublishDirOutput{
+			TotalFiles: 2,
+			Published: []PublishDirItem{
+				{FileName: "short.bin", SHA256: exactly12},
+				{FileName: "long.bin", SHA256: longer},
+			},
+		})
+		if !strings.Contains(got, "| "+exactly12+" |") {
+			t.Errorf("FormatPublishDirMarkdown shortened a twelve-character digest: %s", got)
+		}
+		if !strings.Contains(got, "abcdef123456...") {
+			t.Errorf("FormatPublishDirMarkdown did not shorten a longer digest: %s", got)
+		}
+		if strings.Contains(got, "Errors") {
+			t.Errorf("FormatPublishDirMarkdown shows an errors section for a run with none: %s", got)
+		}
+	})
+}
+
+// TestFormatPackageListMarkdown_SentFields verifies both list tables carry the
+// creator column and the count of other versions read off the captured answer.
+func TestFormatPackageListMarkdown_SentFields(t *testing.T) {
+	item := ListItem{
+		ID: 10, Name: "my-pkg", Version: "1.0.0", PackageType: "generic", Status: "default",
+		CreatorID: 57, Versions: []toolutil.PackageVersionOutput{{ID: 9, Version: "0.9.0"}},
+	}
+	for name, rendered := range map[string]string{
+		"project": FormatListMarkdown(ListOutput{
+			Packages:   []ListItem{item},
+			Pagination: toolutil.PaginationOutput{TotalItems: 1},
+		}),
+		"group": FormatGroupListMarkdown(GroupListOutput{
+			Packages:   []GroupListItem{{ListItem: item, ProjectID: 42, ProjectPath: "grp/proj"}},
+			Pagination: toolutil.PaginationOutput{TotalItems: 1},
+		}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, want := range []string{"Creator", "| 57 |", "1.0.0 (+1)"} {
+				if !strings.Contains(rendered, want) {
+					t.Errorf("%s markdown missing %q: %s", name, want, rendered)
+				}
+			}
+		})
+	}
+}
+
 // TestFormatFileListMarkdown_EmptyFiles verifies that [FormatFileListMarkdown]
 // renders "No package files found." when the list is empty.
 func TestFormatFileListMarkdown_EmptyFiles(t *testing.T) {

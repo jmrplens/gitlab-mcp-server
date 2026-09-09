@@ -59,6 +59,12 @@ func FormatMarkdownString(out Output) string {
 		// it inherits whatever that path can hold.
 		fmt.Fprintf(&b, "| Web URL | %s |\n", toolutil.EscapeMdTableCell(out.WebURL))
 	}
+	if out.ProjectsCount > 0 {
+		fmt.Fprintf(&b, "| Projects Count | %d |\n", out.ProjectsCount)
+	}
+	if out.RootRepositorySize > 0 {
+		fmt.Fprintf(&b, "| Root Repository Size | %d |\n", out.RootRepositorySize)
+	}
 	if out.Plan != "" {
 		//gitlab:allow-unescaped out.Plan: one of GitLab's own seeded subscription names, such as free or ultimate, which no API lets a person write.
 		fmt.Fprintf(&b, "| Plan | %s |\n", out.Plan)
@@ -67,11 +73,31 @@ func FormatMarkdownString(out Output) string {
 		//gitlab:allow-unescaped out.TrialEndsOn: a date toOutput rendered from a gl.ISOTime with time.Format, so it holds digits and dashes.
 		fmt.Fprintf(&b, "| Trial Ends On | %s |\n", out.TrialEndsOn)
 	}
+	if out.EndDate != "" {
+		//gitlab:allow-unescaped out.EndDate: a subscription end date GitLab renders from a Date column, so it holds digits and dashes.
+		fmt.Fprintf(&b, "| Subscription End Date | %s |\n", out.EndDate)
+	}
 	if out.MaxSeatsUsed != nil {
 		fmt.Fprintf(&b, "| Max Seats Used | %d |\n", *out.MaxSeatsUsed)
 	}
+	if out.MaxSeatsUsedChangedAt != "" {
+		fmt.Fprintf(&b, "| Max Seats Used Changed At | %s |\n", toolutil.FormatTime(out.MaxSeatsUsedChangedAt))
+	}
 	if out.SeatsInUse != nil {
 		fmt.Fprintf(&b, "| Seats In Use | %d |\n", *out.SeatsInUse)
+	}
+	if out.SharedRunnersMinutesLimit != nil {
+		fmt.Fprintf(&b, "| Shared Runners Minutes Limit | %d |\n", *out.SharedRunnersMinutesLimit)
+	}
+	if out.ExtraSharedRunnersMinutesLimit != nil {
+		fmt.Fprintf(&b, "| Extra Shared Runners Minutes Limit | %d |\n", *out.ExtraSharedRunnersMinutesLimit)
+	}
+	if out.AdditionalPurchasedStorageSize != nil {
+		fmt.Fprintf(&b, "| Additional Purchased Storage Size | %d |\n", *out.AdditionalPurchasedStorageSize)
+	}
+	if out.AdditionalPurchasedStorageEndsOn != "" {
+		//gitlab:allow-unescaped out.AdditionalPurchasedStorageEndsOn: a storage expiry date GitLab renders from a Date column, so it holds digits and dashes.
+		fmt.Fprintf(&b, "| Additional Purchased Storage Ends On | %s |\n", out.AdditionalPurchasedStorageEndsOn)
 	}
 	toolutil.WriteHints(&b, "Use the namespace ID with project or group tools for further operations")
 	return b.String()
