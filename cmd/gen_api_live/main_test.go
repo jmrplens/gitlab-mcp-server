@@ -86,7 +86,7 @@ func TestRunGenerate_ADumpOnDisk_BecomesARecordWithProvenance(t *testing.T) {
 	dir := t.TempDir()
 	payload := wholeEnough()
 
-	if err := runGenerate(dir, writeDump(t, payload), "gitlab/gitlab-ee:latest", false); err != nil {
+	if err := runGenerate(dir, dumpFrom{path: writeDump(t, payload)}, "gitlab/gitlab-ee:latest", false); err != nil {
 		t.Fatalf("runGenerate: %v", err)
 	}
 
@@ -176,7 +176,7 @@ func TestRunGenerate_ARecordThatIsNotAGitLab_IsRefusedRatherThanWritten(t *testi
 			payload := wholeEnough()
 			testCase.mutate(&payload)
 
-			err := runGenerate(dir, writeDump(t, payload), "gitlab/gitlab-ee:latest", false)
+			err := runGenerate(dir, dumpFrom{path: writeDump(t, payload)}, "gitlab/gitlab-ee:latest", false)
 			if err == nil {
 				t.Fatal("the record was written, want a refusal")
 			}
@@ -201,7 +201,7 @@ func TestRunGenerate_AnIntrospectionFromAnotherSchema_IsRefused(t *testing.T) {
 	payload := wholeEnough()
 	payload.SchemaVersion = apilive.SchemaVersion + 1
 
-	err := runGenerate(t.TempDir(), writeDump(t, payload), "gitlab/gitlab-ee:latest", false)
+	err := runGenerate(t.TempDir(), dumpFrom{path: writeDump(t, payload)}, "gitlab/gitlab-ee:latest", false)
 
 	if err == nil {
 		t.Fatal("an introspection from another schema was accepted")
@@ -294,7 +294,7 @@ func TestIntrospection_WithoutADump_GoesToTheRunner(t *testing.T) {
 		return []byte("{}"), origin{image: image, digest: "sha256:abc"}, nil
 	}
 
-	raw, from, err := introspection("", "gitlab/gitlab-ee:17.0.0", true)
+	raw, from, err := introspection(dumpFrom{}, "gitlab/gitlab-ee:17.0.0", true)
 	if err != nil {
 		t.Fatalf("introspection: %v", err)
 	}
@@ -326,12 +326,17 @@ func TestIntrospection_WithADump_NeverBootsAnything(t *testing.T) {
 	}
 
 	path := writeDump(t, wholeEnough())
-	raw, from, err := introspection(path, "gitlab/gitlab-ee:latest", false)
+	raw, from, err := introspection(dumpFrom{path: path, digest: "sha256:abc"}, "gitlab/gitlab-ee:latest", false)
 	if err != nil {
 		t.Fatalf("introspection: %v", err)
 	}
 	if len(raw) == 0 || from.image != "gitlab/gitlab-ee:latest" {
 		t.Errorf("got %d bytes from %+v, want the dump read back", len(raw), from)
+	}
+	// The digest travels with the dump because the boot that could ask Docker
+	// for it may have happened on another machine.
+	if from.digest != "sha256:abc" {
+		t.Errorf("digest = %q, want the one given beside the dump", from.digest)
 	}
 }
 
@@ -455,9 +460,36 @@ func TestImageDigest_TakesWhatFollowsTheAt(t *testing.T) {
 // TestWaitForRails_WhenTheRunnerAnswers_ReturnsAtOnce verifies the readiness
 // check is the runner answering and not the container being up.
 func TestWaitForRails_WhenTheRunnerAnswers_ReturnsAtOnce(t *testing.T) {
-	docker := stubDocker(t, "exit 0\n")
+	docker := stubDocker(t, "echo "+readyAnswer+"\n")
 	if err := waitForRails(context.Background(), docker); err != nil {
 		t.Errorf("waitForRails: %v", err)
+	}
+}
+
+// TestWaitForRails_WhileTheDatabaseIsMigrating_KeepsWaiting verifies that an
+// application which loads is not yet ready, which is the state that used to
+// pass this wait and then break the introspection.
+//
+// A GitLab boots its Rails environment before its migrations have created the
+// tables, so a probe that only proves the environment loaded says ready to a
+// container whose first query will fail. Two full boots were spent on that
+// before the probe asked the database a question.
+func TestWaitForRails_WhileTheDatabaseIsMigrating_KeepsWaiting(t *testing.T) {
+	previousTimeout, previousInterval := bootTimeout, pollInterval
+	t.Cleanup(func() { bootTimeout, pollInterval = previousTimeout, previousInterval })
+	bootTimeout, pollInterval = 40*time.Millisecond, time.Millisecond
+
+	docker := stubDocker(t, `case "$1" in
+  inspect) echo true ;;
+  *) echo migrating ;;
+esac
+`)
+	err := waitForRails(context.Background(), docker)
+	if err == nil {
+		t.Fatal("a container still migrating was reported ready")
+	}
+	if !strings.Contains(err.Error(), "not ready") {
+		t.Errorf("error = %v, want the wait to report it timed out", err)
 	}
 }
 
@@ -511,7 +543,7 @@ case "$1" in
   exec)
     case "$5" in
       /tmp/introspect.rb) echo '{"schema_version":1}' ;;
-      *) exit 0 ;;
+      *) echo ready ;;
     esac
     ;;
   inspect) echo "gitlab/gitlab-ee@sha256:deadbeef" ;;
@@ -575,7 +607,7 @@ case "$1" in
   exec)
     case "$5" in
       /tmp/introspect.rb) echo '{}' ;;
-      *) exit 0 ;;
+      *) echo ready ;;
     esac
     ;;
   *) exit 0 ;;

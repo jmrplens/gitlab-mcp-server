@@ -189,6 +189,103 @@ func TestNestedNames_TheEdgeAGeneratedDocumentFlattens(t *testing.T) {
 	})
 }
 
+// TestResolve_AMergedExposureContributesItsChildsKeys verifies the one place
+// where an exposure list and the response GitLab sends differ.
+//
+// `expose :user, merge: true, using: UserBasic` on a member sends the user's
+// own keys on the member and no `user` key. Read literally it inverts both
+// halves of a comparison at once, which is what it did: the audit reported
+// `user` as a key GitLab sends and we drop, and the id, username and name we
+// publish as keys GitLab never sends.
+func TestResolve_AMergedExposureContributesItsChildsKeys(t *testing.T) {
+	t.Parallel()
+	doc := Document{Entities: map[string]Entity{
+		"API::Entities::Member": {Fields: []Field{
+			{Name: "user", Using: "API::Entities::UserBasic", Merge: true},
+			{Name: "access_level"},
+			{Name: "unloaded", Using: "API::Entities::Unloaded", Merge: true},
+			{Name: "hash", Merge: true},
+		}},
+		"API::Entities::UserBasic": {Fields: []Field{
+			{Name: "id"},
+			{Name: "avatar_url", Conditions: []Condition{{Kind: "BlockCondition", Text: "if: ->(user) { user.avatar? }"}}},
+		}},
+	}}
+
+	t.Run("the merged keys take the place of the exposure's own", func(t *testing.T) {
+		t.Parallel()
+		want := []string{"access_level", "avatar_url", "id"}
+		if got := doc.FieldNames("API::Entities::Member"); !reflect.DeepEqual(got, want) {
+			t.Errorf("FieldNames = %v, want %v", got, want)
+		}
+	})
+	t.Run("a merge of an entity the record does not hold contributes nothing", func(t *testing.T) {
+		t.Parallel()
+		// Nothing rather than its own name: the name is the one key GitLab is
+		// certain not to send, so keeping it would invent a finding.
+		fields, _ := doc.Fields("API::Entities::Member")
+		for _, absent := range []string{"user", "unloaded", "hash"} {
+			if _, named := fields[absent]; named {
+				t.Errorf("%q was kept as a key, and a merged exposure sends none", absent)
+			}
+		}
+	})
+	t.Run("a merged field stays gated by what gated the merge", func(t *testing.T) {
+		t.Parallel()
+		merged := Document{Entities: map[string]Entity{
+			"API::Entities::Parent": {Fields: []Field{{
+				Name: "child", Using: "API::Entities::Child", Merge: true,
+				Conditions: []Condition{{Kind: "BlockCondition", Text: "if: ->(_, options) { options[:with_child] }"}},
+			}}},
+			"API::Entities::Child": {Fields: []Field{
+				{Name: "own", Conditions: []Condition{{Kind: "HashCondition", Hash: "{scope: :all}"}}},
+			}},
+		}}
+		fields, ok := merged.Fields("API::Entities::Parent")
+		if !ok {
+			t.Fatal("the entity is in the record and was reported absent")
+		}
+		conditions := fields["own"].Conditions
+		if len(conditions) != 2 || conditions[0].Kind != "BlockCondition" || conditions[1].Kind != "HashCondition" {
+			t.Errorf("conditions = %+v, want the merge's own ahead of the field's", conditions)
+		}
+	})
+	t.Run("a nested edge under a merged exposure is nested on the parent", func(t *testing.T) {
+		t.Parallel()
+		nested := Document{Entities: map[string]Entity{
+			"API::Entities::Parent": {Fields: []Field{{Name: "child", Using: "API::Entities::Child", Merge: true}}},
+			"API::Entities::Child":  {Fields: []Field{{Name: "author", Using: "API::Entities::UserBasic"}}},
+			"API::Entities::UserBasic": {Fields: []Field{
+				{Name: "id"},
+			}},
+		}}
+		want := map[string][]string{"author": {"id"}}
+		if got := nested.NestedNames("API::Entities::Parent"); !reflect.DeepEqual(got, want) {
+			t.Errorf("NestedNames = %v, want %v", got, want)
+		}
+	})
+	t.Run("a merge that comes back round to its parent stops", func(t *testing.T) {
+		t.Parallel()
+		// GitLab's own entities hold no such cycle. The guard is here because
+		// the record is generated from whatever the image loaded, and a reader
+		// that hangs on it would take every audit down with it.
+		cyclic := Document{Entities: map[string]Entity{
+			"API::Entities::A": {Fields: []Field{{Name: "b", Using: "API::Entities::B", Merge: true}, {Name: "a_own"}}},
+			"API::Entities::B": {Fields: []Field{{Name: "a", Using: "API::Entities::A", Merge: true}, {Name: "b_own"}}},
+		}}
+		want := []string{"a_own", "b_own"}
+		if got := cyclic.FieldNames("API::Entities::A"); !reflect.DeepEqual(got, want) {
+			t.Errorf("FieldNames = %v, want %v", got, want)
+		}
+	})
+	t.Run("an entity the record does not hold resolves to nothing", func(t *testing.T) {
+		t.Parallel()
+		if fields, ok := doc.Resolve("API::Entities::Missing"); ok || fields != nil {
+			t.Errorf("Resolve = %v, %v; want nothing for an entity the record does not hold", fields, ok)
+		}
+	})
+}
+
 // TestLicensedFeatures_TheThreeSpellingsAConditionUses verifies what is read
 // out of a condition's text, which is what a tier is then resolved from.
 //

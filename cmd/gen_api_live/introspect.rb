@@ -38,7 +38,9 @@
 
 require "json"
 
-SCHEMA_VERSION = 1
+# Version 2 marks a merged exposure. Version 1 spelled it exactly like a nested
+# one, which read as the opposite of what GitLab sends.
+SCHEMA_VERSION = 2
 
 # ---------------------------------------------------------------------------
 # Entities
@@ -159,6 +161,29 @@ def using_of(exposure)
   name.to_s
 end
 
+# merge_of reports whether an exposure is merged into the object around it
+# rather than nested under its key. `expose :user, merge: true, using: UserBasic`
+# on a member sends the user's own keys on the member and no `user` key, so an
+# exposure read without this says the opposite of what GitLab sends.
+#
+# grape-entity keeps the flag on the exposure as for_merge, and the option is
+# read as a fallback so a version that drops the reader is not silently read as
+# no merges anywhere.
+def merge_of(exposure)
+  value =
+    begin
+      if exposure.respond_to?(:for_merge)
+        exposure.for_merge
+      elsif exposure.respond_to?(:options)
+        exposure.options[:merge]
+      end
+    rescue StandardError
+      nil
+    end
+
+  !value.nil? && value != false
+end
+
 def entities_document
   document = {}
   entity_classes.sort.each do |name, klass|
@@ -178,6 +203,7 @@ def entities_document
       field["attribute"] = attribute if attribute != exposure.key.to_s
       using = using_of(exposure)
       field["using"] = using if using
+      field["merge"] = true if merge_of(exposure)
       conditions = conditions_of(exposure)
       field["conditions"] = conditions if conditions
       field

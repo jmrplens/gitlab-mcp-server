@@ -1155,7 +1155,11 @@ It replaced two records that were both readings of text: the OpenAPI document Gi
 
 What comes back is every `API::Entities` class the instance had loaded, keyed by its Ruby name and holding the exposures in declaration order with everything it inherits and everything an Enterprise module prepended already flattened in; every route Grape had mounted, with the entity its `desc … success/entity` annotation names and the parameters it declares; and the licensed feature table, mapping each feature symbol to the tier that unlocks it. A Grape condition is a Proc, which knows where it was written and not what it says, so the script reads those lines back from inside the same image: a condition arrives both located and quoted, and the file it was written in is what says whether it is Enterprise.
 
+An exposure declared with `merge: true` is marked as such, and `apilive` resolves it into the keys it contributes rather than into a key of its own. It sends its child's keys on the parent object and no key named after itself, so an exposure list read literally says the opposite of what GitLab sends, in both directions at once: with `API::Entities::Member` merging `UserBasic`, the record claimed a member carries a `user` object and said nothing about the `id`, `username` and `name` it really carries, and R-PATH reported the one key GitLab never sends as missing from our output and the nine it does send as invented by us. Marking them removed 34 such phantom findings and uncovered 16 real gaps that were hidden underneath. The instance has 14 merged exposures, and six of them merge a value that renders with no entity, whose keys nothing static can name: those contribute nothing, because contributing their own name would be the one answer certain to be wrong.
+
 The boot is a generator and never an audit. It needs Docker and takes a few minutes on a cold image and about forty seconds afterwards; every gate downstream reads the committed record with no Docker and no network, which is the only way a gate can be one. It needs no licence and no fixtures either, because a licence gates `feature_available?` when a request is served and not when a class is defined.
+
+The wait before the introspection asks the database a question, not just Rails. A GitLab loads its Rails environment before its migrations have created the tables, so a probe that only proves the environment loaded reports ready on a container whose first query raises `relation "application_settings" does not exist`; two five-minute boots were spent that way. The probe asks for a table the application always has, which is the same ground the run afterwards covers. A runner that fails anyway now reports the tail of its stderr, since only stdout is the answer and discarding the rest left an exit status and nothing to act on.
 
 Floors refuse a boot that half ran, before anything is written: fewer than 400 entities, 5000 exposed fields, 1500 routes or 150 licensed features, or any entity that refused to describe itself. An introspection that half ran does not fail, it returns less, and written down that record says GitLab stopped sending things while every audit downstream reports the difference as a gap in this server.
 
@@ -1173,19 +1177,25 @@ go run ./cmd/gen_api_live/ -image gitlab/gitlab-ee:19.4.0-ee.0 -keep
 # Write the raw introspection without wrapping it, or read one back
 go run ./cmd/gen_api_live/ -dump /tmp/introspect.json
 
+# Build the record from a dump taken on another machine, keeping its provenance
+go run ./cmd/gen_api_live/ -dump /tmp/introspect.json -digest sha256:b516…
+
 # CI gate, no Docker
 go run ./cmd/gen_api_live/ -check
 ```
 
 #### Flags
 
-| Flag     | Type     | Default            | Description                                                                  |
-| -------- | -------- | ------------------ | ---------------------------------------------------------------------------- |
-| `-image` | `string` | the pinned release | GitLab image to boot                                                         |
-| `-dump`  | `string` | _(empty)_          | Read an introspection already on disk instead of booting, or write one to it |
-| `-keep`  | `bool`   | `false`            | Leave the container running after the run, for a look inside a failed boot   |
-| `-dir`   | `string` | `docs/development` | Directory holding the committed record                                       |
-| `-check` | `bool`   | `false`            | Read the committed record instead of booting, and fail when it is not usable |
+| Flag      | Type     | Default            | Description                                                                   |
+| --------- | -------- | ------------------ | ----------------------------------------------------------------------------- |
+| `-image`  | `string` | the pinned release | GitLab image to boot                                                          |
+| `-dump`   | `string` | _(empty)_          | Read an introspection already on disk instead of booting, or write one to it  |
+| `-digest` | `string` | _(empty)_          | With `-dump`, the repository digest of the image that introspection came from |
+| `-keep`   | `bool`   | `false`            | Leave the container running after the run, for a look inside a failed boot    |
+| `-dir`    | `string` | `docs/development` | Directory holding the committed record                                        |
+| `-check`  | `bool`   | `false`            | Read the committed record instead of booting, and fail when it is not usable  |
+
+`-digest` exists for the split this record sometimes has to be taken across: booting a GitLab wants several gigabytes, so the boot may happen on one machine and the record be built in the checkout on another, and only the first of the two can ask Docker what the image really was. A tag moves and a digest does not, so a record built from a dump without one names the weaker half of its own provenance.
 
 #### Output
 
