@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,152 |
-| Unit test functions                                   | 14,547 |
+| Total test functions                                  | 15,199 |
+| Unit test functions                                   | 14,594 |
 | E2E test functions                                    |    605 |
 | cmd test functions                                    |  2,990 |
 | Test files (internal/)                                |    523 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,998 | 79.2% |
+| `TestFunc_Scenario` (2-part)           | 12,045 | 79.2% |
 | `TestFunc` (no underscore)             |    975 |  6.4% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,179 | 14.4% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,179 | 14.3% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,459 |        148 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,760 |        359 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,807 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            605 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          2,990 |        203 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,152** |    **966** |                                                                                                 |
+| **Total**               |     **15,199** |    **966** |                                                                                                 |
 
 ### Core Packages
 
@@ -84,7 +84,7 @@
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
 | projects          |   393 |   100.0% |    57 |
-| groups            |   251 |   100.0% |    37 |
+| groups            |   277 |   100.0% |    37 |
 | mergerequests     |   245 |   100.0% |    30 |
 | issues            |   223 |   100.0% |    21 |
 | users             |   212 |   100.0% |    38 |
@@ -102,10 +102,10 @@
 | containerregistry |   102 |   100.0% |    16 |
 | accesstokens      |   100 |   100.0% |    18 |
 | branches          |    98 |   100.0% |    10 |
+| groupmembers      |    94 |   100.0% |    10 |
 | pipelineschedules |    94 |    99.7% |    11 |
 | groupmilestones   |    91 |   100.0% |     8 |
 | integrations      |    88 |    99.6% |    12 |
-| groupmembers      |    85 |   100.0% |    10 |
 | files             |    84 |   100.0% |     8 |
 | mrapprovals       |    84 |   100.0% |     7 |
 
@@ -116,7 +116,7 @@
 
 | Sub-package             |     Tests | Test Files | Coverage |     Tools |
 | ----------------------- | --------: | ---------: | -------: | --------: |
-| accessrequests          |        41 |          2 |   100.0% |         8 |
+| accessrequests          |        48 |          2 |   100.0% |         8 |
 | accesstokens            |       100 |          2 |   100.0% |        18 |
 | achievements            |        58 |          3 |   100.0% |        12 |
 | actioncatalog           |        44 |          5 |    99.1% |         0 |
@@ -186,13 +186,13 @@
 | grouplabels             |        56 |          2 |   100.0% |         7 |
 | groupldap               |        14 |          2 |   100.0% |         5 |
 | groupmarkdownuploads    |        37 |          2 |   100.0% |         3 |
-| groupmembers            |        85 |          3 |   100.0% |        10 |
+| groupmembers            |        94 |          3 |   100.0% |        10 |
 | groupmilestones         |        91 |          2 |   100.0% |         8 |
 | groupprotectedbranches  |        16 |          2 |   100.0% |         5 |
 | groupprotectedenvs      |        19 |          2 |   100.0% |         5 |
 | grouprelationsexport    |        26 |          2 |   100.0% |         2 |
 | groupreleases           |        18 |          3 |   100.0% |         1 |
-| groups                  |       251 |          8 |   100.0% |        37 |
+| groups                  |       277 |          8 |   100.0% |        37 |
 | groupsaml               |        33 |          3 |   100.0% |         5 |
 | groupscim               |        32 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |        23 |          2 |   100.0% |         8 |
@@ -205,7 +205,7 @@
 | importservice           |        31 |          1 |   100.0% |         5 |
 | instancevariables       |        42 |          2 |   100.0% |         5 |
 | integrations            |        88 |          4 |    99.6% |        12 |
-| invites                 |        43 |          1 |   100.0% |         4 |
+| invites                 |        48 |          1 |   100.0% |         4 |
 | issuediscussions        |        45 |          2 |   100.0% |         6 |
 | issuelinks              |        68 |          3 |   100.0% |         4 |
 | issuenotes              |        49 |          2 |   100.0% |         5 |
@@ -293,7 +293,7 @@
 | wikis                   |        62 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,760** |    **359** |          | **1,187** |
+| **Total**               | **8,807** |    **359** |          | **1,187** |
 
 </details>
 

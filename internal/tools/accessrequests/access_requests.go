@@ -15,16 +15,41 @@ import (
 // Output types
 // ---------------------------------------------------------------------------.
 
-// Output represents a single access request.
+// Output represents a single access request: what [gl.AccessRequest] decodes,
+// plus what lib/api/entities/access_requester.rb sends that the SDK does not
+// carry, read from the captured response (ADR-0021). The entity inherits
+// Member and merges UserBasic into it, and the keys are in that order.
+//
+// public_email, locked, avatar_url, web_url, expires_at and membership_state
+// are on every access request; created_by, the two identities, email,
+// override and member_role wait on a condition and are absent otherwise.
+//
+// The entity can also send avatar_path, custom_attributes and is_using_seat,
+// and none of them is published: each waits on a presenter option, and no
+// access-request route declares only_path, with_custom_attributes or
+// show_seat_info, so publishing them would advertise keys this endpoint
+// cannot return.
 type Output struct {
 	toolutil.HintableOutput
-	ID          int64  `json:"id"`
-	Username    string `json:"username"`
-	Name        string `json:"name"`
-	State       string `json:"state"`
-	CreatedAt   string `json:"created_at,omitempty"`
-	RequestedAt string `json:"requested_at,omitempty"`
-	AccessLevel int    `json:"access_level"`
+	ID                int64                        `json:"id"`
+	Username          string                       `json:"username"`
+	Name              string                       `json:"name"`
+	PublicEmail       string                       `json:"public_email,omitempty"`
+	State             string                       `json:"state"`
+	Locked            bool                         `json:"locked"`
+	AvatarURL         string                       `json:"avatar_url,omitempty"`
+	WebURL            string                       `json:"web_url,omitempty"`
+	AccessLevel       int                          `json:"access_level"`
+	CreatedAt         string                       `json:"created_at,omitempty"`
+	CreatedBy         *toolutil.MemberUserOutput   `json:"created_by,omitempty"`
+	ExpiresAt         string                       `json:"expires_at,omitempty"`
+	GroupSAMLIdentity *toolutil.SAMLIdentityOutput `json:"group_saml_identity,omitempty" tier:"premium"`
+	GroupSCIMIdentity *toolutil.SCIMIdentityOutput `json:"group_scim_identity,omitempty" tier:"premium"`
+	Email             string                       `json:"email,omitempty"`
+	Override          *bool                        `json:"override,omitempty" tier:"premium"`
+	MembershipState   string                       `json:"membership_state,omitempty" tier:"premium"`
+	MemberRole        *toolutil.MemberRoleOutput   `json:"member_role,omitempty" tier:"ultimate"`
+	RequestedAt       string                       `json:"requested_at,omitempty"`
 }
 
 // ListOutput represents a paginated list of access requests.
@@ -48,14 +73,27 @@ func buildListOptions(page toolutil.PaginationInput, keyset toolutil.KeysetPagin
 	return opts
 }
 
-// convertAccessRequest maps a GitLab access request into the MCP output shape.
-func convertAccessRequest(ar *gl.AccessRequest) Output {
+// convertAccessRequest maps a GitLab access request into the MCP output shape,
+// filling from the decoded request and from what the capture read beside it.
+func convertAccessRequest(ar *gl.AccessRequest, extra toolutil.AccessRequestExtra) Output {
 	o := Output{
-		ID:          ar.ID,
-		Username:    ar.Username,
-		Name:        ar.Name,
-		State:       ar.State,
-		AccessLevel: int(ar.AccessLevel),
+		ID:                ar.ID,
+		Username:          ar.Username,
+		Name:              ar.Name,
+		PublicEmail:       extra.PublicEmail,
+		State:             ar.State,
+		Locked:            extra.Locked,
+		AvatarURL:         extra.AvatarURL,
+		WebURL:            extra.WebURL,
+		AccessLevel:       int(ar.AccessLevel),
+		CreatedBy:         extra.CreatedBy,
+		ExpiresAt:         extra.ExpiresAt,
+		GroupSAMLIdentity: extra.GroupSAMLIdentity,
+		GroupSCIMIdentity: extra.GroupSCIMIdentity,
+		Email:             extra.Email,
+		Override:          extra.Override,
+		MembershipState:   extra.MembershipState,
+		MemberRole:        extra.MemberRole,
 	}
 	if ar.CreatedAt != nil {
 		o.CreatedAt = ar.CreatedAt.Format(time.RFC3339)
@@ -64,6 +102,35 @@ func convertAccessRequest(ar *gl.AccessRequest) Output {
 		o.RequestedAt = ar.RequestedAt.Format(time.RFC3339)
 	}
 	return o
+}
+
+// capturedAccessRequest converts one access request with what its captured
+// answer carries beside the SDK's decode, or reports under op the answer the
+// type cannot hold. It is the whole tail of a handler that returns one
+// request, which is four of the six here.
+func capturedAccessRequest(op string, ar *gl.AccessRequest, capture *gitlabclient.ResponseCapture) (Output, error) {
+	extra, err := toolutil.CapturedAccessRequest(capture)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(op, err)
+	}
+	return convertAccessRequest(ar, extra), nil
+}
+
+// capturedAccessRequests does the same for a list, pairing each request with
+// the extra read at the same position.
+func capturedAccessRequests(op string, requests []*gl.AccessRequest, capture *gitlabclient.ResponseCapture) ([]Output, error) {
+	extras, err := toolutil.CapturedAccessRequests(capture, len(requests))
+	if err != nil {
+		return nil, toolutil.WrapErr(op, err)
+	}
+	// Left nil for an empty page rather than an empty slice, which is the
+	// answer the list handlers gave before the capture was threaded through
+	// them and what the pagination fields already distinguish.
+	var out []Output
+	for i, ar := range requests {
+		out = append(out, convertAccessRequest(ar, extras[i]))
+	}
+	return out, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +156,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	opts := buildListOptions(input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	requests, resp, err := client.GL().AccessRequests.ListProjectAccessRequests(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
@@ -96,11 +164,11 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("access_request_list_project", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get; listing access requests requires Maintainer role or higher")
 	}
-	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, ar := range requests {
-		out.AccessRequests = append(out.AccessRequests, convertAccessRequest(ar))
+	items, err := capturedAccessRequests("access_request_list_project", requests, captured)
+	if err != nil {
+		return ListOutput{}, err
 	}
-	return out, nil
+	return ListOutput{AccessRequests: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -122,6 +190,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
 	opts := buildListOptions(input.PaginationInput, input.KeysetPaginationInput, input.OrderBy, input.Sort)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	requests, resp, err := client.GL().AccessRequests.ListGroupAccessRequests(
 		string(input.GroupID), opts, gl.WithContext(ctx),
 	)
@@ -129,11 +198,11 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("access_request_list_group", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get; listing access requests requires Owner role")
 	}
-	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, ar := range requests {
-		out.AccessRequests = append(out.AccessRequests, convertAccessRequest(ar))
+	items, err := capturedAccessRequests("access_request_list_group", requests, captured)
+	if err != nil {
+		return ListOutput{}, err
 	}
-	return out, nil
+	return ListOutput{AccessRequests: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -150,6 +219,7 @@ func RequestProject(ctx context.Context, client *gitlabclient.Client, input Requ
 	if input.ProjectID == "" {
 		return Output{}, toolutil.ErrFieldRequired("project_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	ar, _, err := client.GL().AccessRequests.RequestProjectAccess(
 		string(input.ProjectID), gl.WithContext(ctx),
 	)
@@ -157,7 +227,7 @@ func RequestProject(ctx context.Context, client *gitlabclient.Client, input Requ
 		return Output{}, toolutil.WrapErrWithStatusHint("access_request_request_project", err, http.StatusConflict,
 			"the authenticated user may already be a member or have a pending request; check gitlab_project_member_get; project must allow access requests in its settings")
 	}
-	return convertAccessRequest(ar), nil
+	return capturedAccessRequest("access_request_request_project", ar, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +244,7 @@ func RequestGroup(ctx context.Context, client *gitlabclient.Client, input Reques
 	if input.GroupID == "" {
 		return Output{}, toolutil.ErrFieldRequired("group_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	ar, _, err := client.GL().AccessRequests.RequestGroupAccess(
 		string(input.GroupID), gl.WithContext(ctx),
 	)
@@ -181,7 +252,7 @@ func RequestGroup(ctx context.Context, client *gitlabclient.Client, input Reques
 		return Output{}, toolutil.WrapErrWithStatusHint("access_request_request_group", err, http.StatusConflict,
 			"the authenticated user may already be a member or have a pending request; group must allow access requests (Owner-controlled setting)")
 	}
-	return convertAccessRequest(ar), nil
+	return capturedAccessRequest("access_request_request_group", ar, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -208,6 +279,7 @@ func ApproveProject(ctx context.Context, client *gitlabclient.Client, input Appr
 		lvl := gl.AccessLevelValue(input.AccessLevel)
 		opts.AccessLevel = &lvl
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	ar, _, err := client.GL().AccessRequests.ApproveProjectAccessRequest(
 		string(input.ProjectID), input.UserID, opts, gl.WithContext(ctx),
 	)
@@ -215,7 +287,7 @@ func ApproveProject(ctx context.Context, client *gitlabclient.Client, input Appr
 		return Output{}, toolutil.WrapErrWithStatusHint("access_request_approve_project", err, http.StatusNotFound,
 			"verify user_id with gitlab_access_request_list_project; access_level must be valid (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer); approving requires Maintainer role")
 	}
-	return convertAccessRequest(ar), nil
+	return capturedAccessRequest("access_request_approve_project", ar, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -242,6 +314,7 @@ func ApproveGroup(ctx context.Context, client *gitlabclient.Client, input Approv
 		lvl := gl.AccessLevelValue(input.AccessLevel)
 		opts.AccessLevel = &lvl
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	ar, _, err := client.GL().AccessRequests.ApproveGroupAccessRequest(
 		string(input.GroupID), input.UserID, opts, gl.WithContext(ctx),
 	)
@@ -249,7 +322,7 @@ func ApproveGroup(ctx context.Context, client *gitlabclient.Client, input Approv
 		return Output{}, toolutil.WrapErrWithStatusHint("access_request_approve_group", err, http.StatusNotFound,
 			"verify user_id with gitlab_access_request_list_group; access_level must be valid (5/10/15/20/25/30/40/50; 60=Admin not valid for access requests); approving requires Owner role")
 	}
-	return convertAccessRequest(ar), nil
+	return capturedAccessRequest("access_request_approve_group", ar, captured)
 }
 
 // ---------------------------------------------------------------------------

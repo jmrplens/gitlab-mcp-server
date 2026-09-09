@@ -6,6 +6,7 @@ package invites
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -509,7 +511,7 @@ func TestToPendingInviteOutput_WithDates(t *testing.T) {
 		CreatedAt:     &created,
 		ExpiresAt:     &expires,
 	}
-	out := toPendingInviteOutput(inv)
+	out := toPendingInviteOutput(inv, toolutil.InvitationExtra{})
 	if out.ID != 10 {
 		t.Errorf("ID = %d, want 10", out.ID)
 	}
@@ -540,7 +542,7 @@ func TestToPendingInviteOutput_NilDates(t *testing.T) {
 		InviteEmail: "bob@example.com",
 		AccessLevel: gl.ReporterPermissions,
 	}
-	out := toPendingInviteOutput(inv)
+	out := toPendingInviteOutput(inv, toolutil.InvitationExtra{})
 	if out.ID != 20 {
 		t.Errorf("ID = %d, want 20", out.ID)
 	}
@@ -1063,5 +1065,218 @@ func TestInviteActionSpecs_DiscoveryMetadata(t *testing.T) {
 		if len(spec.ParameterGuidance) == 0 {
 			t.Errorf("%s: missing ParameterGuidance", tool)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The invitation token GitLab sends that client-go's PendingInvite drops
+// ---------------------------------------------------------------------------.
+
+// pendingInvitationsClient answers both pending-invitation routes with one
+// body, so the table can drive the project and group handlers alike.
+func pendingInvitationsClient(t *testing.T, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK, body,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
+	}))
+}
+
+// pendingInvitationCalls are the two handlers that list pending invitations.
+var pendingInvitationCalls = []struct {
+	name string
+	call func(client *gitlabclient.Client) (ListPendingInvitationsOutput, error)
+}{
+	{name: "project", call: func(client *gitlabclient.Client) (ListPendingInvitationsOutput, error) {
+		return ListPendingProjectInvitations(context.Background(), client, ListPendingProjectInvitationsInput{ProjectID: "42"})
+	}},
+	{name: "group", call: func(client *gitlabclient.Client) (ListPendingInvitationsOutput, error) {
+		return ListPendingGroupInvitations(context.Background(), client, ListPendingGroupInvitationsInput{GroupID: "7"})
+	}},
+}
+
+// TestPendingInvitations_InviteTokenReachesBothHandlers verifies both list
+// handlers publish the invite_token lib/api/entities/invitation.rb exposes
+// under no condition, paired with the invitation at its own position, and
+// leave it empty on an instance that answered without it. client-go's
+// PendingInvite does not model the key, so only the read beside its decode
+// can carry it.
+func TestPendingInvitations_InviteTokenReachesBothHandlers(t *testing.T) {
+	const sent = `[{"id":1,"invite_email":"alice@example.com","invite_token":"tok-alice","access_level":30},` +
+		`{"id":2,"invite_email":"bob@example.com","invite_token":"tok-bob","access_level":40}]`
+	const withoutToken = `[{"id":1,"invite_email":"alice@example.com","access_level":30}]`
+	for _, inviteCall := range pendingInvitationCalls {
+		t.Run(inviteCall.name, func(t *testing.T) {
+			out, err := inviteCall.call(pendingInvitationsClient(t, sent))
+			if err != nil {
+				t.Fatalf("%s: %v", inviteCall.name, err)
+			}
+			if len(out.Invitations) != 2 {
+				t.Fatalf("published %d invitations, want 2", len(out.Invitations))
+			}
+			if out.Invitations[0].InviteToken != "tok-alice" || out.Invitations[1].InviteToken != "tok-bob" {
+				t.Errorf("tokens = %q and %q, want each paired with its own invitation",
+					out.Invitations[0].InviteToken, out.Invitations[1].InviteToken)
+			}
+
+			absent, err := inviteCall.call(pendingInvitationsClient(t, withoutToken))
+			if err != nil {
+				t.Fatalf("%s without a token: %v", inviteCall.name, err)
+			}
+			if absent.Invitations[0].InviteToken != "" {
+				t.Errorf("invite_token = %q, want empty", absent.Invitations[0].InviteToken)
+			}
+		})
+	}
+}
+
+// TestPendingInvitations_UnreadableCapturedFields verifies both handlers
+// report the captured response's decode failure rather than invitations with
+// the token silently empty. The SDK's PendingInvite has no invite_token, so
+// only the read beside it can notice that GitLab sent a number there.
+func TestPendingInvitations_UnreadableCapturedFields(t *testing.T) {
+	const poisoned = `[{"id":1,"invite_email":"alice@example.com","invite_token":7}]`
+	cases := make([]testutil.CapturedCase, 0, len(pendingInvitationCalls))
+	for _, inviteCall := range pendingInvitationCalls {
+		cases = append(cases, testutil.CapturedCase{Name: inviteCall.name, Call: func() error {
+			_, err := inviteCall.call(pendingInvitationsClient(t, poisoned))
+			return err
+		}})
+	}
+	testutil.AssertCapturedDecodeFailures(t, cases)
+}
+
+// recordInvitationBody answers an invitation POST and hands back the body the
+// handler sent, which is the only place the optional parameters appear.
+func recordInvitationBody(t *testing.T, send func(*gitlabclient.Client) error) string {
+	t.Helper()
+	var sent string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Errorf("read request body: %v", readErr)
+		}
+		sent = string(body)
+		testutil.RespondJSON(w, http.StatusCreated, `{"status":"success"}`)
+	}))
+	if err := send(client); err != nil {
+		t.Fatalf("invitation: %v", err)
+	}
+	return sent
+}
+
+// TestInvites_OptionalParametersReachTheRequestOnlyWhenGiven verifies both
+// invitation handlers put each optional parameter in the POST body when the
+// input carries one, and leave it out entirely when it does not.
+//
+// Only the request shows any of this: GitLab answers with the same status
+// either way, so a test reading the output cannot tell a parameter that was
+// sent from one that was dropped. expires_at is the sharpest of them, since a
+// value that is not a date is deliberately not sent at all rather than
+// forwarded for GitLab to refuse.
+func TestInvites_OptionalParametersReachTheRequestOnlyWhenGiven(t *testing.T) {
+	full := map[string]func(*gitlabclient.Client) error{
+		"project": func(client *gitlabclient.Client) error {
+			_, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{
+				ProjectID: "42", ID: "42", Email: "alice@example.com", UserID: 7,
+				AccessLevel: 30, ExpiresAt: "2027-01-31",
+			})
+			return err
+		},
+		"group": func(client *gitlabclient.Client) error {
+			_, err := GroupInvites(context.Background(), client, GroupInvitesInput{
+				GroupID: "7", ID: "7", Email: "alice@example.com", UserID: 7,
+				AccessLevel: 30, ExpiresAt: "2027-01-31",
+			})
+			return err
+		},
+	}
+	bare := map[string]func(*gitlabclient.Client) error{
+		"project": func(client *gitlabclient.Client) error {
+			_, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{
+				ProjectID: "42", Email: "alice@example.com", AccessLevel: 30, ExpiresAt: "31 January 2027",
+			})
+			return err
+		},
+		"group": func(client *gitlabclient.Client) error {
+			_, err := GroupInvites(context.Background(), client, GroupInvitesInput{
+				GroupID: "7", UserID: 7, AccessLevel: 30,
+			})
+			return err
+		},
+	}
+	for _, scope := range []string{"project", "group"} {
+		t.Run(scope, func(t *testing.T) {
+			sent := recordInvitationBody(t, full[scope])
+			for _, want := range []string{`"id"`, `"email"`, `"user_id"`, `"expires_at"`, `"access_level"`} {
+				t.Run("sends"+want, func(t *testing.T) {
+					if !strings.Contains(sent, want) {
+						t.Errorf("body %q is missing %s", sent, want)
+					}
+				})
+			}
+
+			// The bare call omits id everywhere, and then one of the pair the
+			// endpoint accepts either half of: a project invitation names only
+			// an email and a malformed date, a group invitation only a user id.
+			omitted := map[string][]string{
+				"project": {`"id"`, `"user_id"`, `"expires_at"`},
+				"group":   {`"id"`, `"email"`, `"expires_at"`},
+			}[scope]
+			bareBody := recordInvitationBody(t, bare[scope])
+			for _, absent := range omitted {
+				t.Run("omits"+absent, func(t *testing.T) {
+					if strings.Contains(bareBody, absent) {
+						t.Errorf("body %q carries %s the input did not name", bareBody, absent)
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestFormatListPendingMarkdownString_OptionalColumns verifies the rendered
+// list carries the user name and the expiry when the invitation has them and
+// neither when it does not, which is both sides of the two guards there.
+func TestFormatListPendingMarkdownString_OptionalColumns(t *testing.T) {
+	withBoth := FormatListPendingMarkdownString(ListPendingInvitationsOutput{
+		Invitations: []PendingInviteOutput{{
+			ID: 1, InviteEmail: "alice@example.com", AccessLevel: 30,
+			UserName: "alice", ExpiresAt: "2027-01-31T00:00:00Z",
+		}},
+	})
+	for _, want := range []string{", User: alice", ", Expires: 31 Jan 2027"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(withBoth, want) {
+				t.Errorf("markdown missing %q:\n%s", want, withBoth)
+			}
+		})
+	}
+	withNeither := FormatListPendingMarkdownString(ListPendingInvitationsOutput{
+		Invitations: []PendingInviteOutput{{ID: 1, InviteEmail: "alice@example.com", AccessLevel: 30}},
+	})
+	for _, absent := range []string{"User:", "Expires:"} {
+		t.Run("without "+absent, func(t *testing.T) {
+			if strings.Contains(withNeither, absent) {
+				t.Errorf("markdown carries %q for an invitation without it:\n%s", absent, withNeither)
+			}
+		})
+	}
+}
+
+// TestPendingInvitations_MarkdownLeavesTheTokenOut verifies the rendered table
+// never carries the token: it is a live credential, and a Markdown answer is
+// pasted into a conversation. The JSON keeps it for a caller that needs it.
+func TestPendingInvitations_MarkdownLeavesTheTokenOut(t *testing.T) {
+	md := FormatListPendingMarkdownString(ListPendingInvitationsOutput{
+		Invitations: []PendingInviteOutput{{
+			ID: 1, InviteEmail: "alice@example.com", InviteToken: "tok-alice", AccessLevel: 30,
+		}},
+	})
+	if strings.Contains(md, "tok-alice") {
+		t.Errorf("markdown carries the invitation token:\n%s", md)
+	}
+	if !strings.Contains(md, "alice@example.com") {
+		t.Errorf("markdown dropped the invitation itself:\n%s", md)
 	}
 }

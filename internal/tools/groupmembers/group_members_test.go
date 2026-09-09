@@ -5,6 +5,7 @@ package groupmembers
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1458,6 +1460,369 @@ func TestRemoveBillableMember_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 	if err := RemoveBillableMember(t.Context(), client, RemoveBillableMemberInput{GroupID: "5", UserID: 10}); err == nil {
 		t.Fatal("expected error for 404")
+	}
+}
+
+// ----------------------------------------------
+// The user keys GitLab merges into a member and a billable member
+// ----------------------------------------------.
+
+// billableMembersClient answers the billable members list with one body.
+func billableMembersClient(t *testing.T, body string) *gitlabclient.Client {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/5/billable_members", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK, body,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+	})
+	return testutil.NewTestClient(t, mux)
+}
+
+// TestListBillableMembers_SentUserKeys verifies the two keys
+// ee/lib/api/entities/billable_member.rb inherits from UserBasic and sends on
+// every member reach the output. client-go's BillableGroupMember models
+// neither, so only the read beside its decode can carry them.
+//
+// The body also spells avatar_path and custom_attributes, which this route
+// cannot send because it declares neither only_path nor with_custom_attributes,
+// and the published member is held to carrying no trace of either.
+func TestListBillableMembers_SentUserKeys(t *testing.T) {
+	const body = `[{"id":10,"username":"dev","public_email":"dev@public.io","name":"Developer","state":"active",` +
+		`"locked":true,"avatar_url":"https://gl/a.png","avatar_path":"/uploads/a.png",` +
+		`"custom_attributes":[{"key":"cost_center","value":"rnd"}],"web_url":"https://gl/dev"}]`
+	out, err := ListBillableMembers(t.Context(), billableMembersClient(t, body), ListBillableMembersInput{GroupID: "5"})
+	if err != nil {
+		t.Fatalf("ListBillableMembers: %v", err)
+	}
+	if len(out.Members) != 1 {
+		t.Fatalf("len(Members) = %d, want 1", len(out.Members))
+	}
+	m := out.Members[0]
+	if m.PublicEmail != "dev@public.io" {
+		t.Errorf("public_email = %q, want dev@public.io", m.PublicEmail)
+	}
+	if !m.Locked {
+		t.Error("locked = false, want true")
+	}
+	assertNoOptionGatedUserKey(t, m)
+}
+
+// assertNoOptionGatedUserKey holds a marshaled value to carrying neither of
+// the two UserBasic keys that wait on a presenter option.
+//
+// No route of this package declares only_path or with_custom_attributes, so
+// GitLab cannot send either and the surface must not claim it can. The audit
+// answers the matching findings with entity-option-no-endpoint-passes
+// declarations; this is what stops the code drifting back from them.
+func assertNoOptionGatedUserKey(t *testing.T, published any) {
+	t.Helper()
+	encoded, err := json.Marshal(published)
+	if err != nil {
+		t.Fatalf("marshal the published value: %v", err)
+	}
+	for _, key := range []string{"avatar_path", "custom_attributes"} {
+		t.Run("no "+key, func(t *testing.T) {
+			if strings.Contains(string(encoded), key) {
+				t.Errorf("published %s, which no route of this package can send:\n%s", key, encoded)
+			}
+		})
+	}
+}
+
+// TestListBillableMembers_UnconditionalUserKeysSurviveAThinBody verifies the
+// two keys GitLab always sends are still read off a body carrying nothing
+// else, so the assertions above cannot pass on an output that is empty.
+func TestListBillableMembers_UnconditionalUserKeysSurviveAThinBody(t *testing.T) {
+	const body = `[{"id":10,"username":"dev","public_email":"dev@public.io","name":"Developer",` +
+		`"state":"active","locked":true,"web_url":"https://gl/dev"}]`
+	out, err := ListBillableMembers(t.Context(), billableMembersClient(t, body), ListBillableMembersInput{GroupID: "5"})
+	if err != nil {
+		t.Fatalf("ListBillableMembers: %v", err)
+	}
+	m := out.Members[0]
+	if m.PublicEmail == "" || !m.Locked {
+		t.Errorf("the unconditional keys were dropped: %+v", m)
+	}
+	assertNoOptionGatedUserKey(t, m)
+}
+
+// TestListBillableMembers_PairsEachExtraWithItsOwnMember verifies the reader
+// pairs the extra read at one position with the member decoded at the same
+// one, which a reader reusing the first extra would fail only on a page of
+// more than one.
+func TestListBillableMembers_PairsEachExtraWithItsOwnMember(t *testing.T) {
+	const body = `[{"id":10,"username":"dev","locked":true,"public_email":"dev@public.io"},` +
+		`{"id":11,"username":"ops","locked":false,"public_email":"ops@public.io"}]`
+	out, err := ListBillableMembers(t.Context(), billableMembersClient(t, body), ListBillableMembersInput{GroupID: "5"})
+	if err != nil {
+		t.Fatalf("ListBillableMembers: %v", err)
+	}
+	if len(out.Members) != 2 {
+		t.Fatalf("len(Members) = %d, want 2", len(out.Members))
+	}
+	if !out.Members[0].Locked || out.Members[0].PublicEmail != "dev@public.io" {
+		t.Errorf("first member = %+v, want the first extra", out.Members[0])
+	}
+	if out.Members[1].Locked || out.Members[1].PublicEmail != "ops@public.io" {
+		t.Errorf("second member = %+v, want the second extra", out.Members[1])
+	}
+}
+
+// TestListBillableMembers_UnreadableCapturedFields verifies the handler
+// reports the captured response's decode failure rather than a half-filled
+// member. The SDK's BillableGroupMember has no locked, so only the read
+// beside it can notice that GitLab sent a string there.
+func TestListBillableMembers_UnreadableCapturedFields(t *testing.T) {
+	const poisoned = `[{"id":10,"username":"dev","locked":"not-a-bool"}]`
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{{
+		Name: "billable_members_list",
+		Call: func() error {
+			_, err := ListBillableMembers(t.Context(), billableMembersClient(t, poisoned), ListBillableMembersInput{GroupID: "5"})
+			return err
+		},
+	}})
+}
+
+// TestGroupMember_OptionGatedUserKeysAreNotPublished verifies no handler that
+// answers with a group member publishes avatar_path or custom_attributes, even
+// when the body spells both.
+//
+// lib/api/entities/user_basic.rb sends each only when the presenter is given
+// only_path or with_custom_attributes, and none of the twelve group-member
+// routes declares either, so the keys can never be on one of their responses.
+// The group member lists do declare show_seat_info, which is why is_using_seat
+// is published on this type and the other two are not: the answer is per route
+// set, not per entity.
+func TestGroupMember_OptionGatedUserKeysAreNotPublished(t *testing.T) {
+	const sent = `{"id":7,"username":"dev","name":"Developer","state":"active","access_level":30,` +
+		`"locked":true,"is_using_seat":true,` +
+		`"avatar_path":"/uploads/dev.png","custom_attributes":[{"key":"team","value":"core"}]}`
+	for _, memberCall := range groupMemberCalls {
+		t.Run(memberCall.name, func(t *testing.T) {
+			out, err := memberCall.call(groupMemberClient(t, sent))
+			if err != nil {
+				t.Fatalf("%s: %v", memberCall.name, err)
+			}
+			if !out.Locked {
+				t.Error("locked = false, want the captured value, so the assertion below is not vacuous")
+			}
+			assertNoOptionGatedUserKey(t, out)
+		})
+	}
+}
+
+// groupMemberCalls are the four handlers that answer with one group member.
+var groupMemberCalls = []struct {
+	name string
+	call func(client *gitlabclient.Client) (Output, error)
+}{
+	{name: "get", call: func(client *gitlabclient.Client) (Output, error) {
+		return GetMember(context.Background(), client, GetInput{GroupID: "5", UserID: 7})
+	}},
+	{name: "get_inherited", call: func(client *gitlabclient.Client) (Output, error) {
+		return GetInheritedMember(context.Background(), client, GetInput{GroupID: "5", UserID: 7})
+	}},
+	{name: "add", call: func(client *gitlabclient.Client) (Output, error) {
+		return AddMember(context.Background(), client, AddInput{GroupID: "5", UserID: 7, AccessLevel: 30})
+	}},
+	{name: "edit", call: func(client *gitlabclient.Client) (Output, error) {
+		return EditMember(context.Background(), client, EditInput{GroupID: "5", UserID: 7, AccessLevel: 30})
+	}},
+}
+
+// groupMemberClient answers every group-member route with one body.
+func groupMemberClient(t *testing.T, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+}
+
+// recordGroupMemberBody answers one group-member write and hands back the body
+// the handler sent, which is the only place its optional parameters appear.
+func recordGroupMemberBody(t *testing.T, send func(*gitlabclient.Client) error) string {
+	t.Helper()
+	var sent string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Errorf("read request body: %v", readErr)
+		}
+		sent = string(body)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":7,"username":"dev","access_level":30}`)
+	}))
+	if err := send(client); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	return sent
+}
+
+// TestGroupMemberWrites_OptionalParametersReachTheRequestOnlyWhenGiven
+// verifies the three write handlers put each optional parameter in the request
+// body when the input carries one, and leave it out when it does not.
+//
+// GitLab answers with the member either way, so the output cannot tell a
+// parameter that was sent from one that was dropped: a username silently lost
+// would add nobody, and an expiry silently lost would make a temporary
+// membership permanent.
+//
+// The fragments carry values rather than bare keys because two of the SDK's
+// options structs write expires_at as null when it is unset, so the key is on
+// the wire either way and only the value says whether the handler filled it.
+func TestGroupMemberWrites_OptionalParametersReachTheRequestOnlyWhenGiven(t *testing.T) {
+	for _, testCase := range []struct {
+		name    string
+		full    func(*gitlabclient.Client) error
+		bare    func(*gitlabclient.Client) error
+		present []string
+		absent  []string
+	}{
+		{
+			name: "add",
+			full: func(client *gitlabclient.Client) error {
+				_, err := AddMember(context.Background(), client, AddInput{
+					GroupID: "5", UserID: 7, Username: "dev", AccessLevel: 30,
+					ExpiresAt: "2027-01-31", MemberRoleID: 3,
+				})
+				return err
+			},
+			bare: func(client *gitlabclient.Client) error {
+				_, err := AddMember(context.Background(), client, AddInput{GroupID: "5", Username: "dev", AccessLevel: 30})
+				return err
+			},
+			present: []string{`"user_id":7`, `"username":"dev"`, `"expires_at":"2027-01-31"`, `"member_role_id":3`},
+			absent:  []string{`"user_id"`, `"expires_at":"`, `"member_role_id"`},
+		},
+		{
+			name: "edit",
+			full: func(client *gitlabclient.Client) error {
+				_, err := EditMember(context.Background(), client, EditInput{
+					GroupID: "5", UserID: 7, AccessLevel: 30, ExpiresAt: "2027-01-31", MemberRoleID: 3,
+				})
+				return err
+			},
+			bare: func(client *gitlabclient.Client) error {
+				_, err := EditMember(context.Background(), client, EditInput{GroupID: "5", UserID: 7})
+				return err
+			},
+			present: []string{`"access_level":30`, `"expires_at":"2027-01-31"`, `"member_role_id":3`},
+			absent:  []string{`"access_level"`, `"expires_at":"`, `"member_role_id"`},
+		},
+		{
+			name: "share",
+			full: func(client *gitlabclient.Client) error {
+				_, err := ShareGroup(context.Background(), client, ShareInput{
+					GroupID: "5", ShareGroupID: 9, GroupAccess: 30, ExpiresAt: "2027-01-31",
+				})
+				return err
+			},
+			bare: func(client *gitlabclient.Client) error {
+				_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 9, GroupAccess: 30})
+				return err
+			},
+			present: []string{`"expires_at":"2027-01-31"`},
+			absent:  []string{`"expires_at":"`},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			sent := recordGroupMemberBody(t, testCase.full)
+			for _, want := range testCase.present {
+				t.Run("sends"+want, func(t *testing.T) {
+					if !strings.Contains(sent, want) {
+						t.Errorf("body %q is missing %s", sent, want)
+					}
+				})
+			}
+			bare := recordGroupMemberBody(t, testCase.bare)
+			for _, notWanted := range testCase.absent {
+				t.Run("omits"+notWanted, func(t *testing.T) {
+					if strings.Contains(bare, notWanted) {
+						t.Errorf("body %q carries %s the input did not name", bare, notWanted)
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestShareGroup_AcceptsEveryValidGroupAccess verifies each of the four levels
+// GitLab accepts for a group share is let through, not only the one the rest
+// of the tests happen to use. The switch names them as one case, so a level
+// dropped from that list would refuse a share the endpoint supports.
+func TestShareGroup_AcceptsEveryValidGroupAccess(t *testing.T) {
+	for _, level := range []int{10, 20, 30, 40} {
+		t.Run(toolutil.AccessLevelDescription(gl.AccessLevelValue(level)), func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("POST /api/v4/groups/5/share", func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusCreated, `{"id":9,"name":"Shared","path":"shared","web_url":"https://gl/shared"}`)
+			})
+			out, err := ShareGroup(t.Context(), testutil.NewTestClient(t, mux), ShareInput{
+				GroupID: "5", ShareGroupID: 9, GroupAccess: level,
+			})
+			if err != nil {
+				t.Fatalf("ShareGroup at level %d: %v", level, err)
+			}
+			if out.ID != 9 {
+				t.Errorf("ShareGroup at level %d = %+v, want the shared group", level, out)
+			}
+		})
+	}
+}
+
+// TestApplyGroupMemberMeta_KeepsWhatAnEntryDoesNotCarry verifies the fallback
+// every guard in the applier exists for: an entry that fills nothing leaves
+// the generic options exactly as they were.
+//
+// Every entry of the real table fills every field, so this contract is
+// unreachable through [decorateGroupMemberMeta] and is asserted against the
+// applier directly, which is why that function takes the entry.
+func TestApplyGroupMemberMeta_KeepsWhatAnEntryDoesNotCarry(t *testing.T) {
+	options := groupMemberOptions("gitlab_group_member_get")
+	generic := options
+
+	applyGroupMemberMeta(&options, "gitlab_group_member_get", groupMemberActionMetaEntry{})
+
+	if options.Usage != generic.Usage {
+		t.Errorf("Usage = %q, want the generic %q", options.Usage, generic.Usage)
+	}
+	if len(options.Aliases) != 1 || options.Aliases[0] != "gitlab_group_member_get" {
+		t.Errorf("Aliases = %v, want only the tool name", options.Aliases)
+	}
+	if len(options.RelatedActions) != len(generic.RelatedActions) {
+		t.Errorf("RelatedActions = %v, want the generic %v", options.RelatedActions, generic.RelatedActions)
+	}
+	if options.ParameterGuidance != nil {
+		t.Errorf("ParameterGuidance = %v, want none", options.ParameterGuidance)
+	}
+	if options.IndividualTool.Description != generic.IndividualTool.Description {
+		t.Errorf("Description = %q, want the generic %q", options.IndividualTool.Description, generic.IndividualTool.Description)
+	}
+}
+
+// TestBillableMarkdown_OptionalCellsFallBackToPlainText verifies the other side
+// of the four guards in the billable formatters: a member with no web URL is
+// named in plain text rather than linked, and a membership with no source URL,
+// no access level and no expiry renders those cells empty instead of panicking
+// or printing a nil.
+func TestBillableMarkdown_OptionalCellsFallBackToPlainText(t *testing.T) {
+	members := FormatBillableMembersMarkdown(BillableMembersOutput{
+		Members: []BillableMemberOutput{{ID: 10, Username: "dev", Name: "Developer", State: "active"}},
+	})
+	if strings.Contains(members, "[dev](") {
+		t.Errorf("member with no web_url was linked:\n%s", members)
+	}
+	if !strings.Contains(members, "| dev |") {
+		t.Errorf("member with no web_url lost its username:\n%s", members)
+	}
+
+	memberships := FormatBillableMembershipsMarkdown(BillableMembershipsOutput{
+		Memberships: []BillableMembershipOutput{{ID: 1, SourceID: 2, SourceFullName: "group/project"}},
+	})
+	if strings.Contains(memberships, "[group/project](") {
+		t.Errorf("membership with no source URL was linked:\n%s", memberships)
+	}
+	if !strings.Contains(memberships, "| group/project |  |  |") {
+		t.Errorf("membership with no access level or expiry did not render empty cells:\n%s", memberships)
 	}
 }
 

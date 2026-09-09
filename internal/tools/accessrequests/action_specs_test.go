@@ -96,3 +96,26 @@ func TestCatalogSurface_DenyConfirmDeclined(t *testing.T) {
 		})
 	}
 }
+
+// TestAccessRequestOptionsForAction_UnknownActionKeepsTheBase verifies the
+// per-action switch leaves an action it does not name at the base options
+// every access-request spec starts from.
+//
+// It is the other side of the last case: without it nothing ever reaches the
+// end of that switch, so a case label could be wrong and no test would say so.
+func TestAccessRequestOptionsForAction_UnknownActionKeepsTheBase(t *testing.T) {
+	options := accessRequestOptionsForAction("no_such_action", "gitlab_access_request_no_such_action")
+
+	if options.Usage != "Use to execute accessrequests domain action." {
+		t.Errorf("Usage = %q, want the base usage", options.Usage)
+	}
+	if options.IndividualTool.Name != "gitlab_access_request_no_such_action" {
+		t.Errorf("IndividualTool.Name = %q, want the name it was given", options.IndividualTool.Name)
+	}
+	if len(options.Aliases) != 1 || options.Aliases[0] != "gitlab_access_request_no_such_action" {
+		t.Errorf("Aliases = %v, want only the tool name", options.Aliases)
+	}
+	if options.ParameterGuidance != nil {
+		t.Errorf("ParameterGuidance = %v, want none for an action the switch does not name", options.ParameterGuidance)
+	}
+}

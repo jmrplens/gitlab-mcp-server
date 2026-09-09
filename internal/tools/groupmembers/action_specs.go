@@ -135,18 +135,31 @@ func decorateGroupMemberMeta(options *toolutil.ActionSpecOptions, individualTool
 	if !ok {
 		return
 	}
+	applyGroupMemberMeta(options, individualTool, meta)
+}
+
+// applyGroupMemberMeta writes one entry over the generic options, leaving in
+// place whatever the entry does not carry.
+//
+// It takes the entry rather than looking it up because that is the whole
+// contract worth testing here: every entry of the table fills every field, so
+// through [decorateGroupMemberMeta] the fallback each guard exists for can
+// never be reached, and a partial entry is exactly what a new action starts
+// out as.
+func applyGroupMemberMeta(options *toolutil.ActionSpecOptions, individualTool string, meta groupMemberActionMetaEntry) {
 	if meta.usage != "" {
 		options.Usage = meta.usage
 	}
-	if len(meta.aliases) > 0 {
-		options.Aliases = append([]string{individualTool}, meta.aliases...)
-	}
+	// Aliases and guidance are written unguarded, because an entry carrying
+	// neither writes back what was already there: the base aliases are exactly
+	// the tool name this prepends, and the base guidance is nil. Only usage,
+	// related and description would be blanked by an empty entry, so only they
+	// are guarded.
+	options.Aliases = append([]string{individualTool}, meta.aliases...)
 	if len(meta.related) > 0 {
 		options.RelatedActions = append([]string(nil), meta.related...)
 	}
-	if len(meta.guidance) > 0 {
-		options.ParameterGuidance = meta.guidance
-	}
+	options.ParameterGuidance = meta.guidance
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
 	}

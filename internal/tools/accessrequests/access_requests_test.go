@@ -5,6 +5,9 @@ package accessrequests
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -12,6 +15,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -705,7 +709,7 @@ func TestConvertAccessRequest_WithDates(t *testing.T) {
 	ar.CreatedAt = now
 	ar.RequestedAt = later
 
-	out := convertAccessRequest(ar)
+	out := convertAccessRequest(ar, toolutil.AccessRequestExtra{})
 
 	if out.CreatedAt == "" {
 		t.Fatal("expected CreatedAt to be populated")
@@ -726,7 +730,7 @@ func TestConvertAccessRequest_WithDates(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestConvertAccessRequest_WithoutDates(t *testing.T) {
 	ar := mockAccessRequest(2, "bob", "Bob", "approved", 20)
-	out := convertAccessRequest(ar)
+	out := convertAccessRequest(ar, toolutil.AccessRequestExtra{})
 
 	if out.CreatedAt != "" {
 		t.Errorf("expected empty CreatedAt, got %s", out.CreatedAt)
@@ -748,13 +752,19 @@ func TestConvertAccessRequest_WithoutDates(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	out := Output{
-		ID:          1,
-		Username:    "alice",
-		Name:        "Alice Smith",
-		State:       "approved",
-		AccessLevel: 30,
-		CreatedAt:   "2026-06-15T10:30:00Z",
-		RequestedAt: "2026-06-16T08:00:00Z",
+		ID:              1,
+		Username:        "alice",
+		Name:            "Alice Smith",
+		State:           "approved",
+		AccessLevel:     30,
+		CreatedAt:       "2026-06-15T10:30:00Z",
+		RequestedAt:     "2026-06-16T08:00:00Z",
+		Email:           "alice@example.com",
+		PublicEmail:     "alice@public.example.com",
+		MemberRole:      &toolutil.MemberRoleOutput{Name: "Auditor"},
+		MembershipState: "active",
+		ExpiresAt:       "2027-01-31T00:00:00Z",
+		WebURL:          "https://gitlab.example.com/alice",
 	}
 	md := FormatOutputMarkdown(out)
 
@@ -765,8 +775,14 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"| Name | Alice Smith |",
 		"| State | approved |",
 		"| Access Level | 30 |",
+		"| Email | alice@example.com |",
+		"| Public Email | alice@public.example.com |",
+		"| Member Role | Auditor |",
+		"| Membership State | active |",
 		"| Created At | 15 Jun 2026 10:30 UTC |",
 		"| Requested At | 16 Jun 2026 08:00 UTC |",
+		"| Expires At | 31 Jan 2027 00:00 UTC |",
+		"| URL | [alice](https://gitlab.example.com/alice) |",
 	}
 	for _, c := range checks {
 		t.Run(c, func(t *testing.T) {
@@ -793,11 +809,17 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	if !strings.Contains(md, "## Access Request #5") {
 		t.Errorf("expected heading:\n%s", md)
 	}
-	if strings.Contains(md, "Created At") {
-		t.Error("should not contain Created At when empty")
-	}
-	if strings.Contains(md, "Requested At") {
-		t.Error("should not contain Requested At when empty")
+	// The other side of every row the formatter guards: a request GitLab sent
+	// none of these on renders no row at all, rather than an empty cell.
+	for _, absent := range []string{
+		"Created At", "Requested At", "Email", "Public Email",
+		"Member Role", "Membership State", "Expires At", "| URL |",
+	} {
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("markdown should not contain %q when the field is empty:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -1011,5 +1033,359 @@ func mockAccessRequest(id int64, username, name, state string, level int) *gl.Ac
 		Name:        name,
 		State:       state,
 		AccessLevel: gl.AccessLevelValue(level),
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The fields GitLab sends that client-go's AccessRequest does not model
+// ---------------------------------------------------------------------------.
+
+// sentAccessRequestJSON is one access request as
+// lib/api/entities/access_requester.rb renders it to a caller every condition
+// holds for: the entity inherits Member and merges UserBasic, so the keys
+// client-go models are here beside every key it does not.
+//
+// It deliberately carries avatar_path, custom_attributes and is_using_seat as
+// well, which these routes cannot send because none of them declares the
+// presenter option each waits on. They are here so that a body carrying them
+// is proved to leave no trace on the output, which is the other half of the
+// declarations that answer those three findings.
+const sentAccessRequestJSON = `{"id":1,"username":"alice","public_email":"alice@public.example.com",` +
+	`"name":"Alice","state":"active","locked":true,"avatar_url":"https://gitlab.example.com/a.png",` +
+	`"avatar_path":"/uploads/-/system/user/avatar/1/a.png",` +
+	`"custom_attributes":[{"key":"team","value":"core"}],"web_url":"https://gitlab.example.com/alice",` +
+	`"access_level":30,"created_at":"2026-06-15T10:30:00Z",` +
+	`"created_by":{"id":9,"username":"owner","name":"Owner","state":"active"},` +
+	`"expires_at":"2027-01-31","group_saml_identity":{"extern_uid":"saml-1","provider":"group_saml","saml_provider_id":4},` +
+	`"group_scim_identity":{"extern_uid":"scim-1","group_id":7,"active":true},` +
+	`"email":"alice@example.com","is_using_seat":true,"override":true,"membership_state":"active",` +
+	`"member_role":{"id":3,"name":"Auditor","base_access_level":30},` +
+	`"requested_at":"2026-06-16T08:00:00Z"}`
+
+// minimalAccessRequestJSON is the same request rendered to a caller none of
+// the conditions hold for: what GitLab always sends and nothing else.
+const minimalAccessRequestJSON = `{"id":1,"username":"alice","public_email":"alice@public.example.com",` +
+	`"name":"Alice","state":"active","locked":true,"avatar_url":"https://gitlab.example.com/a.png",` +
+	`"web_url":"https://gitlab.example.com/alice","access_level":30,` +
+	`"created_at":"2026-06-15T10:30:00Z","expires_at":"2027-01-31","membership_state":"active",` +
+	`"requested_at":"2026-06-16T08:00:00Z"}`
+
+// accessRequestCalls are the six handlers that answer with an access request,
+// each returning the one request it published and saying whether its endpoint
+// answers with an array.
+var accessRequestCalls = []struct {
+	name string
+	call func(client *gitlabclient.Client) (Output, error)
+	list bool
+}{
+	{name: "list_project", list: true, call: func(client *gitlabclient.Client) (Output, error) {
+		out, err := ListProject(context.Background(), client, ListProjectInput{ProjectID: "10"})
+		return firstAccessRequest(out, err)
+	}},
+	{name: "list_group", list: true, call: func(client *gitlabclient.Client) (Output, error) {
+		out, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: "5"})
+		return firstAccessRequest(out, err)
+	}},
+	{name: "request_project", call: func(client *gitlabclient.Client) (Output, error) {
+		return RequestProject(context.Background(), client, RequestProjectInput{ProjectID: "10"})
+	}},
+	{name: "request_group", call: func(client *gitlabclient.Client) (Output, error) {
+		return RequestGroup(context.Background(), client, RequestGroupInput{GroupID: "5"})
+	}},
+	{name: "approve_project", call: func(client *gitlabclient.Client) (Output, error) {
+		return ApproveProject(context.Background(), client, ApproveProjectInput{ProjectID: "10", UserID: 1})
+	}},
+	{name: "approve_group", call: func(client *gitlabclient.Client) (Output, error) {
+		return ApproveGroup(context.Background(), client, ApproveGroupInput{GroupID: "5", UserID: 1})
+	}},
+}
+
+// errNoAccessRequest reports a list handler that answered without the single
+// request its body carries, which would make every field assertion vacuous.
+var errNoAccessRequest = errors.New("handler answered with no access request")
+
+// firstAccessRequest takes the one request a list handler published.
+func firstAccessRequest(out ListOutput, err error) (Output, error) {
+	if err != nil {
+		return Output{}, err
+	}
+	if len(out.AccessRequests) != 1 {
+		return Output{}, errNoAccessRequest
+	}
+	return out.AccessRequests[0], nil
+}
+
+// accessRequestBodyFor wraps a single request in an array for the endpoints
+// that answer with a collection.
+func accessRequestBodyFor(list bool, object string) string {
+	if list {
+		return "[" + object + "]"
+	}
+	return object
+}
+
+// accessRequestClient answers every access-request route with one body, so a
+// table can drive all six handlers against the same rendering.
+func accessRequestClient(t *testing.T, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK, body,
+			testutil.PaginationHeaders{TotalPages: "1", Total: "1", Page: "1", PerPage: "20"})
+	}))
+}
+
+// TestAccessRequests_SentFieldsReachEveryHandler verifies that every handler
+// answering with an access request publishes the fifteen keys GitLab sends
+// that client-go's AccessRequest does not model. Reading them off the SDK's
+// struct is impossible, so only the capture beside the decode can carry them,
+// and each handler had to be threaded separately.
+func TestAccessRequests_SentFieldsReachEveryHandler(t *testing.T) {
+	for _, requestCall := range accessRequestCalls {
+		t.Run(requestCall.name, func(t *testing.T) {
+			out, err := requestCall.call(accessRequestClient(t, accessRequestBodyFor(requestCall.list, sentAccessRequestJSON)))
+			if err != nil {
+				t.Fatalf("%s: %v", requestCall.name, err)
+			}
+			assertSentAccessRequest(t, out)
+		})
+	}
+}
+
+// sentAccessRequestStrings is what each string key of
+// [sentAccessRequestJSON] must reach the output as.
+var sentAccessRequestStrings = map[string]string{
+	"public_email":     "alice@public.example.com",
+	"avatar_url":       "https://gitlab.example.com/a.png",
+	"web_url":          "https://gitlab.example.com/alice",
+	"expires_at":       "2027-01-31",
+	"email":            "alice@example.com",
+	"membership_state": "active",
+}
+
+// assertSentAccessRequest holds one published request to every key
+// [sentAccessRequestJSON] carries that this endpoint can send, each under a
+// subtest of its own so a failure names the field that was dropped, and holds
+// the three option-gated keys in that body to nothing at all.
+func assertSentAccessRequest(t *testing.T, out Output) {
+	t.Helper()
+	for field, got := range map[string]string{
+		"public_email":     out.PublicEmail,
+		"avatar_url":       out.AvatarURL,
+		"web_url":          out.WebURL,
+		"expires_at":       out.ExpiresAt,
+		"email":            out.Email,
+		"membership_state": out.MembershipState,
+	} {
+		t.Run(field, func(t *testing.T) {
+			if want := sentAccessRequestStrings[field]; got != want {
+				t.Errorf("%s = %q, want %q", field, got, want)
+			}
+		})
+	}
+	t.Run("locked", func(t *testing.T) {
+		if !out.Locked {
+			t.Error("locked = false, want true")
+		}
+	})
+	assertSentAccessRequestObjects(t, out)
+	assertAccessRequestPublishesNoOptionGatedKey(t, out)
+}
+
+// assertAccessRequestPublishesNoOptionGatedKey holds the output to carrying no
+// trace of avatar_path, custom_attributes or is_using_seat even when the body
+// spelled all three.
+//
+// The access-request routes declare none of only_path, with_custom_attributes
+// or show_seat_info, so GitLab cannot send them here and the surface must not
+// claim it can. The audit answers the same three findings with
+// entity-option-no-endpoint-passes declarations; this is what stops the code
+// drifting back from them, and it is asserted on the marshaled JSON because
+// that is the surface a client sees.
+func assertAccessRequestPublishesNoOptionGatedKey(t *testing.T, out Output) {
+	t.Helper()
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal the published request: %v", err)
+	}
+	for _, key := range []string{"avatar_path", "custom_attributes", "is_using_seat"} {
+		t.Run("no "+key, func(t *testing.T) {
+			if strings.Contains(string(encoded), key) {
+				t.Errorf("published %s, which no access-request route can send:\n%s", key, encoded)
+			}
+		})
+	}
+}
+
+// assertSentAccessRequestObjects holds the four object-valued keys, which the
+// SDK's AccessRequest models none of and the capture has to carry whole.
+func assertSentAccessRequestObjects(t *testing.T, out Output) {
+	t.Helper()
+	t.Run("created_by", func(t *testing.T) {
+		if out.CreatedBy == nil || out.CreatedBy.ID != 9 || out.CreatedBy.Username != "owner" {
+			t.Errorf("created_by = %+v, want the creating user", out.CreatedBy)
+		}
+	})
+	t.Run("group_saml_identity", func(t *testing.T) {
+		if out.GroupSAMLIdentity == nil || out.GroupSAMLIdentity.ExternUID != "saml-1" || out.GroupSAMLIdentity.SAMLProviderID != 4 {
+			t.Errorf("group_saml_identity = %+v, want the SAML identity", out.GroupSAMLIdentity)
+		}
+	})
+	t.Run("group_scim_identity", func(t *testing.T) {
+		if out.GroupSCIMIdentity == nil || out.GroupSCIMIdentity.ExternUID != "scim-1" || out.GroupSCIMIdentity.GroupID != 7 || !out.GroupSCIMIdentity.Active {
+			t.Errorf("group_scim_identity = %+v, want the SCIM identity", out.GroupSCIMIdentity)
+		}
+	})
+	t.Run("override", func(t *testing.T) {
+		if out.Override == nil || !*out.Override {
+			t.Errorf("override = %v, want true", out.Override)
+		}
+	})
+	t.Run("member_role", func(t *testing.T) {
+		if out.MemberRole == nil || out.MemberRole.ID != 3 || out.MemberRole.Name != "Auditor" {
+			t.Errorf("member_role = %+v, want the custom role", out.MemberRole)
+		}
+	})
+}
+
+// TestAccessRequests_ConditionalFieldsAbsentWhenGitLabOmitsThem verifies the
+// other side of every condition on the entity: a caller none of them hold for
+// gets the request without those keys, and the output leaves each at its zero
+// rather than inventing one. This is what makes the omitempty tags honest.
+func TestAccessRequests_ConditionalFieldsAbsentWhenGitLabOmitsThem(t *testing.T) {
+	for _, requestCall := range accessRequestCalls {
+		t.Run(requestCall.name, func(t *testing.T) {
+			out, err := requestCall.call(accessRequestClient(t, accessRequestBodyFor(requestCall.list, minimalAccessRequestJSON)))
+			if err != nil {
+				t.Fatalf("%s: %v", requestCall.name, err)
+			}
+			for field, empty := range map[string]bool{
+				"created_by":          out.CreatedBy == nil,
+				"group_saml_identity": out.GroupSAMLIdentity == nil,
+				"group_scim_identity": out.GroupSCIMIdentity == nil,
+				"email":               out.Email == "",
+				"override":            out.Override == nil,
+				"member_role":         out.MemberRole == nil,
+			} {
+				t.Run(field, func(t *testing.T) {
+					if !empty {
+						t.Errorf("%s was filled from a body that does not carry it", field)
+					}
+				})
+			}
+			// The unconditional keys are still there, so an all-empty output
+			// cannot pass this test by carrying nothing at all.
+			if out.PublicEmail == "" || !out.Locked || out.WebURL == "" || out.ExpiresAt == "" || out.MembershipState == "" {
+				t.Errorf("the unconditional keys were dropped too: %+v", out)
+			}
+		})
+	}
+}
+
+// TestAccessRequests_UnreadableCapturedFields verifies every handler reports
+// the captured response's decode failure rather than a half-filled request.
+// client-go's AccessRequest has no expires_at, so only the read beside it can
+// notice that GitLab sent an object where a date belongs.
+func TestAccessRequests_UnreadableCapturedFields(t *testing.T) {
+	const poisoned = `{"id":1,"username":"alice","expires_at":{"not":"a date"}}`
+	cases := make([]testutil.CapturedCase, 0, len(accessRequestCalls))
+	for _, requestCall := range accessRequestCalls {
+		cases = append(cases, testutil.CapturedCase{Name: requestCall.name, Call: func() error {
+			_, err := requestCall.call(accessRequestClient(t, accessRequestBodyFor(requestCall.list, poisoned)))
+			return err
+		}})
+	}
+	testutil.AssertCapturedDecodeFailures(t, cases)
+}
+
+// TestAccessRequests_ListPairsEachExtraWithItsOwnRequest verifies a list
+// handler pairs the extra read at one position with the request decoded at the
+// same one. A reader that took the first extra for every request would pass
+// every single-object test above and be wrong on the first page of two.
+func TestAccessRequests_ListPairsEachExtraWithItsOwnRequest(t *testing.T) {
+	const page = `[{"id":1,"username":"alice","email":"alice@example.com","web_url":"https://gl/alice"},` +
+		`{"id":2,"username":"bob","email":"bob@example.com","web_url":"https://gl/bob"}]`
+	out, err := ListProject(context.Background(), accessRequestClient(t, page), ListProjectInput{ProjectID: "10"})
+	if err != nil {
+		t.Fatalf("ListProject: %v", err)
+	}
+	if len(out.AccessRequests) != 2 {
+		t.Fatalf("published %d requests, want 2", len(out.AccessRequests))
+	}
+	for i, want := range []struct{ username, email, webURL string }{
+		{"alice", "alice@example.com", "https://gl/alice"},
+		{"bob", "bob@example.com", "https://gl/bob"},
+	} {
+		t.Run(want.username, func(t *testing.T) {
+			got := out.AccessRequests[i]
+			if got.Username != want.username || got.Email != want.email || got.WebURL != want.webURL {
+				t.Errorf("request %d = %+v, want %v", i, got, want)
+			}
+		})
+	}
+}
+
+// TestApprove_SendsTheAccessLevelOnlyWhenTheCallerNamedOne verifies both
+// approve handlers put the granted role in the request body when the input
+// carries one, and send no access_level at all when it does not.
+//
+// Only the request shows this. GitLab answers the same either way, so a test
+// reading the output cannot tell an omitted role from a zero one, and a zero
+// is what the endpoint refuses.
+func TestApprove_SendsTheAccessLevelOnlyWhenTheCallerNamedOne(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		level    int
+		wantSent bool
+	}{
+		{name: "with_a_level", level: 40, wantSent: true},
+		{name: "without_a_level", level: 0},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			for scope, approve := range map[string]func(*gitlabclient.Client) error{
+				"project": func(client *gitlabclient.Client) error {
+					_, err := ApproveProject(context.Background(), client, ApproveProjectInput{
+						ProjectID: "10", UserID: 1, AccessLevel: testCase.level,
+					})
+					return err
+				},
+				"group": func(client *gitlabclient.Client) error {
+					_, err := ApproveGroup(context.Background(), client, ApproveGroupInput{
+						GroupID: "5", UserID: 1, AccessLevel: testCase.level,
+					})
+					return err
+				},
+			} {
+				t.Run(scope, func(t *testing.T) {
+					var sent string
+					client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						body, readErr := io.ReadAll(r.Body)
+						if readErr != nil {
+							t.Errorf("read request body: %v", readErr)
+						}
+						sent = string(body)
+						testutil.RespondJSON(w, http.StatusOK, `{"id":1,"username":"alice"}`)
+					}))
+					if err := approve(client); err != nil {
+						t.Fatalf("approve %s: %v", scope, err)
+					}
+					if got := strings.Contains(sent, `"access_level":40`); got != testCase.wantSent {
+						t.Errorf("body %q carries the access level = %v, want %v", sent, got, testCase.wantSent)
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestAccessRequests_ListPublishesNoRequestsForAnEmptyPage verifies an empty
+// page answers with no requests rather than with an error from the reader
+// holding the captured count to the SDK's.
+func TestAccessRequests_ListPublishesNoRequestsForAnEmptyPage(t *testing.T) {
+	out, err := ListGroup(context.Background(), accessRequestClient(t, `[]`), ListGroupInput{GroupID: "5"})
+	if err != nil {
+		t.Fatalf("ListGroup: %v", err)
+	}
+	if out.AccessRequests != nil {
+		t.Errorf("AccessRequests = %+v, want none", out.AccessRequests)
 	}
 }

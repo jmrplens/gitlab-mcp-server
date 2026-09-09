@@ -199,4 +199,14 @@ func TestProvisionedUserToOutput_NilTimes(t *testing.T) {
 	if out.CreatedAt != "" || out.LastActivityOn != "" || out.CurrentSignInIP != "" || out.ConfirmedAt != "" {
 		t.Fatalf("expected empty timestamp/IP fields, got %#v", out)
 	}
+	// The creator object carries a date of its own, and GitLab leaves it out
+	// for a user created before it recorded one, so the nested branch has a
+	// side of its own to answer for.
+	nested := ProvisionedUserToOutput(&gl.User{ID: 1, Username: "u", CreatedBy: &gl.BasicUser{ID: 2, Username: "admin"}})
+	if nested.CreatedBy == nil {
+		t.Fatal("created_by was dropped")
+	}
+	if nested.CreatedBy.CreatedAt != "" {
+		t.Errorf("created_by.created_at = %q, want empty", nested.CreatedBy.CreatedAt)
+	}
 }

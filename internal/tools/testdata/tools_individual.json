@@ -30,11 +30,195 @@
         "access_level": {
           "type": "integer"
         },
+        "avatar_url": {
+          "type": "string"
+        },
         "created_at": {
           "type": "string"
         },
+        "created_by": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "state"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "email": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "group_saml_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "extern_uid": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "saml_provider_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "provider",
+            "saml_provider_id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "group_scim_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "extern_uid": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "group_id",
+            "active"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "id": {
           "type": "integer"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "member_role": {
+          "additionalProperties": false,
+          "properties": {
+            "admin_cicd_variables": {
+              "type": "boolean"
+            },
+            "admin_compliance_framework": {
+              "type": "boolean"
+            },
+            "admin_group_member": {
+              "type": "boolean"
+            },
+            "admin_merge_request": {
+              "type": "boolean"
+            },
+            "admin_push_rules": {
+              "type": "boolean"
+            },
+            "admin_terraform_state": {
+              "type": "boolean"
+            },
+            "admin_vulnerability": {
+              "type": "boolean"
+            },
+            "admin_web_hook": {
+              "type": "boolean"
+            },
+            "archive_project": {
+              "type": "boolean"
+            },
+            "base_access_level": {
+              "type": "integer"
+            },
+            "description": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "manage_deploy_tokens": {
+              "type": "boolean"
+            },
+            "manage_group_access_tokens": {
+              "type": "boolean"
+            },
+            "manage_merge_request_settings": {
+              "type": "boolean"
+            },
+            "manage_project_access_tokens": {
+              "type": "boolean"
+            },
+            "manage_security_policy_link": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "read_code": {
+              "type": "boolean"
+            },
+            "read_dependency": {
+              "type": "boolean"
+            },
+            "read_runners": {
+              "type": "boolean"
+            },
+            "read_vulnerability": {
+              "type": "boolean"
+            },
+            "remove_group": {
+              "type": "boolean"
+            },
+            "remove_project": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "group_id",
+            "base_access_level"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "membership_state": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -48,6 +232,15 @@
             "array"
           ]
         },
+        "override": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "public_email": {
+          "type": "string"
+        },
         "requested_at": {
           "type": "string"
         },
@@ -56,6 +249,9 @@
         },
         "username": {
           "type": "string"
+        },
+        "web_url": {
+          "type": "string"
         }
       },
       "required": [
@@ -63,6 +259,7 @@
         "username",
         "name",
         "state",
+        "locked",
         "access_level"
       ],
       "type": "object"
@@ -105,11 +302,195 @@
         "access_level": {
           "type": "integer"
         },
+        "avatar_url": {
+          "type": "string"
+        },
         "created_at": {
           "type": "string"
         },
+        "created_by": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "state"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "email": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "group_saml_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "extern_uid": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "saml_provider_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "provider",
+            "saml_provider_id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "group_scim_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "extern_uid": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "group_id",
+            "active"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "id": {
           "type": "integer"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "member_role": {
+          "additionalProperties": false,
+          "properties": {
+            "admin_cicd_variables": {
+              "type": "boolean"
+            },
+            "admin_compliance_framework": {
+              "type": "boolean"
+            },
+            "admin_group_member": {
+              "type": "boolean"
+            },
+            "admin_merge_request": {
+              "type": "boolean"
+            },
+            "admin_push_rules": {
+              "type": "boolean"
+            },
+            "admin_terraform_state": {
+              "type": "boolean"
+            },
+            "admin_vulnerability": {
+              "type": "boolean"
+            },
+            "admin_web_hook": {
+              "type": "boolean"
+            },
+            "archive_project": {
+              "type": "boolean"
+            },
+            "base_access_level": {
+              "type": "integer"
+            },
+            "description": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "manage_deploy_tokens": {
+              "type": "boolean"
+            },
+            "manage_group_access_tokens": {
+              "type": "boolean"
+            },
+            "manage_merge_request_settings": {
+              "type": "boolean"
+            },
+            "manage_project_access_tokens": {
+              "type": "boolean"
+            },
+            "manage_security_policy_link": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "read_code": {
+              "type": "boolean"
+            },
+            "read_dependency": {
+              "type": "boolean"
+            },
+            "read_runners": {
+              "type": "boolean"
+            },
+            "read_vulnerability": {
+              "type": "boolean"
+            },
+            "remove_group": {
+              "type": "boolean"
+            },
+            "remove_project": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "group_id",
+            "base_access_level"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "membership_state": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -123,6 +504,15 @@
             "array"
           ]
         },
+        "override": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "public_email": {
+          "type": "string"
+        },
         "requested_at": {
           "type": "string"
         },
@@ -131,6 +521,9 @@
         },
         "username": {
           "type": "string"
+        },
+        "web_url": {
+          "type": "string"
         }
       },
       "required": [
@@ -138,6 +531,7 @@
         "username",
         "name",
         "state",
+        "locked",
         "access_level"
       ],
       "type": "object"
@@ -322,11 +716,195 @@
               "access_level": {
                 "type": "integer"
               },
+              "avatar_url": {
+                "type": "string"
+              },
               "created_at": {
                 "type": "string"
               },
+              "created_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "email": {
+                "type": "string"
+              },
+              "expires_at": {
+                "type": "string"
+              },
+              "group_saml_identity": {
+                "additionalProperties": false,
+                "properties": {
+                  "extern_uid": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "saml_provider_id": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "extern_uid",
+                  "provider",
+                  "saml_provider_id"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "group_scim_identity": {
+                "additionalProperties": false,
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "extern_uid": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "extern_uid",
+                  "group_id",
+                  "active"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "id": {
                 "type": "integer"
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "member_role": {
+                "additionalProperties": false,
+                "properties": {
+                  "admin_cicd_variables": {
+                    "type": "boolean"
+                  },
+                  "admin_compliance_framework": {
+                    "type": "boolean"
+                  },
+                  "admin_group_member": {
+                    "type": "boolean"
+                  },
+                  "admin_merge_request": {
+                    "type": "boolean"
+                  },
+                  "admin_push_rules": {
+                    "type": "boolean"
+                  },
+                  "admin_terraform_state": {
+                    "type": "boolean"
+                  },
+                  "admin_vulnerability": {
+                    "type": "boolean"
+                  },
+                  "admin_web_hook": {
+                    "type": "boolean"
+                  },
+                  "archive_project": {
+                    "type": "boolean"
+                  },
+                  "base_access_level": {
+                    "type": "integer"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "manage_deploy_tokens": {
+                    "type": "boolean"
+                  },
+                  "manage_group_access_tokens": {
+                    "type": "boolean"
+                  },
+                  "manage_merge_request_settings": {
+                    "type": "boolean"
+                  },
+                  "manage_project_access_tokens": {
+                    "type": "boolean"
+                  },
+                  "manage_security_policy_link": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "read_code": {
+                    "type": "boolean"
+                  },
+                  "read_dependency": {
+                    "type": "boolean"
+                  },
+                  "read_runners": {
+                    "type": "boolean"
+                  },
+                  "read_vulnerability": {
+                    "type": "boolean"
+                  },
+                  "remove_group": {
+                    "type": "boolean"
+                  },
+                  "remove_project": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "group_id",
+                  "base_access_level"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "membership_state": {
+                "type": "string"
               },
               "name": {
                 "type": "string"
@@ -340,6 +918,15 @@
                   "array"
                 ]
               },
+              "override": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "public_email": {
+                "type": "string"
+              },
               "requested_at": {
                 "type": "string"
               },
@@ -348,6 +935,9 @@
               },
               "username": {
                 "type": "string"
+              },
+              "web_url": {
+                "type": "string"
               }
             },
             "required": [
@@ -355,6 +945,7 @@
               "username",
               "name",
               "state",
+              "locked",
               "access_level"
             ],
             "type": "object"
@@ -480,11 +1071,195 @@
               "access_level": {
                 "type": "integer"
               },
+              "avatar_url": {
+                "type": "string"
+              },
               "created_at": {
                 "type": "string"
               },
+              "created_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "state"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "email": {
+                "type": "string"
+              },
+              "expires_at": {
+                "type": "string"
+              },
+              "group_saml_identity": {
+                "additionalProperties": false,
+                "properties": {
+                  "extern_uid": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "saml_provider_id": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "extern_uid",
+                  "provider",
+                  "saml_provider_id"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "group_scim_identity": {
+                "additionalProperties": false,
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "extern_uid": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "extern_uid",
+                  "group_id",
+                  "active"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "id": {
                 "type": "integer"
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "member_role": {
+                "additionalProperties": false,
+                "properties": {
+                  "admin_cicd_variables": {
+                    "type": "boolean"
+                  },
+                  "admin_compliance_framework": {
+                    "type": "boolean"
+                  },
+                  "admin_group_member": {
+                    "type": "boolean"
+                  },
+                  "admin_merge_request": {
+                    "type": "boolean"
+                  },
+                  "admin_push_rules": {
+                    "type": "boolean"
+                  },
+                  "admin_terraform_state": {
+                    "type": "boolean"
+                  },
+                  "admin_vulnerability": {
+                    "type": "boolean"
+                  },
+                  "admin_web_hook": {
+                    "type": "boolean"
+                  },
+                  "archive_project": {
+                    "type": "boolean"
+                  },
+                  "base_access_level": {
+                    "type": "integer"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "manage_deploy_tokens": {
+                    "type": "boolean"
+                  },
+                  "manage_group_access_tokens": {
+                    "type": "boolean"
+                  },
+                  "manage_merge_request_settings": {
+                    "type": "boolean"
+                  },
+                  "manage_project_access_tokens": {
+                    "type": "boolean"
+                  },
+                  "manage_security_policy_link": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "read_code": {
+                    "type": "boolean"
+                  },
+                  "read_dependency": {
+                    "type": "boolean"
+                  },
+                  "read_runners": {
+                    "type": "boolean"
+                  },
+                  "read_vulnerability": {
+                    "type": "boolean"
+                  },
+                  "remove_group": {
+                    "type": "boolean"
+                  },
+                  "remove_project": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "group_id",
+                  "base_access_level"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "membership_state": {
+                "type": "string"
               },
               "name": {
                 "type": "string"
@@ -498,6 +1273,15 @@
                   "array"
                 ]
               },
+              "override": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "public_email": {
+                "type": "string"
+              },
               "requested_at": {
                 "type": "string"
               },
@@ -506,6 +1290,9 @@
               },
               "username": {
                 "type": "string"
+              },
+              "web_url": {
+                "type": "string"
               }
             },
             "required": [
@@ -513,6 +1300,7 @@
               "username",
               "name",
               "state",
+              "locked",
               "access_level"
             ],
             "type": "object"
@@ -603,11 +1391,195 @@
         "access_level": {
           "type": "integer"
         },
+        "avatar_url": {
+          "type": "string"
+        },
         "created_at": {
           "type": "string"
         },
+        "created_by": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "state"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "email": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "group_saml_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "extern_uid": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "saml_provider_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "provider",
+            "saml_provider_id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "group_scim_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "extern_uid": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "group_id",
+            "active"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "id": {
           "type": "integer"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "member_role": {
+          "additionalProperties": false,
+          "properties": {
+            "admin_cicd_variables": {
+              "type": "boolean"
+            },
+            "admin_compliance_framework": {
+              "type": "boolean"
+            },
+            "admin_group_member": {
+              "type": "boolean"
+            },
+            "admin_merge_request": {
+              "type": "boolean"
+            },
+            "admin_push_rules": {
+              "type": "boolean"
+            },
+            "admin_terraform_state": {
+              "type": "boolean"
+            },
+            "admin_vulnerability": {
+              "type": "boolean"
+            },
+            "admin_web_hook": {
+              "type": "boolean"
+            },
+            "archive_project": {
+              "type": "boolean"
+            },
+            "base_access_level": {
+              "type": "integer"
+            },
+            "description": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "manage_deploy_tokens": {
+              "type": "boolean"
+            },
+            "manage_group_access_tokens": {
+              "type": "boolean"
+            },
+            "manage_merge_request_settings": {
+              "type": "boolean"
+            },
+            "manage_project_access_tokens": {
+              "type": "boolean"
+            },
+            "manage_security_policy_link": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "read_code": {
+              "type": "boolean"
+            },
+            "read_dependency": {
+              "type": "boolean"
+            },
+            "read_runners": {
+              "type": "boolean"
+            },
+            "read_vulnerability": {
+              "type": "boolean"
+            },
+            "remove_group": {
+              "type": "boolean"
+            },
+            "remove_project": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "group_id",
+            "base_access_level"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "membership_state": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -621,6 +1593,15 @@
             "array"
           ]
         },
+        "override": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "public_email": {
+          "type": "string"
+        },
         "requested_at": {
           "type": "string"
         },
@@ -629,6 +1610,9 @@
         },
         "username": {
           "type": "string"
+        },
+        "web_url": {
+          "type": "string"
         }
       },
       "required": [
@@ -636,6 +1620,7 @@
         "username",
         "name",
         "state",
+        "locked",
         "access_level"
       ],
       "type": "object"
@@ -669,11 +1654,195 @@
         "access_level": {
           "type": "integer"
         },
+        "avatar_url": {
+          "type": "string"
+        },
         "created_at": {
           "type": "string"
         },
+        "created_by": {
+          "additionalProperties": false,
+          "properties": {
+            "avatar_url": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "web_url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "username",
+            "name",
+            "state"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "email": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "group_saml_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "extern_uid": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "saml_provider_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "provider",
+            "saml_provider_id"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "group_scim_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "extern_uid": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "extern_uid",
+            "group_id",
+            "active"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "id": {
           "type": "integer"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "member_role": {
+          "additionalProperties": false,
+          "properties": {
+            "admin_cicd_variables": {
+              "type": "boolean"
+            },
+            "admin_compliance_framework": {
+              "type": "boolean"
+            },
+            "admin_group_member": {
+              "type": "boolean"
+            },
+            "admin_merge_request": {
+              "type": "boolean"
+            },
+            "admin_push_rules": {
+              "type": "boolean"
+            },
+            "admin_terraform_state": {
+              "type": "boolean"
+            },
+            "admin_vulnerability": {
+              "type": "boolean"
+            },
+            "admin_web_hook": {
+              "type": "boolean"
+            },
+            "archive_project": {
+              "type": "boolean"
+            },
+            "base_access_level": {
+              "type": "integer"
+            },
+            "description": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "manage_deploy_tokens": {
+              "type": "boolean"
+            },
+            "manage_group_access_tokens": {
+              "type": "boolean"
+            },
+            "manage_merge_request_settings": {
+              "type": "boolean"
+            },
+            "manage_project_access_tokens": {
+              "type": "boolean"
+            },
+            "manage_security_policy_link": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "read_code": {
+              "type": "boolean"
+            },
+            "read_dependency": {
+              "type": "boolean"
+            },
+            "read_runners": {
+              "type": "boolean"
+            },
+            "read_vulnerability": {
+              "type": "boolean"
+            },
+            "remove_group": {
+              "type": "boolean"
+            },
+            "remove_project": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "group_id",
+            "base_access_level"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "membership_state": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -687,6 +1856,15 @@
             "array"
           ]
         },
+        "override": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "public_email": {
+          "type": "string"
+        },
         "requested_at": {
           "type": "string"
         },
@@ -695,6 +1873,9 @@
         },
         "username": {
           "type": "string"
+        },
+        "web_url": {
+          "type": "string"
         }
       },
       "required": [
@@ -702,6 +1883,7 @@
         "username",
         "name",
         "state",
+        "locked",
         "access_level"
       ],
       "type": "object"
@@ -57282,6 +58464,9 @@
               "invite_email": {
                 "type": "string"
               },
+              "invite_token": {
+                "type": "string"
+              },
               "user_name": {
                 "type": "string"
               }
@@ -102073,10 +103258,16 @@
               "last_login_at": {
                 "type": "string"
               },
+              "locked": {
+                "type": "boolean"
+              },
               "membership_type": {
                 "type": "string"
               },
               "name": {
+                "type": "string"
+              },
+              "public_email": {
                 "type": "string"
               },
               "removable": {
@@ -102097,6 +103288,7 @@
               "username",
               "name",
               "state",
+              "locked",
               "web_url",
               "removable",
               "is_last_owner"
@@ -169185,6 +170377,9 @@
                 "type": "integer"
               },
               "invite_email": {
+                "type": "string"
+              },
+              "invite_token": {
                 "type": "string"
               },
               "user_name": {

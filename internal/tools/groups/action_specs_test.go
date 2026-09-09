@@ -124,6 +124,72 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_GetPassesOnAnErrorThatIsNotANotFound verifies the wrapper
+// around the group get route answers a not-found with the informational output
+// and lets every other failure through as the error it is.
+//
+// Turning a 403 into "the group does not exist" would tell a caller to create
+// a group they already cannot see, so both sides of that check matter.
+func TestActionSpecs_GetPassesOnAnErrorThatIsNotANotFound(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	byTool := groupSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_group_get"].Route.Handler(t.Context(), map[string]any{"group_id": "999"})
+	if err == nil {
+		t.Fatalf("Route.Handler on a 403 = %v, want the error passed through", result)
+	}
+	if _, ok := result.(groupNotFoundOutput); ok {
+		t.Fatal("a 403 was reported as a group that does not exist")
+	}
+}
+
+// TestGroupMetadataSwitches_LeaveAnUnknownToolAlone verifies the two
+// per-tool metadata switches change nothing for a tool they do not name.
+//
+// Without this nothing ever reaches the end of either switch, so a case label
+// that no longer matches any registered tool would look exactly like one that
+// does, and the tool would silently keep the generic metadata.
+func TestGroupMetadataSwitches_LeaveAnUnknownToolAlone(t *testing.T) {
+	for name, apply := range map[string]func(string, *toolutil.ActionSpecOptions){
+		"relation":    applyGroupRelationMetadata,
+		"hook_sub_op": applyGroupHookSubOpMetadata,
+	} {
+		t.Run(name, func(t *testing.T) {
+			options := toolutil.ActionSpecOptions{Usage: "untouched"}
+			apply("gitlab_group_no_such_tool", &options)
+			if options.Usage != "untouched" {
+				t.Errorf("Usage = %q, want it left alone", options.Usage)
+			}
+			if options.Aliases != nil || options.IndividualTool.Description != "" {
+				t.Errorf("options = %+v, want nothing written for an unknown tool", options)
+			}
+		})
+	}
+}
+
+// TestApplyGroupHookAddEditMetadata_TellsTheTwoToolsApart verifies the shared
+// hook add/edit metadata ends with the wording of whichever tool asked for it:
+// creating a hook and editing one take the same parameters and mean different
+// things, and only this branch distinguishes them.
+func TestApplyGroupHookAddEditMetadata_TellsTheTwoToolsApart(t *testing.T) {
+	for tool, want := range map[string]string{
+		toolGroupHookAdd:         "Create a group webhook",
+		"gitlab_group_hook_edit": "Update an existing group webhook",
+	} {
+		t.Run(tool, func(t *testing.T) {
+			options := toolutil.ActionSpecOptions{}
+			applyGroupHookAddEditMetadata(tool, &options)
+			if !strings.HasPrefix(options.Usage, want) {
+				t.Errorf("%s usage = %q, want it to start with %q", tool, options.Usage, want)
+			}
+		})
+	}
+}
+
 // TestFormatGroupNotFound verifies the GroupNotFound Markdown formatter for a representative groupnotfound input.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
