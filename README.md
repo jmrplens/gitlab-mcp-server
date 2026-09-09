@@ -467,10 +467,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,238 |     261,142 |
-| Unit tests (`_test.go`)  |       725 |     424,285 |
+| Source (`.go`, non-test) |     1,238 |     261,150 |
+| Unit tests (`_test.go`)  |       725 |     424,339 |
 | End-to-end tests         |       246 |      66,332 |
-| **Total**                | **2,209** | **751,759** |
+| **Total**                | **2,209** | **751,821** |
 
 ### Functions
 
@@ -479,7 +479,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                |  9,596 |
 | . Exported (public)             |  2,989 |
 | . Unexported (private)          |  6,607 |
-| Unit test functions (`TestXxx`) | 14,421 |
+| Unit test functions (`TestXxx`) | 14,423 |
 | Subtests (`t.Run(...)`)         |  5,761 |
 | End-to-end test functions       |    605 |
 
@@ -490,7 +490,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.62× more tests than code |
 | Average source file length         |                 ~211 lines |
 | Average test file length           |                 ~585 lines |
-| Comment lines in source            |  48,011 (~18.4% of source) |
+| Comment lines in source            |  48,017 (~18.4% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
@@ -498,9 +498,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
 | `if err != nil` checks             | 7,884 |
-| `defer` statements                 | 1,359 |
+| `defer` statements                 | 1,360 |
 | `struct` types defined             | 3,150 |
-| `//nolint` suppressions            |   340 |
+| `//nolint` suppressions            |   342 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
