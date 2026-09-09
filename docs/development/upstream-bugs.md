@@ -815,13 +815,28 @@ of change whose test is one assertion on the built URL.
 
 ### Response structs that miss a field GitLab sends unconditionally
 
-- **Reported**: yes, one merge request per struct, linked below.
-- **In review**: yes, the same merge requests.
-- **Merged**: not yet.
+- **Reported**: yes, one merge request per struct, linked below, plus one
+  umbrella issue,
+  [gitlab-org/api/client-go#2300](https://gitlab.com/gitlab-org/api/client-go/-/issues/2300),
+  which publishes the method and the whole measurement and answers
+  [issue 2269](https://gitlab.com/gitlab-org/api/client-go/-/issues/2269),
+  where the maintainers had said there was no good way to detect this drift.
+  Every merge request references it with a non-closing `Related to`, so the
+  first merge does not close the umbrella.
+- **In review**: `!3041`, `!3043`, `!3044`, `!3045` and `!3047` are open.
+- **Merged**: `!3042` (`BroadcastMessage.Color`) in **v3.1.0**, tagged on
+  2026-09-09 eighteen minutes after the merge; then `!3040`
+  (`Appearance.SiteName`) and `!3046` (the `GroupSCIMIdentity` json tag) in
+  **v3.2.0** the same day. Do not read a merge as a release: `!3040` sat
+  merged and in no tag for hours, so the version is read from which tags
+  contain the merge commit rather than from the newest tag.
 - **Blocking**: no.
 - **Workaround**: yes. Each field is read from the captured response beside
   the SDK's decode, through the readers in `internal/toolutil/sent_shapes.go`.
   Each retires when its merge request lands and the pin moves.
+  The pin is deliberately **not** moved once per merge: several of these will
+  land in quick succession, so the bump and the workarounds it retires are
+  taken together rather than one release at a time.
 
 **What**: one field per struct, each exposed by the rendering entity with no
 condition at all, so every response of every endpoint that renders it carries
@@ -884,6 +899,24 @@ the field and the SDK drops it. Every entity reference is to the tag
   The SDK's own fixtures used the wrong key too, so its tests were green
   against a response GitLab never sends.
   [gitlab-org/api/client-go!3046](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3046).
+- `GroupServiceAccount` (`group_serviceaccounts.go`) has neither
+  `public_email` nor `unconfirmed_email`. All four group service account
+  endpoints render `Entities::ServiceAccount`, which inherits `UserSafe`:
+  [lib/api/entities/user_safe.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/user_safe.rb)
+  exposes `public_email` on line 10 unconditionally, and
+  [lib/api/entities/service_account.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/service_account.rb)
+  exposes `unconfirmed_email` on line 7 when one is pending.
+  [gitlab-org/api/client-go!3047](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3047).
+  This one is worth reading for what it says about the SDK rather than about
+  the field: the same GitLab entity is modelled by three structs, and they
+  disagree. The project-scope `ServiceAccount` already carries
+  `unconfirmed_email` while the group-scope one carries neither, which is why
+  `internal/tools/projectserviceaccounts` reads that key from the SDK and
+  `internal/tools/groupserviceaccounts` reads it from the capture. Two gaps
+  next to it are not covered by that merge request and are worth a second:
+  `ProjectServiceAccount` and the instance-scope `ServiceAccount` are both
+  missing `public_email` too, and no scope wraps
+  `GET /…/service_accounts/:user_id` at all.
 
 **How we found it**: the sent dimension of the 1:1 audit
 (`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), whose
@@ -893,6 +926,22 @@ GitLab says each of its Grape entities exposes. Each finding carries
 
 **Effort**: trivial per struct. One additive field with a `json` tag, and one
 key added to the fixture of an existing test.
+
+**The gap is usually in GitLab's own documentation too, and that is a second
+merge request.** A code owner asked for it on `!3045` rather than opening it
+himself, so cross-checking all eight fields against `doc/api/` was worth doing:
+two of the eight, `file_extension` and `is_receptive`, appeared nowhere on
+their page, and a third page showed `public_email` in none of its fourteen
+example responses. Three documentation merge requests went to
+`gitlab-org/gitlab` from its own
+[community fork](https://gitlab.com/gitlab-community/gitlab-org/gitlab):
+[!254507](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254507),
+[!254511](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254511) and
+[!254519](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254519).
+`.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
+traps: every example on a page rather than the one that prompted it, the
+response attribute tables as well as the examples, and the other entities
+sharing the page that must not gain the field.
 
 **Where these merge requests come from**: the
 [community fork](https://gitlab.com/gitlab-community/gitlab-org/api/client-go),
