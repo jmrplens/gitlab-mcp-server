@@ -175,6 +175,9 @@ type MilestoneEventOutput struct {
 	ResourceID   int64            `json:"resource_id"`
 	User         *EventUserOutput `json:"user,omitempty"`
 	Milestone    *MilestoneOutput `json:"milestone,omitempty"`
+	// State is the issue or merge request's own state at the moment the
+	// milestone changed, not the state of the event.
+	State string `json:"state,omitempty"`
 }
 
 // ListMilestoneEventsOutput wraps a list of milestone events.
@@ -193,6 +196,11 @@ type StateEventOutput struct {
 	ResourceType string           `json:"resource_type"`
 	ResourceID   int64            `json:"resource_id"`
 	User         *EventUserOutput `json:"user,omitempty"`
+	// SourceCommit is the commit that closed the issue and
+	// SourceMergeRequestID the merge request that did, each empty when
+	// something else caused the change.
+	SourceCommit         string `json:"source_commit,omitempty"`
+	SourceMergeRequestID int64  `json:"source_merge_request_id,omitempty"`
 }
 
 // ListStateEventsOutput wraps a list of state events.
@@ -331,12 +339,17 @@ func ListIssueMilestoneEvents(ctx context.Context, client *gitlabclient.Client, 
 	}
 	opts := &gl.ListMilestoneEventsOptions{}
 	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	events, resp, err := client.GL().ResourceMilestoneEvents.ListIssueMilestoneEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListMilestoneEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_milestone_event_list", err, http.StatusNotFound,
 			"verify project_id and issue_iid with gitlab_issue_get")
 	}
-	return toMilestoneEventsOutput(events, resp), nil
+	extras, err := toolutil.CapturedResourceMilestoneEvents(captured, len(events))
+	if err != nil {
+		return ListMilestoneEventsOutput{}, toolutil.WrapErr("gitlab_issue_milestone_event_list", err)
+	}
+	return toMilestoneEventsOutput(events, extras, resp), nil
 }
 
 // GetIssueMilestoneEvent gets a single milestone event for an issue.
@@ -350,12 +363,17 @@ func GetIssueMilestoneEvent(ctx context.Context, client *gitlabclient.Client, in
 	if input.MilestoneEventID <= 0 {
 		return MilestoneEventOutput{}, toolutil.ErrRequiredInt64("gitlab_issue_milestone_event_get", "milestone_event_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	event, _, err := client.GL().ResourceMilestoneEvents.GetIssueMilestoneEvent(string(input.ProjectID), input.IssueIID, input.MilestoneEventID, gl.WithContext(ctx))
 	if err != nil {
 		return MilestoneEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_milestone_event_get", err, http.StatusNotFound,
 			"verify milestone_event_id with gitlab_issue_milestone_event_list")
 	}
-	return toMilestoneEventOutput(event), nil
+	extra, err := toolutil.CapturedResourceMilestoneEvent(captured)
+	if err != nil {
+		return MilestoneEventOutput{}, toolutil.WrapErr("gitlab_issue_milestone_event_get", err)
+	}
+	return toMilestoneEventOutput(event, extra), nil
 }
 
 // ListMRMilestoneEvents lists milestone events for a merge request.
@@ -368,12 +386,17 @@ func ListMRMilestoneEvents(ctx context.Context, client *gitlabclient.Client, inp
 	}
 	opts := &gl.ListMilestoneEventsOptions{}
 	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	events, resp, err := client.GL().ResourceMilestoneEvents.ListMergeMilestoneEvents(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListMilestoneEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_milestone_event_list", err, http.StatusNotFound,
 			"verify project_id and merge_request_iid with gitlab_mr_get")
 	}
-	return toMilestoneEventsOutput(events, resp), nil
+	extras, err := toolutil.CapturedResourceMilestoneEvents(captured, len(events))
+	if err != nil {
+		return ListMilestoneEventsOutput{}, toolutil.WrapErr("gitlab_mr_milestone_event_list", err)
+	}
+	return toMilestoneEventsOutput(events, extras, resp), nil
 }
 
 // GetMRMilestoneEvent gets a single milestone event for a merge request.
@@ -387,12 +410,17 @@ func GetMRMilestoneEvent(ctx context.Context, client *gitlabclient.Client, input
 	if input.MilestoneEventID <= 0 {
 		return MilestoneEventOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_milestone_event_get", "milestone_event_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	event, _, err := client.GL().ResourceMilestoneEvents.GetMergeRequestMilestoneEvent(string(input.ProjectID), input.MRIID, input.MilestoneEventID, gl.WithContext(ctx))
 	if err != nil {
 		return MilestoneEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_milestone_event_get", err, http.StatusNotFound,
 			"verify milestone_event_id with gitlab_mr_milestone_event_list")
 	}
-	return toMilestoneEventOutput(event), nil
+	extra, err := toolutil.CapturedResourceMilestoneEvent(captured)
+	if err != nil {
+		return MilestoneEventOutput{}, toolutil.WrapErr("gitlab_mr_milestone_event_get", err)
+	}
+	return toMilestoneEventOutput(event, extra), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -409,12 +437,17 @@ func ListIssueStateEvents(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	opts := &gl.ListStateEventsOptions{}
 	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	events, resp, err := client.GL().ResourceStateEvents.ListIssueStateEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListStateEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_state_event_list", err, http.StatusNotFound,
 			"verify project_id and issue_iid with gitlab_issue_get")
 	}
-	return toStateEventsOutput(events, resp), nil
+	extras, err := toolutil.CapturedResourceStateEvents(captured, len(events))
+	if err != nil {
+		return ListStateEventsOutput{}, toolutil.WrapErr("gitlab_issue_state_event_list", err)
+	}
+	return toStateEventsOutput(events, extras, resp), nil
 }
 
 // GetIssueStateEvent gets a single state event for an issue.
@@ -428,12 +461,17 @@ func GetIssueStateEvent(ctx context.Context, client *gitlabclient.Client, input 
 	if input.StateEventID <= 0 {
 		return StateEventOutput{}, toolutil.ErrRequiredInt64("gitlab_issue_state_event_get", "state_event_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	event, _, err := client.GL().ResourceStateEvents.GetIssueStateEvent(string(input.ProjectID), input.IssueIID, input.StateEventID, gl.WithContext(ctx))
 	if err != nil {
 		return StateEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_state_event_get", err, http.StatusNotFound,
 			"verify state_event_id with gitlab_issue_state_event_list")
 	}
-	return toStateEventOutput(event), nil
+	extra, err := toolutil.CapturedResourceStateEvent(captured)
+	if err != nil {
+		return StateEventOutput{}, toolutil.WrapErr("gitlab_issue_state_event_get", err)
+	}
+	return toStateEventOutput(event, extra), nil
 }
 
 // ListMRStateEvents lists state events for a merge request.
@@ -446,12 +484,17 @@ func ListMRStateEvents(ctx context.Context, client *gitlabclient.Client, input L
 	}
 	opts := &gl.ListStateEventsOptions{}
 	applyEventListOptions(&opts.ListOptions, input.OrderBy, input.Sort, input.PaginationInput, input.KeysetPaginationInput)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	events, resp, err := client.GL().ResourceStateEvents.ListMergeStateEvents(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListStateEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_state_event_list", err, http.StatusNotFound,
 			"verify project_id and merge_request_iid with gitlab_mr_get")
 	}
-	return toStateEventsOutput(events, resp), nil
+	extras, err := toolutil.CapturedResourceStateEvents(captured, len(events))
+	if err != nil {
+		return ListStateEventsOutput{}, toolutil.WrapErr("gitlab_mr_state_event_list", err)
+	}
+	return toStateEventsOutput(events, extras, resp), nil
 }
 
 // GetMRStateEvent gets a single state event for a merge request.
@@ -465,12 +508,17 @@ func GetMRStateEvent(ctx context.Context, client *gitlabclient.Client, input Get
 	if input.StateEventID <= 0 {
 		return StateEventOutput{}, toolutil.ErrRequiredInt64("gitlab_mr_state_event_get", "state_event_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	event, _, err := client.GL().ResourceStateEvents.GetMergeRequestStateEvent(string(input.ProjectID), input.MRIID, input.StateEventID, gl.WithContext(ctx))
 	if err != nil {
 		return StateEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_mr_state_event_get", err, http.StatusNotFound,
 			"verify state_event_id with gitlab_mr_state_event_list")
 	}
-	return toStateEventOutput(event), nil
+	extra, err := toolutil.CapturedResourceStateEvent(captured)
+	if err != nil {
+		return StateEventOutput{}, toolutil.WrapErr("gitlab_mr_state_event_get", err)
+	}
+	return toStateEventOutput(event, extra), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -526,7 +574,7 @@ func toLabelEventsOutput(events []*gl.LabelEvent, resp *gl.Response) ListLabelEv
 }
 
 // toMilestoneEventOutput converts the GitLab API response to the tool output format.
-func toMilestoneEventOutput(e *gl.MilestoneEvent) MilestoneEventOutput {
+func toMilestoneEventOutput(e *gl.MilestoneEvent, extra toolutil.ResourceMilestoneEventExtra) MilestoneEventOutput {
 	if e == nil {
 		return MilestoneEventOutput{}
 	}
@@ -537,6 +585,7 @@ func toMilestoneEventOutput(e *gl.MilestoneEvent) MilestoneEventOutput {
 		ResourceID:   e.ResourceID,
 		User:         eventUserOutput(e.User),
 		Milestone:    milestoneOutput(e.Milestone),
+		State:        extra.State,
 	}
 	if e.CreatedAt != nil {
 		out.CreatedAt = e.CreatedAt.Format(toolutil.DateTimeFormat)
@@ -545,28 +594,30 @@ func toMilestoneEventOutput(e *gl.MilestoneEvent) MilestoneEventOutput {
 }
 
 // toMilestoneEventsOutput converts the GitLab API response to the tool output format.
-func toMilestoneEventsOutput(events []*gl.MilestoneEvent, resp *gl.Response) ListMilestoneEventsOutput {
+func toMilestoneEventsOutput(events []*gl.MilestoneEvent, extras []toolutil.ResourceMilestoneEventExtra, resp *gl.Response) ListMilestoneEventsOutput {
 	out := ListMilestoneEventsOutput{
 		Events:     make([]MilestoneEventOutput, 0, len(events)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
-	for _, e := range events {
-		out.Events = append(out.Events, toMilestoneEventOutput(e))
+	for i, e := range events {
+		out.Events = append(out.Events, toMilestoneEventOutput(e, extras[i]))
 	}
 	return out
 }
 
 // toStateEventOutput converts the GitLab API response to the tool output format.
-func toStateEventOutput(e *gl.StateEvent) StateEventOutput {
+func toStateEventOutput(e *gl.StateEvent, extra toolutil.ResourceStateEventExtra) StateEventOutput {
 	if e == nil {
 		return StateEventOutput{}
 	}
 	out := StateEventOutput{
-		ID:           e.ID,
-		State:        string(e.State),
-		ResourceType: e.ResourceType,
-		ResourceID:   e.ResourceID,
-		User:         eventUserOutput(e.User),
+		ID:                   e.ID,
+		State:                string(e.State),
+		ResourceType:         e.ResourceType,
+		ResourceID:           e.ResourceID,
+		User:                 eventUserOutput(e.User),
+		SourceCommit:         extra.SourceCommit,
+		SourceMergeRequestID: extra.SourceMergeRequestID,
 	}
 	if e.CreatedAt != nil {
 		out.CreatedAt = e.CreatedAt.Format(toolutil.DateTimeFormat)
@@ -575,13 +626,13 @@ func toStateEventOutput(e *gl.StateEvent) StateEventOutput {
 }
 
 // toStateEventsOutput converts the GitLab API response to the tool output format.
-func toStateEventsOutput(events []*gl.StateEvent, resp *gl.Response) ListStateEventsOutput {
+func toStateEventsOutput(events []*gl.StateEvent, extras []toolutil.ResourceStateEventExtra, resp *gl.Response) ListStateEventsOutput {
 	out := ListStateEventsOutput{
 		Events:     make([]StateEventOutput, 0, len(events)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
-	for _, e := range events {
-		out.Events = append(out.Events, toStateEventOutput(e))
+	for i, e := range events {
+		out.Events = append(out.Events, toStateEventOutput(e, extras[i]))
 	}
 	return out
 }

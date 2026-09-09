@@ -802,7 +802,7 @@ func TestCovtoLabelEventOutput_Nil(t *testing.T) {
 
 // TestCovtoMilestoneEventOutput_Nil verifies CovtoMilestoneEventOutput when nil.
 func TestCovtoMilestoneEventOutput_Nil(t *testing.T) {
-	out := toMilestoneEventOutput(nil)
+	out := toMilestoneEventOutput(nil, toolutil.ResourceMilestoneEventExtra{})
 	if out.ID != 0 {
 		t.Error("expected zero value for nil event")
 	}
@@ -811,7 +811,7 @@ func TestCovtoMilestoneEventOutput_Nil(t *testing.T) {
 // TestCovtoMilestoneEventOutput_NilUserAndMilestone verifies CovtoMilestoneEventOutput when nil user and milestone.
 func TestCovtoMilestoneEventOutput_NilUserAndMilestone(t *testing.T) {
 	e := &gl.MilestoneEvent{ID: 1, Action: "add"}
-	out := toMilestoneEventOutput(e)
+	out := toMilestoneEventOutput(e, toolutil.ResourceMilestoneEventExtra{State: "closed"})
 	if out.User != nil || out.Milestone != nil {
 		t.Error("expected nil user/milestone for nil event sub-objects")
 	}
@@ -819,7 +819,7 @@ func TestCovtoMilestoneEventOutput_NilUserAndMilestone(t *testing.T) {
 
 // TestCovtoStateEventOutput_Nil verifies CovtoStateEventOutput when nil.
 func TestCovtoStateEventOutput_Nil(t *testing.T) {
-	out := toStateEventOutput(nil)
+	out := toStateEventOutput(nil, toolutil.ResourceStateEventExtra{})
 	if out.ID != 0 {
 		t.Error("expected zero value for nil event")
 	}
@@ -828,12 +828,15 @@ func TestCovtoStateEventOutput_Nil(t *testing.T) {
 // TestCovtoStateEventOutput_NilUser verifies CovtoStateEventOutput when nil user.
 func TestCovtoStateEventOutput_NilUser(t *testing.T) {
 	e := &gl.StateEvent{ID: 1, State: "opened"}
-	out := toStateEventOutput(e)
+	out := toStateEventOutput(e, toolutil.ResourceStateEventExtra{SourceCommit: "abc123"})
 	if out.User != nil {
 		t.Error("expected nil user for nil event user")
 	}
 	if out.State != "opened" {
 		t.Errorf("expected opened, got %q", out.State)
+	}
+	if out.SourceCommit != "abc123" {
+		t.Errorf("SourceCommit = %q, want what was read beside the decode", out.SourceCommit)
 	}
 }
 
