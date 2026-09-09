@@ -99,11 +99,14 @@ func TestSentCheck_FieldsGitLabSendsThatWeDoNotPublish_AreListedWithTheirConditi
 // stood for and left them unknown; an instance has already run it, so the
 // fields are named here like any other.
 func TestTypedShapeCheck_FieldsGitLabSendsThatTheTypeDoesNotPublish_AreListed(t *testing.T) {
+	// The SDK struct carries approved_at and not approvers, so the two findings
+	// this produces land on opposite sides of the upstream split: one is a
+	// field client-go could already give us and one is a field nobody models.
 	twoTypes := structs.Pairings{
 		ClientGoDir: "/client-go",
 		Outputs: []structs.OutputPairing{
-			{Package: "mrapprovals", MCPType: "SummaryOutput", SDKType: "MergeRequestApprovals"},
-			{Package: "mrapprovals", MCPType: "ConfigOutput", SDKType: "MergeRequestApprovals"},
+			{Package: "mrapprovals", MCPType: "SummaryOutput", SDKType: "MergeRequestApprovals", SDKFields: []string{"approved", "approved_at"}},
+			{Package: "mrapprovals", MCPType: "ConfigOutput", SDKType: "MergeRequestApprovals", SDKFields: []string{"approved", "approved_at"}},
 		},
 	}
 	stubTypeGrainInputs(t, twoTypes, nil, approvalRoutes)
@@ -125,14 +128,69 @@ func TestTypedShapeCheck_FieldsGitLabSendsThatTheTypeDoesNotPublish_AreListed(t 
 
 	searched := []string{"GET /projects/:/merge_requests/:/approvals", "POST /projects/:/merge_requests/:/approve"}
 	want := []UnsurfacedField{
-		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "approved_at", Operations: searched, Entity: "API::Entities::Approved", Sent: sentAlways},
-		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "approvers", Operations: searched, Entity: "API::Entities::Approvals", Sent: sentWhen, If: ":with_approvers"},
-		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "SummaryOutput", Field: "approved_at", Operations: searched, Entity: "API::Entities::Approved", Sent: sentAlways},
-		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "SummaryOutput", Field: "approvers", Operations: searched, Entity: "API::Entities::Approvals", Sent: sentWhen, If: ":with_approvers"},
+		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "approved_at", Operations: searched, Entity: "API::Entities::Approved", SDKType: "MergeRequestApprovals", SDKModels: true, Sent: sentAlways},
+		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "approvers", Operations: searched, Entity: "API::Entities::Approvals", SDKType: "MergeRequestApprovals", Sent: sentWhen, If: ":with_approvers"},
+		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "SummaryOutput", Field: "approved_at", Operations: searched, Entity: "API::Entities::Approved", SDKType: "MergeRequestApprovals", SDKModels: true, Sent: sentAlways},
+		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "SummaryOutput", Field: "approvers", Operations: searched, Entity: "API::Entities::Approvals", SDKType: "MergeRequestApprovals", Sent: sentWhen, If: ":with_approvers"},
 	}
 	if !reflect.DeepEqual(check.Unsurfaced, want) {
 		t.Errorf("Unsurfaced = %+v, want %+v", check.Unsurfaced, want)
 	}
+	t.Run("the upstream split names which half each finding is in", func(t *testing.T) {
+		// approved_at is a field client-go already models and only this server
+		// drops, which is a local fix. approvers is one nobody models, so
+		// surfacing it means an upstream contribution or a captured response,
+		// and the finding is evidence for that merge request.
+		if notModelledBySDK(check.Unsurfaced) != 2 {
+			t.Errorf("client-go gaps = %d, want the two approvers findings", notModelledBySDK(check.Unsurfaced))
+		}
+	})
+}
+
+// TestUnsurfacedAtTypeGrain_ATypeModellingSeveralStructs_AsksAllOfThem verifies
+// that a key one of the paired structs carries counts as modeled.
+//
+// A type modeling several client-go structs publishes the union of them, so a
+// key any of them carries is one the SDK can already give us and an upstream
+// contribution would have nothing to add.
+func TestUnsurfacedAtTypeGrain_ATypeModellingSeveralStructs_AsksAllOfThem(t *testing.T) {
+	sdkFields := map[string]map[string]bool{
+		"BasicMergeRequest": {"iid": true},
+		"MergeRequest":      {"iid": true, "squash": true},
+	}
+	described := describedResponses{
+		Known:      map[string]bool{"iid": true, "squash": true, "nowhere": true},
+		EntityOf:   map[string]string{},
+		Operations: []string{"GET /merge_requests"},
+	}
+	candidate := publishedType{Package: "internal/tools/mergerequests", Name: "Output"}
+
+	found := unsurfacedAtTypeGrain(candidate, []string{"BasicMergeRequest", "MergeRequest"}, sdkFields, described, newConditionIndex(apilive.Document{}))
+
+	sortUnsurfaced(found)
+	modeled := map[string]bool{}
+	for _, f := range found {
+		modeled[f.Field] = f.SDKModels
+	}
+	for _, testCase := range []struct {
+		field string
+		want  bool
+	}{
+		{field: "iid", want: true},
+		{field: "squash", want: true},
+		{field: "nowhere", want: false},
+	} {
+		t.Run(testCase.field, func(t *testing.T) {
+			if modeled[testCase.field] != testCase.want {
+				t.Errorf("%s modeled = %v, want %v", testCase.field, modeled[testCase.field], testCase.want)
+			}
+		})
+	}
+	t.Run("the finding names every struct the type models", func(t *testing.T) {
+		if found[0].SDKType != "BasicMergeRequest|MergeRequest" {
+			t.Errorf("SDKType = %q, want both structs named", found[0].SDKType)
+		}
+	})
 }
 
 // TestSentCheck_TheEntityOfAField_IsTheFirstOperationCarryingIt verifies the

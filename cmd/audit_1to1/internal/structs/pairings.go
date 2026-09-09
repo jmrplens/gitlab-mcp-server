@@ -1,7 +1,9 @@
 package structs
 
 import (
+	"go/types"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -28,6 +30,15 @@ type OutputPairing struct {
 	// "v2" and names no package a reader would recognize, so the qualifier is
 	// dropped rather than passed on.
 	SDKType string
+	// SDKFields is what that struct would deserialize, as the json names
+	// encoding/json reads, an embed's promoted in, sorted.
+	//
+	// It is carried so a caller can ask the question neither existing rule
+	// asks. The field diff compares our type with this struct, and the shape
+	// join compares our type with what GitLab sends; between them nothing ever
+	// holds **client-go** against GitLab. That is the comparison whose findings
+	// belong upstream rather than here, and it needs exactly this list.
+	SDKFields []string
 }
 
 // Pairings is one pass over the tool packages, for a caller outside this
@@ -64,9 +75,10 @@ func CollectOutputPairings(root string) (Pairings, error) {
 				continue
 			}
 			found.Outputs = append(found.Outputs, OutputPairing{
-				Package: short,
-				MCPType: pair.MCPName,
-				SDKType: pair.SDKName[strings.LastIndexByte(pair.SDKName, '.')+1:],
+				Package:   short,
+				MCPType:   pair.MCPName,
+				SDKType:   pair.SDKName[strings.LastIndexByte(pair.SDKName, '.')+1:],
+				SDKFields: sdkFieldNames(pair.SDKType),
 			})
 		}
 	}
@@ -97,4 +109,21 @@ func clientGoDir(pkgs []*packages.Package) string {
 		}
 	}
 	return ""
+}
+
+// sdkFieldNames is what a client-go struct deserializes, as the json names
+// encoding/json reads, sorted.
+//
+// It goes through the same flattening the field diff uses, so the two rules
+// cannot disagree about what a struct carries: an embed's fields are promoted,
+// and a struct that tags nothing falls back to its Go field names the way
+// encoding/json does.
+func sdkFieldNames(st *types.Struct) []string {
+	fields := flattenFields(st, []string{tagKeyJSON})
+	names := make([]string, 0, len(fields))
+	for name := range fields {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }

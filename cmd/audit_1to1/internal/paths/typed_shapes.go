@@ -177,6 +177,7 @@ func typedShapeCheck(root string, index *operationIndex, conditions *conditionIn
 	}
 	routes := readRoutes(pairings.ClientGoDir)
 	sdkTypes := pairedSDKTypes(pairings.Outputs)
+	sdkFields := sdkFieldsByType(pairings.Outputs)
 
 	check := TypedShapeCheck{Ran: true}
 	for _, candidate := range published {
@@ -224,7 +225,7 @@ func typedShapeCheck(root string, index *operationIndex, conditions *conditionIn
 			nested, compared := unpublishedNested(candidate, paired, described)
 			check.Nested = append(check.Nested, nested...)
 			check.NestedCompared += compared
-			check.Unsurfaced = append(check.Unsurfaced, unsurfacedAtTypeGrain(candidate, described, conditions)...)
+			check.Unsurfaced = append(check.Unsurfaced, unsurfacedAtTypeGrain(candidate, paired, sdkFields, described, conditions)...)
 		}
 	}
 	sortFindings(check.Unpublished)
@@ -238,6 +239,28 @@ func typedShapeCheck(root string, index *operationIndex, conditions *conditionIn
 }
 
 // pairedSDKTypes indexes the client-go structs each output type models.
+// sdkFieldsByType indexes what each client-go struct deserializes, which is
+// what the upstream half of a sent finding is judged against.
+//
+// Keyed by the struct's name rather than by the pairing, because the question
+// is about client-go and not about which of our types happens to model it: two
+// packages modeling one SDK struct must get the same answer, and the struct
+// carries what it carries.
+func sdkFieldsByType(pairings []structs.OutputPairing) map[string]map[string]bool {
+	out := map[string]map[string]bool{}
+	for _, pairing := range pairings {
+		fields := out[pairing.SDKType]
+		if fields == nil {
+			fields = make(map[string]bool, len(pairing.SDKFields))
+			out[pairing.SDKType] = fields
+		}
+		for _, name := range pairing.SDKFields {
+			fields[name] = true
+		}
+	}
+	return out
+}
+
 func pairedSDKTypes(pairings []structs.OutputPairing) map[[2]string][]string {
 	out := map[[2]string][]string{}
 	for _, pairing := range pairings {
@@ -360,7 +383,7 @@ func unpublishedAtTypeGrain(candidate publishedType, paired []string, described 
 // unsurfacedAtTypeGrain reports every response field the operations a type
 // models declare that the type does not publish, with what the conditions
 // record says about each.
-func unsurfacedAtTypeGrain(candidate publishedType, described describedResponses, conditions *conditionIndex) []UnsurfacedField {
+func unsurfacedAtTypeGrain(candidate publishedType, paired []string, sdkFields map[string]map[string]bool, described describedResponses, conditions *conditionIndex) []UnsurfacedField {
 	published := make(map[string]bool, len(candidate.Fields))
 	for _, field := range candidate.Fields {
 		published[field] = true
@@ -377,11 +400,28 @@ func unsurfacedAtTypeGrain(candidate publishedType, described describedResponses
 			Field:      name,
 			Operations: described.Operations,
 			Entity:     described.EntityOf[name],
+			SDKType:    strings.Join(paired, "|"),
+			SDKModels:  modeledBySDK(paired, sdkFields, name),
 		}
 		conditions.annotate(&finding)
 		out = append(out, finding)
 	}
 	return out
+}
+
+// modeledBySDK reports whether any client-go struct the type models carries
+// this key.
+//
+// Any rather than all, because a type modeling several structs publishes the
+// union of them: a key one of them carries is a key the SDK can already give
+// us, and an upstream contribution would have nothing to add.
+func modeledBySDK(paired []string, sdkFields map[string]map[string]bool, name string) bool {
+	for _, sdkType := range paired {
+		if sdkFields[sdkType][name] {
+			return true
+		}
+	}
+	return false
 }
 
 // unpublishedNested reports the same thing one level down: a field of a nested

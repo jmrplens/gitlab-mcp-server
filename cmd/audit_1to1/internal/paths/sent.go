@@ -45,6 +45,23 @@ type UnsurfacedField struct {
 	// naming a component resolves to, when the document names one for any;
 	// the conditions below were read from it.
 	Entity string `json:"entity,omitempty"`
+	// SDKType is the client-go struct the type models, at type grain only, and
+	// several joined by a pipe where a type models more than one.
+	SDKType string `json:"sdk_type,omitempty"`
+	// SDKModels says whether that struct carries this key too.
+	//
+	// It is what splits this list into the two halves a reader acts on
+	// differently. False means client-go does not model the field either, so
+	// surfacing it here means either an upstream contribution or reading it
+	// from the captured response (ADR-0021), and the finding is evidence for
+	// the merge request rather than work in this repository. True means the
+	// SDK has it and only we do not, which is a local fix.
+	//
+	// It is only meaningful at type grain, where a finding knows which struct
+	// models the response. The package grain unions endpoints across a package
+	// and names no struct, so it leaves this false and says so through the
+	// empty SDKType beside it.
+	SDKModels bool `json:"sdk_models,omitempty"`
 	// Sent is one of always, when and unknown.
 	Sent string `json:"sent"`
 	// If, Unless, Tier and Edition are what the conditions record says about
@@ -124,6 +141,18 @@ func unsurfacedCounts(fields []UnsurfacedField) (always, when, declared int) {
 		}
 	}
 	return always, when, declared
+}
+
+// notModelledBySDK counts the findings client-go's own struct does not carry
+// either, which is the half an upstream merge request answers.
+func notModelledBySDK(fields []UnsurfacedField) int {
+	count := 0
+	for _, field := range fields {
+		if !field.SDKModels {
+			count++
+		}
+	}
+	return count
 }
 
 // sortUnsurfaced orders the findings the way a reader reads them: down the
