@@ -225,9 +225,11 @@ func TestResolve_AMergedExposureContributesItsChildsKeys(t *testing.T) {
 		// certain not to send, so keeping it would invent a finding.
 		fields, _ := doc.Fields("API::Entities::Member")
 		for _, absent := range []string{"user", "unloaded", "hash"} {
-			if _, named := fields[absent]; named {
-				t.Errorf("%q was kept as a key, and a merged exposure sends none", absent)
-			}
+			t.Run(absent, func(t *testing.T) {
+				if _, named := fields[absent]; named {
+					t.Errorf("%q was kept as a key, and a merged exposure sends none", absent)
+				}
+			})
 		}
 	})
 	t.Run("a merged field stays gated by what gated the merge", func(t *testing.T) {
