@@ -76,21 +76,31 @@ func TestSubscriptionsListen_IsServedOnTheDefaultTransport(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			frame := firstSSEFrame(t, srv, tt.rpcMethod, tt.protocol, tt.body)
-			if !strings.Contains(frame, tt.wantInFrame) {
-				t.Errorf("first frame does not contain %q:\n%s", tt.wantInFrame, frame)
-			}
+			// The helper does the waiting and fails with everything the
+			// stream said, so reaching here is already the assertion.
+			sseFrameContaining(t, srv, tt.rpcMethod, tt.protocol, tt.body, tt.wantInFrame)
 		})
 	}
 }
 
-// firstSSEFrame sends one JSON-RPC request and returns the first data frame of
-// the response stream.
+// sseFrameContaining sends one JSON-RPC request and returns the first data
+// frame of the response stream that carries want.
+//
+// Not the first frame: the stream is shared with whatever else the server has
+// to say, and every caller here is looking for one particular message. A
+// granted listen answers with an acknowledgement, but the server may also emit
+// notifications/resources/list_changed on the same stream, and which of the two
+// is written first is a race this test has no business trying to win. It lost
+// it on a macOS runner, where the acknowledgement arrived second and the
+// assertion read "the refused listen left watchers behind" about a server that
+// had done nothing wrong.
 //
 // A listen holds its stream open for as long as the subscription lives, so the
-// body cannot be read to EOF: the read has to stop at the first frame and close
-// the response, or the test would wait out the subscription's whole lifetime.
-func firstSSEFrame(t *testing.T, srv *server, rpcMethod, protocol, body string) string {
+// body is never read to EOF: the read stops at the wanted frame and closes the
+// response, or the test would wait out the subscription's whole lifetime. When
+// the frame never comes the context's deadline ends it, and everything seen is
+// reported, since which other messages arrived is the whole diagnosis.
+func sseFrameContaining(t *testing.T, srv *server, rpcMethod, protocol, body, want string) string {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
@@ -118,7 +128,7 @@ func firstSSEFrame(t *testing.T, srv *server, rpcMethod, protocol, body string) 
 		line := scanner.Text()
 		seen.WriteString(line)
 		seen.WriteString("\n")
-		if after, ok := strings.CutPrefix(line, "data: "); ok {
+		if after, ok := strings.CutPrefix(line, "data: "); ok && strings.Contains(after, want) {
 			return after
 		}
 	}
@@ -127,7 +137,8 @@ func firstSSEFrame(t *testing.T, srv *server, rpcMethod, protocol, body string) 
 	}
 	// A non-SSE body means the request was turned away before the stream
 	// began, so it is the body, not the absence of a frame, that says why.
-	t.Fatalf("the stream closed without a data frame (status %d):\n%s", resp.StatusCode, seen.String())
+	t.Fatalf("no data frame carried %q (status %d); everything the stream said:\n%s",
+		want, resp.StatusCode, seen.String())
 	return ""
 }
 
@@ -214,10 +225,10 @@ func TestSubscriptionsListen_PastTheWatcherCeiling_IsRefusedWhole(t *testing.T) 
 	gitlab := startFakeGitLabServingProjects(t)
 	srv := startServer(t, nil, "--gitlab-url="+gitlab.URL, "--capability-surface=full")
 
-	refused := firstSSEFrame(t, srv, "subscriptions/listen", "2026-07-28",
+	refused := sseFrameContaining(t, srv, "subscriptions/listen", "2026-07-28",
 		`{"jsonrpc":"2.0","id":11,"method":"subscriptions/listen","params":{"notifications":{"resourceSubscriptions":[`+
-			strings.Join(uris, ",")+`]},`+meta+`}}`)
-	for _, want := range []string{`"code":-32000`, "too many active subscriptions", "limit 10"} {
+			strings.Join(uris, ",")+`]},`+meta+`}}`, `"code":-32000`)
+	for _, want := range []string{"too many active subscriptions", "limit 10"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(refused, want) {
 				t.Errorf("the refusal does not contain %q:\n%s", want, refused)
@@ -225,11 +236,10 @@ func TestSubscriptionsListen_PastTheWatcherCeiling_IsRefusedWhole(t *testing.T) 
 		})
 	}
 
-	granted := firstSSEFrame(t, srv, "subscriptions/listen", "2026-07-28",
+	// Reaching this without a fatal is the assertion: a credential holding ten
+	// stranded watchers could not be granted an eleventh, so an acknowledged
+	// listen is the proof that the refusal above unwound whole.
+	sseFrameContaining(t, srv, "subscriptions/listen", "2026-07-28",
 		`{"jsonrpc":"2.0","id":12,"method":"subscriptions/listen","params":{"notifications":{"resourceSubscriptions":`+
-			`["gitlab://project/950"]},`+meta+`}}`)
-	if !strings.Contains(granted, "notifications/subscriptions/acknowledged") {
-		t.Errorf("a listen for one resource after the refusal was not acknowledged, so the refused listen left "+
-			"watchers behind:\n%s", granted)
-	}
+			`["gitlab://project/950"]},`+meta+`}}`, "notifications/subscriptions/acknowledged")
 }
