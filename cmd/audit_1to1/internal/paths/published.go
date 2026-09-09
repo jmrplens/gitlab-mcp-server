@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apishapes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 )
 
 // publishedType is one output type and the field names it puts in front of a
@@ -28,10 +28,9 @@ type publishedType struct {
 	Fields []string
 	// Nested holds, per json tag whose Go type is another output type of the
 	// same package, that type's own name and fields. It is one level deep,
-	// which is as far as GitLab's record goes (see [apishapes.Operation.Nested]),
-	// and it is empty on an inner type: a type reached through a field of a
-	// field is compared against nothing, so collecting it would only grow the
-	// walk.
+	// which is as far as the comparison goes (see [operation.Nested]), and it
+	// is empty on an inner type: a type reached through a field of a field is
+	// compared against nothing, so collecting it would only grow the walk.
 	Nested map[string]nestedType
 	// Inner is true for a type some struct of the package names as a field
 	// type, or one not named as an output type at all.
@@ -94,7 +93,7 @@ const inputSuffix = "Input"
 
 // recordDir is where the GitLab API record lives for a given repository root.
 func recordDir(root string) string {
-	return filepath.Join(root, apishapes.DefaultDir)
+	return filepath.Join(root, apilive.DefaultDir)
 }
 
 // publishedTypes reads every exported struct under internal/tools that is not

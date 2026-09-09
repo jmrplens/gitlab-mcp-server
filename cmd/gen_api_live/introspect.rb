@@ -299,10 +299,10 @@ end
 # the source. Here they are just values.
 TIER_RANK = { "global" => 1, "premium" => 2, "ultimate" => 3 }.freeze
 
-# FEATURE_LISTS maps each list to the tier it stands for, matching
-# cmd/internal/apiexposes/features.go so that this record is a drop-in for the
-# readers built on that one: STARTER counts as premium, and where a symbol
-# appears under several lists the highest rank wins.
+# FEATURE_LISTS maps each list to the tier it stands for, keeping the
+# resolution the scanned record used before this one replaced it: STARTER
+# counts as premium, and where a symbol appears under several lists the highest
+# rank wins.
 #
 # Deliberately not re-litigated here. The tier tags across internal/tools and
 # every rule that reads them were written against that resolution, and changing

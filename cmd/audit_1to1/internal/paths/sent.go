@@ -3,7 +3,7 @@ package paths
 import (
 	"sort"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apiexposes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 )
 
 // How GitLab sends an unsurfaced field, as far as the conditions record says.
@@ -153,7 +153,7 @@ type responseSources map[string]map[string]*fieldSources
 
 // note records that a package's request to operation returned a response
 // carrying the named fields.
-func (s responseSources) note(pkg, operation, entity string, fields []string) {
+func (s responseSources) note(pkg, operation string, entityOf map[string]string, fields []string) {
 	byField := s[pkg]
 	if byField == nil {
 		byField = map[string]*fieldSources{}
@@ -166,24 +166,22 @@ func (s responseSources) note(pkg, operation, entity string, fields []string) {
 			byField[field] = sources
 		}
 		sources.operations[operation] = true
-		// The first operation naming a component for the field, not the
-		// first carrying the field: one that names none would otherwise hold
-		// the answer to unknown however many after it name one.
-		if sources.entity == "" && entity != "" {
-			sources.entity = entity
+		// The entity that renders this key, taken from the first operation
+		// that named one for it rather than from the operation as a whole: an
+		// operation is a merged shape wherever two routes differ only in what
+		// they call their placeholders, and it then answers for keys of two
+		// entities. Reading a key on the wrong one returns that entity's
+		// condition, which is a wrong answer rather than a missing one.
+		if sources.entity == "" {
+			sources.entity = entityOf[field]
 		}
 	}
 }
 
 // sentCheck lists every response field a package's endpoints carry that none
 // of its output types publishes, saying when GitLab sends each.
-func sentCheck(root string, sources responseSources, published []publishedType) SentCheck {
-	check := SentCheck{}
-	conditions := newConditionIndex(root)
-	if conditions != nil {
-		check.Ran = true
-		check.Record = apiexposes.FileName
-	}
+func sentCheck(conditions *conditionIndex, sources responseSources, published []publishedType) SentCheck {
+	check := SentCheck{Ran: true, Record: apilive.FileName}
 
 	publishedBy := map[string]map[string]bool{}
 	for _, publishedType := range published {
@@ -227,21 +225,17 @@ func sortedOperations(operations map[string]bool) []string {
 	return names
 }
 
-// conditionIndex answers, for a component and a field, what the conditions
-// record says, resolving each component's effective fields once.
+// conditionIndex answers, for an entity and a field, what gates the exposure,
+// resolving each entity's gates once.
 type conditionIndex struct {
-	doc       apiexposes.Document
-	effective map[string]map[string]apiexposes.Field
+	doc   apilive.Document
+	gates map[string]map[string]apilive.Gate
 }
 
-// newConditionIndex reads the conditions record beside the OpenAPI record,
-// or returns nil when there is none to read.
-func newConditionIndex(root string) *conditionIndex {
-	doc, err := apiexposes.Read(recordDir(root))
-	if err != nil {
-		return nil
-	}
-	return &conditionIndex{doc: doc, effective: map[string]map[string]apiexposes.Field{}}
+// newConditionIndex reads the gates off the record both grains were already
+// given, so the conditions and the responses always speak for one GitLab.
+func newConditionIndex(doc apilive.Document) *conditionIndex {
+	return &conditionIndex{doc: doc, gates: map[string]map[string]apilive.Gate{}}
 }
 
 // annotate fills a finding's Sent and conditions from the record.
@@ -250,41 +244,41 @@ func (c *conditionIndex) annotate(finding *UnsurfacedField) {
 	if c == nil || finding.Entity == "" {
 		return
 	}
-	fields, ok := c.fields(finding.Entity)
+	gates, ok := c.entity(finding.Entity)
 	if !ok {
 		return
 	}
-	field, exposed := fields[finding.Field]
+	gate, exposed := gates[finding.Field]
 	if !exposed {
 		return
 	}
-	finding.If, finding.Unless, finding.Tier, finding.Edition = field.If, field.Unless, field.Tier, field.Edition
-	if field.If == "" && field.Unless == "" {
+	finding.If, finding.Unless, finding.Tier, finding.Edition = gate.If, gate.Unless, gate.Tier, gate.Edition
+	if !gate.Gated() {
 		finding.Sent = sentAlways
 		return
 	}
 	finding.Sent = sentWhen
 }
 
-// fields returns a component's effective fields by name, the last declaration
-// of a name winning as Grape's does, and false for a component the record
+// entity returns an entity's gates by field name, and false for one the record
 // does not hold.
-func (c *conditionIndex) fields(entity string) (map[string]apiexposes.Field, bool) {
-	if cached, ok := c.effective[entity]; ok {
+//
+// There is no parent chain to walk and no splat to skip: the record holds the
+// class as it renders, so a field is present here exactly when GitLab can send
+// it. Both of those were losses of the scanner this replaced, which read a
+// parent it had a file for and left a run-time splat unresolved.
+func (c *conditionIndex) entity(name string) (map[string]apilive.Gate, bool) {
+	if cached, ok := c.gates[name]; ok {
 		return cached, true
 	}
-	effective, ok := c.doc.Effective(entity)
+	fields, ok := c.doc.Fields(name)
 	if !ok {
 		return nil, false
 	}
-	byName := make(map[string]apiexposes.Field, len(effective))
-	for _, field := range effective {
-		// A splat names its fields at run time, so nothing here can be
-		// looked up by it; the field it stood for stays unknown.
-		if !field.Splat {
-			byName[field.Name] = field
-		}
+	gates := make(map[string]apilive.Gate, len(fields))
+	for fieldName, field := range fields {
+		gates[fieldName] = c.doc.GateOf(field)
 	}
-	c.effective[entity] = byName
-	return byName, true
+	c.gates[name] = gates
+	return gates, true
 }

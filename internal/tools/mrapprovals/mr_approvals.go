@@ -123,7 +123,7 @@ type RulesOutput struct {
 // expect an id, a title, a state and an approvals_required it would never
 // receive, and thirteen of those arrived in the payload as zeroes because they
 // carry no omitempty. Mirroring the SDK is mirroring a second model of the API,
-// not the API, which is the whole reason cmd/gen_api_shapes exists.
+// not the API, which is the whole reason cmd/gen_api_live exists.
 type ConfigOutput struct {
 	toolutil.HintableOutput
 	Approved        bool                              `json:"approved"`

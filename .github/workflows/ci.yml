@@ -147,21 +147,13 @@ jobs:
         run: make check-readonly-graphql
       - name: Check the pinned GraphQL schema parses
         run: make check-graphql-schema
-      # The REST twin of the schema pin: the OpenAPI record the shape check
-      # reads, refused when it is truncated, unprovenanced or older than the
-      # same window (cmd/internal/provenance). Documented as a gate from the
-      # day it was written
-      # and wired nowhere until the cmd/ consolidation study read the table.
-      - name: Check the pinned GitLab API record
-        run: make check-api-shapes
-      # The record's other half: the condition each entity field is sent
-      # under, read out of GitLab's Ruby source, so a field the OpenAPI
-      # record lists can be told "never sent" from "sent only when".
-      - name: Check the pinned GitLab entity conditions
-        run: make check-api-exposes
-      # The oracle that is evaluated rather than parsed: what a booted GitLab
-      # says its own API is. The gate reads the committed record and needs no
-      # Docker, which is the whole reason the boot lives in a generator.
+      # The REST twin of the schema pin, and the oracle that is evaluated
+      # rather than parsed: what a booted GitLab says its own API is. It
+      # replaced two records that were readings of text, the OpenAPI document
+      # GitLab generates and a scan of the Grape source beside it, and answers
+      # both of their questions from one reading of one instance. The gate
+      # reads the committed record and needs no Docker, which is the whole
+      # reason the boot lives in a generator.
       - name: Check the pinned live GitLab record
         run: make check-api-live
       # A meta-tool's description is checked against the parameters its routes

@@ -9,11 +9,11 @@
 //
 // # Why a boot rather than a read
 //
-// The two records this replaces are both readings of text. gen_api_shapes
-// fetches the OpenAPI document GitLab generates from its Grape definitions;
-// gen_api_exposes scans the Grape source itself for the condition each field
-// is sent under. Both are downstream of the object that decides what a request
-// returns, and both lose the same thing: a name that is not written down.
+// The two records this replaced were both readings of text: the OpenAPI
+// document GitLab generates from its Grape definitions, fetched, and the Grape
+// source itself, scanned for the condition each field is sent under. Both were
+// downstream of the object that decides what a request returns, and both lost
+// the same thing, a name that is not written down. Both are gone.
 //
 // Measured against this record on GitLab 19.3.1-ee, with the static record's
 // inheritance resolved: 551 of 582 entities agree exactly and 31 do not, and

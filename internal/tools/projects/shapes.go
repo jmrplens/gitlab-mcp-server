@@ -355,7 +355,7 @@ func protectedBranchRefsOutput(branches []*gl.ProtectedBranch) []*ProtectedBranc
 // request's approved_by elements, and the project-level approvers array it
 // spells `"approvers": []  // Deprecated in GitLab 12.3, always returns empty`.
 // GitLab's own record agrees, giving that element the single property `user`
-// (docs/development/gitlab-api-shapes.json, GET and POST /projects/{id}/approvals).
+// (GitLab's generated OpenAPI document, GET and POST /projects/{id}/approvals).
 type ApproverUserOutput struct {
 	User *toolutil.BasicUserOutput `json:"user"`
 }

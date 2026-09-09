@@ -3614,7 +3614,7 @@ type CreateForkRelationInput struct {
 // with the downstream project GitLab returns.
 //
 // GitLab answers POST /projects/:id/fork/:forked_from_id with the forked
-// project, which docs/development/gitlab-api-shapes.json records and the
+// project, which GitLab's own generated OpenAPI document records and the
 // end-to-end suite observed on a live 19.3 instance. client-go declares the
 // response as ProjectForkRelation, a synthetic {id, forked_to_project_id,
 // forked_from_project_id, created_at, updated_at} pair that no field of the

@@ -1,49 +1,44 @@
 package paths
 
 import (
-	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apiexposes"
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apishapes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
 
-// conditionsIn writes a conditions record beside the OpenAPI record a test
-// already wrote under root.
-func conditionsIn(t *testing.T, root string, entities map[string]apiexposes.Entity) {
-	t.Helper()
-	if err := apiexposes.Write(filepath.Join(root, apiexposes.DefaultDir), apiexposes.Document{
-		Source:   apiexposes.Source{Ref: "master", Commit: "0123456789abcdef0123456789abcdef01234567", RetrievedAt: "2026-09-08", SHA256: "abc"},
-		Entities: entities,
-	}); err != nil {
-		t.Fatalf("prepare the conditions record: %v", err)
-	}
-}
+// mirrorCondition gates a field behind an Enterprise licensed feature, written
+// where an Enterprise module prepends it.
+var mirrorCondition = []apilive.Condition{{
+	Kind: "BlockCondition",
+	File: "ee/lib/ee/api/entities/project.rb",
+	Line: 9,
+	Text: "->(project, _) { project.feature_available?(:repository_mirrors) }",
+}}
 
-// projectRecord is an OpenAPI record where one endpoint names a component and
-// another names none.
+// projectRecord is a record where one endpoint is annotated with an entity and
+// another with none, and one of the entity's fields is licensed.
+//
+// The conditions sit on the entity rather than in a record of their own, which
+// is the whole of what the port changed here: the answer and the gate on it
+// come from one reading of one GitLab, so a fixture cannot put them out of step
+// and neither can a regeneration.
 func projectRecord(t *testing.T) string {
 	t.Helper()
-	return recordIn(t, map[string]apishapes.Operation{
-		"GET /api/v4/projects/{id}":       {Entity: "APIEntitiesProject", Response: []string{"archived", "id", "mirror", "name", "star_count", "unlisted"}},
-		"GET /api/v4/projects/{id}/plain": {Response: []string{"extra"}},
-	})
+	return recordIn(t, projectOperations())
 }
 
-// projectConditions is the conditions record for it: a parent exposing id,
-// a child exposing the rest, one field behind a licensed feature.
-func projectConditions() map[string]apiexposes.Entity {
-	return map[string]apiexposes.Entity{
-		"APIEntitiesBasic": {File: "lib/api/entities/basic.rb", Line: 3, Fields: []apiexposes.Field{{Name: "id", Line: 4}}},
-		"APIEntitiesProject": {File: "lib/api/entities/project.rb", Line: 3, Parent: "APIEntitiesBasic", Fields: []apiexposes.Field{
-			{Name: "name", Line: 4},
-			{Name: "archived", Line: 5},
-			{Name: "star_count", Line: 6},
-			{Name: "mirror", Line: 9, File: "ee/lib/ee/api/entities/project.rb", Edition: "ee", If: "->(project, _) { project.feature_available?(:repository_mirrors) }", Features: []string{"repository_mirrors"}, Tier: apiexposes.TierPremium},
-		}},
+// projectOperations is that fixture.
+func projectOperations() map[string]response {
+	return map[string]response{
+		"GET /api/v4/projects/{id}": {
+			Entity:     "API::Entities::Project",
+			Response:   []string{"archived", "id", "mirror", "name", "star_count"},
+			Conditions: map[string][]apilive.Condition{"mirror": mirrorCondition},
+		},
+		"GET /api/v4/projects/{id}/plain": {},
 	}
 }
 
@@ -66,7 +61,6 @@ func projectRows() []requestinventory.Row {
 // by field.
 func TestSentCheck_FieldsGitLabSendsThatWeDoNotPublish_AreListedWithTheirCondition(t *testing.T) {
 	root := projectRecord(t)
-	conditionsIn(t, root, projectConditions())
 	published := []publishedType{
 		{Package: "internal/tools/projects", Name: "Output", Fields: []string{"archived", "id"}},
 		{Package: "internal/tools/projects", Name: "RowOutput", Fields: []string{"star_count"}, Inner: true},
@@ -74,17 +68,15 @@ func TestSentCheck_FieldsGitLabSendsThatWeDoNotPublish_AreListedWithTheirConditi
 
 	check := shapeCheck(root, projectRows(), published)
 
-	if !check.Sent.Ran || check.Sent.Record != apiexposes.FileName {
-		t.Fatalf("Sent = %+v, want it run against the conditions record", check.Sent)
+	if !check.Sent.Ran || check.Sent.Record != apilive.FileName {
+		t.Fatalf("Sent = %+v, want it run against the live record", check.Sent)
 	}
 	want := []UnsurfacedField{
-		{Grain: grainPackage, Package: "internal/tools/projects", Field: "extra", Operations: []string{"GET /projects/:project_id/plain"}, Sent: sentUnknown},
 		{
-			Grain: grainPackage, Package: "internal/tools/projects", Field: "mirror", Operations: []string{"GET /projects/:project_id"}, Entity: "APIEntitiesProject", Sent: sentWhen,
-			If: "->(project, _) { project.feature_available?(:repository_mirrors) }", Tier: apiexposes.TierPremium, Edition: "ee",
+			Grain: grainPackage, Package: "internal/tools/projects", Field: "mirror", Operations: []string{"GET /projects/:project_id"}, Entity: "API::Entities::Project", Sent: sentWhen,
+			If: "->(project, _) { project.feature_available?(:repository_mirrors) }", Tier: apilive.TierPremium, Edition: "ee",
 		},
-		{Grain: grainPackage, Package: "internal/tools/projects", Field: "name", Operations: []string{"GET /projects/:project_id"}, Entity: "APIEntitiesProject", Sent: sentAlways},
-		{Grain: grainPackage, Package: "internal/tools/projects", Field: "unlisted", Operations: []string{"GET /projects/:project_id"}, Entity: "APIEntitiesProject", Sent: sentUnknown},
+		{Grain: grainPackage, Package: "internal/tools/projects", Field: "name", Operations: []string{"GET /projects/:project_id"}, Entity: "API::Entities::Project", Sent: sentAlways},
 	}
 	if !reflect.DeepEqual(check.Sent.Unsurfaced, want) {
 		t.Errorf("Unsurfaced = %+v, want %+v", check.Sent.Unsurfaced, want)
@@ -97,12 +89,15 @@ func TestSentCheck_FieldsGitLabSendsThatWeDoNotPublish_AreListedWithTheirConditi
 // TestTypedShapeCheck_FieldsGitLabSendsThatTheTypeDoesNotPublish_AreListed
 // verifies the same finding at type grain, which is the list the review
 // reads: the type, the operations its client-go struct models, per field the
-// component the first operation carrying it named, and the condition
-// record's answer for the field on that component, with a splat in the
-// entity leaving the field it stands for unknown. The component is per field
-// rather than per type because one type's operations resolve to different
-// components: the field only the second operation carries is read from the
-// second's component.
+// entity the first operation carrying it named, and what gates the field on
+// that entity. The entity is per field rather than per type because one type's
+// operations resolve to different entities: the field only the second
+// operation carries is read from the second's.
+//
+// The splat this test used to carry is gone with the record that had one. A
+// scanner reading `expose *Helper.attributes` could not say which fields it
+// stood for and left them unknown; an instance has already run it, so the
+// fields are named here like any other.
 func TestTypedShapeCheck_FieldsGitLabSendsThatTheTypeDoesNotPublish_AreListed(t *testing.T) {
 	twoTypes := structs.Pairings{
 		ClientGoDir: "/client-go",
@@ -112,58 +107,46 @@ func TestTypedShapeCheck_FieldsGitLabSendsThatTheTypeDoesNotPublish_AreListed(t 
 		},
 	}
 	stubTypeGrainInputs(t, twoTypes, nil, approvalRoutes)
-	root := t.TempDir()
-	conditionsIn(t, root, map[string]apiexposes.Entity{
-		"APIEntitiesApprovals": {File: "lib/api/entities/approvals.rb", Line: 3, Fields: []apiexposes.Field{
-			{Name: "approved", Line: 4},
-			{Name: "approvers", Line: 5, If: ":with_approvers"},
-			{Name: "*Helper.attributes", Line: 6, Splat: true},
-		}},
-		"APIEntitiesApproved": {File: "lib/api/entities/approved.rb", Line: 3, Fields: []apiexposes.Field{
-			{Name: "approved", Line: 4},
-			{Name: "approved_at", Line: 5},
-		}},
-	})
-	operations := map[string]apishapes.Operation{
+	operations := map[string]response{
 		"GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals": {
-			Entity: "APIEntitiesApprovals", Response: []string{"approved", "approvers", "attribute_a"},
+			Entity:     "API::Entities::Approvals",
+			Response:   []string{"approved", "approvers"},
+			Conditions: map[string][]apilive.Condition{"approvers": {{Kind: "HashCondition", Hash: ":with_approvers"}}},
 		},
 		"POST /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approve": {
-			Entity: "APIEntitiesApproved", Response: []string{"approved", "approved_at", "approvers"},
+			Entity: "API::Entities::Approved", Response: []string{"approved", "approved_at"},
 		},
 	}
 
-	check := typedShapeCheck(root, indexOf(operations), []publishedType{
-		{Package: "internal/tools/mrapprovals", Name: "SummaryOutput", Fields: []string{"approved", "attribute_a"}},
+	check := typedCheckOf("", operations, []publishedType{
+		{Package: "internal/tools/mrapprovals", Name: "SummaryOutput", Fields: []string{"approved"}},
 		{Package: "internal/tools/mrapprovals", Name: "ConfigOutput", Fields: []string{"approved"}},
 	})
 
 	searched := []string{"GET /projects/:/merge_requests/:/approvals", "POST /projects/:/merge_requests/:/approve"}
 	want := []UnsurfacedField{
-		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "approved_at", Operations: searched, Entity: "APIEntitiesApproved", Sent: sentAlways},
-		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "approvers", Operations: searched, Entity: "APIEntitiesApprovals", Sent: sentWhen, If: ":with_approvers"},
-		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "attribute_a", Operations: searched, Entity: "APIEntitiesApprovals", Sent: sentUnknown},
-		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "SummaryOutput", Field: "approved_at", Operations: searched, Entity: "APIEntitiesApproved", Sent: sentAlways},
-		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "SummaryOutput", Field: "approvers", Operations: searched, Entity: "APIEntitiesApprovals", Sent: sentWhen, If: ":with_approvers"},
+		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "approved_at", Operations: searched, Entity: "API::Entities::Approved", Sent: sentAlways},
+		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ConfigOutput", Field: "approvers", Operations: searched, Entity: "API::Entities::Approvals", Sent: sentWhen, If: ":with_approvers"},
+		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "SummaryOutput", Field: "approved_at", Operations: searched, Entity: "API::Entities::Approved", Sent: sentAlways},
+		{Grain: grainType, Package: "internal/tools/mrapprovals", Type: "SummaryOutput", Field: "approvers", Operations: searched, Entity: "API::Entities::Approvals", Sent: sentWhen, If: ":with_approvers"},
 	}
 	if !reflect.DeepEqual(check.Unsurfaced, want) {
 		t.Errorf("Unsurfaced = %+v, want %+v", check.Unsurfaced, want)
 	}
 }
 
-// TestSentCheck_TheComponentOfAField_IsTheFirstOperationNamingOne verifies
-// the package grain's choice of component when the same field comes back
-// from an operation the document names no component for and from one it
-// does: the field is read on the named one whichever order the requests were
-// recorded in, so that a request answered without a component does not hold
-// the field at unknown.
-func TestSentCheck_TheComponentOfAField_IsTheFirstOperationNamingOne(t *testing.T) {
-	root := recordIn(t, map[string]apishapes.Operation{
-		"GET /api/v4/things/{id}/plain": {Response: []string{"extra"}},
-		"GET /api/v4/things/{id}":       {Entity: "APIEntitiesThing", Response: []string{"extra", "id"}},
-	})
-	conditionsIn(t, root, map[string]apiexposes.Entity{
-		"APIEntitiesThing": {File: "lib/api/entities/thing.rb", Line: 3, Fields: []apiexposes.Field{{Name: "id", Line: 4}, {Name: "extra", Line: 5}}},
+// TestSentCheck_TheEntityOfAField_IsTheFirstOperationCarryingIt verifies the
+// package grain's choice of entity when two of a package's endpoints send the
+// same key: the gate is read from the first, the finding names both endpoints,
+// and the two are not merged into a claim neither entity makes.
+//
+// The choice matters because two entities can expose one key under different
+// gates, and a finding that averaged them would be true of nothing. Naming the
+// endpoints beside it is what lets a reader check the other.
+func TestSentCheck_TheEntityOfAField_IsTheFirstOperationCarryingIt(t *testing.T) {
+	root := recordIn(t, map[string]response{
+		"GET /api/v4/things/{id}/plain": {Entity: "API::Entities::ThingPlain", Response: []string{"extra"}},
+		"GET /api/v4/things/{id}":       {Entity: "API::Entities::Thing", Response: []string{"extra", "id"}},
 	})
 	rows := []requestinventory.Row{
 		{Package: "internal/tools/things", Kind: "rest", Method: "GET", Path: "/things/:thing_id/plain"},
@@ -173,45 +156,40 @@ func TestSentCheck_TheComponentOfAField_IsTheFirstOperationNamingOne(t *testing.
 	check := shapeCheck(root, rows, []publishedType{{Package: "internal/tools/things", Name: "Output", Fields: []string{"id"}}})
 
 	want := []UnsurfacedField{
-		{Grain: grainPackage, Package: "internal/tools/things", Field: "extra", Operations: []string{"GET /things/:thing_id", "GET /things/:thing_id/plain"}, Entity: "APIEntitiesThing", Sent: sentAlways},
+		{Grain: grainPackage, Package: "internal/tools/things", Field: "extra", Operations: []string{"GET /things/:thing_id", "GET /things/:thing_id/plain"}, Entity: "API::Entities::ThingPlain", Sent: sentAlways},
 	}
 	if !reflect.DeepEqual(check.Sent.Unsurfaced, want) {
 		t.Errorf("Unsurfaced = %+v, want %+v", check.Sent.Unsurfaced, want)
 	}
 }
 
-// TestSentCheck_WithoutAConditionsRecord_ListsFieldsAsUnknown verifies that
-// the document alone still produces the list, with nothing said about when a
-// field is sent, and that the check says the record was not read.
-func TestSentCheck_WithoutAConditionsRecord_ListsFieldsAsUnknown(t *testing.T) {
+// TestSentCheck_EveryFinding_IsAnsweredByTheRecordThatProducedIt verifies the
+// invariant one record buys, which is the whole point of the port: nothing is
+// ever reported as a field GitLab might send under conditions nobody can read.
+//
+// It could be, and often was, while two records answered: the OpenAPI document
+// said what an endpoint returned and a separate scan of the Ruby said what each
+// field was gated by, so a response could name a component that scan had never
+// read, a field could be listed for a component that did not expose it, and the
+// whole check could run with no conditions record at all. Every one of those
+// said unknown, and 1826 findings did. Now a field is in a response because an
+// entity of this record exposes it, so the same entity always has its gate.
+func TestSentCheck_EveryFinding_IsAnsweredByTheRecordThatProducedIt(t *testing.T) {
 	root := projectRecord(t)
-	published := []publishedType{{Package: "internal/tools/projects", Name: "Output", Fields: []string{"archived", "extra", "id", "mirror", "name", "unlisted"}}}
+	published := []publishedType{{Package: "internal/tools/projects", Name: "Output", Fields: []string{"archived", "id"}}}
 
 	check := shapeCheck(root, projectRows(), published)
 
-	if check.Sent.Ran || check.Sent.Record != "" {
-		t.Errorf("Sent = %+v, want it to say the conditions record was not read", check.Sent)
+	if !check.Sent.Ran || check.Sent.Record != apilive.FileName {
+		t.Fatalf("Sent = %+v, want it run against the one record", check.Sent)
 	}
-	want := []UnsurfacedField{{Grain: grainPackage, Package: "internal/tools/projects", Field: "star_count", Operations: []string{"GET /projects/:project_id"}, Entity: "APIEntitiesProject", Sent: sentUnknown}}
-	if !reflect.DeepEqual(check.Sent.Unsurfaced, want) {
-		t.Errorf("Unsurfaced = %+v, want %+v", check.Sent.Unsurfaced, want)
+	if len(check.Sent.Unsurfaced) == 0 {
+		t.Fatal("no findings to judge, so the invariant is not being tested")
 	}
-}
-
-// TestSentCheck_AComponentTheRecordDoesNotHold_IsUnknown verifies the other
-// silence: a component the document names that the conditions record never
-// read, which is what the components rendered outside the entity directories
-// are, contributes findings the record cannot speak for.
-func TestSentCheck_AComponentTheRecordDoesNotHold_IsUnknown(t *testing.T) {
-	root := projectRecord(t)
-	conditionsIn(t, root, map[string]apiexposes.Entity{"APIEntitiesOther": {File: "x.rb", Line: 1, Fields: []apiexposes.Field{}}})
-	published := []publishedType{{Package: "internal/tools/projects", Name: "Output", Fields: []string{"archived", "extra", "id", "mirror", "name", "star_count"}}}
-
-	check := shapeCheck(root, projectRows(), published)
-
-	want := []UnsurfacedField{{Grain: grainPackage, Package: "internal/tools/projects", Field: "unlisted", Operations: []string{"GET /projects/:project_id"}, Entity: "APIEntitiesProject", Sent: sentUnknown}}
-	if !check.Sent.Ran || !reflect.DeepEqual(check.Sent.Unsurfaced, want) {
-		t.Errorf("Sent = %+v, want one unknown finding from a record that holds another component", check.Sent)
+	for _, finding := range check.Sent.Unsurfaced {
+		if finding.Sent == sentUnknown {
+			t.Errorf("%s is unknown, and a field this record listed is a field it can answer for", finding.Field)
+		}
 	}
 }
 
@@ -220,7 +198,6 @@ func TestSentCheck_AComponentTheRecordDoesNotHold_IsUnknown(t *testing.T) {
 // as missing every field of every endpoint it calls.
 func TestSentCheck_APackagePublishingNothingReadable_IsNotJudged(t *testing.T) {
 	root := projectRecord(t)
-	conditionsIn(t, root, projectConditions())
 
 	check := shapeCheck(root, projectRows(), nil)
 

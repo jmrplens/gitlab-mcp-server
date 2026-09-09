@@ -42,8 +42,8 @@ func TestOpenAPIName_ARubyName_BecomesTheOpenAPISpelling(t *testing.T) {
 // TestTier_SeveralFeatures_ResolveToTheDearestPlan verifies the resolution
 // every tier tag downstream is written against.
 //
-// The rule is the one cmd/internal/apiexposes already applies, deliberately:
-// the highest rank a symbol appears under wins. Whether that or the cheapest
+// The rule is the one the scanned record applied before this one replaced it,
+// deliberately: the highest rank a symbol appears under wins. Whether that or the cheapest
 // plan is the better answer is a question for the table's owner, and changing
 // it here without changing the 172 struct tags written against it would be a
 // worse defect than either answer.

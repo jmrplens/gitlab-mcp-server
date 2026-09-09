@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apiexposes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
 )
 
 // TestClassifySentFindings_ADeclaration_AnswersItsFindingsAtEitherGrain
@@ -78,14 +78,14 @@ func TestSentCheck_StaleDeclarations_AreSilentUntilTheCheckRuns(t *testing.T) {
 
 // TestDeclaredUnsurfaced_NamesWhatTheTreeHolds verifies the real table against
 // the real tree, since an entry is a claim about it: each names a package
-// under internal/tools, a component the committed conditions record holds, a
-// known category and a reason. What the reason claims about GitLab's source
-// is not checked here; that is what the reason is written down for.
+// under internal/tools, an entity the committed live record holds, a known
+// category and a reason. What the reason claims about GitLab's source is not
+// checked here; that is what the reason is written down for.
 func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 	root := repoRoot(t)
-	doc, err := apiexposes.Read(filepath.Join(root, apiexposes.DefaultDir))
+	doc, err := apilive.Read(filepath.Join(root, apilive.DefaultDir))
 	if err != nil {
-		t.Fatalf("read the conditions record: %v", err)
+		t.Fatalf("read the live record: %v", err)
 	}
 	for _, declaration := range declaredUnsurfaced {
 		t.Run(declaration.key(), func(t *testing.T) {
@@ -93,7 +93,7 @@ func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 				t.Errorf("package %s: %v", declaration.Package, statErr)
 			}
 			if _, held := doc.Entities[declaration.Entity]; !held {
-				t.Errorf("component %s is not in the conditions record", declaration.Entity)
+				t.Errorf("entity %s is not in the live record", declaration.Entity)
 			}
 			known := declaration.Category == categoryDocumentedNotSent || declaration.Category == categoryOptionNeverPassed
 			if !known || declaration.Reason == "" || declaration.Field == "" {

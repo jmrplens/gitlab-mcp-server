@@ -12,7 +12,6 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apishapes"
 )
 
 const (
@@ -257,7 +256,7 @@ var docOmittedFields = map[string]string{
 	// form every other entry here takes: that page still prints an example body
 	// carrying all of them under the GET, so citing it would cite a document
 	// that contradicts the omission. The generated OpenAPI record separates the
-	// two endpoints (docs/development/gitlab-api-shapes.json), the Grape entity
+	// two endpoints, the Grape entity
 	// GitLab renders the GET with exposes exactly the four, and the CE
 	// end-to-end suite observed four against a live 19.3 instance.
 	"mrapprovals.ConfigOutput.id":                                docMRApprovalsGET,
@@ -336,10 +335,14 @@ const (
 		"with_labels_details is a parameter of the list endpoint, which fills epics.Output.label_details"
 )
 
-// docAPIShapesRecord names the pinned OpenAPI record the citations below read
-// from, spelled once and from the package that writes it, so a move of the
-// record cannot leave a citation pointing at a path that no longer exists.
-const docAPIShapesRecord = apishapes.DefaultDir + "/" + apishapes.FileName + " "
+// docAPIShapesRecord names where the citations below were read.
+//
+// It used to be spelled from the package that held a pinned copy of that
+// document in this repository. The copy is gone, replaced by a record taken
+// from a booted GitLab, and the citations stay as they are because they are
+// evidence about what was read and when, not a path a reader is invited to
+// open here. GitLab publishes the document, so the citation names it there.
+const docAPIShapesRecord = "GitLab's generated OpenAPI document (doc/api/openapi/openapi_v2.yaml) "
 
 // docEpicsGET cites the three oracles that agree the two fields are not sent,
 // since gl.Epic declaring them is the only reason to think they are.

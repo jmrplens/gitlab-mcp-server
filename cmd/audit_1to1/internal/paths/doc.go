@@ -84,10 +84,15 @@
 //
 // # Does GitLab say it sends what we publish
 //
-// The one check here whose oracle is GitLab itself: the OpenAPI document
-// GitLab generates out of its own Grape entities, pinned by cmd/gen_api_shapes.
-// It reports and never gates, and it asks its question at two grains, both
-// published so a reader can compare them.
+// The one check here whose oracle is GitLab itself: the record a booted GitLab
+// produced, pinned by cmd/gen_api_live. It reports and never gates, and it asks
+// its question at two grains, both published so a reader can compare them.
+//
+// One record answers both halves of it, which is why a finding can always say
+// when GitLab sends a field. The two records this replaced could not: a
+// generated document said what an endpoint returned and a scan of the Grape
+// source said what gated each field, so a response could name an entity the
+// scan had never read.
 //
 // The package grain unions the responses of every endpoint a package was
 // recorded calling and holds each of that package's top-level output types

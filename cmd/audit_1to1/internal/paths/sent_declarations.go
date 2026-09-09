@@ -42,13 +42,6 @@ const (
 	categoryOptionNeverPassed = "entity-option-no-endpoint-passes"
 )
 
-// memberOptionsReason is what lib/api/helpers/members_helpers.rb says about
-// the two member fields that hang off presenter options.
-const memberOptionsReason = "lib/api/entities/member.rb exposes avatar_path under options[:only_path] and " +
-	"custom_attributes under :with_custom_attributes, and present_members in " +
-	"lib/api/helpers/members_helpers.rb, which every member endpoint presents through, passes current_user, " +
-	"source and show_seat_info alone, so neither option holds on any member route."
-
 // declaredUnsurfaced holds every field GitLab's document lists that the
 // endpoint does not send, each with the source that says so.
 //
@@ -58,7 +51,7 @@ const memberOptionsReason = "lib/api/entities/member.rb exposes avatar_path unde
 var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adjudication table, emptied by the test stub
 	{
 		Package:  toolsDir + "/keys",
-		Entity:   "APIEntitiesUserWithAdmin",
+		Entity:   "API::Entities::UserWithAdmin",
 		Field:    declaredSegment,
 		Category: categoryDocumentedNotSent,
 		Reason: "lib/api/keys.rb describes the fingerprint lookup, GET /keys, as answering with Entities::UserWithAdmin " +
@@ -68,49 +61,13 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	},
 	{
 		Package:  toolsDir + "/invites",
-		Entity:   "APIEntitiesInvitation",
+		Entity:   "API::Entities::Invitation",
 		Field:    declaredSegment,
 		Category: categoryDocumentedNotSent,
 		Reason: "lib/api/invitations.rb describes the add-a-member POST as answering with Entities::Invitation and " +
 			"returns what Members::InviteService answers, the `status` and `message` pair invitations.md prints; the " +
 			"pending-invitation object is what the GET at the same path lists. The shape declaration for the other " +
 			"direction of this join records the same thing.",
-	},
-	{
-		Package:  toolsDir + "/groupmembers",
-		Entity:   "APIEntitiesMember",
-		Field:    "avatar_path",
-		Category: categoryOptionNeverPassed,
-		Reason:   memberOptionsReason,
-	},
-	{
-		Package:  toolsDir + "/groupmembers",
-		Entity:   "APIEntitiesMember",
-		Field:    "custom_attributes",
-		Category: categoryOptionNeverPassed,
-		Reason:   memberOptionsReason,
-	},
-	{
-		Package:  toolsDir + "/members",
-		Entity:   "APIEntitiesMember",
-		Field:    "avatar_path",
-		Category: categoryOptionNeverPassed,
-		Reason:   memberOptionsReason,
-	},
-	{
-		Package:  toolsDir + "/members",
-		Entity:   "APIEntitiesMember",
-		Field:    "custom_attributes",
-		Category: categoryOptionNeverPassed,
-		Reason:   memberOptionsReason,
-	},
-	{
-		Package:  toolsDir + "/groups",
-		Entity:   "APIEntitiesMember",
-		Field:    "avatar_path",
-		Category: categoryOptionNeverPassed,
-		Reason: memberOptionsReason + " The group's own custom_attributes are published by this package, so only " +
-			"the member's avatar_path is reported at package grain.",
 	},
 }
 

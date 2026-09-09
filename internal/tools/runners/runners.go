@@ -84,7 +84,7 @@ type RunnerDetailsGroupOutput struct {
 // The one field of gl.RunnerDetails it does not carry is Token. GitLab mints a
 // runner's authentication token once, at registration, and answers with it
 // there and nowhere else: the responses of GET /runners/:id and PUT /runners/:id
-// name every field below and no token (docs/development/gitlab-api-shapes.json),
+// name every field below and no token (GitLab's own generated OpenAPI document),
 // while POST /runners answers with id, token and token_expires_at, which is what
 // [Output] carries. Publishing it here promised a secret the endpoint never
 // sends, so a model was told to read a value that is always empty.
