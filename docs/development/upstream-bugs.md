@@ -831,14 +831,14 @@ the field and the SDK drops it. Every entity reference is to the tag
 - `Topic` (`topics.go`) has no `organization_id`, which
   [lib/api/entities/projects/topic.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/projects/topic.rb)
   exposes on line 12.
-  [gitlab-org/api/client-go!3034](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3034).
+  [gitlab-org/api/client-go!3041](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3041).
 - `Appearance` (`appearance.go`) has no `site_name`, which
   [lib/api/entities/appearance.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/appearance.rb)
   exposes on line 44. The same merge request adds it to
   `ChangeAppearanceOptions`, because `lib/api/appearance.rb` declares
   `site_name` as an accepted parameter of the `PUT` on line 58, so the SDK
   could neither read it nor set it.
-  [gitlab-org/api/client-go!3033](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3033).
+  [gitlab-org/api/client-go!3040](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3040).
 - `BroadcastMessage` (`broadcast_messages.go`) has no `color`, which
   [lib/api/entities/system/broadcast_message.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/system/broadcast_message.rb)
   exposes on line 11 and the model defaults to `#E75E40`, so it is never
@@ -846,13 +846,44 @@ the field and the SDK drops it. Every entity reference is to the tag
   `lib/api/admin/broadcast_messages.rb` accepts `color` on create and update.
   The SDK's own test fixtures already carried the key with no field to decode
   it into, which is as clear a statement of the gap as the entity is.
-  [gitlab-org/api/client-go!3035](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3035).
+  [gitlab-org/api/client-go!3042](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3042).
   Worth knowing when reading that merge request: the
   [broadcast messages page](https://docs.gitlab.com/api/broadcast_messages/)
   omits `color` from both the response examples and the parameter tables while
   still documenting `font`, so the documentation is the one source that does
   not show it. A live `GET /broadcast_messages` on gitlab.com does, on every
   message.
+- `Agent` (`cluster_agents.go`) has no `is_receptive`. The exposure is not in
+  the Community Edition entity but in the Enterprise module prepended onto it,
+  [ee/lib/ee/api/entities/clusters/agent.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/ee/api/entities/clusters/agent.rb)
+  line 11, so an Enterprise instance sends it on every agent and a Community
+  one sends nothing. The register-agent options need no change: the route
+  declares `requires :name` and nothing else.
+  [gitlab-org/api/client-go!3043](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3043).
+- `LicenseTemplate` (`license_templates.go`) has no `popular`, which
+  [lib/api/entities/license.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/license.rb)
+  exposes on line 7 and a live gitlab.com sends on both licence endpoints. Not
+  to be confused with `ListLicenseTemplatesOptions.Popular`, which is the
+  request filter and already exists.
+  [gitlab-org/api/client-go!3044](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3044).
+  The struct's `Featured` is the other half of this: no GitLab sends
+  `featured`, the entity does not expose it, and the field has therefore never
+  decoded. It survives because removing an exported field is breaking, and the
+  [licences page](https://docs.gitlab.com/api/templates/licenses/) still shows
+  `featured` in its example response, which is what hid the real key.
+- `SecureFile` (`secure_files.go`) has no `file_extension`, which
+  [lib/api/entities/ci/secure_file.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/ci/secure_file.rb)
+  exposes on line 15 and the list, show and create endpoints all render.
+  [gitlab-org/api/client-go!3045](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3045).
+- `GroupSCIMIdentity` (`group_scim.go`) is the odd one out, and the worst of
+  them: it declares the tag `external_uid` and GitLab sends `extern_uid`, so
+  the field never decodes and is the empty string on every call.
+  [ee/lib/api/entities/identity_detail.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/api/entities/identity_detail.rb)
+  exposes `extern_uid` on line 6, the SCIM page documents that spelling, and
+  every other struct in the SDK carrying this key already spells it that way.
+  The SDK's own fixtures used the wrong key too, so its tests were green
+  against a response GitLab never sends.
+  [gitlab-org/api/client-go!3046](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3046).
 
 **How we found it**: the sent dimension of the 1:1 audit
 (`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), whose
@@ -862,6 +893,18 @@ GitLab says each of its Grape entities exposes. Each finding carries
 
 **Effort**: trivial per struct. One additive field with a `json` tag, and one
 key added to the fixture of an existing test.
+
+**Where these merge requests come from**: the
+[community fork](https://gitlab.com/gitlab-community/gitlab-org/api/client-go),
+which `CONTRIBUTING.md` recommends over a personal one. It is worth doing:
+GitLab's triage bot posts a "did you know about our community forks" nudge on
+every merge request opened from a personal fork and does not on one opened
+from the community fork, and the pipeline runs either way. What it does not
+fix is the `DCR4003` warning the Duo reviewer leaves, which comes from the
+automatic review request the upstream project makes on the author's behalf and
+fails because the author is not a member there. A merge request's source
+cannot be re-pointed after it is opened, so moving one means opening a new one
+from the community fork and closing the old with a note.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

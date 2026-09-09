@@ -453,6 +453,27 @@ func CapturedFeatureFlagUserLists(capture *gitlabclient.ResponseCapture, decoded
 	return capturedList[FeatureFlagUserListExtra](capture, decoded, "feature flag user lists")
 }
 
+// WikiExtra is what GitLab's wiki page entity sends beside the title and the
+// content: the identifier of the page's metadata record, and the YAML front
+// matter parsed out of the page, which is a map of whatever keys the author
+// wrote. Both are exposed under no condition, and the front matter is empty on
+// a page that has none.
+type WikiExtra struct {
+	WikiPageMetaID int64          `json:"wiki_page_meta_id"`
+	FrontMatter    map[string]any `json:"front_matter"`
+}
+
+// CapturedWiki reads them off the captured answer to a request for one page.
+func CapturedWiki(capture *gitlabclient.ResponseCapture) (WikiExtra, error) {
+	return capturedOne[WikiExtra](capture)
+}
+
+// CapturedWikis reads the same off a list answer, one extra per page in order,
+// the count held to what the SDK decoded.
+func CapturedWikis(capture *gitlabclient.ResponseCapture, decoded int) ([]WikiExtra, error) {
+	return capturedList[WikiExtra](capture, decoded, "wiki pages")
+}
+
 // StorageMoveExtra is why a repository storage move failed, exposed under no
 // condition by the group, project and snippet storage move entities alike and
 // empty on a move that did not fail.
