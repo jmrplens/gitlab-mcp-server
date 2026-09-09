@@ -18,6 +18,7 @@ import (
 
 // appearanceJSON identifies the appearance JSON constant used by this package.
 const appearanceJSON = `{
+	"site_name": "Example GitLab",
 	"title": "GitLab CE",
 	"description": "Open source self-hosted Git management",
 	"pwa_name": "GitLab",
@@ -61,6 +62,9 @@ func TestGet_Success(t *testing.T) {
 	}
 	if out.Appearance.HeaderMessage != "Welcome" {
 		t.Errorf("expected header_message 'Welcome', got %q", out.Appearance.HeaderMessage)
+	}
+	if out.Appearance.SiteName != "Example GitLab" {
+		t.Errorf("expected site_name 'Example GitLab', got %q", out.Appearance.SiteName)
 	}
 }
 

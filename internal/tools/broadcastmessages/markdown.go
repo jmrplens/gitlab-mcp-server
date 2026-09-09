@@ -51,6 +51,11 @@ func FormatMessageMarkdown(item MessageItem) *mcp.CallToolResult {
 		//gitlab:allow-unescaped item.Theme: a broadcast theme GitLab picks from a fixed set of color names (indigo, light-indigo, blue and the rest).
 		fmt.Fprintf(&sb, "| Theme | %s |\n", item.Theme)
 	}
+	if item.Color != "" {
+		// The colour GitLab renders the message in, which an administrator
+		// typed as a hex value.
+		fmt.Fprintf(&sb, "| Color | %s |\n", toolutil.EscapeMdTableCell(item.Color))
+	}
 	if item.TargetPath != "" {
 		// A target path is a path glob an administrator types into the message.
 		fmt.Fprintf(&sb, "| Target Path | %s |\n", toolutil.EscapeMdTableCell(item.TargetPath))

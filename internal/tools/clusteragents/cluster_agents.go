@@ -53,15 +53,19 @@ type AgentItem struct {
 	Name            string              `json:"name"`
 	CreatedAt       string              `json:"created_at,omitempty"`
 	CreatedByUserID int64               `json:"created_by_user_id,omitempty"`
+	IsReceptive     bool                `json:"is_receptive"`
 	ConfigProject   ConfigProjectOutput `json:"config_project"`
 }
 
-func agentItem(a *gl.Agent) AgentItem {
+// agentItem converts the GitLab API response to the tool output format,
+// filling from the decoded agent and from what the capture read beside it.
+func agentItem(a *gl.Agent, extra toolutil.ClusterAgentExtra) AgentItem {
 	return AgentItem{
 		ID:              a.ID,
 		Name:            a.Name,
 		CreatedAt:       toolutil.FormatTimePtr(a.CreatedAt),
 		CreatedByUserID: a.CreatedByUserID,
+		IsReceptive:     extra.IsReceptive,
 		ConfigProject:   configProjectOutput(a.ConfigProject),
 	}
 }
@@ -83,14 +87,19 @@ func ListAgents(ctx context.Context, client *gitlabclient.Client, input ListAgen
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	agents, resp, err := client.GL().ClusterAgents.ListAgents(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListAgentsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_cluster_agents", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get; cluster agents require Maintainer role to view")
 	}
+	extras, err := toolutil.CapturedClusterAgents(captured, len(agents))
+	if err != nil {
+		return ListAgentsOutput{}, toolutil.WrapErr("gitlab_list_cluster_agents", err)
+	}
 	items := make([]AgentItem, 0, len(agents))
-	for _, a := range agents {
-		items = append(items, agentItem(a))
+	for i, a := range agents {
+		items = append(items, agentItem(a, extras[i]))
 	}
 	return ListAgentsOutput{Agents: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -108,12 +117,17 @@ func GetAgent(ctx context.Context, client *gitlabclient.Client, input GetAgentIn
 	if input.AgentID <= 0 {
 		return AgentItem{}, toolutil.ErrRequiredInt64("gitlab_get_cluster_agent", "agent_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	a, _, err := client.GL().ClusterAgents.GetAgent(string(input.ProjectID), input.AgentID, gl.WithContext(ctx))
 	if err != nil {
 		return AgentItem{}, toolutil.WrapErrWithStatusHint("gitlab_get_cluster_agent", err, http.StatusNotFound,
 			"verify agent_id with gitlab_list_cluster_agents; the agent may have been deleted")
 	}
-	return agentItem(a), nil
+	extra, err := toolutil.CapturedClusterAgent(captured)
+	if err != nil {
+		return AgentItem{}, toolutil.WrapErr("gitlab_get_cluster_agent", err)
+	}
+	return agentItem(a, extra), nil
 }
 
 // RegisterAgent.
@@ -127,12 +141,17 @@ type RegisterAgentInput struct {
 // RegisterAgent coordinates register agent for the clusteragents package.
 func RegisterAgent(ctx context.Context, client *gitlabclient.Client, input RegisterAgentInput) (AgentItem, error) {
 	opts := &gl.RegisterAgentOptions{Name: new(input.Name)}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	a, _, err := client.GL().ClusterAgents.RegisterAgent(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return AgentItem{}, toolutil.WrapErrWithStatusHint("gitlab_register_cluster_agent", err, http.StatusBadRequest,
 			"name must match DNS-1123 label format (lowercase alphanumeric + dashes, max 63 chars) and be unique within the project; requires Maintainer role")
 	}
-	return agentItem(a), nil
+	extra, err := toolutil.CapturedClusterAgent(captured)
+	if err != nil {
+		return AgentItem{}, toolutil.WrapErr("gitlab_register_cluster_agent", err)
+	}
+	return agentItem(a, extra), nil
 }
 
 // DeleteAgent.

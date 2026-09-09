@@ -524,7 +524,7 @@ func TestListAgents_KeysetAndOrdering(t *testing.T) {
 				}
 			})
 		}
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"agent1","created_at":"2024-01-02T03:04:05Z","created_by_user_id":10,"config_project":{"id":99,"name":"cfg","path_with_namespace":"grp/cfg","created_at":"2023-01-01T00:00:00Z"}}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"agent1","created_at":"2024-01-02T03:04:05Z","created_by_user_id":10,"is_receptive":true,"config_project":{"id":99,"name":"cfg","path_with_namespace":"grp/cfg","created_at":"2023-01-01T00:00:00Z"}}]`)
 	}))
 	out, err := ListAgents(t.Context(), client, ListAgentsInput{
 		ProjectID:  "1",
@@ -541,6 +541,9 @@ func TestListAgents_KeysetAndOrdering(t *testing.T) {
 	a := out.Agents[0]
 	if a.CreatedAt != "2024-01-02T03:04:05Z" {
 		t.Errorf("CreatedAt = %q", a.CreatedAt)
+	}
+	if !a.IsReceptive {
+		t.Error("IsReceptive = false, want the receptive agent the answer describes")
 	}
 	if a.ConfigProject.ID != 99 || a.ConfigProject.PathWithNamespace != "grp/cfg" || a.ConfigProject.CreatedAt == "" {
 		t.Errorf("ConfigProject = %#v", a.ConfigProject)

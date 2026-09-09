@@ -36,6 +36,9 @@ func FormatAgentMarkdown(a AgentItem) string {
 	if a.CreatedByUserID != 0 {
 		fmt.Fprintf(&b, "- **Created By User ID**: %d\n", a.CreatedByUserID)
 	}
+	if a.IsReceptive {
+		b.WriteString("- **Receptive**: yes (GitLab connects out to this agent)\n")
+	}
 	if a.ConfigProject.ID != 0 {
 		cp := a.ConfigProject
 		name := cp.PathWithNamespace

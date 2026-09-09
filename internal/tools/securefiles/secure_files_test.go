@@ -60,7 +60,7 @@ func TestShow(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"key.pem","checksum":"abc","checksum_algorithm":"sha256"}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"key.pem","checksum":"abc","checksum_algorithm":"sha256","file_extension":"pem"}`)
 	}))
 	out, err := Show(t.Context(), client, ShowInput{ProjectID: "1", FileID: 1})
 	if err != nil {
@@ -68,6 +68,9 @@ func TestShow(t *testing.T) {
 	}
 	if out.Name != testFileName {
 		t.Errorf("expected key.pem, got %s", out.Name)
+	}
+	if out.FileExtension != "pem" {
+		t.Errorf("expected file_extension 'pem', got %q", out.FileExtension)
 	}
 }
 

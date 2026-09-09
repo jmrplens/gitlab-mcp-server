@@ -43,6 +43,10 @@ func FormatShowMarkdown(f SecureFileItem) string {
 	//gitlab:allow-unescaped f.ChecksumAlgorithm: a digest algorithm name GitLab picks from a fixed set (sha256).
 	fmt.Fprintf(&b, "## Secure File\n\n- **ID**: %d\n- **Name**: %s\n- **Checksum**: %s\n- **Algorithm**: %s\n- **Created At**: %s\n- **Expires At**: %s\n",
 		f.ID, toolutil.EscapeMdTableCell(f.Name), f.Checksum, f.ChecksumAlgorithm, toolutil.FormatTimePtr(f.CreatedAt), toolutil.FormatTimePtr(f.ExpiresAt))
+	if f.FileExtension != "" {
+		// GitLab derives the extension from the uploaded file's name.
+		fmt.Fprintf(&b, "- **File Extension**: %s\n", toolutil.EscapeMdTableCell(f.FileExtension))
+	}
 	if f.Metadata != nil {
 		m := f.Metadata
 		// Everything below is read out of the certificate whoever uploaded the

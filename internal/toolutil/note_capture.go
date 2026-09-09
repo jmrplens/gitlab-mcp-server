@@ -11,11 +11,7 @@ import (
 // CapturedNote reads, from the captured answer of a call that returned one
 // note, what GitLab sends that client-go's Note does not model.
 func CapturedNote(capture *gitlabclient.ResponseCapture) (NoteExtra, error) {
-	var extra NoteExtra
-	if err := capture.Decode(&extra); err != nil {
-		return NoteExtra{}, err
-	}
-	return extra, nil
+	return capturedOne[NoteExtra](capture)
 }
 
 // CapturedNotes reads the same from the captured answer of a call that
@@ -30,11 +26,7 @@ func CapturedNotes(capture *gitlabclient.ResponseCapture, decoded int) ([]NoteEx
 // one discussion, what GitLab sends that client-go's Discussion and its notes
 // do not model.
 func CapturedDiscussion(capture *gitlabclient.ResponseCapture) (DiscussionExtra, error) {
-	var extra DiscussionExtra
-	if err := capture.Decode(&extra); err != nil {
-		return DiscussionExtra{}, err
-	}
-	return extra, nil
+	return capturedOne[DiscussionExtra](capture)
 }
 
 // CapturedDiscussions reads the same from the captured answer of a call that
@@ -72,6 +64,21 @@ func CapturedThreadNote(op string, n *gl.Note, capture *gitlabclient.ResponseCap
 		return DiscussionThreadNoteOutput{}, WrapErr(op, err)
 	}
 	return DiscussionThreadNoteOutputFromGitLab(n, extra), nil
+}
+
+// capturedOne decodes a captured answer to a request for one object.
+//
+// It is the single-object half of [capturedList], and exists for the same
+// reason: every reader in sent_shapes.go was the same five lines around a
+// different type, and one more copy per gap is how a file of small readers
+// stops being readable.
+func capturedOne[T any](capture *gitlabclient.ResponseCapture) (T, error) {
+	var extra T
+	if err := capture.Decode(&extra); err != nil {
+		var zero T
+		return zero, err
+	}
+	return extra, nil
 }
 
 // capturedList decodes a captured list answer and holds its length to the

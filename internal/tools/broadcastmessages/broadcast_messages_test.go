@@ -21,7 +21,7 @@ import (
 const fmtUnexpErr = "unexpected error: %v"
 
 // messageJSON identifies the message JSON constant used by this package.
-const messageJSON = `{"id":1,"message":"System maintenance tonight","starts_at":"2026-01-01T00:00:00Z","ends_at":"2026-01-02T00:00:00Z","font":"","active":true,"target_access_levels":[],"target_path":"","broadcast_type":"banner","dismissable":true,"theme":"indigo"}`
+const messageJSON = `{"id":1,"message":"System maintenance tonight","starts_at":"2026-01-01T00:00:00Z","ends_at":"2026-01-02T00:00:00Z","font":"","active":true,"target_access_levels":[],"target_path":"","broadcast_type":"banner","dismissable":true,"theme":"indigo","color":"#e75e40"}`
 
 const (
 	// pathBroadcastMessages identifies the path broadcast messages constant used by this package.
@@ -147,6 +147,9 @@ func TestGet_Success(t *testing.T) {
 	}
 	if out.Message.BroadcastType != testBannerType {
 		t.Errorf("expected type 'banner', got %q", out.Message.BroadcastType)
+	}
+	if out.Message.Color != "#e75e40" {
+		t.Errorf("expected color '#e75e40', got %q", out.Message.Color)
 	}
 }
 

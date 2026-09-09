@@ -17,7 +17,7 @@ import (
 func TestList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestPath(t, r, "/api/v4/templates/licenses")
-		testutil.RespondJSON(w, http.StatusOK, `[{"key":"mit","name":"MIT License","featured":true}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"key":"mit","name":"MIT License","featured":true,"popular":true}]`)
 	})
 	client := testutil.NewTestClient(t, handler)
 	out, err := List(t.Context(), client, ListInput{})
@@ -29,6 +29,9 @@ func TestList(t *testing.T) {
 	}
 	if !out.Licenses[0].Featured {
 		t.Error("Featured = false, want true")
+	}
+	if !out.Licenses[0].Popular {
+		t.Error("Popular = false, want the popular template the answer describes")
 	}
 }
 
