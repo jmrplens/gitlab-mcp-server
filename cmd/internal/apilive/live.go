@@ -30,6 +30,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
 // SchemaVersion is the shape of this record. A reader refuses a version it was
@@ -194,11 +196,10 @@ func Read(dir string) (Document, error) {
 // Write commits the record, formatted so a re-pin is a readable diff rather
 // than one very long line.
 func Write(dir string, doc Document) error {
-	encoded, err := json.MarshalIndent(doc, "", " ")
-	if err != nil {
-		return fmt.Errorf("encoding the live API record: %w", err)
-	}
-	encoded = append(encoded, '\n')
+	// Marshaling a struct of strings, numbers, slices and maps cannot fail, and
+	// this repository's rule for that is to say so at the leaf rather than carry
+	// a branch no test can reach.
+	encoded := append(cmdutil.Must(json.MarshalIndent(doc, "", " ")), '\n')
 	// The directory is created rather than required: the generator writes into
 	// a checkout that has it, and a test writes into a temporary root that does
 	// not, and neither should have to know which case it is in.
