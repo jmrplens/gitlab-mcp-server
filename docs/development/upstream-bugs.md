@@ -99,8 +99,10 @@ readable without opening the tracker:
 | 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | No | No | No | No | Yes |
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | No | No | No | No | Yes |
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | No | No | No | No | None |
+| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, open | No | No | Yes |
 
-States verified against the upstream trackers on 2026-09-05.
+States verified against the upstream trackers on 2026-09-05, except entry 34,
+whose merge requests were opened on 2026-09-09.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -810,6 +812,56 @@ in this repository could explain.
 
 **Effort**: trivial, four characters. A good first contribution, and the kind
 of change whose test is one assertion on the built URL.
+
+### Response structs that miss a field GitLab sends unconditionally
+
+- **Reported**: yes, one merge request per struct, linked below.
+- **In review**: yes, the same merge requests.
+- **Merged**: not yet.
+- **Blocking**: no.
+- **Workaround**: yes. Each field is read from the captured response beside
+  the SDK's decode, through the readers in `internal/toolutil/sent_shapes.go`.
+  Each retires when its merge request lands and the pin moves.
+
+**What**: one field per struct, each exposed by the rendering entity with no
+condition at all, so every response of every endpoint that renders it carries
+the field and the SDK drops it. Every entity reference is to the tag
+`v19.3.1-ee`, which is the release the record was taken from.
+
+- `Topic` (`topics.go`) has no `organization_id`, which
+  [lib/api/entities/projects/topic.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/projects/topic.rb)
+  exposes on line 12.
+  [gitlab-org/api/client-go!3034](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3034).
+- `Appearance` (`appearance.go`) has no `site_name`, which
+  [lib/api/entities/appearance.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/appearance.rb)
+  exposes on line 44. The same merge request adds it to
+  `ChangeAppearanceOptions`, because `lib/api/appearance.rb` declares
+  `site_name` as an accepted parameter of the `PUT` on line 58, so the SDK
+  could neither read it nor set it.
+  [gitlab-org/api/client-go!3033](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3033).
+- `BroadcastMessage` (`broadcast_messages.go`) has no `color`, which
+  [lib/api/entities/system/broadcast_message.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/system/broadcast_message.rb)
+  exposes on line 11 and the model defaults to `#E75E40`, so it is never
+  blank. The same merge request adds it to both option structs, since
+  `lib/api/admin/broadcast_messages.rb` accepts `color` on create and update.
+  The SDK's own test fixtures already carried the key with no field to decode
+  it into, which is as clear a statement of the gap as the entity is.
+  [gitlab-org/api/client-go!3035](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3035).
+  Worth knowing when reading that merge request: the
+  [broadcast messages page](https://docs.gitlab.com/api/broadcast_messages/)
+  omits `color` from both the response examples and the parameter tables while
+  still documenting `font`, so the documentation is the one source that does
+  not show it. A live `GET /broadcast_messages` on gitlab.com does, on every
+  message.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), whose
+oracle is `docs/development/gitlab-api-live.json`, a record of what a booted
+GitLab says each of its Grape entities exposes. Each finding carries
+`sdk_models: false`, which is what says the gap is upstream rather than ours.
+
+**Effort**: trivial per struct. One additive field with a `json` tag, and one
+key added to the fixture of an existing test.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
