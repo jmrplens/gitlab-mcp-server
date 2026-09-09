@@ -944,31 +944,28 @@ func TestFormatAgentMarkdown_Receptive(t *testing.T) {
 // a boolean. The SDK ignores the key its own Agent does not model, so the
 // captured read is the only thing that can notice.
 func TestClusterAgents_UnreadableCapturedIsReceptive(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		body string
-		call func(context.Context, *gitlabclient.Client) error
-	}{
-		{"list", `[{"id":1,"name":"prod","is_receptive":"maybe"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := ListAgents(ctx, c, ListAgentsInput{ProjectID: "42"})
-			return err
-		}},
-		{"get", `{"id":1,"name":"prod","is_receptive":"maybe"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := GetAgent(ctx, c, GetAgentInput{ProjectID: "42", AgentID: 1})
-			return err
-		}},
-		{"register", `{"id":1,"name":"prod","is_receptive":"maybe"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := RegisterAgent(ctx, c, RegisterAgentInput{ProjectID: "42", Name: "prod"})
-			return err
-		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, tt.body)
-			}))
-			if err := tt.call(context.Background(), client); err == nil {
-				t.Fatal("error = nil, want the captured decode to fail")
-			}
-		})
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
 	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"id":1,"name":"prod","is_receptive":"maybe"}]`)
+			_, err := ListAgents(context.Background(), client, ListAgentsInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"name":"prod","is_receptive":"maybe"}`)
+			_, err := GetAgent(context.Background(), client, GetAgentInput{ProjectID: "42", AgentID: 1})
+			return err
+		}},
+		{Name: "register", Call: func() error {
+			client := poisoned(`{"id":1,"name":"prod","is_receptive":"maybe"}`)
+			_, err := RegisterAgent(context.Background(), client, RegisterAgentInput{ProjectID: "42", Name: "prod"})
+			return err
+		}},
+	})
 }

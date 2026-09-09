@@ -552,48 +552,46 @@ func TestDeleteUserList_APIError(t *testing.T) {
 // FormatUserListMarkdown — with CreatedAt / UpdatedAt
 // ---------------------------------------------------------------------------.
 
-// TestFormatUserListMarkdown_WithDates verifies the UserListMarkdown_WithDates Markdown formatter for a representative userlist_withdates input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
 // TestUserLists_UnreadableCapturedPath verifies that every feature flag user
 // list handler returns an error rather than a half-filled list when GitLab
 // sends path as something that is not a string. The SDK ignores the key its own
 // FeatureFlagUserList does not model, so the read of the captured response is
 // the only thing that can notice.
 func TestUserLists_UnreadableCapturedPath(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		body string
-		call func(context.Context, *gitlabclient.Client) error
-	}{
-		{"list", `[{"id":1,"iid":10,"name":"cov-list","path":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := ListUserLists(ctx, c, ListInput{ProjectID: "42"})
-			return err
-		}},
-		{"get", `{"id":1,"iid":10,"name":"cov-list","path":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := GetUserList(ctx, c, GetInput{ProjectID: "42", IID: 10})
-			return err
-		}},
-		{"create", `{"id":1,"iid":10,"name":"cov-list","path":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := CreateUserList(ctx, c, CreateInput{ProjectID: "42", Name: "cov-list", UserXIDs: "a,b"})
-			return err
-		}},
-		{"update", `{"id":1,"iid":10,"name":"cov-list","path":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := UpdateUserList(ctx, c, UpdateInput{ProjectID: "42", IID: 10, Name: "renamed"})
-			return err
-		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, tt.body)
-			}))
-			if err := tt.call(context.Background(), client); err == nil {
-				t.Fatal("error = nil, want the captured decode to fail")
-			}
-		})
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
 	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"id":1,"iid":10,"name":"cov-list","path":42}]`)
+			_, err := ListUserLists(context.Background(), client, ListInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"iid":10,"name":"cov-list","path":42}`)
+			_, err := GetUserList(context.Background(), client, GetInput{ProjectID: "42", IID: 10})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			client := poisoned(`{"id":1,"iid":10,"name":"cov-list","path":42}`)
+			_, err := CreateUserList(context.Background(), client, CreateInput{ProjectID: "42", Name: "cov-list", UserXIDs: "a,b"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			client := poisoned(`{"id":1,"iid":10,"name":"cov-list","path":42}`)
+			_, err := UpdateUserList(context.Background(), client, UpdateInput{ProjectID: "42", IID: 10, Name: "renamed"})
+			return err
+		}},
+	})
 }
 
+// TestFormatUserListMarkdown_WithDates verifies the UserListMarkdown_WithDates Markdown formatter for a representative userlist_withdates input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatUserListMarkdown_WithDates(t *testing.T) {
 	out := Output{
 		ID: 1, IID: 10, ProjectID: 42,

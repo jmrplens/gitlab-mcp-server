@@ -825,8 +825,6 @@ func TestRetrieveForSnippet_OrderingAndKeyset(t *testing.T) {
 	}
 }
 
-// TestFormatScheduleAllMarkdown verifies the schedule-all confirmation message
-// rendering.
 // TestSnippetStorageMoves_UnreadableCapturedErrorMessage verifies that every
 // snippet storage move handler returns an error rather than a half-filled move
 // when GitLab sends error_message as something that is not a string. The SDK
@@ -834,43 +832,44 @@ func TestRetrieveForSnippet_OrderingAndKeyset(t *testing.T) {
 // read of the captured response is the only thing that can notice, and a failed
 // move published without its message reads as one that failed for no reason.
 func TestSnippetStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		body string
-		call func(context.Context, *gitlabclient.Client) error
-	}{
-		{"retrieve_all", `[{"id":1,"state":"failed","error_message":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := RetrieveAll(ctx, c, ListInput{})
-			return err
-		}},
-		{"retrieve_for_snippet", `[{"id":1,"state":"failed","error_message":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := RetrieveForSnippet(ctx, c, ListForSnippetInput{SnippetID: 3})
-			return err
-		}},
-		{"get", `{"id":1,"state":"failed","error_message":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Get(ctx, c, IDInput{ID: 1})
-			return err
-		}},
-		{"get_for_snippet", `{"id":1,"state":"failed","error_message":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := GetForSnippet(ctx, c, SnippetMoveInput{SnippetID: 3, ID: 1})
-			return err
-		}},
-		{"schedule", `{"id":1,"state":"scheduled","error_message":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Schedule(ctx, c, ScheduleInput{SnippetID: 3})
-			return err
-		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, tt.body)
-			}))
-			if err := tt.call(context.Background(), client); err == nil {
-				t.Fatal("error = nil, want the captured decode to fail")
-			}
-		})
+	// A retrieve answers with an array and the rest with an object, so each
+	// case drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
 	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "retrieve_all", Call: func() error {
+			client := poisoned(`[{"id":1,"state":"failed","error_message":42}]`)
+			_, err := RetrieveAll(context.Background(), client, ListInput{})
+			return err
+		}},
+		{Name: "retrieve_for_snippet", Call: func() error {
+			client := poisoned(`[{"id":1,"state":"failed","error_message":42}]`)
+			_, err := RetrieveForSnippet(context.Background(), client, ListForSnippetInput{SnippetID: 3})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"state":"failed","error_message":42}`)
+			_, err := Get(context.Background(), client, IDInput{ID: 1})
+			return err
+		}},
+		{Name: "get_for_snippet", Call: func() error {
+			client := poisoned(`{"id":1,"state":"failed","error_message":42}`)
+			_, err := GetForSnippet(context.Background(), client, SnippetMoveInput{SnippetID: 3, ID: 1})
+			return err
+		}},
+		{Name: "schedule", Call: func() error {
+			client := poisoned(`{"id":1,"state":"scheduled","error_message":42}`)
+			_, err := Schedule(context.Background(), client, ScheduleInput{SnippetID: 3})
+			return err
+		}},
+	})
 }
 
+// TestFormatScheduleAllMarkdown verifies the schedule-all confirmation message
+// rendering.
 func TestFormatScheduleAllMarkdown(t *testing.T) {
 	o := ScheduleAllOutput{Message: "All snippet repository storage moves have been scheduled"}
 	md := FormatScheduleAllMarkdown(o)

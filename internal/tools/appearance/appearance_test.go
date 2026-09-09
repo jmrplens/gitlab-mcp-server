@@ -4,7 +4,6 @@
 package appearance
 
 import (
-	"context"
 	"net/http"
 	"slices"
 	"strings"
@@ -376,26 +375,17 @@ func TestFormatGetMarkdown_SiteName(t *testing.T) {
 // only thing that can notice, and a handler that swallowed its failure would
 // publish an appearance with no site name and no complaint.
 func TestAppearance_UnreadableCapturedSiteName(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		call func(context.Context, *gitlabclient.Client) error
-	}{
-		{"get", func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Get(ctx, c, GetInput{})
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"title":"GitLab CE","site_name":42}`)
+	}))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "get", Call: func() error {
+			_, err := Get(t.Context(), client, GetInput{})
 			return err
 		}},
-		{"update", func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Update(ctx, c, UpdateInput{Title: "test"})
+		{Name: "update", Call: func() error {
+			_, err := Update(t.Context(), client, UpdateInput{Title: "test"})
 			return err
 		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, `{"title":"GitLab CE","site_name":42}`)
-			}))
-			if err := tt.call(t.Context(), client); err == nil {
-				t.Fatal("error = nil, want the captured decode to fail")
-			}
-		})
-	}
+	})
 }

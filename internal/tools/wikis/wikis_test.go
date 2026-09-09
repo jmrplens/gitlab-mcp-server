@@ -1002,46 +1002,44 @@ func TestActionSpecs_WikiGetRoute(t *testing.T) {
 	}
 }
 
-// wikiSpecsByTool supports wiki specs by tool assertions in wikis tests.
 // TestWikis_UnreadableCapturedMetaID verifies that every project wiki handler
 // returns an error rather than a half-filled page when GitLab sends
 // wiki_page_meta_id as something that is not a number. The SDK ignores the key
 // its own Wiki does not model, so the read of the captured response is the only
 // thing that can notice.
 func TestWikis_UnreadableCapturedMetaID(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		body string
-		call func(context.Context, *gitlabclient.Client) error
-	}{
-		{"list", `[{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := List(ctx, c, ListInput{ProjectID: "42"})
-			return err
-		}},
-		{"get", `{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Get(ctx, c, GetInput{ProjectID: "42", Slug: "home"})
-			return err
-		}},
-		{"create", `{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Create(ctx, c, CreateInput{ProjectID: "42", Title: "Home", Content: "hello"})
-			return err
-		}},
-		{"update", `{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Update(ctx, c, UpdateInput{ProjectID: "42", Slug: "home", Content: "hello again"})
-			return err
-		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, tt.body)
-			}))
-			if err := tt.call(context.Background(), client); err == nil {
-				t.Fatal("error = nil, want the captured decode to fail")
-			}
-		})
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
 	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}]`)
+			_, err := List(context.Background(), client, ListInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}`)
+			_, err := Get(context.Background(), client, GetInput{ProjectID: "42", Slug: "home"})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			client := poisoned(`{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}`)
+			_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Title: "Home", Content: "hello"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			client := poisoned(`{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}`)
+			_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", Slug: "home", Content: "hello again"})
+			return err
+		}},
+	})
 }
 
+// wikiSpecsByTool supports wiki specs by tool assertions in wikis tests.
 func wikiSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

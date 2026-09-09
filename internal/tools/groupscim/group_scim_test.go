@@ -378,9 +378,6 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
-// The mock GitLab API at /api/v4/groups/mygroup/scim/uid-123 (GET) responds with HTTP BadRequest.
-// It asserts that the returned error is wrapped and contains a useful hint.
 // TestSCIMIdentities_UnreadableCapturedExternUID verifies that both SCIM
 // identity read handlers return an error rather than a half-filled identity
 // when GitLab sends extern_uid as something that is not a string. The SDK
@@ -388,31 +385,30 @@ func TestDelete_CancelledContext(t *testing.T) {
 // the captured response is the only thing that can notice, and an identity
 // published without its external uid names nobody.
 func TestSCIMIdentities_UnreadableCapturedExternUID(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		body string
-		call func(context.Context, *gitlabclient.Client) error
-	}{
-		{"list", `[{"user_id":1,"active":true,"extern_uid":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := List(ctx, c, ListInput{GroupID: "42"})
-			return err
-		}},
-		{"get", `{"user_id":1,"active":true,"extern_uid":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Get(ctx, c, GetInput{GroupID: "42", UID: "user-1"})
-			return err
-		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, tt.body)
-			}))
-			if err := tt.call(context.Background(), client); err == nil {
-				t.Fatal("error = nil, want the captured decode to fail")
-			}
-		})
+	// A list answers with an array and a get with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
 	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"user_id":1,"active":true,"extern_uid":42}]`)
+			_, err := List(context.Background(), client, ListInput{GroupID: "42"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"user_id":1,"active":true,"extern_uid":42}`)
+			_, err := Get(context.Background(), client, GetInput{GroupID: "42", UID: "user-1"})
+			return err
+		}},
+	})
 }
 
+// TestDelete_APIError verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/groups/mygroup/scim/uid-123 (GET) responds with HTTP BadRequest.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/scim/uid-123" {

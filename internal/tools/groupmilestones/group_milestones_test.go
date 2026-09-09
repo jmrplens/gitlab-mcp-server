@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1936,7 +1935,6 @@ func TestActionSpecs_GroupMilestoneGetRoute(t *testing.T) {
 	}
 }
 
-// groupMilestoneSpecsByTool supports group milestone specs by tool assertions in groupmilestones tests.
 // TestGroupMilestones_UnreadableCapturedWebURL verifies that every group
 // milestone handler returns an error rather than a half-filled milestone when
 // GitLab sends web_url as something that is not a string. The SDK ignores the
@@ -1957,36 +1955,28 @@ func TestGroupMilestones_UnreadableCapturedWebURL(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, one)
 	}
-	for _, tt := range []struct {
-		name string
-		call func(context.Context, *gitlabclient.Client) error
-	}{
-		{"list", func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := List(ctx, c, ListInput{GroupID: "42"})
+	client := testutil.NewTestClient(t, http.HandlerFunc(routed))
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := List(context.Background(), client, ListInput{GroupID: "42"})
 			return err
 		}},
-		{"get", func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Get(ctx, c, GetInput{GroupID: "42", MilestoneIID: 10})
+		{Name: "get", Call: func() error {
+			_, err := Get(context.Background(), client, GetInput{GroupID: "42", MilestoneIID: 10})
 			return err
 		}},
-		{"create", func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Create(ctx, c, CreateInput{GroupID: "42", Title: "v1"})
+		{Name: "create", Call: func() error {
+			_, err := Create(context.Background(), client, CreateInput{GroupID: "42", Title: "v1"})
 			return err
 		}},
-		{"update", func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Update(ctx, c, UpdateInput{GroupID: "42", MilestoneIID: 10, Title: "v2"})
+		{Name: "update", Call: func() error {
+			_, err := Update(context.Background(), client, UpdateInput{GroupID: "42", MilestoneIID: 10, Title: "v2"})
 			return err
 		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(routed))
-			if err := tt.call(context.Background(), client); err == nil {
-				t.Fatal("error = nil, want the captured decode to fail")
-			}
-		})
-	}
+	})
 }
 
+// groupMilestoneSpecsByTool supports group milestone specs by tool assertions in groupmilestones tests.
 func groupMilestoneSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

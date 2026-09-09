@@ -829,7 +829,6 @@ func TestConverters_EdgeCases(t *testing.T) {
 	}
 }
 
-// TestGetDomain_ReturnsProjectID verifies GetDomain surfaces the numeric project ID from the API.
 // TestPagesDomains_UnreadableCapturedCertificateExpiration verifies that every
 // Pages domain handler returns an error rather than a half-filled domain when
 // GitLab sends certificate_expiration as something that is not an object. The
@@ -837,43 +836,43 @@ func TestConverters_EdgeCases(t *testing.T) {
 // captured response is the only thing that can notice, and a certificate whose
 // expiry silently disappears is the one fact this field is read for.
 func TestPagesDomains_UnreadableCapturedCertificateExpiration(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		body string
-		call func(context.Context, *gitlabclient.Client) error
-	}{
-		{"list_all", `[{"domain":"example.com","certificate_expiration":"soon"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := ListAllDomains(ctx, c, ListAllDomainsInput{})
-			return err
-		}},
-		{"list", `[{"domain":"example.com","certificate_expiration":"soon"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := ListDomains(ctx, c, ListDomainsInput{ProjectID: "42"})
-			return err
-		}},
-		{"get", `{"domain":"example.com","certificate_expiration":"soon"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := GetDomain(ctx, c, GetDomainInput{ProjectID: "42", Domain: "example.com"})
-			return err
-		}},
-		{"create", `{"domain":"example.com","certificate_expiration":"soon"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := CreateDomain(ctx, c, CreateDomainInput{ProjectID: "42", Domain: "example.com"})
-			return err
-		}},
-		{"update", `{"domain":"example.com","certificate_expiration":"soon"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := UpdateDomain(ctx, c, UpdateDomainInput{ProjectID: "42", Domain: "example.com"})
-			return err
-		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, tt.body)
-			}))
-			if err := tt.call(context.Background(), client); err == nil {
-				t.Fatal("error = nil, want the captured decode to fail")
-			}
-		})
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
 	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list_all", Call: func() error {
+			client := poisoned(`[{"domain":"example.com","certificate_expiration":"soon"}]`)
+			_, err := ListAllDomains(context.Background(), client, ListAllDomainsInput{})
+			return err
+		}},
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"domain":"example.com","certificate_expiration":"soon"}]`)
+			_, err := ListDomains(context.Background(), client, ListDomainsInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"domain":"example.com","certificate_expiration":"soon"}`)
+			_, err := GetDomain(context.Background(), client, GetDomainInput{ProjectID: "42", Domain: "example.com"})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			client := poisoned(`{"domain":"example.com","certificate_expiration":"soon"}`)
+			_, err := CreateDomain(context.Background(), client, CreateDomainInput{ProjectID: "42", Domain: "example.com"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			client := poisoned(`{"domain":"example.com","certificate_expiration":"soon"}`)
+			_, err := UpdateDomain(context.Background(), client, UpdateDomainInput{ProjectID: "42", Domain: "example.com"})
+			return err
+		}},
+	})
 }
 
+// TestGetDomain_ReturnsProjectID verifies GetDomain surfaces the numeric project ID from the API.
 func TestGetDomain_ReturnsProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{

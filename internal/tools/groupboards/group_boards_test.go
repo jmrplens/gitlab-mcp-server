@@ -1196,48 +1196,46 @@ func TestBasicUserOutput_Nil(t *testing.T) {
 	}
 }
 
-// TestRawRequestConstructionFailures verifies every raw-request handler
-// surfaces a request-construction error. The branch is unreachable with valid
-// inputs (PathEscape sanitizes the path), so the constructor seam is stubbed.
 // TestGroupBoardLists_UnreadableCapturedLimitMetric verifies that every group
 // board list handler returns an error rather than a half-filled list when
 // GitLab sends limit_metric as something that is not a string. The SDK ignores
 // the key its own BoardList does not model, so the read of the captured
 // response is the only thing that can notice.
 func TestGroupBoardLists_UnreadableCapturedLimitMetric(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		body string
-		call func(context.Context, *gitlabclient.Client) error
-	}{
-		{"list", `[{"id":1,"position":0,"limit_metric":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := ListGroupBoardLists(ctx, c, ListGroupBoardListsInput{GroupID: "42", BoardID: 1})
-			return err
-		}},
-		{"get", `{"id":1,"position":0,"limit_metric":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := GetGroupBoardList(ctx, c, GetGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 1})
-			return err
-		}},
-		{"create", `{"id":1,"position":0,"limit_metric":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := CreateGroupBoardList(ctx, c, CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 5})
-			return err
-		}},
-		{"update", `{"id":1,"position":0,"limit_metric":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := UpdateGroupBoardList(ctx, c, UpdateGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 1, Position: 2})
-			return err
-		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, tt.body)
-			}))
-			if err := tt.call(context.Background(), client); err == nil {
-				t.Fatal("error = nil, want the captured decode to fail")
-			}
-		})
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
 	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"id":1,"position":0,"limit_metric":42}]`)
+			_, err := ListGroupBoardLists(context.Background(), client, ListGroupBoardListsInput{GroupID: "42", BoardID: 1})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"position":0,"limit_metric":42}`)
+			_, err := GetGroupBoardList(context.Background(), client, GetGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 1})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			client := poisoned(`{"id":1,"position":0,"limit_metric":42}`)
+			_, err := CreateGroupBoardList(context.Background(), client, CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 5})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			client := poisoned(`{"id":1,"position":0,"limit_metric":42}`)
+			_, err := UpdateGroupBoardList(context.Background(), client, UpdateGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 1, Position: 2})
+			return err
+		}},
+	})
 }
 
+// TestRawRequestConstructionFailures verifies every raw-request handler
+// surfaces a request-construction error. The branch is unreachable with valid
+// inputs (PathEscape sanitizes the path), so the constructor seam is stubbed.
 func TestRawRequestConstructionFailures(t *testing.T) {
 	orig := newRawRequest
 	newRawRequest = func(context.Context, *gitlabclient.Client, string, string, any) (*retryablehttp.Request, error) {

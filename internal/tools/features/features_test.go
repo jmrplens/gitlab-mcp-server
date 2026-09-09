@@ -349,47 +349,46 @@ func TestFormatFeatureMarkdown_NoDefinition(t *testing.T) {
 // Set — NewRequest error when the body contains a non-JSON-serializable value
 // ---------------------------------------------------------------------------.
 
-// TestSet_NewRequestErrorOnUnserializableValue verifies that Set surfaces an
-// error when the user-supplied value field cannot be marshaled to JSON (for
-// example, a channel or function). GitLab's client-go NewRequest returns
-// the marshal error directly, and the handler wraps it with the operation
-// name so the LLM sees a meaningful diagnostic.
 // TestFeatures_UnreadableCapturedDefinition verifies that every feature handler
 // returns an error rather than a half-filled feature when GitLab sends one of
 // the definition fields the shape carries as something that is not a string.
 // The SDK's own FeatureDefinition models neither feature_issue_url nor
 // intended_to_rollout_by and ignores both, so the read of the captured response
-// is the only thing that can notice.
+// is the only thing that can notice. The poison sits on one of those two keys
+// rather than on the definition object itself, which gl.Feature does model and
+// would therefore refuse inside the SDK, before the captured read runs.
 func TestFeatures_UnreadableCapturedDefinition(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		body string
-		call func(context.Context, *gitlabclient.Client) error
-	}{
-		{"list", `[{"name":"flag1","state":"on","definition":{"name":"flag1","feature_issue_url":42}}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := List(ctx, c, ListInput{})
-			return err
-		}},
-		{"list_definitions", `[{"name":"flag1","feature_issue_url":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := ListDefinitions(ctx, c, ListDefinitionsInput{})
-			return err
-		}},
-		{"set", `{"name":"flag1","state":"on","definition":{"name":"flag1","feature_issue_url":42}}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Set(ctx, c, SetInput{Name: "flag1", Value: true})
-			return err
-		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, tt.body)
-			}))
-			if err := tt.call(context.Background(), client); err == nil {
-				t.Fatal("error = nil, want the captured decode to fail")
-			}
-		})
+	// A list answers with an array and a set with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
 	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"name":"flag1","state":"on","definition":{"name":"flag1","feature_issue_url":42}}]`)
+			_, err := List(context.Background(), client, ListInput{})
+			return err
+		}},
+		{Name: "list_definitions", Call: func() error {
+			client := poisoned(`[{"name":"flag1","feature_issue_url":42}]`)
+			_, err := ListDefinitions(context.Background(), client, ListDefinitionsInput{})
+			return err
+		}},
+		{Name: "set", Call: func() error {
+			client := poisoned(`{"name":"flag1","state":"on","definition":{"name":"flag1","feature_issue_url":42}}`)
+			_, err := Set(context.Background(), client, SetInput{Name: "flag1", Value: true})
+			return err
+		}},
+	})
 }
 
+// TestSet_NewRequestErrorOnUnserializableValue verifies that Set surfaces an
+// error when the user-supplied value field cannot be marshaled to JSON (for
+// example, a channel or function). GitLab's client-go NewRequest returns
+// the marshal error directly, and the handler wraps it with the operation
+// name so the LLM sees a meaningful diagnostic.
 func TestSet_NewRequestErrorOnUnserializableValue(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 

@@ -2726,40 +2726,36 @@ func TestPipelineInfoToOutput_Nil(t *testing.T) {
 	}
 }
 
-// TestCommitActionSpecs_DiscoveryMetadata verifies every individual commit tool
-// carries an R-META description containing both a "Returns:" and a "See also:"
-// section, plus natural-language aliases beyond the canonical tool name.
 // TestCommitComments_UnreadableCapturedCreatedAt verifies that both commit
 // comment handlers return an error rather than a half-filled comment when
 // GitLab sends created_at as something that is not a timestamp. The SDK ignores
 // the key its own CommitComment does not model, so the read of the captured
 // response is the only thing that can notice.
 func TestCommitComments_UnreadableCapturedCreatedAt(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		body string
-		call func(context.Context, *gitlabclient.Client) error
-	}{
-		{"list", `[{"note":"looks good","created_at":"tomorrow"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := GetComments(ctx, c, CommentsInput{ProjectID: "42", SHA: "abc123"})
-			return err
-		}},
-		{"post", `{"note":"looks good","created_at":"tomorrow"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := PostComment(ctx, c, PostCommentInput{ProjectID: "42", SHA: "abc123", Note: "looks good"})
-			return err
-		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, tt.body)
-			}))
-			if err := tt.call(context.Background(), client); err == nil {
-				t.Fatal("error = nil, want the captured decode to fail")
-			}
-		})
+	// A list answers with an array and a post with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
 	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"note":"looks good","created_at":"tomorrow"}]`)
+			_, err := GetComments(context.Background(), client, CommentsInput{ProjectID: "42", SHA: "abc123"})
+			return err
+		}},
+		{Name: "post", Call: func() error {
+			client := poisoned(`{"note":"looks good","created_at":"tomorrow"}`)
+			_, err := PostComment(context.Background(), client, PostCommentInput{ProjectID: "42", SHA: "abc123", Note: "looks good"})
+			return err
+		}},
+	})
 }
 
+// TestCommitActionSpecs_DiscoveryMetadata verifies every individual commit tool
+// carries an R-META description containing both a "Returns:" and a "See also:"
+// section, plus natural-language aliases beyond the canonical tool name.
 func TestCommitActionSpecs_DiscoveryMetadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "{}")

@@ -800,7 +800,10 @@ func TestListDeps_UnreadableCapturedMalware(t *testing.T) {
 			`[{"name":"rails","version":"7.0.4","package_manager":"bundler","dependency_file_path":"Gemfile.lock","malware":"maybe"}]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
-	if _, err := ListDeps(context.Background(), client, ListInput{ProjectID: "42"}); err == nil {
-		t.Fatal("ListDeps() error = nil, want the captured decode to fail")
-	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			_, err := ListDeps(context.Background(), client, ListInput{ProjectID: "42"})
+			return err
+		}},
+	})
 }

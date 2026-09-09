@@ -980,7 +980,6 @@ func TestFormatRunOutputMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestGet_WithAllTimestamps verifies convertTrigger covers UpdatedAt and LastUsed nil guards.
 // TestFormatTriggerMarkdown_ExpiresAt verifies the expiry reaches the rendered
 // table. It is read off the captured response because the SDK does not model
 // it, and a trigger shown without it reads as one that never expires.
@@ -1002,39 +1001,38 @@ func TestFormatTriggerMarkdown_ExpiresAt(t *testing.T) {
 // the captured read is the only thing that can notice, and a trigger published
 // without its expiry reads as one that never expires.
 func TestPipelineTriggers_UnreadableCapturedExpiresAt(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		body string
-		call func(context.Context, *gitlabclient.Client) error
-	}{
-		{"list", `[{"id":1,"description":"nightly","expires_at":"never"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := ListTriggers(ctx, c, ListInput{ProjectID: "42"})
-			return err
-		}},
-		{"get", `{"id":1,"description":"nightly","expires_at":"never"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := GetTrigger(ctx, c, GetInput{ProjectID: "42", TriggerID: 1})
-			return err
-		}},
-		{"create", `{"id":1,"description":"nightly","expires_at":"never"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := CreateTrigger(ctx, c, CreateInput{ProjectID: "42", Description: "nightly"})
-			return err
-		}},
-		{"update", `{"id":1,"description":"nightly","expires_at":"never"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := UpdateTrigger(ctx, c, UpdateInput{ProjectID: "42", TriggerID: 1, Description: "renamed"})
-			return err
-		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, tt.body)
-			}))
-			if err := tt.call(context.Background(), client); err == nil {
-				t.Fatal("error = nil, want the captured decode to fail")
-			}
-		})
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
 	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"id":1,"description":"nightly","expires_at":"never"}]`)
+			_, err := ListTriggers(context.Background(), client, ListInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "get", Call: func() error {
+			client := poisoned(`{"id":1,"description":"nightly","expires_at":"never"}`)
+			_, err := GetTrigger(context.Background(), client, GetInput{ProjectID: "42", TriggerID: 1})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			client := poisoned(`{"id":1,"description":"nightly","expires_at":"never"}`)
+			_, err := CreateTrigger(context.Background(), client, CreateInput{ProjectID: "42", Description: "nightly"})
+			return err
+		}},
+		{Name: "update", Call: func() error {
+			client := poisoned(`{"id":1,"description":"nightly","expires_at":"never"}`)
+			_, err := UpdateTrigger(context.Background(), client, UpdateInput{ProjectID: "42", TriggerID: 1, Description: "renamed"})
+			return err
+		}},
+	})
 }
 
+// TestGet_WithAllTimestamps verifies convertTrigger covers UpdatedAt and LastUsed nil guards.
 func TestGet_WithAllTimestamps(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{

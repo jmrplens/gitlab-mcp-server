@@ -2183,37 +2183,35 @@ func TestFormatProtectedMarkdown_Inherited(t *testing.T) {
 // ProtectedBranch does not model, so the captured read is the only thing that
 // can notice.
 func TestProtectedBranches_UnreadableCapturedInherited(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		body string
-		call func(context.Context, *gitlabclient.Client) error
-	}{
-		{"protect", `{"id":1,"name":"main","inherited":"yes"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Protect(ctx, c, ProtectInput{ProjectID: "42", BranchName: "main"})
-			return err
-		}},
-		{"protected_list", `[{"id":1,"name":"main","inherited":"yes"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := ProtectedList(ctx, c, ProtectedListInput{ProjectID: "42"})
-			return err
-		}},
-		{"protected_get", `{"id":1,"name":"main","inherited":"yes"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := ProtectedGet(ctx, c, ProtectedGetInput{ProjectID: "42", BranchName: "main"})
-			return err
-		}},
-		{"protected_update", `{"id":1,"name":"main","inherited":"yes"}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := ProtectedUpdate(ctx, c, ProtectedUpdateInput{ProjectID: "42", BranchName: "main", Name: "main-2"})
-			return err
-		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, tt.body)
-			}))
-			if err := tt.call(context.Background(), client); err == nil {
-				t.Fatal("error = nil, want the captured decode to fail")
-			}
-		})
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
 	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "protect", Call: func() error {
+			client := poisoned(`{"id":1,"name":"main","inherited":"yes"}`)
+			_, err := Protect(context.Background(), client, ProtectInput{ProjectID: "42", BranchName: "main"})
+			return err
+		}},
+		{Name: "protected_list", Call: func() error {
+			client := poisoned(`[{"id":1,"name":"main","inherited":"yes"}]`)
+			_, err := ProtectedList(context.Background(), client, ProtectedListInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "protected_get", Call: func() error {
+			client := poisoned(`{"id":1,"name":"main","inherited":"yes"}`)
+			_, err := ProtectedGet(context.Background(), client, ProtectedGetInput{ProjectID: "42", BranchName: "main"})
+			return err
+		}},
+		{Name: "protected_update", Call: func() error {
+			client := poisoned(`{"id":1,"name":"main","inherited":"yes"}`)
+			_, err := ProtectedUpdate(context.Background(), client, ProtectedUpdateInput{ProjectID: "42", BranchName: "main", Name: "main-2"})
+			return err
+		}},
+	})
 }
 
 // TestProtect_UnreadableCapturedInheritedOnConflict covers the other captured

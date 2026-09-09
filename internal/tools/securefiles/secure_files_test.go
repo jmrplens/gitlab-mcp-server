@@ -443,8 +443,6 @@ func TestFormatShowMarkdown_FullMetadata(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_ExpiresColumn verifies the list table renders the
-// Expires At column, including the "-" placeholder for files without expiry.
 // TestFormatShowMarkdown_FileExtension verifies the file extension reaches the
 // rendered detail. It is read off the captured response because the SDK does
 // not model it, so a formatter that dropped it would leave that read with
@@ -466,35 +464,34 @@ func TestFormatShowMarkdown_FileExtension(t *testing.T) {
 // key its own SecureFile does not model, so the read of the captured response
 // is the only thing that can notice.
 func TestSecureFiles_UnreadableCapturedFileExtension(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		body string
-		call func(context.Context, *gitlabclient.Client) error
-	}{
-		{"list", `[{"id":1,"name":"keystore.jks","file_extension":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := List(ctx, c, ListInput{ProjectID: "42"})
-			return err
-		}},
-		{"show", `{"id":1,"name":"keystore.jks","file_extension":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Show(ctx, c, ShowInput{ProjectID: "42", FileID: 1})
-			return err
-		}},
-		{"create", `{"id":1,"name":"keystore.jks","file_extension":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
-			_, err := Create(ctx, c, CreateInput{ProjectID: "42", Name: "keystore.jks", ContentBase64: "aGVsbG8="})
-			return err
-		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, tt.body)
-			}))
-			if err := tt.call(context.Background(), client); err == nil {
-				t.Fatal("error = nil, want the captured decode to fail")
-			}
-		})
+	// A list answers with an array and the rest with an object, so each case
+	// drives a client of its own rather than one shared handler.
+	poisoned := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
 	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "list", Call: func() error {
+			client := poisoned(`[{"id":1,"name":"keystore.jks","file_extension":42}]`)
+			_, err := List(context.Background(), client, ListInput{ProjectID: "42"})
+			return err
+		}},
+		{Name: "show", Call: func() error {
+			client := poisoned(`{"id":1,"name":"keystore.jks","file_extension":42}`)
+			_, err := Show(context.Background(), client, ShowInput{ProjectID: "42", FileID: 1})
+			return err
+		}},
+		{Name: "create", Call: func() error {
+			client := poisoned(`{"id":1,"name":"keystore.jks","file_extension":42}`)
+			_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Name: "keystore.jks", ContentBase64: "aGVsbG8="})
+			return err
+		}},
+	})
 }
 
+// TestFormatListMarkdown_ExpiresColumn verifies the list table renders the
+// Expires At column, including the "-" placeholder for files without expiry.
 func TestFormatListMarkdown_ExpiresColumn(t *testing.T) {
 	expires := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
 	md := FormatListMarkdown(ListOutput{Files: []SecureFileItem{

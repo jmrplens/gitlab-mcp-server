@@ -170,26 +170,38 @@ func TestCapturedTokenListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 	}
 }
 
-// TestCapturedReaders_ReadEachTailEntity verifies every reader added for the
-// fields GitLab sends on the entities client-go models incompletely: each one
-// decodes its shape off the keys GitLab spells, and each reports a capture
-// nothing ran under. A reader whose shape is only ever read as a list is
-// exercised through its list reader, since the two share the shape.
+// capturedReaderCase is one reader in the table below: the body GitLab answers
+// with, and what the reader has to have taken out of it.
+type capturedReaderCase struct {
+	name string
+	read func(*gitlabclient.ResponseCapture) (any, error)
+	body string
+	want func(any) bool
+}
+
+// tailReaderCases is the table itself, out here rather than inside the test, so
+// that the test is the loop it runs and nothing else.
 //
-//nolint:gocognit,gocyclo,maintidx // the score is one small closure per entity in a table, so it tracks the number of readers rather than any branching a reader could hide; splitting the table would group entities by nothing.
-func TestCapturedReaders_ReadEachTailEntity(t *testing.T) {
-	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+// Measured rather than assumed, because the obvious question is whether moving
+// the table anywhere helps at all. Inline, the test scored 26 on gocognit, 37
+// on gocyclo and 13 on maintidx, and needed three suppressions to build. Out
+// here gocognit is genuinely gone, since the nesting it counts was the test's;
+// the other two follow the closures and land on this function at 33 and 14. So
+// the trade is two suppressions on a function that is nothing but data, against
+// three on the function that does the work, and the test now reads as the loop
+// it is.
+//
+// The score is the number of readers. A reader hiding a branch would be a
+// finding rather than a rounding error, and none of them has one.
+//
+//nolint:gocyclo,maintidx // one predicate per entity in a table, so the score is the entity count.
+func tailReaderCases() []capturedReaderCase {
 	// first reads one element out of a list reader, so a shape with no
 	// single-object reader is still held to its fields here.
 	first := func(read func(*gitlabclient.ResponseCapture, int) (any, error)) func(*gitlabclient.ResponseCapture) (any, error) {
 		return func(c *gitlabclient.ResponseCapture) (any, error) { return read(c, 1) }
 	}
-	cases := []struct {
-		name string
-		read func(*gitlabclient.ResponseCapture) (any, error)
-		body string
-		want func(any) bool
-	}{
+	return []capturedReaderCase{
 		{
 			name: "topic",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedTopic(c) },
@@ -429,7 +441,16 @@ func TestCapturedReaders_ReadEachTailEntity(t *testing.T) {
 			},
 		},
 	}
-	for _, testCase := range cases {
+}
+
+// TestCapturedReaders_ReadEachTailEntity verifies every reader added for the
+// fields GitLab sends on the entities client-go models incompletely: each one
+// decodes its shape off the keys GitLab spells, and each reports a capture
+// nothing ran under. A reader whose shape is only ever read as a list is
+// exercised through its list reader, since the two share the shape.
+func TestCapturedReaders_ReadEachTailEntity(t *testing.T) {
+	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+	for _, testCase := range tailReaderCases() {
 		t.Run(testCase.name, func(t *testing.T) {
 			got, err := testCase.read(gitlabclient.CapturedBody([]byte(testCase.body)))
 			if err != nil || !testCase.want(got) {
