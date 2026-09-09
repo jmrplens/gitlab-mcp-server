@@ -112357,7 +112357,10 @@
                 ]
               },
               "malware": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "name": {
                 "type": "string"
