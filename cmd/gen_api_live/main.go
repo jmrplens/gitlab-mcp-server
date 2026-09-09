@@ -237,35 +237,36 @@ const containerName = "gitlab-mcp-api-live"
 // and not when a class is defined. That is what makes this cheap enough to run
 // on every GitLab release.
 func dockerRun(image string, keep bool) ([]byte, origin, error) {
-	if _, err := exec.LookPath("docker"); err != nil {
+	docker, err := lookUpDocker()
+	if err != nil {
 		return nil, origin{}, fmt.Errorf("gen_api_live needs docker to boot %s: %w", image, err)
 	}
 
 	ctx, stop := interrupted()
 	defer stop()
 
-	_ = exec.CommandContext(ctx, "docker", "rm", "-f", containerName).Run()
-	boot := exec.CommandContext(ctx, "docker", "run", "-d", "--name", containerName,
+	_ = docker.command(ctx, "rm", "-f", containerName).Run()
+	boot := docker.command(ctx, "run", "-d", "--name", containerName,
 		"--shm-size", "256m",
 		// Everything a request needs is loaded by Rails; the rest is a boot
 		// this waits on for no reason.
 		"-e", "GITLAB_OMNIBUS_CONFIG=puma['worker_processes']=0; sidekiq['max_concurrency']=2; "+
 			"prometheus_monitoring['enable']=false; gitlab_kas['enable']=false; registry['enable']=false;",
 		image)
-	if out, err := boot.CombinedOutput(); err != nil {
-		return nil, origin{}, fmt.Errorf("booting %s: %w: %s", image, err, strings.TrimSpace(string(out)))
+	if out, bootErr := boot.CombinedOutput(); bootErr != nil {
+		return nil, origin{}, fmt.Errorf("booting %s: %w: %s", image, bootErr, strings.TrimSpace(string(out)))
 	}
 	if !keep {
 		// context.WithoutCancel: the teardown has to run even when the reason
 		// we are unwinding is that the context ended, which is exactly the
 		// interrupt case it exists for.
 		defer func() {
-			_ = exec.CommandContext(context.WithoutCancel(ctx), "docker", "rm", "-f", containerName).Run()
+			_ = docker.command(context.WithoutCancel(ctx), "rm", "-f", containerName).Run()
 		}()
 	}
 
-	if err := waitForRails(ctx); err != nil {
-		return nil, origin{}, err
+	if waitErr := waitForRails(ctx, docker); waitErr != nil {
+		return nil, origin{}, waitErr
 	}
 
 	script, err := os.CreateTemp("", "introspect-*.rb")
@@ -279,21 +280,44 @@ func dockerRun(image string, keep bool) ([]byte, origin, error) {
 	if closeErr := script.Close(); closeErr != nil {
 		return nil, origin{}, fmt.Errorf("staging the introspection script: %w", closeErr)
 	}
-	// #nosec G204 -- every argument is this command's own: a fixed container
-	// name and a temp file it just created. The one value a caller supplies is
-	// the image, and it is passed to docker run above rather than here.
-	if out, copyErr := exec.CommandContext(ctx, "docker", "cp", script.Name(), containerName+":/tmp/introspect.rb").CombinedOutput(); copyErr != nil {
+	if out, copyErr := docker.command(ctx, "cp", script.Name(), containerName+":/tmp/introspect.rb").CombinedOutput(); copyErr != nil {
 		return nil, origin{}, fmt.Errorf("copying the introspection script in: %w: %s", copyErr, strings.TrimSpace(string(out)))
 	}
 
 	// Only stdout is taken: Rails writes deprecation warnings to stderr and
 	// they are not part of the answer.
-	run := exec.CommandContext(ctx, "docker", "exec", containerName, "gitlab-rails", "runner", "/tmp/introspect.rb")
+	run := docker.command(ctx, "exec", containerName, "gitlab-rails", "runner", "/tmp/introspect.rb")
 	out, err := run.Output()
 	if err != nil {
 		return nil, origin{}, fmt.Errorf("running the introspection: %w", err)
 	}
-	return out, origin{image: image, digest: imageDigest(ctx, image)}, nil
+	return out, origin{image: image, digest: imageDigest(ctx, docker, image)}, nil
+}
+
+// dockerPath is the docker binary, as one absolute path resolved at the start
+// of a run rather than as a name looked up again on each of the dozen calls a
+// run makes over a twenty-minute boot.
+type dockerPath string
+
+// lookUpDocker resolves the binary once, and is the only place in this command
+// that reads PATH.
+func lookUpDocker() (dockerPath, error) {
+	resolved, err := exec.LookPath("docker")
+	if err != nil {
+		return "", err
+	}
+	return dockerPath(resolved), nil
+}
+
+// command builds one docker invocation. Every call here goes through it, so
+// the program a run executes is the one PATH named when the run began and
+// cannot be swapped underneath it by a directory earlier on that list.
+func (d dockerPath) command(ctx context.Context, args ...string) *exec.Cmd {
+	// #nosec G204 -- the program is the absolute path LookPath resolved, and
+	// every argument is this command's own: a fixed container name, a temp
+	// file it just created, and fixed docker subcommands. The one value a
+	// caller supplies is the image, which is what -image is for.
+	return exec.CommandContext(ctx, string(d), args...)
 }
 
 // bootTimeout bounds the wait for Rails. A first boot pulls three gigabytes
@@ -303,14 +327,14 @@ const bootTimeout = 20 * time.Minute
 // waitForRails polls until gitlab-rails runner answers, which is a stricter
 // readiness than the container's own health check: the health check passes
 // once the web server answers, and this needs the application loaded.
-func waitForRails(ctx context.Context) error {
+func waitForRails(ctx context.Context, docker dockerPath) error {
 	deadline := time.Now().Add(bootTimeout)
 	for time.Now().Before(deadline) {
-		if err := exec.CommandContext(ctx, "docker", "exec", containerName, "gitlab-rails", "runner", "puts 1").Run(); err == nil {
+		if err := docker.command(ctx, "exec", containerName, "gitlab-rails", "runner", "puts 1").Run(); err == nil {
 			return nil
 		}
-		if !running(ctx) {
-			out, _ := exec.CommandContext(ctx, "docker", "logs", "--tail", "20", containerName).CombinedOutput()
+		if !running(ctx, docker) {
+			out, _ := docker.command(ctx, "logs", "--tail", "20", containerName).CombinedOutput()
 			return fmt.Errorf("the container stopped before the application was ready:\n%s", strings.TrimSpace(string(out)))
 		}
 		select {
@@ -324,16 +348,16 @@ func waitForRails(ctx context.Context) error {
 
 // running reports whether the container is still up, so a boot that died is
 // reported with its logs rather than waited out.
-func running(ctx context.Context) bool {
-	out, err := exec.CommandContext(ctx, "docker", "inspect", "-f", "{{.State.Running}}", containerName).Output()
+func running(ctx context.Context, docker dockerPath) bool {
+	out, err := docker.command(ctx, "inspect", "-f", "{{.State.Running}}", containerName).Output()
 	return err == nil && strings.TrimSpace(string(out)) == "true"
 }
 
 // imageDigest is the image's repository digest, which is what makes a
 // regeneration reproducible: a tag moves and a digest does not. An image
 // pulled without one reports none rather than failing the run.
-func imageDigest(ctx context.Context, image string) string {
-	out, err := exec.CommandContext(ctx, "docker", "inspect", "-f", "{{index .RepoDigests 0}}", image).Output()
+func imageDigest(ctx context.Context, docker dockerPath, image string) string {
+	out, err := docker.command(ctx, "inspect", "-f", "{{index .RepoDigests 0}}", image).Output()
 	if err != nil {
 		return ""
 	}

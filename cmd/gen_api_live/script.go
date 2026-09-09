@@ -1,5 +1,7 @@
 package main
 
+// The blank import is what go:embed requires: the directive below is refused
+// without it, and nothing in this file calls the package.
 import _ "embed"
 
 // introspectScript is the Ruby this command runs inside the container.

@@ -87,11 +87,14 @@ def read_source(file, line)
 
   text = +""
   depth = 0
-  (start...[start + 12, lines.size].min).each do |index|
-    text << lines[index]
-    depth += lines[index].count("{([") - lines[index].count("})]")
-    break if depth <= 0 && index > start
-    break if depth.zero? && lines[index].strip.end_with?("end")
+  # Sliced rather than walked by index: the slice clamps at the end of the file
+  # on its own, and the offset the enumerator gives is the only number the
+  # balance test needs, which is whether this is still the first line.
+  lines[start, 12].each_with_index do |source, offset|
+    text << source
+    depth += source.count("{([") - source.count("})]")
+    break if depth <= 0 && offset.positive?
+    break if depth.zero? && source.strip.end_with?("end")
   end
   squeeze(text)
 end

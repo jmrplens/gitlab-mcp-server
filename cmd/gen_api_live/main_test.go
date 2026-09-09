@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -331,4 +333,291 @@ func TestIntrospection_WithADump_NeverBootsAnything(t *testing.T) {
 	if len(raw) == 0 || from.image != "gitlab/gitlab-ee:latest" {
 		t.Errorf("got %d bytes from %+v, want the dump read back", len(raw), from)
 	}
+}
+
+// stubDocker writes a stand-in for the docker binary and returns the path this
+// command would run it through.
+//
+// The stand-in is a shell script, so the cases that need one skip on Windows
+// and say so: what is being tested is how this command reads docker's answers,
+// and a platform that cannot host the stand-in cannot answer them.
+func stubDocker(t *testing.T, script string) dockerPath {
+	t.Helper()
+	if runtime.GOOS == windowsGOOS {
+		t.Skip("the docker stand-in is a shell script, which Windows will not execute for a file with no extension")
+	}
+	path := filepath.Join(t.TempDir(), "docker")
+	// #nosec G306 -- the stand-in has to be executable to stand in for
+	// anything, and it lives in a directory this test owns for its own run.
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+script), 0o700); err != nil {
+		t.Fatalf("writing the docker stand-in: %v", err)
+	}
+	return dockerPath(path)
+}
+
+// windowsGOOS is spelled once so the skip above reads as one decision.
+const windowsGOOS = "windows"
+
+// TestLookUpDocker_WithNothingOnPATH_SaysWhatIsMissing verifies the one place
+// this command reads PATH reports its own failure, since every later call is
+// built from what it resolved.
+func TestLookUpDocker_WithNothingOnPATH_SaysWhatIsMissing(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	if _, err := lookUpDocker(); err == nil {
+		t.Error("lookUpDocker found a docker on an empty PATH")
+	}
+}
+
+// TestDockerCommand_RunsTheResolvedBinary verifies that a call names the
+// absolute path the lookup returned rather than the word docker, which is the
+// whole point of resolving it once.
+func TestDockerCommand_RunsTheResolvedBinary(t *testing.T) {
+	docker := dockerPath(filepath.Join("opt", "bin", "docker"))
+	cmd := docker.command(context.Background(), "inspect", "-f", "{{.State.Running}}", "box")
+
+	t.Run("the program is the resolved path", func(t *testing.T) {
+		if cmd.Path != string(docker) {
+			t.Errorf("Path = %q, want %q", cmd.Path, docker)
+		}
+	})
+	t.Run("the arguments follow it in order", func(t *testing.T) {
+		want := []string{string(docker), "inspect", "-f", "{{.State.Running}}", "box"}
+		if strings.Join(cmd.Args, " ") != strings.Join(want, " ") {
+			t.Errorf("Args = %v, want %v", cmd.Args, want)
+		}
+	})
+}
+
+// TestRunning_ReadsDockersAnswerRatherThanItsExitCode verifies both halves of
+// the check: a container docker calls running, and one it does not.
+func TestRunning_ReadsDockersAnswerRatherThanItsExitCode(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer string
+		want   bool
+	}{
+		{name: "up", answer: "true", want: true},
+		{name: "stopped", answer: "false", want: false},
+		{name: "not a boolean", answer: "<no value>", want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			docker := stubDocker(t, "echo "+tc.answer+"\n")
+			if got := running(context.Background(), docker); got != tc.want {
+				t.Errorf("running = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRunning_WhenDockerItselfFails_IsFalse verifies that a docker that cannot
+// answer is not read as a running container.
+func TestRunning_WhenDockerItselfFails_IsFalse(t *testing.T) {
+	docker := stubDocker(t, "echo true\nexit 1\n")
+	if running(context.Background(), docker) {
+		t.Error("running = true for a docker that exited non-zero")
+	}
+}
+
+// TestImageDigest_TakesWhatFollowsTheAt verifies the digest is read out of the
+// repository digest rather than reported whole, and that an image without one
+// reports none instead of failing the run.
+func TestImageDigest_TakesWhatFollowsTheAt(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		script string
+		want   string
+	}{
+		{
+			name:   "a repository digest",
+			script: "echo gitlab/gitlab-ee@sha256:abc123\n",
+			want:   "sha256:abc123",
+		},
+		{
+			name:   "an image with no repository digest",
+			script: "echo gitlab/gitlab-ee\n",
+			want:   "",
+		},
+		{
+			name:   "docker refuses to answer",
+			script: "exit 1\n",
+			want:   "",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			docker := stubDocker(t, tc.script)
+			if got := imageDigest(context.Background(), docker, "gitlab/gitlab-ee:latest"); got != tc.want {
+				t.Errorf("imageDigest = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestWaitForRails_WhenTheRunnerAnswers_ReturnsAtOnce verifies the readiness
+// check is the runner answering and not the container being up.
+func TestWaitForRails_WhenTheRunnerAnswers_ReturnsAtOnce(t *testing.T) {
+	docker := stubDocker(t, "exit 0\n")
+	if err := waitForRails(context.Background(), docker); err != nil {
+		t.Errorf("waitForRails: %v", err)
+	}
+}
+
+// TestWaitForRails_WhenTheContainerDied_ReportsItsLogs verifies a boot that
+// died is reported with what docker said rather than waited out for twenty
+// minutes, which is the difference between a diagnosis and a timeout.
+func TestWaitForRails_WhenTheContainerDied_ReportsItsLogs(t *testing.T) {
+	docker := stubDocker(t, `case "$1" in
+  exec) exit 1 ;;
+  inspect) echo false ;;
+  logs) echo "the reconfigure failed" ;;
+esac
+`)
+	err := waitForRails(context.Background(), docker)
+	if err == nil {
+		t.Fatal("waitForRails returned no error for a container that stopped")
+	}
+	if !strings.Contains(err.Error(), "the reconfigure failed") {
+		t.Errorf("error = %q, want the container's own logs in it", err)
+	}
+}
+
+// TestDockerRun_WithNoDockerOnPATH_NamesTheImageItCouldNotBoot verifies the
+// early refusal carries what was being attempted, since this is the failure a
+// maintainer without docker installed will actually see.
+func TestDockerRun_WithNoDockerOnPATH_NamesTheImageItCouldNotBoot(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	_, _, err := dockerRun("gitlab/gitlab-ee:19.3.1-ee.0", false)
+	if err == nil {
+		t.Fatal("dockerRun booted something with no docker on PATH")
+	}
+	if !strings.Contains(err.Error(), "gitlab/gitlab-ee:19.3.1-ee.0") {
+		t.Errorf("error = %q, want the image named in it", err)
+	}
+}
+
+// TestDockerRun_DrivesOneBootAndCleansUpAfterIt verifies the whole sequence
+// this command puts a container through, against a stand-in that records what
+// it was asked for: the stale container is removed, the image is booted, the
+// script is copied in, the introspection is run, and the container is removed
+// again when -keep was not passed.
+//
+// Driving it end to end is the only way to see the order, and the order is the
+// part that breaks: a copy before the application is up, or a teardown that
+// does not run because the function returned early, are both invisible to a
+// test of any one step.
+func TestDockerRun_DrivesOneBootAndCleansUpAfterIt(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "calls.log")
+	docker := stubDocker(t, `echo "$@" >> `+log+`
+case "$1" in
+  exec)
+    case "$5" in
+      /tmp/introspect.rb) echo '{"schema_version":1}' ;;
+      *) exit 0 ;;
+    esac
+    ;;
+  inspect) echo "gitlab/gitlab-ee@sha256:deadbeef" ;;
+  *) exit 0 ;;
+esac
+`)
+	t.Setenv("PATH", filepath.Dir(string(docker)))
+
+	raw, from, err := dockerRun("gitlab/gitlab-ee:19.3.1-ee.0", false)
+	if err != nil {
+		t.Fatalf("dockerRun: %v", err)
+	}
+
+	calls, readErr := os.ReadFile(log)
+	if readErr != nil {
+		t.Fatalf("reading what the stand-in was asked: %v", readErr)
+	}
+	recorded := string(calls)
+
+	t.Run("the introspection is what comes back", func(t *testing.T) {
+		if strings.TrimSpace(string(raw)) != `{"schema_version":1}` {
+			t.Errorf("output = %q, want the runner's own stdout", raw)
+		}
+	})
+	t.Run("the digest travels with it", func(t *testing.T) {
+		if from.digest != "sha256:deadbeef" || from.image != "gitlab/gitlab-ee:19.3.1-ee.0" {
+			t.Errorf("origin = %+v, want the image and its repository digest", from)
+		}
+	})
+	t.Run("a stale container is removed before the boot", func(t *testing.T) {
+		if !strings.HasPrefix(recorded, "rm -f "+containerName) {
+			t.Errorf("first call was %q, want the stale container removed first", firstLine(recorded))
+		}
+	})
+	t.Run("the image asked for is the image booted", func(t *testing.T) {
+		if !strings.Contains(recorded, "run -d --name "+containerName) ||
+			!strings.Contains(recorded, "gitlab/gitlab-ee:19.3.1-ee.0") {
+			t.Errorf("calls were:\n%s\nwant the named image booted detached", recorded)
+		}
+	})
+	t.Run("the script is copied in before it is run", func(t *testing.T) {
+		copied := strings.Index(recorded, "cp ")
+		ran := strings.Index(recorded, "/tmp/introspect.rb\n")
+		if copied < 0 || ran < 0 || copied > ran {
+			t.Errorf("calls were:\n%s\nwant the copy before the run", recorded)
+		}
+	})
+	t.Run("the container is removed again", func(t *testing.T) {
+		if strings.Count(recorded, "rm -f "+containerName) != 2 {
+			t.Errorf("calls were:\n%s\nwant the container removed before and after", recorded)
+		}
+	})
+}
+
+// TestDockerRun_WithKeep_LeavesTheContainerUp verifies -keep is honored, which
+// is what makes a failed introspection debuggable.
+func TestDockerRun_WithKeep_LeavesTheContainerUp(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "calls.log")
+	docker := stubDocker(t, `echo "$@" >> `+log+`
+case "$1" in
+  exec)
+    case "$5" in
+      /tmp/introspect.rb) echo '{}' ;;
+      *) exit 0 ;;
+    esac
+    ;;
+  *) exit 0 ;;
+esac
+`)
+	t.Setenv("PATH", filepath.Dir(string(docker)))
+
+	if _, _, err := dockerRun("gitlab/gitlab-ee:latest", true); err != nil {
+		t.Fatalf("dockerRun: %v", err)
+	}
+	calls, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatalf("reading what the stand-in was asked: %v", err)
+	}
+	if strings.Count(string(calls), "rm -f "+containerName) != 1 {
+		t.Errorf("calls were:\n%s\nwant only the removal that precedes the boot", calls)
+	}
+}
+
+// TestDockerRun_WhenTheBootFails_SaysWhatDockerSaid verifies the refusal
+// carries docker's own message, since a boot that fails on the image name and
+// one that fails on a daemon that is not running read identically otherwise.
+func TestDockerRun_WhenTheBootFails_SaysWhatDockerSaid(t *testing.T) {
+	docker := stubDocker(t, `case "$1" in
+  run) echo "no such image" >&2; exit 125 ;;
+  *) exit 0 ;;
+esac
+`)
+	t.Setenv("PATH", filepath.Dir(string(docker)))
+
+	_, _, err := dockerRun("gitlab/gitlab-ee:nope", false)
+	if err == nil {
+		t.Fatal("dockerRun returned no error for a boot that failed")
+	}
+	if !strings.Contains(err.Error(), "no such image") {
+		t.Errorf("error = %q, want docker's own message in it", err)
+	}
+}
+
+// firstLine names the first call a stand-in recorded, for a failure message
+// that shows what happened instead of the whole log.
+func firstLine(recorded string) string {
+	line, _, _ := strings.Cut(recorded, "\n")
+	return line
 }
