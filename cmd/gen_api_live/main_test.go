@@ -647,10 +647,44 @@ esac
 	}
 }
 
-// TestWaitForRails_WhenTheRunIsCancelled_StopsWaiting verifies the interrupt
-// path: the container is up and the application is not ready, and the wait
-// ends on the context rather than sitting out the rest of the twenty minutes.
-func TestWaitForRails_WhenTheRunIsCancelled_StopsWaiting(t *testing.T) {
+// TestWaitForRails_WhenTheRunIsCancelled_SaysSoRatherThanBlamingTheContainer
+// verifies the interrupt path, and that it is not mistaken for the other way a
+// wait ends.
+//
+// Every question this loop asks goes through docker with the run's own context,
+// so a cancelled run makes the readiness check and the is-it-up check fail
+// alike. Read in that order, an interrupt looks exactly like a container that
+// died, and a reader is sent to the logs of a container that is fine. The
+// cancellation is therefore reported before the container is asked about, and
+// this test cancels up front, which is the case that used to be misreported.
+func TestWaitForRails_WhenTheRunIsCancelled_SaysSoRatherThanBlamingTheContainer(t *testing.T) {
+	docker := stubDocker(t, `case "$1" in
+  exec) exit 1 ;;
+  inspect) echo true ;;
+  logs) echo "a container that is perfectly fine" ;;
+esac
+`)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := waitForRails(ctx, docker)
+
+	if err == nil {
+		t.Fatal("waitForRails returned no error for a cancelled run")
+	}
+	if !strings.Contains(err.Error(), "waiting for the application") {
+		t.Errorf("error = %q, want it to name what it was waiting for", err)
+	}
+	if strings.Contains(err.Error(), "perfectly fine") {
+		t.Errorf("error = %q, want it not to blame the container for an interrupt", err)
+	}
+}
+
+// TestWaitForRails_WhenTheRunIsCancelledWhileItSleeps_StopsWaiting verifies the
+// other moment an interrupt can arrive: not before an attempt but during the
+// pause between two, which is where a twenty-minute wait spends nearly all of
+// its time and so where a real interrupt almost always lands.
+func TestWaitForRails_WhenTheRunIsCancelledWhileItSleeps_StopsWaiting(t *testing.T) {
 	docker := stubDocker(t, `case "$1" in
   exec) exit 1 ;;
   inspect) echo true ;;
@@ -660,16 +694,13 @@ esac
 	t.Cleanup(func() { pollInterval = previousPoll })
 	pollInterval = time.Hour
 
-	// Cancelled on a timer rather than up front: an already-cancelled context
-	// makes the very first docker call fail, and the wait would then report the
-	// container as stopped instead of reaching the interrupt this is about.
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
 	err := waitForRails(ctx, docker)
 
 	if err == nil {
-		t.Fatal("waitForRails returned no error for a cancelled run")
+		t.Fatal("waitForRails returned no error for a run cancelled mid-wait")
 	}
 	if !strings.Contains(err.Error(), "waiting for the application") {
 		t.Errorf("error = %q, want it to name what it was waiting for", err)

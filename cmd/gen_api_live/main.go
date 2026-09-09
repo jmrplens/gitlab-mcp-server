@@ -341,6 +341,14 @@ func waitForRails(ctx context.Context, docker dockerPath) error {
 		if err := docker.command(ctx, "exec", containerName, "gitlab-rails", "runner", "puts 1").Run(); err == nil {
 			return nil
 		}
+		// Before asking whether the container is up, because that question is
+		// asked through docker with this same context: once it is cancelled
+		// the inspect fails too, and a run somebody interrupted would be
+		// reported as a container that died, which sends a reader to the logs
+		// of a container that is fine.
+		if ctx.Err() != nil {
+			return fmt.Errorf("waiting for the application: %w", ctx.Err())
+		}
 		if !running(ctx, docker) {
 			out, _ := docker.command(ctx, "logs", "--tail", "20", containerName).CombinedOutput()
 			return fmt.Errorf("the container stopped before the application was ready:\n%s", strings.TrimSpace(string(out)))

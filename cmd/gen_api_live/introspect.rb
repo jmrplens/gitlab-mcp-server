@@ -323,7 +323,11 @@ def features_document
     list =
       begin
         table.const_get(constant)
-      rescue StandardError, NameError
+      # NameError alone, and not StandardError beside it: NameError descends
+      # from StandardError, so naming both rescued nothing the first did not
+      # and only widened what is swallowed. A list this release does not
+      # declare is the one failure worth passing over here.
+      rescue NameError
         []
       end
     list.each do |feature|
