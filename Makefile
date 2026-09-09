@@ -14,7 +14,7 @@
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent \
-	gen-api-shapes check-api-shapes gen-api-exposes check-api-exposes check-meta-descriptions \
+	gen-api-shapes check-api-shapes gen-api-exposes check-api-exposes gen-api-live check-api-live check-meta-descriptions \
 	gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
@@ -1408,6 +1408,24 @@ gen-api-exposes:
 ## same shared staleness window (cmd/internal/provenance). No network, so it is a gate.
 check-api-exposes:
 	go run ./cmd/gen_api_exposes/ -check
+
+## gen-api-live: boot a released GitLab image, ask the loaded application what
+## its REST API is, and rewrite docs/development/gitlab-api-live.json. It needs
+## Docker and takes a few minutes on a cold image, about forty seconds
+## afterwards; it needs no licence and no fixtures, because a licence gates
+## feature_available? when a request is served and not when a class is defined.
+## This is the only oracle here that is evaluated rather than parsed, which is
+## what lets it see the ~600 fields GeoSiteStatus exposes through a loop where
+## a scan of the same source sees 26.
+gen-api-live:
+	go run ./cmd/gen_api_live/
+
+## check-api-live: fail when the committed live record is not one this build can
+## read, is too small to have come from a GitLab, holds an entity that refused to
+## describe itself, or is past the shared staleness window
+## (cmd/internal/provenance). No Docker and no network, so it is a gate.
+check-api-live:
+	go run ./cmd/gen_api_live/ -check
 
 ## check-graphql-documents: fail when a raw GraphQL document in the source is
 ## one GitLab would refuse. The test transport catches the documents a test
