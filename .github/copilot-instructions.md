@@ -38,13 +38,11 @@ gitlab-mcp-server/
 │   ├── audit_test_goroutines/ # Off-goroutine testing.T abort audit (--check gate)
 │   ├── audit_test_names/   # Test naming convention (+ -apply/-dry-run; -check-files gates test-file naming)
 │   ├── audit_test_subtests/ # Case loops that assert without a t.Run subtest (-fix rewrites the unambiguous ones)
-│   ├── audit_string_dupes/ # Duplicated string literals missing constants
 │   ├── bench_resources/    # What the server costs to run, and the charts the docs publish
 │   ├── godoc_tool/         # Godoc auditor + fixer (audit/fix; was audit_godocs + add_docs)
 │   ├── format_md_tables/   # Markdown pipe-table normalizer
 │   ├── gen_action_catalog_manifest/ # ActionSpec group-builder manifest
 │   ├── gen_brand/          # Every vector brand asset from one parametric geometry
-│   ├── gen_docker_tools/   # Docker MCP Registry tools.json
 │   ├── gen_icon_webp/      # Light/dark WebP icon fallbacks from icons.go
 │   ├── gen_lhm_manifest/   # Capability arrays in lhm.plugin.json (LobeHub)
 │   ├── gen_llms/           # llms.txt / llms-full.txt

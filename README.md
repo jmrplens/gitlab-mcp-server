@@ -467,20 +467,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,252 |     263,799 |
-| Unit tests (`_test.go`)  |       734 |     426,960 |
+| Source (`.go`, non-test) |     1,248 |     263,399 |
+| Unit tests (`_test.go`)  |       732 |     426,298 |
 | End-to-end tests         |       246 |      66,332 |
-| **Total**                | **2,232** | **757,091** |
+| **Total**                | **2,226** | **756,029** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  9,691 |
+| Source functions                |  9,678 |
 | . Exported (public)             |  2,999 |
-| . Unexported (private)          |  6,692 |
-| Unit test functions (`TestXxx`) | 14,476 |
-| Subtests (`t.Run(...)`)         |  5,799 |
+| . Unexported (private)          |  6,679 |
+| Unit test functions (`TestXxx`) | 14,451 |
+| Subtests (`t.Run(...)`)         |  5,795 |
 | End-to-end test functions       |    605 |
 
 ### Ratios worth noting
@@ -490,16 +490,16 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.62× more tests than code |
 | Average source file length         |                 ~211 lines |
 | Average test file length           |                 ~582 lines |
-| Comment lines in source            |  48,620 (~18.4% of source) |
+| Comment lines in source            |  48,532 (~18.4% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 7,917 |
-| `defer` statements                 | 1,366 |
-| `struct` types defined             | 3,168 |
+| `if err != nil` checks             | 7,911 |
+| `defer` statements                 | 1,365 |
+| `struct` types defined             | 3,165 |
 | `//nolint` suppressions            |   341 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
@@ -507,7 +507,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   274 |
+| Go packages                    |   272 |
 | Direct dependencies (`go.mod`) |    32 |
 | Indirect dependencies          |    39 |
 
@@ -522,8 +522,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~4,796 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 15,142 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~4,789 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 15,136 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

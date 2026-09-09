@@ -36,7 +36,6 @@ gitlab-mcp-server/
 │   ├── audit_install_buttons/   # One-click install buttons decode to one configuration per command
 │   ├── audit_metrics/           # MCP tool/resource/prompt metrics summary (+ -site-stats)
 │   ├── audit_readonly_graphql/  # No ReadOnly action can reach a GraphQL mutation
-│   ├── audit_string_dupes/      # Finds duplicated string literals missing constants
 │   ├── audit_supply_chain/      # Release-configuration invariants (pinned actions, locked release jobs, ...)
 │   ├── audit_surface_quality/   # Surface quality audit (-view metadata|output|all)
 │   ├── audit_test_goroutines/   # testing.T aborts made off the test goroutine
@@ -48,7 +47,6 @@ gitlab-mcp-server/
 │   ├── format_md_tables/        # Normalizes Markdown pipe tables
 │   ├── gen_action_catalog_manifest/ # Generates ActionSpec manifest
 │   ├── gen_brand/               # Emits every vector brand asset from one parametric geometry
-│   ├── gen_docker_tools/        # Generates Docker MCP Registry tools.json
 │   ├── gen_icon_webp/           # Light/dark WebP icon fallbacks (maintainer-only)
 │   ├── gen_lhm_manifest/        # Generates the LobeHub manifest capability arrays
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt

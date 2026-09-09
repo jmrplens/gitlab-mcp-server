@@ -26,7 +26,6 @@ dist/
 /audit_tools
 /add_docs
 /find_dupes
-/gen_docker_tools
 /gen_icon_webp
 /gen_llms
 /gen_stats
@@ -142,7 +141,6 @@ image.png
 /audit_dynamic_aliases
 /audit_edition_tier
 /audit_metrics
-/audit_string_dupes
 /audit_surface_quality
 /audit_test_names
 /audit_tokens
@@ -150,7 +148,6 @@ image.png
 /find_dupes
 /format_md_tables
 /gen_action_catalog_manifest
-/gen_docker_tools
 /gen_lhm_manifest
 /gen_llms
 /gen_stats
