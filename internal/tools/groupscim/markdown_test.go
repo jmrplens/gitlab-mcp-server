@@ -21,8 +21,8 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			name: "active identity with all fields",
 			input: Output{
 				ExternUID: "ext-uid-123",
-				UserID:      42,
-				Active:      true,
+				UserID:    42,
+				Active:    true,
 			},
 			contains: []string{
 				"SCIM Identity",
@@ -37,8 +37,8 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			name: "inactive identity",
 			input: Output{
 				ExternUID: "ext-uid-456",
-				UserID:      99,
-				Active:      false,
+				UserID:    99,
+				Active:    false,
 			},
 			contains: []string{
 				"ext-uid-456",

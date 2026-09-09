@@ -182,9 +182,9 @@ func toOutput(d *gitlab.Deployment, extra toolutil.DeploymentExtra) Output {
 		PendingApprovalCount: extra.PendingApprovalCount,
 		CreatedAt:            toolutil.FormatTimePtr(d.CreatedAt),
 		UpdatedAt:            toolutil.FormatTimePtr(d.UpdatedAt),
-		User:        projectUserOutput(d.User),
-		Environment: environmentOutput(d.Environment),
-		Deployable:  deployableOutput(d.Deployable, nil),
+		User:                 projectUserOutput(d.User),
+		Environment:          environmentOutput(d.Environment),
+		Deployable:           deployableOutput(d.Deployable, nil),
 	}
 }
 
