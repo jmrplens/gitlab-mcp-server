@@ -47,7 +47,9 @@ Target a `release-client-N.0` branch only when the change breaks the public API.
 
 ### 3. Write a conventional-commit title, and prefix every commit
 
-Title: `feat(topics): add OrganizationID to the Topic struct` — the API file is the scope. `feat` for a new field or endpoint, `fix` for a wrong tag or a bug.
+Title: `feat(topics): add OrganizationID to the Topic struct`. `feat` for a new field or endpoint, `fix` for a wrong tag or a bug.
+
+**The scope is the API file, and it is expected even though conventional-commit does not require one.** `fix: correct the json tag` parses as conventional and reaches the release notes, so a check for "has a prefix" passes it, and the project's merged history is overwhelmingly file-scoped (`fix(group_boards)`, `fix(feature_flags)`, `fix(issues)`). Write the scope.
 
 The release-notes generator strips the prefix and **omits a non-conventional title entirely**, so an unprefixed title merges and then never appears in the changelog. Of 279 changelog entries, none differs from its merge request title.
 
@@ -57,7 +59,9 @@ Never use a `(no-release)` scope, and never put `[delay release]` in the descrip
 
 ### 4. Use the project's description headings
 
-"What does this MR do?", "Is this a breaking change?", "How was this tested?". The repository has issue templates and no merge request template, so this is convention read off merged requests rather than something enforced.
+Three `##` headings, in this order: "What does this MR do?", "Is this a breaking change?", "How was this tested?". The repository has issue templates and no merge request template, so this is convention read off merged requests rather than something enforced, which is exactly why it gets skipped: seven merge requests opened from here carried ad-hoc headings or none until they were rewritten.
+
+Answer the breaking-change heading honestly rather than with a flat "no". Correcting a json tag is source-compatible and still changes the value a caller decodes, which is worth one sentence.
 
 Say the gap was found while developing this MCP server and link the repository: the backlink is the point of contributing from here.
 
@@ -70,6 +74,8 @@ Reference a related issue **only** if it already carries a `type::` label, and o
 Do not open as a draft; the ready command issues `/ready` regardless.
 
 Do not request `@GitLabDuo` yourself. That request is what produces the `DCR4003` warning ("you don't have permission to create a pipeline for Code Review Flow"), and it is not the review that counts: on merged requests `gitlab-bot` requests Duo after the ready command and Duo then posts a real review.
+
+**This one cannot be undone.** Removing a reviewer means `reviewer_ids`, which is exactly the field dropped silently for a non-member, so a Duo request made at creation stays on the merge request with its warning comment for the life of it. Seven merge requests opened from here carry one permanently.
 
 Do not write a `Changelog:` trailer and do not touch `CHANGELOG.md`: semantic-release writes it.
 
@@ -102,12 +108,13 @@ Expect `danger-review` and `autolabels` to fail: both are `allow_failure: true`.
 
 In this order.
 
-1. **Fix the title** if it has no conventional prefix. Title and description are the two fields the author may still edit.
-2. **Ask for the label**: post `@gitlab-bot label ~"type::feature"` (or `~"type::bug"`) as a comment, with the command at the start of its own line. `command_mr_label.rb` accepts it from the resource author, and its allowed scopes include `type`. The rate limit is the module default of 60 per hour keyed on the actor.
+1. **Fix the title** if it has no conventional prefix, or has one with no file scope. Title and description are the two fields the author may still edit.
+2. **Fix the description** if it is missing the three headings or the backlink, keeping every piece of evidence it already carries. This comes **before** the label command, not after: editing a description re-fires `apply_labels_from_related_issue.rb`, so a merge request that references an issue would have its `type::` label re-derived on top of the one just asked for.
+3. **Ask for the label**: post `@gitlab-bot label ~"type::feature"` (or `~"type::bug"`) as a comment, with the command at the start of its own line. `command_mr_label.rb` accepts it from the resource author, and its allowed scopes include `type`. The rate limit is the module default of 60 per hour keyed on the actor.
    Pick by what should ship: `type::feature` cuts a minor, `type::bug` a patch, `type::maintenance` cuts nothing. There is no urgency — an unlabelled merge request still merges and still ships under "Other Changes", and the analyzer reads labels through the API at release time, so a label added later still counts.
-3. **Ask for review, naming a code owner**: post `@gitlab-bot ready @<code owner>`. `command_mr_request_review.rb` reacts to the author's own note and emits `/ready`, the `workflow::ready for review` label and `/request_review`; with arguments it requests exactly those users. This is the only mechanism by which a non-member gets a chosen name onto the reviewer field. Posted **bare** it picks a random GitLab-wide merge request coach, who is usually not one of the four code owners.
+4. **Ask for review, naming a code owner**: post `@gitlab-bot ready @<code owner>`. `command_mr_request_review.rb` reacts to the author's own note and emits `/ready`, the `workflow::ready for review` label and `/request_review`; with arguments it requests exactly those users. This is the only mechanism by which a non-member gets a chosen name onto the reviewer field. Posted **bare** it picks a random GitLab-wide merge request coach, who is usually not one of the four code owners.
    One ready command per merge request per hour: the limit is 1 for a non-member and the cache key is the actor **plus** the merge request path, so several merge requests can be readied within the same hour and a misfire costs an hour on that one only.
-4. **Then stop.** One approval is required and this account cannot approve; the fork pipeline is already green and needs no maintainer to start it. Do not re-post `ready` if nothing happens — it is rate-limited and would only re-request the same person, and `gitlab-bot` nudges an unattended merge request on its own.
+5. **Then stop.** One approval is required and this account cannot approve; the fork pipeline is already green and needs no maintainer to start it. Do not re-post `ready` if nothing happens — it is rate-limited and would only re-request the same person, and `gitlab-bot` nudges an unattended merge request on its own.
 
 ## What actually moves a merge request
 
@@ -131,8 +138,9 @@ Then retire the workaround this project carried for the gap (a captured-response
 
 - [ ] No open upstream merge request already covers this
 - [ ] Branch pushed to the community fork, merge request opened against project 65271576
-- [ ] Conventional prefix on the title **and** on every commit
-- [ ] Description uses the project's three headings, names this MCP server as where the gap was found, and links it
+- [ ] Conventional prefix **with the API file as scope** on the title, and a prefix on every commit
+- [ ] Description uses the project's three `##` headings, names this MCP server as where the gap was found, and links it
+- [ ] No reviewer requested by hand, `@GitLabDuo` included: that one is permanent once made
 - [ ] Field placed in API-documentation order, `int64`/`any`, `PathEscape` where a path parameter is interpolated
 - [ ] Every public symbol carries a name-first comment ending in a `// GitLab API docs:` link
 - [ ] Test asserts the new field, starts with `t.Parallel()`, uses testify
