@@ -250,6 +250,11 @@ type MergeRequestsOutput struct {
 // Scope priority: project_id > group_id > global.
 func MergeRequests(ctx context.Context, client *gitlabclient.Client, input MergeRequestsInput) (MergeRequestsOutput, error) {
 	searchClient := client.GL().Search
+	// A search result is a whole merge request, so it carries the keys no
+	// client-go merge request struct models and the shared output type
+	// publishes; without the capture they would be schema fields this handler
+	// alone never fills (ADR-0021).
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mrs, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.MergeRequest]{
 		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
 		searchType: input.SearchType, operation: "searchMergeRequests", projectSearch: searchClient.MergeRequestsByProject,
@@ -258,7 +263,14 @@ func MergeRequests(ctx context.Context, client *gitlabclient.Client, input Merge
 	if err != nil {
 		return MergeRequestsOutput{}, err
 	}
-	out := convertSearchResults(mrs, mergerequests.ToOutput)
+	extras, err := toolutil.CapturedMergeRequests(captured, len(mrs))
+	if err != nil {
+		return MergeRequestsOutput{}, toolutil.WrapErr("searchMergeRequests", err)
+	}
+	out := make([]mergerequests.Output, len(mrs))
+	for i, mr := range mrs {
+		out[i] = mergerequests.ToOutput(mr, extras[i])
+	}
 	return MergeRequestsOutput{MergeRequests: out, Pagination: searchPagination(resp, len(out))}, nil
 }
 

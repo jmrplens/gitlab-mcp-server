@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -2273,5 +2274,246 @@ func TestWrapSearchErr_400(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "search_type") || !strings.Contains(err.Error(), "backend") {
 		t.Errorf("expected 400 hint about search_type backend availability, got: %v", err)
+	}
+}
+
+// TestMergeRequests_SentKeys_ReachEveryResult verifies a merge request search
+// result carries the keys lib/api/entities/merge_request_basic.rb sends and no
+// client-go merge request struct declares. The result type is the one the merge
+// request domain publishes, so leaving them empty here would put schema fields
+// in front of a model that this handler alone never fills (ADR-0021).
+func TestMergeRequests_SentKeys_ReachEveryResult(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathSearchGlobal {
+			testutil.RespondJSON(w, http.StatusOK, `[{
+				"id":100,"iid":1,"project_id":42,"title":"Add login","state":"opened",
+				"approvals_before_merge":3,"merge_status":"can_be_merged",
+				"reference":"!1","work_in_progress":true
+			}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := MergeRequests(context.Background(), client, MergeRequestsInput{Query: "login"})
+	if err != nil {
+		t.Fatalf("MergeRequests() unexpected error: %v", err)
+	}
+	if len(out.MergeRequests) != 1 {
+		t.Fatalf("MergeRequests() returned %d results, want 1", len(out.MergeRequests))
+	}
+	row := out.MergeRequests[0]
+	if row.ApprovalsBeforeMerge == nil || *row.ApprovalsBeforeMerge != 3 {
+		t.Errorf("ApprovalsBeforeMerge = %v, want 3", row.ApprovalsBeforeMerge)
+	}
+	if row.MergeStatus != "can_be_merged" || row.Reference != "!1" || !row.WorkInProgress {
+		t.Errorf("captured keys = %q/%q/%t, want can_be_merged/!1/true", row.MergeStatus, row.Reference, row.WorkInProgress)
+	}
+}
+
+// TestMergeRequests_UndecodableBody_IsTheOperationError verifies a captured
+// body the extra shape cannot decode is returned as the handler's error rather
+// than dropped.
+func TestMergeRequests_UndecodableBody_IsTheOperationError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathSearchGlobal {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"merge_status":7}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	if _, err := MergeRequests(context.Background(), client, MergeRequestsInput{Query: "login"}); err == nil {
+		t.Fatal("error = nil, want the undecodable captured body reported")
+	}
+}
+
+// TestDecorateSearchMeta_EmptyEntry_LeavesEveryOptionAlone verifies each of the
+// five metadata fields is copied only when the entry supplies it. Every entry
+// in the real table fills all five, so nothing else can reach the other side of
+// those five guards, and a search action added with partial metadata would
+// otherwise silently lose whatever the generic options already carried.
+func TestDecorateSearchMeta_EmptyEntry_LeavesEveryOptionAlone(t *testing.T) {
+	const probe = "gitlab_search_meta_probe"
+	searchActionMeta[probe] = searchActionMetaEntry{}
+	t.Cleanup(func() { delete(searchActionMeta, probe) })
+
+	options := toolutil.ActionSpecOptions{
+		Usage:          "generic usage",
+		Aliases:        []string{"generic alias"},
+		Tags:           []string{"generic tag"},
+		RelatedActions: []string{"generic.related"},
+	}
+	options.IndividualTool.Description = "generic description"
+	decorateSearchMeta(&options, probe)
+
+	if options.Usage != "generic usage" || options.IndividualTool.Description != "generic description" {
+		t.Errorf("usage/description = %q/%q, want the generic ones untouched", options.Usage, options.IndividualTool.Description)
+	}
+	if len(options.Aliases) != 1 || len(options.Tags) != 1 || len(options.RelatedActions) != 1 {
+		t.Errorf("aliases/tags/related = %v/%v/%v, want each left as it was",
+			options.Aliases, options.Tags, options.RelatedActions)
+	}
+}
+
+// TestDecorateSearchMeta_UnknownTool_IsANoOp verifies a tool the table does not
+// name keeps the generic options, which is the early return the five guards sit
+// behind.
+func TestDecorateSearchMeta_UnknownTool_IsANoOp(t *testing.T) {
+	options := toolutil.ActionSpecOptions{Usage: "generic usage"}
+	decorateSearchMeta(&options, "gitlab_search_not_in_the_table")
+	if options.Usage != "generic usage" {
+		t.Errorf("Usage = %q, want the generic one untouched", options.Usage)
+	}
+}
+
+// TestSearchInputSchema_WithoutSearchType_LeavesTheSchemaAlone verifies the
+// schema builder decorates search_type only where the input type has one. Every
+// search input embeds TypeInput today, so this guard is what keeps one that
+// does not from being handed a nil property to write through.
+func TestSearchInputSchema_WithoutSearchType_LeavesTheSchemaAlone(t *testing.T) {
+	type noSearchType struct {
+		Query string `json:"query"`
+	}
+	schema := searchInputSchema[noSearchType]()
+	if schema == nil {
+		t.Fatal("searchInputSchema() = nil, want a schema")
+	}
+	if _, found := schema.Properties["search_type"]; found {
+		t.Errorf("schema carries search_type for a type that has no such field")
+	}
+}
+
+// TestUsersAndWiki_ScopedSearches_ReachTheScopedPath verifies the project and
+// group branches of the two handlers that build their own scope switch rather
+// than going through runScopedSearch. Nothing drove either branch before, so a
+// scoped user or wiki search could have been sent to the global endpoint and no
+// test would have said so.
+func TestUsersAndWiki_ScopedSearches_ReachTheScopedPath(t *testing.T) {
+	tests := []struct {
+		name  string
+		scope string
+		path  string
+		body  string
+		call  func(*gitlabclient.Client) (int, error)
+	}{
+		{"users/project", "users", pathSearchProject, `[{"id":1,"username":"alice"}]`, func(c *gitlabclient.Client) (int, error) {
+			out, err := Users(context.Background(), c, UsersInput{ProjectID: "42", Query: "alice"})
+			return len(out.Users), err
+		}},
+		{"users/group", "users", pathSearchGroup, `[{"id":1,"username":"alice"}]`, func(c *gitlabclient.Client) (int, error) {
+			out, err := Users(context.Background(), c, UsersInput{GroupID: "7", Query: "alice"})
+			return len(out.Users), err
+		}},
+		{"wiki/project", "wiki_blobs", pathSearchProject, `[{"basename":"home","path":"home.md"}]`, func(c *gitlabclient.Client) (int, error) {
+			out, err := Wiki(context.Background(), c, WikiInput{ProjectID: "42", Query: "home"})
+			return len(out.WikiBlobs), err
+		}},
+		{"wiki/group", "wiki_blobs", pathSearchGroup, `[{"basename":"home","path":"home.md"}]`, func(c *gitlabclient.Client) (int, error) {
+			out, err := Wiki(context.Background(), c, WikiInput{GroupID: "7", Query: "home"})
+			return len(out.WikiBlobs), err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == tt.path && r.URL.Query().Get(queryScope) == tt.scope {
+					testutil.RespondJSON(w, http.StatusOK, tt.body)
+					return
+				}
+				t.Errorf("request went to %s (scope %q), want %s (scope %q)",
+					r.URL.Path, r.URL.Query().Get(queryScope), tt.path, tt.scope)
+				testutil.RespondJSON(w, http.StatusOK, "[]")
+			}))
+			got, err := tt.call(client)
+			if err != nil {
+				t.Fatalf("%s unexpected error: %v", tt.name, err)
+			}
+			if got != 1 {
+				t.Errorf("%s returned %d results, want 1", tt.name, got)
+			}
+		})
+	}
+}
+
+// TestSnippets_AuthorAndTimestamps_AreCopiedOnlyWhenSent verifies the snippet
+// converter copies the author and the two timestamps only where GitLab sent
+// them: a snippet whose author account is gone carries an empty username, and
+// the guards are what keep that from reaching the surface as a blank
+// attribution and a zero-valued date. Both sides are driven, since a guard that
+// only ever sees one of them is a guard nothing has tested.
+func TestSnippets_AuthorAndTimestamps_AreCopiedOnlyWhenSent(t *testing.T) {
+	tests := []struct {
+		name          string
+		body          string
+		wantAuthor    string
+		wantTimestamp bool
+	}{
+		{
+			name: "sent",
+			body: `[{"id":9,"title":"scratch","file_name":"scratch.sh","author":{"username":"alice"},` +
+				`"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-16T10:00:00Z"}]`,
+			wantAuthor: "alice", wantTimestamp: true,
+		},
+		{
+			name: "absent",
+			body: `[{"id":9,"title":"scratch","file_name":"scratch.sh"}]`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == pathSearchGlobal && r.URL.Query().Get(queryScope) == "snippet_titles" {
+					testutil.RespondJSON(w, http.StatusOK, tt.body)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			out, err := Snippets(context.Background(), client, SnippetsInput{Query: "scratch"})
+			if err != nil {
+				t.Fatalf("Snippets() unexpected error: %v", err)
+			}
+			if len(out.Snippets) != 1 {
+				t.Fatalf("Snippets() returned %d snippets, want 1", len(out.Snippets))
+			}
+			snippet := out.Snippets[0]
+			if snippet.Author != tt.wantAuthor {
+				t.Errorf("Author = %q, want %q", snippet.Author, tt.wantAuthor)
+			}
+			if gotTimestamp := snippet.CreatedAt != "" && snippet.UpdatedAt != ""; gotTimestamp != tt.wantTimestamp {
+				t.Errorf("timestamps = %q/%q, want them set: %t", snippet.CreatedAt, snippet.UpdatedAt, tt.wantTimestamp)
+			}
+			if snippet.Title != "scratch" {
+				t.Errorf("Title = %q, want the snippet's own title", snippet.Title)
+			}
+		})
+	}
+}
+
+// TestSearchActionSpecs_MetaTags_ReachTheSpec verifies the tags half of
+// decorateSearchMeta actually lands on the built spec. The five metadata copies
+// sit behind five guards and only this one had nothing asserting the value on
+// the far side, so a spec that silently lost its tags would still have passed.
+func TestSearchActionSpecs_MetaTags_ReachTheSpec(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, "[]")
+	}))
+	const tool = "gitlab_search_users"
+	want := searchActionMeta[tool].tags
+	if len(want) == 0 {
+		t.Fatalf("searchActionMeta[%q] declares no tags; pick a tool that does", tool)
+	}
+	var found *toolutil.ActionSpec
+	for _, spec := range ActionSpecs(client) {
+		if spec.IndividualTool.Name == tool {
+			found = &spec
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("no action spec registers %q", tool)
+	}
+	for _, tag := range want {
+		if !slices.Contains(found.Tags, tag) {
+			t.Errorf("spec tags = %v, want them to carry %q from the metadata table", found.Tags, tag)
+		}
 	}
 }

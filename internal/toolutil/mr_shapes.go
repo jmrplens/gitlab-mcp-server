@@ -105,6 +105,37 @@ type MergeRequestOutput struct {
 	ClosedAt                    string                      `json:"closed_at,omitempty"`
 	PreparedAt                  string                      `json:"prepared_at,omitempty"`
 	UserNotesCount              int64                       `json:"user_notes_count,omitempty"`
+	// The keys GitLab's merge request entity sends that client-go's structs do
+	// not model, read from the captured response beside the SDK's own decode
+	// (ADR-0021) and described on [MergeRequestExtra]. approvals_before_merge
+	// carries the tier the sibling shapes already give it, since the count only
+	// exists where merge request approvals are licensed.
+	ApprovalsBeforeMerge *int64 `json:"approvals_before_merge,omitempty" tier:"premium"`
+	MergeStatus          string `json:"merge_status,omitempty"`
+	Reference            string `json:"reference,omitempty"`
+	TitleHTML            string `json:"title_html,omitempty"`
+	DescriptionHTML      string `json:"description_html,omitempty"`
+}
+
+// ApplyExtra fills the keys read off the captured response.
+//
+// It is a method rather than six assignments at each call site because the
+// merge request converters are reached from four packages, and a key added to
+// [MergeRequestExtra] that one of them forgot would be a schema field nothing
+// ever fills.
+//
+// work_in_progress is filled from here even though client-go models it, because
+// it models it on MergeRequest alone: a list decodes into BasicMergeRequest,
+// which does not carry it, so before this the key was published on every list
+// and set on none of them. The capture reads the same bytes the SDK decoded, so
+// the two answers cannot disagree where both exist.
+func (o *MergeRequestOutput) ApplyExtra(extra MergeRequestExtra) {
+	o.ApprovalsBeforeMerge = extra.ApprovalsBeforeMerge
+	o.MergeStatus = extra.MergeStatus
+	o.Reference = extra.Reference
+	o.TitleHTML = extra.TitleHTML
+	o.DescriptionHTML = extra.DescriptionHTML
+	o.WorkInProgress = extra.WorkInProgress
 }
 
 // MRMilestoneOutput mirrors gl.Milestone as surfaced inside merge

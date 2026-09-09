@@ -101,6 +101,7 @@ readable without opening the tracker:
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | No | No | No | No | None |
 | 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, open | No | No | Yes |
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | No | No | No | No | Partial |
+| 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | No | No | No | No | Partial |
 
 States verified against the upstream trackers on 2026-09-05, except entry 34,
 whose merge requests were opened on 2026-09-09.
@@ -1098,6 +1099,71 @@ and `storage_shards`. The replicable matrix is a design question rather than a
 field list, since the names depend on the instance. The `namespaces` type and
 the `RepairGeoSite` return type are both breaking changes to exported API, so
 they belong to a major version or to a new method beside the old one.
+
+### The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. Every gap is worked around, and the two return types cost
+  this repository four declarations rather than a defect.
+- **Workaround**: partial. The six keys are read from the captured response
+  beside the SDK's decode (ADR-0021), through `toolutil.CapturedMergeRequest`
+  and `CapturedMergeRequests` and, for the dependency, a shape local to
+  `internal/tools/mergerequests`. The two return types cannot be worked around
+  without leaving the SDK methods behind, so both stand and are answered by
+  declarations in `cmd/audit_1to1/internal/paths/sent_declarations.go`.
+
+**What**: three gaps in client-go v3.0.0's `merge_requests.go` and
+`merge_request_approvals.go`, measured against the `v19.3.1-ee` entities the
+committed live record was taken from.
+
+- `BasicMergeRequest` carries 50 of the 55 keys
+  [lib/api/entities/merge_request_basic.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/merge_request_basic.rb)
+  exposes. It has no `merge_status`, no `reference`, no
+  `approvals_before_merge` and no `work_in_progress`, all four exposed with no
+  condition at all, and no `title_html` or `description_html`, which the entity
+  exposes under the `render_html` presenter option. Four of the six are the
+  older spelling of a key the entity also sends under a newer name, and GitLab
+  keeps sending both, so a client reading a merge request through the SDK
+  silently loses whichever half its caller expected.
+- The gap is uneven between the two structs, which is what makes it a modelling
+  bug rather than a deliberate omission: `MergeRequest` embeds
+  `BasicMergeRequest` and adds `WorkInProgress` back, marked deprecated, so a
+  single-merge-request GET carries the key and every list of the same objects
+  does not. `BlockingMergeRequest`, a third struct over the same entity,
+  carries all four of the unconditional ones. Three spellings of one response
+  shape, agreeing on nothing.
+- `MergeRequestDependency` carries `blocking_merge_request` and not
+  `blocked_merge_request`, though
+  [lib/api/entities/merge_request_dependency.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/api/entities/merge_request_dependency.rb)
+  exposes both, each rendered with `MergeRequestBasic` and each sent to a
+  caller allowed to read that merge request. Half of a dependency is therefore
+  invisible to the SDK.
+- Two methods declare a return type whose endpoint answers with something else.
+  `MergeRequestApprovalsService.ChangeApprovalConfiguration` returns
+  `*MergeRequest` and sends `POST /projects/:id/merge_requests/:iid/approvals`,
+  which is annotated `Entities::ApprovalState`;
+  `MergeRequestsService.GetMergeRequestChanges` returns `*MergeRequest` and
+  sends `GET /projects/:id/merge_requests/:iid/changes`, annotated
+  `Entities::MergeRequestChanges`. In both cases the struct the caller is
+  handed can hold almost nothing of what arrives.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), whose
+oracle is `docs/development/gitlab-api-live.json`. The merge request family was
+51 of its findings, and the last item above is why 34 of those were filed
+against merge request output types under two entities they never receive: the
+audit reads which endpoints answer with a struct out of the SDK's own source,
+and those two methods put the approval and changes routes in the set. Neither
+endpoint is called anywhere in this repository, which is what settled them as
+artefacts rather than gaps.
+
+**Effort**: additive and small for the six struct fields, which is the same
+change [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+already opened for another set of structs. The two return types are breaking
+changes to exported API, so they belong to a major version or to a new method
+beside the old one.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

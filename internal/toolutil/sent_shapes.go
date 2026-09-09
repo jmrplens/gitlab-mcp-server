@@ -1109,3 +1109,45 @@ func CapturedSnippet(capture *gitlabclient.ResponseCapture) (SnippetExtra, error
 func CapturedSnippets(capture *gitlabclient.ResponseCapture, decoded int) ([]SnippetExtra, error) {
 	return capturedList[SnippetExtra](capture, decoded, "snippets")
 }
+
+// MergeRequestExtra is what lib/api/entities/merge_request_basic.rb sends that
+// client-go's BasicMergeRequest does not carry.
+//
+// Four of the six are the older spelling of something the entity also sends
+// under a newer name, and GitLab still sends both: merge_status beside
+// detailed_merge_status, reference beside references, work_in_progress beside
+// draft, and approvals_before_merge beside the approval rules API. Deprecated
+// is not absent, and a caller reading a merge request through this server
+// should see what GitLab put on the wire.
+//
+// title_html and description_html are the exception: the entity exposes them
+// under the render_html presenter option, and of every route GitLab mounts
+// only GET /projects/:id/merge_requests/:merge_request_iid declares
+// render_html as a request parameter. They arrive on that one response, when
+// the caller asked for them, and on no other, which is why the output shape
+// publishes them omitempty and why a type serving only the other routes leaves
+// them out altogether.
+//
+// approvals_before_merge is a pointer because GitLab sends null where no
+// approval count applies, which a bare int64 would flatten into zero, a number
+// that means something else.
+type MergeRequestExtra struct {
+	ApprovalsBeforeMerge *int64 `json:"approvals_before_merge"`
+	MergeStatus          string `json:"merge_status"`
+	Reference            string `json:"reference"`
+	WorkInProgress       bool   `json:"work_in_progress"`
+	TitleHTML            string `json:"title_html"`
+	DescriptionHTML      string `json:"description_html"`
+}
+
+// CapturedMergeRequest reads them off the captured answer to a request that
+// returned one merge request.
+func CapturedMergeRequest(capture *gitlabclient.ResponseCapture) (MergeRequestExtra, error) {
+	return capturedOne[MergeRequestExtra](capture)
+}
+
+// CapturedMergeRequests reads the same off a list answer, one extra per merge
+// request in order, the count held to what the SDK decoded.
+func CapturedMergeRequests(capture *gitlabclient.ResponseCapture, decoded int) ([]MergeRequestExtra, error) {
+	return capturedList[MergeRequestExtra](capture, decoded, "merge requests")
+}

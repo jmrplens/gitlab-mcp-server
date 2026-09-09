@@ -97,7 +97,8 @@ func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 			}
 			known := declaration.Category == categoryDocumentedNotSent ||
 				declaration.Category == categoryOptionNeverPassed ||
-				declaration.Category == categoryEntityPublishedElsewhere
+				declaration.Category == categoryEntityPublishedElsewhere ||
+				declaration.Category == categorySDKRouteNeverCalled
 			if !known || declaration.Reason == "" || declaration.Field == "" {
 				t.Errorf("declaration %+v is missing its category, reason or field", declaration)
 			}

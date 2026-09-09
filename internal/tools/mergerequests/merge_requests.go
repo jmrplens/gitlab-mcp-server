@@ -194,12 +194,30 @@ type mergeRequestListTarget struct {
 	listOptions         *gl.ListOptions
 }
 
-func mergeRequestListOutput(mrs []*gl.BasicMergeRequest, resp *gl.Response) ListOutput {
+// mergeRequestOutput converts a merge request the SDK has just decoded, filling
+// the keys client-go models on no merge request struct from the same answer the
+// transport captured (ADR-0021). A body that will not decode is the operation's
+// error rather than a silently empty set of keys.
+func mergeRequestOutput(op string, mr *gl.MergeRequest, capture *gitlabclient.ResponseCapture) (Output, error) {
+	extra, err := toolutil.CapturedMergeRequest(capture)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(op, err)
+	}
+	return ToOutput(mr, extra), nil
+}
+
+// mergeRequestListOutput does the same for a page of merge requests, one extra
+// per merge request in order.
+func mergeRequestListOutput(op string, mrs []*gl.BasicMergeRequest, resp *gl.Response, capture *gitlabclient.ResponseCapture) (ListOutput, error) {
+	extras, err := toolutil.CapturedMergeRequests(capture, len(mrs))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr(op, err)
+	}
 	out := make([]Output, len(mrs))
 	for i, m := range mrs {
-		out[i] = BasicToOutput(m)
+		out[i] = BasicToOutput(m, extras[i])
 	}
-	return ListOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}
+	return ListOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // labelOptions converts a label-name slice into a *gl.LabelOptions, or nil when
@@ -359,15 +377,18 @@ type ApproveOutput struct {
 // ToOutput converts a GitLab API [gl.MergeRequest] (the get endpoint payload)
 // to the MCP tool output format. It first projects the embedded
 // BasicMergeRequest, then layers on the MergeRequest-only fields.
-func ToOutput(m *gl.MergeRequest) Output {
-	out := BasicToOutput(&m.BasicMergeRequest)
+//
+// extra carries the keys GitLab sends that no client-go merge request struct
+// models, read from the captured response (ADR-0021); a caller with nothing
+// captured passes the zero value and every one of them stays absent.
+func ToOutput(m *gl.MergeRequest, extra toolutil.MergeRequestExtra) Output {
+	out := BasicToOutput(&m.BasicMergeRequest, extra)
 	out.MergeError = m.MergeError
 	out.ChangesCount = m.ChangesCount
 	out.RebaseInProgress = m.RebaseInProgress
 	out.DivergedCommitsCount = m.DivergedCommitsCount
 	out.Subscribed = m.Subscribed
 	out.FirstContribution = m.FirstContribution
-	out.WorkInProgress = m.WorkInProgress //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; use Draft.
 	out.User = mergeRequestUserOutputPtr(m.User)
 	if m.DiffRefs.BaseSha != "" || m.DiffRefs.HeadSha != "" || m.DiffRefs.StartSha != "" {
 		out.DiffRefs = &DiffRefsOutput{
@@ -387,7 +408,10 @@ func ToOutput(m *gl.MergeRequest) Output {
 // BasicToOutput converts a GitLab API [gl.BasicMergeRequest] to the MCP tool
 // output format. BasicMergeRequest is used in list endpoints that return a
 // lighter payload than the full MergeRequest object.
-func BasicToOutput(m *gl.BasicMergeRequest) Output {
+//
+// extra is what [ToOutput] documents: the keys client-go does not model, read
+// from the captured response.
+func BasicToOutput(m *gl.BasicMergeRequest, extra toolutil.MergeRequestExtra) Output {
 	out := Output{
 		ID:                          m.ID,
 		IID:                         m.IID,
@@ -410,6 +434,7 @@ func BasicToOutput(m *gl.BasicMergeRequest) Output {
 		UserNotesCount:              m.UserNotesCount,
 	}
 	populatePeople(&out, m)
+	out.ApplyExtra(extra)
 	return out
 }
 
@@ -526,6 +551,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.ApprovalsBeforeMerge != 0 {
 		opts.ApprovalsBeforeMerge = new(input.ApprovalsBeforeMerge) //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; no replacement on CreateMergeRequestOptions.
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mr, _, err := client.GL().MergeRequests.CreateMergeRequest(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
@@ -538,7 +564,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		}
 		return Output{}, toolutil.WrapErrWithMessage("mrCreate", err)
 	}
-	return ToOutput(mr), nil
+	return mergeRequestOutput("mrCreate", mr, captured)
 }
 
 // Get retrieves a single merge request by its internal ID within a project.
@@ -563,6 +589,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.RenderHTML != nil {
 		opts.RenderHTML = input.RenderHTML
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mr, _, err := client.GL().MergeRequests.GetMergeRequest(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
@@ -571,7 +598,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		}
 		return Output{}, toolutil.WrapErrWithMessage("mrGet", err)
 	}
-	return ToOutput(mr), nil
+	return mergeRequestOutput("mrGet", mr, captured)
 }
 
 // List returns a paginated list of merge requests for a project.
@@ -588,12 +615,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if err != nil {
 		return ListOutput{}, err
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mrs, resp, err := client.GL().MergeRequests.ListProjectMergeRequests(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrList", err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get")
 	}
-	return mergeRequestListOutput(mrs, resp), nil
+	return mergeRequestListOutput("mrList", mrs, resp, captured)
 }
 
 // buildListOptions maps ListInput fields to the GitLab API list options,
@@ -706,6 +734,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, toolutil.ErrRequiredInt64("mrUpdate", "merge_request_iid")
 	}
 	opts := buildUpdateOpts(input)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mr, _, err := client.GL().MergeRequests.UpdateMergeRequest(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
@@ -714,7 +743,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		}
 		return Output{}, toolutil.WrapErrWithMessage("mrUpdate", err)
 	}
-	return ToOutput(mr), nil
+	return mergeRequestOutput("mrUpdate", mr, captured)
 }
 
 // Merge accepts (merges) a merge request. When squash or
@@ -771,6 +800,9 @@ func Merge(ctx context.Context, client *gitlabclient.Client, input MergeInput) (
 	if input.SquashCommitMessage != "" {
 		opts.SquashCommitMessage = new(input.SquashCommitMessage)
 	}
+	// Captured after the pre-fetch above, so the capture holds the merge's own
+	// answer rather than the merge request as it was before it.
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mr, resp, err := client.GL().MergeRequests.AcceptMergeRequest(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if resp != nil && resp.StatusCode == http.StatusMethodNotAllowed && fetchErr == nil {
@@ -778,7 +810,7 @@ func Merge(ctx context.Context, client *gitlabclient.Client, input MergeInput) (
 		}
 		return Output{}, toolutil.WrapErrWithMessage("mrMerge", err)
 	}
-	return ToOutput(mr), nil
+	return mergeRequestOutput("mrMerge", mr, captured)
 }
 
 // Approve adds an approval to the specified merge request and returns the
@@ -1089,12 +1121,13 @@ func ListGlobal(ctx context.Context, client *gitlabclient.Client, input ListGlob
 	if err != nil {
 		return ListOutput{}, err
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mrs, resp, err := client.GL().MergeRequests.ListMergeRequests(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrListGlobal", err, http.StatusUnauthorized,
 			"global MR listing requires an authenticated token; results are scoped to MRs visible to the calling user (use scope=created_by_me or scope=assigned_to_me to narrow further)")
 	}
-	return mergeRequestListOutput(mrs, resp), nil
+	return mergeRequestListOutput("mrListGlobal", mrs, resp, captured)
 }
 
 // buildGlobalListOptions maps ListGlobalInput to the GitLab API list options.
@@ -1297,16 +1330,13 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	if err != nil {
 		return ListOutput{}, err
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mrs, resp, err := client.GL().MergeRequests.ListGroupMergeRequests(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrListGroup", err, http.StatusNotFound,
 			"verify the group exists with gitlab_group_get. Use full_path or numeric ID")
 	}
-	out := make([]Output, len(mrs))
-	for i, m := range mrs {
-		out[i] = BasicToOutput(m)
-	}
-	return ListOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return mergeRequestListOutput("mrListGroup", mrs, resp, captured)
 }
 
 // buildGroupListOptions maps ListGroupInput to the GitLab API list options.
@@ -1566,6 +1596,7 @@ func CancelAutoMerge(ctx context.Context, client *gitlabclient.Client, input Get
 	if input.MRIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrCancelAutoMerge", "merge_request_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mr, _, err := client.GL().MergeRequests.CancelMergeWhenPipelineSucceeds(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusMethodNotAllowed) || toolutil.IsHTTPStatus(err, http.StatusNotAcceptable) {
@@ -1575,59 +1606,64 @@ func CancelAutoMerge(ctx context.Context, client *gitlabclient.Client, input Get
 		return Output{}, toolutil.WrapErrWithStatusHint("mrCancelAutoMerge", err, http.StatusNotFound,
 			hintVerifyMR)
 	}
-	return ToOutput(mr), nil
+	return mergeRequestOutput("mrCancelAutoMerge", mr, captured)
 }
 
 // ---------------------------------------------------------------------------
 // Subscribe / Unsubscribe
 // ---------------------------------------------------------------------------.
 
-// Subscribe subscribes the authenticated user to the given merge request
-// to receive notifications. Returns the updated merge request.
-func Subscribe(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
+// subscriptionCall is the shape of the two SDK methods that toggle the calling
+// user's subscription to a merge request. It is taken as a selector on the
+// service rather than as the method itself so that client.GL() is reached only
+// after the inputs have been validated, the way every other handler here
+// reaches it.
+type subscriptionCall func(gl.MergeRequestsServiceInterface) func(any, int64, ...gl.RequestOptionFunc) (*gl.MergeRequest, *gl.Response, error)
+
+// toggleSubscription is the body Subscribe and Unsubscribe share, which is all
+// of it but the operation name and the method called.
+func toggleSubscription(ctx context.Context, client *gitlabclient.Client, input GetInput, op string, pick subscriptionCall) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("mrSubscribe: project_id is required")
+		return Output{}, fmt.Errorf("%s: project_id is required", op)
 	}
 	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrSubscribe", "merge_request_iid")
+		return Output{}, toolutil.ErrRequiredInt64(op, "merge_request_iid")
 	}
-	mr, _, err := client.GL().MergeRequests.SubscribeToMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
+	// The capture rides its own context so the fall-back Get below starts from
+	// the caller's, with a capture of its own.
+	callCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	mr, _, err := pick(client.GL().MergeRequests)(string(input.ProjectID), input.MRIID, gl.WithContext(callCtx))
 	if err != nil {
-		// GitLab returns 304 Not Modified with empty body when already subscribed,
-		// which causes EOF during JSON decode. Fall back to Get.
+		// GitLab returns 304 Not Modified with an empty body when the merge
+		// request is already in the requested state, which reaches the decoder
+		// as EOF. The merge request itself is what the caller asked for.
 		if errors.Is(err, io.EOF) || toolutil.IsHTTPStatus(err, http.StatusNotModified) {
 			return Get(ctx, client, input)
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("mrSubscribe", err, http.StatusNotFound,
-			hintVerifyMR)
+		return Output{}, toolutil.WrapErrWithStatusHint(op, err, http.StatusNotFound, hintVerifyMR)
 	}
-	return ToOutput(mr), nil
+	return mergeRequestOutput(op, mr, captured)
+}
+
+// Subscribe subscribes the authenticated user to the given merge request
+// to receive notifications. Returns the updated merge request.
+func Subscribe(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
+	return toggleSubscription(ctx, client, input, "mrSubscribe",
+		func(s gl.MergeRequestsServiceInterface) func(any, int64, ...gl.RequestOptionFunc) (*gl.MergeRequest, *gl.Response, error) {
+			return s.SubscribeToMergeRequest
+		})
 }
 
 // Unsubscribe unsubscribes the authenticated user from the given merge request.
 // Returns the updated merge request.
 func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
-	if err := ctx.Err(); err != nil {
-		return Output{}, err
-	}
-	if input.ProjectID == "" {
-		return Output{}, errors.New("mrUnsubscribe: project_id is required")
-	}
-	if input.MRIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("mrUnsubscribe", "merge_request_iid")
-	}
-	mr, _, err := client.GL().MergeRequests.UnsubscribeFromMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
-	if err != nil {
-		if errors.Is(err, io.EOF) || toolutil.IsHTTPStatus(err, http.StatusNotModified) {
-			return Get(ctx, client, input)
-		}
-		return Output{}, toolutil.WrapErrWithStatusHint("mrUnsubscribe", err, http.StatusNotFound,
-			hintVerifyMR)
-	}
-	return ToOutput(mr), nil
+	return toggleSubscription(ctx, client, input, "mrUnsubscribe",
+		func(s gl.MergeRequestsServiceInterface) func(any, int64, ...gl.RequestOptionFunc) (*gl.MergeRequest, *gl.Response, error) {
+			return s.UnsubscribeFromMergeRequest
+		})
 }
 
 // ---------------------------------------------------------------------------
@@ -1912,7 +1948,35 @@ type DependencyOutput struct {
 	toolutil.HintableOutput
 	ID                   int64                       `json:"id"`
 	BlockingMergeRequest *BlockingMergeRequestOutput `json:"blocking_merge_request,omitempty"`
-	ProjectID            int64                       `json:"project_id"`
+	// BlockedMergeRequest is the other end of the dependency, which
+	// lib/api/entities/merge_request_dependency.rb renders with the same
+	// MergeRequestBasic and client-go's MergeRequestDependency does not model
+	// at all (ADR-0021). GitLab sends it to a caller allowed to read that merge
+	// request, which is why it is omitempty rather than always present.
+	BlockedMergeRequest *BlockingMergeRequestOutput `json:"blocked_merge_request,omitempty"`
+	ProjectID           int64                       `json:"project_id"`
+}
+
+// dependencyExtra is what the dependency entity sends beside the blocking
+// merge request that the SDK's struct leaves behind.
+type dependencyExtra struct {
+	BlockedMergeRequest *gl.BlockingMergeRequest `json:"blocked_merge_request"`
+}
+
+// capturedDependencies reads one extra per dependency off a captured list
+// answer, holding the count to what the SDK decoded so a capture that fell out
+// of step with the decode cannot pair an extra with the wrong dependency. It
+// mirrors the readers in internal/toolutil, which the shape is too local to
+// join.
+func capturedDependencies(capture *gitlabclient.ResponseCapture, decoded int) ([]dependencyExtra, error) {
+	var extras []dependencyExtra
+	if err := capture.Decode(&extras); err != nil {
+		return nil, err
+	}
+	if len(extras) != decoded {
+		return nil, fmt.Errorf("the captured answer holds %d dependencies and the SDK decoded %d", len(extras), decoded)
+	}
+	return extras, nil
 }
 
 // DependenciesOutput holds a list of merge request dependencies.
@@ -1921,13 +1985,19 @@ type DependenciesOutput struct {
 	Dependencies []DependencyOutput `json:"dependencies"`
 }
 
-// dependencyToOutput converts the GitLab API response to the tool output format.
-func dependencyToOutput(d *gl.MergeRequestDependency) DependencyOutput {
-	return DependencyOutput{
+// dependencyToOutput converts the GitLab API response to the tool output
+// format, taking the blocked merge request from what the capture read beside
+// the SDK's decode.
+func dependencyToOutput(d *gl.MergeRequestDependency, extra dependencyExtra) DependencyOutput {
+	out := DependencyOutput{
 		ID:                   d.ID,
 		ProjectID:            d.ProjectID,
 		BlockingMergeRequest: blockingMergeRequestOutput(d.BlockingMergeRequest),
 	}
+	if extra.BlockedMergeRequest != nil {
+		out.BlockedMergeRequest = blockingMergeRequestOutput(*extra.BlockedMergeRequest)
+	}
+	return out
 }
 
 // CreateDependency creates a new dependency (blocker) on a merge request.
@@ -1941,6 +2011,7 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 	if input.MRIID <= 0 {
 		return DependencyOutput{}, toolutil.ErrRequiredInt64("mrCreateDependency", "merge_request_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	dep, _, err := client.GL().MergeRequests.CreateMergeRequestDependency(string(input.ProjectID), input.MRIID,
 		gl.CreateMergeRequestDependencyOptions{BlockingMergeRequestID: new(input.BlockingMergeRequestID)}, gl.WithContext(ctx))
 	if err != nil {
@@ -1955,7 +2026,11 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 		return DependencyOutput{}, toolutil.WrapErrWithStatusHint("mrCreateDependency", err, http.StatusNotFound,
 			"verify project_id and merge_request_iid with gitlab_mr_get; blocking_merge_request_id is a global database ID, not an IID")
 	}
-	return dependencyToOutput(dep), nil
+	var extra dependencyExtra
+	if decodeErr := captured.Decode(&extra); decodeErr != nil {
+		return DependencyOutput{}, toolutil.WrapErr("mrCreateDependency", decodeErr)
+	}
+	return dependencyToOutput(dep, extra), nil
 }
 
 // DeleteDependencyInput defines parameters for deleting a merge request dependency.
@@ -2005,6 +2080,7 @@ func GetDependencies(ctx context.Context, client *gitlabclient.Client, input Get
 	if input.MRIID <= 0 {
 		return DependenciesOutput{}, toolutil.ErrRequiredInt64("mrGetDependencies", "merge_request_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	deps, _, err := client.GL().MergeRequests.GetMergeRequestDependencies(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -2014,9 +2090,13 @@ func GetDependencies(ctx context.Context, client *gitlabclient.Client, input Get
 		return DependenciesOutput{}, toolutil.WrapErrWithStatusHint("mrGetDependencies", err, http.StatusNotFound,
 			hintVerifyMR)
 	}
+	extras, err := capturedDependencies(captured, len(deps))
+	if err != nil {
+		return DependenciesOutput{}, toolutil.WrapErr("mrGetDependencies", err)
+	}
 	out := make([]DependencyOutput, len(deps))
 	for i := range deps {
-		out[i] = dependencyToOutput(&deps[i])
+		out[i] = dependencyToOutput(&deps[i], extras[i])
 	}
 	return DependenciesOutput{Dependencies: out}, nil
 }

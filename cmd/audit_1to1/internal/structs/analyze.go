@@ -63,6 +63,16 @@ const (
 	// granular, impersonation and the resource pair are exposed by the
 	// entities and printed on no page, which is why the entity is cited in
 	// the comment beside each block below.
+	// doc/api/merge_requests.md prints merge_status and reference in every
+	// example body and names approvals_before_merge and work_in_progress among
+	// the deprecated keys GitLab still sends; lib/api/entities/merge_request_basic.rb
+	// exposes all four unconditionally. title_html and description_html wait on
+	// render_html, which of the whole record only the single-merge-request GET
+	// declares, and the blocked merge request is the other end of a dependency,
+	// which client-go's MergeRequestDependency does not model at all.
+	docMergeRequests      = "merge_requests.md"
+	docMergeRequestRender = docMergeRequests + " (render_html, declared on GET /projects/:id/merge_requests/:merge_request_iid alone)"
+	docMergeRequestBlocks = docMergeRequests + " (blocked_merge_request on GET /projects/:id/merge_requests/:merge_request_iid/blocks)"
 	docPATList            = "personal_access_tokens.md#list-all-personal-access-tokens"
 	docProjectTokensList  = "project_access_tokens.md#list-all-project-access-tokens"
 	docGroupTokensList    = "group_access_tokens.md"
@@ -596,6 +606,34 @@ var docAddedFields = map[string]string{
 	"accesstokens.Output.last_used_ips":                docProjectTokensList,
 	"accesstokens.Output.resource_type":                docGroupTokensList,
 	"accesstokens.Output.resource_id":                  docGroupTokensList,
+
+	// merge requests: what lib/api/entities/merge_request_basic.rb sends on
+	// every merge request that neither gl.BasicMergeRequest nor gl.MergeRequest
+	// declares, read from the captured response (ADR-0021,
+	// toolutil.CapturedMergeRequest and CapturedMergeRequests). Four of them are
+	// the older spelling of a key the entity also sends under a newer name and
+	// GitLab keeps sending both. work_in_progress is here only on the types
+	// paired with the lean struct: gl.MergeRequest declares it and
+	// gl.BasicMergeRequest does not, so a list published the key and filled it
+	// from nothing. The rendered pair is on toolutil.MergeRequestOutput alone,
+	// which the two merge request packages alias, because it is the only shape
+	// serving the one route that declares render_html. Recorded in
+	// docs/development/upstream-bugs.md.
+	"mergerequests.Output.approvals_before_merge":           docMergeRequests,
+	"mergerequests.Output.merge_status":                     docMergeRequests,
+	"mergerequests.Output.reference":                        docMergeRequests,
+	"mergerequests.Output.title_html":                       docMergeRequestRender,
+	"mergerequests.Output.description_html":                 docMergeRequestRender,
+	"mergerequests.DependencyOutput.blocked_merge_request":  docMergeRequestBlocks,
+	"deploymentmergerequests.Output.approvals_before_merge": docMergeRequests,
+	"deploymentmergerequests.Output.merge_status":           docMergeRequests,
+	"deploymentmergerequests.Output.reference":              docMergeRequests,
+	"deploymentmergerequests.Output.title_html":             docMergeRequestRender,
+	"deploymentmergerequests.Output.description_html":       docMergeRequestRender,
+	"issues.RelatedMROutput.approvals_before_merge":         docMergeRequests,
+	"issues.RelatedMROutput.merge_status":                   docMergeRequests,
+	"issues.RelatedMROutput.reference":                      docMergeRequests,
+	"issues.RelatedMROutput.work_in_progress":               docMergeRequests,
 }
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we
