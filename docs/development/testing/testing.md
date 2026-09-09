@@ -18,26 +18,26 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,028 |
-| Unit test functions                                   | 14,423 |
+| Total test functions                                  | 15,039 |
+| Unit test functions                                   | 14,434 |
 | E2E test functions                                    |    605 |
-| cmd test functions                                    |  2,974 |
+| cmd test functions                                    |  2,985 |
 | Test files (internal/)                                |    523 |
-| Test files (cmd/)                                     |    202 |
+| Test files (cmd/)                                     |    203 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     21 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.3% |
-| Overall coverage (`go test ./internal/...`)           |  98.5% |
-| Average package coverage                              |  98.4% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.4% |
+| Overall coverage (`go test ./internal/...`)           |  98.6% |
+| Average package coverage                              |  98.7% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,883 | 79.1% |
+| `TestFunc_Scenario` (2-part)           | 11,890 | 79.1% |
 | `TestFunc` (no underscore)             |    975 |  6.5% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,170 | 14.4% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,174 | 14.5% |
 
 ## Test Distribution
 
@@ -49,8 +49,8 @@
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (177) |          8,654 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            605 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,974 |        202 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,028** |    **965** |                                                                                                 |
+| cmd packages            |          2,985 |        203 | server entry point and developer command utilities                                              |
+| **Total**               |     **15,039** |    **966** |                                                                                                 |
 
 ### Core Packages
 
@@ -351,7 +351,7 @@
 | cmd/gen_testing_docs                           |    97.9% |
 | cmd/godoc_tool                                 |   100.0% |
 | cmd/internal/apidocs                           |   100.0% |
-| cmd/internal/apilive                           |    34.2% |
+| cmd/internal/apilive                           |   100.0% |
 | cmd/internal/auditshared                       |   100.0% |
 | cmd/internal/docgen                            |   100.0% |
 | cmd/internal/golist                            |   100.0% |
@@ -575,7 +575,6 @@
 
 Coverage target: **>90%** per package. Packages below the target in the latest generated coverage snapshot:
 
-- **cmd/internal/apilive** (34.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_action_catalog_manifest** (57.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (77.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_api_live** (79.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
