@@ -19,6 +19,10 @@ type Output struct {
 	Name     string `json:"name"`
 	Username string `json:"username"`
 	Email    string `json:"email"`
+	// PublicEmail is the address the account shows publicly, and
+	// UnconfirmedEmail the one waiting to be confirmed after a change.
+	PublicEmail      string `json:"public_email,omitempty"`
+	UnconfirmedEmail string `json:"unconfirmed_email,omitempty"`
 }
 
 // ListOutput holds a paginated list of group service accounts.
@@ -60,12 +64,16 @@ type ListPATOutput struct {
 // DeleteOutput confirms the deletion of a resource.
 type DeleteOutput = toolutil.DeleteOutput
 
-func toOutput(sa *gl.GroupServiceAccount) Output {
+// toOutput converts the GitLab API response to the tool output format, filling
+// from the decoded account and from what the capture read beside it.
+func toOutput(sa *gl.GroupServiceAccount, extra toolutil.ServiceAccountExtra) Output {
 	return Output{
-		ID:       sa.ID,
-		Name:     sa.Name,
-		Username: sa.UserName,
-		Email:    sa.Email,
+		ID:               sa.ID,
+		Name:             sa.Name,
+		Username:         sa.UserName,
+		Email:            sa.Email,
+		PublicEmail:      extra.PublicEmail,
+		UnconfirmedEmail: extra.UnconfirmedEmail,
 	}
 }
 
@@ -117,13 +125,18 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Sort != "" {
 		opts.Sort = &input.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	accounts, resp, err := client.GL().Groups.ListServiceAccounts(input.GroupID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, fmt.Errorf("list group service accounts: %w", err)
 	}
+	extras, err := toolutil.CapturedServiceAccounts(captured, len(accounts))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("list group service accounts", err)
+	}
 	out := make([]Output, len(accounts))
 	for i, sa := range accounts {
-		out[i] = toOutput(sa)
+		out[i] = toOutput(sa, extras[i])
 	}
 	return ListOutput{
 		Accounts:   out,
@@ -154,11 +167,16 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Email != "" {
 		opts.Email = &input.Email
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	sa, _, err := client.GL().Groups.CreateServiceAccount(input.GroupID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, fmt.Errorf("create group service account: %w", err)
 	}
-	return toOutput(sa), nil
+	extra, err := toolutil.CapturedServiceAccount(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("create group service account", err)
+	}
+	return toOutput(sa, extra), nil
 }
 
 // UpdateInput holds parameters for updating a group service account.
@@ -188,11 +206,16 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Email != "" {
 		opts.Email = &input.Email
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	sa, _, err := client.GL().Groups.UpdateServiceAccount(input.GroupID, input.ServiceAccountID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, fmt.Errorf("update group service account: %w", err)
 	}
-	return toOutput(sa), nil
+	extra, err := toolutil.CapturedServiceAccount(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("update group service account", err)
+	}
+	return toOutput(sa, extra), nil
 }
 
 // DeleteInput holds parameters for deleting a group service account.

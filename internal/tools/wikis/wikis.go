@@ -56,6 +56,10 @@ type Output struct {
 	Format   string `json:"format"`
 	Content  string `json:"content,omitempty"`
 	Encoding string `json:"encoding,omitempty"`
+	// WikiPageMetaID identifies the page's metadata record, and FrontMatter is
+	// the YAML front matter parsed out of the page.
+	WikiPageMetaID int64          `json:"wiki_page_meta_id,omitempty"`
+	FrontMatter    map[string]any `json:"front_matter,omitempty"`
 }
 
 // ListOutput holds a list of wiki pages.
@@ -64,14 +68,17 @@ type ListOutput struct {
 	WikiPages []Output `json:"wiki_pages"`
 }
 
-// wikiToOutput converts a GitLab API [gl.Wiki] to MCP output format.
-func toOutput(w *gl.Wiki) Output {
+// wikiToOutput converts a GitLab API [gl.Wiki] to MCP output format, filling
+// from the decoded page and from what the capture read beside it.
+func toOutput(w *gl.Wiki, extra toolutil.WikiExtra) Output {
 	return Output{
-		Title:    w.Title,
-		Slug:     w.Slug,
-		Format:   string(w.Format),
-		Content:  w.Content,
-		Encoding: w.Encoding,
+		Title:          w.Title,
+		Slug:           w.Slug,
+		Format:         string(w.Format),
+		Content:        w.Content,
+		Encoding:       w.Encoding,
+		WikiPageMetaID: extra.WikiPageMetaID,
+		FrontMatter:    extra.FrontMatter,
 	}
 }
 
@@ -90,15 +97,20 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.WithContent = new(true)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	wikiPages, _, err := client.GL().Wikis.ListWikis(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("wikiList", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get; the project's wiki feature may be disabled")
 	}
+	extras, err := toolutil.CapturedWikis(captured, len(wikiPages))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("wikiList", err)
+	}
 
 	out := make([]Output, len(wikiPages))
 	for i, p := range wikiPages {
-		out[i] = toOutput(p)
+		out[i] = toOutput(p, extras[i])
 	}
 	return ListOutput{WikiPages: out}, nil
 }
@@ -123,12 +135,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		opts.Version = new(input.Version)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	w, _, err := client.GL().Wikis.GetWikiPage(string(input.ProjectID), input.Slug, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("wikiGet", err, http.StatusNotFound,
 			"verify slug with gitlab_wiki_list; slugs are case-sensitive and use hyphens for spaces")
 	}
-	return toOutput(w), nil
+	extra, err := toolutil.CapturedWiki(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("wikiGet", err)
+	}
+	return toOutput(w, extra), nil
 }
 
 // Create creates a new wiki page in the specified GitLab project.
@@ -154,6 +171,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		opts.Format = new(gl.WikiFormatValue(input.Format))
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	w, _, err := client.GL().Wikis.CreateWikiPage(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
@@ -161,7 +179,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		}
 		return Output{}, toolutil.WrapErrWithMessage("wikiCreate", err)
 	}
-	return toOutput(w), nil
+	extra, err := toolutil.CapturedWiki(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("wikiCreate", err)
+	}
+	return toOutput(w, extra), nil
 }
 
 // Update updates an existing wiki page identified by slug.
@@ -188,12 +210,17 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.Format = new(gl.WikiFormatValue(input.Format))
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	w, _, err := client.GL().Wikis.EditWikiPage(string(input.ProjectID), input.Slug, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("wikiUpdate", err, http.StatusNotFound,
 			"verify slug with gitlab_wiki_list; slugs are case-sensitive")
 	}
-	return toOutput(w), nil
+	extra, err := toolutil.CapturedWiki(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("wikiUpdate", err)
+	}
+	return toOutput(w, extra), nil
 }
 
 // Delete deletes a wiki page identified by slug from a GitLab project.
