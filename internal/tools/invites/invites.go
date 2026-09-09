@@ -70,6 +70,14 @@ type PendingInviteOutput struct {
 	// invitation URL is built from, exposed under no condition. It is carried
 	// in the JSON and deliberately left out of the Markdown, where a rendered
 	// table would paste a live credential into the conversation.
+	//
+	// Keeping it in the JSON is a decision rather than an oversight, taken
+	// after a security review asked for its removal. GitLab sends it to any
+	// caller whose token can list invitations, so dropping it here would not
+	// deny anyone the value; it would only make this server misreport what the
+	// endpoint returns, which this project treats as a defect of its own. The
+	// Markdown exclusion is where the line is drawn: the transcript is the
+	// surface a person reads without asking for it.
 	InviteToken   string `json:"invite_token,omitempty"`
 	CreatedAt     string `json:"created_at,omitempty"`
 	AccessLevel   int    `json:"access_level"`
