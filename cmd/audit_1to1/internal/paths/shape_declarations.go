@@ -40,6 +40,10 @@ const (
 	// and the generator has no entity to read. The document then carries some
 	// other response for the operation, or none of the right shape.
 	categoryRecordSilent = "record-does-not-model-the-response"
+	// categoryServerShape is a name this server publishes for values GitLab
+	// sends under names of its own, so no entity carries the name and the field
+	// is not a phantom: the values under it are what the endpoint sent.
+	categoryServerShape = "this-server-shapes-what-gitlab-sends-flat"
 )
 
 // declaredShapeFields holds every published field the type-grain join reports
@@ -59,6 +63,27 @@ var declaredShapeFields = []shapeDeclaration{
 			"`queued_users` map on an instance with member promotion management enabled. GitLab's generated " +
 			"document carries the pending-invitation member object under that POST instead, which is what the " +
 			"GET at the same path answers with, so every field of the real response reads as unpublished.",
+	},
+	{
+		Package:  toolsDir + "/geo",
+		Type:     "StatusOutput",
+		Field:    "replicables",
+		Category: categoryServerShape,
+		Reason: "API::Entities::GeoSiteStatus renders the same thirteen metrics for every replicator class and " +
+			"flattens them into key names, so `lfs_objects_synced_count` and 570 siblings are one matrix. They are " +
+			"published here as a map keyed by replicable, `replicables.lfs_objects.synced_count`, which absorbs the " +
+			"replicables GitLab enables each release instead of needing 600 named fields regenerated. The values are " +
+			"GitLab's own, read off the captured response.",
+	},
+	{
+		Package:  toolsDir + "/geo",
+		Type:     "StatusOutput",
+		Field:    "additional_fields",
+		Category: categoryServerShape,
+		Reason: "the residue of the same decomposition: a key of the status answer that is neither a matrix cell " +
+			"nor a field this type publishes under GitLab's own name is kept here rather than dropped, so a field " +
+			"GitLab adds to the entity reaches the caller before this code knows its name. Empty against every " +
+			"key the record carries today.",
 	},
 }
 

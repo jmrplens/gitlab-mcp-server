@@ -90,6 +90,16 @@ type Output struct {
 	WebEditURL                       string   `json:"web_edit_url,omitempty"`
 	WebGeoReplicationDetailsURL      string   `json:"web_geo_replication_details_url,omitempty"`
 	Links                            Links    `json:"_links"`
+
+	// What follows is what ee/lib/api/entities/geo_site.rb sends that
+	// client-go's GeoSite does not model, read from the captured response
+	// (ADR-0021). The organization ids are exposed only where
+	// Gitlab::Geo.geo_selective_sync_by_organizations_enabled?, so an
+	// instance without that flag sends nothing there.
+	SelectiveSyncOrganizationIDs            []int64 `json:"selective_sync_organization_ids,omitempty"`
+	BlobDownloadTimeout                     int64   `json:"blob_download_timeout"`
+	ChecksumMismatchReportThreshold         int64   `json:"checksum_mismatch_report_threshold"`
+	ChecksumMismatchSelfHealCooldownMinutes int64   `json:"checksum_mismatch_self_heal_cooldown_minutes"`
 }
 
 // Links mirrors gl.GeoSiteLinks: navigation links for a Geo site.
@@ -118,6 +128,7 @@ type StatusOutput struct {
 	toolutil.HintableOutput
 	GeoNodeID                                       int64       `json:"geo_node_id"`
 	ProjectsCount                                   int64       `json:"projects_count"`
+	RepositoriesCount                               int64       `json:"repositories_count"`
 	ContainerRepositoriesReplicationEnabled         bool        `json:"container_repositories_replication_enabled"`
 	LFSObjectsCount                                 int64       `json:"lfs_objects_count"`
 	LFSObjectsChecksumTotalCount                    int64       `json:"lfs_objects_checksum_total_count"`
@@ -327,6 +338,20 @@ type StatusOutput struct {
 	UpdatedAt                                       time.Time   `json:"updated_at"`
 	StorageShardsMatch                              bool        `json:"storage_shards_match"`
 	Links                                           StatusLinks `json:"_links"`
+
+	// What follows is what the status entity sends that client-go's
+	// GeoSiteStatus does not model, read from the captured response
+	// (ADR-0021). StorageShards is exposed only when the site reported any.
+	StorageShards []StorageShard `json:"storage_shards,omitempty"`
+	// Replicables is every replicable resource the site reports, keyed by the
+	// name GitLab prefixes its metrics with. The fifteen resources the fields
+	// above spell out are in here too, under the same numbers: those are what
+	// client-go models, and this is what GitLab sends.
+	Replicables map[string]ReplicableStatus `json:"replicables,omitempty"`
+	// AdditionalFields holds any key of the status answer this build models
+	// neither as a field of its own nor as a cell of the matrix, so a field
+	// GitLab adds reaches the caller instead of being dropped in silence.
+	AdditionalFields map[string]any `json:"additional_fields,omitempty"`
 }
 
 // ListStatusOutput represents a paginated list of Geo site statuses.
@@ -358,15 +383,22 @@ func Create(ctx context.Context, client *gitlabclient.Client, in CreateInput) (O
 		SelectiveSyncNamespaceIDs:        in.SelectiveSyncNamespaceIDs,
 		MinimumReverificationInterval:    in.MinimumReverificationInterval,
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	site, _, err := client.GL().GeoSites.CreateGeoSite(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("create geo site", err, http.StatusBadRequest,
 			"name must be unique; url must be reachable; only one site may have primary=true; selective_sync_type must be 'namespaces' or 'shards'. Requires admin access and GitLab Premium/Ultimate license")
 	}
-	return toOutput(site), nil
+	extra, err := capturedSite(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("create geo site", err)
+	}
+	return toOutput(site, extra), nil
 }
 
 // List retrieves all Geo sites.
+//
+//nolint:dupl // ListStatus reads a different SDK service, option type, element type and captured shape; the four steps they share are the list idiom every handler here follows.
 func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -374,15 +406,20 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 
 	opts := &gl.ListGeoSitesOptions{}
 	applyGeoListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput, in.OrderBy, in.Sort)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	sites, resp, err := client.GL().GeoSites.ListGeoSites(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list geo sites", err, http.StatusForbidden,
 			"requires admin access and GitLab Premium/Ultimate license; ensure the instance is configured for Geo")
 	}
+	extras, err := capturedSites(captured, len(sites))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("list geo sites", err)
+	}
 
 	out := ListOutput{Sites: make([]Output, 0, len(sites))}
-	for _, s := range sites {
-		out.Sites = append(out.Sites, toOutput(s))
+	for i, s := range sites {
+		out.Sites = append(out.Sites, toOutput(s, extras[i]))
 	}
 	out.Pagination = toolutil.PaginationFromResponse(resp)
 	return out, nil
@@ -397,12 +434,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, in IDInput) (Output, 
 		return Output{}, toolutil.ErrFieldRequired("id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	site, _, err := client.GL().GeoSites.GetGeoSite(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get geo site", err, http.StatusNotFound,
 			"verify id with gitlab_list_geo_sites; requires admin access")
 	}
-	return toOutput(site), nil
+	extra, err := capturedSite(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("get geo site", err)
+	}
+	return toOutput(site, extra), nil
 }
 
 // Edit updates an existing Geo site.
@@ -428,12 +470,17 @@ func Edit(ctx context.Context, client *gitlabclient.Client, in EditInput) (Outpu
 		SelectiveSyncNamespaceIDs:        in.SelectiveSyncNamespaceIDs,
 		MinimumReverificationInterval:    in.MinimumReverificationInterval,
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	site, _, err := client.GL().GeoSites.EditGeoSite(in.ID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("edit geo site", err, http.StatusBadRequest,
 			"verify id with gitlab_list_geo_sites; cannot toggle primary status (recreate site instead); selective_sync_type must be 'namespaces' or 'shards'")
 	}
-	return toOutput(site), nil
+	extra, err := capturedSite(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("edit geo site", err)
+	}
+	return toOutput(site, extra), nil
 }
 
 // Delete removes a Geo site by ID.
@@ -475,10 +522,17 @@ func Repair(ctx context.Context, client *gitlabclient.Client, in IDInput) (Outpu
 			ID: in.ID,
 		}, nil
 	}
-	return toOutput(site), nil
+	// No captured read here, unlike the other four site handlers: GitLab's
+	// repair route is annotated `success Entities::GeoSiteStatus` and presents
+	// the site's status, so a site's own fields are not in this answer to be
+	// read. client-go declaring *GeoSite for it is recorded in
+	// docs/development/upstream-bugs.md.
+	return toOutput(site, siteExtra{}), nil
 }
 
 // ListStatus retrieves the replication status of all Geo sites.
+//
+//nolint:dupl // see List: the same four steps around a different service, option type, element type and captured shape.
 func ListStatus(ctx context.Context, client *gitlabclient.Client, in ListStatusInput) (ListStatusOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListStatusOutput{}, err
@@ -486,15 +540,20 @@ func ListStatus(ctx context.Context, client *gitlabclient.Client, in ListStatusI
 
 	opts := &gl.ListStatusOfAllGeoSitesOptions{}
 	applyGeoListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput, in.OrderBy, in.Sort)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	statuses, resp, err := client.GL().GeoSites.ListStatusOfAllGeoSites(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListStatusOutput{}, toolutil.WrapErrWithStatusHint("list geo site statuses", err, http.StatusForbidden,
 			"requires admin access; status data is collected by the primary site. Secondary sites may show stale data if replication is lagging")
 	}
+	extras, err := capturedStatuses(captured, len(statuses))
+	if err != nil {
+		return ListStatusOutput{}, toolutil.WrapErr("list geo site statuses", err)
+	}
 
 	out := ListStatusOutput{Statuses: make([]StatusOutput, 0, len(statuses))}
-	for _, s := range statuses {
-		out.Statuses = append(out.Statuses, toStatusOutput(s))
+	for i, s := range statuses {
+		out.Statuses = append(out.Statuses, toStatusOutput(s, extras[i]))
 	}
 	out.Pagination = toolutil.PaginationFromResponse(resp)
 	return out, nil
@@ -509,12 +568,17 @@ func GetStatus(ctx context.Context, client *gitlabclient.Client, in IDInput) (St
 		return StatusOutput{}, toolutil.ErrFieldRequired("id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	status, _, err := client.GL().GeoSites.GetStatusOfGeoSite(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return StatusOutput{}, toolutil.WrapErrWithStatusHint("get geo site status", err, http.StatusNotFound,
 			"verify id with gitlab_list_geo_sites; the site must have reported status at least once for data to be available")
 	}
-	return toStatusOutput(status), nil
+	extra, err := capturedStatus(captured)
+	if err != nil {
+		return StatusOutput{}, toolutil.WrapErr("get geo site status", err)
+	}
+	return toStatusOutput(status, extra), nil
 }
 
 // applyGeoListOptions wires offset/keyset pagination plus order_by/sort onto a
@@ -529,26 +593,30 @@ func applyGeoListOptions(opts *gl.ListOptions, page toolutil.PaginationInput, ke
 	}
 }
 
-func toOutput(s *gl.GeoSite) Output {
+func toOutput(s *gl.GeoSite, extra siteExtra) Output {
 	return Output{
-		ID:                               s.ID,
-		Name:                             s.Name,
-		URL:                              s.URL,
-		InternalURL:                      s.InternalURL,
-		Primary:                          s.Primary,
-		Enabled:                          s.Enabled,
-		Current:                          s.Current,
-		FilesMaxCapacity:                 s.FilesMaxCapacity,
-		ReposMaxCapacity:                 s.ReposMaxCapacity,
-		VerificationMaxCapacity:          s.VerificationMaxCapacity,
-		ContainerRepositoriesMaxCapacity: s.ContainerRepositoriesMaxCapacity,
-		SelectiveSyncType:                s.SelectiveSyncType,
-		SelectiveSyncShards:              s.SelectiveSyncShards,
-		SelectiveSyncNamespaceIDs:        s.SelectiveSyncNamespaceIDs,
-		MinimumReverificationInterval:    s.MinimumReverificationInterval,
-		SyncObjectStorage:                s.SyncObjectStorage,
-		WebEditURL:                       s.WebEditURL,
-		WebGeoReplicationDetailsURL:      s.WebGeoReplicationDetailsURL,
+		ID:                                      s.ID,
+		Name:                                    s.Name,
+		URL:                                     s.URL,
+		InternalURL:                             s.InternalURL,
+		Primary:                                 s.Primary,
+		Enabled:                                 s.Enabled,
+		Current:                                 s.Current,
+		FilesMaxCapacity:                        s.FilesMaxCapacity,
+		ReposMaxCapacity:                        s.ReposMaxCapacity,
+		VerificationMaxCapacity:                 s.VerificationMaxCapacity,
+		ContainerRepositoriesMaxCapacity:        s.ContainerRepositoriesMaxCapacity,
+		SelectiveSyncType:                       s.SelectiveSyncType,
+		SelectiveSyncShards:                     s.SelectiveSyncShards,
+		SelectiveSyncNamespaceIDs:               s.SelectiveSyncNamespaceIDs,
+		SelectiveSyncOrganizationIDs:            extra.SelectiveSyncOrganizationIDs,
+		MinimumReverificationInterval:           s.MinimumReverificationInterval,
+		BlobDownloadTimeout:                     extra.BlobDownloadTimeout,
+		ChecksumMismatchReportThreshold:         extra.ChecksumMismatchReportThreshold,
+		ChecksumMismatchSelfHealCooldownMinutes: extra.ChecksumMismatchSelfHealCooldownMinutes,
+		SyncObjectStorage:                       s.SyncObjectStorage,
+		WebEditURL:                              s.WebEditURL,
+		WebGeoReplicationDetailsURL:             s.WebGeoReplicationDetailsURL,
 		Links: Links{
 			Self:   s.Links.Self,
 			Status: s.Links.Status,
@@ -557,10 +625,11 @@ func toOutput(s *gl.GeoSite) Output {
 	}
 }
 
-func toStatusOutput(s *gl.GeoSiteStatus) StatusOutput {
+func toStatusOutput(s *gl.GeoSiteStatus, extra statusExtra) StatusOutput {
 	return StatusOutput{
 		GeoNodeID:                                     s.GeoNodeID,
 		ProjectsCount:                                 s.ProjectsCount,
+		RepositoriesCount:                             extra.RepositoriesCount,
 		ContainerRepositoriesReplicationEnabled:       s.ContainerRepositoriesReplicationEnabled,
 		LFSObjectsCount:                               s.LFSObjectsCount,
 		LFSObjectsChecksumTotalCount:                  s.LFSObjectsChecksumTotalCount,
@@ -770,6 +839,9 @@ func toStatusOutput(s *gl.GeoSiteStatus) StatusOutput {
 		Namespaces:                                      s.Namespaces,
 		UpdatedAt:                                       s.UpdatedAt,
 		StorageShardsMatch:                              s.StorageShardsMatch,
+		StorageShards:                                   extra.StorageShards,
+		Replicables:                                     extra.Replicables,
+		AdditionalFields:                                extra.Additional,
 		Links: StatusLinks{
 			Self: s.Links.Self,
 			Site: s.Links.Site,

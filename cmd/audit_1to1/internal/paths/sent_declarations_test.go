@@ -95,7 +95,9 @@ func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 			if _, held := doc.Entities[declaration.Entity]; !held {
 				t.Errorf("entity %s is not in the live record", declaration.Entity)
 			}
-			known := declaration.Category == categoryDocumentedNotSent || declaration.Category == categoryOptionNeverPassed
+			known := declaration.Category == categoryDocumentedNotSent ||
+				declaration.Category == categoryOptionNeverPassed ||
+				declaration.Category == categoryEntityPublishedElsewhere
 			if !known || declaration.Reason == "" || declaration.Field == "" {
 				t.Errorf("declaration %+v is missing its category, reason or field", declaration)
 			}

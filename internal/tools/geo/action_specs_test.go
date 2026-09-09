@@ -159,6 +159,30 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// TestGeoActionMeta_EveryEntryIsComplete verifies the invariant
+// decorateGeoMeta copies on: every entry of the discovery table carries a
+// usage, at least one alias, at least one related action and a description.
+// It is what lets that function assign all four without asking, since a guard
+// no entry can fail is a branch no test could ever take.
+func TestGeoActionMeta_EveryEntryIsComplete(t *testing.T) {
+	for tool, meta := range geoActionMeta {
+		t.Run(tool, func(t *testing.T) {
+			if meta.usage == "" {
+				t.Error("usage is empty")
+			}
+			if len(meta.aliases) == 0 {
+				t.Error("aliases is empty")
+			}
+			if len(meta.related) == 0 {
+				t.Error("related is empty")
+			}
+			if meta.description == "" {
+				t.Error("description is empty")
+			}
+		})
+	}
+}
+
 func geoSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

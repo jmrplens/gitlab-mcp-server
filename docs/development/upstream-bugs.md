@@ -100,6 +100,7 @@ readable without opening the tracker:
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | No | No | No | No | Yes |
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | No | No | No | No | None |
 | 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, open | No | No | Yes |
+| 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | No | No | No | No | Partial |
 
 States verified against the upstream trackers on 2026-09-05, except entry 34,
 whose merge requests were opened on 2026-09-09.
@@ -954,6 +955,69 @@ automatic review request the upstream project makes on the author's behalf and
 fails because the author is not a member there. A merge request's source
 cannot be re-pointed after it is opened, so moving one means opening a new one
 from the community fork and closing the old with a note.
+
+### The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no, except for the third item below, which makes two endpoints
+  unusable on any site with selective sync by namespace.
+- **Workaround**: partial. The site's four missing fields, the status's
+  `repositories_count` and `storage_shards`, and the whole per-replicable
+  matrix are read from the captured response beside the SDK's decode
+  (ADR-0021), through the readers in `internal/tools/geo/sent_shapes.go`.
+  Neither the `namespaces` type nor the repair return type can be worked
+  around without leaving the SDK method behind, so both stand.
+
+**What**: four gaps in client-go v3.0.0's `geo_sites.go`, measured against the
+`v19.3.1-ee` entities the committed live record was taken from.
+
+- `GeoSite` carries 19 of the 23 keys
+  [ee/lib/api/entities/geo_site.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/api/entities/geo_site.rb)
+  exposes. It has no `blob_download_timeout`, no
+  `checksum_mismatch_report_threshold` and no
+  `checksum_mismatch_self_heal_cooldown_minutes`, each an `Integer` exposed
+  with no condition at all, and no `selective_sync_organization_ids`, exposed
+  when `::Gitlab::Geo.geo_selective_sync_by_organizations_enabled?`. The
+  create and edit option structs are missing the same settings, so the SDK can
+  neither read them nor set them.
+- `GeoSiteStatus` carries 211 of the 605 distinct keys
+  [ee/lib/api/entities/geo_site_status.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/api/entities/geo_site_status.rb)
+  exposes. Most of that entity is generated: it loops over
+  `GeoNodeStatus::RESOURCE_STATUS_FIELDS`, which is thirteen metrics for each
+  of the 44 replicator classes, flattened into key names, and the struct spells
+  out fifteen of the 44 by hand and none of the per-replicable
+  `oldest_unsynced_time`. It is also missing two singular keys,
+  `repositories_count` and `storage_shards`. This is the one gap where a
+  hand-written struct was never going to keep up: the field list is a function
+  of which replicators the instance has enabled, and this server therefore
+  publishes it as a map keyed by the replicable rather than as 573 fields.
+- `GeoSiteStatus.Namespaces` is declared `[]string` and the entity exposes
+  `namespaces, using: ::API::Entities::NamespaceBasic`, an array of objects.
+  On a site with selective sync by namespace the SDK's own decode therefore
+  fails and both `GetStatusOfGeoSite` and `ListStatusOfAllGeoSites` return an
+  error instead of a status. Nothing here caught it either, because our own
+  fixture spelled the array the way the struct does.
+- `RepairGeoSite` returns `*GeoSite`, and `POST /geo_sites/:id/repair` is
+  annotated `success Entities::GeoSiteStatus` and presents the site's status.
+  Every field of the struct it hands back is therefore the zero value, and
+  this server's `geo.repair` answers with a site GitLab did not send. It reads
+  no captured extras for that reason, which is written down beside the call.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), whose
+oracle is `docs/development/gitlab-api-live.json`. Geo was 1001 of its 1388
+findings, and the repair return type is why 603 of those were filed against
+`geo.Output`, a site type, under the status entity: the audit reads which
+endpoints answer with `*GeoSite` out of the SDK's own source, and that method
+puts the repair route in the set.
+
+**Effort**: additive and small for the first item and for `repositories_count`
+and `storage_shards`. The replicable matrix is a design question rather than a
+field list, since the names depend on the instance. The `namespaces` type and
+the `RepairGeoSite` return type are both breaking changes to exported API, so
+they belong to a major version or to a new method beside the old one.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

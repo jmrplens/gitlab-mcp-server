@@ -27,6 +27,9 @@ func FormatOutputMarkdown(o Output) string {
 	fmt.Fprintf(&sb, "| Files Max Capacity | %d |\n", o.FilesMaxCapacity)
 	fmt.Fprintf(&sb, "| Repos Max Capacity | %d |\n", o.ReposMaxCapacity)
 	fmt.Fprintf(&sb, "| Verification Max Capacity | %d |\n", o.VerificationMaxCapacity)
+	fmt.Fprintf(&sb, "| Blob Download Timeout | %ds |\n", o.BlobDownloadTimeout)
+	fmt.Fprintf(&sb, "| Checksum Mismatch Report Threshold | %d |\n", o.ChecksumMismatchReportThreshold)
+	fmt.Fprintf(&sb, "| Checksum Mismatch Self-Heal Cooldown | %d min |\n", o.ChecksumMismatchSelfHealCooldownMinutes)
 	fmt.Fprintf(&sb, "| Sync Object Storage | %t |\n", o.SyncObjectStorage)
 	if o.SelectiveSyncType != "" {
 		//gitlab:allow-unescaped o.SelectiveSyncType: one of the two values GitLab validates this field against, namespaces or shards.
@@ -71,6 +74,13 @@ func FormatStatusMarkdown(o StatusOutput) string {
 	fmt.Fprintf(&sb, "| DB Replication Lag | %ds |\n", o.DBReplicationLagSeconds)
 	fmt.Fprintf(&sb, "| Missing OAuth App | %t |\n", o.MissingOAuthApplication)
 	fmt.Fprintf(&sb, "| Projects Count | %d |\n", o.ProjectsCount)
+	fmt.Fprintf(&sb, "| Repositories Count | %d |\n", o.RepositoriesCount)
+	if len(o.Replicables) > 0 {
+		fmt.Fprintf(&sb, "| Replicables Tracked | %d |\n", len(o.Replicables))
+	}
+	if len(o.StorageShards) > 0 {
+		fmt.Fprintf(&sb, "| Storage Shards | %s |\n", toolutil.EscapeMdTableCell(storageShardNames(o.StorageShards)))
+	}
 	//gitlab:allow-unescaped o.LFSObjectsSyncedInPercentage: a percentage GitLab formatted for display, of the shape "100.00%".
 	fmt.Fprintf(&sb, "| LFS Synced | %s |\n", o.LFSObjectsSyncedInPercentage)
 	//gitlab:allow-unescaped o.JobArtifactsSyncedInPercentage: a percentage GitLab formatted for display, of the shape "100.00%".
@@ -86,6 +96,16 @@ func FormatStatusMarkdown(o StatusOutput) string {
 		fmt.Fprintf(&sb, "| Updated At | %s |\n", o.UpdatedAt.Format("2006-01-02 15:04:05"))
 	}
 	return sb.String()
+}
+
+// storageShardNames joins the shard names for the one cell that reports them,
+// the whole shard object being a name and nothing else.
+func storageShardNames(shards []StorageShard) string {
+	names := make([]string, 0, len(shards))
+	for _, shard := range shards {
+		names = append(names, shard.Name)
+	}
+	return strings.Join(names, ", ")
 }
 
 // FormatListStatusMarkdown formats a list of Geo site statuses as a Markdown table.
