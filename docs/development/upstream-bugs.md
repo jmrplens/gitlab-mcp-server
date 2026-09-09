@@ -98,6 +98,7 @@ readable without opening the tracker:
 | 30 | client-go | [The member structs, options and services miss what GitLab sends, accepts and serves](#the-member-structs-options-and-services-miss-what-gitlab-sends-accepts-and-serves) | No | No | No | No | Partial |
 | 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | No | No | No | No | Yes |
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | No | No | No | No | Yes |
+| 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | No | No | No | No | None |
 
 States verified against the upstream trackers on 2026-09-05.
 
@@ -777,6 +778,40 @@ rather than documented attributes.
 plus one type for the granular scope object. The `granular_scopes` field on
 `resourceAccessToken` comes free with the embed once
 `PersonalAccessToken` carries it.
+
+### The four Sidekiq routes carry a leading slash and send a double slash
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. `gitlab.com` answers the malformed path with a redirect.
+- **Workaround**: none. There is nowhere to put one: the path is built inside
+  the SDK from a constant, and the handlers in `internal/tools/sidekiq` only
+  call the service methods.
+
+**What**: `sidekiq_metrics.go:24-27` declares its four routes as
+`route("/sidekiq/compound_metrics")` and the three beside it, with a leading
+slash. `NewRequest` joins the path onto `/api/v4`, so this server sends
+`GET /api/v4//sidekiq/queue_metrics`.
+
+**Evidence that it is a defect rather than a convention**: of the 699 `route(…)`
+declarations in client-go v3.0.0, **695 have no leading slash and the 4 that do
+are all in this one file**. The malformed paths are visible in this
+repository's own committed record of what it sends,
+`docs/development/request-inventory.json` (`//sidekiq/compound_metrics`,
+`//sidekiq/job_stats`, `//sidekiq/process_metrics`, `//sidekiq/queue_metrics`),
+and `internal/tools/sidekiq/sidekiq_test.go` registers its mock handler under
+the double slash because that is what arrives.
+
+**Why it matters even though nothing is broken today**: `gitlab.com` answers a
+double slash with a 308 to the collapsed path, so the call succeeds after a
+redirect. A self-managed front end is not obliged to do that, and a proxy that
+normalizes differently, or a deployment that refuses a redirect on an
+authenticated request, would see four tools stop working for a reason nothing
+in this repository could explain.
+
+**Effort**: trivial, four characters. A good first contribution, and the kind
+of change whose test is one assertion on the built URL.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

@@ -159,6 +159,11 @@ jobs:
       # record lists can be told "never sent" from "sent only when".
       - name: Check the pinned GitLab entity conditions
         run: make check-api-exposes
+      # The oracle that is evaluated rather than parsed: what a booted GitLab
+      # says its own API is. The gate reads the committed record and needs no
+      # Docker, which is the whole reason the boot lives in a generator.
+      - name: Check the pinned live GitLab record
+        run: make check-api-live
       # A meta-tool's description is checked against the parameters its routes
       # take, which is the third party the golden snapshot never was (issue 574).
       - name: Check every meta-tool description against its routes
