@@ -2228,7 +2228,10 @@ func TestProtect_UnreadableCapturedInheritedOnConflict(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"main","inherited":"yes"}`)
 	}))
 
-	if _, err := Protect(context.Background(), client, ProtectInput{ProjectID: "42", BranchName: "main"}); err == nil {
-		t.Fatal("error = nil, want the captured decode of the existing rule to fail")
-	}
+	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+		{Name: "protect on conflict", Call: func() error {
+			_, err := Protect(context.Background(), client, ProtectInput{ProjectID: "42", BranchName: "main"})
+			return err
+		}},
+	})
 }
