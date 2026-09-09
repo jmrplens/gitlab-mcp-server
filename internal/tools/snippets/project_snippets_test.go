@@ -719,6 +719,7 @@ func TestExtractProjectPath(t *testing.T) {
 		{"short URL", testWebURL, ""},
 		{"empty string", "", ""},
 		{"no scheme returns empty", "gitlab.example.com/group/project/-/snippets/1", ""},
+		{"unparseable URL returns empty", "https://gitlab.example.com/\x7f/-/snippets/1", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -815,7 +816,7 @@ func TestFormatListMarkdown_NoProjectColumn(t *testing.T) {
 
 // TestConvertSnippet_NilFiles verifies ConvertSnippet when nil files.
 func TestConvertSnippet_NilFiles(t *testing.T) {
-	s := convertSnippet(&snippetFixtureNoFiles)
+	s := convertSnippet(&snippetFixtureNoFiles, toolutil.SnippetExtra{})
 	if len(s.Files) != 0 {
 		t.Errorf("expected no files, got %d", len(s.Files))
 	}
@@ -1000,5 +1001,163 @@ func TestProjectList_Ordering(t *testing.T) {
 	}
 	if got.Get("order_by") != "created_at" || got.Get("sort") != "desc" {
 		t.Errorf("order_by/sort = %q/%q, want created_at/desc", got.Get("order_by"), got.Get("sort"))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Project snippet option builders
+// ---------------------------------------------------------------------------.
+
+// TestBuildProjectUpdateOptions_SendsOnlyWhatTheCallerGave verifies the
+// project snippet update sends every field the caller named and nothing else,
+// and that the files array wins over the deprecated single-file pair.
+func TestBuildProjectUpdateOptions_SendsOnlyWhatTheCallerGave(t *testing.T) {
+	opts := buildProjectUpdateOptions(ProjectUpdateInput{
+		ProjectID: "42", SnippetID: 7, Title: "Renamed", Description: "desc", Visibility: "public",
+		Files:       []UpdateFileInput{{Action: "update", FilePath: "new.go", Content: "x", PreviousPath: "old.go"}},
+		FileName:    "ignored.go",
+		ContentBody: "ignored",
+	})
+	assertStringPtr(t, "title", opts.Title, "Renamed")
+	assertStringPtr(t, "description", opts.Description, "desc")
+	if opts.Visibility == nil || string(*opts.Visibility) != "public" {
+		t.Errorf("Visibility = %v, want public", opts.Visibility)
+	}
+	if opts.Files == nil || len(*opts.Files) != 1 {
+		t.Fatalf("Files = %v, want the one file operation", opts.Files)
+	}
+	file := (*opts.Files)[0]
+	assertStringPtr(t, "files[0].file_path", file.FilePath, "new.go")
+	assertStringPtr(t, "files[0].content", file.Content, "x")
+	assertStringPtr(t, "files[0].previous_path", file.PreviousPath, "old.go")
+}
+
+// TestBuildProjectUpdateOptions_WithoutAnyFieldSendsNothing verifies an update
+// naming no field sends none, so every value the snippet has keeps its place.
+func TestBuildProjectUpdateOptions_WithoutAnyFieldSendsNothing(t *testing.T) {
+	opts := buildProjectUpdateOptions(ProjectUpdateInput{ProjectID: "42", SnippetID: 7})
+	if opts.Title != nil || opts.Description != nil || opts.Visibility != nil || opts.Files != nil {
+		t.Errorf("update options = %+v, want every field left alone", opts)
+	}
+}
+
+// TestBuildProjectUpdateOptions_DeprecatedSingleFilePair verifies either half
+// of the deprecated pair describes an update on its own: a rename with no new
+// content, and new content under the name the file already has.
+func TestBuildProjectUpdateOptions_DeprecatedSingleFilePair(t *testing.T) {
+	for _, testCase := range []struct {
+		name        string
+		fileName    string
+		contentBody string
+	}{
+		{name: "both halves", fileName: "test.go", contentBody: "package main"},
+		{name: "a rename with no new content", fileName: "test.go"},
+		{name: "new content under the current name", contentBody: "package main"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			opts := buildProjectUpdateOptions(ProjectUpdateInput{
+				ProjectID: "42", SnippetID: 7,
+				FileName: testCase.fileName, ContentBody: testCase.contentBody,
+			})
+			if opts.Files == nil || len(*opts.Files) != 1 {
+				t.Fatalf("Files = %v, want one operation built from what was given", opts.Files)
+			}
+			file := (*opts.Files)[0]
+			assertStringPtr(t, "files[0].action", file.Action, "update")
+			assertOptionalStringPtr(t, "files[0].file_path", file.FilePath, testCase.fileName)
+			assertOptionalStringPtr(t, "files[0].content", file.Content, testCase.contentBody)
+		})
+	}
+}
+
+// assertOptionalStringPtr reports a request field that was sent when the
+// caller named nothing, or that does not carry what the caller named.
+func assertOptionalStringPtr(t *testing.T, field string, got *string, want string) {
+	t.Helper()
+	if want == "" {
+		if got != nil {
+			t.Errorf("%s = %v, want none", field, got)
+		}
+		return
+	}
+	assertStringPtr(t, field, got, want)
+}
+
+// TestUpdateSnippetFileOptions_WithoutContentOrPreviousPath verifies a file
+// operation that names neither sends neither, in both the files-array form and
+// the deprecated single-file one.
+func TestUpdateSnippetFileOptions_WithoutContentOrPreviousPath(t *testing.T) {
+	files := updateSnippetFileOptions([]UpdateFileInput{{Action: "delete", FilePath: "gone.go"}})
+	if len(files) != 1 {
+		t.Fatalf("files = %v, want the one operation", files)
+	}
+	if files[0].Content != nil || files[0].PreviousPath != nil {
+		t.Errorf("file operation = %+v, want neither content nor a previous path", files[0])
+	}
+	legacy := legacyUpdateSnippetFileOptions(ProjectUpdateInput{})
+	if legacy.FilePath != nil || legacy.Content != nil {
+		t.Errorf("legacy file operation = %+v, want neither a path nor content", legacy)
+	}
+}
+
+// TestProjectCreate_SendsOnlyWhatTheCallerGave verifies the project snippet
+// create sends the description and the single-file pair only when the caller
+// named them, and prefers a files array over that pair.
+func TestProjectCreate_SendsOnlyWhatTheCallerGave(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		input ProjectCreateInput
+		want  []string
+		omit  []string
+	}{
+		{
+			name: "the single-file pair with a description",
+			input: ProjectCreateInput{
+				ProjectID: "42", Title: "Test Snippet", Description: "desc",
+				FileName: "test.go", ContentBody: "package main", Visibility: "public",
+			},
+			want: []string{`"description":"desc"`, `"file_path":"test.go"`, `"content":"package main"`, `"visibility":"public"`},
+		},
+		{
+			name: "the single-file pair with no description",
+			input: ProjectCreateInput{
+				ProjectID: "42", Title: "Test Snippet", FileName: "empty.go", ContentBody: "package empty",
+			},
+			want: []string{`"file_path":"empty.go"`, `"visibility":"private"`},
+			omit: []string{`"description"`},
+		},
+		{
+			name: "a files array",
+			input: ProjectCreateInput{
+				ProjectID: "42", Title: "Test Snippet",
+				Files: []CreateFileInput{{FilePath: "a.go", Content: "package a"}},
+			},
+			want: []string{`"file_path":"a.go"`, `"content":"package a"`},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var body string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				raw, readErr := io.ReadAll(r.Body)
+				if readErr != nil {
+					t.Errorf("read request body: %v", readErr)
+				}
+				body = string(raw)
+				testutil.RespondJSON(w, http.StatusCreated, snippetJSON)
+			}))
+			if _, err := ProjectCreate(context.Background(), client, testCase.input); err != nil {
+				t.Fatalf("ProjectCreate: %v", err)
+			}
+			for _, want := range testCase.want {
+				if !strings.Contains(body, want) {
+					t.Errorf("create body %q missing %q", body, want)
+				}
+			}
+			for _, omit := range testCase.omit {
+				if strings.Contains(body, omit) {
+					t.Errorf("create body %q carries %q it was not given", body, omit)
+				}
+			}
+		})
 	}
 }

@@ -179,6 +179,33 @@ type capturedReaderCase struct {
 	want func(any) bool
 }
 
+// readTheSentPackage reports whether the package reader decoded every key of
+// the fixture, the nested version with its tag and its pipeline included. It
+// sits out here because a predicate reaching three objects deep is the one
+// shape the table cannot hold as a literal and stay readable.
+func readTheSentPackage(v any) bool {
+	e, _ := v.([]PackageExtra)
+	if len(e) != 1 || e[0].CreatorID != 57 || e[0].ConanPackageName != "my-pkg" ||
+		e[0].ProjectID != 42 || e[0].ProjectPath != "group/project" || len(e[0].Versions) != 1 {
+		return false
+	}
+	version := e[0].Versions[0]
+	return version.Version == "0.9.0" && len(version.Tags) == 1 && version.Tags[0].Name == "stable" &&
+		version.Pipeline != nil && version.Pipeline.IID == 4 &&
+		version.Pipeline.User != nil && version.Pipeline.User.Username == "alice"
+}
+
+// readTheSentNamespace reports whether the namespace reader decoded all eight
+// keys, which is more than a table cell holds comfortably.
+func readTheSentNamespace(v any) bool {
+	e, _ := v.(NamespaceExtra)
+	return e.ProjectsCount == 12 && e.RootRepositorySize == 34567 &&
+		e.SharedRunnersMinutesLimit != nil && *e.SharedRunnersMinutesLimit == 400 &&
+		e.ExtraSharedRunnersMinutesLimit != nil && e.AdditionalPurchasedStorageSize != nil &&
+		e.AdditionalPurchasedStorageEndsOn == "2027-03-31" &&
+		e.MaxSeatsUsedChangedAt != nil && e.EndDate == "2027-01-31"
+}
+
 // tailReaderCases is the table itself, out here rather than inside the test, so
 // that the test is the loop it runs and nothing else.
 //
@@ -440,6 +467,74 @@ func tailReaderCases() []capturedReaderCase {
 				return len(e) == 1 && e[0].Project != nil && e[0].Project.CIJobTokenScopeEnabled
 			},
 		},
+		{
+			name: "system hook",
+			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedSystemHook(c) },
+			body: `{"id":1,"push_events_branch_filter":"release/*","branch_filter_strategy":"wildcard",` +
+				`"alert_status":"executable","disabled_until":"2026-02-03T04:05:06Z",` +
+				`"custom_webhook_template":"{}","custom_headers":[{"key":"X-Env"}],"organization_id":7}`,
+			want: func(v any) bool {
+				e, _ := v.(SystemHookExtra)
+				return e.PushEventsBranchFilter == "release/*" && e.BranchFilterStrategy == "wildcard" &&
+					e.AlertStatus == "executable" && e.DisabledUntil != nil && e.CustomWebhookTemplate == "{}" &&
+					len(e.CustomHeaders) == 1 && e.CustomHeaders[0].Key == "X-Env" && e.OrganizationID == 7
+			},
+		},
+		{
+			name: "deploy key",
+			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedDeployKey(c) },
+			body: `{"id":1,"last_used_at":"2026-04-07T08:09:10Z","usage_type":"auth_and_signing",` +
+				`"projects_with_write_access":[{"id":11,"path_with_namespace":"group/writer","created_at":"2026-01-02T03:04:05Z"}],` +
+				`"projects_with_readonly_access":[{"id":12,"path_with_namespace":"group/reader"}]}`,
+			want: func(v any) bool {
+				e, _ := v.(DeployKeyExtra)
+				return e.LastUsedAt != nil && e.UsageType == "auth_and_signing" &&
+					len(e.ProjectsWithWriteAccess) == 1 && e.ProjectsWithWriteAccess[0].ID == 11 &&
+					e.ProjectsWithWriteAccess[0].CreatedAt != nil &&
+					len(e.ProjectsWithReadonlyAccess) == 1 && e.ProjectsWithReadonlyAccess[0].ID == 12
+			},
+		},
+		{
+			name: "event",
+			read: first(func(c *gitlabclient.ResponseCapture, n int) (any, error) { return CapturedEvents(c, n) }),
+			body: `[{"id":1,"imported":true,"imported_from":"github",` +
+				`"wiki_page":{"format":"markdown","slug":"home","title":"Home","wiki_page_meta_id":77}}]`,
+			want: func(v any) bool {
+				e, _ := v.([]EventExtra)
+				return len(e) == 1 && e[0].Imported && e[0].ImportedFrom == "github" &&
+					e[0].WikiPage != nil && e[0].WikiPage.Slug == "home" && e[0].WikiPage.WikiPageMetaID == 77
+			},
+		},
+		{
+			name: "namespace",
+			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedNamespace(c) },
+			body: `{"id":1,"projects_count":12,"root_repository_size":34567,` +
+				`"shared_runners_minutes_limit":400,"extra_shared_runners_minutes_limit":50,` +
+				`"additional_purchased_storage_size":10240,"additional_purchased_storage_ends_on":"2027-03-31",` +
+				`"max_seats_used_changed_at":"2026-05-06T07:08:09Z","end_date":"2027-01-31"}`,
+			want: readTheSentNamespace,
+		},
+		{
+			name: "package",
+			read: first(func(c *gitlabclient.ResponseCapture, n int) (any, error) { return CapturedPackages(c, n) }),
+			body: `[{"id":10,"creator_id":57,"conan_package_name":"my-pkg","project_id":42,` +
+				`"project_path":"group/project","versions":[{"id":9,"version":"0.9.0",` +
+				`"tags":[{"id":3,"package_id":9,"name":"stable"}],` +
+				`"pipeline":{"id":77,"iid":4,"sha":"abc123","user":{"id":5,"username":"alice"}}}]}]`,
+			want: readTheSentPackage,
+		},
+		{
+			name: "snippet",
+			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedSnippet(c) },
+			body: `{"id":42,"imported":true,"imported_from":"github",` +
+				`"ssh_url_to_repo":"git@example:snippets/42.git","http_url_to_repo":"https://example/snippets/42.git"}`,
+			want: func(v any) bool {
+				e, _ := v.(SnippetExtra)
+				return e.Imported && e.ImportedFrom == "github" &&
+					e.SSHURLToRepo == "git@example:snippets/42.git" &&
+					e.HTTPURLToRepo == "https://example/snippets/42.git"
+			},
+		},
 	}
 }
 
@@ -587,6 +682,30 @@ func TestCapturedTailListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 		}},
 		{"service accounts", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
 			x, e := CapturedServiceAccounts(c, n)
+			return len(x), e
+		}},
+		{"system hooks", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+			x, e := CapturedSystemHooks(c, n)
+			return len(x), e
+		}},
+		{"deploy keys", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+			x, e := CapturedDeployKeys(c, n)
+			return len(x), e
+		}},
+		{"events", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+			x, e := CapturedEvents(c, n)
+			return len(x), e
+		}},
+		{"namespaces", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+			x, e := CapturedNamespaces(c, n)
+			return len(x), e
+		}},
+		{"packages", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+			x, e := CapturedPackages(c, n)
+			return len(x), e
+		}},
+		{"snippets", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+			x, e := CapturedSnippets(c, n)
 			return len(x), e
 		}},
 	} {

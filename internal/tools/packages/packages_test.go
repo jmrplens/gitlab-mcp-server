@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -21,7 +22,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const (
@@ -467,7 +470,7 @@ func TestPackageToListItem_OptionalPipelineFields(t *testing.T) {
 				},
 			},
 		},
-	})
+	}, toolutil.PackageExtra{})
 
 	if item.CreatedAt == "" {
 		t.Fatal("CreatedAt should be preserved")
@@ -594,7 +597,7 @@ func TestPackageToListItem_FullNestedObjects(t *testing.T) {
 				WebURL: "https://gitlab.example.com/alice", CreatedAt: &now,
 			},
 		},
-	})
+	}, toolutil.PackageExtra{})
 
 	if item.Links == nil || item.Links.DeleteAPIPath != "/api/v4/p/7" {
 		t.Errorf("Links = %+v, want DeleteAPIPath set", item.Links)
@@ -1057,5 +1060,368 @@ func TestDownload_FileNameShapes(t *testing.T) {
 			}
 			assertFileNameShapeResult(t, "Download", tt.fileName, tt.wantErr, err)
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Fields GitLab sends beside the ones the SDK's own Package models
+// ---------------------------------------------------------------------------.
+
+// packageSentJSON is one package as GitLab renders it, carrying the keys the
+// SDK's own Package leaves out: who published it, the Conan recipe name, the
+// owning project a group listing names, and the package's other versions with
+// the tags and the pipeline each of those carries.
+const packageSentJSON = `{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"conan",` +
+	`"status":"default","creator_id":57,"conan_package_name":"my-pkg",` +
+	`"project_id":42,"project_path":"group/project",` +
+	`"versions":[{"id":9,"version":"0.9.0","created_at":"2026-01-02T03:04:05Z",` +
+	`"tags":[{"id":3,"package_id":9,"name":"stable","created_at":"2026-01-02T03:04:05Z",` +
+	`"updated_at":"2026-01-03T03:04:05Z"}],` +
+	`"pipeline":{"id":77,"iid":4,"project_id":42,"sha":"abc123","ref":"main","status":"success",` +
+	`"source":"push","created_at":"2026-01-02T03:04:05Z","updated_at":"2026-01-02T04:04:05Z",` +
+	`"web_url":"https://gitlab.example.com/p/-/pipelines/77",` +
+	`"user":{"id":5,"username":"alice","name":"Alice"}}}]}`
+
+// packageWithoutConditionalJSON is a package rendered by the project listing,
+// where GitLab names no Conan recipe, no owning project and no other version.
+const packageWithoutConditionalJSON = `{"id":10,"name":"my-pkg","version":"1.0.0",` +
+	`"package_type":"generic","status":"default","creator_id":57}`
+
+// packagesClient answers the project and group listing endpoints with body.
+func packagesClient(t *testing.T, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+}
+
+// packageCalls are the two listing handlers that answer with packages.
+var packageCalls = []struct {
+	name string
+	call func(client *gitlabclient.Client) (ListItem, error)
+}{
+	{name: "list", call: func(client *gitlabclient.Client) (ListItem, error) {
+		out, err := List(context.Background(), client, ListInput{ProjectID: "42"})
+		if err != nil {
+			return ListItem{}, err
+		}
+		if len(out.Packages) != 1 {
+			return ListItem{}, errNoPackage
+		}
+		return out.Packages[0], nil
+	}},
+	{name: "group_list", call: func(client *gitlabclient.Client) (ListItem, error) {
+		out, err := GroupList(context.Background(), client, GroupListInput{GroupID: "7"})
+		if err != nil {
+			return ListItem{}, err
+		}
+		if len(out.Packages) != 1 {
+			return ListItem{}, errNoPackage
+		}
+		return out.Packages[0].ListItem, nil
+	}},
+}
+
+// errNoPackage reports a listing handler that answered with no package.
+var errNoPackage = errors.New("the handler published no package")
+
+// TestPackages_PublishTheFieldsGitLabSendsBesideTheSDKs verifies both listing
+// handlers publish the five keys the SDK's own Package does not model, read
+// off the captured response, including every field of a nested version.
+func TestPackages_PublishTheFieldsGitLabSendsBesideTheSDKs(t *testing.T) {
+	for _, packageCall := range packageCalls {
+		t.Run(packageCall.name, func(t *testing.T) {
+			item, err := packageCall.call(packagesClient(t, `[`+packageSentJSON+`]`))
+			if err != nil {
+				t.Fatalf("%s: %v", packageCall.name, err)
+			}
+			if item.CreatorID != 57 {
+				t.Errorf("creator_id = %d, want 57", item.CreatorID)
+			}
+			if item.ConanPackageName != "my-pkg" {
+				t.Errorf("conan_package_name = %q, want my-pkg", item.ConanPackageName)
+			}
+			if item.ProjectID != 42 || item.ProjectPath != "group/project" {
+				t.Errorf("owning project = %d / %q, want 42 / group/project", item.ProjectID, item.ProjectPath)
+			}
+			assertSentVersions(t, item.Versions)
+		})
+	}
+}
+
+// wantSentVersion is the one other version packageSentJSON carries, with the
+// tag pointing at it and the pipeline that built it, as the handler should
+// publish them.
+var wantSentVersion = toolutil.PackageVersionOutput{
+	ID:      9,
+	Version: "0.9.0",
+	Tags:    []toolutil.PackageTagOutput{{ID: 3, PackageID: 9, Name: "stable"}},
+	Pipeline: &toolutil.PackagePipelineOutput{
+		ID: 77, IID: 4, ProjectID: 42, SHA: "abc123", Ref: "main", Status: "success",
+		Source: "push", WebURL: "https://gitlab.example.com/p/-/pipelines/77",
+		User: &toolutil.UserBasicOutput{ID: 5, Username: "alice", Name: "Alice"},
+	},
+}
+
+// assertSentVersions reports a package's other versions that lost any field of
+// the version, its tags or the pipeline that built it. The timestamps are
+// compared only for presence, since the fixture's are the only ones that could
+// be there.
+func assertSentVersions(t *testing.T, versions []toolutil.PackageVersionOutput) {
+	t.Helper()
+	if len(versions) != 1 {
+		t.Fatalf("versions = %+v, want the one version GitLab sent", versions)
+	}
+	got := versions[0]
+	if got.CreatedAt == nil || len(got.Tags) != 1 || got.Tags[0].CreatedAt == nil || got.Tags[0].UpdatedAt == nil {
+		t.Fatalf("versions[0] = %+v, want the version and its tag with their timestamps", got)
+	}
+	if got.Pipeline == nil || got.Pipeline.CreatedAt == nil || got.Pipeline.UpdatedAt == nil {
+		t.Fatalf("versions[0].pipeline = %+v, want the pipeline with its timestamps", got.Pipeline)
+	}
+	// Compared with the timestamps cleared, so one comparison covers every
+	// other field of the version, the tag and the pipeline at once.
+	got.CreatedAt, got.Tags[0].CreatedAt, got.Tags[0].UpdatedAt = nil, nil, nil
+	pipeline := *got.Pipeline
+	pipeline.CreatedAt, pipeline.UpdatedAt = nil, nil
+	got.Pipeline = &pipeline
+	if !reflect.DeepEqual(got, wantSentVersion) {
+		t.Errorf("versions[0] = %+v, want %+v", got, wantSentVersion)
+	}
+}
+
+// TestPackages_OmitTheFieldsGitLabDidNotSend verifies a package answered
+// without the Conan name, the owning project and the other versions publishes
+// none of them, while the creator GitLab always sends still arrives.
+func TestPackages_OmitTheFieldsGitLabDidNotSend(t *testing.T) {
+	for _, packageCall := range packageCalls {
+		t.Run(packageCall.name, func(t *testing.T) {
+			item, err := packageCall.call(packagesClient(t, `[`+packageWithoutConditionalJSON+`]`))
+			if err != nil {
+				t.Fatalf("%s: %v", packageCall.name, err)
+			}
+			if item.ConanPackageName != "" {
+				t.Errorf("conan_package_name = %q, want none for a generic package", item.ConanPackageName)
+			}
+			if item.ProjectID != 0 || item.ProjectPath != "" {
+				t.Errorf("owning project = %d / %q, want none", item.ProjectID, item.ProjectPath)
+			}
+			if item.Versions != nil {
+				t.Errorf("versions = %+v, want none", item.Versions)
+			}
+			if item.CreatorID != 57 {
+				t.Errorf("creator_id = %d, want 57", item.CreatorID)
+			}
+		})
+	}
+}
+
+// TestPackages_UnreadableCapturedFields verifies both listing handlers report
+// the captured response's decode failure rather than a package missing what
+// GitLab sent. The SDK's own Package has no creator_id, so only the read
+// beside it can notice GitLab sent a string there.
+func TestPackages_UnreadableCapturedFields(t *testing.T) {
+	const poisoned = `[{"id":10,"name":"my-pkg","version":"1.0.0","creator_id":"nobody"}]`
+	cases := make([]testutil.CapturedCase, 0, len(packageCalls))
+	for _, packageCall := range packageCalls {
+		cases = append(cases, testutil.CapturedCase{Name: packageCall.name, Call: func() error {
+			_, err := packageCall.call(packagesClient(t, poisoned))
+			return err
+		}})
+	}
+	testutil.AssertCapturedDecodeFailures(t, cases)
+}
+
+// TestGroupList_SkipsANullPackageAndKeepsTheCapturedFieldsPaired verifies a
+// listing whose array carries a null entry publishes the packages beside it
+// with the fields read off their own position in the captured answer.
+func TestGroupList_SkipsANullPackageAndKeepsTheCapturedFieldsPaired(t *testing.T) {
+	client := packagesClient(t, `[null,`+packageSentJSON+`]`)
+	out, err := GroupList(t.Context(), client, GroupListInput{GroupID: "7"})
+	if err != nil {
+		t.Fatalf("GroupList: %v", err)
+	}
+	if len(out.Packages) != 1 {
+		t.Fatalf("packages = %d, want the one package beside the null", len(out.Packages))
+	}
+	if out.Packages[0].CreatorID != 57 {
+		t.Errorf("creator_id = %d, want 57 read off the second position", out.Packages[0].CreatorID)
+	}
+}
+
+// TestPackageToListItem_LeavesOutTheCollectionsGitLabDidNotSend verifies a
+// package carrying no pipeline history and no tags publishes neither, rather
+// than publishing an empty list for each.
+func TestPackageToListItem_LeavesOutTheCollectionsGitLabDidNotSend(t *testing.T) {
+	item := packageToListItem(&gl.Package{ID: 1, Name: "pkg", Version: "1.0.0"}, toolutil.PackageExtra{})
+	if item.Pipelines != nil {
+		t.Errorf("Pipelines = %+v, want none", item.Pipelines)
+	}
+	if item.Tags != nil {
+		t.Errorf("Tags = %+v, want none", item.Tags)
+	}
+	if item.Links != nil {
+		t.Errorf("Links = %+v, want none", item.Links)
+	}
+}
+
+// TestPublish_SelectAndURL verifies the publish request carries the default
+// response selector unless one was given, and that the answer names the URL
+// the file can be fetched from.
+func TestPublish_SelectAndURL(t *testing.T) {
+	for _, testCase := range []struct {
+		name    string
+		select_ string
+		want    string
+	}{
+		{name: "default", want: "select=package_file"},
+		{name: "given", select_: "package_file_details", want: "select=package_file_details"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var query string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				query = r.URL.RawQuery
+				testutil.RespondJSON(w, http.StatusCreated, publishResponseJSON)
+			}))
+			out, err := Publish(context.Background(), nil, client, PublishInput{
+				ProjectID:      "42",
+				PackageName:    testPackageName,
+				PackageVersion: "1.0.0",
+				FileName:       testFileName,
+				ContentBase64:  testBase64Content,
+				Select:         testCase.select_,
+			})
+			if err != nil {
+				t.Fatalf("Publish: %v", err)
+			}
+			if !strings.Contains(query, testCase.want) {
+				t.Errorf("publish query %q missing %q", query, testCase.want)
+			}
+			// The path is escaped the way the SDK builds it, dots included.
+			if !strings.HasSuffix(out.URL, "/projects/42/packages/generic/my-pkg/1%2E0%2E0/app%2Etar%2Egz") {
+				t.Errorf("URL = %q, want the generic package path", out.URL)
+			}
+		})
+	}
+}
+
+// TestGroupList_FiltersReachTheRequest verifies every optional filter the
+// group listing accepts is sent when it was given and left out when it was
+// not, which only the query the handler built can say.
+func TestGroupList_FiltersReachTheRequest(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		input GroupListInput
+		want  []string
+		omit  []string
+	}{
+		{
+			name: "every filter",
+			input: GroupListInput{
+				GroupID: "7", ExcludeSubgroups: true, PackageName: "my-pkg", PackageType: "generic",
+				OrderBy: "created_at", Sort: "desc", IncludeVersionless: true, Status: "hidden",
+			},
+			want: []string{
+				"exclude_subgroups=true", "package_name=my-pkg", "package_type=generic",
+				"order_by=created_at", "sort=desc", "include_versionless=true", "status=hidden",
+			},
+		},
+		{
+			name:  "none of them",
+			input: GroupListInput{GroupID: "7"},
+			omit: []string{
+				"exclude_subgroups", "package_name", "package_type",
+				"order_by", "sort", "include_versionless", "status",
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var query string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				query = r.URL.RawQuery
+				testutil.RespondJSON(w, http.StatusOK, `[`+packageSentJSON+`]`)
+			}))
+			if _, err := GroupList(context.Background(), client, testCase.input); err != nil {
+				t.Fatalf("GroupList: %v", err)
+			}
+			for _, want := range testCase.want {
+				if !strings.Contains(query, want) {
+					t.Errorf("query %q missing %q", query, want)
+				}
+			}
+			for _, omit := range testCase.omit {
+				if strings.Contains(query, omit) {
+					t.Errorf("query %q carries %q it was not given", query, omit)
+				}
+			}
+		})
+	}
+}
+
+// TestPackageIdentifiers_RefuseAZeroID verifies the three handlers that take a
+// package identifier refuse a zero as firmly as an identifier that is not a
+// number, since GitLab numbers packages and files from one.
+func TestPackageIdentifiers_RefuseAZeroID(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	for _, testCase := range []struct {
+		name string
+		call func() error
+		want string
+	}{
+		{name: "file_list zero package", want: "package_id must be a positive integer", call: func() error {
+			_, err := FileList(context.Background(), client, FileListInput{ProjectID: "42", PackageID: "0"})
+			return err
+		}},
+		{name: "delete zero package", want: "package_id must be a positive integer", call: func() error {
+			return Delete(context.Background(), nil, client, DeleteInput{ProjectID: "42", PackageID: "0"})
+		}},
+		{name: "file_delete zero package", want: "package_id must be a positive integer", call: func() error {
+			return FileDelete(context.Background(), nil, client,
+				FileDeleteInput{ProjectID: "42", PackageID: "0", PackageFileID: "20"})
+		}},
+		{name: "file_delete zero file", want: "package_file_id must be a positive integer", call: func() error {
+			return FileDelete(context.Background(), nil, client,
+				FileDeleteInput{ProjectID: "42", PackageID: "10", PackageFileID: "0"})
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := testCase.call()
+			if err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Errorf("error = %v, want one naming %q", err, testCase.want)
+			}
+		})
+	}
+}
+
+// TestPackageOptions_UseTheMetadataTable verifies the spec builder takes the
+// usage, aliases, related actions and description from the metadata entry for
+// the action, and keeps the shared defaults for an action the table does not
+// name. No action reaches that fallback today, so the builder is called
+// directly rather than through ActionSpecs.
+func TestPackageOptions_UseTheMetadataTable(t *testing.T) {
+	options := packageOptions("publish", "gitlab_package_publish")
+	meta := packageActionMetadata["publish"]
+	if options.Usage != meta.usage {
+		t.Errorf("Usage = %q, want the metadata usage", options.Usage)
+	}
+	if len(options.Aliases) != len(meta.aliases)+1 || options.Aliases[0] != "gitlab_package_publish" {
+		t.Errorf("Aliases = %v, want the tool name followed by the metadata aliases", options.Aliases)
+	}
+	if len(options.RelatedActions) != len(meta.related) {
+		t.Errorf("RelatedActions = %v, want the metadata related actions", options.RelatedActions)
+	}
+	if options.IndividualTool.Description != meta.description {
+		t.Errorf("Description = %q, want the metadata description", options.IndividualTool.Description)
+	}
+
+	unlisted := packageOptions("unlisted", "gitlab_package_unlisted")
+	if unlisted.Usage != "Use to execute packages domain action." {
+		t.Errorf("Usage = %q, want the shared one", unlisted.Usage)
+	}
+	if len(unlisted.Aliases) != 1 || unlisted.Aliases[0] != "gitlab_package_unlisted" {
+		t.Errorf("Aliases = %v, want the tool name alone", unlisted.Aliases)
+	}
+	if unlisted.RelatedActions != nil || unlisted.IndividualTool.Description != "" {
+		t.Errorf("unlisted action carries %v / %q, want neither", unlisted.RelatedActions, unlisted.IndividualTool.Description)
 	}
 }

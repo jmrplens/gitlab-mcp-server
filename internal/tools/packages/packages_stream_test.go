@@ -110,6 +110,42 @@ func confineDownloadRoots(t *testing.T, dir string) {
 // parent-traversal escape and a symlinked parent are all refused, nothing is
 // created on the way, and the package is never even requested. The one
 // legitimate destination inside the workspace still works.
+// TestDownload_UnusableOutputPath_RefusedBeforeGitLabIsAsked verifies a
+// download whose destination cannot hold a file is refused while the path is
+// still being resolved, before any byte is requested: a parent that is a file
+// rather than a directory, and a destination that is itself a directory.
+func TestDownload_UnusableOutputPath_RefusedBeforeGitLabIsAsked(t *testing.T) {
+	root := t.TempDir()
+	confineDownloadRoots(t, root)
+
+	fileAsParent := filepath.Join(root, "not-a-directory")
+	if err := os.WriteFile(fileAsParent, []byte("x"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	existingDir := filepath.Join(root, "already-a-directory")
+	makeDirs(t, existingDir)
+
+	for _, testCase := range []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "parent is a file", path: filepath.Join(fileAsParent, "out.bin"), want: "resolve output path"},
+		{name: "destination is a directory", path: existingDir, want: "already exists and is not a regular file"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				t.Errorf("package file was requested for an unusable output_path %q", testCase.path)
+				w.WriteHeader(http.StatusForbidden)
+			}))
+			_, err := downloadTo(t, client, testCase.path)
+			if err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Errorf("Download(%q) error = %v, want one naming %q", testCase.path, err, testCase.want)
+			}
+		})
+	}
+}
+
 func TestDownload_OutputPathOutsideAllowedDirs_Rejected(t *testing.T) {
 	root := t.TempDir()
 	allowed := filepath.Join(root, "workspace")

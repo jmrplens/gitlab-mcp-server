@@ -825,3 +825,208 @@ func CapturedServiceAccount(capture *gitlabclient.ResponseCapture) (ServiceAccou
 func CapturedServiceAccounts(capture *gitlabclient.ResponseCapture, decoded int) ([]ServiceAccountExtra, error) {
 	return capturedList[ServiceAccountExtra](capture, decoded, "service accounts")
 }
+
+// HookHeaderOutput is one custom header a webhook sends with every delivery.
+// Only the name is read: GitLab masks the value on the way out, and a header
+// value is secret-bearing.
+type HookHeaderOutput struct {
+	Key string `json:"key"`
+}
+
+// SystemHookExtra is what GitLab's hook entity sends beside the event flags:
+// which branches a push triggers on and how that filter is read, whether the
+// hook has been disabled after failing and until when, the template its
+// payload is rendered from, the custom headers configured on it, and the
+// organization a system hook belongs to.
+//
+// All of them are exposed unconditionally except the headers, which a caller
+// can ask to be left out, and the organization, which only a system hook has.
+type SystemHookExtra struct {
+	PushEventsBranchFilter string             `json:"push_events_branch_filter"`
+	BranchFilterStrategy   string             `json:"branch_filter_strategy"`
+	AlertStatus            string             `json:"alert_status"`
+	DisabledUntil          *time.Time         `json:"disabled_until"`
+	CustomWebhookTemplate  string             `json:"custom_webhook_template"`
+	CustomHeaders          []HookHeaderOutput `json:"custom_headers"`
+	OrganizationID         int64              `json:"organization_id"`
+}
+
+// CapturedSystemHook reads them off the captured answer to a request for one
+// hook.
+func CapturedSystemHook(capture *gitlabclient.ResponseCapture) (SystemHookExtra, error) {
+	return capturedOne[SystemHookExtra](capture)
+}
+
+// CapturedSystemHooks reads the same off a list answer, one extra per hook in
+// order, the count held to what the SDK decoded.
+func CapturedSystemHooks(capture *gitlabclient.ResponseCapture, decoded int) ([]SystemHookExtra, error) {
+	return capturedList[SystemHookExtra](capture, decoded, "system hooks")
+}
+
+// DeployKeyProjectOutput is one project a deploy key reaches, rendered as the
+// project identity entity: the naming and the creation date, without the
+// settings a full project carries.
+type DeployKeyProjectOutput struct {
+	ID                int64      `json:"id"`
+	Description       string     `json:"description"`
+	Name              string     `json:"name"`
+	NameWithNamespace string     `json:"name_with_namespace"`
+	Path              string     `json:"path"`
+	PathWithNamespace string     `json:"path_with_namespace"`
+	CreatedAt         *time.Time `json:"created_at"`
+}
+
+// DeployKeyExtra is what GitLab's deploy key entity sends that the key itself
+// does not say: when the key was last used to reach the instance and what it
+// may be used for, both unconditional, and the projects it can write to or
+// only read from, which are sent when the request asks for them.
+type DeployKeyExtra struct {
+	LastUsedAt                 *time.Time               `json:"last_used_at"`
+	UsageType                  string                   `json:"usage_type"`
+	ProjectsWithWriteAccess    []DeployKeyProjectOutput `json:"projects_with_write_access"`
+	ProjectsWithReadonlyAccess []DeployKeyProjectOutput `json:"projects_with_readonly_access"`
+}
+
+// CapturedDeployKey reads them off the captured answer to a request for one
+// deploy key.
+func CapturedDeployKey(capture *gitlabclient.ResponseCapture) (DeployKeyExtra, error) {
+	return capturedOne[DeployKeyExtra](capture)
+}
+
+// CapturedDeployKeys reads the same off a list answer, one extra per key in
+// order, the count held to what the SDK decoded.
+func CapturedDeployKeys(capture *gitlabclient.ResponseCapture, decoded int) ([]DeployKeyExtra, error) {
+	return capturedList[DeployKeyExtra](capture, decoded, "deploy keys")
+}
+
+// EventWikiPageOutput is the wiki page an event happened to, as the basic wiki
+// page entity renders it: how the page is written, where it lives, its title,
+// and the identifier of the record that survives a rename.
+type EventWikiPageOutput struct {
+	Format         string `json:"format"`
+	Slug           string `json:"slug"`
+	Title          string `json:"title"`
+	WikiPageMetaID int64  `json:"wiki_page_meta_id"`
+}
+
+// EventExtra is what GitLab's event entity sends that the event itself does
+// not say: whether the event arrived with an import rather than happening
+// here and which platform it came from, both unconditional, and the wiki page
+// an event about a wiki names.
+type EventExtra struct {
+	Imported     bool                 `json:"imported"`
+	ImportedFrom string               `json:"imported_from"`
+	WikiPage     *EventWikiPageOutput `json:"wiki_page"`
+}
+
+// CapturedEvents reads them off the captured answer to a list of events, one
+// extra per event in order, the count held to what the SDK decoded.
+func CapturedEvents(capture *gitlabclient.ResponseCapture, decoded int) ([]EventExtra, error) {
+	return capturedList[EventExtra](capture, decoded, "events")
+}
+
+// NamespaceExtra is what GitLab's namespace entity sends to a caller allowed
+// to see it. An administrator asking about a group is told how many projects
+// it holds and how much room their repositories take; a caller who may change
+// the namespace's limits is told the compute minutes and the purchased
+// storage; and a namespace with a subscription carries when that subscription
+// ends and when its seat high-water mark last moved.
+type NamespaceExtra struct {
+	ProjectsCount                    int64      `json:"projects_count"`
+	RootRepositorySize               int64      `json:"root_repository_size"`
+	SharedRunnersMinutesLimit        *int64     `json:"shared_runners_minutes_limit"`
+	ExtraSharedRunnersMinutesLimit   *int64     `json:"extra_shared_runners_minutes_limit"`
+	AdditionalPurchasedStorageSize   *int64     `json:"additional_purchased_storage_size"`
+	AdditionalPurchasedStorageEndsOn string     `json:"additional_purchased_storage_ends_on"`
+	MaxSeatsUsedChangedAt            *time.Time `json:"max_seats_used_changed_at"`
+	EndDate                          string     `json:"end_date"`
+}
+
+// CapturedNamespace reads them off the captured answer to a request for one
+// namespace.
+func CapturedNamespace(capture *gitlabclient.ResponseCapture) (NamespaceExtra, error) {
+	return capturedOne[NamespaceExtra](capture)
+}
+
+// CapturedNamespaces reads the same off a list answer, one extra per namespace
+// in order, the count held to what the SDK decoded.
+func CapturedNamespaces(capture *gitlabclient.ResponseCapture, decoded int) ([]NamespaceExtra, error) {
+	return capturedList[NamespaceExtra](capture, decoded, "namespaces")
+}
+
+// PackageTagOutput is one tag pointing at a package version.
+type PackageTagOutput struct {
+	ID        int64      `json:"id"`
+	PackageID int64      `json:"package_id"`
+	Name      string     `json:"name"`
+	CreatedAt *time.Time `json:"created_at"`
+	UpdatedAt *time.Time `json:"updated_at"`
+}
+
+// PackagePipelineOutput is the pipeline that built a package version, sent to
+// a caller allowed to read it.
+type PackagePipelineOutput struct {
+	ID        int64            `json:"id"`
+	IID       int64            `json:"iid"`
+	ProjectID int64            `json:"project_id"`
+	SHA       string           `json:"sha"`
+	Ref       string           `json:"ref"`
+	Status    string           `json:"status"`
+	Source    string           `json:"source"`
+	CreatedAt *time.Time       `json:"created_at"`
+	UpdatedAt *time.Time       `json:"updated_at"`
+	WebURL    string           `json:"web_url"`
+	User      *UserBasicOutput `json:"user"`
+}
+
+// PackageVersionOutput is one other version of the same package, with the tags
+// pointing at it and the pipeline that built it.
+type PackageVersionOutput struct {
+	ID        int64                  `json:"id"`
+	Version   string                 `json:"version"`
+	CreatedAt *time.Time             `json:"created_at"`
+	Tags      []PackageTagOutput     `json:"tags"`
+	Pipeline  *PackagePipelineOutput `json:"pipeline"`
+}
+
+// PackageExtra is what GitLab's package entity sends that the package itself
+// does not say: who published it, unconditionally; the Conan recipe's own name
+// on a Conan package; the owning project's id and path, sent when the package
+// is listed across a group; and the package's other versions, sent when one
+// package is asked for rather than a page of them.
+type PackageExtra struct {
+	CreatorID        int64                  `json:"creator_id"`
+	ConanPackageName string                 `json:"conan_package_name"`
+	ProjectID        int64                  `json:"project_id"`
+	ProjectPath      string                 `json:"project_path"`
+	Versions         []PackageVersionOutput `json:"versions"`
+}
+
+// CapturedPackages reads them off the captured answer to a list of packages,
+// one extra per package in order, the count held to what the SDK decoded.
+func CapturedPackages(capture *gitlabclient.ResponseCapture, decoded int) ([]PackageExtra, error) {
+	return capturedList[PackageExtra](capture, decoded, "packages")
+}
+
+// SnippetExtra is what GitLab's snippet entity sends that the snippet itself
+// does not say: whether it arrived with an import rather than being written
+// here and which platform it came from, both unconditional, and the two clone
+// URLs of its repository, sent once that repository exists.
+type SnippetExtra struct {
+	Imported      bool   `json:"imported"`
+	ImportedFrom  string `json:"imported_from"`
+	SSHURLToRepo  string `json:"ssh_url_to_repo"`
+	HTTPURLToRepo string `json:"http_url_to_repo"`
+}
+
+// CapturedSnippet reads them off the captured answer to a request for one
+// snippet.
+func CapturedSnippet(capture *gitlabclient.ResponseCapture) (SnippetExtra, error) {
+	return capturedOne[SnippetExtra](capture)
+}
+
+// CapturedSnippets reads the same off a list answer, one extra per snippet in
+// order, the count held to what the SDK decoded.
+func CapturedSnippets(capture *gitlabclient.ResponseCapture, decoded int) ([]SnippetExtra, error) {
+	return capturedList[SnippetExtra](capture, decoded, "snippets")
+}

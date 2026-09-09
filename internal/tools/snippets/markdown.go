@@ -51,6 +51,15 @@ func FormatMarkdown(out Output) string {
 		}
 	}
 	fmt.Fprintf(&b, "| Web URL | %s |\n", toolutil.MdTitleLink(out.Title, out.WebURL))
+	if out.SSHURLToRepo != "" {
+		fmt.Fprintf(&b, "| SSH URL to Repo | %s |\n", toolutil.EscapeMdTableCell(out.SSHURLToRepo))
+	}
+	if out.HTTPURLToRepo != "" {
+		fmt.Fprintf(&b, "| HTTP URL to Repo | %s |\n", toolutil.EscapeMdTableCell(out.HTTPURLToRepo))
+	}
+	if out.Imported {
+		fmt.Fprintf(&b, "| Imported From | %s |\n", toolutil.EscapeMdTableCell(out.ImportedFrom))
+	}
 	if len(out.Files) > 0 {
 		b.WriteString("\n### Files\n\n")
 		b.WriteString("| Path | Raw URL |\n|---|---|\n")

@@ -56,12 +56,26 @@ type Output struct {
 	AvatarURL                   string `json:"avatar_url,omitempty"`
 	WebURL                      string `json:"web_url,omitempty"`
 	MembersCountWithDescendants int64  `json:"members_count_with_descendants,omitempty"`
-	BillableMembersCount        int64  `json:"billable_members_count,omitempty" tier:"premium"`
-	Plan                        string `json:"plan,omitempty" tier:"premium"`
-	TrialEndsOn                 string `json:"trial_ends_on,omitempty" tier:"premium"`
-	Trial                       bool   `json:"trial,omitempty" tier:"premium"`
-	MaxSeatsUsed                *int64 `json:"max_seats_used,omitempty"`
-	SeatsInUse                  *int64 `json:"seats_in_use,omitempty"`
+	// ProjectsCount and RootRepositorySize are sent to an administrator asking
+	// about a group.
+	ProjectsCount      int64 `json:"projects_count,omitempty"`
+	RootRepositorySize int64 `json:"root_repository_size,omitempty"`
+	// The compute-minute and purchased-storage fields are sent to a caller
+	// allowed to change the namespace's limits.
+	SharedRunnersMinutesLimit        *int64 `json:"shared_runners_minutes_limit,omitempty"`
+	ExtraSharedRunnersMinutesLimit   *int64 `json:"extra_shared_runners_minutes_limit,omitempty"`
+	AdditionalPurchasedStorageSize   *int64 `json:"additional_purchased_storage_size,omitempty"`
+	AdditionalPurchasedStorageEndsOn string `json:"additional_purchased_storage_ends_on,omitempty"`
+	BillableMembersCount             int64  `json:"billable_members_count,omitempty" tier:"premium"`
+	Plan                             string `json:"plan,omitempty" tier:"premium"`
+	TrialEndsOn                      string `json:"trial_ends_on,omitempty" tier:"premium"`
+	Trial                            bool   `json:"trial,omitempty" tier:"premium"`
+	MaxSeatsUsed                     *int64 `json:"max_seats_used,omitempty"`
+	SeatsInUse                       *int64 `json:"seats_in_use,omitempty"`
+	// MaxSeatsUsedChangedAt and EndDate are sent for a namespace that has a
+	// subscription.
+	MaxSeatsUsedChangedAt string `json:"max_seats_used_changed_at,omitempty"`
+	EndDate               string `json:"end_date,omitempty"`
 }
 
 // ListOutput represents a paginated list of namespaces.
@@ -100,18 +114,23 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.TopLevelOnly = new(true)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	nss, resp, err := client.GL().Namespaces.ListNamespaces(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("namespace_list", err, http.StatusForbidden,
 			"requires authentication; only namespaces visible to the token are returned; use search to filter, owned_only=true for namespaces you own, top_level_only=true for top-level groups")
+	}
+	extras, err := toolutil.CapturedNamespaces(captured, len(nss))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("namespace_list", err)
 	}
 
 	out := ListOutput{
 		Namespaces: make([]Output, 0, len(nss)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
-	for _, ns := range nss {
-		out.Namespaces = append(out.Namespaces, toOutput(ns))
+	for i, ns := range nss {
+		out.Namespaces = append(out.Namespaces, toOutput(ns, extras[i]))
 	}
 	return out, nil
 }
@@ -122,29 +141,44 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // return an array for path-based lookups. Tracked, unreported so far, in
 // docs/development/upstream-bugs.md.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	ns, _, err := client.GL().Namespaces.GetNamespace(input.ID, gl.WithContext(ctx))
 	if err != nil {
 		if !strings.Contains(err.Error(), "cannot unmarshal array") {
 			return Output{}, toolutil.WrapErrWithStatusHint("namespace_get", err, http.StatusNotFound,
 				"verify id (numeric) or path (URL-encoded full path) with gitlab_namespace_list or gitlab_namespace_search")
 		}
-		// Fallback: GitLab returned an array instead of a single object.
-		req, reqErr := client.GL().NewRequest("GET", "namespaces/"+gl.PathEscape(input.ID), nil, nil)
-		if reqErr != nil {
-			return Output{}, toolutil.WrapErrWithMessage("namespace_get", reqErr)
-		}
-		req = req.WithContext(ctx)
-
-		var nsList []*gl.Namespace
-		if _, doErr := client.GL().Do(req, &nsList); doErr != nil {
-			return Output{}, toolutil.WrapErrWithMessage("namespace_get", doErr)
-		}
-		if len(nsList) == 0 {
-			return Output{}, toolutil.WrapErrWithMessage("namespace_get", fmt.Errorf("namespace %q not found", input.ID))
-		}
-		return toOutput(nsList[0]), nil
+		return getFromArray(ctx, client, input.ID)
 	}
-	return toOutput(ns), nil
+	extra, err := toolutil.CapturedNamespace(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("namespace_get", err)
+	}
+	return toOutput(ns, extra), nil
+}
+
+// getFromArray asks for the namespace again and reads the answer as the array
+// some GitLab versions send for a path lookup, taking the first entry.
+func getFromArray(ctx context.Context, client *gitlabclient.Client, id string) (Output, error) {
+	req, reqErr := client.GL().NewRequest("GET", "namespaces/"+gl.PathEscape(id), nil, nil)
+	if reqErr != nil {
+		return Output{}, toolutil.WrapErrWithMessage("namespace_get", reqErr)
+	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	req = req.WithContext(ctx)
+
+	var nsList []*gl.Namespace
+	if _, doErr := client.GL().Do(req, &nsList); doErr != nil {
+		return Output{}, toolutil.WrapErrWithMessage("namespace_get", doErr)
+	}
+	if len(nsList) == 0 {
+		return Output{}, toolutil.WrapErrWithMessage("namespace_get", fmt.Errorf("namespace %q not found", id))
+	}
+	extras, listErr := toolutil.CapturedNamespaces(captured, len(nsList))
+	if listErr != nil {
+		return Output{}, toolutil.WrapErr("namespace_get", listErr)
+	}
+	return toOutput(nsList[0], extras[0]), nil
 }
 
 // Exists checks whether a namespace path is available.
@@ -167,40 +201,54 @@ func Exists(ctx context.Context, client *gitlabclient.Client, input ExistsInput)
 
 // Search searches namespaces by query string.
 func Search(ctx context.Context, client *gitlabclient.Client, input SearchInput) (ListOutput, error) {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	nss, resp, err := client.GL().Namespaces.SearchNamespace(input.Query, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("namespace_search", err, http.StatusForbidden,
 			"query is required; only namespaces visible to the authenticated user are returned")
+	}
+	extras, err := toolutil.CapturedNamespaces(captured, len(nss))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("namespace_search", err)
 	}
 
 	out := ListOutput{
 		Namespaces: make([]Output, 0, len(nss)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
-	for _, ns := range nss {
-		out.Namespaces = append(out.Namespaces, toOutput(ns))
+	for i, ns := range nss {
+		out.Namespaces = append(out.Namespaces, toOutput(ns, extras[i]))
 	}
 	return out, nil
 }
 
 // Converters.
 
-// toOutput converts the GitLab API response to the tool output format.
-func toOutput(ns *gl.Namespace) Output {
+// toOutput converts the GitLab API response to the tool output format,
+// filling from the decoded namespace and from what the capture read beside it.
+func toOutput(ns *gl.Namespace, extra toolutil.NamespaceExtra) Output {
 	o := Output{
-		ID:                          ns.ID,
-		Name:                        ns.Name,
-		Path:                        ns.Path,
-		Kind:                        ns.Kind,
-		FullPath:                    ns.FullPath,
-		ParentID:                    ns.ParentID,
-		WebURL:                      ns.WebURL,
-		MembersCountWithDescendants: ns.MembersCountWithDescendants,
-		BillableMembersCount:        ns.BillableMembersCount,
-		Plan:                        ns.Plan,
-		Trial:                       ns.Trial,
-		MaxSeatsUsed:                ns.MaxSeatsUsed,
-		SeatsInUse:                  ns.SeatsInUse,
+		ID:                               ns.ID,
+		Name:                             ns.Name,
+		Path:                             ns.Path,
+		Kind:                             ns.Kind,
+		FullPath:                         ns.FullPath,
+		ParentID:                         ns.ParentID,
+		WebURL:                           ns.WebURL,
+		MembersCountWithDescendants:      ns.MembersCountWithDescendants,
+		ProjectsCount:                    extra.ProjectsCount,
+		RootRepositorySize:               extra.RootRepositorySize,
+		SharedRunnersMinutesLimit:        extra.SharedRunnersMinutesLimit,
+		ExtraSharedRunnersMinutesLimit:   extra.ExtraSharedRunnersMinutesLimit,
+		AdditionalPurchasedStorageSize:   extra.AdditionalPurchasedStorageSize,
+		AdditionalPurchasedStorageEndsOn: extra.AdditionalPurchasedStorageEndsOn,
+		BillableMembersCount:             ns.BillableMembersCount,
+		Plan:                             ns.Plan,
+		Trial:                            ns.Trial,
+		MaxSeatsUsed:                     ns.MaxSeatsUsed,
+		SeatsInUse:                       ns.SeatsInUse,
+		MaxSeatsUsedChangedAt:            toolutil.FormatTimePtr(extra.MaxSeatsUsedChangedAt),
+		EndDate:                          extra.EndDate,
 	}
 	if ns.AvatarURL != nil {
 		o.AvatarURL = *ns.AvatarURL

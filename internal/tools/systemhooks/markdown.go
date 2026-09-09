@@ -47,10 +47,28 @@ func FormatHookMarkdown(item HookItem) *mcp.CallToolResult {
 	}
 	fmt.Fprintf(&sb, "| URL | %s |\n", toolutil.EscapeMdTableCell(item.URL))
 	fmt.Fprintf(&sb, "| Push Events | %v |\n", item.PushEvents)
+	if item.PushEventsBranchFilter != "" {
+		fmt.Fprintf(&sb, "| Push Events Branch Filter | %s |\n", toolutil.EscapeMdTableCell(item.PushEventsBranchFilter))
+	}
+	if item.BranchFilterStrategy != "" {
+		fmt.Fprintf(&sb, "| Branch Filter Strategy | %s |\n", toolutil.EscapeMdTableCell(item.BranchFilterStrategy))
+	}
 	fmt.Fprintf(&sb, "| Tag Push Events | %v |\n", item.TagPushEvents)
 	fmt.Fprintf(&sb, "| MR Events | %v |\n", item.MergeRequestsEvents)
 	fmt.Fprintf(&sb, "| Repo Update Events | %v |\n", item.RepositoryUpdateEvents)
 	fmt.Fprintf(&sb, "| SSL Verification | %v |\n", item.EnableSSLVerification)
+	if item.AlertStatus != "" {
+		fmt.Fprintf(&sb, "| Alert Status | %s |\n", toolutil.EscapeMdTableCell(item.AlertStatus))
+	}
+	if item.DisabledUntil != "" {
+		fmt.Fprintf(&sb, "| Disabled Until | %s |\n", toolutil.FormatTime(item.DisabledUntil))
+	}
+	if item.CustomWebhookTemplate != "" {
+		fmt.Fprintf(&sb, "| Custom Webhook Template | %s |\n", toolutil.EscapeMdTableCell(item.CustomWebhookTemplate))
+	}
+	if item.OrganizationID != 0 {
+		fmt.Fprintf(&sb, "| Organization ID | %d |\n", item.OrganizationID)
+	}
 	fmt.Fprintf(&sb, "| Token Present | %v |\n", item.TokenPresent)
 	fmt.Fprintf(&sb, "| Signing Token Present | %v |\n", item.SigningTokenPresent)
 	if item.CreatedAt != "" {
@@ -61,6 +79,13 @@ func FormatHookMarkdown(item HookItem) *mcp.CallToolResult {
 		sb.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
 		for _, variable := range item.URLVariables {
 			sb.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(variable.Key), toolutil.RedactedSecretValue))
+		}
+	}
+	if len(item.CustomHeaders) > 0 {
+		sb.WriteString("\n### Custom Headers\n\n")
+		sb.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
+		for _, header := range item.CustomHeaders {
+			sb.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(header.Key), toolutil.RedactedSecretValue))
 		}
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_test_system_hook` to verify this hook is working")

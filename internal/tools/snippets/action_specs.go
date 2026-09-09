@@ -100,15 +100,21 @@ func decorateSnippetMeta(options *toolutil.ActionSpecOptions, individualTool str
 	if !ok {
 		return
 	}
+	applySnippetMeta(options, meta)
+}
+
+// applySnippetMeta copies whatever the entry names onto the options, leaving
+// the generic placeholder in place for anything it does not.
+func applySnippetMeta(options *toolutil.ActionSpecOptions, meta snippetActionMetaEntry) {
 	if meta.usage != "" {
 		options.Usage = meta.usage
 	}
 	if len(meta.aliases) > 0 {
 		options.Aliases = append([]string(nil), meta.aliases...)
 	}
-	if len(meta.related) > 0 {
-		options.RelatedActions = append([]string(nil), meta.related...)
-	}
+	// The related actions are taken whatever the entry holds: an entry naming
+	// none leaves the options with none, which is what they already carry.
+	options.RelatedActions = append([]string(nil), meta.related...)
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
 	}

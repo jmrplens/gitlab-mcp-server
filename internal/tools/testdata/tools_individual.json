@@ -4636,10 +4636,40 @@
         "hook": {
           "additionalProperties": false,
           "properties": {
+            "alert_status": {
+              "type": "string"
+            },
+            "branch_filter_strategy": {
+              "type": "string"
+            },
             "created_at": {
               "type": "string"
             },
+            "custom_headers": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "custom_webhook_template": {
+              "type": "string"
+            },
             "description": {
+              "type": "string"
+            },
+            "disabled_until": {
               "type": "string"
             },
             "enable_ssl_verification": {
@@ -4654,8 +4684,14 @@
             "name": {
               "type": "string"
             },
+            "organization_id": {
+              "type": "integer"
+            },
             "push_events": {
               "type": "boolean"
+            },
+            "push_events_branch_filter": {
+              "type": "string"
             },
             "repository_update_events": {
               "type": "boolean"
@@ -21928,79 +21964,7 @@
         "key": {
           "type": "string"
         },
-        "next_steps": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
-        "title": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "id",
-        "title",
-        "key",
-        "can_push"
-      ],
-      "type": "object"
-    },
-    "annotations": {
-      "destructiveHint": false,
-      "idempotentHint": false,
-      "openWorldHint": true,
-      "readOnlyHint": false
-    }
-  },
-  {
-    "name": "gitlab_deploy_key_add_instance",
-    "description": "Create an instance-level deploy key (admin only). Returns: the created instance deploy key with id, title, fingerprint, expiry, and project access arrays. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_enable.",
-    "inputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "expires_at": {
-          "description": "Expiry date (YYYY-MM-DD)",
-          "format": "date-time",
-          "type": "string"
-        },
-        "key": {
-          "description": "Public SSH key content",
-          "type": "string"
-        },
-        "title": {
-          "description": "Deploy key title",
-          "type": "string"
-        }
-      },
-      "required": [
-        "title",
-        "key"
-      ],
-      "type": "object"
-    },
-    "outputSchema": {
-      "additionalProperties": false,
-      "properties": {
-        "created_at": {
-          "type": "string"
-        },
-        "expires_at": {
-          "type": "string"
-        },
-        "fingerprint": {
-          "type": "string"
-        },
-        "fingerprint_sha256": {
-          "type": "string"
-        },
-        "id": {
-          "type": "integer"
-        },
-        "key": {
+        "last_used_at": {
           "type": "string"
         },
         "next_steps": {
@@ -22089,6 +22053,166 @@
           ]
         },
         "title": {
+          "type": "string"
+        },
+        "usage_type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "key",
+        "can_push"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "name": "gitlab_deploy_key_add_instance",
+    "description": "Create an instance-level deploy key (admin only). Returns: the created instance deploy key with id, title, fingerprint, expiry, and project access arrays. See also: gitlab_deploy_key_list_all, gitlab_deploy_key_enable.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "expires_at": {
+          "description": "Expiry date (YYYY-MM-DD)",
+          "format": "date-time",
+          "type": "string"
+        },
+        "key": {
+          "description": "Public SSH key content",
+          "type": "string"
+        },
+        "title": {
+          "description": "Deploy key title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "key"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "fingerprint_sha256": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "key": {
+          "type": "string"
+        },
+        "last_used_at": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "projects_with_readonly_access": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path_with_namespace"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "projects_with_write_access": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path_with_namespace"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "usage_type": {
           "type": "string"
         }
       },
@@ -22209,6 +22333,9 @@
         "key": {
           "type": "string"
         },
+        "last_used_at": {
+          "type": "string"
+        },
         "next_steps": {
           "items": {
             "type": "string"
@@ -22218,7 +22345,86 @@
             "array"
           ]
         },
+        "projects_with_readonly_access": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path_with_namespace"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "projects_with_write_access": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path_with_namespace"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "title": {
+          "type": "string"
+        },
+        "usage_type": {
           "type": "string"
         }
       },
@@ -22282,6 +22488,9 @@
         "key": {
           "type": "string"
         },
+        "last_used_at": {
+          "type": "string"
+        },
         "next_steps": {
           "items": {
             "type": "string"
@@ -22291,7 +22500,86 @@
             "array"
           ]
         },
+        "projects_with_readonly_access": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path_with_namespace"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "projects_with_write_access": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path_with_namespace"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "title": {
+          "type": "string"
+        },
+        "usage_type": {
           "type": "string"
         }
       },
@@ -22382,6 +22670,9 @@
               "key": {
                 "type": "string"
               },
+              "last_used_at": {
+                "type": "string"
+              },
               "next_steps": {
                 "items": {
                   "type": "string"
@@ -22468,6 +22759,9 @@
                 ]
               },
               "title": {
+                "type": "string"
+              },
+              "usage_type": {
                 "type": "string"
               }
             },
@@ -22617,6 +22911,9 @@
               "key": {
                 "type": "string"
               },
+              "last_used_at": {
+                "type": "string"
+              },
               "next_steps": {
                 "items": {
                   "type": "string"
@@ -22626,7 +22923,86 @@
                   "array"
                 ]
               },
+              "projects_with_readonly_access": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "name_with_namespace": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "path_with_namespace": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "path_with_namespace"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "projects_with_write_access": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "name_with_namespace": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "path_with_namespace": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "path_with_namespace"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "title": {
+                "type": "string"
+              },
+              "usage_type": {
                 "type": "string"
               }
             },
@@ -22777,6 +23153,9 @@
               "key": {
                 "type": "string"
               },
+              "last_used_at": {
+                "type": "string"
+              },
               "next_steps": {
                 "items": {
                   "type": "string"
@@ -22786,7 +23165,86 @@
                   "array"
                 ]
               },
+              "projects_with_readonly_access": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "name_with_namespace": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "path_with_namespace": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "path_with_namespace"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "projects_with_write_access": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "name_with_namespace": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "path_with_namespace": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "path_with_namespace"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "title": {
+                "type": "string"
+              },
+              "usage_type": {
                 "type": "string"
               }
             },
@@ -22918,6 +23376,9 @@
         "key": {
           "type": "string"
         },
+        "last_used_at": {
+          "type": "string"
+        },
         "next_steps": {
           "items": {
             "type": "string"
@@ -22927,7 +23388,86 @@
             "array"
           ]
         },
+        "projects_with_readonly_access": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path_with_namespace"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "projects_with_write_access": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path_with_namespace"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "title": {
+          "type": "string"
+        },
+        "usage_type": {
           "type": "string"
         }
       },
@@ -27796,10 +28336,40 @@
         "hook": {
           "additionalProperties": false,
           "properties": {
+            "alert_status": {
+              "type": "string"
+            },
+            "branch_filter_strategy": {
+              "type": "string"
+            },
             "created_at": {
               "type": "string"
             },
+            "custom_headers": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "custom_webhook_template": {
+              "type": "string"
+            },
             "description": {
+              "type": "string"
+            },
+            "disabled_until": {
               "type": "string"
             },
             "enable_ssl_verification": {
@@ -27814,8 +28384,14 @@
             "name": {
               "type": "string"
             },
+            "organization_id": {
+              "type": "integer"
+            },
             "push_events": {
               "type": "boolean"
+            },
+            "push_events_branch_filter": {
+              "type": "string"
             },
             "repository_update_events": {
               "type": "boolean"
@@ -46776,10 +47352,40 @@
         "hook": {
           "additionalProperties": false,
           "properties": {
+            "alert_status": {
+              "type": "string"
+            },
+            "branch_filter_strategy": {
+              "type": "string"
+            },
             "created_at": {
               "type": "string"
             },
+            "custom_headers": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "custom_webhook_template": {
+              "type": "string"
+            },
             "description": {
+              "type": "string"
+            },
+            "disabled_until": {
               "type": "string"
             },
             "enable_ssl_verification": {
@@ -46794,8 +47400,14 @@
             "name": {
               "type": "string"
             },
+            "organization_id": {
+              "type": "integer"
+            },
             "push_events": {
               "type": "boolean"
+            },
+            "push_events_branch_filter": {
+              "type": "string"
             },
             "repository_update_events": {
               "type": "boolean"
@@ -108437,8 +109049,14 @@
                   "object"
                 ]
               },
+              "conan_package_name": {
+                "type": "string"
+              },
               "created_at": {
                 "type": "string"
+              },
+              "creator_id": {
+                "type": "integer"
               },
               "id": {
                 "type": "integer"
@@ -108644,6 +109262,174 @@
               },
               "version": {
                 "type": "string"
+              },
+              "versions": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "pipeline": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "created_at": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "iid": {
+                          "type": "integer"
+                        },
+                        "project_id": {
+                          "type": "integer"
+                        },
+                        "ref": {
+                          "type": "string"
+                        },
+                        "sha": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "user": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "avatar_url": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "type": "integer"
+                            },
+                            "locked": {
+                              "type": "boolean"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "public_email": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string"
+                            },
+                            "username": {
+                              "type": "string"
+                            },
+                            "web_url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "username",
+                            "name",
+                            "locked"
+                          ],
+                          "type": [
+                            "null",
+                            "object"
+                          ]
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "iid",
+                        "project_id",
+                        "sha",
+                        "ref",
+                        "status",
+                        "source",
+                        "created_at",
+                        "updated_at",
+                        "web_url",
+                        "user"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "tags": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "created_at": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "id": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "package_id": {
+                            "type": "integer"
+                          },
+                          "updated_at": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "package_id",
+                          "name",
+                          "created_at",
+                          "updated_at"
+                        ],
+                        "type": "object"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "version",
+                    "created_at",
+                    "tags",
+                    "pipeline"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               }
             },
             "required": [
@@ -116644,10 +117430,40 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "alert_status": {
+                "type": "string"
+              },
+              "branch_filter_strategy": {
+                "type": "string"
+              },
               "created_at": {
                 "type": "string"
               },
+              "custom_headers": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "custom_webhook_template": {
+                "type": "string"
+              },
               "description": {
+                "type": "string"
+              },
+              "disabled_until": {
                 "type": "string"
               },
               "enable_ssl_verification": {
@@ -116662,8 +117478,14 @@
               "name": {
                 "type": "string"
               },
+              "organization_id": {
+                "type": "integer"
+              },
               "push_events": {
                 "type": "boolean"
+              },
+              "push_events_branch_filter": {
+                "type": "string"
               },
               "repository_update_events": {
                 "type": "boolean"
@@ -145184,11 +146006,29 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "additional_purchased_storage_ends_on": {
+          "type": "string"
+        },
+        "additional_purchased_storage_size": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "avatar_url": {
           "type": "string"
         },
         "billable_members_count": {
           "type": "integer"
+        },
+        "end_date": {
+          "type": "string"
+        },
+        "extra_shared_runners_minutes_limit": {
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "full_path": {
           "type": "string"
@@ -145204,6 +146044,9 @@
             "null",
             "integer"
           ]
+        },
+        "max_seats_used_changed_at": {
+          "type": "string"
         },
         "members_count_with_descendants": {
           "type": "integer"
@@ -145229,7 +146072,19 @@
         "plan": {
           "type": "string"
         },
+        "projects_count": {
+          "type": "integer"
+        },
+        "root_repository_size": {
+          "type": "integer"
+        },
         "seats_in_use": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "shared_runners_minutes_limit": {
           "type": [
             "null",
             "integer"
@@ -145320,11 +146175,29 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "additional_purchased_storage_ends_on": {
+                "type": "string"
+              },
+              "additional_purchased_storage_size": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
               "avatar_url": {
                 "type": "string"
               },
               "billable_members_count": {
                 "type": "integer"
+              },
+              "end_date": {
+                "type": "string"
+              },
+              "extra_shared_runners_minutes_limit": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
               },
               "full_path": {
                 "type": "string"
@@ -145340,6 +146213,9 @@
                   "null",
                   "integer"
                 ]
+              },
+              "max_seats_used_changed_at": {
+                "type": "string"
               },
               "members_count_with_descendants": {
                 "type": "integer"
@@ -145365,7 +146241,19 @@
               "plan": {
                 "type": "string"
               },
+              "projects_count": {
+                "type": "integer"
+              },
+              "root_repository_size": {
+                "type": "integer"
+              },
               "seats_in_use": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "shared_runners_minutes_limit": {
                 "type": [
                   "null",
                   "integer"
@@ -145477,11 +146365,29 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "additional_purchased_storage_ends_on": {
+                "type": "string"
+              },
+              "additional_purchased_storage_size": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
               "avatar_url": {
                 "type": "string"
               },
               "billable_members_count": {
                 "type": "integer"
+              },
+              "end_date": {
+                "type": "string"
+              },
+              "extra_shared_runners_minutes_limit": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
               },
               "full_path": {
                 "type": "string"
@@ -145497,6 +146403,9 @@
                   "null",
                   "integer"
                 ]
+              },
+              "max_seats_used_changed_at": {
+                "type": "string"
               },
               "members_count_with_descendants": {
                 "type": "integer"
@@ -145522,7 +146431,19 @@
               "plan": {
                 "type": "string"
               },
+              "projects_count": {
+                "type": "integer"
+              },
+              "root_repository_size": {
+                "type": "integer"
+              },
               "seats_in_use": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "shared_runners_minutes_limit": {
                 "type": [
                   "null",
                   "integer"
@@ -147281,8 +148202,14 @@
                   "object"
                 ]
               },
+              "conan_package_name": {
+                "type": "string"
+              },
               "created_at": {
                 "type": "string"
+              },
+              "creator_id": {
+                "type": "integer"
               },
               "id": {
                 "type": "integer"
@@ -147445,6 +148372,12 @@
                   "array"
                 ]
               },
+              "project_id": {
+                "type": "integer"
+              },
+              "project_path": {
+                "type": "string"
+              },
               "status": {
                 "type": "string"
               },
@@ -147482,6 +148415,174 @@
               },
               "version": {
                 "type": "string"
+              },
+              "versions": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "pipeline": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "created_at": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "iid": {
+                          "type": "integer"
+                        },
+                        "project_id": {
+                          "type": "integer"
+                        },
+                        "ref": {
+                          "type": "string"
+                        },
+                        "sha": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "user": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "avatar_url": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "type": "integer"
+                            },
+                            "locked": {
+                              "type": "boolean"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "public_email": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string"
+                            },
+                            "username": {
+                              "type": "string"
+                            },
+                            "web_url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "username",
+                            "name",
+                            "locked"
+                          ],
+                          "type": [
+                            "null",
+                            "object"
+                          ]
+                        },
+                        "web_url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "iid",
+                        "project_id",
+                        "sha",
+                        "ref",
+                        "status",
+                        "source",
+                        "created_at",
+                        "updated_at",
+                        "web_url",
+                        "user"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    },
+                    "tags": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "created_at": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "id": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "package_id": {
+                            "type": "integer"
+                          },
+                          "updated_at": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "package_id",
+                          "name",
+                          "created_at",
+                          "updated_at"
+                        ],
+                        "type": "object"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "version",
+                    "created_at",
+                    "tags",
+                    "pipeline"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               }
             },
             "required": [
@@ -163951,6 +165052,12 @@
               "id": {
                 "type": "integer"
               },
+              "imported": {
+                "type": "boolean"
+              },
+              "imported_from": {
+                "type": "string"
+              },
               "note": {
                 "additionalProperties": false,
                 "properties": {
@@ -164074,13 +165181,35 @@
               },
               "title": {
                 "type": "string"
+              },
+              "wiki_page": {
+                "additionalProperties": false,
+                "properties": {
+                  "format": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "wiki_page_meta_id": {
+                    "type": "integer"
+                  }
+                },
+                "type": [
+                  "null",
+                  "object"
+                ]
               }
             },
             "required": [
               "id",
               "project_id",
               "action_name",
-              "author_id"
+              "author_id",
+              "imported"
             ],
             "type": "object"
           },
@@ -179154,8 +180283,17 @@
             "array"
           ]
         },
+        "http_url_to_repo": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
+        },
+        "imported": {
+          "type": "boolean"
+        },
+        "imported_from": {
+          "type": "string"
         },
         "next_steps": {
           "items": {
@@ -179173,6 +180311,9 @@
           "type": "string"
         },
         "repository_storage": {
+          "type": "string"
+        },
+        "ssh_url_to_repo": {
           "type": "string"
         },
         "title": {
@@ -179198,7 +180339,8 @@
         "description",
         "visibility",
         "web_url",
-        "raw_url"
+        "raw_url",
+        "imported"
       ],
       "type": "object"
     },
@@ -179362,8 +180504,17 @@
             "array"
           ]
         },
+        "http_url_to_repo": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
+        },
+        "imported": {
+          "type": "boolean"
+        },
+        "imported_from": {
+          "type": "string"
         },
         "next_steps": {
           "items": {
@@ -179381,6 +180532,9 @@
           "type": "string"
         },
         "repository_storage": {
+          "type": "string"
+        },
+        "ssh_url_to_repo": {
           "type": "string"
         },
         "title": {
@@ -179406,7 +180560,8 @@
         "description",
         "visibility",
         "web_url",
-        "raw_url"
+        "raw_url",
+        "imported"
       ],
       "type": "object"
     },
@@ -179587,8 +180742,17 @@
                   "array"
                 ]
               },
+              "http_url_to_repo": {
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
+              },
+              "imported": {
+                "type": "boolean"
+              },
+              "imported_from": {
+                "type": "string"
               },
               "next_steps": {
                 "items": {
@@ -179606,6 +180770,9 @@
                 "type": "string"
               },
               "repository_storage": {
+                "type": "string"
+              },
+              "ssh_url_to_repo": {
                 "type": "string"
               },
               "title": {
@@ -179631,7 +180798,8 @@
               "description",
               "visibility",
               "web_url",
-              "raw_url"
+              "raw_url",
+              "imported"
             ],
             "type": "object"
           },
@@ -179813,8 +180981,17 @@
             "array"
           ]
         },
+        "http_url_to_repo": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
+        },
+        "imported": {
+          "type": "boolean"
+        },
+        "imported_from": {
+          "type": "string"
         },
         "next_steps": {
           "items": {
@@ -179832,6 +181009,9 @@
           "type": "string"
         },
         "repository_storage": {
+          "type": "string"
+        },
+        "ssh_url_to_repo": {
           "type": "string"
         },
         "title": {
@@ -179857,7 +181037,8 @@
         "description",
         "visibility",
         "web_url",
-        "raw_url"
+        "raw_url",
+        "imported"
       ],
       "type": "object"
     },
@@ -207426,8 +208607,17 @@
             "array"
           ]
         },
+        "http_url_to_repo": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
+        },
+        "imported": {
+          "type": "boolean"
+        },
+        "imported_from": {
+          "type": "string"
         },
         "next_steps": {
           "items": {
@@ -207445,6 +208635,9 @@
           "type": "string"
         },
         "repository_storage": {
+          "type": "string"
+        },
+        "ssh_url_to_repo": {
           "type": "string"
         },
         "title": {
@@ -207470,7 +208663,8 @@
         "description",
         "visibility",
         "web_url",
-        "raw_url"
+        "raw_url",
+        "imported"
       ],
       "type": "object"
     },
@@ -208168,8 +209362,17 @@
                   "array"
                 ]
               },
+              "http_url_to_repo": {
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
+              },
+              "imported": {
+                "type": "boolean"
+              },
+              "imported_from": {
+                "type": "string"
               },
               "next_steps": {
                 "items": {
@@ -208187,6 +209390,9 @@
                 "type": "string"
               },
               "repository_storage": {
+                "type": "string"
+              },
+              "ssh_url_to_repo": {
                 "type": "string"
               },
               "title": {
@@ -208212,7 +209418,8 @@
               "description",
               "visibility",
               "web_url",
-              "raw_url"
+              "raw_url",
+              "imported"
             ],
             "type": "object"
           },
@@ -208391,8 +209598,17 @@
             "array"
           ]
         },
+        "http_url_to_repo": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
+        },
+        "imported": {
+          "type": "boolean"
+        },
+        "imported_from": {
+          "type": "string"
         },
         "next_steps": {
           "items": {
@@ -208410,6 +209626,9 @@
           "type": "string"
         },
         "repository_storage": {
+          "type": "string"
+        },
+        "ssh_url_to_repo": {
           "type": "string"
         },
         "title": {
@@ -208435,7 +209654,8 @@
         "description",
         "visibility",
         "web_url",
-        "raw_url"
+        "raw_url",
+        "imported"
       ],
       "type": "object"
     },
@@ -208609,8 +209829,17 @@
                   "array"
                 ]
               },
+              "http_url_to_repo": {
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
+              },
+              "imported": {
+                "type": "boolean"
+              },
+              "imported_from": {
+                "type": "string"
               },
               "next_steps": {
                 "items": {
@@ -208628,6 +209857,9 @@
                 "type": "string"
               },
               "repository_storage": {
+                "type": "string"
+              },
+              "ssh_url_to_repo": {
                 "type": "string"
               },
               "title": {
@@ -208653,7 +209885,8 @@
               "description",
               "visibility",
               "web_url",
-              "raw_url"
+              "raw_url",
+              "imported"
             ],
             "type": "object"
           },
@@ -208853,8 +210086,17 @@
                   "array"
                 ]
               },
+              "http_url_to_repo": {
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
+              },
+              "imported": {
+                "type": "boolean"
+              },
+              "imported_from": {
+                "type": "string"
               },
               "next_steps": {
                 "items": {
@@ -208872,6 +210114,9 @@
                 "type": "string"
               },
               "repository_storage": {
+                "type": "string"
+              },
+              "ssh_url_to_repo": {
                 "type": "string"
               },
               "title": {
@@ -208897,7 +210142,8 @@
               "description",
               "visibility",
               "web_url",
-              "raw_url"
+              "raw_url",
+              "imported"
             ],
             "type": "object"
           },
@@ -211008,8 +212254,17 @@
             "array"
           ]
         },
+        "http_url_to_repo": {
+          "type": "string"
+        },
         "id": {
           "type": "integer"
+        },
+        "imported": {
+          "type": "boolean"
+        },
+        "imported_from": {
+          "type": "string"
         },
         "next_steps": {
           "items": {
@@ -211027,6 +212282,9 @@
           "type": "string"
         },
         "repository_storage": {
+          "type": "string"
+        },
+        "ssh_url_to_repo": {
           "type": "string"
         },
         "title": {
@@ -211052,7 +212310,8 @@
         "description",
         "visibility",
         "web_url",
-        "raw_url"
+        "raw_url",
+        "imported"
       ],
       "type": "object"
     },
@@ -218388,6 +219647,12 @@
               "id": {
                 "type": "integer"
               },
+              "imported": {
+                "type": "boolean"
+              },
+              "imported_from": {
+                "type": "string"
+              },
               "note": {
                 "additionalProperties": false,
                 "properties": {
@@ -218668,13 +219933,35 @@
               },
               "title": {
                 "type": "string"
+              },
+              "wiki_page": {
+                "additionalProperties": false,
+                "properties": {
+                  "format": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "wiki_page_meta_id": {
+                    "type": "integer"
+                  }
+                },
+                "type": [
+                  "null",
+                  "object"
+                ]
               }
             },
             "required": [
               "id",
               "project_id",
               "action_name",
-              "author_id"
+              "author_id",
+              "imported"
             ],
             "type": "object"
           },

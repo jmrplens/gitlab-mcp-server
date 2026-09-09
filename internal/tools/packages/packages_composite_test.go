@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -142,6 +143,79 @@ func TestPackagePublishAndLink_CustomLinkType(t *testing.T) {
 	}
 	if out.ReleaseLink.LinkType != "runbook" {
 		t.Errorf("ReleaseLink.LinkType = %q, want %q", out.ReleaseLink.LinkType, "runbook")
+	}
+}
+
+// TestFileSizes_CountAFileItCannotStatAsZero verifies the scale a directory
+// publish reports against survives a name it cannot measure, since losing the
+// whole publish over a progress bar would be the worse trade.
+func TestFileSizes_CountAFileItCannotStatAsZero(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "there.bin"), []byte("12345"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	sizes := fileSizes(dir, []string{"there.bin", "missing.bin"})
+	if len(sizes) != 2 || sizes[0] != 5 || sizes[1] != 0 {
+		t.Errorf("fileSizes() = %v, want the measured file and a zero for the missing one", sizes)
+	}
+}
+
+// TestPackagePublishAndLink_LinkNameAndTypeReachTheRequest verifies the
+// release link is created under the name and type the caller asked for, and
+// under the file name and the package type when the caller named neither.
+// Only the request the handler built says which, since the answer is the
+// fixture's.
+func TestPackagePublishAndLink_LinkNameAndTypeReachTheRequest(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		linkName string
+		linkType string
+		want     []string
+	}{
+		{name: "defaulted", want: []string{`"name":"app.tar.gz"`, `"link_type":"package"`}},
+		{
+			name: "given", linkName: "Runbook", linkType: "runbook",
+			want: []string{`"name":"Runbook"`, `"link_type":"runbook"`},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var linkBody string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodPut && r.URL.Path == pathPackagePublish:
+					testutil.RespondJSON(w, http.StatusCreated, publishResponseJSON)
+				case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/assets/links"):
+					body, readErr := io.ReadAll(r.Body)
+					if readErr != nil {
+						t.Errorf("read link request body: %v", readErr)
+					}
+					linkBody = string(body)
+					testutil.RespondJSON(w, http.StatusCreated,
+						`{"id":53,"name":"n","url":"https://example.com/pkg","link_type":"package","external":true}`)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+
+			_, err := PublishAndLink(context.Background(), nil, client, PublishAndLinkInput{
+				ProjectID:      "42",
+				PackageName:    "my-pkg",
+				PackageVersion: "1.0.0",
+				FileName:       "app.tar.gz",
+				ContentBase64:  base64.StdEncoding.EncodeToString([]byte("data")),
+				TagName:        "v1.0.0",
+				LinkName:       testCase.linkName,
+				LinkType:       testCase.linkType,
+			})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			for _, want := range testCase.want {
+				if !strings.Contains(linkBody, want) {
+					t.Errorf("link request body %q missing %q", linkBody, want)
+				}
+			}
+		})
 	}
 }
 
@@ -882,6 +956,28 @@ func TestPublishDirectory_ProgressSequenceOnlyIncreases(t *testing.T) {
 
 	if last := got[len(got)-1]; last.Progress != wantTotal {
 		t.Errorf("the last notification reports %v of %v, want the job finished", last.Progress, wantTotal)
+	}
+
+	assertFilesCountedFromOne(t, got)
+}
+
+// assertFilesCountedFromOne reports per-file progress frames that number the
+// files from anything but one, the way a person reads them. Only the first
+// frame is guaranteed to arrive: a later one whose byte count the reader
+// already reported is dropped by the monotonic guard.
+func assertFilesCountedFromOne(t *testing.T, got []mcp.ProgressNotificationParams) {
+	t.Helper()
+	var countedFromOne bool
+	for _, n := range got {
+		if strings.Contains(n.Message, "file 1 of 2") {
+			countedFromOne = true
+		}
+		if strings.Contains(n.Message, "file 0 of") || strings.Contains(n.Message, "file -1 of") {
+			t.Errorf("notification counts the files from something other than one: %q", n.Message)
+		}
+	}
+	if !countedFromOne {
+		t.Errorf("no notification named the first file as 1 of 2: %+v", got)
 	}
 }
 

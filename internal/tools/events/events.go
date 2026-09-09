@@ -132,6 +132,32 @@ type ContributionEventOutput struct {
 	Note           *NoteOutput                      `json:"note,omitempty"`
 	Author         *UserOutput                      `json:"author,omitempty"`
 	AuthorUsername string                           `json:"author_username,omitempty"`
+	WikiPage       *WikiPageOutput                  `json:"wiki_page,omitempty"`
+	Imported       bool                             `json:"imported"`
+	ImportedFrom   string                           `json:"imported_from,omitempty"`
+}
+
+// WikiPageOutput is the wiki page an event happened to, which GitLab sends on
+// an event about a wiki.
+type WikiPageOutput struct {
+	Format         string `json:"format,omitempty"`
+	Slug           string `json:"slug,omitempty"`
+	Title          string `json:"title,omitempty"`
+	WikiPageMetaID int64  `json:"wiki_page_meta_id,omitempty"`
+}
+
+// toWikiPageOutput mirrors the wiki page read off the captured answer,
+// returning nil when the event is about something else.
+func toWikiPageOutput(w *toolutil.EventWikiPageOutput) *WikiPageOutput {
+	if w == nil {
+		return nil
+	}
+	return &WikiPageOutput{
+		Format:         w.Format,
+		Slug:           w.Slug,
+		Title:          w.Title,
+		WikiPageMetaID: w.WikiPageMetaID,
+	}
 }
 
 // ListContributionEventsOutput holds a paginated list of contribution events.
@@ -158,17 +184,22 @@ func ListCurrentUserContributionEvents(ctx context.Context, client *gitlabclient
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	events, resp, err := client.GL().Events.ListCurrentUserContributionEvents(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListContributionEventsOutput{}, toolutil.WrapErrWithStatusHint("user_contribution_event_list", err, http.StatusForbidden, "verify your token has read_api scope")
+	}
+	extras, err := toolutil.CapturedEvents(captured, len(events))
+	if err != nil {
+		return ListContributionEventsOutput{}, toolutil.WrapErr("user_contribution_event_list", err)
 	}
 
 	out := ListContributionEventsOutput{
 		Events:     make([]ContributionEventOutput, 0, len(events)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
-	for _, e := range events {
-		out.Events = append(out.Events, toContributionEventOutput(e))
+	for i, e := range events {
+		out.Events = append(out.Events, toContributionEventOutput(e, extras[i]))
 	}
 
 	enrichContributionEventURLs(ctx, client, out.Events)
@@ -176,8 +207,10 @@ func ListCurrentUserContributionEvents(ctx context.Context, client *gitlabclient
 	return out, nil
 }
 
-// toContributionEventOutput converts the GitLab API response to the tool output format.
-func toContributionEventOutput(e *gl.ContributionEvent) ContributionEventOutput {
+// toContributionEventOutput converts the GitLab API response to the tool
+// output format, filling from the decoded event and from what the capture
+// read beside it.
+func toContributionEventOutput(e *gl.ContributionEvent, extra toolutil.EventExtra) ContributionEventOutput {
 	o := ContributionEventOutput{
 		ID:             e.ID,
 		Title:          e.Title,
@@ -192,6 +225,9 @@ func toContributionEventOutput(e *gl.ContributionEvent) ContributionEventOutput 
 		PushData:       toContributionPushDataOutput(e.PushData),
 		Note:           toNoteOutput(e.Note),
 		Author:         toBasicUserOutput(e.Author),
+		WikiPage:       toWikiPageOutput(extra.WikiPage),
+		Imported:       extra.Imported,
+		ImportedFrom:   extra.ImportedFrom,
 	}
 	if e.CreatedAt != nil {
 		o.CreatedAt = e.CreatedAt.Format(time.RFC3339)
@@ -453,6 +489,9 @@ type ProjectEventOutput struct {
 	Data           *ProjectEventDataOutput     `json:"data,omitempty"`
 	Note           *ProjectEventNoteOutput     `json:"note,omitempty"`
 	PushData       *ProjectEventPushDataOutput `json:"push_data,omitempty"`
+	WikiPage       *WikiPageOutput             `json:"wiki_page,omitempty"`
+	Imported       bool                        `json:"imported"`
+	ImportedFrom   string                      `json:"imported_from,omitempty"`
 }
 
 // ListProjectEventsOutput holds a paginated list of project events.
@@ -482,17 +521,22 @@ func ListProjectEvents(ctx context.Context, client *gitlabclient.Client, input L
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	events, resp, err := client.GL().Events.ListProjectVisibleEvents(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectEventsOutput{}, toolutil.WrapErrWithStatusHint("project_event_list", err, http.StatusNotFound, "verify project_id with gitlab_project_get")
+	}
+	extras, err := toolutil.CapturedEvents(captured, len(events))
+	if err != nil {
+		return ListProjectEventsOutput{}, toolutil.WrapErr("project_event_list", err)
 	}
 
 	out := ListProjectEventsOutput{
 		Events:     make([]ProjectEventOutput, 0, len(events)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
-	for _, e := range events {
-		out.Events = append(out.Events, toProjectEventOutput(e))
+	for i, e := range events {
+		out.Events = append(out.Events, toProjectEventOutput(e, extras[i]))
 	}
 
 	enrichProjectEventURLs(ctx, client, out.Events)
@@ -502,8 +546,10 @@ func ListProjectEvents(ctx context.Context, client *gitlabclient.Client, input L
 
 // Converters.
 
-// toProjectEventOutput converts the GitLab API response to the tool output format.
-func toProjectEventOutput(e *gl.ProjectEvent) ProjectEventOutput {
+// toProjectEventOutput converts the GitLab API response to the tool output
+// format, filling from the decoded event and from what the capture read
+// beside it.
+func toProjectEventOutput(e *gl.ProjectEvent, extra toolutil.EventExtra) ProjectEventOutput {
 	return ProjectEventOutput{
 		ID:             e.ID,
 		Title:          e.Title,
@@ -520,6 +566,9 @@ func toProjectEventOutput(e *gl.ProjectEvent) ProjectEventOutput {
 		Data:           toProjectEventDataOutput(e.Data),
 		Note:           toProjectEventNoteOutput(e.Note),
 		PushData:       toProjectPushDataOutput(e.PushData),
+		WikiPage:       toWikiPageOutput(extra.WikiPage),
+		Imported:       extra.Imported,
+		ImportedFrom:   extra.ImportedFrom,
 	}
 }
 

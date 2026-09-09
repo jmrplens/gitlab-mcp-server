@@ -5,6 +5,7 @@ package events
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -457,7 +459,7 @@ func TestCovtoContributionEventOutput_NilCreatedAt(t *testing.T) {
 		CreatedAt:      nil,
 		AuthorUsername: "covUser",
 	}
-	out := toContributionEventOutput(e)
+	out := toContributionEventOutput(e, toolutil.EventExtra{})
 	if out.CreatedAt != "" {
 		t.Errorf("expected empty CreatedAt, got %q", out.CreatedAt)
 	}
@@ -484,7 +486,7 @@ func TestCovtoContributionEventOutput_WithDate(t *testing.T) {
 		CreatedAt:      &ts,
 		AuthorUsername: "covUser",
 	}
-	out := toContributionEventOutput(e)
+	out := toContributionEventOutput(e, toolutil.EventExtra{})
 	if !strings.Contains(out.CreatedAt, "2026-03-07") {
 		t.Errorf("expected date in CreatedAt, got %q", out.CreatedAt)
 	}
@@ -550,7 +552,7 @@ func TestCovtoProject_EventOutputFieldMapping(t *testing.T) {
 		CreatedAt:      "2026-03-07T12:34:56Z",
 		AuthorUsername: "covUser",
 	}
-	out := toProjectEventOutput(e)
+	out := toProjectEventOutput(e, toolutil.EventExtra{})
 	if out.ID != 101 || out.ProjectID != 202 || out.ActionName != "covAction" {
 		t.Errorf("field mapping failed: %+v", out)
 	}
@@ -886,7 +888,7 @@ func TestToContributionEventOutput_FullMirror(t *testing.T) {
 		Author: gl.BasicUser{ID: 5, Username: "u", Name: "User", State: "active", CreatedAt: &ts, AvatarURL: "a", WebURL: "w"},
 	}
 
-	out := toContributionEventOutput(e)
+	out := toContributionEventOutput(e, toolutil.EventExtra{})
 	assertTrue(t, out.PushData != nil && out.PushData.CommitCount == 3 && out.PushData.CommitTitle == "fix", "push_data")
 	assertTrue(t, out.Author != nil && out.Author.ID == 5 && out.Author.CreatedAt != "", "author")
 	assertContributionNote(t, out.Note)
@@ -916,7 +918,7 @@ func assertTrue(t *testing.T, cond bool, label string) {
 // TestToContributionEventOutput_EmptySubObjects verifies that zero-valued sub
 // objects are omitted (nil) so the output stays clean.
 func TestToContributionEventOutput_EmptySubObjects(t *testing.T) {
-	out := toContributionEventOutput(&gl.ContributionEvent{ID: 1})
+	out := toContributionEventOutput(&gl.ContributionEvent{ID: 1}, toolutil.EventExtra{})
 	if out.PushData != nil {
 		t.Errorf("expected nil push_data, got %+v", out.PushData)
 	}
@@ -1011,7 +1013,7 @@ func TestToProjectEventOutput_FullMirror(t *testing.T) {
 		},
 	}
 
-	out := toProjectEventOutput(e)
+	out := toProjectEventOutput(e, toolutil.EventExtra{})
 	assertTrue(t, out.Author != nil && out.Author.ID == 5, "author")
 	assertTrue(t, out.PushData != nil && out.PushData.CommitTitle == "ct", "push_data")
 	assertTrue(t, out.Note != nil && out.Note.NoteableType == "Issue" && out.Note.Author != nil && out.Note.Author.Email == "n@e" && out.Note.CreatedAt != "", "note")
@@ -1035,7 +1037,7 @@ func assertProjectData(t *testing.T, d *ProjectEventDataOutput) {
 // TestToProjectEventOutput_EmptySubObjects verifies zero-valued ProjectEvent sub
 // objects are omitted.
 func TestToProjectEventOutput_EmptySubObjects(t *testing.T) {
-	out := toProjectEventOutput(&gl.ProjectEvent{ID: 1})
+	out := toProjectEventOutput(&gl.ProjectEvent{ID: 1}, toolutil.EventExtra{})
 	if out.PushData != nil || out.Note != nil || out.Data != nil || out.Author != nil {
 		t.Errorf("expected nil sub-objects, got %+v", out)
 	}
@@ -1106,5 +1108,329 @@ func TestListCurrentUserContributionEvents_KeysetAndOrderBy(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Fields GitLab sends beside the ones the SDK's own event models
+// ---------------------------------------------------------------------------.
+
+// eventSentJSON is one event about a wiki page as GitLab renders it, carrying
+// the keys the SDK's own event structs leave out: the wiki page the event
+// happened to, and whether the event arrived with an import.
+const eventSentJSON = `{"id":1,"project_id":42,"action_name":"created","author_id":10,` +
+	`"author_username":"alice","created_at":"2026-01-15T10:00:00Z",` +
+	`"wiki_page":{"format":"markdown","slug":"home","title":"Home","wiki_page_meta_id":77},` +
+	`"imported":true,"imported_from":"github"}`
+
+// eventWithoutWikiJSON is an event about something other than a wiki page,
+// which happened here rather than arriving with an import.
+const eventWithoutWikiJSON = `{"id":2,"project_id":42,"action_name":"pushed","author_id":10,` +
+	`"author_username":"alice","created_at":"2026-01-15T10:00:00Z","imported":false,"imported_from":null}`
+
+// eventsClient answers the two event endpoints with body and refuses anything
+// else, so the project lookup that follows a listing cannot be mistaken for a
+// second answer to the listing itself.
+func eventsClient(t *testing.T, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/events") {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+}
+
+// eventSent is what a handler published of the fields read off the captured
+// answer, normalized so the contribution and project handlers share a table.
+type eventSent struct {
+	wikiPage     *WikiPageOutput
+	imported     bool
+	importedFrom string
+}
+
+// errNoEvent reports a handler that answered with no event at all.
+var errNoEvent = errors.New("the handler published no event")
+
+// eventCalls are the two handlers that answer with events.
+var eventCalls = []struct {
+	name string
+	call func(client *gitlabclient.Client) (eventSent, error)
+}{
+	{name: "contribution", call: func(client *gitlabclient.Client) (eventSent, error) {
+		out, err := ListCurrentUserContributionEvents(context.Background(), client, ListContributionEventsInput{})
+		if err != nil {
+			return eventSent{}, err
+		}
+		if len(out.Events) != 1 {
+			return eventSent{}, errNoEvent
+		}
+		return eventSent{
+			wikiPage:     out.Events[0].WikiPage,
+			imported:     out.Events[0].Imported,
+			importedFrom: out.Events[0].ImportedFrom,
+		}, nil
+	}},
+	{name: "project", call: func(client *gitlabclient.Client) (eventSent, error) {
+		out, err := ListProjectEvents(context.Background(), client, ListProjectEventsInput{ProjectID: "42"})
+		if err != nil {
+			return eventSent{}, err
+		}
+		if len(out.Events) != 1 {
+			return eventSent{}, errNoEvent
+		}
+		return eventSent{
+			wikiPage:     out.Events[0].WikiPage,
+			imported:     out.Events[0].Imported,
+			importedFrom: out.Events[0].ImportedFrom,
+		}, nil
+	}},
+}
+
+// TestEvents_PublishTheFieldsGitLabSendsBesideTheSDKs verifies both event
+// handlers publish the wiki page an event happened to and where an imported
+// event came from, read off the captured response.
+func TestEvents_PublishTheFieldsGitLabSendsBesideTheSDKs(t *testing.T) {
+	for _, eventCall := range eventCalls {
+		t.Run(eventCall.name, func(t *testing.T) {
+			sent, err := eventCall.call(eventsClient(t, `[`+eventSentJSON+`]`))
+			if err != nil {
+				t.Fatalf("%s: %v", eventCall.name, err)
+			}
+			if sent.wikiPage == nil {
+				t.Fatal("wiki_page = nil, want the page GitLab sent")
+			}
+			if sent.wikiPage.Format != "markdown" || sent.wikiPage.Slug != "home" ||
+				sent.wikiPage.Title != "Home" || sent.wikiPage.WikiPageMetaID != 77 {
+				t.Errorf("wiki_page = %+v, want every field GitLab sent", *sent.wikiPage)
+			}
+			if !sent.imported {
+				t.Error("imported = false, want true")
+			}
+			if sent.importedFrom != "github" {
+				t.Errorf("imported_from = %q, want github", sent.importedFrom)
+			}
+		})
+	}
+}
+
+// TestEvents_OmitTheWikiPageGitLabDidNotSend verifies an event about anything
+// but a wiki page publishes no page, and one that happened here says so.
+func TestEvents_OmitTheWikiPageGitLabDidNotSend(t *testing.T) {
+	for _, eventCall := range eventCalls {
+		t.Run(eventCall.name, func(t *testing.T) {
+			sent, err := eventCall.call(eventsClient(t, `[`+eventWithoutWikiJSON+`]`))
+			if err != nil {
+				t.Fatalf("%s: %v", eventCall.name, err)
+			}
+			if sent.wikiPage != nil {
+				t.Errorf("wiki_page = %+v, want none", *sent.wikiPage)
+			}
+			if sent.imported {
+				t.Error("imported = true, want false for an event that happened here")
+			}
+			if sent.importedFrom != "" {
+				t.Errorf("imported_from = %q, want none", sent.importedFrom)
+			}
+		})
+	}
+}
+
+// TestEvents_UnreadableCapturedFields verifies both event handlers report the
+// captured response's decode failure rather than an event missing what GitLab
+// sent. The SDK's own event structs have no imported flag, so only the read
+// beside them can notice GitLab sent a string there.
+func TestEvents_UnreadableCapturedFields(t *testing.T) {
+	const poisoned = `[{"id":1,"project_id":42,"action_name":"created","imported":"yes"}]`
+	cases := make([]testutil.CapturedCase, 0, len(eventCalls))
+	for _, eventCall := range eventCalls {
+		cases = append(cases, testutil.CapturedCase{Name: eventCall.name, Call: func() error {
+			_, err := eventCall.call(eventsClient(t, poisoned))
+			return err
+		}})
+	}
+	testutil.AssertCapturedDecodeFailures(t, cases)
+}
+
+// TestFormatEventListMarkdown_SentFields verifies both list formatters name
+// the wiki page an event happened to and where an imported event came from,
+// and say nothing of either for an event that carries neither.
+func TestFormatEventListMarkdown_SentFields(t *testing.T) {
+	page := &WikiPageOutput{Format: "markdown", Slug: "home", Title: "Home", WikiPageMetaID: 77}
+	for name, rendered := range map[string]string{
+		"contribution": FormatContributionListMarkdownString(ListContributionEventsOutput{
+			Events: []ContributionEventOutput{{
+				ID: 1, ActionName: "created", WikiPage: page, Imported: true, ImportedFrom: "github",
+			}},
+		}),
+		"project": FormatListMarkdownString(ListProjectEventsOutput{
+			Events: []ProjectEventOutput{{
+				ID: 1, ActionName: "created", WikiPage: page, Imported: true, ImportedFrom: "github",
+			}},
+		}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, want := range []string{`wiki page "Home"`, "(imported from github)"} {
+				if !strings.Contains(rendered, want) {
+					t.Errorf("%s markdown missing %q: %s", name, want, rendered)
+				}
+			}
+		})
+	}
+
+	for name, rendered := range map[string]string{
+		"contribution": FormatContributionListMarkdownString(ListContributionEventsOutput{
+			Events: []ContributionEventOutput{{ID: 1, ActionName: "pushed"}},
+		}),
+		"project": FormatListMarkdownString(ListProjectEventsOutput{
+			Events: []ProjectEventOutput{{ID: 1, ActionName: "pushed"}},
+		}),
+	} {
+		t.Run(name+" without them", func(t *testing.T) {
+			for _, unwanted := range []string{"wiki page", "imported"} {
+				if strings.Contains(rendered, unwanted) {
+					t.Errorf("%s markdown shows %q for an event that has none: %s", name, unwanted, rendered)
+				}
+			}
+		})
+	}
+}
+
+// Each of the four converters below decides whether a nested event object is
+// worth publishing by asking whether every one of its fields is empty. The
+// tests hand each of them an object with exactly one field filled, which is
+// the case a guard reading its conditions the other way round would drop.
+
+// TestToBasicUserOutput_AnySingleFilledFieldMakesTheUserPresent verifies the
+// event author survives however little GitLab said about them.
+func TestToBasicUserOutput_AnySingleFilledFieldMakesTheUserPresent(t *testing.T) {
+	for name, user := range map[string]gl.BasicUser{
+		"id":       {ID: 5},
+		"username": {Username: "alice"},
+		"name":     {Name: "Alice"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if toBasicUserOutput(user) == nil {
+				t.Errorf("toBasicUserOutput(%+v) = nil, want the user", user)
+			}
+		})
+	}
+	if toBasicUserOutput(gl.BasicUser{}) != nil {
+		t.Error("toBasicUserOutput of an empty user should be nil")
+	}
+}
+
+// TestNoteAuthorOutput_AnySingleFilledFieldMakesTheAuthorPresent verifies a
+// note's author survives however little GitLab said about them.
+func TestNoteAuthorOutput_AnySingleFilledFieldMakesTheAuthorPresent(t *testing.T) {
+	for name, author := range map[string]gl.ProjectEventNoteAuthor{
+		"id":         {ID: 5},
+		"username":   {Username: "alice"},
+		"email":      {Email: "alice@example.com"},
+		"name":       {Name: "Alice"},
+		"state":      {State: "active"},
+		"avatar_url": {AvatarURL: "https://example.com/a.png"},
+		"web_url":    {WebURL: "https://example.com/alice"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := noteAuthorOutput(author.ID, author.Username, author.Email,
+				author.Name, author.State, author.AvatarURL, author.WebURL)
+			if got == nil {
+				t.Errorf("noteAuthorOutput(%+v) = nil, want the author", author)
+			}
+		})
+	}
+	if noteAuthorOutput(0, "", "", "", "", "", "") != nil {
+		t.Error("noteAuthorOutput of an empty author should be nil")
+	}
+}
+
+// TestToProjectEventDataOutput_AnySingleFilledFieldMakesTheDataPresent
+// verifies a push event's data survives however little of it GitLab sent, and
+// that data carrying no commit publishes no commit list.
+func TestToProjectEventDataOutput_AnySingleFilledFieldMakesTheDataPresent(t *testing.T) {
+	for name, data := range map[string]gl.ProjectEventData{
+		"before":              {Before: "abc"},
+		"after":               {After: "def"},
+		"ref":                 {Ref: "refs/heads/main"},
+		"user_id":             {UserID: 5},
+		"user_name":           {UserName: "Alice"},
+		"repository":          {Repository: &gl.Repository{Name: "repo"}},
+		"commits":             {Commits: []*gl.Commit{{ID: "abc"}}},
+		"total_commits_count": {TotalCommitsCount: 3},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if toProjectEventDataOutput(data) == nil {
+				t.Errorf("toProjectEventDataOutput(%+v) = nil, want the data", data)
+			}
+		})
+	}
+	if toProjectEventDataOutput(gl.ProjectEventData{}) != nil {
+		t.Error("toProjectEventDataOutput of empty data should be nil")
+	}
+	if out := toProjectEventDataOutput(gl.ProjectEventData{Ref: "refs/heads/main"}); out.Commits != nil {
+		t.Errorf("Commits = %+v, want none for data carrying no commit", out.Commits)
+	}
+}
+
+// TestToProjectEventNoteOutput_AnySingleFilledFieldMakesTheNotePresent
+// verifies a comment event's note survives however little of it GitLab sent.
+func TestToProjectEventNoteOutput_AnySingleFilledFieldMakesTheNotePresent(t *testing.T) {
+	created := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+	for name, note := range map[string]gl.ProjectEventNote{
+		"id":            {ID: 5},
+		"body":          {Body: "a comment"},
+		"attachment":    {Attachment: "file.txt"},
+		"author":        {Author: gl.ProjectEventNoteAuthor{ID: 7}},
+		"created_at":    {CreatedAt: &created},
+		"system":        {System: true},
+		"noteable_id":   {NoteableID: 9},
+		"noteable_type": {NoteableType: "Issue"},
+		"noteable_iid":  {NoteableIID: 11},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if toProjectEventNoteOutput(note) == nil {
+				t.Errorf("toProjectEventNoteOutput(%+v) = nil, want the note", note)
+			}
+		})
+	}
+	if toProjectEventNoteOutput(gl.ProjectEventNote{}) != nil {
+		t.Error("toProjectEventNoteOutput of an empty note should be nil")
+	}
+}
+
+// TestEventConverters_LeaveOutTheTimestampsGitLabDidNotSend verifies the note
+// and pipeline converters publish an empty timestamp rather than formatting a
+// moment that is not there, which every one of their date fields can be.
+func TestEventConverters_LeaveOutTheTimestampsGitLabDidNotSend(t *testing.T) {
+	note := toNoteOutput(&gl.Note{ID: 1, Body: "a comment"})
+	if note == nil {
+		t.Fatal("toNoteOutput = nil, want the note")
+	}
+	if note.CreatedAt != "" || note.UpdatedAt != "" || note.ExpiresAt != "" || note.ResolvedAt != "" {
+		t.Errorf("note timestamps = %+v, want all empty", note)
+	}
+
+	pipeline := toPipelineInfoOutput(&gl.PipelineInfo{ID: 3, Status: "success"})
+	if pipeline == nil {
+		t.Fatal("toPipelineInfoOutput = nil, want the pipeline")
+	}
+	if pipeline.CreatedAt != "" || pipeline.UpdatedAt != "" {
+		t.Errorf("pipeline timestamps = %+v, want both empty", pipeline)
+	}
+}
+
+// TestFormatOrigin_ImportedWithoutASource verifies an event GitLab marked as
+// imported without naming the platform still says so.
+func TestFormatOrigin_ImportedWithoutASource(t *testing.T) {
+	rendered := FormatListMarkdownString(ListProjectEventsOutput{
+		Events: []ProjectEventOutput{{ID: 1, ActionName: "pushed", Imported: true}},
+	})
+	if !strings.Contains(rendered, "(imported)") {
+		t.Errorf("markdown missing the bare imported note: %s", rendered)
+	}
+	if strings.Contains(rendered, "imported from") {
+		t.Errorf("markdown names a source GitLab did not send: %s", rendered)
 	}
 }

@@ -5,6 +5,7 @@ package namespaces
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -332,7 +334,7 @@ func TestList_OrderBySortKeyset(t *testing.T) {
 // TestToOutput_WithAvatarURL verifies ToOutput when with avatar URL.
 func TestToOutput_WithAvatarURL(t *testing.T) {
 	ns := &nsWithAvatar
-	o := toOutput(ns)
+	o := toOutput(ns, toolutil.NamespaceExtra{})
 	if o.AvatarURL != "https://avatar.url" {
 		t.Errorf("expected avatar URL, got %q", o.AvatarURL)
 	}
@@ -341,7 +343,7 @@ func TestToOutput_WithAvatarURL(t *testing.T) {
 // TestToOutput_NilAvatarURL verifies ToOutput when nil avatar URL.
 func TestToOutput_NilAvatarURL(t *testing.T) {
 	ns := &nsNoAvatar
-	o := toOutput(ns)
+	o := toOutput(ns, toolutil.NamespaceExtra{})
 	if o.AvatarURL != "" {
 		t.Errorf("expected empty avatar URL, got %q", o.AvatarURL)
 	}
@@ -357,7 +359,7 @@ func TestToOutput_SeatAndTrialFields(t *testing.T) {
 		ID: 1, Name: "n", Path: "n", Kind: "group", FullPath: "n",
 		TrialEndsOn: &trial, MaxSeatsUsed: &maxSeats, SeatsInUse: &inUse,
 	}
-	o := toOutput(ns)
+	o := toOutput(ns, toolutil.NamespaceExtra{})
 	if o.TrialEndsOn != "2026-12-31" {
 		t.Errorf("got trial_ends_on %q, want 2026-12-31", o.TrialEndsOn)
 	}
@@ -501,6 +503,21 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 	if specByTool["gitlab_namespace_search"].ParameterGuidance["query"].SemanticRole == "" {
 		t.Fatal("gitlab_namespace_search should define query parameter guidance")
+	}
+	// Only the two actions that take an id describe one, and the two that do
+	// not take one describe nothing under that name.
+	for tool, wantsID := range map[string]bool{
+		"gitlab_namespace_get":    true,
+		"gitlab_namespace_exists": true,
+		"gitlab_namespace_list":   false,
+		"gitlab_namespace_search": false,
+	} {
+		t.Run(tool, func(t *testing.T) {
+			_, hasID := specByTool[tool].ParameterGuidance["id"]
+			if hasID != wantsID {
+				t.Errorf("id parameter guidance on %s = %v, want %v", tool, hasID, wantsID)
+			}
+		})
 	}
 }
 
@@ -667,5 +684,274 @@ func TestGet_ArrayFallback_DoError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "namespace_get") {
 		t.Fatalf("error = %v, want namespace_get context", err)
+	}
+}
+
+// TestNamespaceReadSpec_WithoutMetadataKeepsTheSharedUsage verifies the spec
+// builder falls back to the shared usage and to the tool name alone when the
+// metadata table names no entry for the tool. No action reaches that fallback
+// today, so the builder is called directly rather than through ActionSpecs.
+func TestNamespaceReadSpec_WithoutMetadataKeepsTheSharedUsage(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	spec := namespaceReadSpec("namespace_list", toolutil.RouteAction(client, List), "gitlab_namespace_unlisted")
+	if spec.Usage != "Use to execute namespaces domain action." {
+		t.Errorf("Usage = %q, want the shared one", spec.Usage)
+	}
+	if len(spec.Aliases) != 1 || spec.Aliases[0] != "gitlab_namespace_unlisted" {
+		t.Errorf("Aliases = %v, want the tool name alone", spec.Aliases)
+	}
+	if spec.IndividualTool.Description != "" {
+		t.Errorf("Description = %q, want none", spec.IndividualTool.Description)
+	}
+}
+
+// TestExists_ParentIDReachesTheRequestOnlyWhenGiven verifies the existence
+// check scopes to a parent namespace when it was given one and asks about the
+// whole instance when it was not.
+func TestExists_ParentIDReachesTheRequestOnlyWhenGiven(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		parentID int64
+		want     bool
+	}{
+		{name: "with a parent", parentID: 9, want: true},
+		{name: "without a parent", parentID: 0, want: false},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var query string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				query = r.URL.RawQuery
+				testutil.RespondJSON(w, http.StatusOK, `{"exists":false,"suggests":[]}`)
+			}))
+			if _, err := Exists(t.Context(), client, ExistsInput{ID: "group1", ParentID: testCase.parentID}); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if got := strings.Contains(query, "parent_id"); got != testCase.want {
+				t.Errorf("query %q carries parent_id = %v, want %v", query, got, testCase.want)
+			}
+			if testCase.want && !strings.Contains(query, "parent_id=9") {
+				t.Errorf("query %q carries a parent other than the one given", query)
+			}
+		})
+	}
+}
+
+// TestFormatExistsMarkdownString_SuggestionsOnlyWhenGitLabSentThem verifies
+// the existence result lists the alternative paths GitLab offered and says
+// nothing about suggestions when it offered none.
+func TestFormatExistsMarkdownString_SuggestionsOnlyWhenGitLabSentThem(t *testing.T) {
+	with := FormatExistsMarkdownString(ExistsOutput{Exists: true, Suggests: []string{"group2"}})
+	if !strings.Contains(with, "Suggestions") || !strings.Contains(with, "group2") {
+		t.Errorf("markdown missing the suggestions GitLab sent: %s", with)
+	}
+	without := FormatExistsMarkdownString(ExistsOutput{Exists: false})
+	if strings.Contains(without, "Suggestions") {
+		t.Errorf("markdown shows suggestions GitLab did not send: %s", without)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Fields GitLab sends beside the ones the SDK's own Namespace models
+// ---------------------------------------------------------------------------.
+
+// namespaceSentJSON is one namespace as GitLab renders it for a caller allowed
+// to see everything: the administrator's project and repository figures, the
+// compute-minute and purchased-storage limits a caller who may change them is
+// shown, and the two subscription dates.
+const namespaceSentJSON = `{"id":1,"name":"group1","path":"group1","kind":"group","full_path":"group1",` +
+	`"projects_count":12,"root_repository_size":34567,` +
+	`"shared_runners_minutes_limit":400,"extra_shared_runners_minutes_limit":50,` +
+	`"additional_purchased_storage_size":10240,"additional_purchased_storage_ends_on":"2027-03-31",` +
+	`"max_seats_used_changed_at":"2026-05-06T07:08:09Z","end_date":"2027-01-31"}`
+
+// namespaceWithoutConditionalJSON is the same namespace as a caller who may
+// neither administer it nor change its limits sees it, and with no
+// subscription behind it.
+const namespaceWithoutConditionalJSON = `{"id":1,"name":"group1","path":"group1","kind":"group",` +
+	`"full_path":"group1"}`
+
+// namespaceClient answers every namespace endpoint with body, which the caller
+// writes as an array for a list handler and as an object for a get.
+func namespaceClient(t *testing.T, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+}
+
+// namespaceCalls are the handlers that answer with a namespace, including the
+// get handler's fallback for an instance that answers a path lookup with an
+// array rather than an object.
+var namespaceCalls = []struct {
+	name string
+	list bool
+	call func(client *gitlabclient.Client) (Output, error)
+}{
+	{name: "list", list: true, call: func(client *gitlabclient.Client) (Output, error) {
+		out, err := List(context.Background(), client, ListInput{})
+		if err != nil {
+			return Output{}, err
+		}
+		if len(out.Namespaces) != 1 {
+			return Output{}, errNoNamespace
+		}
+		return out.Namespaces[0], nil
+	}},
+	{name: "search", list: true, call: func(client *gitlabclient.Client) (Output, error) {
+		out, err := Search(context.Background(), client, SearchInput{Query: "group1"})
+		if err != nil {
+			return Output{}, err
+		}
+		if len(out.Namespaces) != 1 {
+			return Output{}, errNoNamespace
+		}
+		return out.Namespaces[0], nil
+	}},
+	{name: "get", call: func(client *gitlabclient.Client) (Output, error) {
+		return Get(context.Background(), client, GetInput{ID: "group1"})
+	}},
+	{name: "get through the array fallback", list: true, call: func(client *gitlabclient.Client) (Output, error) {
+		return Get(context.Background(), client, GetInput{ID: "group1"})
+	}},
+}
+
+// errNoNamespace reports a list handler that answered with no namespace.
+var errNoNamespace = errors.New("the handler published no namespace")
+
+// namespaceBodyFor wraps the object body in an array for a list endpoint, and
+// for the get handler's array fallback.
+func namespaceBodyFor(list bool, body string) string {
+	if list {
+		return "[" + body + "]"
+	}
+	return body
+}
+
+// TestNamespaces_PublishTheFieldsGitLabSendsBesideTheSDKs verifies every
+// handler answering with a namespace publishes the eight keys the SDK's own
+// Namespace does not model, read off the captured response.
+func TestNamespaces_PublishTheFieldsGitLabSendsBesideTheSDKs(t *testing.T) {
+	for _, namespaceCall := range namespaceCalls {
+		t.Run(namespaceCall.name, func(t *testing.T) {
+			out, err := namespaceCall.call(namespaceClient(t, namespaceBodyFor(namespaceCall.list, namespaceSentJSON)))
+			if err != nil {
+				t.Fatalf("%s: %v", namespaceCall.name, err)
+			}
+			if out.ProjectsCount != 12 {
+				t.Errorf("projects_count = %d, want 12", out.ProjectsCount)
+			}
+			if out.RootRepositorySize != 34567 {
+				t.Errorf("root_repository_size = %d, want 34567", out.RootRepositorySize)
+			}
+			assertInt64Ptr(t, "shared_runners_minutes_limit", out.SharedRunnersMinutesLimit, 400)
+			assertInt64Ptr(t, "extra_shared_runners_minutes_limit", out.ExtraSharedRunnersMinutesLimit, 50)
+			assertInt64Ptr(t, "additional_purchased_storage_size", out.AdditionalPurchasedStorageSize, 10240)
+			if out.AdditionalPurchasedStorageEndsOn != "2027-03-31" {
+				t.Errorf("additional_purchased_storage_ends_on = %q, want 2027-03-31", out.AdditionalPurchasedStorageEndsOn)
+			}
+			if out.MaxSeatsUsedChangedAt != "2026-05-06T07:08:09Z" {
+				t.Errorf("max_seats_used_changed_at = %q, want 2026-05-06T07:08:09Z", out.MaxSeatsUsedChangedAt)
+			}
+			if out.EndDate != "2027-01-31" {
+				t.Errorf("end_date = %q, want 2027-01-31", out.EndDate)
+			}
+		})
+	}
+}
+
+// assertInt64Ptr reports a nullable integer that is missing or not the wanted
+// value, which is how every limit GitLab sends only to a privileged caller is
+// checked.
+func assertInt64Ptr(t *testing.T, field string, got *int64, want int64) {
+	t.Helper()
+	if got == nil || *got != want {
+		t.Errorf("%s = %v, want %d", field, got, want)
+	}
+}
+
+// TestNamespaces_OmitTheFieldsGitLabDidNotSend verifies a namespace answered
+// without the administrator figures, the limits and the subscription dates
+// publishes none of them rather than publishing zeroes.
+func TestNamespaces_OmitTheFieldsGitLabDidNotSend(t *testing.T) {
+	for _, namespaceCall := range namespaceCalls {
+		t.Run(namespaceCall.name, func(t *testing.T) {
+			out, err := namespaceCall.call(namespaceClient(t, namespaceBodyFor(namespaceCall.list, namespaceWithoutConditionalJSON)))
+			if err != nil {
+				t.Fatalf("%s: %v", namespaceCall.name, err)
+			}
+			if out.ProjectsCount != 0 || out.RootRepositorySize != 0 {
+				t.Errorf("administrator figures = %d / %d, want none", out.ProjectsCount, out.RootRepositorySize)
+			}
+			if out.SharedRunnersMinutesLimit != nil || out.ExtraSharedRunnersMinutesLimit != nil ||
+				out.AdditionalPurchasedStorageSize != nil {
+				t.Error("the limits should be absent for a caller who may not change them")
+			}
+			if out.AdditionalPurchasedStorageEndsOn != "" || out.MaxSeatsUsedChangedAt != "" || out.EndDate != "" {
+				t.Errorf("dates = %q / %q / %q, want none", out.AdditionalPurchasedStorageEndsOn,
+					out.MaxSeatsUsedChangedAt, out.EndDate)
+			}
+		})
+	}
+}
+
+// TestNamespaces_UnreadableCapturedFields verifies every handler answering
+// with a namespace reports the captured response's decode failure rather than
+// a namespace missing what GitLab sent. The SDK's own Namespace has no
+// projects_count, so only the read beside it can notice GitLab sent a string.
+func TestNamespaces_UnreadableCapturedFields(t *testing.T) {
+	const poisoned = `{"id":1,"name":"group1","path":"group1","kind":"group","full_path":"group1",` +
+		`"projects_count":"many"}`
+	cases := make([]testutil.CapturedCase, 0, len(namespaceCalls))
+	for _, namespaceCall := range namespaceCalls {
+		cases = append(cases, testutil.CapturedCase{Name: namespaceCall.name, Call: func() error {
+			_, err := namespaceCall.call(namespaceClient(t, namespaceBodyFor(namespaceCall.list, poisoned)))
+			return err
+		}})
+	}
+	testutil.AssertCapturedDecodeFailures(t, cases)
+}
+
+// TestFormatMarkdownString_SentFields verifies the namespace Markdown names
+// every field read off the captured answer, and leaves each of them out of a
+// namespace that carries none.
+func TestFormatMarkdownString_SentFields(t *testing.T) {
+	limit, extra, storage := int64(400), int64(50), int64(10240)
+	full := FormatMarkdownString(Output{
+		ID: 1, Name: "group1", Path: "group1", Kind: "group", FullPath: "group1",
+		ProjectsCount: 12, RootRepositorySize: 34567,
+		SharedRunnersMinutesLimit: &limit, ExtraSharedRunnersMinutesLimit: &extra,
+		AdditionalPurchasedStorageSize: &storage, AdditionalPurchasedStorageEndsOn: "2027-03-31",
+		MaxSeatsUsedChangedAt: "2026-05-06T07:08:09Z", EndDate: "2027-01-31",
+	})
+	for _, want := range []string{
+		"Projects Count", "| 12 |",
+		"Root Repository Size", "| 34567 |",
+		"Shared Runners Minutes Limit", "| 400 |",
+		"Extra Shared Runners Minutes Limit", "| 50 |",
+		"Additional Purchased Storage Size", "| 10240 |",
+		"Additional Purchased Storage Ends On", "2027-03-31",
+		"Max Seats Used Changed At", "6 May 2026 07:08 UTC",
+		"Subscription End Date", "2027-01-31",
+	} {
+		t.Run("shows "+want, func(t *testing.T) {
+			if !strings.Contains(full, want) {
+				t.Errorf("FormatMarkdownString missing %q: %s", want, full)
+			}
+		})
+	}
+
+	bare := FormatMarkdownString(Output{ID: 1, Name: "group1", Path: "group1", Kind: "group", FullPath: "group1"})
+	for _, unwanted := range []string{
+		"Projects Count", "Root Repository Size", "Shared Runners Minutes Limit",
+		"Extra Shared Runners Minutes Limit", "Additional Purchased Storage Size",
+		"Additional Purchased Storage Ends On", "Max Seats Used Changed At", "Subscription End Date",
+	} {
+		t.Run("omits "+unwanted, func(t *testing.T) {
+			if strings.Contains(bare, unwanted) {
+				t.Errorf("FormatMarkdownString shows %q for a namespace that has none: %s", unwanted, bare)
+			}
+		})
 	}
 }

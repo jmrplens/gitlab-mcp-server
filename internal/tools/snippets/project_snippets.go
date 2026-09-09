@@ -33,6 +33,7 @@ func ProjectList(ctx context.Context, client *gitlabclient.Client, input Project
 	opts := &gl.ListProjectSnippetsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	snippets, resp, err := client.GL().ProjectSnippets.ListSnippets(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
@@ -40,11 +41,7 @@ func ProjectList(ctx context.Context, client *gitlabclient.Client, input Project
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("project_snippet_list", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get; the project must have snippets enabled")
 	}
-	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for _, s := range snippets {
-		out.Snippets = append(out.Snippets, convertSnippet(s))
-	}
-	return out, nil
+	return snippetListOutput("project_snippet_list", snippets, resp, captured)
 }
 
 // ProjectGetInput identifies a snippet within its owning project.
@@ -61,6 +58,7 @@ func ProjectGet(ctx context.Context, client *gitlabclient.Client, input ProjectG
 	if input.SnippetID == 0 {
 		return Output{}, toolutil.ErrFieldRequired("snippet_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	snippet, _, err := client.GL().ProjectSnippets.GetSnippet(
 		string(input.ProjectID), input.SnippetID, gl.WithContext(ctx),
 	)
@@ -68,7 +66,11 @@ func ProjectGet(ctx context.Context, client *gitlabclient.Client, input ProjectG
 		return Output{}, toolutil.WrapErrWithStatusHint("project_snippet_get", err, http.StatusNotFound,
 			"verify snippet_id with gitlab_project_snippet_list; project_id must match the project that owns the snippet")
 	}
-	return convertSnippet(snippet), nil
+	extra, err := toolutil.CapturedSnippet(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("project_snippet_get", err)
+	}
+	return convertSnippet(snippet, extra), nil
 }
 
 // ProjectContentInput identifies the raw content for a project snippet.
@@ -126,17 +128,16 @@ func ProjectCreate(ctx context.Context, client *gitlabclient.Client, input Proje
 	opts.Visibility = snippetVisibility(input.Visibility)
 	if files := createSnippetFiles(input.Files); files != nil {
 		opts.Files = files
-	} else if input.FileName != "" || input.ContentBody != "" {
-		file := &gl.CreateSnippetFileOptions{}
-		if input.FileName != "" {
-			file.FilePath = new(input.FileName)
-		}
-		if input.ContentBody != "" {
-			file.Content = new(input.ContentBody)
-		}
-		files := []*gl.CreateSnippetFileOptions{file}
+	} else {
+		// No files array means the deprecated single-file pair, which
+		// validateCreateSnippetContent has already refused as incomplete.
+		files := []*gl.CreateSnippetFileOptions{{
+			FilePath: new(input.FileName),
+			Content:  new(input.ContentBody),
+		}}
 		opts.Files = &files
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	snippet, _, err := client.GL().ProjectSnippets.CreateSnippet(
 		string(input.ProjectID), opts, gl.WithContext(ctx),
 	)
@@ -144,7 +145,11 @@ func ProjectCreate(ctx context.Context, client *gitlabclient.Client, input Proje
 		return Output{}, toolutil.WrapErrWithStatusHint("project_snippet_create", err, http.StatusBadRequest,
 			"title, file_name, and content are required; visibility must be 'private', 'internal', or 'public'; creating project snippets requires Developer role or higher")
 	}
-	return convertSnippet(snippet), nil
+	extra, err := toolutil.CapturedSnippet(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("project_snippet_create", err)
+	}
+	return convertSnippet(snippet, extra), nil
 }
 
 // ProjectUpdateInput identifies a project snippet and the metadata or file operations to apply.
@@ -168,6 +173,7 @@ func ProjectUpdate(ctx context.Context, client *gitlabclient.Client, input Proje
 		return Output{}, toolutil.ErrFieldRequired("snippet_id")
 	}
 	opts := buildProjectUpdateOptions(input)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	snippet, _, err := client.GL().ProjectSnippets.UpdateSnippet(
 		string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx),
 	)
@@ -175,7 +181,11 @@ func ProjectUpdate(ctx context.Context, client *gitlabclient.Client, input Proje
 		return Output{}, toolutil.WrapErrWithStatusHint("project_snippet_update", err, http.StatusForbidden,
 			"updating a project snippet requires being the author or Maintainer role; verify snippet_id with gitlab_project_snippet_list")
 	}
-	return convertSnippet(snippet), nil
+	extra, err := toolutil.CapturedSnippet(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("project_snippet_update", err)
+	}
+	return convertSnippet(snippet, extra), nil
 }
 
 // ProjectDeleteInput identifies the project snippet to delete.

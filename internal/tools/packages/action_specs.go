@@ -193,15 +193,13 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 		if meta.usage != "" {
 			options.Usage = meta.usage
 		}
-		if len(meta.aliases) > 0 {
-			options.Aliases = append([]string{individualTool}, meta.aliases...)
-		}
-		if len(meta.related) > 0 {
-			options.RelatedActions = meta.related
-		}
-		if meta.description != "" {
-			options.IndividualTool.Description = meta.description
-		}
+		// The aliases, the related actions and the description are taken
+		// whatever the entry holds: an entry naming none leaves the tool name
+		// alone, no related action and no description, which is what the
+		// defaults above already are.
+		options.Aliases = append([]string{individualTool}, meta.aliases...)
+		options.RelatedActions = meta.related
+		options.IndividualTool.Description = meta.description
 	}
 	if actionName == actionNameList {
 		options.Usage = "List package registry packages. If ordering is requested, use order_by with one of created_at, name, version, or type. Do not use updated_at, released_at, or downloaded_at."
