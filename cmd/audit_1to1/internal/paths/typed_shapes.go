@@ -204,9 +204,6 @@ func typedShapeCheck(root string, index *operationIndex, published []publishedTy
 			check.Skipped.NoPairing = append(check.Skipped.NoPairing, named)
 			continue
 		}
-		if candidate.Inner {
-			check.ComparedInner++
-		}
 		described := describedRoutes(paired, routes, index)
 		switch {
 		case !described.Routed:
@@ -217,6 +214,14 @@ func typedShapeCheck(root string, index *operationIndex, published []publishedTy
 			check.Skipped.NoSchema = append(check.Skipped.NoSchema, named)
 		default:
 			check.Compared++
+			// Counted here rather than before the switch, because it is
+			// documented as how many of Compared were reached through an
+			// envelope. An inner payload whose endpoints have no route or no
+			// response is a skip like any other, and counting it above would
+			// report a subset larger than the set it is a subset of.
+			if candidate.Inner {
+				check.ComparedInner++
+			}
 			check.Unpublished = append(check.Unpublished, unpublishedAtTypeGrain(candidate, paired, described)...)
 			nested, compared := unpublishedNested(candidate, paired, described)
 			check.Nested = append(check.Nested, nested...)
