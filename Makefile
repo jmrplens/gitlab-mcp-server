@@ -14,7 +14,7 @@
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent \
-	gen-api-shapes check-api-shapes gen-api-exposes check-api-exposes gen-api-live check-api-live check-meta-descriptions \
+	gen-api-live check-api-live check-meta-descriptions \
 	gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
@@ -645,7 +645,7 @@ analyze:
 	run_check "[12/16] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
 	run_check "[13/16] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
 	run_check "[14/16] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[15/16] pinned GitLab API record" go run ./cmd/gen_api_shapes/ --check; \
+	run_check "[15/16] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
 	run_check "[16/16] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
@@ -1376,38 +1376,6 @@ gen-graphql-schema:
 ## (cmd/internal/provenance). No network, so it is a gate.
 check-graphql-schema:
 	go run ./cmd/gen_graphql_schema/ --check
-
-## gen-api-shapes: re-read what GitLab says its own REST API accepts and
-## returns, from the OpenAPI document GitLab generates and commits to its own
-## repository, and rewrite docs/development/gitlab-api-shapes.json. Needs the
-## network and no credential: the document is served unauthenticated, and
-## because gitlab-org/gitlab is the Enterprise codebase it covers the Premium
-## and Ultimate surface a Community Edition instance would never reveal.
-gen-api-shapes:
-	go run ./cmd/gen_api_shapes/
-
-## check-api-shapes: fail when the committed record is not one this build can
-## read, is too short to be GitLab's whole API, or is past the shared staleness
-## window (cmd/internal/provenance). No network, so it is a gate. It cannot say whether the record still
-## matches GitLab, which only a regeneration answers, and which is what the
-## window is for.
-check-api-shapes:
-	go run ./cmd/gen_api_shapes/ --check
-
-## gen-api-exposes: re-read, from GitLab's own Ruby source, the condition under
-## which each field a REST entity exposes is sent, and rewrite
-## docs/development/gitlab-api-exposes.json. The OpenAPI record lists a field
-## exposed under a condition as if it were always sent; this record says when.
-## Needs the network and no credential: three subtree archives and one file of
-## gitlab-org/gitlab, fetched at one ref. -source reads a local checkout instead.
-gen-api-exposes:
-	go run ./cmd/gen_api_exposes/
-
-## check-api-exposes: fail when the committed conditions record is not one this
-## build can read, is too short to be GitLab's whole entity tree, or is past the
-## same shared staleness window (cmd/internal/provenance). No network, so it is a gate.
-check-api-exposes:
-	go run ./cmd/gen_api_exposes/ -check
 
 ## gen-api-live: boot a released GitLab image, ask the loaded application what
 ## its REST API is, and rewrite docs/development/gitlab-api-live.json. It needs

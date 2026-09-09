@@ -18,26 +18,26 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,067 |
-| Unit test functions                                   | 14,462 |
+| Total test functions                                  | 15,026 |
+| Unit test functions                                   | 14,421 |
 | E2E test functions                                    |    605 |
-| cmd test functions                                    |  3,013 |
+| cmd test functions                                    |  2,972 |
 | Test files (internal/)                                |    523 |
-| Test files (cmd/)                                     |    209 |
+| Test files (cmd/)                                     |    202 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     21 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.4% |
-| Overall coverage (`go test ./internal/...`)           |  98.6% |
-| Average package coverage                              |  98.5% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.3% |
+| Overall coverage (`go test ./internal/...`)           |  98.5% |
+| Average package coverage                              |  98.4% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,892 | 78.9% |
+| `TestFunc_Scenario` (2-part)           | 11,883 | 79.1% |
 | `TestFunc` (no underscore)             |    975 |  6.5% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,200 | 14.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,168 | 14.4% |
 
 ## Test Distribution
 
@@ -49,8 +49,8 @@
 | Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (177) |          8,654 |        359 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            605 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          3,013 |        209 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,067** |    **972** |                                                                                                 |
+| cmd packages            |          2,972 |        202 | server entry point and developer command utilities                                              |
+| **Total**               |     **15,026** |    **965** |                                                                                                 |
 
 ### Core Packages
 
@@ -308,7 +308,7 @@
 | cmd/audit_1to1/internal/enums                  |    99.7% |
 | cmd/audit_1to1/internal/merge                  |   100.0% |
 | cmd/audit_1to1/internal/metadata               |   100.0% |
-| cmd/audit_1to1/internal/paths                  |   100.0% |
+| cmd/audit_1to1/internal/paths                  |    99.6% |
 | cmd/audit_1to1/internal/sdk                    |   100.0% |
 | cmd/audit_1to1/internal/shared                 |   100.0% |
 | cmd/audit_1to1/internal/structs                |   100.0% |
@@ -340,9 +340,7 @@
 | cmd/eval_mcp_surfaces/internal/termio          |   100.0% |
 | cmd/format_md_tables                           |    95.8% |
 | cmd/gen_action_catalog_manifest                |    57.9% |
-| cmd/gen_api_exposes                            |    93.5% |
 | cmd/gen_api_live                               |    76.9% |
-| cmd/gen_api_shapes                             |    88.5% |
 | cmd/gen_brand                                  |    87.1% |
 | cmd/gen_graphql_schema                         |    85.9% |
 | cmd/gen_icon_webp                              |    92.3% |
@@ -353,9 +351,7 @@
 | cmd/gen_testing_docs                           |    97.9% |
 | cmd/godoc_tool                                 |   100.0% |
 | cmd/internal/apidocs                           |   100.0% |
-| cmd/internal/apiexposes                        |   100.0% |
-| cmd/internal/apilive                           |    80.0% |
-| cmd/internal/apishapes                         |   100.0% |
+| cmd/internal/apilive                           |    34.2% |
 | cmd/internal/auditshared                       |   100.0% |
 | cmd/internal/docgen                            |   100.0% |
 | cmd/internal/golist                            |   100.0% |
@@ -579,10 +575,10 @@
 
 Coverage target: **>90%** per package. Packages below the target in the latest generated coverage snapshot:
 
+- **cmd/internal/apilive** (34.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_action_catalog_manifest** (57.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_api_live** (76.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (77.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/internal/apilive** (80.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **progress** (83.8%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/audit_install_buttons** (84.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_graphql_schema** (85.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
@@ -590,7 +586,6 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **edition** (87.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/gen_brand** (87.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_gateway_chars** (87.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_api_shapes** (88.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/evalrun** (88.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_request_inventory** (89.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 

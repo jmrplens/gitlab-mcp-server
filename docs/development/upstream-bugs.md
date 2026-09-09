@@ -167,7 +167,7 @@ MUST cannot be met by its named mechanism. Recorded as
 - **Blocking**: no, now that we read the generated document instead.
 - **Workaround**: yes. The carve-outs in
   `cmd/audit_1to1/internal/structs/analyze.go` cite
-  `docs/development/gitlab-api-shapes.json` rather than the prose page, which is
+  GitLab's generated OpenAPI document rather than the prose page, which is
   the only entry in that table that does. It retires when the page is corrected.
 
 **Where**: `doc/api/merge_request_approvals.md`, the section for
@@ -186,7 +186,7 @@ GitLab's own generated OpenAPI document already separates the two.
 fields of `gl.MergeRequestApprovals` and every one of the twenty extra arrived
 as a zero. The 1:1 audit was green throughout, because it compares our type
 against the SDK type and the SDK type models the POST. It surfaced when
-`cmd/gen_api_shapes` gave the audit an oracle that speaks for GitLab, and the
+a record of GitLab's own gave the audit an oracle that speaks for it, and the
 e2e suite had recorded the live CE observation months earlier without anyone
 connecting it to the output type.
 
@@ -405,7 +405,7 @@ project, which shares only `id` with that shape, so every other field decodes to
 its zero value and `id` decodes to the project's rather than a relation's. The
 call therefore succeeds and returns a struct that says nothing true.
 
-**Evidence**: `docs/development/gitlab-api-shapes.json` records the response of
+**Evidence**: GitLab's generated OpenAPI document records the response of
 that operation as a project (`_links`, `namespace`, `forked_from_project` and
 the rest of the project body), and the CE end-to-end suite observed the same
 against a live GitLab 19.3.
@@ -496,8 +496,7 @@ really sends or really accepts.
 
 - `ListGroupEpicsOptions` declares no `AuthorUsername` and no `Confidential`.
   Both are listed as parameters of `GET /api/v4/groups/{id}/-/epics` in the
-  OpenAPI document GitLab generates from its own Grape definitions
-  (`docs/development/gitlab-api-shapes.json`); the prose page
+  OpenAPI document GitLab generates from its own Grape definitions; the prose page
   [doc/api/epics.md](https://docs.gitlab.com/api/epics/#list-all-group-epics)
   lists `author_username` in the list endpoint's parameter table and in that
   table's `not` row, and prints `confidential` in the example bodies of list,
@@ -570,7 +569,7 @@ or a second `LabelDetails` field beside the names.
 
 **What**: three structs in `notes.go` and `discussions.go`, held against the
 Grape entities that render them at the pinned commit `1c8ac034` of
-gitlab-org/gitlab (`docs/development/gitlab-api-exposes.json`).
+gitlab-org/gitlab.
 
 - `Note` declares four fewer fields than `lib/api/entities/note.rb` exposes:
   `imported` and `imported_from`, sent on every note; `commands_changes`, sent
@@ -629,7 +628,7 @@ them.
 **What**: three kinds of gap in `group_members.go` and `project_members.go`,
 held against `lib/api/members.rb`, `ee/lib/ee/api/members.rb` and
 `lib/api/entities/member.rb` at the pinned commit `1c8ac034` of
-gitlab-org/gitlab (`docs/development/gitlab-api-exposes.json`).
+gitlab-org/gitlab.
 
 - **Response fields.** `lib/api/entities/member.rb` exposes `locked` on every
   member and, on an Enterprise instance, `membership_state`; it exposes
@@ -686,8 +685,8 @@ types.
   fields.
 
 **What**: one gap per struct, each a field the rendering entity exposes with
-no condition at the pinned commit `1c8ac034` of gitlab-org/gitlab
-(`docs/development/gitlab-api-exposes.json`), except where noted.
+no condition at the pinned commit `1c8ac034` of gitlab-org/gitlab, except where
+noted.
 
 - `Key` (`keys.go`) declares `id`, `title`, `key`, `created_at` and `user`,
   and `lib/api/entities/ssh_key.rb` exposes `expires_at`, `last_used_at` and
@@ -738,8 +737,7 @@ can reuse whichever basic-user struct the wrapper settles on.
 
 **What**: `PersonalAccessToken` in `personal_access_tokens.go` and the three
 types built on it, held against the entities that render them at the pinned
-commit `1c8ac034` of gitlab-org/gitlab
-(`docs/development/gitlab-api-exposes.json`).
+commit `1c8ac034` of gitlab-org/gitlab.
 
 - **Every token is missing three fields.**
   `lib/api/entities/personal_access_token.rb` exposes `granular` on every

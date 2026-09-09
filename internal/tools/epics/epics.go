@@ -163,9 +163,9 @@ func (l *epicLabels) UnmarshalJSON(data []byte) error {
 // sends that it does not declare, and the dual-shape labels array it cannot
 // decode.
 //
-// The fields are GitLab's own, not ours to infer: its generated OpenAPI record
-// lists all twelve on each of the five epic GETs
-// (docs/development/gitlab-api-shapes.json, GET /api/v4/groups/{id}/-/epics).
+// The fields are GitLab's own, not ours to infer: its generated OpenAPI
+// document listed all twelve on each of the five epic GETs when this was
+// written (GET /api/v4/groups/{id}/-/epics).
 // Two further oracles corroborate them, so every field rests on the record plus
 // at least one of them: live gitlab.com GETs on 2026-09-07 carried all twelve,
 // while doc/api/epics.md prints all but web_edit_url, which it never mentions,
