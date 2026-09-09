@@ -453,6 +453,87 @@ func CapturedFeatureFlagUserLists(capture *gitlabclient.ResponseCapture, decoded
 	return capturedList[FeatureFlagUserListExtra](capture, decoded, "feature flag user lists")
 }
 
+// MilestoneExtra is what GitLab's milestone entity sends that a group
+// milestone struct does not carry: the milestone's own page, exposed under no
+// condition, and the project a project-scoped milestone belongs to, exposed
+// only when there is one, so a group milestone leaves it zero.
+type MilestoneExtra struct {
+	WebURL    string `json:"web_url"`
+	ProjectID int64  `json:"project_id"`
+}
+
+// CapturedMilestone reads them off the captured answer to a request for one
+// milestone.
+func CapturedMilestone(capture *gitlabclient.ResponseCapture) (MilestoneExtra, error) {
+	return capturedOne[MilestoneExtra](capture)
+}
+
+// CapturedMilestones reads the same off a list answer, one extra per milestone
+// in order, the count held to what the SDK decoded.
+func CapturedMilestones(capture *gitlabclient.ResponseCapture, decoded int) ([]MilestoneExtra, error) {
+	return capturedList[MilestoneExtra](capture, decoded, "milestones")
+}
+
+// BoardListExtra is the metric a board list limits its work in progress by,
+// which GitLab exposes only on a list whose board has work-in-progress limits
+// available, so it is empty everywhere else.
+type BoardListExtra struct {
+	LimitMetric string `json:"limit_metric"`
+}
+
+// CapturedBoardList reads it off the captured answer to a request for one
+// board list.
+func CapturedBoardList(capture *gitlabclient.ResponseCapture) (BoardListExtra, error) {
+	return capturedOne[BoardListExtra](capture)
+}
+
+// CapturedBoardLists reads the same off a list answer, one extra per board
+// list in order, the count held to what the SDK decoded.
+func CapturedBoardLists(capture *gitlabclient.ResponseCapture, decoded int) ([]BoardListExtra, error) {
+	return capturedList[BoardListExtra](capture, decoded, "board lists")
+}
+
+// CIVariableExtra is what GitLab's CI variable entity sends that the instance
+// variable struct does not carry: the environments the value applies to, and
+// whether the value is hidden from every reader once set. Both are exposed
+// only where the variable's own model answers to them.
+type CIVariableExtra struct {
+	EnvironmentScope string `json:"environment_scope"`
+	Hidden           bool   `json:"hidden"`
+}
+
+// CapturedCIVariable reads them off the captured answer to a request for one
+// variable.
+func CapturedCIVariable(capture *gitlabclient.ResponseCapture) (CIVariableExtra, error) {
+	return capturedOne[CIVariableExtra](capture)
+}
+
+// CapturedCIVariables reads the same off a list answer, one extra per variable
+// in order, the count held to what the SDK decoded.
+func CapturedCIVariables(capture *gitlabclient.ResponseCapture, decoded int) ([]CIVariableExtra, error) {
+	return capturedList[CIVariableExtra](capture, decoded, "CI variables")
+}
+
+// RegistryRepositoryExtra is what GitLab's container registry repository
+// entity sends beside the name and the path: the size, when the caller asked
+// for it, and the path a caller allowed to administer images deletes through.
+type RegistryRepositoryExtra struct {
+	Size          int64  `json:"size"`
+	DeleteAPIPath string `json:"delete_api_path"`
+}
+
+// CapturedRegistryRepository reads them off the captured answer to a request
+// for one repository.
+func CapturedRegistryRepository(capture *gitlabclient.ResponseCapture) (RegistryRepositoryExtra, error) {
+	return capturedOne[RegistryRepositoryExtra](capture)
+}
+
+// CapturedRegistryRepositories reads the same off a list answer, one extra per
+// repository in order, the count held to what the SDK decoded.
+func CapturedRegistryRepositories(capture *gitlabclient.ResponseCapture, decoded int) ([]RegistryRepositoryExtra, error) {
+	return capturedList[RegistryRepositoryExtra](capture, decoded, "registry repositories")
+}
+
 // WikiExtra is what GitLab's wiki page entity sends beside the title and the
 // content: the identifier of the page's metadata record, and the YAML front
 // matter parsed out of the page, which is a map of whatever keys the author

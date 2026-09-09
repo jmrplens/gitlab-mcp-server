@@ -118,6 +118,10 @@ type Output struct {
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 	Expired     bool   `json:"expired"`
+	// WebURL is the milestone's own page. ProjectID is set only on a
+	// project-scoped milestone, so a group one leaves it zero.
+	WebURL    string `json:"web_url,omitempty"`
+	ProjectID int64  `json:"project_id,omitempty"`
 }
 
 // ListOutput holds a paginated list of group milestones.
@@ -211,15 +215,20 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	milestones, resp, err := client.GL().GroupMilestones.ListGroupMilestones(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("groupMilestoneList", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get; group milestones differ from project milestones")
 	}
+	extras, err := toolutil.CapturedMilestones(captured, len(milestones))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("groupMilestoneList", err)
+	}
 
 	out := make([]Output, len(milestones))
 	for i, m := range milestones {
-		out[i] = toOutput(m)
+		out[i] = toOutput(m, extras[i])
 	}
 	return ListOutput{Milestones: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -333,12 +342,17 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, err
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	m, _, err := client.GL().GroupMilestones.GetGroupMilestone(string(input.GroupID), globalID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("groupMilestoneGet", err, http.StatusNotFound,
 			hintVerifyGroupMilestoneID)
 	}
-	return toOutput(m), nil
+	extra, err := toolutil.CapturedMilestone(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("groupMilestoneGet", err)
+	}
+	return toOutput(m, extra), nil
 }
 
 // Create creates a new milestone in a GitLab group.
@@ -371,12 +385,17 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		opts.DueDate = d
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	m, _, err := client.GL().GroupMilestones.CreateGroupMilestone(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("groupMilestoneCreate", err, http.StatusBadRequest,
 			"title is required and must be unique within the group; start_date and due_date must be YYYY-MM-DD with start_date <= due_date; creating group milestones requires Reporter role or higher")
 	}
-	return toOutput(m), nil
+	extra, err := toolutil.CapturedMilestone(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("groupMilestoneCreate", err)
+	}
+	return toOutput(m, extra), nil
 }
 
 // Update modifies an existing group milestone. Only non-empty fields are applied.
@@ -423,12 +442,17 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.StateEvent = new(input.StateEvent)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	m, _, err := client.GL().GroupMilestones.UpdateGroupMilestone(string(input.GroupID), globalID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("groupMilestoneUpdate", err, http.StatusBadRequest,
 			"state_event must be 'close' or 'activate'; start_date/due_date must be YYYY-MM-DD; verify milestone_id with gitlab_group_milestone_list")
 	}
-	return toOutput(m), nil
+	extra, err := toolutil.CapturedMilestone(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr("groupMilestoneUpdate", err)
+	}
+	return toOutput(m, extra), nil
 }
 
 // Delete removes a group milestone.
@@ -609,7 +633,9 @@ func GetBurndownChartEvents(ctx context.Context, client *gitlabclient.Client, in
 // ---------- Converters ----------.
 
 // toOutput converts a GitLab API [gl.GroupMilestone] to MCP output format.
-func toOutput(m *gl.GroupMilestone) Output {
+// toOutput converts the GitLab API response to the tool output format, filling
+// from the decoded milestone and from what the capture read beside it.
+func toOutput(m *gl.GroupMilestone, extra toolutil.MilestoneExtra) Output {
 	out := Output{
 		ID:          m.ID,
 		IID:         m.IID,
@@ -617,6 +643,8 @@ func toOutput(m *gl.GroupMilestone) Output {
 		Title:       m.Title,
 		Description: m.Description,
 		State:       m.State,
+		WebURL:      extra.WebURL,
+		ProjectID:   extra.ProjectID,
 	}
 	if m.StartDate != nil {
 		out.StartDate = m.StartDate.String()
