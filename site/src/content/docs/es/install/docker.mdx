@@ -55,7 +55,7 @@ docker run --rm -p 8080:8080 ghcr.io/jmrplens/gitlab-mcp-server:latest \
   --http --http-addr=0.0.0.0:8080 --gitlab-url=https://gitlab.com
 ```
 
-Un despliegue que no nombra ninguna instancia haría peticiones al host que quien llama ponga en la cabecera `GITLAB-URL`, con el token que esa misma persona enviara, así que se rechaza al arrancar. `--allow-any-gitlab-url` lo acepta para un despliegue local de un único usuario y avisa; en un puerto que otros puedan alcanzar, publica las instancias. Cada cliente envía además su propio token de GitLab en cada petición, y el servidor no guarda ninguno. Para endurecer el contenedor como hace el despliegue de referencia:
+Un despliegue que no nombra ninguna instancia haría peticiones al host que quien llama ponga en la cabecera `GITLAB-URL`, con el token que esa misma persona enviara, así que se rechaza al arrancar. `--allow-any-gitlab-url` lo acepta para un despliegue local de un único usuario y avisa, pero solo si `--http-addr` liga loopback o un socket unix, así que dentro de un contenedor que liga `0.0.0.0` no sirve: publica las instancias. Cada cliente envía además su propio token de GitLab en cada petición, y el servidor no guarda ninguno. Para endurecer el contenedor como hace el despliegue de referencia:
 
 <Tabs>
 <TabItem label="Instancia única">
