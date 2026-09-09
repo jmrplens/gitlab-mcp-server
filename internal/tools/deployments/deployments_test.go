@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1487,6 +1488,39 @@ func TestActionSpecs_DeploymentGetRoute(t *testing.T) {
 }
 
 // deploymentSpecsByTool supports deployment specs by tool assertions in deployments tests.
+// TestDeployments_UnreadableCapturedPendingApprovalCount verifies that the two
+// deployment handlers reading the approval fields off the captured answer
+// return an error rather than a half-filled deployment when GitLab sends
+// pending_approval_count as something that is not a number. The SDK ignores the
+// key its own Deployment does not model, so the captured read is the only thing
+// that can notice, and a deployment reported without its pending approvals
+// would read as one that needs none.
+func TestDeployments_UnreadableCapturedPendingApprovalCount(t *testing.T) {
+	const body = `{"id":1,"iid":1,"ref":"main","status":"created","pending_approval_count":"many"}`
+	for _, tt := range []struct {
+		name string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"create", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{ProjectID: "42", Environment: "production", Ref: "main", SHA: "abc123"})
+			return err
+		}},
+		{"update", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Update(ctx, c, UpdateInput{ProjectID: "42", DeploymentID: 1, Status: "success"})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
+}
+
 func deploymentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

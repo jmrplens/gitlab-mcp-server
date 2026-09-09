@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -883,6 +884,50 @@ func TestFormatScheduleAllMarkdown(t *testing.T) {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(got, want) {
 				t.Errorf("output missing %q\ngot:\n%s", want, got)
+			}
+		})
+	}
+}
+
+// TestProjectStorageMoves_UnreadableCapturedErrorMessage verifies that every
+// project storage move handler returns an error rather than a half-filled move
+// when GitLab sends error_message as something that is not a string. The SDK
+// ignores the key its own ProjectRepositoryStorageMove does not model, so the
+// read of the captured response is the only thing that can notice, and a failed
+// move published without its message reads as one that failed for no reason.
+func TestProjectStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"retrieve_all", `[{"id":1,"state":"failed","error_message":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := RetrieveAll(ctx, c, ListInput{})
+			return err
+		}},
+		{"retrieve_for_project", `[{"id":1,"state":"failed","error_message":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := RetrieveForProject(ctx, c, ListForProjectInput{ProjectID: 42})
+			return err
+		}},
+		{"get", `{"id":1,"state":"failed","error_message":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, IDInput{ID: 1})
+			return err
+		}},
+		{"get_for_project", `{"id":1,"state":"failed","error_message":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetForProject(ctx, c, ProjectMoveInput{ProjectID: 42, ID: 1})
+			return err
+		}},
+		{"schedule", `{"id":1,"state":"scheduled","error_message":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Schedule(ctx, c, ScheduleInput{ProjectID: 42})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
 			}
 		})
 	}

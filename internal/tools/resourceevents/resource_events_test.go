@@ -11,6 +11,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1343,6 +1344,68 @@ func TestGetGroupEpicLabelEvent_NotFound_HintsGitLab19Removal(t *testing.T) {
 
 // TestGetGroupEpicLabelEvent_Success verifies GetGroupEpicLabelEvent hits the
 // single group epic label event endpoint and maps the event fields.
+// TestResourceEvents_UnreadableCapturedExtras verifies that every milestone and
+// state event handler returns an error rather than a half-filled event when
+// GitLab sends one of the captured fields as something the shape cannot hold:
+// the milestone event's state, and the state event's source_commit. The SDK
+// ignores the keys its own event structs do not model, so the read of the
+// captured response is the only thing that can notice.
+func TestResourceEvents_UnreadableCapturedExtras(t *testing.T) {
+	const (
+		milestoneList = `[{"id":1,"action":"add","state":42}]`
+		milestoneOne  = `{"id":1,"action":"add","state":42}`
+		stateList     = `[{"id":1,"state":"closed","source_commit":42}]`
+		stateOne      = `{"id":1,"state":"closed","source_commit":42}`
+	)
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"issue_milestone_list", milestoneList, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListIssueMilestoneEvents(ctx, c, ListIssueMilestoneEventsInput{ProjectID: "42", IssueIID: 7})
+			return err
+		}},
+		{"issue_milestone_get", milestoneOne, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetIssueMilestoneEvent(ctx, c, GetIssueMilestoneEventInput{ProjectID: "42", IssueIID: 7, MilestoneEventID: 1})
+			return err
+		}},
+		{"mr_milestone_list", milestoneList, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListMRMilestoneEvents(ctx, c, ListMRMilestoneEventsInput{ProjectID: "42", MRIID: 7})
+			return err
+		}},
+		{"mr_milestone_get", milestoneOne, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetMRMilestoneEvent(ctx, c, GetMRMilestoneEventInput{ProjectID: "42", MRIID: 7, MilestoneEventID: 1})
+			return err
+		}},
+		{"issue_state_list", stateList, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListIssueStateEvents(ctx, c, ListIssueStateEventsInput{ProjectID: "42", IssueIID: 7})
+			return err
+		}},
+		{"issue_state_get", stateOne, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetIssueStateEvent(ctx, c, GetIssueStateEventInput{ProjectID: "42", IssueIID: 7, StateEventID: 1})
+			return err
+		}},
+		{"mr_state_list", stateList, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListMRStateEvents(ctx, c, ListMRStateEventsInput{ProjectID: "42", MRIID: 7})
+			return err
+		}},
+		{"mr_state_get", stateOne, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetMRStateEvent(ctx, c, GetMRStateEventInput{ProjectID: "42", MRIID: 7, StateEventID: 1})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
+}
+
 func TestGetGroupEpicLabelEvent_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/acme/epics/7/resource_label_events/50" {

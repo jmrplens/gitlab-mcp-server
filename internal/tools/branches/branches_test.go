@@ -14,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -2157,4 +2158,79 @@ func branchSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]too
 		byTool[spec.IndividualTool.Name] = spec
 	}
 	return byTool
+}
+
+// TestFormatProtectedMarkdown_Inherited verifies that a rule GitLab reports as
+// inherited says so in the rendered Markdown, and that a rule of the project's
+// own does not. The flag is read off the captured response because the SDK does
+// not model it, and it is the difference between a rule that can be edited here
+// and one that has to be edited on the group.
+func TestFormatProtectedMarkdown_Inherited(t *testing.T) {
+	inherited := FormatProtectedMarkdown(ProtectedOutput{ID: 1, Name: "main", Inherited: true})
+	if !strings.Contains(inherited, "**Inherited**: yes") {
+		t.Errorf("markdown missing the inherited line:\n%s", inherited)
+	}
+	own := FormatProtectedMarkdown(ProtectedOutput{ID: 1, Name: "main"})
+	if strings.Contains(own, "**Inherited**") {
+		t.Errorf("markdown claims a project's own rule is inherited:\n%s", own)
+	}
+}
+
+// TestProtectedBranches_UnreadableCapturedInherited verifies that every
+// protected-branch handler reading the inherited flag off the captured answer
+// returns an error rather than a half-filled rule when GitLab sends it as
+// something that is not a boolean. The SDK ignores the key its own
+// ProtectedBranch does not model, so the captured read is the only thing that
+// can notice.
+func TestProtectedBranches_UnreadableCapturedInherited(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"protect", `{"id":1,"name":"main","inherited":"yes"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Protect(ctx, c, ProtectInput{ProjectID: "42", BranchName: "main"})
+			return err
+		}},
+		{"protected_list", `[{"id":1,"name":"main","inherited":"yes"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ProtectedList(ctx, c, ProtectedListInput{ProjectID: "42"})
+			return err
+		}},
+		{"protected_get", `{"id":1,"name":"main","inherited":"yes"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ProtectedGet(ctx, c, ProtectedGetInput{ProjectID: "42", BranchName: "main"})
+			return err
+		}},
+		{"protected_update", `{"id":1,"name":"main","inherited":"yes"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ProtectedUpdate(ctx, c, ProtectedUpdateInput{ProjectID: "42", BranchName: "main", Name: "main-2"})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
+}
+
+// TestProtect_UnreadableCapturedInheritedOnConflict covers the other captured
+// read in Protect: a 409 means the rule already exists, so the handler fetches
+// it and answers with that instead. The rule it fetched is read from the same
+// capture, and an inherited flag GitLab sends as something other than a boolean
+// must fail the call rather than reach the caller as a silent false.
+func TestProtect_UnreadableCapturedInheritedOnConflict(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			testutil.RespondJSON(w, http.StatusConflict, `{"message":"Protected branch 'main' already exists"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"main","inherited":"yes"}`)
+	}))
+
+	if _, err := Protect(context.Background(), client, ProtectInput{ProjectID: "42", BranchName: "main"}); err == nil {
+		t.Fatal("error = nil, want the captured decode of the existing rule to fail")
+	}
 }

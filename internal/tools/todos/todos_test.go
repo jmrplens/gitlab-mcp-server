@@ -724,6 +724,21 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // TestActionSpecs_CallRoutes covers ActionSpecs with table-driven subtests for call routes.
+// TestList_UnreadableCapturedGroup verifies that the todo list handler returns
+// an error rather than a half-filled list when GitLab sends the group object as
+// something that is not an object. The SDK ignores the key its own Todo does
+// not model, so the read of the captured response is the only thing that can
+// notice.
+func TestList_UnreadableCapturedGroup(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"action_name":"assigned","state":"pending","group":"not-an-object"}]`)
+	}))
+
+	if _, err := List(context.Background(), client, ListInput{}); err == nil {
+		t.Fatal("error = nil, want the captured decode to fail")
+	}
+}
+
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {

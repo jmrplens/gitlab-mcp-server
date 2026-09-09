@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -516,6 +517,45 @@ func TestDelete_APIError(t *testing.T) {
 // TestDelete_CancelledContext verifies the Delete_CancelledContext handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
+// TestGroupWikis_UnreadableCapturedMetaID verifies that every group wiki
+// handler returns an error rather than a half-filled page when GitLab sends
+// wiki_page_meta_id as something that is not a number. The SDK ignores the key
+// its own Wiki does not model, so the read of the captured response is the only
+// thing that can notice.
+func TestGroupWikis_UnreadableCapturedMetaID(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list", `[{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{GroupID: "42"})
+			return err
+		}},
+		{"get", `{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{GroupID: "42", Slug: "home"})
+			return err
+		}},
+		{"create", `{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{GroupID: "42", Title: "Home", Content: "hello"})
+			return err
+		}},
+		{"edit", `{"slug":"home","title":"Home","wiki_page_meta_id":"not-a-number"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Edit(ctx, c, EditInput{GroupID: "42", Slug: "home", Content: "hello again"})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
+}
+
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)

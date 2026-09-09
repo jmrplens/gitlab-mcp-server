@@ -4,6 +4,7 @@ package dependencies
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -718,5 +719,88 @@ func TestFormatDownloadMarkdown(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestListDeps_MalwareIsThreeStated verifies the malware flag survives every
+// answer GitLab gives: true is a detection, false is a package the scan
+// cleared, and an absent key is a scan that did not run. The false case is
+// asserted on the marshaled JSON as well, since a non-pointer field under
+// omitempty would drop it and read as the absent case.
+func TestListDeps_MalwareIsThreeStated(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		wantJSON string
+		want     *bool
+	}{
+		{
+			name:     "a detection is published as true",
+			body:     `[{"name":"evil","version":"1.0.0","package_manager":"npm","dependency_file_path":"package-lock.json","malware":true}]`,
+			want:     new(true),
+			wantJSON: `"malware":true`,
+		},
+		{
+			name:     "a cleared package is published as false",
+			body:     `[{"name":"rails","version":"7.0.4","package_manager":"bundler","dependency_file_path":"Gemfile.lock","malware":false}]`,
+			want:     new(false),
+			wantJSON: `"malware":false`,
+		},
+		{
+			name: "no scan leaves the flag out",
+			body: `[{"name":"rails","version":"7.0.4","package_manager":"bundler","dependency_file_path":"Gemfile.lock"}]`,
+			want: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSONWithPagination(w, http.StatusOK, tt.body,
+					testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+			}))
+			out, err := ListDeps(context.Background(), client, ListInput{ProjectID: "42"})
+			if err != nil {
+				t.Fatalf("ListDeps() error: %v", err)
+			}
+			if len(out.Dependencies) != 1 {
+				t.Fatalf("got %d dependencies, want 1", len(out.Dependencies))
+			}
+			got := out.Dependencies[0].Malware
+			switch {
+			case tt.want == nil && got != nil:
+				t.Fatalf("Malware = %v, want nil", *got)
+			case tt.want != nil && got == nil:
+				t.Fatalf("Malware = nil, want %v", *tt.want)
+			case tt.want != nil && *got != *tt.want:
+				t.Fatalf("Malware = %v, want %v", *got, *tt.want)
+			}
+
+			encoded, err := json.Marshal(out.Dependencies[0])
+			if err != nil {
+				t.Fatalf("marshal output: %v", err)
+			}
+			if tt.wantJSON != "" && !strings.Contains(string(encoded), tt.wantJSON) {
+				t.Errorf("marshaled output missing %q:\n%s", tt.wantJSON, encoded)
+			}
+			if tt.wantJSON == "" && strings.Contains(string(encoded), `"malware"`) {
+				t.Errorf("marshaled output carries a malware key it was never sent:\n%s", encoded)
+			}
+		})
+	}
+}
+
+// TestListDeps_UnreadableCapturedMalware verifies the handler returns an error
+// rather than a half-filled list when GitLab sends the malware flag as
+// something that is not a boolean: the SDK ignores the key it does not model,
+// so the captured read is the only thing that can notice.
+func TestListDeps_UnreadableCapturedMalware(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK,
+			`[{"name":"rails","version":"7.0.4","package_manager":"bundler","dependency_file_path":"Gemfile.lock","malware":"maybe"}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+	}))
+	if _, err := ListDeps(context.Background(), client, ListInput{ProjectID: "42"}); err == nil {
+		t.Fatal("ListDeps() error = nil, want the captured decode to fail")
 	}
 }

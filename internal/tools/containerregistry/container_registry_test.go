@@ -12,6 +12,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1502,6 +1503,41 @@ func TestListTags_KeysetAndOrdering(t *testing.T) {
 // TestDeleteTagsBulk_AllCriteria verifies that DeleteTagsBulk forwards every
 // cleanup criterion, including the deprecated name_regex parameter, name_regex_keep,
 // and older_than. It asserts each query parameter reaches the request unchanged.
+// TestRegistryRepositories_UnreadableCapturedDeleteAPIPath verifies that every
+// registry repository handler returns an error rather than a half-filled
+// repository when GitLab sends delete_api_path as something that is not a
+// string. The SDK ignores the key its own RegistryRepository does not model, so
+// the read of the captured response is the only thing that can notice.
+func TestRegistryRepositories_UnreadableCapturedDeleteAPIPath(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list_project", `[{"id":1,"name":"app","delete_api_path":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListProject(ctx, c, ListProjectInput{ProjectID: "10"})
+			return err
+		}},
+		{"list_group", `[{"id":1,"name":"app","delete_api_path":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListGroup(ctx, c, ListGroupInput{GroupID: "7"})
+			return err
+		}},
+		{"get", `{"id":1,"name":"app","delete_api_path":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetRepository(ctx, c, GetRepositoryInput{RepositoryID: 1})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
+}
+
 func TestDeleteTagsBulk_AllCriteria(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/repositories/1/tags", func(w http.ResponseWriter, r *http.Request) {

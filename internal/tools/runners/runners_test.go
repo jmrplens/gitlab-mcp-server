@@ -2199,6 +2199,21 @@ func TestFormatManagerListMarkdown_Empty(t *testing.T) {
 }
 
 // TestToManagerOutput_Timestamps verifies timestamp fields are formatted when present.
+// TestListManagers_UnreadableCapturedJobExecutionStatus verifies that the
+// runner manager list handler returns an error rather than a half-filled
+// manager when GitLab sends job_execution_status as something that is not a
+// string. The SDK ignores the key its own RunnerManager does not model, so the
+// read of the captured response is the only thing that can notice.
+func TestListManagers_UnreadableCapturedJobExecutionStatus(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"system_id":"s_1","job_execution_status":42}]`)
+	}))
+
+	if _, err := ListManagers(context.Background(), client, ListManagersInput{RunnerID: 1}); err == nil {
+		t.Fatal("error = nil, want the captured decode to fail")
+	}
+}
+
 func TestToManagerOutput_Timestamps(t *testing.T) {
 	createdAt := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
 	contactedAt := time.Date(2026, 1, 15, 11, 30, 0, 0, time.UTC)

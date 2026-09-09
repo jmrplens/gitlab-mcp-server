@@ -6,6 +6,7 @@ package environments
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -1492,5 +1493,175 @@ func TestActionSpecs_UpdateDeleteMetadata(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// envProjectJSON is a single-environment API response whose project object
+// carries every one of the twenty-four basic_project_details keys GitLab
+// renders under an environment, each with a value distinctive enough that a
+// converter reading the wrong source field cannot produce it.
+const envProjectJSON = `{
+	"id":7,"name":"production","slug":"production","state":"available",
+	"project":{
+		"id":42,
+		"description":"The project this environment belongs to",
+		"name":"api",
+		"name_with_namespace":"Acme / api",
+		"path":"api",
+		"path_with_namespace":"acme/api",
+		"created_at":"2026-01-02T03:04:05Z",
+		"default_branch":"main",
+		"tag_list":["legacy-tag"],
+		"topics":["go","mcp"],
+		"ssh_url_to_repo":"git@example.com:acme/api.git",
+		"http_url_to_repo":"https://example.com/acme/api.git",
+		"web_url":"https://example.com/acme/api",
+		"readme_url":"https://example.com/acme/api/-/blob/main/README.md",
+		"forks_count":9,
+		"license_url":"https://example.com/acme/api/-/blob/main/LICENSE",
+		"license":{"key":"mit","name":"MIT License","nickname":"MIT","html_url":"https://licences.example/mit","source_url":"https://licences.example/mit.txt"},
+		"avatar_url":"https://example.com/uploads/project.png",
+		"star_count":13,
+		"last_activity_at":"2026-02-03T04:05:06Z",
+		"visibility":"internal",
+		"namespace":{"id":5,"name":"Acme","path":"acme","kind":"group","full_path":"acme","parent_id":2,"avatar_url":"https://example.com/uploads/group.png","web_url":"https://example.com/groups/acme"},
+		"custom_attributes":[{"key":"cost_centre","value":"platform"}],
+		"repository_storage":"nfs-01"
+	}
+}`
+
+// TestEnvironmentGet_ProjectObject verifies that projectOutput surfaces every
+// key of the basic_project_details object GitLab renders under an environment,
+// the nested license and namespace objects included. The project is the one
+// nested object of an environment nothing else in this package exercises, and
+// a converter that reads the wrong source field is invisible without a
+// per-field assertion, so each key is checked on its own.
+func TestEnvironmentGet_ProjectObject(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/environments/7" {
+			testutil.RespondJSON(w, http.StatusOK, envProjectJSON)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", EnvironmentID: 7})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	p := out.Project
+	if p == nil {
+		t.Fatal("Project is nil, want the project object the answer carries")
+	}
+
+	for _, tt := range []struct {
+		name string
+		got  any
+		want any
+	}{
+		{"id", p.ID, int64(42)},
+		{"description", p.Description, "The project this environment belongs to"},
+		{"name", p.Name, "api"},
+		{"name_with_namespace", p.NameWithNamespace, "Acme / api"},
+		{"path", p.Path, "api"},
+		{"path_with_namespace", p.PathWithNamespace, "acme/api"},
+		{"created_at", p.CreatedAt, "2026-01-02T03:04:05Z"},
+		{"default_branch", p.DefaultBranch, "main"},
+		{"tag_list", p.TagList, []string{"legacy-tag"}},
+		{"topics", p.Topics, []string{"go", "mcp"}},
+		{"ssh_url_to_repo", p.SSHURLToRepo, "git@example.com:acme/api.git"},
+		{"http_url_to_repo", p.HTTPURLToRepo, "https://example.com/acme/api.git"},
+		{"web_url", p.WebURL, "https://example.com/acme/api"},
+		{"readme_url", p.ReadmeURL, "https://example.com/acme/api/-/blob/main/README.md"},
+		{"forks_count", p.ForksCount, int64(9)},
+		{"license_url", p.LicenseURL, "https://example.com/acme/api/-/blob/main/LICENSE"},
+		{"license", p.License, &ProjectLicenseOutput{
+			Key:       "mit",
+			Name:      "MIT License",
+			Nickname:  "MIT",
+			HTMLURL:   "https://licences.example/mit",
+			SourceURL: "https://licences.example/mit.txt",
+		}},
+		{"avatar_url", p.AvatarURL, "https://example.com/uploads/project.png"},
+		{"star_count", p.StarCount, int64(13)},
+		{"last_activity_at", p.LastActivityAt, "2026-02-03T04:05:06Z"},
+		{"visibility", p.Visibility, "internal"},
+		{"namespace", p.Namespace, &ProjectNamespaceOutput{
+			ID:        5,
+			Name:      "Acme",
+			Path:      "acme",
+			Kind:      "group",
+			FullPath:  "acme",
+			ParentID:  2,
+			AvatarURL: "https://example.com/uploads/group.png",
+			WebURL:    "https://example.com/groups/acme",
+		}},
+		{"custom_attributes", p.CustomAttributes, []toolutil.CustomAttributeOutput{{Key: "cost_centre", Value: "platform"}}},
+		{"repository_storage", p.RepositoryStorage, "nfs-01"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if !reflect.DeepEqual(tt.got, tt.want) {
+				t.Errorf("%s = %#v, want %#v", tt.name, tt.got, tt.want)
+			}
+		})
+	}
+}
+
+// TestEnvironmentGet_ProjectWithoutNestedObjects verifies the other side of
+// every guard in projectOutput: a project GitLab sends without a license,
+// without a namespace and without timestamps produces nil pointers and empty
+// strings rather than zero-valued objects, and a null entry in
+// custom_attributes is skipped rather than dereferenced.
+func TestEnvironmentGet_ProjectWithoutNestedObjects(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/environments/9" {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":9,"name":"review","slug":"review","state":"available",
+				"project":{"id":43,"name":"unlicensed","custom_attributes":[null,{"key":"tier","value":"free"}]}}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", EnvironmentID: 9})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	p := out.Project
+	if p == nil {
+		t.Fatal("Project is nil, want the project object the answer carries")
+	}
+	if p.License != nil {
+		t.Errorf("License = %#v, want nil", p.License)
+	}
+	if p.Namespace != nil {
+		t.Errorf("Namespace = %#v, want nil", p.Namespace)
+	}
+	if p.CreatedAt != "" || p.LastActivityAt != "" {
+		t.Errorf("timestamps = %q and %q, want both empty", p.CreatedAt, p.LastActivityAt)
+	}
+	want := []toolutil.CustomAttributeOutput{{Key: "tier", Value: "free"}}
+	if !reflect.DeepEqual(p.CustomAttributes, want) {
+		t.Errorf("CustomAttributes = %#v, want %#v", p.CustomAttributes, want)
+	}
+}
+
+// TestEnvironmentGet_WithoutProject verifies that an environment GitLab sends
+// with no project object surfaces a nil Project rather than an empty one, so a
+// reader can tell "no project was sent" from "a project with no fields".
+func TestEnvironmentGet_WithoutProject(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/environments/10" {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"name":"review","slug":"review","state":"available"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", EnvironmentID: 10})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Project != nil {
+		t.Errorf("Project = %#v, want nil", out.Project)
 	}
 }

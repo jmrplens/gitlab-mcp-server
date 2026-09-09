@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -980,6 +981,60 @@ func TestFormatRunOutputMarkdown_AllFields(t *testing.T) {
 }
 
 // TestGet_WithAllTimestamps verifies convertTrigger covers UpdatedAt and LastUsed nil guards.
+// TestFormatTriggerMarkdown_ExpiresAt verifies the expiry reaches the rendered
+// table. It is read off the captured response because the SDK does not model
+// it, and a trigger shown without it reads as one that never expires.
+func TestFormatTriggerMarkdown_ExpiresAt(t *testing.T) {
+	withExpiry := FormatTriggerMarkdown(Output{ID: 1, Description: "nightly", ExpiresAt: "2026-05-05T00:00:00Z"})
+	if !strings.Contains(withExpiry, "| Expires At |") {
+		t.Errorf("markdown missing the expiry row:\n%s", withExpiry)
+	}
+	without := FormatTriggerMarkdown(Output{ID: 1, Description: "nightly"})
+	if strings.Contains(without, "| Expires At |") {
+		t.Errorf("markdown shows an expiry GitLab did not send:\n%s", without)
+	}
+}
+
+// TestPipelineTriggers_UnreadableCapturedExpiresAt verifies that every trigger
+// handler reading expires_at off the captured answer returns an error rather
+// than a half-filled trigger when GitLab sends it as something that is not a
+// timestamp. The SDK ignores the key its own PipelineTrigger does not model, so
+// the captured read is the only thing that can notice, and a trigger published
+// without its expiry reads as one that never expires.
+func TestPipelineTriggers_UnreadableCapturedExpiresAt(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list", `[{"id":1,"description":"nightly","expires_at":"never"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListTriggers(ctx, c, ListInput{ProjectID: "42"})
+			return err
+		}},
+		{"get", `{"id":1,"description":"nightly","expires_at":"never"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetTrigger(ctx, c, GetInput{ProjectID: "42", TriggerID: 1})
+			return err
+		}},
+		{"create", `{"id":1,"description":"nightly","expires_at":"never"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := CreateTrigger(ctx, c, CreateInput{ProjectID: "42", Description: "nightly"})
+			return err
+		}},
+		{"update", `{"id":1,"description":"nightly","expires_at":"never"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := UpdateTrigger(ctx, c, UpdateInput{ProjectID: "42", TriggerID: 1, Description: "renamed"})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
+}
+
 func TestGet_WithAllTimestamps(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{

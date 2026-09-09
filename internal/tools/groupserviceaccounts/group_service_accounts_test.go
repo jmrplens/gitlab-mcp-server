@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -973,6 +974,41 @@ func TestFormatPATMarkdownString(t *testing.T) {
 // TestFormatListPATMarkdownString verifies the ListPATMarkdownString Markdown formatter for a representative listpatstring input.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
+// TestGroupServiceAccounts_UnreadableCapturedPublicEmail verifies that every
+// service account handler returns an error rather than a half-filled account
+// when GitLab sends public_email as something that is not a string. The SDK
+// ignores the key its own ServiceAccount does not model, so the read of the
+// captured response is the only thing that can notice.
+func TestGroupServiceAccounts_UnreadableCapturedPublicEmail(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list", `[{"id":1,"username":"svc","name":"Service","public_email":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{GroupID: "7"})
+			return err
+		}},
+		{"create", `{"id":1,"username":"svc","name":"Service","public_email":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{GroupID: "7", Name: "Service"})
+			return err
+		}},
+		{"update", `{"id":1,"username":"svc","name":"Service","public_email":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Update(ctx, c, UpdateInput{GroupID: "7", ServiceAccountID: 1, Name: "Renamed"})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
+}
+
 func TestFormatListPATMarkdownString(t *testing.T) {
 	t.Run("with tokens", func(t *testing.T) {
 		out := ListPATOutput{

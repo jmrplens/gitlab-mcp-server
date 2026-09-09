@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -800,6 +801,50 @@ func TestRetrieveAll_KeysetAndSort(t *testing.T) {
 // keyset pagination and ordering parameters to the GitLab API.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that every keyset and ordering query parameter is sent.
+// TestGroupStorageMoves_UnreadableCapturedErrorMessage verifies that every
+// group storage move handler returns an error rather than a half-filled move
+// when GitLab sends error_message as something that is not a string. The SDK
+// ignores the key its own GroupRepositoryStorageMove does not model, so the
+// read of the captured response is the only thing that can notice, and a failed
+// move published without its message reads as one that failed for no reason.
+func TestGroupStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"retrieve_all", `[{"id":1,"state":"failed","error_message":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := RetrieveAll(ctx, c, ListInput{})
+			return err
+		}},
+		{"retrieve_for_group", `[{"id":1,"state":"failed","error_message":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := RetrieveForGroup(ctx, c, ListForGroupInput{GroupID: 7})
+			return err
+		}},
+		{"get", `{"id":1,"state":"failed","error_message":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, IDInput{ID: 1})
+			return err
+		}},
+		{"get_for_group", `{"id":1,"state":"failed","error_message":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetForGroup(ctx, c, GroupMoveInput{GroupID: 7, ID: 1})
+			return err
+		}},
+		{"schedule", `{"id":1,"state":"scheduled","error_message":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Schedule(ctx, c, ScheduleInput{GroupID: 7})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
+}
+
 func TestRetrieveForGroup_KeysetAndSort(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)

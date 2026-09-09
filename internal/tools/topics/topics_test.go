@@ -4,6 +4,7 @@
 package topics
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -497,6 +499,45 @@ func TestFormatTopicMarkdown_MinimalFields(t *testing.T) {
 // TestFormatDelegatorMarkdown_GetCreateUpdate verifies the thin
 // get/create/update formatter delegators produce the shared topic Markdown
 // (non-empty result), covering their delegation bodies.
+// TestTopics_UnreadableCapturedOrganizationID verifies that every topic handler
+// returns an error rather than a half-filled topic when GitLab sends
+// organization_id as something that is not a number. The SDK ignores the key
+// its own Topic does not model, so the read of the captured response is the
+// only thing that can notice.
+func TestTopics_UnreadableCapturedOrganizationID(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list", `[{"id":1,"name":"go","title":"Go","organization_id":"not-a-number"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{})
+			return err
+		}},
+		{"get", `{"id":1,"name":"go","title":"Go","organization_id":"not-a-number"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{TopicID: 1})
+			return err
+		}},
+		{"create", `{"id":1,"name":"go","title":"Go","organization_id":"not-a-number"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{Name: "go", Title: "Go"})
+			return err
+		}},
+		{"update", `{"id":1,"name":"go","title":"Go","organization_id":"not-a-number"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Update(ctx, c, UpdateInput{TopicID: 1, Title: "Golang"})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
+}
+
 func TestFormatDelegatorMarkdown_GetCreateUpdate(t *testing.T) {
 	topic := TopicItem{ID: 3, Name: "go", Title: "Go"}
 	for name, result := range map[string]*mcp.CallToolResult{

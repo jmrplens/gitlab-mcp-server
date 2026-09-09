@@ -13,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -738,4 +739,55 @@ func broadcastMessageSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[
 		byTool[toolName] = spec
 	}
 	return byTool
+}
+
+// TestFormatMessageMarkdown_Color verifies the color reaches the rendered
+// table. It is the one broadcast message field the SDK does not model and the
+// handler reads off the captured response, so a formatter that dropped it would
+// leave that read with nothing to show for itself.
+func TestFormatMessageMarkdown_Color(t *testing.T) {
+	result := FormatMessageMarkdown(MessageItem{ID: 1, Message: "hello", Color: "#e75e40"})
+	content := result.Content[0].(*mcp.TextContent).Text
+	if !strings.Contains(content, "| Color | #e75e40 |") {
+		t.Errorf("markdown missing the color row:\n%s", content)
+	}
+}
+
+// TestBroadcastMessages_UnreadableCapturedColor verifies that every broadcast
+// message handler reading the color off the captured answer returns an error
+// rather than a half-filled message when GitLab sends color as something that
+// is not a string. The SDK ignores the key its own BroadcastMessage does not
+// model, so the captured read is the only thing that can notice.
+func TestBroadcastMessages_UnreadableCapturedColor(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list", `[{"id":1,"message":"hello","color":7}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{})
+			return err
+		}},
+		{"get", `{"id":1,"message":"hello","color":7}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{ID: 1})
+			return err
+		}},
+		{"create", `{"id":1,"message":"hello","color":7}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{Message: "hello"})
+			return err
+		}},
+		{"update", `{"id":1,"message":"hello","color":7}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Update(ctx, c, UpdateInput{ID: 1, Message: "hello again"})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
 }

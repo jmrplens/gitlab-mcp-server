@@ -4,6 +4,7 @@
 package securefiles
 
 import (
+	"context"
 	"encoding/base64"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -443,6 +445,56 @@ func TestFormatShowMarkdown_FullMetadata(t *testing.T) {
 
 // TestFormatListMarkdown_ExpiresColumn verifies the list table renders the
 // Expires At column, including the "-" placeholder for files without expiry.
+// TestFormatShowMarkdown_FileExtension verifies the file extension reaches the
+// rendered detail. It is read off the captured response because the SDK does
+// not model it, so a formatter that dropped it would leave that read with
+// nothing to show for itself.
+func TestFormatShowMarkdown_FileExtension(t *testing.T) {
+	withExt := FormatShowMarkdown(SecureFileItem{ID: 1, Name: "keystore.jks", FileExtension: "jks"})
+	if !strings.Contains(withExt, "- **File Extension**: jks") {
+		t.Errorf("markdown missing the file extension line:\n%s", withExt)
+	}
+	without := FormatShowMarkdown(SecureFileItem{ID: 1, Name: "keystore"})
+	if strings.Contains(without, "**File Extension**") {
+		t.Errorf("markdown shows an extension GitLab did not send:\n%s", without)
+	}
+}
+
+// TestSecureFiles_UnreadableCapturedFileExtension verifies that every secure
+// file handler returns an error rather than a half-filled file when GitLab
+// sends file_extension as something that is not a string. The SDK ignores the
+// key its own SecureFile does not model, so the read of the captured response
+// is the only thing that can notice.
+func TestSecureFiles_UnreadableCapturedFileExtension(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list", `[{"id":1,"name":"keystore.jks","file_extension":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{ProjectID: "42"})
+			return err
+		}},
+		{"show", `{"id":1,"name":"keystore.jks","file_extension":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Show(ctx, c, ShowInput{ProjectID: "42", FileID: 1})
+			return err
+		}},
+		{"create", `{"id":1,"name":"keystore.jks","file_extension":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{ProjectID: "42", Name: "keystore.jks", ContentBase64: "aGVsbG8="})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
+}
+
 func TestFormatListMarkdown_ExpiresColumn(t *testing.T) {
 	expires := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
 	md := FormatListMarkdown(ListOutput{Files: []SecureFileItem{

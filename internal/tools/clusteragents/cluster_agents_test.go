@@ -11,6 +11,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -920,4 +921,54 @@ func clusterAgentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[stri
 		byTool[toolName] = spec
 	}
 	return byTool
+}
+
+// TestFormatAgentMarkdown_Receptive verifies that an agent GitLab reports as
+// receptive says so in the rendered Markdown, and that an ordinary agent does
+// not. The flag is read off the captured response because the SDK does not
+// model it, and it decides which way the connection is made.
+func TestFormatAgentMarkdown_Receptive(t *testing.T) {
+	receptive := FormatAgentMarkdown(AgentItem{ID: 1, Name: "prod", IsReceptive: true})
+	if !strings.Contains(receptive, "**Receptive**: yes") {
+		t.Errorf("markdown missing the receptive line:\n%s", receptive)
+	}
+	ordinary := FormatAgentMarkdown(AgentItem{ID: 1, Name: "prod"})
+	if strings.Contains(ordinary, "**Receptive**") {
+		t.Errorf("markdown calls an ordinary agent receptive:\n%s", ordinary)
+	}
+}
+
+// TestClusterAgents_UnreadableCapturedIsReceptive verifies that every agent
+// handler reading is_receptive off the captured answer returns an error rather
+// than a half-filled agent when GitLab sends the flag as something that is not
+// a boolean. The SDK ignores the key its own Agent does not model, so the
+// captured read is the only thing that can notice.
+func TestClusterAgents_UnreadableCapturedIsReceptive(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list", `[{"id":1,"name":"prod","is_receptive":"maybe"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListAgents(ctx, c, ListAgentsInput{ProjectID: "42"})
+			return err
+		}},
+		{"get", `{"id":1,"name":"prod","is_receptive":"maybe"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetAgent(ctx, c, GetAgentInput{ProjectID: "42", AgentID: 1})
+			return err
+		}},
+		{"register", `{"id":1,"name":"prod","is_receptive":"maybe"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := RegisterAgent(ctx, c, RegisterAgentInput{ProjectID: "42", Name: "prod"})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
 }

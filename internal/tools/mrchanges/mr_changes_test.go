@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -958,6 +959,37 @@ func TestDecorateMRChangeMeta_UnknownTool(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // newMRChangesActionSpecs builds canonical action specs backed by a mock GitLab API.
+// TestDiffVersions_UnreadableCapturedPatchIDSHA verifies that both diff version
+// handlers return an error rather than a half-filled version when GitLab sends
+// patch_id_sha as something that is not a string. The SDK ignores the key its
+// own MergeRequestDiffVersion does not model, so the read of the captured
+// response is the only thing that can notice.
+func TestDiffVersions_UnreadableCapturedPatchIDSHA(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list", `[{"id":1,"head_commit_sha":"abc","patch_id_sha":42}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListDiffVersions(ctx, c, DiffVersionsListInput{ProjectID: "42", MRIID: 7})
+			return err
+		}},
+		{"get", `{"id":1,"head_commit_sha":"abc","patch_id_sha":42}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetDiffVersion(ctx, c, DiffVersionGetInput{ProjectID: "42", MRIID: 7, VersionID: 1})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
+}
+
 func newMRChangesActionSpecs(t *testing.T) []toolutil.ActionSpec {
 	t.Helper()
 

@@ -12,6 +12,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -829,6 +830,50 @@ func TestConverters_EdgeCases(t *testing.T) {
 }
 
 // TestGetDomain_ReturnsProjectID verifies GetDomain surfaces the numeric project ID from the API.
+// TestPagesDomains_UnreadableCapturedCertificateExpiration verifies that every
+// Pages domain handler returns an error rather than a half-filled domain when
+// GitLab sends certificate_expiration as something that is not an object. The
+// SDK ignores the key its own PagesDomain does not model, so the read of the
+// captured response is the only thing that can notice, and a certificate whose
+// expiry silently disappears is the one fact this field is read for.
+func TestPagesDomains_UnreadableCapturedCertificateExpiration(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list_all", `[{"domain":"example.com","certificate_expiration":"soon"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListAllDomains(ctx, c, ListAllDomainsInput{})
+			return err
+		}},
+		{"list", `[{"domain":"example.com","certificate_expiration":"soon"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListDomains(ctx, c, ListDomainsInput{ProjectID: "42"})
+			return err
+		}},
+		{"get", `{"domain":"example.com","certificate_expiration":"soon"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetDomain(ctx, c, GetDomainInput{ProjectID: "42", Domain: "example.com"})
+			return err
+		}},
+		{"create", `{"domain":"example.com","certificate_expiration":"soon"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := CreateDomain(ctx, c, CreateDomainInput{ProjectID: "42", Domain: "example.com"})
+			return err
+		}},
+		{"update", `{"domain":"example.com","certificate_expiration":"soon"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := UpdateDomain(ctx, c, UpdateDomainInput{ProjectID: "42", Domain: "example.com"})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
+}
+
 func TestGetDomain_ReturnsProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{

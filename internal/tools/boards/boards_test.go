@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1577,4 +1578,39 @@ func boardSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]tool
 		byTool[spec.IndividualTool.Name] = spec
 	}
 	return byTool
+}
+
+// TestBoards_UnreadableCapturedGroup verifies that every board handler reading
+// the group object off the captured answer returns an error rather than a
+// half-filled board when GitLab sends group as something that is not an object.
+// The SDK ignores the key its own IssueBoard does not model, so the captured
+// read is the only thing that can notice.
+func TestBoards_UnreadableCapturedGroup(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list", `[{"id":1,"name":"dev","group":"not-an-object"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListBoards(ctx, c, ListBoardsInput{ProjectID: "42"})
+			return err
+		}},
+		{"create", `{"id":1,"name":"dev","group":"not-an-object"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := CreateBoard(ctx, c, CreateBoardInput{ProjectID: "42", Name: "dev"})
+			return err
+		}},
+		{"update", `{"id":1,"name":"dev","group":"not-an-object"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := UpdateBoard(ctx, c, UpdateBoardInput{ProjectID: "42", BoardID: 1, Name: "renamed"})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
 }

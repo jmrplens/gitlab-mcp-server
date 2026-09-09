@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -774,6 +775,46 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 // TestFormatListMarkdown_EscapesTableCells verifies the ListMarkdown_EscapesTableCells Markdown formatter for a representative list_escapestablecells input.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
+// TestInstanceVariables_UnreadableCapturedHidden verifies that every instance
+// variable handler returns an error rather than a half-filled variable when
+// GitLab sends hidden as something that is not a boolean. The SDK ignores the
+// key its own InstanceVariable does not model, so the read of the captured
+// response is the only thing that can notice, and a hidden variable published
+// as visible is exactly the mistake this flag exists to prevent.
+func TestInstanceVariables_UnreadableCapturedHidden(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list", `[{"key":"TOKEN","value":"x","hidden":"maybe"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{})
+			return err
+		}},
+		{"get", `{"key":"TOKEN","value":"x","hidden":"maybe"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{Key: "TOKEN"})
+			return err
+		}},
+		{"create", `{"key":"TOKEN","value":"x","hidden":"maybe"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{Key: "TOKEN", Value: "x"})
+			return err
+		}},
+		{"update", `{"key":"TOKEN","value":"x","hidden":"maybe"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Update(ctx, c, UpdateInput{Key: "TOKEN", Value: "y"})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(context.Background(), client); err == nil {
+				t.Fatal("error = nil, want the captured decode to fail")
+			}
+		})
+	}
+}
+
 func TestFormatListMarkdown_EscapesTableCells(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{
