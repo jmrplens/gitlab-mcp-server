@@ -2480,7 +2480,7 @@ func TestCommentToOutput_AuthorNameFallback(t *testing.T) {
 		Note:   "test",
 		Author: gl.Author{Name: "John"},
 	}
-	out := commentToOutput(c)
+	out := commentToOutput(c, toolutil.CommitCommentExtra{})
 	if out.Author == nil || out.Author.Name != "John" {
 		t.Errorf("Author = %v, want Name %q", out.Author, "John")
 	}

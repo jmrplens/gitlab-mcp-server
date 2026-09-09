@@ -307,7 +307,7 @@ func TestTodoList_AllFilters(t *testing.T) {
 // TestToOutput_NilTargetProjectAuthorCreatedAt verifies ToOutput when nil target project author created at.
 func TestToOutput_NilTargetProjectAuthorCreatedAt(t *testing.T) {
 	todo := todoWithNils()
-	out := toOutput(&todo)
+	out := toOutput(&todo, toolutil.TodoExtra{})
 	if out.Target != nil {
 		t.Errorf("expected nil Target, got %+v", out.Target)
 	}
@@ -579,7 +579,7 @@ func TestToOutput_FullNestedTarget(t *testing.T) {
 			ImageURL:             "https://x/design.png",
 		},
 	}
-	out := toOutput(todo)
+	out := toOutput(todo, toolutil.TodoExtra{})
 	if out.Project == nil || out.Project.PathWithNamespace != "g/proj" || out.Project.CreatedAt == "" {
 		t.Fatalf("project not mapped: %+v", out.Project)
 	}
@@ -637,7 +637,7 @@ func assertTargetNested(t *testing.T, tgt *TodoTargetOut) {
 func TestMilestoneOut_NilDates(t *testing.T) {
 	out := toOutput(&gl.Todo{
 		Target: &gl.TodoTarget{Milestone: &gl.Milestone{ID: 1, Title: "M"}},
-	})
+	}, toolutil.TodoExtra{})
 	if out.Target == nil || out.Target.Milestone == nil {
 		t.Fatal("expected milestone")
 	}

@@ -49,6 +49,9 @@ type Output struct {
 	Body       string            `json:"body,omitempty"`
 	State      string            `json:"state"`
 	CreatedAt  string            `json:"created_at,omitempty"`
+	UpdatedAt  string            `json:"updated_at,omitempty"`
+	// Group is present on a to-do raised in a group rather than a project.
+	Group *toolutil.NamespaceBasicOutput `json:"group,omitempty"`
 }
 
 // ListOutput holds a paginated list of to-do items.
@@ -71,8 +74,9 @@ type MarkAllDoneOutput struct {
 	Message string `json:"message"`
 }
 
-// toOutput converts a GitLab API [gl.Todo] to MCP output format.
-func toOutput(t *gl.Todo) Output {
+// toOutput converts a GitLab API [gl.Todo] to MCP output format, filling from
+// the decoded to-do and from what the capture read beside it.
+func toOutput(t *gl.Todo, extra toolutil.TodoExtra) Output {
 	out := Output{
 		ID:         t.ID,
 		Project:    basicProjectOut(t.Project),
@@ -83,6 +87,8 @@ func toOutput(t *gl.Todo) Output {
 		TargetURL:  t.TargetURL,
 		Body:       t.Body,
 		State:      t.State,
+		UpdatedAt:  toolutil.FormatTimePtr(extra.UpdatedAt),
+		Group:      extra.Group,
 	}
 	if t.CreatedAt != nil {
 		out.CreatedAt = t.CreatedAt.Format("2006-01-02T15:04:05Z07:00")
@@ -124,14 +130,19 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		opts.Type = new(input.Type)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	todos, resp, err := client.GL().Todos.ListTodos(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("todoList", err, http.StatusForbidden, "verify your token has read_api scope")
 	}
+	extras, err := toolutil.CapturedTodos(captured, len(todos))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("todoList", err)
+	}
 
 	out := make([]Output, len(todos))
 	for i, t := range todos {
-		out[i] = toOutput(t)
+		out[i] = toOutput(t, extras[i])
 	}
 	return ListOutput{
 		Todos:      out,

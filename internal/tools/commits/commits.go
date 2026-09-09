@@ -571,6 +571,8 @@ type CommentOutput struct {
 	Line     int64            `json:"line,omitempty"`
 	LineType string           `json:"line_type,omitempty"`
 	Author   *BasicUserOutput `json:"author,omitempty"`
+	// CreatedAt is when the comment was written.
+	CreatedAt string `json:"created_at,omitempty"`
 }
 
 // CommentsOutput holds a paginated list of commit comments.
@@ -596,27 +598,34 @@ func GetComments(ctx context.Context, client *gitlabclient.Client, input Comment
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	comments, resp, err := client.GL().Commits.GetCommitComments(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return CommentsOutput{}, toolutil.WrapErrWithStatusHint("getCommitComments", err, http.StatusNotFound,
 			"verify SHA with gitlab_commit_get")
 	}
+	extras, err := toolutil.CapturedCommitComments(captured, len(comments))
+	if err != nil {
+		return CommentsOutput{}, toolutil.WrapErr("getCommitComments", err)
+	}
 	out := make([]CommentOutput, len(comments))
 	for i, c := range comments {
-		out[i] = commentToOutput(c)
+		out[i] = commentToOutput(c, extras[i])
 	}
 	return CommentsOutput{Comments: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // commentToOutput converts the GitLab API response to the tool output format,
-// mirroring the full author user object.
-func commentToOutput(c *gl.CommitComment) CommentOutput {
+// mirroring the full author user object, and takes what the capture read
+// beside the decode.
+func commentToOutput(c *gl.CommitComment, extra toolutil.CommitCommentExtra) CommentOutput {
 	return CommentOutput{
-		Note:     c.Note,
-		Path:     c.Path,
-		Line:     c.Line,
-		LineType: c.LineType,
-		Author:   authorToOutput(c.Author),
+		Note:      c.Note,
+		Path:      c.Path,
+		Line:      c.Line,
+		LineType:  c.LineType,
+		Author:    authorToOutput(c.Author),
+		CreatedAt: toolutil.FormatTimePtr(extra.CreatedAt),
 	}
 }
 
@@ -650,6 +659,7 @@ func PostComment(ctx context.Context, client *gitlabclient.Client, input PostCom
 	if input.LineType != "" {
 		opts.LineType = new(input.LineType)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	c, _, err := client.GL().Commits.PostCommitComment(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
@@ -659,7 +669,11 @@ func PostComment(ctx context.Context, client *gitlabclient.Client, input PostCom
 		return CommentOutput{}, toolutil.WrapErrWithStatusHint("postCommitComment", err, http.StatusNotFound,
 			"verify SHA with gitlab_commit_get; commenting requires Reporter+ role")
 	}
-	return commentToOutput(c), nil
+	extra, err := toolutil.CapturedCommitComment(captured)
+	if err != nil {
+		return CommentOutput{}, toolutil.WrapErr("postCommitComment", err)
+	}
+	return commentToOutput(c, extra), nil
 }
 
 // ---------------------------------------------------------------------------
