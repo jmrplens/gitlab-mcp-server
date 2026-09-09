@@ -89,7 +89,7 @@ func TestTypedShapeCheck_TheShapeIssue580Fixed_IsTheOneItWasBuiltFor(t *testing.
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			check := typedCheckOf("", approvalOperations,[]publishedType{{
+			check := typedCheckOf("", approvalOperations, []publishedType{{
 				Package: "internal/tools/mrapprovals", Name: "ConfigOutput", Fields: testCase.fields,
 			}})
 
@@ -156,7 +156,7 @@ func TestTypedShapeCheck_ATypeNamedAsAField_IsJudgedWhenAConverterPairsIt(t *tes
 		t.Run(testCase.name, func(t *testing.T) {
 			stubTypeGrainInputs(t, testCase.pairings, nil, approvalRoutes)
 
-			check := typedCheckOf("", approvalOperations,[]publishedType{{
+			check := typedCheckOf("", approvalOperations, []publishedType{{
 				Package: "internal/tools/mrapprovals", Name: "ConfigOutput",
 				Fields: []string{"approved", "title"}, Inner: true, Payload: testCase.payload,
 			}})
@@ -183,7 +183,7 @@ func TestTypedShapeCheck_ATypeNamedAsAField_IsJudgedWhenAConverterPairsIt(t *tes
 func TestTypedShapeCheck_AFinding_NamesWhatWasSearched(t *testing.T) {
 	stubTypeGrainInputs(t, approvalPairing, nil, approvalRoutes)
 
-	check := typedCheckOf("", approvalOperations,[]publishedType{{
+	check := typedCheckOf("", approvalOperations, []publishedType{{
 		Package: "internal/tools/mrapprovals", Name: "ConfigOutput", Fields: []string{"approved", "title"},
 	}})
 
@@ -270,7 +270,7 @@ func TestTypedShapeCheck_WhatItRefusesToJudge_IsCountedAndNotReported(t *testing
 		t.Run(testCase.name, func(t *testing.T) {
 			stubTypeGrainInputs(t, testCase.pairings, nil, testCase.routes)
 
-			check := typedCheckOf("", testCase.operations,[]publishedType{{
+			check := typedCheckOf("", testCase.operations, []publishedType{{
 				Package: "internal/tools/mrapprovals", Name: "ConfigOutput", Fields: []string{"invented"},
 			}})
 
@@ -396,7 +396,7 @@ func TestTypedShapeCheck_WithoutItsInputs_DoesNotRun(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			stubTypeGrainInputs(t, testCase.pairings, testCase.err, approvalRoutes)
 
-			check := typedCheckOf("", approvalOperations,[]publishedType{{
+			check := typedCheckOf("", approvalOperations, []publishedType{{
 				Package: "internal/tools/mrapprovals", Name: "ConfigOutput", Fields: []string{"title"},
 			}})
 
@@ -461,7 +461,7 @@ var approvalConfigWithApprovers = publishedType{
 func TestTypedShapeCheck_ANestedType_IsJudgedUnderItsOwnProperty(t *testing.T) {
 	stubTypeGrainInputs(t, approvalPairing, nil, approvalRoutes)
 
-	check := typedCheckOf("", approvedByOperations,[]publishedType{approvalConfigWithApprovers})
+	check := typedCheckOf("", approvedByOperations, []publishedType{approvalConfigWithApprovers})
 
 	if check.NestedCompared != 1 {
 		t.Errorf("NestedCompared = %d, want the one nested type held against approved_by", check.NestedCompared)
@@ -482,7 +482,7 @@ func TestTypedShapeCheck_ANestedFieldTheObjectDoesNotCarry_IsReportedUnderIt(t *
 		"approved_by": {Name: "ApproverOutput", Fields: []string{"approved_at", "invented", "user"}},
 	}
 
-	check := typedCheckOf("", approvedByOperations,[]publishedType{candidate})
+	check := typedCheckOf("", approvedByOperations, []publishedType{candidate})
 
 	want := []UnpublishedField{{
 		Grain: grainType, Package: "internal/tools/mrapprovals", Type: "ApproverOutput",
@@ -502,7 +502,7 @@ func TestTypedShapeCheck_ANestedFieldTheObjectDoesNotCarry_IsReportedUnderIt(t *
 func TestTypedShapeCheck_ANestedPropertyTheRecordDescribesNoObjectFor_IsNotJudged(t *testing.T) {
 	stubTypeGrainInputs(t, approvalPairing, nil, approvalRoutes)
 
-	check := typedCheckOf("", approvalOperations,[]publishedType{approvalConfigWithApprovers})
+	check := typedCheckOf("", approvalOperations, []publishedType{approvalConfigWithApprovers})
 
 	if check.Compared != 1 {
 		t.Errorf("Compared = %d, want the top-level type still judged", check.Compared)
@@ -532,7 +532,7 @@ func TestTypedShapeCheck_TwoOperationsSharingAShape_UnionTheirNestedProperties(t
 	candidate := approvalConfigWithApprovers
 	candidate.Fields = []string{"approved_by"}
 
-	check := typedCheckOf("", operations,[]publishedType{candidate})
+	check := typedCheckOf("", operations, []publishedType{candidate})
 
 	if len(check.Nested) != 0 {
 		t.Errorf("nested findings = %+v, want none: between them the two operations name both properties", check.Nested)
