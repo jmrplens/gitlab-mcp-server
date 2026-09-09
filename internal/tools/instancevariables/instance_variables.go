@@ -12,6 +12,8 @@ import (
 
 // Operation names used by error wrappers (kept as constants to satisfy S1192).
 const (
+	opListInstanceVariables  = "list instance variables"
+	opGetInstanceVariable    = "get instance variable"
 	opCreateInstanceVariable = "create instance variable"
 	opUpdateInstanceVariable = "update instance variable"
 	opDeleteInstanceVariable = "delete instance variable"
@@ -110,7 +112,7 @@ func toOutput(v *gl.InstanceVariable, extra toolutil.CIVariableExtra) Output {
 // List retrieves a paginated list of instance-level CI/CD variables.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage("list instance variables", err)
+		return ListOutput{}, toolutil.WrapErrWithMessage(opListInstanceVariables, err)
 	}
 
 	opts := &gl.ListInstanceVariablesOptions{}
@@ -125,12 +127,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	vars, resp, err := client.GL().InstanceVariables.ListVariables(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list instance variables", err, http.StatusForbidden,
+		return ListOutput{}, toolutil.WrapErrWithStatusHint(opListInstanceVariables, err, http.StatusForbidden,
 			"instance-level CI/CD variables are admin-only. Verify your token has admin scope")
 	}
 	extras, err := toolutil.CapturedCIVariables(captured, len(vars))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("list instance variables", err)
+		return ListOutput{}, toolutil.WrapErr(opListInstanceVariables, err)
 	}
 
 	out := ListOutput{Variables: make([]Output, 0, len(vars))}
@@ -147,18 +149,18 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.ErrFieldRequired("key")
 	}
 	if err := ctx.Err(); err != nil {
-		return Output{}, toolutil.WrapErrWithMessage("get instance variable", err)
+		return Output{}, toolutil.WrapErrWithMessage(opGetInstanceVariable, err)
 	}
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	v, _, err := client.GL().InstanceVariables.GetVariable(input.Key, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("get instance variable", err, http.StatusNotFound,
+		return Output{}, toolutil.WrapErrWithStatusHint(opGetInstanceVariable, err, http.StatusNotFound,
 			"verify the variable key exists with gitlab_instance_variable_list; admin-only API")
 	}
 	extra, err := toolutil.CapturedCIVariable(captured)
 	if err != nil {
-		return Output{}, toolutil.WrapErr("get instance variable", err)
+		return Output{}, toolutil.WrapErr(opGetInstanceVariable, err)
 	}
 	return toOutput(v, extra), nil
 }

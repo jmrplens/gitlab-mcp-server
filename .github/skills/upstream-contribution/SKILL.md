@@ -85,7 +85,7 @@ From `.gitlab/duo/mr-review-instructions.yaml`, which is what the reviewer check
 
 - `int64` never `int`, and `any` never `interface{}` — inside slices and maps too.
 - Pointer structs for requests, non-pointer for responses.
-- `PathEscape()` on path parameters, `url.PathEscape()` on query parameters.
+- `PathEscape()` on every path parameter interpolated into a route. Query values are not path segments: encode those with `url.Values.Encode()`, or `url.QueryEscape()` for a single value, since `url.PathEscape` leaves a `+` alone and form-style decoding then reads it as a space.
 - Project and group ids typed `any`, parsed with `parseID()`.
 - lowerCamelCase locals.
 - "GitLab", never "Gitlab" or "gitlab", in comments, log messages, test names and any other text.
@@ -132,7 +132,7 @@ go get gitlab.com/gitlab-org/api/client-go/v3@latest
 go mod tidy
 ```
 
-Then retire the workaround this project carried for the gap (a captured-response read under [ADR-0021](../../docs/development/adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md), or a request built by hand) and mark the `docs/development/upstream-bugs.md` entry merged with the version that carries it.
+Then retire the workaround this project carried for the gap (a captured-response read under [ADR-0021](../../../docs/development/adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md), or a request built by hand) and mark the `docs/development/upstream-bugs.md` entry merged with the version that carries it.
 
 ## Validation checklist
 

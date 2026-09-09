@@ -52,7 +52,7 @@ func FormatMessageMarkdown(item MessageItem) *mcp.CallToolResult {
 		fmt.Fprintf(&sb, "| Theme | %s |\n", item.Theme)
 	}
 	if item.Color != "" {
-		// The colour GitLab renders the message in, which an administrator
+		// The color GitLab renders the message in, which an administrator
 		// typed as a hex value.
 		fmt.Fprintf(&sb, "| Color | %s |\n", toolutil.EscapeMdTableCell(item.Color))
 	}

@@ -61,7 +61,9 @@ type Output struct {
 	Licenses           []LicenseOutput       `json:"licenses,omitempty"`
 	// Malware is sent to a caller allowed to read the project's
 	// vulnerabilities, and only while the instance has the flag enabled.
-	Malware bool `json:"malware,omitempty"`
+	// False means the scan cleared the package, so it is published rather
+	// than folded into the absence that means no scan ran.
+	Malware *bool `json:"malware,omitempty"`
 }
 
 // ListOutput holds a paginated list of dependencies.

@@ -240,7 +240,7 @@ func CapturedAppearance(capture *gitlabclient.ResponseCapture) (AppearanceExtra,
 	return capturedOne[AppearanceExtra](capture)
 }
 
-// BroadcastMessageExtra is the colour a broadcast message is drawn in, which
+// BroadcastMessageExtra is the color a broadcast message is drawn in, which
 // GitLab's broadcast message entity exposes under no condition.
 type BroadcastMessageExtra struct {
 	Color string `json:"color"`
@@ -277,7 +277,7 @@ func CapturedClusterAgents(capture *gitlabclient.ResponseCapture, decoded int) (
 	return capturedList[ClusterAgentExtra](capture, decoded, "cluster agents")
 }
 
-// LicenseTemplateExtra is whether a licence template is one of the popular
+// LicenseTemplateExtra is whether a license template is one of the popular
 // ones GitLab offers first, exposed under no condition.
 type LicenseTemplateExtra struct {
 	Popular bool `json:"popular"`
@@ -292,7 +292,7 @@ func CapturedLicenseTemplate(capture *gitlabclient.ResponseCapture) (LicenseTemp
 // CapturedLicenseTemplates reads the same off a list answer, one extra per
 // template in order, the count held to what the SDK decoded.
 func CapturedLicenseTemplates(capture *gitlabclient.ResponseCapture, decoded int) ([]LicenseTemplateExtra, error) {
-	return capturedList[LicenseTemplateExtra](capture, decoded, "licence templates")
+	return capturedList[LicenseTemplateExtra](capture, decoded, "license templates")
 }
 
 // SecureFileExtra is a secure file's extension, exposed under no condition.
@@ -474,8 +474,12 @@ func CapturedCommitComments(capture *gitlabclient.ResponseCapture, decoded int) 
 // DependencyExtra is whether a dependency is known malware, which GitLab
 // exposes to a caller allowed to read the project's vulnerabilities and only
 // while the instance has the feature enabled.
+//
+// The pointer carries the third state: true is a detection, false is a
+// package the scan cleared, and absent is a scan that did not run. Read into
+// a bool the last two would both arrive as false.
 type DependencyExtra struct {
-	Malware bool `json:"malware"`
+	Malware *bool `json:"malware"`
 }
 
 // CapturedDependencies reads it off the captured answer to a list of

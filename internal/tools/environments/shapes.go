@@ -380,6 +380,7 @@ func projectOutput(p *gl.Project) *ProjectOutput {
 		PathWithNamespace: p.PathWithNamespace,
 		CreatedAt:         toolutil.FormatTimePtr(p.CreatedAt),
 		DefaultBranch:     p.DefaultBranch,
+		//nolint:staticcheck // tag_list is documented (deprecated alias of topics) in doc/api/environments.md
 		TagList:           p.TagList,
 		Topics:            p.Topics,
 		SSHURLToRepo:      p.SSHURLToRepo,

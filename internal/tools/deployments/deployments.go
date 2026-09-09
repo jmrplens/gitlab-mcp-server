@@ -15,6 +15,7 @@ import (
 const (
 	errDeploymentIDRequired = "deployment_id is required and must be > 0"
 	opCreateDeployment      = "create deployment"
+	opUpdateDeployment      = "update deployment"
 )
 
 // ---------------------------------------------------------------------------
@@ -376,15 +377,15 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	d, _, err := client.GL().Deployments.UpdateProjectDeployment(string(input.ProjectID), int64(input.DeploymentID), opts, gitlab.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint("update deployment", err,
+			return Output{}, toolutil.WrapErrWithHint(opUpdateDeployment, err,
 				"status must be one of: created, running, success, failed, canceled, blocked. Transitions out of terminal states are not allowed")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("update deployment", err, http.StatusNotFound,
+		return Output{}, toolutil.WrapErrWithStatusHint(opUpdateDeployment, err, http.StatusNotFound,
 			"verify deployment_id with gitlab_deployment_list")
 	}
 	extra, err := toolutil.CapturedDeployment(captured)
 	if err != nil {
-		return Output{}, toolutil.WrapErr("update deployment", err)
+		return Output{}, toolutil.WrapErr(opUpdateDeployment, err)
 	}
 
 	return toOutput(d, extra), nil
