@@ -111,6 +111,11 @@ type Summary struct {
 	TypedUnsurfacedAlways   int `json:"typed_unsurfaced_sent_always"`
 	TypedUnsurfacedWhen     int `json:"typed_unsurfaced_sent_when"`
 	TypedUnsurfacedDeclared int `json:"typed_unsurfaced_declared"`
+	// TypedUnsurfacedNotInSDK counts how many of those fields client-go's own
+	// struct does not carry either, which is the half whose answer is an
+	// upstream merge request rather than an edit here. The remainder is a
+	// field the SDK already gives us and only this server does not publish.
+	TypedUnsurfacedNotInSDK int `json:"typed_unsurfaced_not_in_sdk"`
 }
 
 // observedGrain is what [Summary.Grain] says, spelled once.
@@ -244,6 +249,7 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 			TypedUnsurfacedAlways:   typedSentAlways,
 			TypedUnsurfacedWhen:     typedSentWhen,
 			TypedUnsurfacedDeclared: typedSentDeclared,
+			TypedUnsurfacedNotInSDK: notModelledBySDK(shapes.Typed.Unsurfaced),
 			TypedCompared:           shapes.Typed.Compared,
 			TypedNoPairing:          shapes.Typed.SkippedNoPairing,
 			TypedNoRoute:            shapes.Typed.SkippedNoRoute,
