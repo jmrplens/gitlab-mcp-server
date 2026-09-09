@@ -113,6 +113,73 @@ func TestTypedShapeCheck_TheShapeIssue580Fixed_IsTheOneItWasBuiltFor(t *testing.
 	}
 }
 
+// TestTypedShapeCheck_ATypeNamedAsAField_IsJudgedWhenAConverterPairsIt
+// verifies the rule that decides whether this grain sees anything at all.
+//
+// The convention in this repository is a one-key envelope: a get handler
+// returns `{badge: BadgeItem}`, and it is `BadgeItem` that models GitLab's
+// response and that a converter pairs with a client-go struct. The envelope
+// carries no pairing. So a grain that passes over every type some struct names
+// as a field passes over exactly the types that model the responses, and it
+// saw 26 of 441 for that reason alone.
+//
+// What being named as a field actually says is nothing about GitLab: the
+// pairing is the whole question, because that struct's service methods name
+// the endpoints. A type named as a field and paired is judged; one named as a
+// field and unpaired is not, and is not counted either, since the skip figures
+// are about the responses this grain was meant to judge and would stop being
+// comparable if a second population joined them.
+func TestTypedShapeCheck_ATypeNamedAsAField_IsJudgedWhenAConverterPairsIt(t *testing.T) {
+	cases := []struct {
+		name          string
+		pairings      structs.Pairings
+		payload       bool
+		wantCompared  int
+		wantInner     int
+		wantNoPairing int
+		wantFindings  int
+	}{
+		{
+			name:     "wrapped by an envelope and paired",
+			pairings: approvalPairing, payload: true,
+			wantCompared: 1, wantInner: 1, wantFindings: 1,
+		},
+		{
+			name:     "wrapped by an envelope and unpaired",
+			pairings: structs.Pairings{ClientGoDir: "/client-go"}, payload: true,
+		},
+		{
+			// A reference to another resource sitting inside a response. Its
+			// pairing names the struct of the whole entity, so judging it
+			// here would hold a job's project reference to what
+			// GET /projects/:id answers with.
+			name:     "a field of a response that carries other content, paired",
+			pairings: approvalPairing,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			stubTypeGrainInputs(t, testCase.pairings, nil, approvalRoutes)
+
+			check := typedShapeCheck("", indexOf(approvalOperations), []publishedType{{
+				Package: "internal/tools/mrapprovals", Name: "ConfigOutput",
+				Fields: []string{"approved", "title"}, Inner: true, Payload: testCase.payload,
+			}})
+
+			if check.Compared != testCase.wantCompared || check.ComparedInner != testCase.wantInner {
+				t.Errorf("compared = %d (%d inner), want %d (%d inner)",
+					check.Compared, check.ComparedInner, testCase.wantCompared, testCase.wantInner)
+			}
+			if check.SkippedNoPairing != testCase.wantNoPairing || len(check.Skipped.NoPairing) != testCase.wantNoPairing {
+				t.Errorf("no-pairing skips = %d/%v, want %d", check.SkippedNoPairing, check.Skipped.NoPairing, testCase.wantNoPairing)
+			}
+			if len(check.Unpublished) != testCase.wantFindings {
+				t.Errorf("reported %d finding(s), want %d: %+v", len(check.Unpublished), testCase.wantFindings, check.Unpublished)
+			}
+		})
+	}
+}
+
 // TestTypedShapeCheck_AFinding_NamesWhatWasSearched verifies that a finding
 // carries its own grounds. A reader arriving at one has to be able to tell it
 // from a package-grain finding, see which client-go struct named the operations
@@ -149,7 +216,9 @@ func TestTypedShapeCheck_AFinding_NamesWhatWasSearched(t *testing.T) {
 // nested inside another response; and a route the document is silent about says
 // nothing rather than that GitLab sends nothing. Judging any of them would
 // invent findings, so each is counted where a reader can see how much of the
-// tree went uncompared.
+// tree went uncompared, and named beside the count: the figure alone says how
+// much was declined and nothing about whether declining was right, which is
+// the only question a reader has.
 func TestTypedShapeCheck_WhatItRefusesToJudge_IsCountedAndNotReported(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -163,21 +232,30 @@ func TestTypedShapeCheck_WhatItRefusesToJudge_IsCountedAndNotReported(t *testing
 			pairings:   structs.Pairings{ClientGoDir: "/client-go"},
 			routes:     approvalRoutes,
 			operations: approvalOperations,
-			want:       TypedShapeCheck{Ran: true, SkippedNoPairing: 1},
+			want: TypedShapeCheck{
+				Ran: true, SkippedNoPairing: 1,
+				Skipped: SkippedTypes{NoPairing: []string{"mrapprovals.ConfigOutput"}},
+			},
 		},
 		{
 			name:       "no method answers with the SDK struct",
 			pairings:   approvalPairing,
 			routes:     nil,
 			operations: approvalOperations,
-			want:       TypedShapeCheck{Ran: true, SkippedNoRoute: 1},
+			want: TypedShapeCheck{
+				Ran: true, SkippedNoRoute: 1,
+				Skipped: SkippedTypes{NoRoute: []string{"mrapprovals.ConfigOutput"}},
+			},
 		},
 		{
 			name:       "the document carries none of the routes",
 			pairings:   approvalPairing,
 			routes:     approvalRoutes,
 			operations: map[string]apishapes.Operation{"GET /api/v4/version": {Response: []string{"version"}}},
-			want:       TypedShapeCheck{Ran: true, SkippedNoSchema: 1},
+			want: TypedShapeCheck{
+				Ran: true, SkippedNoSchema: 1,
+				Skipped: SkippedTypes{NoSchema: []string{"mrapprovals.ConfigOutput"}},
+			},
 		},
 		{
 			name:     "the document names the routes and no response for them",
@@ -187,7 +265,10 @@ func TestTypedShapeCheck_WhatItRefusesToJudge_IsCountedAndNotReported(t *testing
 				"GET /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approvals": {},
 				"POST /api/v4/projects/{id}/merge_requests/{merge_request_iid}/approve":  {},
 			},
-			want: TypedShapeCheck{Ran: true, SkippedNoSchema: 1},
+			want: TypedShapeCheck{
+				Ran: true, SkippedNoSchema: 1,
+				Skipped: SkippedTypes{NoSchema: []string{"mrapprovals.ConfigOutput"}},
+			},
 		},
 	}
 	for _, testCase := range cases {

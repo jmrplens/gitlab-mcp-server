@@ -382,6 +382,7 @@ type GroupOutput struct {
 }
 
 type ListItem struct {
+	ID         int              `+"`json:\"id\"`"+`
 	UploadedBy UploadedByOutput `+"`json:\"uploaded_by\"`"+`
 }
 
@@ -412,7 +413,7 @@ type RightOutput struct {
 		{Package: "internal/tools/sample", Name: "DetailsOutput", Fields: []string{"connected", "group", "hollow", "id", "owner"}, Nested: map[string]nestedType{"group": {Name: "GroupOutput", Fields: []string{"path"}}}},
 		{Package: "internal/tools/sample", Name: "GroupOutput", Fields: []string{"path"}, Inner: true},
 		{Package: "internal/tools/sample", Name: "LeftOutput", Fields: []string{"a", "b"}},
-		{Package: "internal/tools/sample", Name: "ListItem", Fields: []string{"uploaded_by"}, Inner: true},
+		{Package: "internal/tools/sample", Name: "ListItem", Fields: []string{"id", "uploaded_by"}, Inner: true},
 		{Package: "internal/tools/sample", Name: "Output", Fields: []string{"group", "hollow", "id", "owner"}, Nested: map[string]nestedType{"group": {Name: "GroupOutput", Fields: []string{"path"}}, "owner": {Name: "UserOutput", Fields: []string{"name"}}}},
 		{Package: "internal/tools/sample", Name: "RightOutput", Fields: []string{"a", "b"}},
 		{Package: "internal/tools/sample", Name: "StatusOutput", Fields: []string{"Status", "note"}},
@@ -421,5 +422,71 @@ type RightOutput struct {
 	}
 	if !reflect.DeepEqual(types, want) {
 		t.Errorf("publishedTypes() = %+v, want %+v", types, want)
+	}
+}
+
+// TestEnvelopePayload_TellsThePackagingFromTheContent verifies the rule that
+// decides whether a type named as somebody's field is a response.
+//
+// Both shapes exist in this repository and they look identical to a walk that
+// only asks "is this named as a field". `{badge: BadgeItem}` is packaging over
+// a response, so `BadgeItem` is what GitLab answered with and is what the type
+// grain has to judge against the endpoint. `jobs.Output` naming a
+// `ProjectObject` among thirty other fields is a reference to another
+// resource, and judging it would hold a job's project reference to what
+// GET /projects/:id answers with and report all eighty-five fields of a
+// project as missing from it.
+//
+// Pagination is set aside because it is framing this server adds, not
+// something GitLab sent, so a list plus its pagination is still a wrapper.
+func TestEnvelopePayload_TellsThePackagingFromTheContent(t *testing.T) {
+	t.Parallel()
+	for _, testCase := range []struct {
+		name       string
+		fields     []string
+		fieldTypes map[string]string
+		want       string
+	}{
+		{
+			name:   "a get envelope",
+			fields: []string{"badge"}, fieldTypes: map[string]string{"badge": "BadgeItem"},
+			want: "BadgeItem",
+		},
+		{
+			name:   "a list envelope beside its pagination",
+			fields: []string{"badges", "pagination"},
+			fieldTypes: map[string]string{
+				"badges": "BadgeItem", "pagination": sharedPrefix + "PaginationOutput",
+			},
+			want: "BadgeItem",
+		},
+		{
+			name:       "a response carrying a reference among its own fields",
+			fields:     []string{"id", "name", "project"},
+			fieldTypes: map[string]string{"project": "ProjectObject"},
+		},
+		{
+			name:       "a response carrying a scalar beside the object",
+			fields:     []string{"badge", "deleted"},
+			fieldTypes: map[string]string{"badge": "BadgeItem"},
+		},
+		{
+			name:       "two objects, so neither is the payload",
+			fields:     []string{"group", "project"},
+			fieldTypes: map[string]string{"group": "GroupOutput", "project": "ProjectObject"},
+		},
+		{
+			name:       "nothing but pagination",
+			fields:     []string{"pagination"},
+			fieldTypes: map[string]string{"pagination": sharedPrefix + "PaginationOutput"},
+		},
+		{name: "no fields at all"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := envelopePayload(testCase.fields, testCase.fieldTypes); got != testCase.want {
+				t.Errorf("envelopePayload() = %q, want %q", got, testCase.want)
+			}
+		})
 	}
 }

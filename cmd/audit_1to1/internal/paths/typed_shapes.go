@@ -40,12 +40,30 @@ type TypedShapeCheck struct {
 	// Compared counts the output types held against the response of the
 	// operations their client-go struct models.
 	Compared int `json:"compared"`
-	// SkippedNoPairing counts the output types no converter pairs with a
-	// client-go struct. They are our own wrappers around a JSON array, our own
-	// answers to a 204 and to a not-found, and the synthetic results of a
-	// handler that calls nothing: no endpoint sends their keys because they are
-	// not an endpoint's response, and the package-grain join already carries
-	// them as the lower bound it is.
+	// ComparedInner counts how many of [TypedShapeCheck.Compared] are types
+	// some struct of their package names as a field, rather than a response
+	// this repository returns whole.
+	//
+	// They are compared because a converter pairs them with a client-go
+	// struct, which is the only thing this grain needs: that struct's service
+	// methods name the endpoints, and GitLab's document describes what those
+	// send. Being named as somebody's field says nothing about whether GitLab
+	// answers with the object.
+	//
+	// Excluding them was the reason this grain saw 26 types out of 441. The
+	// convention here is a one-key envelope, so `GetProjectOutput` is
+	// `{badge: BadgeItem}` and it is `BadgeItem` that models the response and
+	// carries the pairing. The envelope has none and was counted a skip; the
+	// modeling type was passed over for being named as its field; and no
+	// finding about that endpoint's response could be made at the sharp grain
+	// at all.
+	ComparedInner int `json:"compared_inner"`
+	// SkippedNoPairing counts the top-level output types no converter pairs
+	// with a client-go struct. They are our own wrappers around a JSON array,
+	// our own answers to a 204 and to a not-found, and the synthetic results
+	// of a handler that calls nothing: no endpoint sends their keys because
+	// they are not an endpoint's response, and the package-grain join already
+	// carries them as the lower bound it is.
 	SkippedNoPairing int `json:"skipped_no_pairing"`
 	// SkippedNoRoute counts the output types whose client-go struct no service
 	// method was seen answering with, so there is no endpoint to ask about.
@@ -78,6 +96,31 @@ type TypedShapeCheck struct {
 	// in this run, sorted. Each is a claim about GitLab's record that no longer
 	// describes it.
 	UnusedDeclarations []string `json:"unused_declarations,omitempty"`
+	// Skipped names the types behind the three counters above, as
+	// "package.Type", sorted.
+	//
+	// The counters alone say how much this grain declined to judge and nothing
+	// about whether declining was right, which is the only question a reader
+	// has when the sharp grain compares 26 types and the blunt one reports
+	// hundreds of fields. Named, the same numbers answer it: a NoPairing list
+	// that is wrappers and delete results is the concession its comment claims,
+	// and one carrying a package's real response type is a hole in the pairing
+	// that suppresses every finding about it, silently and with no declaration
+	// anywhere. Reported rather than gated, because none of the three is a
+	// defect on its own.
+	Skipped SkippedTypes `json:"skipped,omitzero"`
+}
+
+// SkippedTypes names the output types each skip bucket holds.
+type SkippedTypes struct {
+	// NoPairing is every type no converter pairs with a client-go struct.
+	NoPairing []string `json:"no_pairing,omitempty"`
+	// NoRoute is every type whose client-go struct no service method answers
+	// with.
+	NoRoute []string `json:"no_route,omitempty"`
+	// NoSchema is every type whose routes GitLab's document describes no
+	// response for.
+	NoSchema []string `json:"no_schema,omitempty"`
 }
 
 // undeclared counts the findings no declaration accounts for, at both levels,
@@ -139,22 +182,46 @@ func typedShapeCheck(root string, index *operationIndex, published []publishedTy
 
 	check := TypedShapeCheck{Ran: true}
 	for _, candidate := range published {
-		if candidate.Inner {
+		named := shortPackage(candidate.Package) + "." + candidate.Name
+		paired := sdkTypes[[2]string{shortPackage(candidate.Package), candidate.Name}]
+		if candidate.Inner && !candidate.Payload {
+			// A reference to another resource sitting inside a response, not a
+			// response. Its pairing names the struct of the whole entity, so
+			// judging it here would hold a job's project reference to what
+			// GET /projects/:id answers with and report all eighty-five fields
+			// of a project as missing from it. The nested pass asks the only
+			// question that fits, against the property it sits under.
 			continue
 		}
-		paired := sdkTypes[[2]string{shortPackage(candidate.Package), candidate.Name}]
+		if len(paired) == 0 && candidate.Payload {
+			// Wrapped and unpaired: the envelope was already counted a skip
+			// under its own name, and counting the payload again would double
+			// one response.
+			continue
+		}
 		if len(paired) == 0 {
 			check.SkippedNoPairing++
+			check.Skipped.NoPairing = append(check.Skipped.NoPairing, named)
 			continue
 		}
 		described := describedRoutes(paired, routes, index)
 		switch {
 		case !described.Routed:
 			check.SkippedNoRoute++
+			check.Skipped.NoRoute = append(check.Skipped.NoRoute, named)
 		case len(described.Known) == 0:
 			check.SkippedNoSchema++
+			check.Skipped.NoSchema = append(check.Skipped.NoSchema, named)
 		default:
 			check.Compared++
+			// Counted here rather than before the switch, because it is
+			// documented as how many of Compared were reached through an
+			// envelope. An inner payload whose endpoints have no route or no
+			// response is a skip like any other, and counting it above would
+			// report a subset larger than the set it is a subset of.
+			if candidate.Inner {
+				check.ComparedInner++
+			}
 			check.Unpublished = append(check.Unpublished, unpublishedAtTypeGrain(candidate, paired, described)...)
 			nested, compared := unpublishedNested(candidate, paired, described)
 			check.Nested = append(check.Nested, nested...)
@@ -165,6 +232,9 @@ func typedShapeCheck(root string, index *operationIndex, published []publishedTy
 	sortFindings(check.Unpublished)
 	sortFindings(check.Nested)
 	sortUnsurfaced(check.Unsurfaced)
+	for _, names := range [][]string{check.Skipped.NoPairing, check.Skipped.NoRoute, check.Skipped.NoSchema} {
+		sort.Strings(names)
+	}
 	check.Unpublished, check.Nested, check.UnusedDeclarations = classifyShapeFindings(check.Unpublished, check.Nested)
 	return check
 }
