@@ -389,9 +389,12 @@ func TestSourceString_TheProvenanceLineAGateReports(t *testing.T) {
 	}.String()
 
 	for _, want := range []string{"582 entities", "7317 fields", "2110 routes", "264 licensed features", "19.3.1-ee", "2026-09-09"} {
-		if !strings.Contains(line, want) {
-			t.Errorf("provenance line %q is missing %q", line, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			t.Parallel()
+			if !strings.Contains(line, want) {
+				t.Errorf("provenance line %q is missing %q", line, want)
+			}
+		})
 	}
 }
 
