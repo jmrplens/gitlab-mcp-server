@@ -1008,6 +1008,85 @@ func CapturedPackages(capture *gitlabclient.ResponseCapture, decoded int) ([]Pac
 	return capturedList[PackageExtra](capture, decoded, "packages")
 }
 
+// AccessRequestExtra is what lib/api/entities/access_requester.rb sends on an
+// access request that client-go's AccessRequest does not carry. The entity
+// inherits Member and merges UserBasic into it, so everything [MemberExtra]
+// reads arrives here too; these are the keys beside them. The two URLs are
+// unconditional; the address, the creator and the custom role each wait on
+// their own condition, and the expiry is sent on every member.
+//
+// Three keys the entity can send are deliberately not read: is_using_seat,
+// avatar_path and custom_attributes wait on presenter options the caller has
+// to ask for, and no access-request route declares show_seat_info, only_path
+// or with_custom_attributes, so GitLab never sends them here. The first is
+// absent from this shape and the other two arrive through the embed unread.
+type AccessRequestExtra struct {
+	MemberExtra
+	AvatarURL string            `json:"avatar_url"`
+	WebURL    string            `json:"web_url"`
+	CreatedBy *MemberUserOutput `json:"created_by"`
+	// ExpiresAt is a date and not a timestamp, which is how GitLab spells a
+	// membership expiry, so it is read as the string it arrives as.
+	ExpiresAt  string            `json:"expires_at"`
+	Email      string            `json:"email"`
+	MemberRole *MemberRoleOutput `json:"member_role"`
+}
+
+// CapturedAccessRequest reads them off the captured answer to a request that
+// returned one access request.
+func CapturedAccessRequest(capture *gitlabclient.ResponseCapture) (AccessRequestExtra, error) {
+	return capturedOne[AccessRequestExtra](capture)
+}
+
+// CapturedAccessRequests reads the same off a list answer, one extra per
+// request in order, the count held to what the SDK decoded.
+func CapturedAccessRequests(capture *gitlabclient.ResponseCapture, decoded int) ([]AccessRequestExtra, error) {
+	return capturedList[AccessRequestExtra](capture, decoded, "access requests")
+}
+
+// BillableMemberExtra is what ee/lib/api/entities/billable_member.rb sends on a
+// billable member that client-go's BillableGroupMember does not carry: whether
+// the account is locked and the address the user publishes, both of them from
+// the UserBasic the entity inherits and both on every member.
+//
+// The same UserBasic exposes avatar_path and custom_attributes, and neither is
+// read: both wait on a presenter option, and the billable members route
+// declares neither only_path nor with_custom_attributes, so GitLab has never
+// sent either on this response.
+//
+// It is deliberately not [MemberExtra]. A billable member is a user who counts
+// against the seat total and not a membership record, so it carries no access
+// level, no expiry and no role. The endpoint's own desc annotates
+// Entities::Member while its handler presents this entity, which is why the
+// audit reads nine membership keys against a response that has never carried
+// one of them.
+type BillableMemberExtra struct {
+	Locked      bool   `json:"locked"`
+	PublicEmail string `json:"public_email"`
+}
+
+// CapturedBillableMembers reads them off the captured answer to a list of
+// billable members, one extra per member in order, the count held to what the
+// SDK decoded.
+func CapturedBillableMembers(capture *gitlabclient.ResponseCapture, decoded int) ([]BillableMemberExtra, error) {
+	return capturedList[BillableMemberExtra](capture, decoded, "billable members")
+}
+
+// InvitationExtra is the token lib/api/entities/invitation.rb exposes under no
+// condition and client-go's PendingInvite does not model. It is what the
+// invitation URL a recipient follows is built from, so a caller allowed to
+// list a group's pending invitations can reissue one without the mail.
+type InvitationExtra struct {
+	InviteToken string `json:"invite_token"`
+}
+
+// CapturedPendingInvites reads it off the captured answer to a list of pending
+// invitations, one extra per invitation in order, the count held to what the
+// SDK decoded.
+func CapturedPendingInvites(capture *gitlabclient.ResponseCapture, decoded int) ([]InvitationExtra, error) {
+	return capturedList[InvitationExtra](capture, decoded, "invitations")
+}
+
 // SnippetExtra is what GitLab's snippet entity sends that the snippet itself
 // does not say: whether it arrived with an import rather than being written
 // here and which platform it came from, both unconditional, and the two clone

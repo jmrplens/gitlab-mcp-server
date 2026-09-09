@@ -47,11 +47,18 @@ func TestFormatBillableMembershipsMarkdown(t *testing.T) {
 		}},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
+	// The expiry is asserted as the formatter renders it rather than as the
+	// raw date, so a formatter that stopped rendering it at all is caught.
+	expires := toolutil.FormatTime("2026-12-31")
+	if expires == "" {
+		t.Fatal("FormatTime rendered the expiry as nothing, which would make the assertion below vacuous")
+	}
 	for _, want := range []string{
 		"Billable Member Memberships",
 		"[Org / Team](https://gl/groups/team/-/group_members)",
 		"Developer",
 		"30",
+		expires,
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(md, want) {

@@ -10,7 +10,11 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -391,5 +395,202 @@ func TestPushRules_CanceledContext(t *testing.T) {
 	}
 	if err := DeletePushRule(ctx, client, DeletePushRuleInput{GroupID: "99"}); err == nil {
 		t.Error("DeletePushRule: expected context error")
+	}
+}
+
+// TestPushRuleWrites_UnprocessableCarriesTheSameHintAsBadRequest verifies the
+// add and edit handlers answer both statuses GitLab rejects a push rule with
+// using the same hint, since only one of the two is reachable per instance and
+// the caller needs the explanation either way.
+func TestPushRuleWrites_UnprocessableCarriesTheSameHintAsBadRequest(t *testing.T) {
+	for _, status := range []int{http.StatusUnprocessableEntity, http.StatusBadRequest} {
+		for name, call := range map[string]func(*gitlabclient.Client) error{
+			"add": func(client *gitlabclient.Client) error {
+				_, err := AddPushRule(context.Background(), client, AddPushRuleInput{GroupID: "99", CommitMessageRegex: "^JIRA-"})
+				return err
+			},
+			"edit": func(client *gitlabclient.Client) error {
+				_, err := EditPushRule(context.Background(), client, EditPushRuleInput{GroupID: "99", CommitMessageRegex: new("^JIRA-")})
+				return err
+			},
+		} {
+			t.Run(name+"_"+http.StatusText(status), func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, status, `{"message":"rejected"}`)
+				}))
+				if err := call(client); err == nil || !strings.Contains(err.Error(), "regex") {
+					t.Errorf("%s on a %d = %v, want the regex hint", name, status, err)
+				}
+			})
+		}
+	}
+}
+
+// TestPushRuleToOutput_CreatedAtOnlyWhenGitLabSentOne verifies a rule with a
+// creation date publishes it and one without publishes nothing there, rather
+// than the zero time formatted as a date.
+func TestPushRuleToOutput_CreatedAtOnlyWhenGitLabSentOne(t *testing.T) {
+	created := time.Date(2026, 6, 15, 10, 30, 0, 0, time.UTC)
+	withDate := pushRuleOutputFromGL(&gl.GroupPushRules{ID: 1, CreatedAt: &created})
+	if withDate.CreatedAt == "" {
+		t.Error("a rule with a creation date published none")
+	}
+	withoutDate := pushRuleOutputFromGL(&gl.GroupPushRules{ID: 1})
+	if withoutDate.CreatedAt != "" {
+		t.Errorf("a rule with no creation date published %q", withoutDate.CreatedAt)
+	}
+}
+
+// TestHasAddPushRuleSetting_EverySettingCountsOnItsOwn verifies each of the
+// thirteen settings makes the input a push rule worth sending, and that an
+// input naming none of them does not.
+//
+// The predicate is what stops the handler POSTing an empty rule, so a term
+// dropped from the chain would silently discard the one setting a caller
+// asked for; only naming each of them alone can tell.
+func TestHasAddPushRuleSetting_EverySettingCountsOnItsOwn(t *testing.T) {
+	for name, input := range map[string]AddPushRuleInput{
+		"author_email_regex":            {AuthorEmailRegex: "@example.com$"},
+		"branch_name_regex":             {BranchNameRegex: "^feature/"},
+		"commit_committer_check":        {CommitCommitterCheck: new(true)},
+		"commit_committer_name_check":   {CommitCommitterNameCheck: new(true)},
+		"commit_message_negative_regex": {CommitMessageNegativeRegex: "WIP"},
+		"commit_message_regex":          {CommitMessageRegex: "^JIRA-"},
+		"deny_delete_tag":               {DenyDeleteTag: new(true)},
+		"file_name_regex":               {FileNameRegex: `\.exe$`},
+		"max_file_size":                 {MaxFileSize: new(int64(10))},
+		"member_check":                  {MemberCheck: new(true)},
+		"prevent_secrets":               {PreventSecrets: new(true)},
+		"reject_unsigned_commits":       {RejectUnsignedCommits: new(true)},
+		"reject_non_dco_commits":        {RejectNonDCOCommits: new(true)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !hasAddPushRuleSetting(input) {
+				t.Errorf("%s alone did not count as a push-rule setting", name)
+			}
+		})
+	}
+	if hasAddPushRuleSetting(AddPushRuleInput{GroupID: "99"}) {
+		t.Error("an input naming no setting counted as a push rule")
+	}
+}
+
+// TestApplyAddPushRuleOptions_CarriesEachSettingOnlyWhenGiven verifies every
+// setting the input names reaches the SDK options and every one it does not
+// leaves the option unset, so a rule created with one setting does not carry
+// twelve zero values GitLab would apply.
+func TestApplyAddPushRuleOptions_CarriesEachSettingOnlyWhenGiven(t *testing.T) {
+	full := &gl.AddGroupPushRuleOptions{}
+	applyAddPushRuleOptions(AddPushRuleInput{
+		AuthorEmailRegex: "@example.com$", BranchNameRegex: "^feature/",
+		CommitCommitterCheck: new(true), CommitCommitterNameCheck: new(true),
+		CommitMessageNegativeRegex: "WIP", CommitMessageRegex: "^JIRA-",
+		DenyDeleteTag: new(true), FileNameRegex: `\.exe$`, MaxFileSize: new(int64(10)),
+		MemberCheck: new(true), PreventSecrets: new(true),
+		RejectUnsignedCommits: new(true), RejectNonDCOCommits: new(true),
+	}, full)
+	for name, set := range map[string]bool{
+		"author_email_regex":            full.AuthorEmailRegex != nil,
+		"branch_name_regex":             full.BranchNameRegex != nil,
+		"commit_committer_check":        full.CommitCommitterCheck != nil,
+		"commit_committer_name_check":   full.CommitCommitterNameCheck != nil,
+		"commit_message_negative_regex": full.CommitMessageNegativeRegex != nil,
+		"commit_message_regex":          full.CommitMessageRegex != nil,
+		"deny_delete_tag":               full.DenyDeleteTag != nil,
+		"file_name_regex":               full.FileNameRegex != nil,
+		"max_file_size":                 full.MaxFileSize != nil,
+		"member_check":                  full.MemberCheck != nil,
+		"prevent_secrets":               full.PreventSecrets != nil,
+		"reject_unsigned_commits":       full.RejectUnsignedCommits != nil,
+		"reject_non_dco_commits":        full.RejectNonDCOCommits != nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !set {
+				t.Errorf("%s was dropped on the way to the options", name)
+			}
+		})
+	}
+
+	bare := &gl.AddGroupPushRuleOptions{}
+	applyAddPushRuleOptions(AddPushRuleInput{GroupID: "99"}, bare)
+	if *bare != (gl.AddGroupPushRuleOptions{}) {
+		t.Errorf("options = %+v, want nothing set from an input naming no setting", bare)
+	}
+}
+
+// TestApplyEditPushRuleOptions_CarriesEachSettingOnlyWhenGiven verifies the
+// same for the edit half, where every input field is a pointer so that a
+// setting can be turned off as well as on: an omitted field must stay omitted
+// rather than being sent as false.
+func TestApplyEditPushRuleOptions_CarriesEachSettingOnlyWhenGiven(t *testing.T) {
+	full := &gl.EditGroupPushRuleOptions{}
+	applyEditPushRuleOptions(EditPushRuleInput{
+		AuthorEmailRegex: new("@example.com$"), BranchNameRegex: new("^feature/"),
+		CommitCommitterCheck: new(true), CommitCommitterNameCheck: new(true),
+		CommitMessageNegativeRegex: new("WIP"), CommitMessageRegex: new("^JIRA-"),
+		DenyDeleteTag: new(false), FileNameRegex: new(`\.exe$`), MaxFileSize: new(int64(10)),
+		MemberCheck: new(false), PreventSecrets: new(false),
+		RejectUnsignedCommits: new(false), RejectNonDCOCommits: new(false),
+	}, full)
+	for name, set := range map[string]bool{
+		"author_email_regex":            full.AuthorEmailRegex != nil,
+		"branch_name_regex":             full.BranchNameRegex != nil,
+		"commit_committer_check":        full.CommitCommitterCheck != nil,
+		"commit_committer_name_check":   full.CommitCommitterNameCheck != nil,
+		"commit_message_negative_regex": full.CommitMessageNegativeRegex != nil,
+		"commit_message_regex":          full.CommitMessageRegex != nil,
+		"deny_delete_tag":               full.DenyDeleteTag != nil,
+		"file_name_regex":               full.FileNameRegex != nil,
+		"max_file_size":                 full.MaxFileSize != nil,
+		"member_check":                  full.MemberCheck != nil,
+		"prevent_secrets":               full.PreventSecrets != nil,
+		"reject_unsigned_commits":       full.RejectUnsignedCommits != nil,
+		"reject_non_dco_commits":        full.RejectNonDCOCommits != nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !set {
+				t.Errorf("%s was dropped on the way to the options", name)
+			}
+		})
+	}
+
+	bare := &gl.EditGroupPushRuleOptions{}
+	applyEditPushRuleOptions(EditPushRuleInput{GroupID: "99"}, bare)
+	if *bare != (gl.EditGroupPushRuleOptions{}) {
+		t.Errorf("options = %+v, want nothing set from an input naming no setting", bare)
+	}
+}
+
+// TestFormatPushRuleMarkdown_OptionalLinesAppearOnlyWhenSet verifies the
+// rendered rule carries every regex, the file-size cap and the creation date
+// when the rule has them, and none of those lines when it does not, so an
+// unset rule does not read as one that forbids everything.
+func TestFormatPushRuleMarkdown_OptionalLinesAppearOnlyWhenSet(t *testing.T) {
+	full := FormatPushRuleMarkdown(PushRuleOutput{
+		ID: 1, CommitMessageRegex: "^JIRA-", CommitMessageNegativeRegex: "WIP",
+		BranchNameRegex: "^feature/", AuthorEmailRegex: "@example.com$", FileNameRegex: `\.exe$`,
+		MaxFileSize: 10, CreatedAt: "2026-06-15T10:30:00Z",
+	})
+	for _, want := range []string{
+		"Commit Message Regex", "Commit Message Negative Regex", "Branch Name Regex",
+		"Author Email Regex", "File Name Regex", "Max File Size", "15 Jun 2026",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(full, want) {
+				t.Errorf("markdown missing %q:\n%s", want, full)
+			}
+		})
+	}
+
+	bare := FormatPushRuleMarkdown(PushRuleOutput{ID: 1})
+	for _, absent := range []string{
+		"Commit Message Regex", "Commit Message Negative Regex", "Branch Name Regex",
+		"Author Email Regex", "File Name Regex", "Max File Size", "Created",
+	} {
+		t.Run("without "+absent, func(t *testing.T) {
+			if strings.Contains(bare, absent) {
+				t.Errorf("markdown carries %q for a rule that has none:\n%s", absent, bare)
+			}
+		})
 	}
 }

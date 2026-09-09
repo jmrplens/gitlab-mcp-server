@@ -252,3 +252,23 @@ func TestUploadAvatar_CanceledContext_ReturnsContextError(t *testing.T) {
 		t.Fatal("ListProvisionedUsers: expected context error")
 	}
 }
+
+// TestUploadAvatar_BadRequestCarriesTheImageHint verifies the second status
+// the upload answers with the image-format hint. GitLab returns 400 for some
+// of the same rejections it returns 422 for, and the caller needs to be told
+// about the format and the size limit either way.
+func TestUploadAvatar_BadRequestCarriesTheImageHint(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, status, `{"message":"rejected"}`)
+			}))
+			_, err := UploadAvatar(context.Background(), client, UploadAvatarInput{
+				GroupID: "99", Filename: "pic.png", ContentBase64: "YQ==",
+			})
+			if err == nil || !strings.Contains(err.Error(), "avatar must be JPG/PNG/GIF") {
+				t.Errorf("UploadAvatar on a %d = %v, want the image hint", status, err)
+			}
+		})
+	}
+}

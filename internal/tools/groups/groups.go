@@ -237,11 +237,15 @@ type MembersListInput struct {
 // canonical json keys (C-IMPORTS: replicated here rather than imported from
 // sibling packages to preserve the zero-import-cycle constraint).
 type MemberOutput struct {
-	ID                int64               `json:"id"`
-	Username          string              `json:"username"`
-	Name              string              `json:"name"`
-	State             string              `json:"state"`
-	Locked            bool                `json:"locked"`
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	Name     string `json:"name"`
+	State    string `json:"state"`
+	Locked   bool   `json:"locked"`
+	// AvatarURL is published and avatar_path is not, along with
+	// custom_attributes: lib/api/entities/user_basic.rb sends each of those
+	// two only when the caller asks for it, and no group-member route
+	// declares only_path or with_custom_attributes.
 	AvatarURL         string              `json:"avatar_url,omitempty"`
 	AccessLevel       int                 `json:"access_level"`
 	WebURL            string              `json:"web_url"`
@@ -646,9 +650,11 @@ func listGroupsOptions(input ListInput) *gl.ListGroupsOptions {
 	if input.WithCustomAttributes {
 		opts.WithCustomAttributes = new(true)
 	}
-	if len(input.CustomAttributes) > 0 {
-		opts.CustomAttributes = gl.CustomAttributesFilter(input.CustomAttributes)
-	}
+	// Converted unguarded: the filter is a map type, so an empty input becomes
+	// a nil filter and writes back the nil the option already held. The guard
+	// that used to stand here could not change a result, in the options or on
+	// the wire, and no input could reach its other side.
+	opts.CustomAttributes = gl.CustomAttributesFilter(input.CustomAttributes)
 	if len(input.SkipGroups) > 0 {
 		opts.SkipGroups = &input.SkipGroups
 	}
@@ -731,17 +737,12 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	return ToOutput(g), nil
 }
 
-// MembersList retrieves all members of a GitLab group, including
-// inherited members from parent groups. Supports filtering by name or
-// username and pagination. Returns the member list with pagination metadata.
-func MembersList(ctx context.Context, client *gitlabclient.Client, input MembersListInput) (MemberListOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return MemberListOutput{}, err
-	}
-	if input.GroupID == "" {
-		return MemberListOutput{}, errors.New("MembersList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
-	}
-
+// membersListOptions builds the ListAllGroupMembers options from the input,
+// applying offset/keyset pagination and every supported member filter. Split
+// out of MembersList for the reason [listGroupsOptions] is split out of List,
+// and so that the filters a request does and does not carry can be asserted
+// without an answer standing in the way.
+func membersListOptions(input MembersListInput) *gl.ListGroupMembersOptions {
 	opts := &gl.ListGroupMembersOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.OrderBy != "" {
@@ -759,6 +760,21 @@ func MembersList(ctx context.Context, client *gitlabclient.Client, input Members
 	if input.ShowSeatInfo != nil {
 		opts.ShowSeatInfo = input.ShowSeatInfo
 	}
+	return opts
+}
+
+// MembersList retrieves all members of a GitLab group, including
+// inherited members from parent groups. Supports filtering by name or
+// username and pagination. Returns the member list with pagination metadata.
+func MembersList(ctx context.Context, client *gitlabclient.Client, input MembersListInput) (MemberListOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return MemberListOutput{}, err
+	}
+	if input.GroupID == "" {
+		return MemberListOutput{}, errors.New("MembersList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+	}
+
+	opts := membersListOptions(input)
 
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	memberList, resp, err := client.GL().Groups.ListAllGroupMembers(string(input.GroupID), opts, gl.WithContext(ctx))
@@ -847,9 +863,11 @@ func subgroupsListOptions(input SubgroupsListInput) *gl.ListDescendantGroupsOpti
 	if input.WithCustomAttributes {
 		opts.WithCustomAttributes = new(true)
 	}
-	if len(input.CustomAttributes) > 0 {
-		opts.CustomAttributes = gl.CustomAttributesFilter(input.CustomAttributes)
-	}
+	// Converted unguarded: the filter is a map type, so an empty input becomes
+	// a nil filter and writes back the nil the option already held. The guard
+	// that used to stand here could not change a result, in the options or on
+	// the wire, and no input could reach its other side.
+	opts.CustomAttributes = gl.CustomAttributesFilter(input.CustomAttributes)
 	if len(input.SkipGroups) > 0 {
 		opts.SkipGroups = &input.SkipGroups
 	}
@@ -1527,15 +1545,10 @@ type SharedWithListInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// SharedWithList lists the groups that have been shared with the given group.
-func SharedWithList(ctx context.Context, client *gitlabclient.Client, input SharedWithListInput) (ListOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return ListOutput{}, err
-	}
-	if input.GroupID == "" {
-		return ListOutput{}, errors.New("SharedWithList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
-	}
-
+// sharedWithListOptions builds the ListGroupsSharedWith options from the
+// input, applying offset/keyset pagination and every supported filter. Split
+// out for the reason [membersListOptions] is.
+func sharedWithListOptions(input SharedWithListInput) *gl.ListGroupsSharedWithOptions {
 	opts := &gl.ListGroupsSharedWithOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.Search != "" {
@@ -1559,6 +1572,19 @@ func SharedWithList(ctx context.Context, client *gitlabclient.Client, input Shar
 	if input.WithCustomAttributes {
 		opts.WithCustomAttributes = new(true)
 	}
+	return opts
+}
+
+// SharedWithList lists the groups that have been shared with the given group.
+func SharedWithList(ctx context.Context, client *gitlabclient.Client, input SharedWithListInput) (ListOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return ListOutput{}, err
+	}
+	if input.GroupID == "" {
+		return ListOutput{}, errors.New("SharedWithList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+	}
+
+	opts := sharedWithListOptions(input)
 
 	groups, resp, err := client.GL().Groups.ListGroupsSharedWith(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -1593,15 +1619,10 @@ type InvitedListInput struct {
 	toolutil.KeysetPaginationInput
 }
 
-// InvitedList lists the groups invited to the given group.
-func InvitedList(ctx context.Context, client *gitlabclient.Client, input InvitedListInput) (ListOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return ListOutput{}, err
-	}
-	if input.GroupID == "" {
-		return ListOutput{}, errors.New("InvitedList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
-	}
-
+// invitedListOptions builds the ListInvitedGroups options from the input,
+// applying offset/keyset pagination and every supported filter. Split out for
+// the reason [membersListOptions] is.
+func invitedListOptions(input InvitedListInput) *gl.ListInvitedGroupsOptions {
 	opts := &gl.ListInvitedGroupsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.OrderBy != "" {
@@ -1622,6 +1643,19 @@ func InvitedList(ctx context.Context, client *gitlabclient.Client, input Invited
 	if input.WithCustomAttributes {
 		opts.WithCustomAttributes = new(true)
 	}
+	return opts
+}
+
+// InvitedList lists the groups invited to the given group.
+func InvitedList(ctx context.Context, client *gitlabclient.Client, input InvitedListInput) (ListOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return ListOutput{}, err
+	}
+	if input.GroupID == "" {
+		return ListOutput{}, errors.New("InvitedList: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+	}
+
+	opts := invitedListOptions(input)
 
 	groups, resp, err := client.GL().Groups.ListInvitedGroups(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {

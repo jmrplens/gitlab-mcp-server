@@ -23,7 +23,10 @@ import (
 // from the captured response (ADR-0021): locked on every member,
 // membership_state on every member of an Enterprise instance, and
 // two_factor_enabled, group_scim_identity and override when the caller may
-// see them. The created_by, group_saml_identity, group_scim_identity and
+// see them. avatar_path and custom_attributes are deliberately not published:
+// each waits on a presenter option, and no group-member route declares
+// only_path or with_custom_attributes, so GitLab never sends them here.
+// The created_by, group_saml_identity, group_scim_identity and
 // member_role sub-objects are surfaced as full local mirrors on their
 // canonical json keys (C-IMPORTS: replicated here rather than imported from
 // sibling packages to preserve the zero-import-cycle constraint).
@@ -82,11 +85,23 @@ type ShareOutput struct {
 // BillableMemberOutput mirrors gl.BillableGroupMember 1:1 (Enterprise
 // Premium/Ultimate). A billable member is a user who counts toward the group's
 // seat usage, including members inherited from subgroups and shared projects.
+//
+// Beside what the SDK decodes it carries the two keys
+// ee/lib/api/entities/billable_member.rb inherits from UserBasic and the SDK
+// does not model, read from the captured response (ADR-0021): public_email and
+// locked, both on every member. The same UserBasic exposes avatar_path and
+// custom_attributes, which are not published because this route declares
+// neither only_path nor with_custom_attributes and so never sends them.
+//
+// It carries no access level, expiry or role: this endpoint answers with a
+// user who costs a seat and not with a membership record.
 type BillableMemberOutput struct {
 	ID             int64  `json:"id"`
 	Username       string `json:"username"`
+	PublicEmail    string `json:"public_email,omitempty"`
 	Name           string `json:"name"`
 	State          string `json:"state"`
+	Locked         bool   `json:"locked"`
 	AvatarURL      string `json:"avatar_url,omitempty"`
 	WebURL         string `json:"web_url"`
 	Email          string `json:"email,omitempty"`
@@ -486,6 +501,7 @@ func ListBillableMembers(ctx context.Context, client *gitlabclient.Client, input
 	if input.Sort != "" {
 		opts.Sort = new(input.Sort)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	members, resp, err := client.GL().Groups.ListBillableGroupMembers(
 		string(input.GroupID), opts, gl.WithContext(ctx),
 	)
@@ -493,12 +509,16 @@ func ListBillableMembers(ctx context.Context, client *gitlabclient.Client, input
 		return BillableMembersOutput{}, toolutil.WrapErrWithStatusHint("group_billable_members_list", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get. Billable members are a Premium/Ultimate feature and require Owner access on the group")
 	}
+	extras, err := toolutil.CapturedBillableMembers(captured, len(members))
+	if err != nil {
+		return BillableMembersOutput{}, toolutil.WrapErr("group_billable_members_list", err)
+	}
 	out := BillableMembersOutput{
 		Members:    make([]BillableMemberOutput, len(members)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
 	for i, m := range members {
-		out.Members[i] = convertBillableMember(m)
+		out.Members[i] = convertBillableMember(m, extras[i])
 	}
 	return out, nil
 }
@@ -626,13 +646,16 @@ func memberRoleOutput(r *gl.MemberRole) *MemberRoleOutput {
 }
 
 // convertBillableMember maps a gl.BillableGroupMember into the MCP output
-// shape (1:1 field fidelity).
-func convertBillableMember(m *gl.BillableGroupMember) BillableMemberOutput {
+// shape (1:1 field fidelity), filling from the decoded member and from what
+// the capture read beside it.
+func convertBillableMember(m *gl.BillableGroupMember, extra toolutil.BillableMemberExtra) BillableMemberOutput {
 	out := BillableMemberOutput{
 		ID:             m.ID,
 		Username:       m.Username,
+		PublicEmail:    extra.PublicEmail,
 		Name:           m.Name,
 		State:          m.State,
+		Locked:         extra.Locked,
 		AvatarURL:      m.AvatarURL,
 		WebURL:         m.WebURL,
 		Email:          m.Email,

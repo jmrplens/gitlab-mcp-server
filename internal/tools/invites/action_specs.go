@@ -57,9 +57,11 @@ func decorateInviteMeta(options *toolutil.ActionSpecOptions, individualTool stri
 	options.Aliases = append([]string(nil), meta.aliases...)
 	options.RelatedActions = append([]string(nil), meta.related...)
 	options.IndividualTool.Description = meta.description
-	if len(meta.guidance) > 0 {
-		options.ParameterGuidance = meta.guidance
-	}
+	// Assigned unguarded: [inviteOptions] leaves ParameterGuidance nil, so an
+	// entry carrying none writes back the value that was already there. The
+	// guard that used to stand here could not change a result and no input
+	// could reach its other side.
+	options.ParameterGuidance = meta.guidance
 }
 
 // inviteActionMetaEntry is the discovery metadata for one invite action.
@@ -119,11 +121,10 @@ func inviteGuidance(scopeParam string, scope toolutil.ParameterGuidance) map[str
 // inviteActionMeta maps each individual invite tool to its discovery metadata.
 var inviteActionMeta = map[string]inviteActionMetaEntry{
 	"gitlab_project_invite": {
-		usage:   "Invite a user to a project by email address or user_id with a chosen access_level. Use when adding someone who is not yet a project member, including external users invited by email. For users who already have an account prefer project.member_add.",
-		aliases: []string{"invite user to project", "add user to project by email", "send project invitation"},
-		related: []string{actionInviteListProject, "project.member_add", "access.request_project", "project.members"},
-		description: "Invite a user to a project by email or user ID with an access level. Returns: an invitation result with status, per-email messages, and any users queued for administrator approval. " +
-			"See also: gitlab_project_invite_list_pending, gitlab_project_member_add, gitlab_access_request_request_project.",
+		usage:       "Invite a user to a project by email address or user_id with a chosen access_level. Use when adding someone who is not yet a project member, including external users invited by email. For users who already have an account prefer project.member_add.",
+		aliases:     []string{"invite user to project", "add user to project by email", "send project invitation"},
+		related:     []string{actionInviteListProject, "project.member_add", "access.request_project", "project.members"},
+		description: "Invite a user to a project by email or user ID with an access level. Returns: an invitation result with status, per-email messages, and any users queued for administrator approval. See also: gitlab_project_invite_list_pending, gitlab_project_member_add, gitlab_access_request_request_project.",
 		guidance: inviteGuidance("project_id", toolutil.ParameterGuidance{
 			SemanticRole:     "scope_project",
 			ValueSource:      "Project ID or full namespace path the user is being invited to.",
@@ -132,11 +133,10 @@ var inviteActionMeta = map[string]inviteActionMetaEntry{
 		}),
 	},
 	"gitlab_group_invite": {
-		usage:   "Invite a user to a group by email address or user_id with a chosen access_level. Use when adding someone who is not yet a group member, including external users invited by email. For users who already have an account prefer group.group_member_add.",
-		aliases: []string{"invite user to group", "add user to group by email", "send group invitation"},
-		related: []string{actionInviteListGroup, "group.group_member_add", "access.request_group", "group.members"},
-		description: "Invite a user to a group by email or user ID with an access level. Returns: an invitation result with status, per-email messages, and any users queued for administrator approval. " +
-			"See also: gitlab_group_invite_list_pending, gitlab_group_member_add, gitlab_access_request_request_group.",
+		usage:       "Invite a user to a group by email address or user_id with a chosen access_level. Use when adding someone who is not yet a group member, including external users invited by email. For users who already have an account prefer group.group_member_add.",
+		aliases:     []string{"invite user to group", "add user to group by email", "send group invitation"},
+		related:     []string{actionInviteListGroup, "group.group_member_add", "access.request_group", "group.members"},
+		description: "Invite a user to a group by email or user ID with an access level. Returns: an invitation result with status, per-email messages, and any users queued for administrator approval. See also: gitlab_group_invite_list_pending, gitlab_group_member_add, gitlab_access_request_request_group.",
 		guidance: inviteGuidance("group_id", toolutil.ParameterGuidance{
 			SemanticRole:     "scope_group",
 			ValueSource:      "Group ID or full group path the user is being invited to.",
@@ -145,11 +145,10 @@ var inviteActionMeta = map[string]inviteActionMetaEntry{
 		}),
 	},
 	"gitlab_project_invite_list_pending": {
-		usage:   "List the pending (not yet accepted) invitations for a project. Use to audit outstanding email invitations before resending or revoking them. This lists invitations, not current members.",
-		aliases: []string{"list pending project invitations", "show outstanding project invites", "pending project invitations"},
-		related: []string{actionInviteProject, "project.members", "access.request_list_project"},
-		description: "List a project's pending invitations. Returns: pending invitations with invite email, access level, creator, creation and expiry dates, plus pagination metadata. " +
-			"See also: gitlab_project_invite, gitlab_project_members_list.",
+		usage:       "List the pending (not yet accepted) invitations for a project. Use to audit outstanding email invitations before resending or revoking them. This lists invitations, not current members.",
+		aliases:     []string{"list pending project invitations", "show outstanding project invites", "pending project invitations"},
+		related:     []string{actionInviteProject, "project.members", "access.request_list_project"},
+		description: "List a project's pending invitations. Returns: pending invitations with invite email, access level, creator, creation and expiry dates, plus pagination metadata. See also: gitlab_project_invite, gitlab_project_members_list.",
 		guidance: map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:     "scope_project",
@@ -165,11 +164,10 @@ var inviteActionMeta = map[string]inviteActionMetaEntry{
 		},
 	},
 	"gitlab_group_invite_list_pending": {
-		usage:   "List the pending (not yet accepted) invitations for a group. Use to audit outstanding email invitations before resending or revoking them. This lists invitations, not current members.",
-		aliases: []string{"list pending group invitations", "show outstanding group invites", "pending group invitations"},
-		related: []string{actionInviteGroup, "group.members", "access.request_list_group"},
-		description: "List a group's pending invitations. Returns: pending invitations with invite email, access level, creator, creation and expiry dates, plus pagination metadata. " +
-			"See also: gitlab_group_invite, gitlab_group_members_list.",
+		usage:       "List the pending (not yet accepted) invitations for a group. Use to audit outstanding email invitations before resending or revoking them. This lists invitations, not current members.",
+		aliases:     []string{"list pending group invitations", "show outstanding group invites", "pending group invitations"},
+		related:     []string{actionInviteGroup, "group.members", "access.request_list_group"},
+		description: "List a group's pending invitations. Returns: pending invitations with invite email, access level, creator, creation and expiry dates, plus pagination metadata. See also: gitlab_group_invite, gitlab_group_members_list.",
 		guidance: map[string]toolutil.ParameterGuidance{
 			"group_id": {
 				SemanticRole:     "scope_group",

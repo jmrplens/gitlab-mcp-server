@@ -63,8 +63,14 @@ type GroupInvitesInput struct {
 
 // PendingInviteOutput represents a single pending invitation.
 type PendingInviteOutput struct {
-	ID            int64  `json:"id"`
-	InviteEmail   string `json:"invite_email"`
+	ID          int64  `json:"id"`
+	InviteEmail string `json:"invite_email"`
+	// InviteToken is what lib/api/entities/invitation.rb sends beside the
+	// address and client-go's PendingInvite does not model: the token the
+	// invitation URL is built from, exposed under no condition. It is carried
+	// in the JSON and deliberately left out of the Markdown, where a rendered
+	// table would paste a live credential into the conversation.
+	InviteToken   string `json:"invite_token,omitempty"`
 	CreatedAt     string `json:"created_at,omitempty"`
 	AccessLevel   int    `json:"access_level"`
 	ExpiresAt     string `json:"expires_at,omitempty"`
@@ -117,17 +123,22 @@ func runPendingInvitationsList(ctx context.Context, args pendingInvitationsListA
 		return ListPendingInvitationsOutput{}, toolutil.WrapErrWithMessage(args.operation, toolutil.ErrFieldRequired(args.requiredField))
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	invites, resp, err := args.list(string(args.scopeID), args.opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListPendingInvitationsOutput{}, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusNotFound, args.notFoundHint)
+	}
+	extras, err := toolutil.CapturedPendingInvites(captured, len(invites))
+	if err != nil {
+		return ListPendingInvitationsOutput{}, toolutil.WrapErr(args.operation, err)
 	}
 
 	out := ListPendingInvitationsOutput{
 		Invitations: make([]PendingInviteOutput, 0, len(invites)),
 		Pagination:  toolutil.PaginationFromResponse(resp),
 	}
-	for _, inv := range invites {
-		out.Invitations = append(out.Invitations, toPendingInviteOutput(inv))
+	for i, inv := range invites {
+		out.Invitations = append(out.Invitations, toPendingInviteOutput(inv, extras[i]))
 	}
 	return out, nil
 }
@@ -348,11 +359,14 @@ func GroupInvites(ctx context.Context, client *gitlabclient.Client, input GroupI
 
 // Converters.
 
-// toPendingInviteOutput converts the GitLab API response to the tool output format.
-func toPendingInviteOutput(inv *gl.PendingInvite) PendingInviteOutput {
+// toPendingInviteOutput converts the GitLab API response to the tool output
+// format, filling from the decoded invitation and from what the capture read
+// beside it.
+func toPendingInviteOutput(inv *gl.PendingInvite, extra toolutil.InvitationExtra) PendingInviteOutput {
 	out := PendingInviteOutput{
 		ID:            inv.ID,
 		InviteEmail:   inv.InviteEmail,
+		InviteToken:   extra.InviteToken,
 		AccessLevel:   int(inv.AccessLevel),
 		UserName:      inv.UserName,
 		CreatedByName: inv.CreatedByName,

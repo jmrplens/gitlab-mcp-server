@@ -535,7 +535,65 @@ func tailReaderCases() []capturedReaderCase {
 					e.HTTPURLToRepo == "https://example/snippets/42.git"
 			},
 		},
+		{
+			name: "access request",
+			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedAccessRequest(c) },
+			body: `{"id":1,"public_email":"pub@example.com","locked":true,"avatar_url":"https://example/a.png",` +
+				`"avatar_path":"/uploads/a.png","custom_attributes":[{"key":"team","value":"core"}],` +
+				`"web_url":"https://example/u","created_by":{"id":9,"username":"owner"},` +
+				`"expires_at":"2027-01-31","group_saml_identity":{"extern_uid":"saml-1","provider":"group_saml"},` +
+				`"group_scim_identity":{"extern_uid":"scim-1","group_id":4,"active":true},` +
+				`"email":"member@example.com","override":true,` +
+				`"membership_state":"active","member_role":{"id":3,"name":"Auditor"}}`,
+			want: readTheSentAccessRequest,
+		},
+		{
+			name: "billable member",
+			read: first(func(c *gitlabclient.ResponseCapture, n int) (any, error) { return CapturedBillableMembers(c, n) }),
+			body: `[{"id":1,"locked":true,"public_email":"pub@example.com"}]`,
+			want: func(v any) bool {
+				e, _ := v.([]BillableMemberExtra)
+				return len(e) == 1 && e[0].Locked && e[0].PublicEmail == "pub@example.com"
+			},
+		},
+		{
+			name: "pending invitation",
+			read: first(func(c *gitlabclient.ResponseCapture, n int) (any, error) { return CapturedPendingInvites(c, n) }),
+			body: `[{"invite_email":"invitee@example.com","invite_token":"abc123"}]`,
+			want: func(v any) bool {
+				e, _ := v.([]InvitationExtra)
+				return len(e) == 1 && e[0].InviteToken == "abc123"
+			},
+		},
 	}
+}
+
+// readTheSentAccessRequest reports whether the access request reader filled
+// every key of the entity. The two halves are split so each stays inside the
+// complexity bound, and they are the entity's own split: what Member and the
+// UserBasic merged into it contribute, and what the embed does not reach.
+func readTheSentAccessRequest(v any) bool {
+	e, _ := v.(AccessRequestExtra)
+	return readTheEmbeddedMember(e.MemberExtra) && readTheAccessRequestsOwnKeys(e)
+}
+
+// readTheEmbeddedMember reports whether the keys [MemberExtra] contributes
+// through the embed arrived.
+func readTheEmbeddedMember(e MemberExtra) bool {
+	return e.Locked && e.PublicEmail == "pub@example.com" && e.AvatarPath == "/uploads/a.png" &&
+		len(e.CustomAttributes) == 1 && e.CustomAttributes[0].Value == "core" &&
+		e.GroupSAMLIdentity != nil && e.GroupSAMLIdentity.ExternUID == "saml-1" &&
+		e.GroupSCIMIdentity != nil && e.GroupSCIMIdentity.Active &&
+		e.Override != nil && *e.Override && e.MembershipState == "active"
+}
+
+// readTheAccessRequestsOwnKeys reports whether the six keys the shape names
+// beside the embed arrived.
+func readTheAccessRequestsOwnKeys(e AccessRequestExtra) bool {
+	return e.AvatarURL == "https://example/a.png" && e.WebURL == "https://example/u" &&
+		e.CreatedBy != nil && e.CreatedBy.Username == "owner" &&
+		e.ExpiresAt == "2027-01-31" && e.Email == "member@example.com" &&
+		e.MemberRole != nil && e.MemberRole.Name == "Auditor"
 }
 
 // TestCapturedReaders_ReadEachTailEntity verifies every reader added for the
@@ -706,6 +764,18 @@ func TestCapturedTailListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 		}},
 		{"snippets", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
 			x, e := CapturedSnippets(c, n)
+			return len(x), e
+		}},
+		{"access requests", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+			x, e := CapturedAccessRequests(c, n)
+			return len(x), e
+		}},
+		{"billable members", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+			x, e := CapturedBillableMembers(c, n)
+			return len(x), e
+		}},
+		{"invitations", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
+			x, e := CapturedPendingInvites(c, n)
 			return len(x), e
 		}},
 	} {

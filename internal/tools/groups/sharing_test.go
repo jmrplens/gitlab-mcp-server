@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -416,5 +418,78 @@ func TestFormatSharedProjectsListMarkdown_ArchivedRow(t *testing.T) {
 	}})
 	if !strings.Contains(md, "| Yes |") {
 		t.Errorf("markdown missing archived Yes cell:\n%s", md)
+	}
+}
+
+// TestApplyListSharedProjectsOptions_CarriesTheFiltersOnlyWhenGiven verifies
+// the two filters whose guards read a pointer and a level reach the SDK
+// options when the input names them and are left unset when it does not.
+//
+// GitLab answers a list the same whether a filter was applied or dropped, so
+// the options are the only place the difference shows.
+func TestApplyListSharedProjectsOptions_CarriesTheFiltersOnlyWhenGiven(t *testing.T) {
+	full := &gl.ListGroupSharedProjectsOptions{}
+	applyListSharedProjectsOptions(ListSharedProjectsInput{Archived: new(true), MinAccessLevel: 30}, full)
+	if full.Archived == nil || !*full.Archived {
+		t.Errorf("archived = %v, want true", full.Archived)
+	}
+	if full.MinAccessLevel == nil || *full.MinAccessLevel != gl.AccessLevelValue(30) {
+		t.Errorf("min_access_level = %v, want 30", full.MinAccessLevel)
+	}
+
+	bare := &gl.ListGroupSharedProjectsOptions{}
+	applyListSharedProjectsOptions(ListSharedProjectsInput{GroupID: "99"}, bare)
+	if bare.Archived != nil || bare.MinAccessLevel != nil {
+		t.Errorf("options = %+v, want neither filter", bare)
+	}
+}
+
+// TestSharingMarkdown_OptionalPartsAppearOnlyWhenPresent verifies the share
+// result names the granted role only when there is one, and the shared-project
+// table links a project only when GitLab sent its URL.
+func TestSharingMarkdown_OptionalPartsAppearOnlyWhenPresent(t *testing.T) {
+	withRole := FormatShareGroupMarkdown(ShareGroupOutput{Message: "shared", AccessRole: "Developer", GroupAccess: 30})
+	if !strings.Contains(withRole, "**Access**: Developer (30)") {
+		t.Errorf("markdown missing the granted role:\n%s", withRole)
+	}
+	withoutRole := FormatShareGroupMarkdown(ShareGroupOutput{Message: "shared"})
+	if strings.Contains(withoutRole, "**Access**") {
+		t.Errorf("markdown names a role the share result does not carry:\n%s", withoutRole)
+	}
+
+	linked := FormatSharedProjectsListMarkdown(SharedProjectsListOutput{
+		Projects: []ProjectItem{{ID: 1, Name: "proj", WebURL: "https://gl/proj"}},
+	})
+	if !strings.Contains(linked, "[proj](https://gl/proj)") {
+		t.Errorf("markdown did not link a project that has a URL:\n%s", linked)
+	}
+	plain := FormatSharedProjectsListMarkdown(SharedProjectsListOutput{
+		Projects: []ProjectItem{{ID: 1, Name: "proj"}},
+	})
+	if strings.Contains(plain, "[proj](") {
+		t.Errorf("markdown linked a project with no URL:\n%s", plain)
+	}
+	if !strings.Contains(plain, "| proj |") {
+		t.Errorf("markdown lost the name of a project with no URL:\n%s", plain)
+	}
+}
+
+// TestShareGroup_BadRequestCarriesTheSameHintAsUnprocessable verifies the
+// second status the share handler answers with the parameter hint. GitLab
+// returns 400 for some of the same rejections it returns 422 for, and the
+// caller needs the hint either way.
+func TestShareGroup_BadRequestCarriesTheSameHintAsUnprocessable(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, status, `{"message":"rejected"}`)
+			}))
+			_, err := ShareGroupWithGroup(context.Background(), client, ShareGroupInput{
+				GroupID: "99", SharedGroupID: 7, GroupAccess: 30,
+			})
+			if err == nil || !strings.Contains(err.Error(), "group_access must be") {
+				t.Errorf("ShareGroupWithGroup on a %d = %v, want the parameter hint", status, err)
+			}
+		})
 	}
 }

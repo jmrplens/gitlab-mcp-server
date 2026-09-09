@@ -6,10 +6,12 @@ package groups
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -276,6 +278,7 @@ func TestGroupMembersList_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"username":"devops1","access_level":40,"locked":true,`+
 			`"membership_state":"awaiting","two_factor_enabled":true,"override":true,`+
+			`"avatar_path":"/uploads/devops1.png","custom_attributes":[{"key":"team","value":"core"}],`+
 			`"group_scim_identity":{"extern_uid":"s1","group_id":99,"active":true}},`+
 			`{"id":11,"username":"devops2","access_level":30,"locked":false}]`)
 	}))
@@ -287,13 +290,399 @@ func TestGroupMembersList_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 	if len(out.Members) != 2 {
 		t.Fatalf("len(out.Members) = %d, want 2", len(out.Members))
 	}
-	first, second := out.Members[0], out.Members[1]
+	assertCapturedGroupMembers(t, out.Members[0], out.Members[1])
+}
+
+// ---------------------------------------------------------------------------
+// The optional filters and fields the request carries, asserted on the request
+// ---------------------------------------------------------------------------.
+
+// TestListGroupsOptions_CarriesTheFiltersOnlyWhenGiven verifies the three
+// filters whose guards read a length or a level: an input naming them builds
+// options carrying them, and an input naming none builds options carrying
+// none.
+//
+// GitLab answers a list the same whether a filter was applied or silently
+// dropped, so the options the builder produces are the only place the
+// difference shows.
+func TestListGroupsOptions_CarriesTheFiltersOnlyWhenGiven(t *testing.T) {
+	filtered := listGroupsOptions(ListInput{
+		CustomAttributes: map[string]string{"team": "core"},
+		SkipGroups:       []int64{4, 5},
+		MinAccessLevel:   30,
+	})
+	if len(filtered.CustomAttributes) == 0 {
+		t.Error("custom attributes filter was dropped")
+	}
+	if filtered.SkipGroups == nil || len(*filtered.SkipGroups) != 2 {
+		t.Errorf("skip_groups = %v, want the two groups", filtered.SkipGroups)
+	}
+	if filtered.MinAccessLevel == nil || *filtered.MinAccessLevel != gl.AccessLevelValue(30) {
+		t.Errorf("min_access_level = %v, want 30", filtered.MinAccessLevel)
+	}
+
+	bare := listGroupsOptions(ListInput{})
+	if len(bare.CustomAttributes) != 0 || bare.SkipGroups != nil || bare.MinAccessLevel != nil {
+		t.Errorf("options = %+v, want none of the three filters", bare)
+	}
+}
+
+// TestSubgroupsListOptions_CarriesTheFiltersOnlyWhenGiven verifies the same
+// three filters on the descendant-group builder, which spells them separately.
+func TestSubgroupsListOptions_CarriesTheFiltersOnlyWhenGiven(t *testing.T) {
+	filtered := subgroupsListOptions(SubgroupsListInput{
+		CustomAttributes: map[string]string{"team": "core"},
+		SkipGroups:       []int64{4, 5},
+		MinAccessLevel:   30,
+	})
+	if len(filtered.CustomAttributes) == 0 {
+		t.Error("custom attributes filter was dropped")
+	}
+	if filtered.SkipGroups == nil || len(*filtered.SkipGroups) != 2 {
+		t.Errorf("skip_groups = %v, want the two groups", filtered.SkipGroups)
+	}
+	if filtered.MinAccessLevel == nil || *filtered.MinAccessLevel != gl.AccessLevelValue(30) {
+		t.Errorf("min_access_level = %v, want 30", filtered.MinAccessLevel)
+	}
+
+	bare := subgroupsListOptions(SubgroupsListInput{})
+	if len(bare.CustomAttributes) != 0 || bare.SkipGroups != nil || bare.MinAccessLevel != nil {
+		t.Errorf("options = %+v, want none of the three filters", bare)
+	}
+}
+
+// TestListBuilders_LeaveACollectionFilterUnsetWhenTheInputNamesNone verifies
+// the three builders whose collection filters are pointers leave the option
+// nil for an empty input rather than pointing it at an empty slice.
+//
+// The distinction is invisible in the query the SDK encodes, which omits an
+// empty collection either way, so the options are the only place it can be
+// asserted; it matters because a pointer to an empty slice says the caller
+// asked for nothing rather than that they asked for no filter, and an encoder
+// that ever spelled that difference would send it.
+func TestListBuilders_LeaveACollectionFilterUnsetWhenTheInputNamesNone(t *testing.T) {
+	t.Run("members", func(t *testing.T) {
+		if got := membersListOptions(MembersListInput{GroupID: "99", UserIDs: []int64{10}}); got.UserIDs == nil {
+			t.Error("user_ids was dropped")
+		}
+		if got := membersListOptions(MembersListInput{GroupID: "99"}); got.UserIDs != nil {
+			t.Errorf("user_ids = %v, want unset", got.UserIDs)
+		}
+	})
+	t.Run("shared_with", func(t *testing.T) {
+		if got := sharedWithListOptions(SharedWithListInput{GroupID: "99", SkipGroups: []int64{4}}); got.SkipGroups == nil {
+			t.Error("skip_groups was dropped")
+		}
+		if got := sharedWithListOptions(SharedWithListInput{GroupID: "99"}); got.SkipGroups != nil {
+			t.Errorf("skip_groups = %v, want unset", got.SkipGroups)
+		}
+	})
+	t.Run("invited", func(t *testing.T) {
+		if got := invitedListOptions(InvitedListInput{GroupID: "99", Relation: []string{"direct"}}); got.Relation == nil {
+			t.Error("relation was dropped")
+		}
+		if got := invitedListOptions(InvitedListInput{GroupID: "99"}); got.Relation != nil {
+			t.Errorf("relation = %v, want unset", got.Relation)
+		}
+	})
+}
+
+// TestBranchProtectionDefaultsToOptions_CarriesTheAccessLevelsOnlyWhenGiven
+// verifies the two access-level lists reach the options when the input names
+// them and are left alone when it does not, and that the converter answers nil
+// for an empty list rather than an empty slice.
+//
+// The distinction matters on the wire: an empty slice would tell GitLab that
+// nobody may push, and a nil leaves the instance default in place.
+func TestBranchProtectionDefaultsToOptions_CarriesTheAccessLevelsOnlyWhenGiven(t *testing.T) {
+	if got := accessLevelOptions(nil); got != nil {
+		t.Errorf("accessLevelOptions(nil) = %v, want nil", got)
+	}
+	if got := accessLevelOptions([]int{30}); len(got) != 1 || got[0].AccessLevel == nil || *got[0].AccessLevel != gl.AccessLevelValue(30) {
+		t.Errorf("accessLevelOptions([30]) = %+v, want one Developer level", got)
+	}
+
+	with := (&BranchProtectionDefaultsInput{AllowedToPush: []int{30}, AllowedToMerge: []int{40}}).toOptions()
+	if len(with.AllowedToPush) != 1 || len(with.AllowedToMerge) != 1 {
+		t.Errorf("options = %+v, want both access-level lists", with)
+	}
+
+	without := (&BranchProtectionDefaultsInput{}).toOptions()
+	if without.AllowedToPush != nil || without.AllowedToMerge != nil {
+		t.Errorf("options = %+v, want neither access-level list", without)
+	}
+}
+
+// recordGroupRequest answers one group request and hands back what the handler
+// put on the wire: the query it built and the body it sent.
+func recordGroupRequest(t *testing.T, body string, send func(*gitlabclient.Client) error) (query, sentBody string) {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		read, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Errorf("read request body: %v", readErr)
+		}
+		sentBody = string(read)
+		testutil.RespondJSONWithPagination(w, http.StatusOK, body,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+	}))
+	if err := send(client); err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	return query, sentBody
+}
+
+// TestGroupWrites_OptionalSettingsReachTheRequestOnlyWhenGiven verifies the
+// create and update handlers put each optional setting in the request body
+// when the input names one, and leave it out when it does not.
+//
+// GitLab answers with the group either way, so a setting the handler silently
+// dropped reads as a setting the instance chose to ignore, and the group is
+// left at a default the caller did not ask for.
+func TestGroupWrites_OptionalSettingsReachTheRequestOnlyWhenGiven(t *testing.T) {
+	const answer = `{"id":9,"name":"Team","path":"team","web_url":"https://gl/team"}`
+	for _, testCase := range []struct {
+		name    string
+		full    func(*gitlabclient.Client) error
+		bare    func(*gitlabclient.Client) error
+		present []string
+	}{
+		{
+			name: "create",
+			full: func(client *gitlabclient.Client) error {
+				_, err := Create(context.Background(), client, CreateInput{
+					Name: "Team", Path: "team", Description: "the team", Visibility: "private",
+					ParentID: 4, RequestAccessEnabled: new(true), LFSEnabled: new(true),
+					DefaultBranch: "main", UniqueProjectDownloadLimit: new(int64(10)),
+					UniqueProjectDownloadLimitAllowlist: []string{"alice"},
+					UniqueProjectDownloadLimitAlertlist: []int64{7},
+				})
+				return err
+			},
+			bare: func(client *gitlabclient.Client) error {
+				_, err := Create(context.Background(), client, CreateInput{Name: "Team"})
+				return err
+			},
+			present: []string{
+				`"path"`, `"description"`, `"visibility"`, `"parent_id"`,
+				`"request_access_enabled"`, `"lfs_enabled"`, `"default_branch"`,
+				`"unique_project_download_limit"`,
+				`"unique_project_download_limit_allowlist"`,
+				`"unique_project_download_limit_alertlist"`,
+			},
+		},
+		{
+			name: "update",
+			full: func(client *gitlabclient.Client) error {
+				_, err := Update(context.Background(), client, UpdateInput{
+					GroupID: "9", Name: "Team", Path: "team", Description: "the team", Visibility: "private",
+					RequestAccessEnabled: new(true), LFSEnabled: new(true), DefaultBranch: "main",
+					UniqueProjectDownloadLimitAllowlist: []string{"alice"},
+					UniqueProjectDownloadLimitAlertlist: []int64{7},
+				})
+				return err
+			},
+			bare: func(client *gitlabclient.Client) error {
+				_, err := Update(context.Background(), client, UpdateInput{GroupID: "9"})
+				return err
+			},
+			present: []string{
+				`"name"`, `"path"`, `"description"`, `"visibility"`,
+				`"request_access_enabled"`, `"lfs_enabled"`, `"default_branch"`,
+				`"unique_project_download_limit_allowlist"`,
+				`"unique_project_download_limit_alertlist"`,
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, full := recordGroupRequest(t, answer, testCase.full)
+			_, bare := recordGroupRequest(t, answer, testCase.bare)
+			for _, key := range testCase.present {
+				t.Run(key, func(t *testing.T) {
+					if !strings.Contains(full, key) {
+						t.Errorf("body %q is missing %s", full, key)
+					}
+					if strings.Contains(bare, key) {
+						t.Errorf("body %q carries %s the input did not name", bare, key)
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestGroupLists_OptionalFiltersReachTheQueryOnlyWhenGiven verifies each list
+// handler puts its optional filters in the query string when the input names
+// them and sends none of them when it does not.
+//
+// A dropped filter changes which groups or projects come back, and the answer
+// looks exactly the same either way, so the query is the only witness.
+func TestGroupLists_OptionalFiltersReachTheQueryOnlyWhenGiven(t *testing.T) {
+	for _, testCase := range []struct {
+		name    string
+		answer  string
+		full    func(*gitlabclient.Client) error
+		bare    func(*gitlabclient.Client) error
+		present []string
+	}{
+		{
+			name:   "members",
+			answer: `[{"id":10,"username":"dev","access_level":30}]`,
+			full: func(client *gitlabclient.Client) error {
+				_, err := MembersList(context.Background(), client, MembersListInput{GroupID: "99", UserIDs: []int64{10, 11}})
+				return err
+			},
+			bare: func(client *gitlabclient.Client) error {
+				_, err := MembersList(context.Background(), client, MembersListInput{GroupID: "99"})
+				return err
+			},
+			present: []string{"user_ids"},
+		},
+		{
+			name:   "projects",
+			answer: `[{"id":1,"name":"proj"}]`,
+			full: func(client *gitlabclient.Client) error {
+				_, err := ListProjects(context.Background(), client, ListProjectsInput{
+					GroupID: "99", Archived: new(true), WithShared: new(false), MinAccessLevel: 30,
+				})
+				return err
+			},
+			bare: func(client *gitlabclient.Client) error {
+				_, err := ListProjects(context.Background(), client, ListProjectsInput{GroupID: "99"})
+				return err
+			},
+			present: []string{"archived", "with_shared", "min_access_level"},
+		},
+		{
+			name:   "shared_with",
+			answer: `[{"id":1,"name":"other"}]`,
+			full: func(client *gitlabclient.Client) error {
+				_, err := SharedWithList(context.Background(), client, SharedWithListInput{
+					GroupID: "99", MinAccessLevel: 30, SkipGroups: []int64{4},
+				})
+				return err
+			},
+			bare: func(client *gitlabclient.Client) error {
+				_, err := SharedWithList(context.Background(), client, SharedWithListInput{GroupID: "99"})
+				return err
+			},
+			present: []string{"min_access_level", "skip_groups"},
+		},
+		{
+			name:   "invited",
+			answer: `[{"id":1,"name":"other"}]`,
+			full: func(client *gitlabclient.Client) error {
+				_, err := InvitedList(context.Background(), client, InvitedListInput{
+					GroupID: "99", MinAccessLevel: 30, Relation: []string{"direct"},
+				})
+				return err
+			},
+			bare: func(client *gitlabclient.Client) error {
+				_, err := InvitedList(context.Background(), client, InvitedListInput{GroupID: "99"})
+				return err
+			},
+			present: []string{"min_access_level", "relation"},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			full, _ := recordGroupRequest(t, testCase.answer, testCase.full)
+			bare, _ := recordGroupRequest(t, testCase.answer, testCase.bare)
+			for _, key := range testCase.present {
+				t.Run(key, func(t *testing.T) {
+					if !strings.Contains(full, key) {
+						t.Errorf("query %q is missing %s", full, key)
+					}
+					if strings.Contains(bare, key) {
+						t.Errorf("query %q carries %s the input did not name", bare, key)
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestSharedWithGroupsOutput_ExpiresAtOnlyWhenTheShareHasOne verifies a share
+// with an expiry publishes the date and one without publishes nothing there,
+// so a permanent share is not read as expiring at the zero time.
+func TestSharedWithGroupsOutput_ExpiresAtOnlyWhenTheShareHasOne(t *testing.T) {
+	expiry := gl.ISOTime(time.Date(2027, 1, 31, 0, 0, 0, 0, time.UTC))
+	out := sharedWithGroupsOutput([]gl.SharedWithGroup{
+		{GroupID: 1, GroupName: "temporary", ExpiresAt: &expiry},
+		{GroupID: 2, GroupName: "permanent"},
+	})
+	if len(out) != 2 {
+		t.Fatalf("published %d shares, want 2", len(out))
+	}
+	if out[0].ExpiresAt == "" {
+		t.Error("the share with an expiry published none")
+	}
+	if out[1].ExpiresAt != "" {
+		t.Errorf("the share with no expiry published %q", out[1].ExpiresAt)
+	}
+}
+
+// TestDelete_FullPathIsSentOnlyWithAPermanentRemoval verifies the full path
+// reaches the request when the caller asked for a permanent removal and names
+// one, and is left out otherwise.
+//
+// GitLab requires the path as a confirmation for a permanent removal and
+// rejects it on an ordinary one, so sending it in the wrong case fails the
+// call that the caller expected to work.
+func TestDelete_FullPathIsSentOnlyWithAPermanentRemoval(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		input    DeleteInput
+		wantSent bool
+	}{
+		{name: "permanent_with_path", input: DeleteInput{GroupID: "99", PermanentlyRemove: true, FullPath: "g/team"}, wantSent: true},
+		{name: "permanent_without_path", input: DeleteInput{GroupID: "99", PermanentlyRemove: true}},
+		{name: "not_permanent", input: DeleteInput{GroupID: "99", FullPath: "g/team"}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var query string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				query = r.URL.RawQuery
+				testutil.RespondJSON(w, http.StatusAccepted, `{}`)
+			}))
+			if err := Delete(context.Background(), client, testCase.input); err != nil {
+				t.Fatalf("Delete: %v", err)
+			}
+			if got := strings.Contains(query, "full_path"); got != testCase.wantSent {
+				t.Errorf("query %q carries full_path = %v, want %v", query, got, testCase.wantSent)
+			}
+		})
+	}
+}
+
+// assertCapturedGroupMembers holds the member GitLab sent every conditional
+// key for to all of them, and the member it sent none for to none, which is
+// both sides of every condition on the entity.
+func assertCapturedGroupMembers(t *testing.T, first, second MemberOutput) {
+	t.Helper()
 	if !first.Locked || first.MembershipState != "awaiting" || first.TwoFactorEnabled == nil || !*first.TwoFactorEnabled ||
 		first.Override == nil || !*first.Override || first.GroupSCIMIdentity == nil || first.GroupSCIMIdentity.GroupID != 99 {
 		t.Errorf("first member = %+v, want the captured fields", first)
 	}
 	if second.Locked || second.MembershipState != "" || second.TwoFactorEnabled != nil || second.Override != nil || second.GroupSCIMIdentity != nil {
 		t.Errorf("second member = %+v, want the conditional fields absent", second)
+	}
+	// The body spells avatar_path and custom_attributes on the first member,
+	// and neither is published: lib/api/entities/user_basic.rb sends each only
+	// when the presenter is given only_path or with_custom_attributes, and no
+	// group-member route declares either, so the keys can never be on one of
+	// their responses. The audit answers the matching findings with
+	// entity-option-no-endpoint-passes declarations.
+	encoded, err := json.Marshal(first)
+	if err != nil {
+		t.Fatalf("marshal the published member: %v", err)
+	}
+	for _, key := range []string{"avatar_path", "custom_attributes"} {
+		t.Run("no "+key, func(t *testing.T) {
+			if strings.Contains(string(encoded), key) {
+				t.Errorf("published %s, which no group-member route can send:\n%s", key, encoded)
+			}
+		})
 	}
 }
 

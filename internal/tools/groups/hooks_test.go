@@ -13,6 +13,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -994,5 +995,94 @@ func TestListHooks_AuditParams(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("ListHooks() unexpected error: %v", err)
+	}
+}
+
+// TestGroupHooks_ZeroHookIDIsRefusedByEveryHandler verifies each handler that
+// takes a hook id refuses a zero one before reaching GitLab.
+//
+// Zero is the id an omitted argument decodes to, and the endpoints would
+// answer 404 for it, so the guard is what turns a missing argument into a
+// message naming the parameter. The client is a handler that fails the test
+// if it is ever called, so a guard that stopped refusing would be caught even
+// if GitLab happened to answer.
+func TestGroupHooks_ZeroHookIDIsRefusedByEveryHandler(t *testing.T) {
+	for name, call := range map[string]func(*gitlabclient.Client) error{
+		"get": func(client *gitlabclient.Client) error {
+			_, err := GetHook(context.Background(), client, GetHookInput{GroupID: "99"})
+			return err
+		},
+		"set_custom_header": func(client *gitlabclient.Client) error {
+			return SetHookCustomHeader(context.Background(), client, SetHookCustomHeaderInput{GroupID: "99", Key: "X-Env", Value: "prod"})
+		},
+		"set_url_variable": func(client *gitlabclient.Client) error {
+			return SetHookURLVariable(context.Background(), client, SetHookURLVariableInput{GroupID: "99", Key: "env", Value: "prod"})
+		},
+		"delete_url_variable": func(client *gitlabclient.Client) error {
+			return DeleteHookURLVariable(context.Background(), client, DeleteHookURLVariableInput{GroupID: "99", Key: "env"})
+		},
+		"edit": func(client *gitlabclient.Client) error {
+			_, err := EditHook(context.Background(), client, EditHookInput{GroupID: "99"})
+			return err
+		},
+		"delete_custom_header": func(client *gitlabclient.Client) error {
+			return DeleteHookCustomHeader(context.Background(), client, DeleteHookCustomHeaderInput{GroupID: "99", Key: "X-Env"})
+		},
+		"test": func(client *gitlabclient.Client) error {
+			return TestHook(context.Background(), client, TestHookInput{GroupID: "99", Trigger: "push_events"})
+		},
+		"resend_event": func(client *gitlabclient.Client) error {
+			return ResendHookEvent(context.Background(), client, ResendHookEventInput{GroupID: "99", HookEventID: 3})
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := call(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+			if err == nil || !strings.Contains(err.Error(), "hook_id") {
+				t.Errorf("%s with a zero hook_id = %v, want an error naming hook_id", name, err)
+			}
+		})
+	}
+}
+
+// TestHookToOutput_SecretCarryingListsAreEmptyWhenGitLabSendsNone verifies the
+// two lists whose values GitLab masks are surfaced as keys when the hook has
+// them and left absent when it does not, rather than as an empty array.
+func TestHookToOutput_SecretCarryingListsAreEmptyWhenGitLabSendsNone(t *testing.T) {
+	with := hookToOutput(&gl.GroupHook{
+		ID:            1,
+		URLVariables:  []gl.HookURLVariable{{Key: "env", Value: "prod"}},
+		CustomHeaders: []*gl.HookCustomHeader{{Key: "X-Env", Value: "prod"}},
+	})
+	if len(with.URLVariables) != 1 || with.URLVariables[0].Key != "env" || with.URLVariables[0].Value != "" {
+		t.Errorf("url_variables = %+v, want the key alone", with.URLVariables)
+	}
+	if len(with.CustomHeaders) != 1 || with.CustomHeaders[0].Key != "X-Env" {
+		t.Errorf("custom_headers = %+v, want the key alone", with.CustomHeaders)
+	}
+
+	without := hookToOutput(&gl.GroupHook{ID: 1})
+	if without.URLVariables != nil || without.CustomHeaders != nil {
+		t.Errorf("output = %+v, want neither list", without)
+	}
+}
+
+// TestApplyGroupHookIdentityOptions_CarriesEachFieldOnlyWhenGiven verifies the
+// identity half of the hook options: a field the input names reaches the SDK
+// options, and one it does not leaves the option unset, so an edit that
+// mentions nothing changes nothing.
+func TestApplyGroupHookIdentityOptions_CarriesEachFieldOnlyWhenGiven(t *testing.T) {
+	full := &gl.AddGroupHookOptions{}
+	applyGroupHookIdentityOptions(HookInput{
+		URL: "https://example.com/hook", Name: "Named", Description: "why",
+		Token: "s3cret", EnableSSLVerification: new(true),
+	}, full)
+	if full.URL == nil || full.Name == nil || full.Description == nil || full.Token == nil || full.EnableSSLVerification == nil {
+		t.Errorf("options = %+v, want every named field set", full)
+	}
+
+	bare := &gl.AddGroupHookOptions{}
+	applyGroupHookIdentityOptions(HookInput{}, bare)
+	if bare.URL != nil || bare.Name != nil || bare.Description != nil || bare.Token != nil || bare.EnableSSLVerification != nil {
+		t.Errorf("options = %+v, want nothing set from an empty input", bare)
 	}
 }

@@ -18,14 +18,34 @@ func FormatOutputMarkdown(out Output) string {
 	//gitlab:allow-unescaped out.State: a membership state GitLab picks from a fixed set (active, awaiting, blocked and the rest).
 	fmt.Fprintf(&b, "| State | %s |\n", out.State)
 	fmt.Fprintf(&b, "| Access Level | %d |\n", out.AccessLevel)
+	if out.Email != "" {
+		fmt.Fprintf(&b, "| Email | %s |\n", toolutil.EscapeMdTableCell(out.Email))
+	}
+	if out.PublicEmail != "" {
+		fmt.Fprintf(&b, "| Public Email | %s |\n", toolutil.EscapeMdTableCell(out.PublicEmail))
+	}
+	if out.MemberRole != nil {
+		fmt.Fprintf(&b, "| Member Role | %s |\n", toolutil.EscapeMdTableCell(out.MemberRole.Name))
+	}
+	if out.MembershipState != "" {
+		//gitlab:allow-unescaped out.MembershipState: a membership state GitLab picks from a fixed set (active, awaiting and the rest).
+		fmt.Fprintf(&b, "| Membership State | %s |\n", out.MembershipState)
+	}
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, "| Created At | %s |\n", toolutil.FormatTime(out.CreatedAt))
 	}
 	if out.RequestedAt != "" {
 		fmt.Fprintf(&b, "| Requested At | %s |\n", toolutil.FormatTime(out.RequestedAt))
 	}
+	if out.ExpiresAt != "" {
+		fmt.Fprintf(&b, "| Expires At | %s |\n", toolutil.FormatTime(out.ExpiresAt))
+	}
+	if out.WebURL != "" {
+		fmt.Fprintf(&b, "| URL | %s |\n", toolutil.MdTitleLink(out.Username, out.WebURL))
+	}
 	toolutil.WriteHints(
 		&b,
+		toolutil.HintPreserveLinks,
 		"Use action 'approve' to approve this access request",
 		"Use action 'deny_project' to deny a project access request",
 		"Use action 'deny_group' to deny a group access request",
