@@ -62,8 +62,9 @@ var sharedCatalogs sync.Map // string -> *sharedCatalogEntry
 // report their failure exist for the day one of those facts changes, and
 // would otherwise never run.
 var (
-	sharedBaseCatalog   = SharedBaseCatalog   //nolint:gochecknoglobals // test seam
-	filterSharedCatalog = FilterActionCatalog //nolint:gochecknoglobals // test seam
+	sharedBaseCatalog   = SharedBaseCatalog          //nolint:gochecknoglobals // test seam
+	filterSharedCatalog = FilterActionCatalog        //nolint:gochecknoglobals // test seam
+	scopeFilterCatalog  = FilterScopeFilteredCatalog //nolint:gochecknoglobals // test seam
 )
 
 // ShareCatalog returns the catalog cached under key, building it with build
@@ -133,11 +134,25 @@ func BaseCatalogKey(tier edition.Tier, dotcom, includeMCP bool) string {
 // token. A nil list is still told apart from an empty one, because the scope
 // filter treats the two differently: nil means detection was unavailable.
 func CatalogFilterKey(cfg *config.ServerConfig) string {
-	return fmt.Sprintf("exclude=%s|scopes=%s|scopesKnown=%t|readonly=%t|readonlyFromScope=%t|safe=%t",
+	return fmt.Sprintf("exclude=%s|%s|readonly=%t|readonlyFromScope=%t|safe=%t",
 		strings.Join(cfg.ExcludeTools, ","),
-		strings.Join(catalogRelevantScopes(cfg.TokenScopes), ","),
-		cfg.TokenScopes != nil,
+		scopeCatalogKey(cfg.TokenScopes),
 		cfg.ReadOnly, cfg.ReadOnlyFromTokenScope, cfg.SafeMode)
+}
+
+// scopeCatalogKey names the part of a token's scopes that changes a catalog:
+// the components [catalogRelevantScopes] keeps, plus whether the list was known
+// at all, since the scope filter treats a nil list (detection unavailable) as
+// "remove nothing" and an empty one as "remove everything scoped".
+//
+// It is one function because two keys need the same component and they must
+// stay the same component: the individual surface and the two filtered surfaces
+// now apply the same scope filter, so a key that canonicalized differently
+// would let one of them cache a catalog under a name the other cannot reach.
+func scopeCatalogKey(tokenScopes []string) string {
+	return fmt.Sprintf("scopes=%s|scopesKnown=%t",
+		strings.Join(catalogRelevantScopes(tokenScopes), ","),
+		tokenScopes != nil)
 }
 
 // SharedBaseCatalog returns the shared, unbound catalog for a tier and
@@ -179,14 +194,31 @@ func SharedMetaCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*
 }
 
 // SharedIndividualCatalog returns the catalog the individual surface registers
-// for cfg, with the operator's exclusions applied and bound to client, and the
-// canonical IDs those exclusions removed. The exclusions are applied to the
-// catalog rather than to registered names, for the reason
-// [registerConfiguredToolSurface] gives: only the catalog can map all three
-// spellings an operator writes.
+// for cfg, with the operator's exclusions and the credential's scopes applied
+// and bound to client, and the canonical IDs those exclusions removed. The
+// exclusions are applied to the catalog rather than to registered names, for
+// the reason [registerConfiguredToolSurface] gives: only the catalog can map
+// all three spellings an operator writes.
+//
+// The scope filter is applied here for a related but distinct reason. Its keys
+// are meta-tool group names, and this surface registers one tool per action, so
+// nothing it names is ever a registered tool name here: filtering registered
+// names after registration, which is what this surface used to be given, could
+// only ever remove nothing, and every admin tool stayed listed for a token with
+// no admin_mode. The calls were refused by GitLab with a 403, so the defect was
+// in what the listing claimed rather than in what the server allowed, which is
+// the worse half to leave: a model reads tools/list to decide what is possible,
+// and concluded the capability was there.
+//
+// Only the withheld-by-exclusion IDs are returned, and deliberately: they
+// narrow the resource and prompt surfaces, because an action the operator
+// removed must not stay readable through a second request path. A scope-removed
+// action needs no such treatment, since the credential that cannot call it
+// cannot read it either, and the two filtered surfaces make the same split.
 func SharedIndividualCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*actioncatalog.Catalog, []string, error) {
 	dotcom := client.IsGitLabDotCom()
-	key := "individual|" + BaseCatalogKey(cfg.Tier, dotcom, true) + "|exclude=" + strings.Join(cfg.ExcludeTools, ",")
+	key := "individual|" + BaseCatalogKey(cfg.Tier, dotcom, true) +
+		"|exclude=" + strings.Join(cfg.ExcludeTools, ",") + "|" + scopeCatalogKey(cfg.TokenScopes)
 	catalog, withheld, err := ShareCatalog(key, func() (*actioncatalog.Catalog, WithheldActions, error) {
 		base, baseErr := sharedBaseCatalog(dotcom, ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
 		if baseErr != nil {
@@ -195,7 +227,14 @@ func SharedIndividualCatalog(client *gitlabclient.Client, cfg *config.ServerConf
 		// Resolved before the exclusion is applied, since afterwards the
 		// catalog can no longer map the operator's entries to anything.
 		excluded := base.ExcludedActionIDs(cfg.ExcludeTools)
-		return ExcludeFromCatalog(base, cfg.ExcludeTools), WithheldActions{ExcludedByName: excluded}, nil
+		// Same order as [FilterActionCatalog]: the operator's decision first,
+		// then the credential's, so a tool the operator removed is never
+		// reported as withheld by a scope it also happens to lack.
+		scoped, scopeErr := scopeFilterCatalog(ExcludeFromCatalog(base, cfg.ExcludeTools), cfg.TokenScopes)
+		if scopeErr != nil {
+			return nil, WithheldActions{}, fmt.Errorf("filter individual action catalog: %w", scopeErr)
+		}
+		return scoped, WithheldActions{ExcludedByName: excluded}, nil
 	})
 	if err != nil {
 		return nil, nil, err

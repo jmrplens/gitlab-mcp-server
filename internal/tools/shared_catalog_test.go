@@ -331,6 +331,50 @@ func TestSharedMetaCatalog_ScopeSubsetsDoNotEachPinACatalog(t *testing.T) {
 	}
 }
 
+// TestSharedIndividualCatalog_ScopesNarrowTheCatalogAndKeyIt is the same
+// property on the surface that used not to be scope-filtered at all.
+//
+// Two things have to hold together, and either one alone is a defect. The
+// catalog has to lose the admin actions, which is the fix. And the cache has to
+// key on the scopes that caused the loss, or the first credential through would
+// pin its catalog for the process and the next one would be served whichever
+// narrowing happened to be built first, in either direction: an admin token
+// handed a catalog with no admin tools, or a read_api token handed all of them.
+// The key carries only the scopes [MetaToolScopes] reads, for the reason
+// [CatalogFilterKey] gives, so a list differing only in the others must still
+// share.
+func TestSharedIndividualCatalog_ScopesNarrowTheCatalogAndKeyIt(t *testing.T) {
+	client := testutil.NewTestClient(t, healthyGitLab())
+	withScopes := func(scopes ...string) *config.ServerConfig {
+		return &config.ServerConfig{Tier: edition.Free, ExcludeTools: []string{"scopes-" + t.Name()}, TokenScopes: scopes}
+	}
+	build := func(t *testing.T, cfg *config.ServerConfig) *actioncatalog.Catalog {
+		t.Helper()
+		catalog, _, err := SharedIndividualCatalog(client, cfg)
+		if err != nil {
+			t.Fatalf("SharedIndividualCatalog(%v) error = %v", cfg.TokenScopes, err)
+		}
+		return catalog
+	}
+
+	admin := build(t, withScopes("api", "admin_mode"))
+	adminPlusNoise := build(t, withScopes("read_api", "k8s_proxy", "admin_mode", "ai_features"))
+	narrow := build(t, withScopes("read_api"))
+
+	if _, kept := admin.Action("admin.settings_get"); !kept {
+		t.Fatal("admin.settings_get is absent from the admin_mode catalog, so the removal below proves nothing")
+	}
+	if _, kept := narrow.Action("admin.settings_get"); kept {
+		t.Error("the admin group survived a token with no admin_mode on the individual surface")
+	}
+	if admin.SharedOrigin() != adminPlusNoise.SharedOrigin() {
+		t.Error("two scope lists differing only in scopes the filter never reads pinned two catalogs")
+	}
+	if narrow.SharedOrigin() == admin.SharedOrigin() {
+		t.Error("a credential without admin_mode shared the catalog of one that has it")
+	}
+}
+
 // TestSharedMetaCatalog_TwoClientsShareOneCatalogBoundToEach verifies the
 // contract every pool entry relies on: two clients with one configuration
 // receive catalogs with one shared origin and one set of schema maps, and
@@ -595,6 +639,14 @@ func TestSharedCatalogs_BuildFailuresAreReportedWithTheirStep(t *testing.T) {
 			return nil, WithheldActions{}, forced
 		}
 	}
+	failScopeFilter := func(t *testing.T) {
+		t.Helper()
+		original := scopeFilterCatalog
+		t.Cleanup(func() { scopeFilterCatalog = original })
+		scopeFilterCatalog = func(*actioncatalog.Catalog, []string) (*actioncatalog.Catalog, error) {
+			return nil, forced
+		}
+	}
 	cases := []struct {
 		name    string
 		arrange func(t *testing.T)
@@ -618,6 +670,21 @@ func TestSharedCatalogs_BuildFailuresAreReportedWithTheirStep(t *testing.T) {
 			arrange: failBase,
 			run:     func() error { _, _, err := SharedIndividualCatalog(client, fresh("individual-base")); return err },
 			want:    "build individual action catalog",
+		},
+		{
+			// The scope filter is the individual surface's own step: the two
+			// filtered surfaces reach it through FilterActionCatalog, and this
+			// one calls it directly, so its failure needs its own message or a
+			// caller cannot tell which narrowing refused.
+			name:    "individual scope filter",
+			arrange: failScopeFilter,
+			run: func() error {
+				cfg := fresh("individual-scope-filter")
+				cfg.TokenScopes = []string{"read_api"}
+				_, _, err := SharedIndividualCatalog(client, cfg)
+				return err
+			},
+			want: "filter individual action catalog",
 		},
 		{
 			name:    "bound base catalog",
