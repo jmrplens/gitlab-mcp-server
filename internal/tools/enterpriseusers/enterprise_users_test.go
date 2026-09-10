@@ -257,7 +257,7 @@ func TestList_EmptyResults(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestToOutput_NilUser(t *testing.T) {
-	out := toOutput(nil)
+	out := toOutput(nil, toolutil.UserExtra{})
 	if out.ID != 0 {
 		t.Errorf("expected ID 0 for nil user, got %d", out.ID)
 	}
@@ -724,4 +724,107 @@ func TestDelete_APIError(t *testing.T) {
 		UserID:  10,
 	})
 	assertEnterpriseUserHint(t, err)
+}
+
+// TestGet_ReadsTheCapturedUserPublicKeys verifies the ten keys
+// lib/api/entities/user_public.rb sends that client-go's User declares on no
+// field of its own reach the output, on the side of the permission condition
+// where the caller may read the profile. Both enterprise user routes present
+// UserPublic, so this is the whole set they can carry.
+func TestGet_ReadsTheCapturedUserPublicKeys(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/42/enterprise_users/10" {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":10,"username":"alice","commit_email":"c@example.com","discord":"alice#1",
+				"github":"alice","local_time":"2:30 PM","preferred_language":"en",
+				"pronouns":"she/her","work_information":"Org",
+				"followers":12,"following":34,"is_followed":true
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{GroupID: toolutil.StringOrInt("42"), UserID: 10})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if out.CommitEmail != "c@example.com" || out.Discord != "alice#1" || out.GitHub != "alice" {
+		t.Errorf("out = %+v, want the commit address and the two account names", out)
+	}
+	if out.LocalTime != "2:30 PM" || out.PreferredLanguage != "en" || out.Pronouns != "she/her" || out.WorkInformation != "Org" {
+		t.Errorf("out = %+v, want the four profile keys", out)
+	}
+	if out.Followers == nil || *out.Followers != 12 || out.Following == nil || *out.Following != 34 ||
+		out.IsFollowed == nil || !*out.IsFollowed {
+		t.Errorf("counts = %v/%v/%v, want 12, 34 and true", out.Followers, out.Following, out.IsFollowed)
+	}
+}
+
+// TestGet_OnAProfileTheCallerMayNotReadSendsNoCounts is the other side of that
+// condition: GitLab exposes none of the three counts, and the output leaves
+// them absent rather than reporting a user nobody follows.
+func TestGet_OnAProfileTheCallerMayNotReadSendsNoCounts(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/42/enterprise_users/10" {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"username":"alice","pronouns":"she/her"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{GroupID: toolutil.StringOrInt("42"), UserID: 10})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if out.Followers != nil || out.Following != nil || out.IsFollowed != nil {
+		t.Errorf("counts = %v/%v/%v, want all three absent", out.Followers, out.Following, out.IsFollowed)
+	}
+	if out.Pronouns != "she/her" {
+		t.Errorf("Pronouns = %q, want the unconditional key still read", out.Pronouns)
+	}
+}
+
+// TestList_PairsTheCapturedKeysByPosition verifies a page of enterprise users
+// takes one captured extra per row in order, so the first row's keys are not
+// read onto the second.
+func TestList_PairsTheCapturedKeysByPosition(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/42/enterprise_users" {
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id":1,"username":"alice","pronouns":"she/her","followers":5},
+				{"id":2,"username":"bob"}
+			]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{GroupID: toolutil.StringOrInt("42")})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Users) != 2 {
+		t.Fatalf("got %d users, want 2", len(out.Users))
+	}
+	if out.Users[0].Pronouns != "she/her" || out.Users[0].Followers == nil || *out.Users[0].Followers != 5 {
+		t.Errorf("Users[0] = %+v, want the first row's own keys", out.Users[0])
+	}
+	if out.Users[1].Pronouns != "" || out.Users[1].Followers != nil {
+		t.Errorf("Users[1] = %+v, want the second row left empty", out.Users[1])
+	}
+}
+
+// TestList_ACapturedFieldTheTypeCannotHold_IsReported verifies a body that
+// decodes for the SDK and not for the keys read beside it is the operation's
+// error rather than a page of users with those keys silently empty.
+func TestList_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"username":"alice","followers":"not-a-number"}]`)
+	}))
+
+	_, err := List(context.Background(), client, ListInput{GroupID: toolutil.StringOrInt("42")})
+	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("List() error = %v, want the capture's decode failure", err)
+	}
 }

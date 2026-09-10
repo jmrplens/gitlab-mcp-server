@@ -55,6 +55,11 @@ func UploadCurrentUserAvatar(ctx context.Context, client *gitlabclient.Client, i
 	}
 	defer cleanup()
 
+	// Wired like every other handler returning Output even though this one
+	// cannot fill a captured key: lib/api/entities/avatar.rb carries avatar_url
+	// and nothing else, so the extra comes back empty and omitempty keeps the
+	// keys off the wire. Reading it anyway leaves one rule for the package.
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	u, _, err := client.GL().Users.UploadAvatar(reader, input.Filename, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
@@ -64,7 +69,10 @@ func UploadCurrentUserAvatar(ctx context.Context, client *gitlabclient.Client, i
 		return Output{}, toolutil.WrapErrWithStatusHint("upload_user_avatar", err, http.StatusUnauthorized,
 			"verify your token is valid with the api scope; the avatar is set for the token's own user")
 	}
-	out := toOutput(u)
+	out, err := userOutput("upload_user_avatar", u, captured)
+	if err != nil {
+		return Output{}, err
+	}
 	// GitLab 19 responds with only {avatar_url}, so the decoded user ID is
 	// legitimately zero even though the upload succeeded.
 	if out.ID == 0 && out.AvatarURL != "" {

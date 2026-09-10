@@ -73,6 +73,23 @@ const (
 	docMergeRequests      = "merge_requests.md"
 	docMergeRequestRender = docMergeRequests + " (render_html, declared on GET /projects/:id/merge_requests/:merge_request_iid alone)"
 	docMergeRequestBlocks = docMergeRequests + " (blocked_merge_request on GET /projects/:id/merge_requests/:merge_request_iid/blocks)"
+	// doc/api/users.md prints all ten keys UserPublic adds to the user object
+	// in its single-user and current-user example bodies, and bio_html beside
+	// them on the single-user one. It is cited for the three group-scoped user
+	// packages too, because GitLab presents their lists `with:
+	// ::API::Entities::UserPublic` and so answers with that same object;
+	// doc/api/group_enterprise_users.md prints most of it and leaves discord,
+	// github and is_followed out of its examples, which the entity exposes on
+	// every user regardless. The two enterprise keys are exposed by
+	// ee/lib/ee/api/entities/user_with_admin.rb under the domain_verification
+	// license and printed on no page, which is why the entity is named here
+	// rather than a section. unconfirmed_email is not a user key at all:
+	// doc/api/service_accounts.md documents it on the service account object
+	// POST /service_accounts answers with.
+	docUsers                = "users.md"
+	docUsersEnterpriseGroup = docUsers + " (enterprise_group_id and enterprise_group_associated_at, exposed by " +
+		"ee/lib/ee/api/entities/user_with_admin.rb under the domain_verification license and printed on no page)"
+	docServiceAccounts    = "service_accounts.md"
 	docPATList            = "personal_access_tokens.md#list-all-personal-access-tokens"
 	docProjectTokensList  = "project_access_tokens.md#list-all-project-access-tokens"
 	docGroupTokensList    = "group_access_tokens.md"
@@ -634,6 +651,63 @@ var docAddedFields = map[string]string{
 	"issues.RelatedMROutput.merge_status":                   docMergeRequests,
 	"issues.RelatedMROutput.reference":                      docMergeRequests,
 	"issues.RelatedMROutput.work_in_progress":               docMergeRequests,
+
+	// users: what GitLab's user entities send on a user that client-go's User
+	// declares on no field of its own, read from the captured response
+	// (ADR-0021, toolutil.CapturedUser and CapturedInstanceUser). The ten
+	// UserPublic keys are on all four types that publish a user, since every
+	// route filling them presents that entity. The five beside them are on
+	// internal/tools/users alone, which is the only package serving the routes
+	// that send them: bio_html on GET /users/:id, the licensed trio on the two
+	// administrator routes, and unconfirmed_email on POST /service_accounts.
+	// The three group-scoped types are held to those same five by the audit and
+	// answered in cmd/audit_1to1/internal/paths/sent_declarations.go instead.
+	// Recorded in docs/development/upstream-bugs.md.
+	"users.Output.commit_email":                       docUsers,
+	"users.Output.discord":                            docUsers,
+	"users.Output.github":                             docUsers,
+	"users.Output.local_time":                         docUsers,
+	"users.Output.preferred_language":                 docUsers,
+	"users.Output.pronouns":                           docUsers,
+	"users.Output.work_information":                   docUsers,
+	"users.Output.followers":                          docUsers,
+	"users.Output.following":                          docUsers,
+	"users.Output.is_followed":                        docUsers,
+	"users.Output.bio_html":                           docUsers,
+	"users.Output.unconfirmed_email":                  docServiceAccounts,
+	"users.Output.enterprise_group_id":                docUsersEnterpriseGroup,
+	"users.Output.enterprise_group_associated_at":     docUsersEnterpriseGroup,
+	"users.Output.provisioned_by_group_id":            docUsers,
+	"enterpriseusers.Output.commit_email":             docUsers,
+	"enterpriseusers.Output.discord":                  docUsers,
+	"enterpriseusers.Output.github":                   docUsers,
+	"enterpriseusers.Output.local_time":               docUsers,
+	"enterpriseusers.Output.preferred_language":       docUsers,
+	"enterpriseusers.Output.pronouns":                 docUsers,
+	"enterpriseusers.Output.work_information":         docUsers,
+	"enterpriseusers.Output.followers":                docUsers,
+	"enterpriseusers.Output.following":                docUsers,
+	"enterpriseusers.Output.is_followed":              docUsers,
+	"groups.ProvisionedUserOutput.commit_email":       docUsers,
+	"groups.ProvisionedUserOutput.discord":            docUsers,
+	"groups.ProvisionedUserOutput.github":             docUsers,
+	"groups.ProvisionedUserOutput.local_time":         docUsers,
+	"groups.ProvisionedUserOutput.preferred_language": docUsers,
+	"groups.ProvisionedUserOutput.pronouns":           docUsers,
+	"groups.ProvisionedUserOutput.work_information":   docUsers,
+	"groups.ProvisionedUserOutput.followers":          docUsers,
+	"groups.ProvisionedUserOutput.following":          docUsers,
+	"groups.ProvisionedUserOutput.is_followed":        docUsers,
+	"groupsaml.SAMLUserOutput.commit_email":           docUsers,
+	"groupsaml.SAMLUserOutput.discord":                docUsers,
+	"groupsaml.SAMLUserOutput.github":                 docUsers,
+	"groupsaml.SAMLUserOutput.local_time":             docUsers,
+	"groupsaml.SAMLUserOutput.preferred_language":     docUsers,
+	"groupsaml.SAMLUserOutput.pronouns":               docUsers,
+	"groupsaml.SAMLUserOutput.work_information":       docUsers,
+	"groupsaml.SAMLUserOutput.followers":              docUsers,
+	"groupsaml.SAMLUserOutput.following":              docUsers,
+	"groupsaml.SAMLUserOutput.is_followed":            docUsers,
 }
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we

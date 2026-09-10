@@ -67,6 +67,29 @@ type Output struct {
 	SCIMIdentities                 []SCIMIdentityOutput    `json:"scim_identities,omitempty" tier:"premium"`
 	CustomAttributes               []CustomAttributeOutput `json:"custom_attributes,omitempty"`
 	CreatedBy                      *BasicUserOutput        `json:"created_by,omitempty"`
+	// The keys GitLab's user entities send that client-go's User does not
+	// model, read from the captured response beside the SDK's own decode
+	// (ADR-0021) and described on toolutil.InstanceUserExtra. Which of them
+	// arrives depends on the route: the profile fields are on every user, the
+	// three counts on a caller allowed to read the profile, bio_html on the
+	// single-user GET, the two enterprise keys and the provisioning group on
+	// the administrator routes under their license, and unconfirmed_email on
+	// the service account POST alone.
+	CommitEmail                 string `json:"commit_email,omitempty"`
+	Discord                     string `json:"discord,omitempty"`
+	GitHub                      string `json:"github,omitempty"`
+	LocalTime                   string `json:"local_time,omitempty"`
+	PreferredLanguage           string `json:"preferred_language,omitempty"`
+	Pronouns                    string `json:"pronouns,omitempty"`
+	WorkInformation             string `json:"work_information,omitempty"`
+	BioHTML                     string `json:"bio_html,omitempty"`
+	Followers                   *int64 `json:"followers,omitempty"`
+	Following                   *int64 `json:"following,omitempty"`
+	IsFollowed                  *bool  `json:"is_followed,omitempty"`
+	UnconfirmedEmail            string `json:"unconfirmed_email,omitempty"`
+	EnterpriseGroupID           *int64 `json:"enterprise_group_id,omitempty" tier:"premium"`
+	EnterpriseGroupAssociatedAt string `json:"enterprise_group_associated_at,omitempty" tier:"premium"`
+	ProvisionedByGroupID        *int64 `json:"provisioned_by_group_id,omitempty" tier:"premium"`
 }
 
 // IdentityOutput mirrors gl.UserIdentity, a provider/extern_uid pair linking a
@@ -100,12 +123,25 @@ func Current(ctx context.Context, client *gitlabclient.Client, _ CurrentInput) (
 		return Output{}, err
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	u, _, err := client.GL().Users.CurrentUser(gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("userCurrent", err, http.StatusUnauthorized,
 			"verify your token is valid and has read_user or api scope; expired tokens must be refreshed")
 	}
-	return toOutput(u), nil
+	return userOutput("userCurrent", u, captured)
+}
+
+// userOutput converts a user the SDK has just decoded, filling the keys
+// client-go's User models on no field of its own from the same answer the
+// transport captured (ADR-0021). A body that will not decode is the
+// operation's error rather than a silently empty set of keys.
+func userOutput(op string, u *gl.User, capture *gitlabclient.ResponseCapture) (Output, error) {
+	extra, err := toolutil.CapturedInstanceUser(capture)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(op, err)
+	}
+	return toOutput(u, extra), nil
 }
 
 // List Users.
@@ -150,15 +186,20 @@ type ListOutput struct {
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := buildListUsersOptions(input)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	users, resp, err := client.GL().Users.ListUsers(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_users", err, http.StatusForbidden,
 			"listing all users may require admin token on private instances; use search by username/email/two_factor filters to narrow results")
 	}
 
+	extras, err := toolutil.CapturedInstanceUsers(captured, len(users))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr("list_users", err)
+	}
 	out := make([]Output, 0, len(users))
-	for _, u := range users {
-		out = append(out, toOutput(u))
+	for i, u := range users {
+		out = append(out, toOutput(u, extras[i]))
 	}
 	return ListOutput{
 		Users:      out,
@@ -229,12 +270,13 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.WithCustomAttributes != nil {
 		opts.WithCustomAttributes = input.WithCustomAttributes
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	u, _, err := client.GL().Users.GetUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get_user", err, http.StatusNotFound,
 			"verify user_id with gitlab_list_users (search by username); user_id must be a positive integer")
 	}
-	return toOutput(u), nil
+	return userOutput("get_user", u, captured)
 }
 
 // User Status.
@@ -564,8 +606,10 @@ func toBasicUserOutput(u *gl.BasicUser) *BasicUserOutput {
 	return toolutil.NewUserRefOutput(u)
 }
 
-// toOutput converts a GitLab User to our Output type.
-func toOutput(u *gl.User) Output {
+// toOutput converts a GitLab User to our Output type, filling from extra the
+// keys client-go's User declares on no field of its own (ADR-0021). A key the
+// route did not send stays zero and its omitempty keeps it off the wire.
+func toOutput(u *gl.User, extra toolutil.InstanceUserExtra) Output {
 	if u == nil {
 		return Output{}
 	}
@@ -610,6 +654,23 @@ func toOutput(u *gl.User) Output {
 		SCIMIdentities:                 toSCIMIdentityOutputs(u.SCIMIdentities),
 		CustomAttributes:               toCustomAttributeOutputs(u.CustomAttributes),
 		CreatedBy:                      toBasicUserOutput(u.CreatedBy),
+		CommitEmail:                    extra.CommitEmail,
+		Discord:                        extra.Discord,
+		GitHub:                         extra.GitHub,
+		LocalTime:                      extra.LocalTime,
+		PreferredLanguage:              extra.PreferredLanguage,
+		Pronouns:                       extra.Pronouns,
+		WorkInformation:                extra.WorkInformation,
+		BioHTML:                        extra.BioHTML,
+		Followers:                      extra.Followers,
+		Following:                      extra.Following,
+		IsFollowed:                     extra.IsFollowed,
+		UnconfirmedEmail:               extra.UnconfirmedEmail,
+		EnterpriseGroupID:              extra.EnterpriseGroupID,
+		ProvisionedByGroupID:           extra.ProvisionedByGroupID,
+	}
+	if extra.EnterpriseGroupAssociatedAt != nil {
+		out.EnterpriseGroupAssociatedAt = extra.EnterpriseGroupAssociatedAt.Format(time.RFC3339)
 	}
 	if u.CreatedAt != nil {
 		out.CreatedAt = u.CreatedAt.Format(time.RFC3339)

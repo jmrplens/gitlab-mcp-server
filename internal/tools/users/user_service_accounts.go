@@ -69,12 +69,13 @@ func CreateServiceAccount(ctx context.Context, client *gitlabclient.Client, inpu
 	if input.Email != "" {
 		opts.Email = new(input.Email)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	user, _, err := client.GL().Users.CreateServiceAccountUser(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("create_service_account", err, http.StatusForbidden,
 			"creating service accounts requires an admin token; username must be unique")
 	}
-	return toOutput(user), nil
+	return userOutput("create_service_account", user, captured)
 }
 
 // ListServiceAccounts lists all service accounts.

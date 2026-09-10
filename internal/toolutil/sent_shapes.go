@@ -1151,3 +1151,79 @@ func CapturedMergeRequest(capture *gitlabclient.ResponseCapture) (MergeRequestEx
 func CapturedMergeRequests(capture *gitlabclient.ResponseCapture, decoded int) ([]MergeRequestExtra, error) {
 	return capturedList[MergeRequestExtra](capture, decoded, "merge requests")
 }
+
+// UserExtra is what lib/api/entities/user_public.rb, and the User it inherits,
+// send on a user that client-go's User does not carry. It is the set every
+// route presenting UserPublic answers with, which is what the group-scoped
+// user lists (enterprise users, provisioned users, SAML users) and the
+// instance-wide ones alike present, so the four packages publishing a user
+// share it.
+//
+// Seven of the ten are exposed under no condition. The three counts are gated
+// on Ability.allowed?(current_user, :read_user_profile, user) together with
+// following_users_allowed, so the same endpoint sends them to a caller who may
+// read the profile and to nobody else. Each is a pointer because zero
+// followers and a profile this caller may not read are different answers, and
+// a bare number would tell them apart from nothing.
+type UserExtra struct {
+	CommitEmail       string `json:"commit_email"`
+	Discord           string `json:"discord"`
+	GitHub            string `json:"github"`
+	LocalTime         string `json:"local_time"`
+	PreferredLanguage string `json:"preferred_language"`
+	Pronouns          string `json:"pronouns"`
+	WorkInformation   string `json:"work_information"`
+	Followers         *int64 `json:"followers"`
+	Following         *int64 `json:"following"`
+	IsFollowed        *bool  `json:"is_followed"`
+}
+
+// CapturedUser reads, off the captured answer to a request for one user, the
+// fields client-go's User does not model.
+func CapturedUser(capture *gitlabclient.ResponseCapture) (UserExtra, error) {
+	return capturedOne[UserExtra](capture)
+}
+
+// CapturedUsers reads the same off a list answer, one extra per user in order,
+// the count held to what the SDK decoded.
+func CapturedUsers(capture *gitlabclient.ResponseCapture, decoded int) ([]UserExtra, error) {
+	return capturedList[UserExtra](capture, decoded, "users")
+}
+
+// InstanceUserExtra is [UserExtra] plus the five keys only the instance-wide
+// user routes ever send, which is what separates internal/tools/users from the
+// three group-scoped packages sharing the smaller shape: those serve
+// GET /groups/:id/{enterprise_users,provisioned_users,saml_users}, and GitLab
+// presents every one of them with UserPublic.
+//
+// bio_html comes from lib/api/entities/users/bio_html.rb, which only
+// UserProfile includes, so of the routes here it is on GET /users/:id alone.
+// The three license-gated keys come from ee/lib/ee/api/entities/user_with_admin.rb,
+// which only POST /users and PUT /users/:id present. unconfirmed_email is not a
+// user key at all: lib/api/entities/service_account.rb sends it, on the six-key
+// object POST /service_accounts answers with, when the account has an address
+// change waiting to be confirmed.
+//
+// The two identifiers are pointers for the reason the counts are: a license
+// that does not carry the feature sends no key, and group 0 is not that.
+type InstanceUserExtra struct {
+	UserExtra
+	BioHTML                     string     `json:"bio_html"`
+	EnterpriseGroupID           *int64     `json:"enterprise_group_id"`
+	EnterpriseGroupAssociatedAt *time.Time `json:"enterprise_group_associated_at"`
+	ProvisionedByGroupID        *int64     `json:"provisioned_by_group_id"`
+	UnconfirmedEmail            string     `json:"unconfirmed_email"`
+}
+
+// CapturedInstanceUser reads, off the captured answer to a request for one
+// user on an instance-wide route, everything [CapturedUser] reads and the five
+// keys beside it.
+func CapturedInstanceUser(capture *gitlabclient.ResponseCapture) (InstanceUserExtra, error) {
+	return capturedOne[InstanceUserExtra](capture)
+}
+
+// CapturedInstanceUsers reads the same off a list answer, one extra per user in
+// order, the count held to what the SDK decoded.
+func CapturedInstanceUsers(capture *gitlabclient.ResponseCapture, decoded int) ([]InstanceUserExtra, error) {
+	return capturedList[InstanceUserExtra](capture, decoded, "users")
+}

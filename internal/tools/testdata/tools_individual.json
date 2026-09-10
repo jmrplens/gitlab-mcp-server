@@ -18463,6 +18463,9 @@
         "bio": {
           "type": "string"
         },
+        "bio_html": {
+          "type": "string"
+        },
         "bot": {
           "type": "boolean"
         },
@@ -18477,6 +18480,9 @@
         },
         "color_scheme_id": {
           "type": "integer"
+        },
+        "commit_email": {
+          "type": "string"
         },
         "confirmed_at": {
           "type": "string"
@@ -18548,8 +18554,20 @@
             "array"
           ]
         },
+        "discord": {
+          "type": "string"
+        },
         "email": {
           "type": "string"
+        },
+        "enterprise_group_associated_at": {
+          "type": "string"
+        },
+        "enterprise_group_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "extern_uid": {
           "type": "string"
@@ -18559,6 +18577,21 @@
         },
         "extra_shared_runners_minutes_limit": {
           "type": "integer"
+        },
+        "followers": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "following": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "github": {
+          "type": "string"
         },
         "id": {
           "type": "integer"
@@ -18591,6 +18624,12 @@
         "is_auditor": {
           "type": "boolean"
         },
+        "is_followed": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "job_title": {
           "type": "string"
         },
@@ -18604,6 +18643,9 @@
           "type": "string"
         },
         "linkedin": {
+          "type": "string"
+        },
+        "local_time": {
           "type": "string"
         },
         "location": {
@@ -18633,14 +18675,26 @@
         "organization": {
           "type": "string"
         },
+        "preferred_language": {
+          "type": "string"
+        },
         "private_profile": {
           "type": "boolean"
         },
         "projects_limit": {
           "type": "integer"
         },
+        "pronouns": {
+          "type": "string"
+        },
         "provider": {
           "type": "string"
+        },
+        "provisioned_by_group_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "public_email": {
           "type": "string"
@@ -18689,6 +18743,9 @@
         "two_factor_enabled": {
           "type": "boolean"
         },
+        "unconfirmed_email": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         },
@@ -18699,6 +18756,9 @@
           "type": "string"
         },
         "website_url": {
+          "type": "string"
+        },
+        "work_information": {
           "type": "string"
         }
       },
@@ -19391,6 +19451,9 @@
         "bio": {
           "type": "string"
         },
+        "bio_html": {
+          "type": "string"
+        },
         "bot": {
           "type": "boolean"
         },
@@ -19405,6 +19468,9 @@
         },
         "color_scheme_id": {
           "type": "integer"
+        },
+        "commit_email": {
+          "type": "string"
         },
         "confirmed_at": {
           "type": "string"
@@ -19476,8 +19542,20 @@
             "array"
           ]
         },
+        "discord": {
+          "type": "string"
+        },
         "email": {
           "type": "string"
+        },
+        "enterprise_group_associated_at": {
+          "type": "string"
+        },
+        "enterprise_group_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "extern_uid": {
           "type": "string"
@@ -19487,6 +19565,21 @@
         },
         "extra_shared_runners_minutes_limit": {
           "type": "integer"
+        },
+        "followers": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "following": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "github": {
+          "type": "string"
         },
         "id": {
           "type": "integer"
@@ -19519,6 +19612,12 @@
         "is_auditor": {
           "type": "boolean"
         },
+        "is_followed": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "job_title": {
           "type": "string"
         },
@@ -19532,6 +19631,9 @@
           "type": "string"
         },
         "linkedin": {
+          "type": "string"
+        },
+        "local_time": {
           "type": "string"
         },
         "location": {
@@ -19561,14 +19663,26 @@
         "organization": {
           "type": "string"
         },
+        "preferred_language": {
+          "type": "string"
+        },
         "private_profile": {
           "type": "boolean"
         },
         "projects_limit": {
           "type": "integer"
         },
+        "pronouns": {
+          "type": "string"
+        },
         "provider": {
           "type": "string"
+        },
+        "provisioned_by_group_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "public_email": {
           "type": "string"
@@ -19617,6 +19731,9 @@
         "two_factor_enabled": {
           "type": "boolean"
         },
+        "unconfirmed_email": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         },
@@ -19627,6 +19744,9 @@
           "type": "string"
         },
         "website_url": {
+          "type": "string"
+        },
+        "work_information": {
           "type": "string"
         }
       },
@@ -40563,6 +40683,9 @@
         "color_scheme_id": {
           "type": "integer"
         },
+        "commit_email": {
+          "type": "string"
+        },
         "confirmed_at": {
           "type": "string"
         },
@@ -40633,6 +40756,9 @@
             "array"
           ]
         },
+        "discord": {
+          "type": "string"
+        },
         "email": {
           "type": "string"
         },
@@ -40644,6 +40770,21 @@
         },
         "extra_shared_runners_minutes_limit": {
           "type": "integer"
+        },
+        "followers": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "following": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "github": {
+          "type": "string"
         },
         "id": {
           "type": "integer"
@@ -40676,6 +40817,12 @@
         "is_auditor": {
           "type": "boolean"
         },
+        "is_followed": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "job_title": {
           "type": "string"
         },
@@ -40689,6 +40836,9 @@
           "type": "string"
         },
         "linkedin": {
+          "type": "string"
+        },
+        "local_time": {
           "type": "string"
         },
         "location": {
@@ -40718,11 +40868,17 @@
         "organization": {
           "type": "string"
         },
+        "preferred_language": {
+          "type": "string"
+        },
         "private_profile": {
           "type": "boolean"
         },
         "projects_limit": {
           "type": "integer"
+        },
+        "pronouns": {
+          "type": "string"
         },
         "provider": {
           "type": "string"
@@ -40784,6 +40940,9 @@
           "type": "string"
         },
         "website_url": {
+          "type": "string"
+        },
+        "work_information": {
           "type": "string"
         }
       },
@@ -49119,6 +49278,9 @@
         "bio": {
           "type": "string"
         },
+        "bio_html": {
+          "type": "string"
+        },
         "bot": {
           "type": "boolean"
         },
@@ -49133,6 +49295,9 @@
         },
         "color_scheme_id": {
           "type": "integer"
+        },
+        "commit_email": {
+          "type": "string"
         },
         "confirmed_at": {
           "type": "string"
@@ -49204,8 +49369,20 @@
             "array"
           ]
         },
+        "discord": {
+          "type": "string"
+        },
         "email": {
           "type": "string"
+        },
+        "enterprise_group_associated_at": {
+          "type": "string"
+        },
+        "enterprise_group_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "extern_uid": {
           "type": "string"
@@ -49215,6 +49392,21 @@
         },
         "extra_shared_runners_minutes_limit": {
           "type": "integer"
+        },
+        "followers": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "following": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "github": {
+          "type": "string"
         },
         "id": {
           "type": "integer"
@@ -49247,6 +49439,12 @@
         "is_auditor": {
           "type": "boolean"
         },
+        "is_followed": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "job_title": {
           "type": "string"
         },
@@ -49260,6 +49458,9 @@
           "type": "string"
         },
         "linkedin": {
+          "type": "string"
+        },
+        "local_time": {
           "type": "string"
         },
         "location": {
@@ -49289,14 +49490,26 @@
         "organization": {
           "type": "string"
         },
+        "preferred_language": {
+          "type": "string"
+        },
         "private_profile": {
           "type": "boolean"
         },
         "projects_limit": {
           "type": "integer"
         },
+        "pronouns": {
+          "type": "string"
+        },
         "provider": {
           "type": "string"
+        },
+        "provisioned_by_group_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "public_email": {
           "type": "string"
@@ -49345,6 +49558,9 @@
         "two_factor_enabled": {
           "type": "boolean"
         },
+        "unconfirmed_email": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         },
@@ -49355,6 +49571,9 @@
           "type": "string"
         },
         "website_url": {
+          "type": "string"
+        },
+        "work_information": {
           "type": "string"
         }
       },
@@ -61438,6 +61657,9 @@
               "color_scheme_id": {
                 "type": "integer"
               },
+              "commit_email": {
+                "type": "string"
+              },
               "confirmed_at": {
                 "type": "string"
               },
@@ -61507,6 +61729,9 @@
                   "array"
                 ]
               },
+              "discord": {
+                "type": "string"
+              },
               "email": {
                 "type": "string"
               },
@@ -61518,6 +61743,21 @@
               },
               "extra_shared_runners_minutes_limit": {
                 "type": "integer"
+              },
+              "followers": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "following": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "github": {
+                "type": "string"
               },
               "id": {
                 "type": "integer"
@@ -61550,6 +61790,12 @@
               "is_auditor": {
                 "type": "boolean"
               },
+              "is_followed": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "job_title": {
                 "type": "string"
               },
@@ -61563,6 +61809,9 @@
                 "type": "string"
               },
               "linkedin": {
+                "type": "string"
+              },
+              "local_time": {
                 "type": "string"
               },
               "location": {
@@ -61583,11 +61832,17 @@
               "organization": {
                 "type": "string"
               },
+              "preferred_language": {
+                "type": "string"
+              },
               "private_profile": {
                 "type": "boolean"
               },
               "projects_limit": {
                 "type": "integer"
+              },
+              "pronouns": {
+                "type": "string"
               },
               "provider": {
                 "type": "string"
@@ -61649,6 +61904,9 @@
                 "type": "string"
               },
               "website_url": {
+                "type": "string"
+              },
+              "work_information": {
                 "type": "string"
               }
             },
@@ -68203,6 +68461,9 @@
               "color_scheme_id": {
                 "type": "integer"
               },
+              "commit_email": {
+                "type": "string"
+              },
               "confirmed_at": {
                 "type": "string"
               },
@@ -68272,6 +68533,9 @@
                   "array"
                 ]
               },
+              "discord": {
+                "type": "string"
+              },
               "email": {
                 "type": "string"
               },
@@ -68283,6 +68547,21 @@
               },
               "extra_shared_runners_minutes_limit": {
                 "type": "integer"
+              },
+              "followers": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "following": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "github": {
+                "type": "string"
               },
               "id": {
                 "type": "integer"
@@ -68315,6 +68594,12 @@
               "is_auditor": {
                 "type": "boolean"
               },
+              "is_followed": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "job_title": {
                 "type": "string"
               },
@@ -68328,6 +68613,9 @@
                 "type": "string"
               },
               "linkedin": {
+                "type": "string"
+              },
+              "local_time": {
                 "type": "string"
               },
               "location": {
@@ -68348,11 +68636,17 @@
               "organization": {
                 "type": "string"
               },
+              "preferred_language": {
+                "type": "string"
+              },
               "private_profile": {
                 "type": "boolean"
               },
               "projects_limit": {
                 "type": "integer"
+              },
+              "pronouns": {
+                "type": "string"
               },
               "provider": {
                 "type": "string"
@@ -68414,6 +68708,9 @@
                 "type": "string"
               },
               "website_url": {
+                "type": "string"
+              },
+              "work_information": {
                 "type": "string"
               }
             },
@@ -107619,6 +107916,9 @@
               "color_scheme_id": {
                 "type": "integer"
               },
+              "commit_email": {
+                "type": "string"
+              },
               "confirmed_at": {
                 "type": "string"
               },
@@ -107689,6 +107989,9 @@
                   "array"
                 ]
               },
+              "discord": {
+                "type": "string"
+              },
               "email": {
                 "type": "string"
               },
@@ -107700,6 +108003,21 @@
               },
               "extra_shared_runners_minutes_limit": {
                 "type": "integer"
+              },
+              "followers": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "following": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "github": {
+                "type": "string"
               },
               "id": {
                 "type": "integer"
@@ -107732,6 +108050,12 @@
               "is_auditor": {
                 "type": "boolean"
               },
+              "is_followed": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "job_title": {
                 "type": "string"
               },
@@ -107745,6 +108069,9 @@
                 "type": "string"
               },
               "linkedin": {
+                "type": "string"
+              },
+              "local_time": {
                 "type": "string"
               },
               "location": {
@@ -107774,11 +108101,17 @@
               "organization": {
                 "type": "string"
               },
+              "preferred_language": {
+                "type": "string"
+              },
               "private_profile": {
                 "type": "boolean"
               },
               "projects_limit": {
                 "type": "integer"
+              },
+              "pronouns": {
+                "type": "string"
               },
               "provider": {
                 "type": "string"
@@ -107840,6 +108173,9 @@
                 "type": "string"
               },
               "website_url": {
+                "type": "string"
+              },
+              "work_information": {
                 "type": "string"
               }
             },
@@ -119756,6 +120092,9 @@
               "bio": {
                 "type": "string"
               },
+              "bio_html": {
+                "type": "string"
+              },
               "bot": {
                 "type": "boolean"
               },
@@ -119770,6 +120109,9 @@
               },
               "color_scheme_id": {
                 "type": "integer"
+              },
+              "commit_email": {
+                "type": "string"
               },
               "confirmed_at": {
                 "type": "string"
@@ -119841,8 +120183,20 @@
                   "array"
                 ]
               },
+              "discord": {
+                "type": "string"
+              },
               "email": {
                 "type": "string"
+              },
+              "enterprise_group_associated_at": {
+                "type": "string"
+              },
+              "enterprise_group_id": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
               },
               "extern_uid": {
                 "type": "string"
@@ -119852,6 +120206,21 @@
               },
               "extra_shared_runners_minutes_limit": {
                 "type": "integer"
+              },
+              "followers": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "following": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "github": {
+                "type": "string"
               },
               "id": {
                 "type": "integer"
@@ -119884,6 +120253,12 @@
               "is_auditor": {
                 "type": "boolean"
               },
+              "is_followed": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "job_title": {
                 "type": "string"
               },
@@ -119897,6 +120272,9 @@
                 "type": "string"
               },
               "linkedin": {
+                "type": "string"
+              },
+              "local_time": {
                 "type": "string"
               },
               "location": {
@@ -119926,14 +120304,26 @@
               "organization": {
                 "type": "string"
               },
+              "preferred_language": {
+                "type": "string"
+              },
               "private_profile": {
                 "type": "boolean"
               },
               "projects_limit": {
                 "type": "integer"
               },
+              "pronouns": {
+                "type": "string"
+              },
               "provider": {
                 "type": "string"
+              },
+              "provisioned_by_group_id": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
               },
               "public_email": {
                 "type": "string"
@@ -119982,6 +120372,9 @@
               "two_factor_enabled": {
                 "type": "boolean"
               },
+              "unconfirmed_email": {
+                "type": "string"
+              },
               "username": {
                 "type": "string"
               },
@@ -119992,6 +120385,9 @@
                 "type": "string"
               },
               "website_url": {
+                "type": "string"
+              },
+              "work_information": {
                 "type": "string"
               }
             },
@@ -122413,6 +122809,9 @@
         "bio": {
           "type": "string"
         },
+        "bio_html": {
+          "type": "string"
+        },
         "bot": {
           "type": "boolean"
         },
@@ -122427,6 +122826,9 @@
         },
         "color_scheme_id": {
           "type": "integer"
+        },
+        "commit_email": {
+          "type": "string"
         },
         "confirmed_at": {
           "type": "string"
@@ -122498,8 +122900,20 @@
             "array"
           ]
         },
+        "discord": {
+          "type": "string"
+        },
         "email": {
           "type": "string"
+        },
+        "enterprise_group_associated_at": {
+          "type": "string"
+        },
+        "enterprise_group_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "extern_uid": {
           "type": "string"
@@ -122509,6 +122923,21 @@
         },
         "extra_shared_runners_minutes_limit": {
           "type": "integer"
+        },
+        "followers": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "following": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "github": {
+          "type": "string"
         },
         "id": {
           "type": "integer"
@@ -122541,6 +122970,12 @@
         "is_auditor": {
           "type": "boolean"
         },
+        "is_followed": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "job_title": {
           "type": "string"
         },
@@ -122554,6 +122989,9 @@
           "type": "string"
         },
         "linkedin": {
+          "type": "string"
+        },
+        "local_time": {
           "type": "string"
         },
         "location": {
@@ -122583,14 +123021,26 @@
         "organization": {
           "type": "string"
         },
+        "preferred_language": {
+          "type": "string"
+        },
         "private_profile": {
           "type": "boolean"
         },
         "projects_limit": {
           "type": "integer"
         },
+        "pronouns": {
+          "type": "string"
+        },
         "provider": {
           "type": "string"
+        },
+        "provisioned_by_group_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "public_email": {
           "type": "string"
@@ -122639,6 +123089,9 @@
         "two_factor_enabled": {
           "type": "boolean"
         },
+        "unconfirmed_email": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         },
@@ -122649,6 +123102,9 @@
           "type": "string"
         },
         "website_url": {
+          "type": "string"
+        },
+        "work_information": {
           "type": "string"
         }
       },
@@ -222061,6 +222517,9 @@
         "bio": {
           "type": "string"
         },
+        "bio_html": {
+          "type": "string"
+        },
         "bot": {
           "type": "boolean"
         },
@@ -222075,6 +222534,9 @@
         },
         "color_scheme_id": {
           "type": "integer"
+        },
+        "commit_email": {
+          "type": "string"
         },
         "confirmed_at": {
           "type": "string"
@@ -222146,8 +222608,20 @@
             "array"
           ]
         },
+        "discord": {
+          "type": "string"
+        },
         "email": {
           "type": "string"
+        },
+        "enterprise_group_associated_at": {
+          "type": "string"
+        },
+        "enterprise_group_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "extern_uid": {
           "type": "string"
@@ -222157,6 +222631,21 @@
         },
         "extra_shared_runners_minutes_limit": {
           "type": "integer"
+        },
+        "followers": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "following": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "github": {
+          "type": "string"
         },
         "id": {
           "type": "integer"
@@ -222189,6 +222678,12 @@
         "is_auditor": {
           "type": "boolean"
         },
+        "is_followed": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "job_title": {
           "type": "string"
         },
@@ -222202,6 +222697,9 @@
           "type": "string"
         },
         "linkedin": {
+          "type": "string"
+        },
+        "local_time": {
           "type": "string"
         },
         "location": {
@@ -222231,14 +222729,26 @@
         "organization": {
           "type": "string"
         },
+        "preferred_language": {
+          "type": "string"
+        },
         "private_profile": {
           "type": "boolean"
         },
         "projects_limit": {
           "type": "integer"
         },
+        "pronouns": {
+          "type": "string"
+        },
         "provider": {
           "type": "string"
+        },
+        "provisioned_by_group_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "public_email": {
           "type": "string"
@@ -222287,6 +222797,9 @@
         "two_factor_enabled": {
           "type": "boolean"
         },
+        "unconfirmed_email": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         },
@@ -222297,6 +222810,9 @@
           "type": "string"
         },
         "website_url": {
+          "type": "string"
+        },
+        "work_information": {
           "type": "string"
         }
       },
@@ -222868,6 +223384,9 @@
         "bio": {
           "type": "string"
         },
+        "bio_html": {
+          "type": "string"
+        },
         "bot": {
           "type": "boolean"
         },
@@ -222882,6 +223401,9 @@
         },
         "color_scheme_id": {
           "type": "integer"
+        },
+        "commit_email": {
+          "type": "string"
         },
         "confirmed_at": {
           "type": "string"
@@ -222953,8 +223475,20 @@
             "array"
           ]
         },
+        "discord": {
+          "type": "string"
+        },
         "email": {
           "type": "string"
+        },
+        "enterprise_group_associated_at": {
+          "type": "string"
+        },
+        "enterprise_group_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "extern_uid": {
           "type": "string"
@@ -222964,6 +223498,21 @@
         },
         "extra_shared_runners_minutes_limit": {
           "type": "integer"
+        },
+        "followers": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "following": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "github": {
+          "type": "string"
         },
         "id": {
           "type": "integer"
@@ -222996,6 +223545,12 @@
         "is_auditor": {
           "type": "boolean"
         },
+        "is_followed": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "job_title": {
           "type": "string"
         },
@@ -223009,6 +223564,9 @@
           "type": "string"
         },
         "linkedin": {
+          "type": "string"
+        },
+        "local_time": {
           "type": "string"
         },
         "location": {
@@ -223038,14 +223596,26 @@
         "organization": {
           "type": "string"
         },
+        "preferred_language": {
+          "type": "string"
+        },
         "private_profile": {
           "type": "boolean"
         },
         "projects_limit": {
           "type": "integer"
         },
+        "pronouns": {
+          "type": "string"
+        },
         "provider": {
           "type": "string"
+        },
+        "provisioned_by_group_id": {
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "public_email": {
           "type": "string"
@@ -223094,6 +223664,9 @@
         "two_factor_enabled": {
           "type": "boolean"
         },
+        "unconfirmed_email": {
+          "type": "string"
+        },
         "username": {
           "type": "string"
         },
@@ -223104,6 +223677,9 @@
           "type": "string"
         },
         "website_url": {
+          "type": "string"
+        },
+        "work_information": {
           "type": "string"
         }
       },

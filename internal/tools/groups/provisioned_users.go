@@ -82,6 +82,22 @@ type ProvisionedUserOutput struct {
 	NamespaceID                    int64                            `json:"namespace_id,omitempty"`
 	Locked                         bool                             `json:"locked,omitempty"`
 	CreatedBy                      *ProvisionedUserBasicUser        `json:"created_by,omitempty"`
+	// The keys lib/api/entities/user_public.rb sends that client-go's User
+	// does not model, read from the captured response beside the SDK's own
+	// decode (ADR-0021) and described on toolutil.UserExtra. GitLab presents
+	// GET /groups/:id/provisioned_users with UserPublic, so the seven profile
+	// keys are on every response and the three counts on one whose caller may
+	// read the profile.
+	CommitEmail       string `json:"commit_email,omitempty"`
+	Discord           string `json:"discord,omitempty"`
+	GitHub            string `json:"github,omitempty"`
+	LocalTime         string `json:"local_time,omitempty"`
+	PreferredLanguage string `json:"preferred_language,omitempty"`
+	Pronouns          string `json:"pronouns,omitempty"`
+	WorkInformation   string `json:"work_information,omitempty"`
+	Followers         *int64 `json:"followers,omitempty"`
+	Following         *int64 `json:"following,omitempty"`
+	IsFollowed        *bool  `json:"is_followed,omitempty"`
 }
 
 // ProvisionedUserIdentity mirrors gl.UserIdentity (the identities object).
@@ -122,8 +138,9 @@ type ProvisionedUsersListOutput struct {
 }
 
 // ProvisionedUserToOutput converts a gl.User to the full provisioned-user output
-// shape (1:1 audit policy: full nested objects).
-func ProvisionedUserToOutput(u *gl.User) ProvisionedUserOutput {
+// shape (1:1 audit policy: full nested objects), filling from extra the keys
+// client-go's User declares on no field of its own (ADR-0021).
+func ProvisionedUserToOutput(u *gl.User, extra toolutil.UserExtra) ProvisionedUserOutput {
 	out := ProvisionedUserOutput{
 		ID:                             u.ID,
 		Username:                       u.Username,
@@ -165,6 +182,16 @@ func ProvisionedUserToOutput(u *gl.User) ProvisionedUserOutput {
 		NamespaceID:                    u.NamespaceID,
 		Locked:                         u.Locked,
 		CreatedBy:                      provisionedUserBasicUser(u.CreatedBy),
+		CommitEmail:                    extra.CommitEmail,
+		Discord:                        extra.Discord,
+		GitHub:                         extra.GitHub,
+		LocalTime:                      extra.LocalTime,
+		PreferredLanguage:              extra.PreferredLanguage,
+		Pronouns:                       extra.Pronouns,
+		WorkInformation:                extra.WorkInformation,
+		Followers:                      extra.Followers,
+		Following:                      extra.Following,
+		IsFollowed:                     extra.IsFollowed,
 	}
 	if u.CreatedAt != nil {
 		out.CreatedAt = u.CreatedAt.Format(time.RFC3339)
@@ -266,18 +293,23 @@ func ListProvisionedUsers(ctx context.Context, client *gitlabclient.Client, inpu
 		return ProvisionedUsersListOutput{}, err
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	users, resp, err := client.GL().Groups.ListProvisionedUsers(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ProvisionedUsersListOutput{}, toolutil.WrapErrWithStatusHint("ListProvisionedUsers", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get; provisioned users require a SAML/SCIM-enabled group and Owner role (Premium/Ultimate)")
 	}
 
+	extras, err := toolutil.CapturedUsers(captured, len(users))
+	if err != nil {
+		return ProvisionedUsersListOutput{}, toolutil.WrapErr("ListProvisionedUsers", err)
+	}
 	out := ProvisionedUsersListOutput{
 		Users:      make([]ProvisionedUserOutput, len(users)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
 	for i, u := range users {
-		out.Users[i] = ProvisionedUserToOutput(u)
+		out.Users[i] = ProvisionedUserToOutput(u, extras[i])
 	}
 	return out, nil
 }

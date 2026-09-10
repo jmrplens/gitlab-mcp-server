@@ -865,6 +865,123 @@ func TestCapturedMergeRequests_HoldsTheCountToTheSDKs(t *testing.T) {
 	}
 }
 
+// userPublicBody is what a route presenting API::Entities::UserPublic answers
+// to a caller allowed to read the profile: the seven unconditional keys and the
+// three follow counts.
+const userPublicBody = `{
+	"id":7,"username":"jdoe","commit_email":"c@example.com","discord":"jdoe#1","github":"jdoe",
+	"local_time":"2:30 PM","preferred_language":"en","pronouns":"she/her","work_information":"Org",
+	"followers":12,"following":34,"is_followed":true
+}`
+
+// TestCapturedUser_ReadsWhatTheSDKDoesNotModel verifies the user reader decodes
+// the ten keys UserPublic sends that client-go's User declares on no field, and
+// reports a capture nothing ran under.
+func TestCapturedUser_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
+	extra, err := CapturedUser(gitlabclient.CapturedBody([]byte(userPublicBody)))
+	if err != nil {
+		t.Fatalf("CapturedUser() unexpected error: %v", err)
+	}
+	if extra.CommitEmail != "c@example.com" || extra.Discord != "jdoe#1" || extra.GitHub != "jdoe" {
+		t.Errorf("extra = %+v, want the commit address and the two account names", extra)
+	}
+	if extra.LocalTime != "2:30 PM" || extra.PreferredLanguage != "en" || extra.Pronouns != "she/her" || extra.WorkInformation != "Org" {
+		t.Errorf("extra = %+v, want the four profile keys", extra)
+	}
+	if extra.Followers == nil || *extra.Followers != 12 || extra.Following == nil || *extra.Following != 34 {
+		t.Errorf("counts = %v/%v, want 12 and 34", extra.Followers, extra.Following)
+	}
+	if extra.IsFollowed == nil || !*extra.IsFollowed {
+		t.Errorf("IsFollowed = %v, want true", extra.IsFollowed)
+	}
+
+	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+	if _, err = CapturedUser(untouched); !errors.Is(err, gitlabclient.ErrNoResponseCaptured) {
+		t.Errorf("read on a capture nothing ran under = %v, want ErrNoResponseCaptured", err)
+	}
+}
+
+// TestCapturedUser_KeepsAHiddenProfileApartFromAnUnfollowedUser verifies the
+// two sides of the read_user_profile condition stay distinguishable. GitLab
+// sends no count at all to a caller who may not read the profile, and a zero
+// count is a user nobody follows: a bare number would flatten the first into
+// the second.
+func TestCapturedUser_KeepsAHiddenProfileApartFromAnUnfollowedUser(t *testing.T) {
+	hidden, err := CapturedUser(gitlabclient.CapturedBody([]byte(`{"id":7,"username":"jdoe"}`)))
+	if err != nil || hidden.Followers != nil || hidden.Following != nil || hidden.IsFollowed != nil {
+		t.Errorf("CapturedUser() on a hidden profile = %+v, %v; want the three pointers left nil", hidden, err)
+	}
+	none, err := CapturedUser(gitlabclient.CapturedBody([]byte(`{"id":7,"followers":0,"following":0,"is_followed":false}`)))
+	if err != nil || none.Followers == nil || *none.Followers != 0 || none.IsFollowed == nil || *none.IsFollowed {
+		t.Errorf("CapturedUser() on a user nobody follows = %+v, %v; want zero read as zero", none, err)
+	}
+}
+
+// TestCapturedInstanceUser_ReadsTheFiveKeysBesideThem verifies the wider reader
+// carries everything CapturedUser reads and the five keys only an instance-wide
+// route sends, and that each of the three conditions leaves its key absent
+// rather than zero when GitLab does not send it.
+func TestCapturedInstanceUser_ReadsTheFiveKeysBesideThem(t *testing.T) {
+	extra, err := CapturedInstanceUser(gitlabclient.CapturedBody([]byte(`{
+		"id":7,"commit_email":"c@example.com","followers":12,"bio_html":"<p>bio</p>",
+		"enterprise_group_id":33,"enterprise_group_associated_at":"2026-01-02T03:04:05Z",
+		"provisioned_by_group_id":44,"unconfirmed_email":"new@example.com"
+	}`)))
+	if err != nil {
+		t.Fatalf("CapturedInstanceUser() unexpected error: %v", err)
+	}
+	// The embedded shape is read through the same decode.
+	if extra.CommitEmail != "c@example.com" || extra.Followers == nil || *extra.Followers != 12 {
+		t.Errorf("embedded UserExtra = %+v, want the commit address and the count", extra.UserExtra)
+	}
+	if extra.BioHTML != "<p>bio</p>" || extra.UnconfirmedEmail != "new@example.com" {
+		t.Errorf("extra = %+v, want the rendered bio and the pending address", extra)
+	}
+	if extra.EnterpriseGroupID == nil || *extra.EnterpriseGroupID != 33 ||
+		extra.ProvisionedByGroupID == nil || *extra.ProvisionedByGroupID != 44 {
+		t.Errorf("group ids = %v/%v, want 33 and 44", extra.EnterpriseGroupID, extra.ProvisionedByGroupID)
+	}
+	if extra.EnterpriseGroupAssociatedAt == nil || extra.EnterpriseGroupAssociatedAt.Year() != 2026 {
+		t.Errorf("EnterpriseGroupAssociatedAt = %v, want the 2026 timestamp", extra.EnterpriseGroupAssociatedAt)
+	}
+
+	// An instance without the license sends neither enterprise key nor the
+	// provisioning group, and an account with no address change pending sends
+	// no unconfirmed_email. Group 0 is not "no group", which is why the two
+	// identifiers are pointers.
+	unlicensed, err := CapturedInstanceUser(gitlabclient.CapturedBody([]byte(`{"id":7}`)))
+	if err != nil {
+		t.Fatalf("CapturedInstanceUser() unexpected error: %v", err)
+	}
+	if unlicensed.EnterpriseGroupID != nil || unlicensed.EnterpriseGroupAssociatedAt != nil ||
+		unlicensed.ProvisionedByGroupID != nil || unlicensed.UnconfirmedEmail != "" || unlicensed.BioHTML != "" {
+		t.Errorf("CapturedInstanceUser() on an unlicensed answer = %+v, want every key left absent", unlicensed)
+	}
+}
+
+// TestCapturedUserListReaders_HoldTheCountToTheSDKs verifies both list readers
+// pair extras by position and refuse a count other than the SDK's, naming both
+// numbers.
+func TestCapturedUserListReaders_HoldTheCountToTheSDKs(t *testing.T) {
+	extras, err := CapturedUsers(gitlabclient.CapturedBody([]byte(`[{"id":1,"pronouns":"he/him"},{"id":2}]`)), 2)
+	if err != nil || len(extras) != 2 || extras[0].Pronouns != "he/him" || extras[1].Pronouns != "" {
+		t.Errorf("CapturedUsers() = %+v, %v; want two extras in order", extras, err)
+	}
+	if _, err = CapturedUsers(gitlabclient.CapturedBody([]byte(`[{"id":1}]`)), 2); err == nil ||
+		!strings.Contains(err.Error(), "holds 1 users and the SDK decoded 2") {
+		t.Errorf("CapturedUsers() with another count = %v, want the two numbers", err)
+	}
+
+	wide, err := CapturedInstanceUsers(gitlabclient.CapturedBody([]byte(`[{"id":1,"bio_html":"<p>b</p>"},{"id":2}]`)), 2)
+	if err != nil || len(wide) != 2 || wide[0].BioHTML != "<p>b</p>" || wide[1].BioHTML != "" {
+		t.Errorf("CapturedInstanceUsers() = %+v, %v; want two extras in order", wide, err)
+	}
+	if _, err = CapturedInstanceUsers(gitlabclient.CapturedBody([]byte(`[{"id":1}]`)), 2); err == nil ||
+		!strings.Contains(err.Error(), "holds 1 users and the SDK decoded 2") {
+		t.Errorf("CapturedInstanceUsers() with another count = %v, want the two numbers", err)
+	}
+}
+
 // TestMergeRequestOutput_ApplyExtra_FillsEveryCapturedKey verifies ApplyExtra
 // writes all six keys onto the shared output shape. It is the one place the
 // four packages aliasing that shape rely on, so a key added to

@@ -15,6 +15,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestListProvisionedUsers_FiltersAndOutput verifies the query parameters, the
@@ -175,7 +176,7 @@ func TestProvisionedUserToOutput_AllFields(t *testing.T) {
 		CustomAttributes: []*gl.CustomAttribute{{Key: "k", Value: "v"}, nil},
 		CreatedBy:        &gl.BasicUser{ID: 1, Username: "admin", Name: "Admin", CreatedAt: &ts},
 	}
-	out := ProvisionedUserToOutput(u)
+	out := ProvisionedUserToOutput(u, toolutil.UserExtra{})
 	if out.CreatedAt == "" || out.LastActivityOn == "" || out.CurrentSignInAt == "" ||
 		out.CurrentSignInIP != "10.0.0.1" || out.LastSignInAt == "" || out.LastSignInIP != "10.0.0.2" ||
 		out.ConfirmedAt == "" {
@@ -192,21 +193,105 @@ func TestProvisionedUserToOutput_AllFields(t *testing.T) {
 	}
 }
 
+// TestProvisionedUserToOutput_CopiesEveryCapturedKey verifies the converter
+// writes all ten keys of the captured extra onto the output. A key added to
+// toolutil.UserExtra and not copied here would be a schema field nothing fills.
+func TestProvisionedUserToOutput_CopiesEveryCapturedKey(t *testing.T) {
+	followers, following, followed := int64(3), int64(4), true
+	out := ProvisionedUserToOutput(&gl.User{ID: 7, Username: "u"}, toolutil.UserExtra{
+		CommitEmail: "c@x.com", Discord: "d#1", GitHub: "gh", LocalTime: "9:00 AM",
+		PreferredLanguage: "es", Pronouns: "they/them", WorkInformation: "org",
+		Followers: &followers, Following: &following, IsFollowed: &followed,
+	})
+	if out.CommitEmail != "c@x.com" || out.Discord != "d#1" || out.GitHub != "gh" {
+		t.Errorf("out = %#v, want the commit address and the two account names", out)
+	}
+	if out.LocalTime != "9:00 AM" || out.PreferredLanguage != "es" ||
+		out.Pronouns != "they/them" || out.WorkInformation != "org" {
+		t.Errorf("out = %#v, want the four profile keys", out)
+	}
+	if out.Followers == nil || *out.Followers != 3 || out.Following == nil || *out.Following != 4 ||
+		out.IsFollowed == nil || !*out.IsFollowed {
+		t.Errorf("out counts = %v/%v/%v, want 3, 4 and true", out.Followers, out.Following, out.IsFollowed)
+	}
+}
+
 // TestProvisionedUserToOutput_NilTimes verifies the nil-timestamp branches leave
 // the corresponding string fields empty.
 func TestProvisionedUserToOutput_NilTimes(t *testing.T) {
-	out := ProvisionedUserToOutput(&gl.User{ID: 1, Username: "u"})
+	out := ProvisionedUserToOutput(&gl.User{ID: 1, Username: "u"}, toolutil.UserExtra{})
 	if out.CreatedAt != "" || out.LastActivityOn != "" || out.CurrentSignInIP != "" || out.ConfirmedAt != "" {
 		t.Fatalf("expected empty timestamp/IP fields, got %#v", out)
+	}
+	// A caller who may not read the profile is sent no count at all, which the
+	// pointers keep distinct from a user nobody follows.
+	if out.Followers != nil || out.Following != nil || out.IsFollowed != nil {
+		t.Fatalf("follow counts = %v/%v/%v, want all nil", out.Followers, out.Following, out.IsFollowed)
 	}
 	// The creator object carries a date of its own, and GitLab leaves it out
 	// for a user created before it recorded one, so the nested branch has a
 	// side of its own to answer for.
-	nested := ProvisionedUserToOutput(&gl.User{ID: 1, Username: "u", CreatedBy: &gl.BasicUser{ID: 2, Username: "admin"}})
+	nested := ProvisionedUserToOutput(&gl.User{ID: 1, Username: "u", CreatedBy: &gl.BasicUser{ID: 2, Username: "admin"}}, toolutil.UserExtra{})
 	if nested.CreatedBy == nil {
 		t.Fatal("created_by was dropped")
 	}
 	if nested.CreatedBy.CreatedAt != "" {
 		t.Errorf("created_by.created_at = %q, want empty", nested.CreatedBy.CreatedAt)
+	}
+}
+
+// TestListProvisionedUsers_PairsTheCapturedKeysByPosition verifies the ten keys
+// lib/api/entities/user_public.rb sends that client-go's User declares on no
+// field of its own reach the output, one captured extra per row in order, and
+// that a row GitLab sent no follow counts on leaves them absent rather than
+// zero. GitLab presents this endpoint `with: ::API::Entities::UserPublic`, so
+// these ten are the whole set it can carry.
+func TestListProvisionedUsers_PairsTheCapturedKeysByPosition(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/42/provisioned_users", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"id":1,"username":"alice","commit_email":"c@example.com","discord":"alice#1","github":"alice",
+			 "local_time":"2:30 PM","preferred_language":"en","pronouns":"she/her","work_information":"Org",
+			 "followers":12,"following":34,"is_followed":true},
+			{"id":2,"username":"bob"}
+		]`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := ListProvisionedUsers(context.Background(), client, ListProvisionedUsersInput{GroupID: "42"})
+	if err != nil {
+		t.Fatalf("ListProvisionedUsers() unexpected error: %v", err)
+	}
+	if len(out.Users) != 2 {
+		t.Fatalf("got %d users, want 2", len(out.Users))
+	}
+	first := out.Users[0]
+	if first.CommitEmail != "c@example.com" || first.Discord != "alice#1" || first.GitHub != "alice" ||
+		first.LocalTime != "2:30 PM" || first.PreferredLanguage != "en" || first.Pronouns != "she/her" ||
+		first.WorkInformation != "Org" {
+		t.Errorf("Users[0] = %+v, want the seven unconditional keys", first)
+	}
+	if first.Followers == nil || *first.Followers != 12 || first.Following == nil || *first.Following != 34 ||
+		first.IsFollowed == nil || !*first.IsFollowed {
+		t.Errorf("Users[0] counts = %v/%v/%v, want 12, 34 and true", first.Followers, first.Following, first.IsFollowed)
+	}
+	if out.Users[1].CommitEmail != "" || out.Users[1].Followers != nil || out.Users[1].IsFollowed != nil {
+		t.Errorf("Users[1] = %+v, want the second row left empty", out.Users[1])
+	}
+}
+
+// TestListProvisionedUsers_ACapturedFieldTheTypeCannotHold_IsReported verifies
+// a body that decodes for the SDK and not for the keys read beside it is the
+// operation's error rather than a page of users with those keys silently empty.
+func TestListProvisionedUsers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/42/provisioned_users", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"username":"alice","following":"not-a-number"}]`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	_, err := ListProvisionedUsers(context.Background(), client, ListProvisionedUsersInput{GroupID: "42"})
+	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("ListProvisionedUsers() error = %v, want the capture's decode failure", err)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -420,5 +421,78 @@ func TestModify_AllOptionalFields(t *testing.T) {
 				t.Errorf("modify body missing %q: %v", key, body)
 			}
 		})
+	}
+}
+
+// TestCreateUser_ReadsTheLicensedEnterpriseKeys verifies the three keys
+// ee/lib/ee/api/entities/user_with_admin.rb exposes reach the output when the
+// instance holds the license that gates them. POST /users is one of the two
+// routes presenting UserWithAdmin, and client-go's User models none of the
+// three, so they can only arrive through the captured response (ADR-0021).
+func TestCreateUser_ReadsTheLicensedEnterpriseKeys(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users" {
+			testutil.RespondJSON(w, http.StatusCreated, `{
+				"id":42,"username":"testuser","commit_email":"c@example.com","local_time":"9:00 AM",
+				"enterprise_group_id":33,"enterprise_group_associated_at":"2026-01-02T03:04:05Z",
+				"provisioned_by_group_id":44
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Create(context.Background(), client, CreateInput{Email: "e@x", Name: "N", Username: "u"})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	if out.EnterpriseGroupID == nil || *out.EnterpriseGroupID != 33 {
+		t.Errorf("EnterpriseGroupID = %v, want 33", out.EnterpriseGroupID)
+	}
+	if out.EnterpriseGroupAssociatedAt != "2026-01-02T03:04:05Z" {
+		t.Errorf("EnterpriseGroupAssociatedAt = %q, want the RFC3339 timestamp", out.EnterpriseGroupAssociatedAt)
+	}
+	if out.ProvisionedByGroupID == nil || *out.ProvisionedByGroupID != 44 {
+		t.Errorf("ProvisionedByGroupID = %v, want 44", out.ProvisionedByGroupID)
+	}
+	if out.CommitEmail != "c@example.com" || out.LocalTime != "9:00 AM" {
+		t.Errorf("out = %+v, want the two unconditional keys beside them", out)
+	}
+}
+
+// TestCreateUser_OnAnUnlicensedInstanceLeavesTheEnterpriseKeysAbsent is the
+// other side of that condition: License.feature_available? is false for
+// domain_verification and group_saml, GitLab exposes neither key, and the
+// output must say nothing rather than name group 0.
+func TestCreateUser_OnAnUnlicensedInstanceLeavesTheEnterpriseKeysAbsent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users" {
+			testutil.RespondJSON(w, http.StatusCreated, userJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Create(context.Background(), client, CreateInput{Email: "e@x", Name: "N", Username: "u"})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	if out.EnterpriseGroupID != nil || out.ProvisionedByGroupID != nil || out.EnterpriseGroupAssociatedAt != "" {
+		t.Errorf("out = %+v, want the three licensed keys left absent", out)
+	}
+}
+
+// TestModify_UserACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds: GitLab's answer decodes for the SDK and
+// not for the keys read beside it, and the handler reports it rather than
+// returning a user with those keys silently empty.
+func TestModify_UserACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"u","followers":"not-a-number"}`)
+	}))
+
+	_, err := Modify(context.Background(), client, ModifyInput{UserID: 42, Name: "N"})
+	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("Modify() error = %v, want the capture's decode failure", err)
 	}
 }

@@ -51,6 +51,16 @@ const (
 	// and whatever entity it answers with, into the union in front of a type
 	// that has never held one of its responses.
 	categorySDKRouteNeverCalled = "sdk-route-no-handler-calls"
+	// categorySDKRouteFillsAnotherType is its sibling for the case where this
+	// repository does call the endpoint, into a different output type. Several
+	// types here decode one client-go struct from different route sets, and
+	// [readSDKRoutes] unions every endpoint that struct's methods reach in
+	// front of all of them, so the entity behind an endpoint a given type is
+	// never filled from is still held against it. The two are kept apart
+	// because the evidence differs: the other is answered by showing that
+	// nothing calls the method, and this one by showing which routes fill the
+	// type.
+	categorySDKRouteFillsAnotherType = "sdk-route-fills-another-type"
 )
 
 // The member-family package paths, spelled once because several declarations
@@ -69,6 +79,44 @@ const (
 	deploymentMergeRequestsPkg = toolsDir + "/deploymentmergerequests"
 )
 
+// The three group-scoped user packages, beside internal/tools/users. All four
+// publish a user, all four pair with client-go's User, and only the last is
+// filled from an instance-wide route.
+const (
+	enterpriseUsersPkg = toolsDir + "/enterpriseusers"
+	groupSAMLPkg       = toolsDir + "/groupsaml"
+	usersPkg           = toolsDir + "/users"
+)
+
+// The four user entities the eleven endpoints behind client-go's User present.
+// UserPublic is what every group-scoped list answers with; the other three
+// belong to routes only internal/tools/users calls.
+const (
+	userPublicEntity     = "API::Entities::UserPublic"
+	userProfileEntity    = "API::Entities::UserProfile"
+	userWithAdminEntity  = "API::Entities::UserWithAdmin"
+	serviceAccountEntity = "API::Entities::ServiceAccount"
+)
+
+// reasonGroupScopedUserRoutes answers the five keys held against the three
+// group-scoped user types that only an instance-wide route can send.
+//
+// It is one reason for fifteen findings because it is one artifact. All four
+// user output types pair with client-go's User, and readSDKRoutes unions the
+// eleven endpoints its service methods reach in front of every one of them.
+// Three of those endpoints fill these types: GET /groups/:id/enterprise_users
+// (and its single-user sibling), /provisioned_users and /saml_users, each of
+// which GitLab presents `with: ::API::Entities::UserPublic` and not merely
+// annotates that way. The keys here are on entities the other eight endpoints
+// present, and internal/tools/users is where they are published.
+const reasonGroupScopedUserRoutes = "the three group-scoped user endpoints present ::API::Entities::UserPublic, which carries none of these keys: " +
+	"bio_html comes from lib/api/entities/users/bio_html.rb, which only UserProfile includes and only GET /users/:id presents; " +
+	"enterprise_group_id, enterprise_group_associated_at and provisioned_by_group_id come from " +
+	"ee/lib/ee/api/entities/user_with_admin.rb, which only POST /users and PUT /users/:id present; and unconfirmed_email is not a user " +
+	"key at all but one of the six on lib/api/entities/service_account.rb, which POST /service_accounts answers with. All five reach " +
+	"this type only because it decodes the same gl.User those endpoints do, and all five are published on internal/tools/users, which " +
+	"is the package those routes fill."
+
 // memberEntity is the entity the billable members route annotates and the one
 // internal/tools/groupmembers really publishes on its member output.
 const memberEntity = "API::Entities::Member"
@@ -78,7 +126,11 @@ const memberEntity = "API::Entities::Member"
 const accessRequesterEntity = "API::Entities::AccessRequester"
 
 // The three presenter options behind [categoryOptionNeverPassed] in the member
-// family, each naming the routes checked against the record at v19.3.1-ee.
+// and user families, each naming the routes checked against the record at
+// v19.3.1-ee. only_path is declared by none of the 2110 routes in that record,
+// which is why every type carrying a user answers avatar_path this way; the
+// contrast that makes the check worth running is render_html, which looks the
+// same in the entity and is a declared parameter on three of them.
 //
 // A presenter option is not a request parameter a caller can smuggle in: Grape
 // passes it only where the endpoint declares it, so a route that does not
@@ -231,6 +283,36 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	// GitLab adds.
 	{Package: toolsDir + "/issues", Entity: "API::Entities::MergeRequestBasic", Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
 	{Package: toolsDir + "/issues", Entity: "API::Entities::MergeRequestBasic", Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
+
+	// avatar_path on the four types that publish a user. The user entities
+	// inherit it from UserBasic, so it is the same option and the same answer
+	// as in the member family: no route declares only_path, so no response of
+	// theirs has ever carried the key.
+	{Package: usersPkg, Entity: userPublicEntity, Field: "avatar_path", Category: categoryOptionNeverPassed, Reason: reasonOnlyPathNeverPassed},
+	{Package: enterpriseUsersPkg, Entity: userPublicEntity, Field: "avatar_path", Category: categoryOptionNeverPassed, Reason: reasonOnlyPathNeverPassed},
+	{Package: groupsPkg, Entity: userPublicEntity, Field: "avatar_path", Category: categoryOptionNeverPassed, Reason: reasonOnlyPathNeverPassed},
+	{Package: groupSAMLPkg, Entity: userPublicEntity, Field: "avatar_path", Category: categoryOptionNeverPassed, Reason: reasonOnlyPathNeverPassed},
+
+	// The five keys the three group-scoped user types are held to and only an
+	// instance-wide route can send. Named one by one rather than with a splat
+	// over each entity: every other key of UserPublic on these types is
+	// published, and UserProfile and UserWithAdmin both inherit the whole of
+	// it, so a splat would swallow the next key GitLab adds there.
+	{Package: enterpriseUsersPkg, Entity: userProfileEntity, Field: "bio_html", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: enterpriseUsersPkg, Entity: userWithAdminEntity, Field: "enterprise_group_id", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: enterpriseUsersPkg, Entity: userWithAdminEntity, Field: "enterprise_group_associated_at", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: enterpriseUsersPkg, Entity: userWithAdminEntity, Field: "provisioned_by_group_id", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: enterpriseUsersPkg, Entity: serviceAccountEntity, Field: "unconfirmed_email", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: groupsPkg, Entity: userProfileEntity, Field: "bio_html", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: groupsPkg, Entity: userWithAdminEntity, Field: "enterprise_group_id", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: groupsPkg, Entity: userWithAdminEntity, Field: "enterprise_group_associated_at", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: groupsPkg, Entity: userWithAdminEntity, Field: "provisioned_by_group_id", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: groupsPkg, Entity: serviceAccountEntity, Field: "unconfirmed_email", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: groupSAMLPkg, Entity: userProfileEntity, Field: "bio_html", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: groupSAMLPkg, Entity: userWithAdminEntity, Field: "enterprise_group_id", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: groupSAMLPkg, Entity: userWithAdminEntity, Field: "enterprise_group_associated_at", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: groupSAMLPkg, Entity: userWithAdminEntity, Field: "provisioned_by_group_id", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+	{Package: groupSAMLPkg, Entity: serviceAccountEntity, Field: "unconfirmed_email", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
 
 	{
 		Package:  toolsDir + "/geo",

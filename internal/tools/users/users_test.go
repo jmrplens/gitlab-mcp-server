@@ -134,6 +134,112 @@ func TestList_UsersSuccess(t *testing.T) {
 	}
 }
 
+// TestList_UsersPairsTheCapturedKeysByPosition verifies a page of users takes
+// one captured extra per row in order, so the second user's profile keys are
+// not read onto the first. GET /users presents UserBasic, which carries none of
+// them, but the reader is the same one every route here uses and the pairing is
+// what a list can get wrong.
+func TestList_UsersPairsTheCapturedKeysByPosition(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathListUsers {
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id":1,"username":"alice","pronouns":"she/her","followers":5},
+				{"id":2,"username":"bob"}
+			]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Users) != 2 {
+		t.Fatalf("got %d users, want 2", len(out.Users))
+	}
+	if out.Users[0].Pronouns != "she/her" || out.Users[0].Followers == nil || *out.Users[0].Followers != 5 {
+		t.Errorf("Users[0] = %+v, want the first row's own keys", out.Users[0])
+	}
+	if out.Users[1].Pronouns != "" || out.Users[1].Followers != nil {
+		t.Errorf("Users[1] = %+v, want the second row left empty", out.Users[1])
+	}
+}
+
+// TestList_UsersACapturedFieldTheTypeCannotHold_IsReported verifies a list body
+// that decodes for the SDK and not for the keys read beside it is the
+// operation's error rather than a page of users with those keys empty.
+func TestList_UsersACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"username":"alice","following":"not-a-number"}]`)
+	}))
+
+	_, err := List(context.Background(), client, ListInput{})
+	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("List() error = %v, want the capture's decode failure", err)
+	}
+}
+
+// TestGet_UserReadsTheProfileKeysAndTheFollowCounts verifies GET /users/:id,
+// which presents UserProfile, carries the rendered bio and the three follow
+// counts to a caller allowed to read the profile, none of which client-go's
+// User models.
+func TestGet_UserReadsTheProfileKeysAndTheFollowCounts(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathGetUser {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":42,"username":"testuser","bio_html":"<p>Developer</p>","discord":"jdoe#1",
+				"github":"jdoe","work_information":"Org","pronouns":"she/her","local_time":"2:30 PM",
+				"followers":12,"following":34,"is_followed":true
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{UserID: 42})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if out.BioHTML != "<p>Developer</p>" || out.Discord != "jdoe#1" || out.GitHub != "jdoe" {
+		t.Errorf("out = %+v, want the rendered bio and the two account names", out)
+	}
+	if out.WorkInformation != "Org" || out.Pronouns != "she/her" || out.LocalTime != "2:30 PM" {
+		t.Errorf("out = %+v, want the three profile keys", out)
+	}
+	if out.Followers == nil || *out.Followers != 12 || out.Following == nil || *out.Following != 34 {
+		t.Errorf("counts = %v/%v, want 12 and 34", out.Followers, out.Following)
+	}
+	if out.IsFollowed == nil || !*out.IsFollowed {
+		t.Errorf("IsFollowed = %v, want true", out.IsFollowed)
+	}
+}
+
+// TestGet_UserOnAProfileTheCallerMayNotReadSendsNoCounts is the other side of
+// the Ability.allowed?(:read_user_profile) condition: GitLab exposes none of
+// the three, and the output must leave them absent rather than report a user
+// with no followers.
+func TestGet_UserOnAProfileTheCallerMayNotReadSendsNoCounts(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathGetUser {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"username":"testuser","pronouns":"she/her"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{UserID: 42})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if out.Followers != nil || out.Following != nil || out.IsFollowed != nil {
+		t.Errorf("counts = %v/%v/%v, want all three absent", out.Followers, out.Following, out.IsFollowed)
+	}
+	if out.Pronouns != "she/her" {
+		t.Errorf("Pronouns = %q, want the unconditional key still read", out.Pronouns)
+	}
+}
+
 // TestList_UsersAPIError verifies List when users API error.
 func TestList_UsersAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1681,7 +1787,7 @@ func assertFullUserSubObjects(t *testing.T, out Output) {
 // TestToOutput_NilAndEmptySubObjects covers the nil-User short-circuit and the
 // empty-slice / nil-element paths of the sub-object converters.
 func TestToOutput_NilAndEmptySubObjects(t *testing.T) {
-	if got := toOutput(nil); got.ID != 0 {
+	if got := toOutput(nil, toolutil.InstanceUserExtra{}); got.ID != 0 {
 		t.Errorf("toOutput(nil) = %+v, want zero", got)
 	}
 	if got := toIdentityOutputs([]*gl.UserIdentity{}); got != nil {
