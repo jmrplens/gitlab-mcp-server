@@ -103,6 +103,7 @@ readable without opening the tracker:
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | No | No | No | No | Partial |
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | No | No | No | No | Partial |
 | 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | No | No | No | No | Yes |
+| 38 | gitlab | [Three job token scope endpoints declare a response entity they do not send](#three-job-token-scope-endpoints-declare-a-response-entity-they-do-not-send) | No | No | No | No | Yes |
 
 States verified against the upstream trackers on 2026-09-05, except entry 34,
 whose merge requests were opened on 2026-09-09.
@@ -1583,6 +1584,64 @@ was ruled out.
 [openai/codex#10334](https://github.com/openai/codex/issues/10334) — Codex sends
 only `structuredContent` to its model when both are present, dropping the
 markdown. We keep emitting both.
+
+## GitLab (`gitlab-org/gitlab`)
+
+### Three job token scope endpoints declare a response entity they do not send
+
+- **Reported**: no, not yet.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes, a declaration. The 13 findings this produces against
+  `internal/tools/groups`' output are answered under
+  `documented-response-is-not-the-one-sent`, which is the category built for
+  exactly this: the record is right about what GitLab says and wrong about what
+  GitLab sends, because GitLab itself is wrong about it.
+
+Three Grape `desc` blocks in `lib/api/project_job_token_scope.rb` name a
+response entity the handler beneath them does not present. The wrong line and
+the `present` it contradicts landed in the same commit each time, so this is a
+copy-paste at introduction rather than drift.
+
+| Endpoint                                    | Declared              | Actually presented  |
+| ------------------------------------------- | --------------------- | ------------------- |
+| `GET :id/job_token_scope/groups_allowlist`  | `BasicProjectDetails` | `BasicGroupDetails` |
+| `POST :id/job_token_scope/groups_allowlist` | `BasicGroupDetails`   | `GroupScopeLink`    |
+| `POST :id/job_token_scope/allowlist`        | `BasicProjectDetails` | `ProjectScopeLink`  |
+
+**How it was settled.** Not by reading the source, which is what found it, but
+by calling the three endpoints against a fixture project and comparing the keys
+that came back. The groups allowlist returns three keys, `id`, `web_url` and
+`name`; the projects allowlist, which really is annotated with the project
+entity, returns seventeen. The two creations return a two-key link object with
+no `id` at all. Both links created for the measurement were deleted afterwards
+and the original state verified restored.
+
+**Why the reading alone was not enough.** Every way the finding could have been
+wrong was tried first. None of the presented entities descends from the declared
+one, so the annotation is not merely loose. No Enterprise override reopens the
+class, and the route is defined once. `doc/development/api_styleguide.md`
+defines `model` as the entity returned in the response body and its own example
+pairs the two, so a mismatch is not house style. Nothing is reported upstream.
+
+**What it costs GitLab.** Both committed OpenAPI specifications carry all three
+wrong schemas, and `ProjectScopeLink` and `GroupScopeLink` have no schema at all
+in either, because no `desc` has ever referenced them.
+
+**What the fix is.** Three lines of Ruby, and **not** a documentation change:
+`doc/api/project_job_token_scopes.md` already documents all three correctly, so
+the page and the annotation contradict each other and the page is the one that
+matches the wire. That puts the fix on the backend review path rather than the
+documentation one this project has used so far. A `lefthook` hook regenerates
+`doc/api/openapi/openapi_v3.yaml` from `lib/api/**/*.rb`, and CI checks its
+freshness, so the change cannot be sent from outside a GDK checkout without that
+regenerated file.
+
+Two adjacent observations were left out of the finding on purpose, so that the
+three lines stay reviewable on their own: both list endpoints are missing
+`is_array: true`, which is real but repository-wide, and `success status:`
+against the styleguide's `code:` is the prevailing idiom rather than a defect.
 
 ## Other
 
