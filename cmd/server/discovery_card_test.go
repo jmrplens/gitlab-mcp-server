@@ -68,9 +68,13 @@ func TestDiscoveryCard_HoldsTheConstraintsTheExtensionDeclares(t *testing.T) {
 	// the extension omits primitives, so finding one here means the two
 	// documents have been confused again.
 	for _, key := range []string{"tools", "resources", "resourceTemplates", "prompts", "capabilities", "authentication"} {
-		if _, found := card[key]; found {
-			t.Errorf("the card carries %q, which SEP-2127 omits on purpose", key)
-		}
+		t.Run(key, func(t *testing.T) {
+			t.Parallel()
+
+			if _, found := card[key]; found {
+				t.Errorf("the card carries %q, which SEP-2127 omits on purpose", key)
+			}
+		})
 	}
 }
 

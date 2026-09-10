@@ -273,14 +273,18 @@ func TestOAuth_DiscoveryCardCarriesNoPrimitivesAndNamesTheCredential(t *testing.
 		t.Fatalf("card is not JSON: %v\n%s", err, got.body)
 	}
 	for _, key := range []string{"tools", "resources", "resourceTemplates", "prompts", "capabilities"} {
-		if _, found := card[key]; found {
-			t.Errorf("the SEP-2127 card carries %q; that extension omits primitives on purpose", key)
-		}
+		t.Run(key, func(t *testing.T) {
+			if _, found := card[key]; found {
+				t.Errorf("the SEP-2127 card carries %q; that extension omits primitives on purpose", key)
+			}
+		})
 	}
 	for _, key := range []string{"$schema", "name", "version", "description"} {
-		if _, found := card[key]; !found {
-			t.Errorf("the SEP-2127 card is missing the required field %q", key)
-		}
+		t.Run(key, func(t *testing.T) {
+			if _, found := card[key]; !found {
+				t.Errorf("the SEP-2127 card is missing the required field %q", key)
+			}
+		})
 	}
 }
 

@@ -72,28 +72,18 @@ const (
 	discoveryCardRepositoryURL = "https://github.com/jmrplens/gitlab-mcp-server"
 )
 
-// discoveryCardProtocolVersions is what this server really accepts at
-// initialize, newest first.
+// The protocol versions the card declares come from
+// [supportedProtocolVersionsFor], the same helper [protocolVersionMiddleware]
+// refuses requests with, and they are narrowed by `--stateless` for a reason
+// the card must not paper over: a stateful deployment does not serve
+// 2026-07-28, and the middleware answers it 400.
 //
-// The extension asks for it: a card "SHOULD accurately reflect the server's
-// runtime behavior", and the versions it declares "SHOULD NOT contradict the
-// equivalent values" a client observes once connected. A card that overstates
-// this sends a client into a handshake that fails.
-//
-// It is a hand-written list because the SDK keeps its own set unexported, and
-// a hand-written list is only worth having if something checks it. That is
-// TestServerCard_DeclaredProtocolVersionsAreWhatTheServerAccepts in
-// test/e2e/http, which asks the running binary rather than this file: it sends
-// a version no server supports and reads the set back out of the refusal, so
-// an SDK bump that changes what is accepted fails there instead of quietly
-// making this card wrong.
-var discoveryCardProtocolVersions = []string{
-	"2026-07-28",
-	"2025-11-25",
-	"2025-06-18",
-	"2025-03-26",
-	"2024-11-05",
-}
+// The extension asks for exactly this consistency: a card "SHOULD accurately
+// reflect the server's runtime behavior", and the versions it declares "SHOULD
+// NOT contradict the equivalent values" a client observes once connected. A
+// card carrying its own copy of the list would satisfy that only by accident,
+// and would advertise a version the deployment refuses the moment somebody
+// passed --stateless=false.
 
 // buildDiscoveryCard renders the SEP-2127 Server Card for this deployment.
 //
@@ -139,8 +129,9 @@ func discoveryCardRemote(cfg *config.Config) map[string]any {
 	if cfg.PublicURL == "" {
 		return nil
 	}
-	versions := make([]any, 0, len(discoveryCardProtocolVersions))
-	for _, v := range discoveryCardProtocolVersions {
+	supported := supportedProtocolVersionsFor(cfg.Stateless)
+	versions := make([]any, 0, len(supported))
+	for _, v := range supported {
 		versions = append(versions, v)
 	}
 	return map[string]any{

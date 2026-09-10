@@ -636,59 +636,74 @@ func TestServerCard_DiscoveryCardNamesTheLegacyHeader(t *testing.T) {
 // operator would, by sending a version nothing supports and reading the set
 // back out of the refusal, and compares that with what the card published.
 func TestServerCard_DeclaredProtocolVersionsAreWhatTheServerAccepts(t *testing.T) {
-	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
-	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--public-url=https://mcp.example.com")
+	tests := []struct {
+		name  string
+		flags []string
+	}{
+		// The stateful case is the one that matters. A stateful deployment
+		// does not serve 2026-07-28, and a card carrying its own copy of the
+		// list advertised it anyway until this test existed.
+		{name: "stateless", flags: nil},
+		{name: "stateful", flags: []string{"--stateless=false"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+			flags := append([]string{"--gitlab-url=" + gitlab.url, "--public-url=https://mcp.example.com"}, tt.flags...)
+			srv := startServer(t, nil, flags...)
 
-	card := srv.do(t, request{method: http.MethodGet, path: "/server-card"})
-	if card.status != http.StatusOK {
-		t.Fatalf("GET /server-card = %d, want 200", card.status)
-	}
-	var declared struct {
-		Remotes []struct {
-			SupportedProtocolVersions []string `json:"supportedProtocolVersions"`
-		} `json:"remotes"`
-	}
-	if err := json.Unmarshal([]byte(card.body), &declared); err != nil {
-		t.Fatalf("card is not JSON: %v\n%s", err, card.body)
-	}
-	if len(declared.Remotes) != 1 {
-		t.Fatalf("remotes = %d, want 1", len(declared.Remotes))
-	}
+			card := srv.do(t, request{method: http.MethodGet, path: "/server-card"})
+			if card.status != http.StatusOK {
+				t.Fatalf("GET /server-card = %d, want 200", card.status)
+			}
+			var declared struct {
+				Remotes []struct {
+					SupportedProtocolVersions []string `json:"supportedProtocolVersions"`
+				} `json:"remotes"`
+			}
+			if err := json.Unmarshal([]byte(card.body), &declared); err != nil {
+				t.Fatalf("card is not JSON: %v\n%s", err, card.body)
+			}
+			if len(declared.Remotes) != 1 {
+				t.Fatalf("remotes = %d, want 1", len(declared.Remotes))
+			}
 
-	// -32022 is CodeUnsupportedProtocolVersion, and the SDK puts the set it
-	// would have accepted in error.data.supported.
-	refusal := srv.do(t, request{
-		method: http.MethodPost,
-		path:   "/mcp",
-		body:   `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`,
-		headers: map[string]string{
-			"Content-Type":         "application/json",
-			"Accept":               "application/json, text/event-stream",
-			"MCP-Protocol-Version": "1999-01-01",
-			"PRIVATE-TOKEN":        "glpat-whatever",
-		},
-	})
-	if refusal.status != http.StatusBadRequest {
-		t.Fatalf("an unsupported protocol version answered %d, want 400: %s", refusal.status, refusal.body)
-	}
-	var served struct {
-		Error struct {
-			Code int `json:"code"`
-			Data struct {
-				Supported []string `json:"supported"`
-			} `json:"data"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal([]byte(refusal.body), &served); err != nil {
-		t.Fatalf("the refusal is not JSON: %v\n%s", err, refusal.body)
-	}
-	if len(served.Error.Data.Supported) == 0 {
-		t.Fatalf("the refusal named no supported versions, so this test can prove nothing: %s", refusal.body)
-	}
+			// -32022 is CodeUnsupportedProtocolVersion, and the transport puts
+			// the set it would have accepted in error.data.supported.
+			refusal := srv.do(t, request{
+				method: http.MethodPost,
+				path:   "/mcp",
+				body:   `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`,
+				headers: map[string]string{
+					"Content-Type":         "application/json",
+					"Accept":               "application/json, text/event-stream",
+					"MCP-Protocol-Version": "1999-01-01",
+					"PRIVATE-TOKEN":        "glpat-whatever",
+				},
+			})
+			if refusal.status != http.StatusBadRequest {
+				t.Fatalf("an unsupported protocol version answered %d, want 400: %s", refusal.status, refusal.body)
+			}
+			var served struct {
+				Error struct {
+					Code int `json:"code"`
+					Data struct {
+						Supported []string `json:"supported"`
+					} `json:"data"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(refusal.body), &served); err != nil {
+				t.Fatalf("the refusal is not JSON: %v\n%s", err, refusal.body)
+			}
+			if len(served.Error.Data.Supported) == 0 {
+				t.Fatalf("the refusal named no supported versions, so this test can prove nothing: %s", refusal.body)
+			}
 
-	if !slices.Equal(declared.Remotes[0].SupportedProtocolVersions, served.Error.Data.Supported) {
-		t.Errorf("the card declares %v and the server accepts %v; update discoveryCardProtocolVersions",
-			declared.Remotes[0].SupportedProtocolVersions, served.Error.Data.Supported)
+			if !slices.Equal(declared.Remotes[0].SupportedProtocolVersions, served.Error.Data.Supported) {
+				t.Errorf("the card declares %v and the server accepts %v",
+					declared.Remotes[0].SupportedProtocolVersions, served.Error.Data.Supported)
+			}
+		})
 	}
 }
 
