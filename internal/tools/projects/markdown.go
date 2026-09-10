@@ -111,53 +111,57 @@ func FormatDeleteMarkdown(out DeleteOutput) string {
 
 // FormatListMarkdown renders a list of projects as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
+	return formatProjectTable("Projects", "No projects found.", out.Projects, out.SimpleProjects, out.Pagination,
+		"Use action 'get' with a project_id to see full project details",
+		"Use action 'create' to create a new project",
+	)
+}
+
+// formatProjectTable renders a page of projects in whichever of the two
+// entities GitLab sent: full rows, or the BasicProjectDetails rows a caller
+// gets by passing simple. The project list and the fork list are the same
+// table and differ only in their title, empty line and hints.
+func formatProjectTable(title, empty string, full []Output, basic []BasicOutput, pagination toolutil.PaginationOutput, hints ...string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Projects (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Projects), out.Pagination)
-	if len(out.Projects) == 0 {
-		b.WriteString("No projects found.\n")
+	fmt.Fprintf(&b, toolutil.FmtMdH2Count, title, pagination.TotalItems)
+	rows := len(full) + len(basic)
+	toolutil.WriteListSummary(&b, rows, pagination)
+	if rows == 0 {
+		b.WriteString(empty + "\n")
 		return b.String()
 	}
 	b.WriteString("| ID | Name | Path | Visibility | " + toolutil.EmojiStar + " |\n")
 	b.WriteString(toolutil.TblSep5Col)
-	for _, p := range out.Projects {
-		archived := ""
-		if p.Archived {
-			archived = " " + toolutil.EmojiArchived
-		}
-		fmt.Fprintf(&b, "| %d | %s%s | %s | %s | %d |\n", p.ID, toolutil.MdTitleLink(p.Name, p.WebURL), archived, toolutil.EscapeMdTableCell(p.PathWithNamespace), p.Visibility, p.StarCount)
+	for _, p := range full {
+		writeProjectListRow(&b, p.BasicOutput, p.Archived)
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use action 'get' with a project_id to see full project details",
-		"Use action 'create' to create a new project",
-	)
+	// A simple row is BasicProjectDetails, which does not say whether the
+	// project is archived, so no row of it claims either answer.
+	for _, p := range basic {
+		writeProjectListRow(&b, p, false)
+	}
+	toolutil.WritePagination(&b, pagination)
+	toolutil.WriteHints(&b, append([]string{toolutil.HintPreserveLinks}, hints...)...)
 	return b.String()
+}
+
+// writeProjectListRow writes one row of a project list table. It takes the
+// basic entity because that is what every row of both list shapes carries;
+// archived is passed apart since only a full row knows it.
+func writeProjectListRow(b *strings.Builder, p BasicOutput, archived bool) {
+	mark := ""
+	if archived {
+		mark = " " + toolutil.EmojiArchived
+	}
+	fmt.Fprintf(b, "| %d | %s%s | %s | %s | %d |\n", p.ID, toolutil.MdTitleLink(p.Name, p.WebURL), mark, toolutil.EscapeMdTableCell(p.PathWithNamespace), p.Visibility, p.StarCount)
 }
 
 // FormatListForksMarkdown renders a list of project forks as Markdown.
 func FormatListForksMarkdown(out ListForksOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Project Forks (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Forks), out.Pagination)
-	if len(out.Forks) == 0 {
-		b.WriteString("No forks found.\n")
-		return b.String()
-	}
-	b.WriteString("| ID | Name | Path | Visibility | " + toolutil.EmojiStar + " |\n")
-	b.WriteString(toolutil.TblSep5Col)
-	for _, p := range out.Forks {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %d |\n", p.ID, toolutil.EscapeMdTableCell(p.Name), toolutil.EscapeMdTableCell(p.PathWithNamespace), p.Visibility, p.StarCount)
-	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
+	return formatProjectTable("Project Forks", "No forks found.", out.Forks, out.SimpleForks, out.Pagination,
 		"Use `gitlab_project_get` to view fork details",
 		"Use `gitlab_project_fork` to create a new fork",
 	)
-	return b.String()
 }
 
 // FormatLanguagesMarkdown renders project languages as Markdown.

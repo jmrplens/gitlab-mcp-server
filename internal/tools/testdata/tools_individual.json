@@ -55449,7 +55449,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -55481,8 +55484,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -55610,7 +55612,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -55642,8 +55647,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -57068,7 +57072,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -57100,8 +57107,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -57229,7 +57235,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -57261,8 +57270,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -65331,7 +65339,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -65363,8 +65374,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -68385,7 +68395,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -68417,8 +68430,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -68546,7 +68558,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -68578,8 +68593,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -71426,7 +71440,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -71458,8 +71475,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -72546,7 +72562,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -72578,8 +72597,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -72707,7 +72725,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -72739,8 +72760,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -73501,7 +73521,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -73533,8 +73556,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -73662,7 +73684,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -73694,8 +73719,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -74847,7 +74871,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -74879,8 +74906,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -75008,7 +75034,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -75040,8 +75069,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -75663,7 +75691,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -75695,8 +75726,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -75824,7 +75854,10 @@
             "additionalProperties": false,
             "properties": {
               "archived": {
-                "type": "boolean"
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -75856,8 +75889,7 @@
               "name",
               "path_with_namespace",
               "visibility",
-              "web_url",
-              "archived"
+              "web_url"
             ],
             "type": "object"
           },
@@ -176224,10 +176256,213 @@
             "null",
             "array"
           ]
+        },
+        "simple_projects": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "custom_attributes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "default_branch": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "forks_count": {
+                "type": "integer"
+              },
+              "http_url_to_repo": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "last_activity_at": {
+                "type": "string"
+              },
+              "license": {
+                "additionalProperties": false,
+                "properties": {
+                  "html_url": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "nickname": {
+                    "type": "string"
+                  },
+                  "source_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key",
+                  "name",
+                  "nickname",
+                  "html_url",
+                  "source_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "license_url": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "namespace": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "integer"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "path",
+                  "kind",
+                  "full_path",
+                  "parent_id",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              },
+              "readme_url": {
+                "type": "string"
+              },
+              "repository_storage": {
+                "type": "string"
+              },
+              "ssh_url_to_repo": {
+                "type": "string"
+              },
+              "star_count": {
+                "type": "integer"
+              },
+              "tag_list": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "topics": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "visibility": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path",
+              "path_with_namespace",
+              "description",
+              "visibility",
+              "default_branch",
+              "web_url",
+              "topics",
+              "created_at"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         }
       },
       "required": [
-        "projects",
         "pagination"
       ],
       "type": "object"
@@ -177523,10 +177758,213 @@
             "has_more"
           ],
           "type": "object"
+        },
+        "simple_forks": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "custom_attributes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "default_branch": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "forks_count": {
+                "type": "integer"
+              },
+              "http_url_to_repo": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "last_activity_at": {
+                "type": "string"
+              },
+              "license": {
+                "additionalProperties": false,
+                "properties": {
+                  "html_url": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "nickname": {
+                    "type": "string"
+                  },
+                  "source_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key",
+                  "name",
+                  "nickname",
+                  "html_url",
+                  "source_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "license_url": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "namespace": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "integer"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "path",
+                  "kind",
+                  "full_path",
+                  "parent_id",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              },
+              "readme_url": {
+                "type": "string"
+              },
+              "repository_storage": {
+                "type": "string"
+              },
+              "ssh_url_to_repo": {
+                "type": "string"
+              },
+              "star_count": {
+                "type": "integer"
+              },
+              "tag_list": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "topics": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "visibility": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path",
+              "path_with_namespace",
+              "description",
+              "visibility",
+              "default_branch",
+              "web_url",
+              "topics",
+              "created_at"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         }
       },
       "required": [
-        "forks",
         "pagination"
       ],
       "type": "object"
@@ -179407,10 +179845,213 @@
             "null",
             "array"
           ]
+        },
+        "simple_projects": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "custom_attributes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "default_branch": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "forks_count": {
+                "type": "integer"
+              },
+              "http_url_to_repo": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "last_activity_at": {
+                "type": "string"
+              },
+              "license": {
+                "additionalProperties": false,
+                "properties": {
+                  "html_url": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "nickname": {
+                    "type": "string"
+                  },
+                  "source_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key",
+                  "name",
+                  "nickname",
+                  "html_url",
+                  "source_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "license_url": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "namespace": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "integer"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "path",
+                  "kind",
+                  "full_path",
+                  "parent_id",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              },
+              "readme_url": {
+                "type": "string"
+              },
+              "repository_storage": {
+                "type": "string"
+              },
+              "ssh_url_to_repo": {
+                "type": "string"
+              },
+              "star_count": {
+                "type": "integer"
+              },
+              "tag_list": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "topics": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "visibility": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path",
+              "path_with_namespace",
+              "description",
+              "visibility",
+              "default_branch",
+              "web_url",
+              "topics",
+              "created_at"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         }
       },
       "required": [
-        "projects",
         "pagination"
       ],
       "type": "object"
@@ -180706,10 +181347,213 @@
             "null",
             "array"
           ]
+        },
+        "simple_projects": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "custom_attributes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "default_branch": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "forks_count": {
+                "type": "integer"
+              },
+              "http_url_to_repo": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "last_activity_at": {
+                "type": "string"
+              },
+              "license": {
+                "additionalProperties": false,
+                "properties": {
+                  "html_url": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "nickname": {
+                    "type": "string"
+                  },
+                  "source_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key",
+                  "name",
+                  "nickname",
+                  "html_url",
+                  "source_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "license_url": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "namespace": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "integer"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "path",
+                  "kind",
+                  "full_path",
+                  "parent_id",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              },
+              "readme_url": {
+                "type": "string"
+              },
+              "repository_storage": {
+                "type": "string"
+              },
+              "ssh_url_to_repo": {
+                "type": "string"
+              },
+              "star_count": {
+                "type": "integer"
+              },
+              "tag_list": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "topics": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "visibility": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path",
+              "path_with_namespace",
+              "description",
+              "visibility",
+              "default_branch",
+              "web_url",
+              "topics",
+              "created_at"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         }
       },
       "required": [
-        "projects",
         "pagination"
       ],
       "type": "object"
@@ -182005,10 +182849,213 @@
             "null",
             "array"
           ]
+        },
+        "simple_projects": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "avatar_url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "custom_attributes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "default_branch": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "forks_count": {
+                "type": "integer"
+              },
+              "http_url_to_repo": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "last_activity_at": {
+                "type": "string"
+              },
+              "license": {
+                "additionalProperties": false,
+                "properties": {
+                  "html_url": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "nickname": {
+                    "type": "string"
+                  },
+                  "source_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key",
+                  "name",
+                  "nickname",
+                  "html_url",
+                  "source_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "license_url": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "name_with_namespace": {
+                "type": "string"
+              },
+              "namespace": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "integer"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "path",
+                  "kind",
+                  "full_path",
+                  "parent_id",
+                  "avatar_url",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "next_steps": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "path": {
+                "type": "string"
+              },
+              "path_with_namespace": {
+                "type": "string"
+              },
+              "readme_url": {
+                "type": "string"
+              },
+              "repository_storage": {
+                "type": "string"
+              },
+              "ssh_url_to_repo": {
+                "type": "string"
+              },
+              "star_count": {
+                "type": "integer"
+              },
+              "tag_list": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "topics": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "visibility": {
+                "type": "string"
+              },
+              "web_url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path",
+              "path_with_namespace",
+              "description",
+              "visibility",
+              "default_branch",
+              "web_url",
+              "topics",
+              "created_at"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         }
       },
       "required": [
-        "projects",
         "pagination"
       ],
       "type": "object"

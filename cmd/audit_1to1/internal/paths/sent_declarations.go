@@ -94,6 +94,7 @@ const (
 	accessRequestsPkg = toolsDir + "/accessrequests"
 	groupMembersPkg   = toolsDir + "/groupmembers"
 	groupsPkg         = toolsDir + "/groups"
+	issuesPkg         = toolsDir + "/issues"
 	projectsPkg       = toolsDir + "/projects"
 )
 
@@ -350,8 +351,8 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	// named one by one rather than with a splat: every other key of the same
 	// entity on that type is published, and a splat would swallow the next one
 	// GitLab adds.
-	{Package: toolsDir + "/issues", Entity: "API::Entities::MergeRequestBasic", Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
-	{Package: toolsDir + "/issues", Entity: "API::Entities::MergeRequestBasic", Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
+	{Package: issuesPkg, Entity: "API::Entities::MergeRequestBasic", Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
+	{Package: issuesPkg, Entity: "API::Entities::MergeRequestBasic", Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
 
 	// avatar_path on the four types that publish a user. The user entities
 	// inherit it from UserBasic, so it is the same option and the same answer
@@ -435,7 +436,7 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	// Issue methods reach the epic's issue list, which is a route of another
 	// package.
 	{
-		Package: toolsDir + "/issues", Entity: "API::Entities::EpicIssue", Field: declaredSegment,
+		Package: issuesPkg, Entity: "API::Entities::EpicIssue", Field: declaredSegment,
 		Category: categorySDKRouteFillsAnotherType,
 		Reason: "GET /groups/:id/epics/:epic_iid/issues is what renders EpicIssue, and internal/tools/epicissues is the " +
 			"package that calls it and publishes it. None of the fifteen issue routes sends the epic-link keys.",
@@ -444,7 +445,7 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	// The third case of a desc annotation naming an entity the handler does
 	// not present, after the two already recorded upstream.
 	{
-		Package: toolsDir + "/issues", Entity: "API::Entities::MRNote", Field: "note",
+		Package: issuesPkg, Entity: "API::Entities::MRNote", Field: "note",
 		Category: categoryDocumentedNotSent,
 		Reason: "lib/api/merge_requests.rb:975 declares success Entities::MRNote and line 994 presents Entities::IssueBasic " +
 			"beside Entities::ExternalIssue, so GET /projects/:id/merge_requests/:iid/closes_issues sends issues and never a " +

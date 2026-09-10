@@ -2650,8 +2650,8 @@ func TestFormatMemberListMarkdown_Empty(t *testing.T) {
 func TestFormatListProjectsMarkdown_WithData(t *testing.T) {
 	out := ListProjectsOutput{
 		Projects: []ProjectItem{
-			{ID: 42, Name: "my-project", PathWithNamespace: "org/infra/my-project", Visibility: "private", Archived: false},
-			{ID: 43, Name: "old-project", PathWithNamespace: "org/infra/old-project", Visibility: "public", Archived: true},
+			{ID: 42, Name: "my-project", PathWithNamespace: "org/infra/my-project", Visibility: "private", Archived: new(false)},
+			{ID: 43, Name: "old-project", PathWithNamespace: "org/infra/old-project", Visibility: "public", Archived: new(true)},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}

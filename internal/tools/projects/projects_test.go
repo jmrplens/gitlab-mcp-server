@@ -4771,8 +4771,14 @@ func TestListUserProjects_AllFilters(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if len(out.Projects) != 1 {
-		t.Fatalf(fmtLenProjectsWant1, len(out.Projects))
+	// simple makes GitLab render BasicProjectDetails, so the row lands in the
+	// basic field and the full one stays absent rather than reading as a
+	// project with every other key false.
+	if len(out.SimpleProjects) != 1 {
+		t.Fatalf("len(SimpleProjects) = %d, want 1", len(out.SimpleProjects))
+	}
+	if out.Projects != nil {
+		t.Errorf("Projects = %v, want nil under simple", out.Projects)
 	}
 }
 

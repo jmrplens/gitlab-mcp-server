@@ -18,24 +18,24 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,358 |
-| Unit test functions                                   | 14,745 |
+| Total test functions                                  | 15,361 |
+| Unit test functions                                   | 14,748 |
 | E2E test functions                                    |    613 |
-| cmd test functions                                    |  3,020 |
+| cmd test functions                                    |  3,021 |
 | Test files (internal/)                                |    531 |
 | Test files (cmd/)                                     |    206 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     22 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  98.4% |
-| Overall coverage (`go test ./internal/...`)           |  98.5% |
+| Overall coverage (`go test ./internal/...`)           |  98.6% |
 | Average package coverage                              |  98.7% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,136 | 79.0% |
+| `TestFunc_Scenario` (2-part)           | 12,139 | 79.0% |
 | `TestFunc` (no underscore)             |    975 |  6.3% |
 | `TestFunc_Scenario_Expected` (3+ part) |  2,247 | 14.6% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,488 |        150 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            336 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,901 |        365 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,903 |        365 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            613 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          3,020 |        206 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,358** |    **977** |                                                                                                 |
+| cmd packages            |          3,021 |        206 | server entry point and developer command utilities                                              |
+| **Total**               |     **15,361** |    **977** |                                                                                                 |
 
 ### Core Packages
 
@@ -84,8 +84,8 @@
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   393 |    99.6% |    57 |
-| groups            |   280 |    98.9% |    37 |
+| projects          |   393 |    99.5% |    57 |
+| groups            |   282 |    99.6% |    37 |
 | mergerequests     |   259 |    99.9% |    30 |
 | issues            |   233 |    98.7% |    21 |
 | users             |   220 |    99.2% |    38 |
@@ -193,7 +193,7 @@
 | groupprotectedenvs      |        19 |          2 |   100.0% |         5 |
 | grouprelationsexport    |        26 |          2 |   100.0% |         2 |
 | groupreleases           |        18 |          3 |   100.0% |         1 |
-| groups                  |       280 |          8 |    98.9% |        37 |
+| groups                  |       282 |          8 |    99.6% |        37 |
 | groupsaml               |        35 |          3 |   100.0% |         5 |
 | groupscim               |        32 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |        23 |          2 |   100.0% |         8 |
@@ -249,7 +249,7 @@
 | projectimportexport     |        40 |          1 |    99.6% |         5 |
 | projectiterations       |        18 |          1 |   100.0% |         1 |
 | projectmirrors          |        65 |          2 |   100.0% |         7 |
-| projects                |       393 |          6 |    99.6% |        57 |
+| projects                |       393 |          6 |    99.5% |        57 |
 | projectserviceaccounts  |        14 |          2 |   100.0% |         8 |
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
 | projectstoragemoves     |        20 |          2 |   100.0% |         6 |
@@ -294,7 +294,7 @@
 | wikis                   |        62 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,901** |    **365** |          | **1,187** |
+| **Total**               | **8,903** |    **365** |          | **1,187** |
 
 </details>
 
@@ -473,7 +473,7 @@
 | groupprotectedenvs      |   100.0% |
 | grouprelationsexport    |   100.0% |
 | groupreleases           |   100.0% |
-| groups                  |    98.9% |
+| groups                  |    99.6% |
 | groupsaml               |   100.0% |
 | groupscim               |   100.0% |
 | groupserviceaccounts    |   100.0% |
@@ -529,7 +529,7 @@
 | projectimportexport     |    99.6% |
 | projectiterations       |   100.0% |
 | projectmirrors          |   100.0% |
-| projects                |    99.6% |
+| projects                |    99.5% |
 | projectserviceaccounts  |   100.0% |
 | projectstatistics       |   100.0% |
 | projectstoragemoves     |   100.0% |

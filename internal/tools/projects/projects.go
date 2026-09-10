@@ -464,10 +464,17 @@ type ListInput struct {
 }
 
 // ListOutput holds a paginated list of projects.
+//
+// GitLab answers a project list with one of two entities and the caller
+// chooses which: the full project by default, BasicProjectDetails when simple
+// is true. Each has a field of its own here, so that a basic row never reads
+// as a full one with every key the basic entity lacks set to false or zero;
+// exactly one of the two is present in a response.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Projects   []Output                  `json:"projects"`
-	Pagination toolutil.PaginationOutput `json:"pagination"`
+	Projects       []Output                  `json:"projects,omitzero"`
+	SimpleProjects []BasicOutput             `json:"simple_projects,omitzero"`
+	Pagination     toolutil.PaginationOutput `json:"pagination"`
 }
 
 // DeleteInput defines parameters for deleting a project.
@@ -642,6 +649,22 @@ func projectListOutput(op string, list []*gl.Project, captured *gitlabclient.Res
 		out[i] = ToOutput(p, extras[i])
 	}
 	return out, nil
+}
+
+// projectRows finishes a handler that answers with a page of projects in the
+// entity the caller asked for: BasicProjectDetails when simple was set, which
+// carries every key client-go models and so needs nothing from the capture,
+// and the full project otherwise. Exactly one of the two slices is non-nil.
+func projectRows(op string, simple bool, list []*gl.Project, captured *gitlabclient.ResponseCapture) ([]Output, []BasicOutput, error) {
+	if simple {
+		basic := make([]BasicOutput, len(list))
+		for i, p := range list {
+			basic[i] = ToBasicOutput(p)
+		}
+		return nil, basic, nil
+	}
+	full, err := projectListOutput(op, list, captured)
+	return full, nil, err
 }
 
 // ToBasicOutput converts a project the way API::Entities::BasicProjectDetails
@@ -1252,11 +1275,11 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithMessage("projectList", err)
 	}
-	out, err := projectListOutput("projectList", projects, captured)
+	full, basic, err := projectRows("projectList", input.Simple, projects, captured)
 	if err != nil {
 		return ListOutput{}, err
 	}
-	return ListOutput{Projects: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return ListOutput{Projects: full, SimpleProjects: basic, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // Delete deletes a GitLab project by its ID or URL-encoded path.
@@ -2028,8 +2051,11 @@ type ListForksInput struct {
 // ListForksOutput holds a paginated list of project forks.
 type ListForksOutput struct {
 	toolutil.HintableOutput
-	Forks      []Output                  `json:"forks"`
-	Pagination toolutil.PaginationOutput `json:"pagination"`
+	// Forks and SimpleForks split for the reason [ListOutput] splits: simple
+	// switches the entity GitLab renders, and exactly one is present.
+	Forks       []Output                  `json:"forks,omitzero"`
+	SimpleForks []BasicOutput             `json:"simple_forks,omitzero"`
+	Pagination  toolutil.PaginationOutput `json:"pagination"`
 }
 
 // buildForkListOpts maps ListForksInput filters onto the shared
@@ -2075,13 +2101,14 @@ func ListForks(ctx context.Context, client *gitlabclient.Client, input ListForks
 		return ListForksOutput{}, toolutil.WrapErrWithStatusHint("projectListForks", err, http.StatusNotFound,
 			"verify the parent project exists with gitlab_project_get")
 	}
-	out, err := projectListOutput("projectListForks", forks, captured)
+	full, basic, err := projectRows("projectListForks", input.Simple, forks, captured)
 	if err != nil {
 		return ListForksOutput{}, err
 	}
 	return ListForksOutput{
-		Forks:      out,
-		Pagination: toolutil.PaginationFromResponse(resp),
+		Forks:       full,
+		SimpleForks: basic,
+		Pagination:  toolutil.PaginationFromResponse(resp),
 	}, nil
 }
 
@@ -2701,11 +2728,11 @@ func listUserScopedProjects(ctx context.Context, userID toolutil.StringOrInt, op
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, notFoundHint)
 	}
-	out, err := projectListOutput(operation, projects, captured)
+	full, basic, err := projectRows(operation, filters.Simple, projects, captured)
 	if err != nil {
 		return ListOutput{}, err
 	}
-	return ListOutput{Projects: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return ListOutput{Projects: full, SimpleProjects: basic, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // ---------------------------------------------------------------------------

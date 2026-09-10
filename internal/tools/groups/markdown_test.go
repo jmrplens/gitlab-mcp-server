@@ -1,11 +1,54 @@
 // markdown_test.go contains unit tests for the group Markdown formatters
-// covering provisioned-user lists and transfer-location lists.
+// covering the single-group card, provisioned-user lists and transfer-location
+// lists.
 package groups
 
 import (
 	"strings"
 	"testing"
 )
+
+// TestFormatDetailOutputMarkdown_DetailRowsCloseBeforeTheHints verifies the
+// single-group card: the rows only GroupDetail adds are list items like the
+// rest of the card, they come before the next-steps block rather than after
+// it, and the runners token the JSON carries never reaches the text.
+func TestFormatDetailOutputMarkdown_DetailRowsCloseBeforeTheHints(t *testing.T) {
+	autoBan := true
+	md := FormatDetailOutputMarkdown(DetailOutput{
+		ID:                                     7,
+		Name:                                   "platform",
+		FullPath:                               "acme/platform",
+		Visibility:                             "private",
+		WebURL:                                 "https://gl/acme/platform",
+		EnabledGitAccessProtocol:               "ssh",
+		RunnersToken:                           "glrt-secret-value",
+		AutoBanUserOnExcessiveProjectsDownload: &autoBan,
+	})
+
+	hints := strings.Index(md, "**Next steps:**")
+	if hints < 0 {
+		t.Fatalf("card has no next-steps block:\n%s", md)
+	}
+	for _, row := range []string{"- **Git Access Protocol**: ssh", "- **Auto-ban on Excessive Downloads**:"} {
+		t.Run(row, func(t *testing.T) {
+			at := strings.Index(md, row)
+			if at < 0 {
+				t.Fatalf("detail row %q missing:\n%s", row, md)
+			}
+			if at > hints {
+				t.Errorf("detail row %q comes after the next-steps block:\n%s", row, md)
+			}
+		})
+	}
+	if strings.Contains(md, "glrt-secret-value") {
+		t.Errorf("the runners token reached the Markdown:\n%s", md)
+	}
+	for line := range strings.SplitSeq(md, "\n") {
+		if strings.HasPrefix(line, "|") {
+			t.Errorf("a table row in a bulleted card renders as literal pipe text: %q", line)
+		}
+	}
+}
 
 // TestFormatProvisionedUsersListMarkdown_Empty covers the empty-list branch.
 func TestFormatProvisionedUsersListMarkdown_Empty(t *testing.T) {

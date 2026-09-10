@@ -26,37 +26,63 @@ func formatGroupNotFound(out groupNotFoundOutput) *mcp.CallToolResult {
 // FormatOutputMarkdown renders a single group as a Markdown summary.
 func FormatOutputMarkdown(g Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Group: %s\n\n", toolutil.EscapeMdHeading(g.Name))
-	fmt.Fprintf(&b, toolutil.FmtMdID, g.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdPath, toolutil.EscapeMdTableCell(g.FullPath))
+	writeGroupCard(&b, g)
+	writeGroupHints(&b)
+	return b.String()
+}
+
+// writeGroupCard writes the card of the group entity without its hints, so
+// that [FormatDetailOutputMarkdown] can add its own rows before the hints
+// close the card rather than after them.
+func writeGroupCard(b *strings.Builder, g Output) {
+	fmt.Fprintf(b, "## Group: %s\n\n", toolutil.EscapeMdHeading(g.Name))
+	fmt.Fprintf(b, toolutil.FmtMdID, g.ID)
+	fmt.Fprintf(b, toolutil.FmtMdPath, toolutil.EscapeMdTableCell(g.FullPath))
 	if g.FullName != "" {
 		// A full name is the group names of the ancestry joined, and a group
 		// name is free text a person types.
-		fmt.Fprintf(&b, "- **Full Name**: %s\n", toolutil.EscapeMdTableCell(g.FullName))
+		fmt.Fprintf(b, "- **Full Name**: %s\n", toolutil.EscapeMdTableCell(g.FullName))
 	}
 	//gitlab:allow-unescaped g.Visibility: a gl.VisibilityValue, which GitLab fills with private, internal or public.
-	fmt.Fprintf(&b, toolutil.FmtMdVisibility, g.Visibility)
+	fmt.Fprintf(b, toolutil.FmtMdVisibility, g.Visibility)
 	if g.Description != "" {
-		toolutil.WriteDescription(&b, g.Description)
+		toolutil.WriteDescription(b, g.Description)
 	}
-	toolutil.WriteMdURL(&b, g.WebURL)
+	toolutil.WriteMdURL(b, g.WebURL)
 	if g.ParentID != 0 {
-		fmt.Fprintf(&b, "- **Parent ID**: %d\n", g.ParentID)
+		fmt.Fprintf(b, "- **Parent ID**: %d\n", g.ParentID)
 	}
 	if g.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(g.CreatedAt))
+		fmt.Fprintf(b, toolutil.FmtMdCreated, toolutil.FormatTime(g.CreatedAt))
 	}
 	if g.MarkedForDeletion != "" {
 		//gitlab:allow-unescaped g.MarkedForDeletion: a date ToOutput rendered from a gl.ISOTime as YYYY-MM-DD.
-		fmt.Fprintf(&b, "- %s **Marked for deletion**: %s\n", toolutil.EmojiWarning, g.MarkedForDeletion)
+		fmt.Fprintf(b, "- %s **Marked for deletion**: %s\n", toolutil.EmojiWarning, g.MarkedForDeletion)
 	}
+}
+
+// archivedCell renders a project row's archived flag for the two group project
+// tables. A row GitLab rendered as BasicProjectDetails carries no flag, and
+// its cell stays empty rather than answering No for it.
+func archivedCell(p ProjectItem) string {
+	switch {
+	case p.Archived == nil:
+		return ""
+	case *p.Archived:
+		return "Yes"
+	default:
+		return "No"
+	}
+}
+
+// writeGroupHints closes a group card with its next steps.
+func writeGroupHints(b *strings.Builder) {
 	toolutil.WriteHints(
-		&b,
+		b,
 		toolutil.HintPreserveLinks,
 		"Use action 'projects' to see projects in this group",
 		"Use action 'members' to see group members",
 	)
-	return b.String()
 }
 
 // FormatListMarkdown renders a list of groups as a Markdown table.
@@ -116,10 +142,7 @@ func FormatListProjectsMarkdown(out ListProjectsOutput) string {
 	b.WriteString("| ID | Name | Path | Visibility | Archived |\n")
 	b.WriteString("| --- | --- | --- | --- | --- |\n")
 	for _, p := range out.Projects {
-		archived := "No"
-		if p.Archived {
-			archived = "Yes"
-		}
+		archived := archivedCell(p)
 		fmt.Fprintf(
 			&b, "| %d | %s | %s | %s | %s |\n",
 			p.ID,
@@ -292,7 +315,7 @@ func FormatProvisionedUsersListMarkdown(out ProvisionedUsersListOutput) string {
 // took for invite_token and the reasoning is the same.
 func FormatDetailOutputMarkdown(g DetailOutput) string {
 	var b strings.Builder
-	b.WriteString(FormatOutputMarkdown(g.Output))
+	writeGroupCard(&b, g.Output)
 	// Only what a single-group route adds, and only when GitLab sent it: each
 	// of these is behind a condition of its own, so an absent key is an answer
 	// rather than a gap.
@@ -312,6 +335,7 @@ func FormatDetailOutputMarkdown(g DetailOutput) string {
 	if g.AutoBanUserOnExcessiveProjectsDownload != nil {
 		fmt.Fprintf(&b, "- **Auto-ban on Excessive Downloads**: %s\n", toolutil.BoolEmoji(*g.AutoBanUserOnExcessiveProjectsDownload))
 	}
+	writeGroupHints(&b)
 	return b.String()
 }
 

@@ -209,7 +209,7 @@ func ListSharedProjects(ctx context.Context, client *gitlabclient.Client, input 
 		return SharedProjectsListOutput{}, toolutil.WrapErrWithStatusHint("groupListSharedProjects", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get. Shared projects are projects shared *into* this group from elsewhere, not the group's own projects")
 	}
-	return SharedProjectsListOutput{Projects: projectItemsFromGroup(projects), Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return SharedProjectsListOutput{Projects: projectItemsFromGroup(projects, input.Simple != nil && *input.Simple), Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -285,10 +285,7 @@ func FormatSharedProjectsListMarkdown(out SharedProjectsListOutput) string {
 	b.WriteString("| ID | Name | Path | Visibility | Archived |\n")
 	b.WriteString("| --- | --- | --- | --- | --- |\n")
 	for _, p := range out.Projects {
-		archived := "No"
-		if p.Archived {
-			archived = "Yes"
-		}
+		archived := archivedCell(p)
 		name := toolutil.EscapeMdTableCell(p.Name)
 		if p.WebURL != "" {
 			name = toolutil.MdTitleLink(name, p.WebURL)

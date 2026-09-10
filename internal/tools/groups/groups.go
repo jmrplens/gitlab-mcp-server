@@ -472,8 +472,8 @@ func ToDetailOutput(g *gl.Group, extra toolutil.GroupDetailExtra) DetailOutput {
 	out.AllowMergeOnSkippedPipeline = g.AllowMergeOnSkippedPipeline
 	out.OnlyAllowMergeIfAllDiscussionsAreResolved = g.OnlyAllowMergeIfAllDiscussionsAreResolved
 	out.SharedWithGroups = sharedWithGroupsOutput(g.SharedWithGroups)
-	out.Projects = projectItemsFromGroup(g.Projects)             //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
-	out.SharedProjects = projectItemsFromGroup(g.SharedProjects) //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
+	out.Projects = projectItemsFromGroup(g.Projects, false)             //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
+	out.SharedProjects = projectItemsFromGroup(g.SharedProjects, false) //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
 	out.StepUpAuthRequiredOAuthProvider = extra.StepUpAuthRequiredOAuthProvider
 	out.ServiceAccessTokensExpirationEnforced = extra.ServiceAccessTokensExpirationEnforced
 	out.AISettings = extra.AISettings
@@ -643,9 +643,12 @@ func samlGroupLinksOutput(links []*gl.SAMLGroupLink) []SAMLGroupLinkOutput {
 	return out
 }
 
-// projectItemsFromGroup maps the deprecated embedded gl.Project slices
-// (Group.Projects / Group.SharedProjects) into the local ProjectItem shape.
-func projectItemsFromGroup(projects []*gl.Project) []ProjectItem {
+// projectItemsFromGroup maps a page of gl.Project into the local ProjectItem
+// shape: the deprecated embedded slices (Group.Projects, Group.SharedProjects)
+// and the two group project lists. simple says GitLab rendered
+// BasicProjectDetails, which carries no archived flag, so the item leaves it
+// unset rather than claiming false.
+func projectItemsFromGroup(projects []*gl.Project, simple bool) []ProjectItem {
 	if len(projects) == 0 {
 		return nil
 	}
@@ -659,7 +662,9 @@ func projectItemsFromGroup(projects []*gl.Project) []ProjectItem {
 			Visibility:        string(p.Visibility),
 			WebURL:            p.WebURL,
 			DefaultBranch:     p.DefaultBranch,
-			Archived:          p.Archived,
+		}
+		if !simple {
+			out[i].Archived = new(p.Archived)
 		}
 		if p.CreatedAt != nil {
 			out[i].CreatedAt = p.CreatedAt.Format(time.RFC3339)
@@ -1185,8 +1190,11 @@ type ProjectItem struct {
 	Visibility        string `json:"visibility"`
 	WebURL            string `json:"web_url"`
 	DefaultBranch     string `json:"default_branch,omitempty"`
-	Archived          bool   `json:"archived"`
-	CreatedAt         string `json:"created_at,omitempty"`
+	// Archived is a pointer because the two group project lists take simple,
+	// which makes GitLab render BasicProjectDetails, and that entity does not
+	// say whether a project is archived: nil there is no answer, not false.
+	Archived  *bool  `json:"archived,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
 }
 
 // ListProjectsOutput holds a paginated list of group projects.
@@ -1612,7 +1620,7 @@ func ListProjects(ctx context.Context, client *gitlabclient.Client, input ListPr
 			"verify group_id with gitlab_group_get. Use include_subgroups=true to also list projects in descendant groups")
 	}
 
-	return ListProjectsOutput{Projects: projectItemsFromGroup(projects), Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return ListProjectsOutput{Projects: projectItemsFromGroup(projects, input.Simple), Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // ---------------------------------------------------------------------------
