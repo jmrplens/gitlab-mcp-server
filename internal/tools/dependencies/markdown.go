@@ -53,9 +53,12 @@ func FormatExportMarkdown(e ExportOutput) string {
 func FormatDownloadMarkdown(d DownloadOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Dependency List Export (CycloneDX SBOM)\n\n")
-	sb.WriteString("```json\n")
-	sb.WriteString(d.Content)
-	sb.WriteString("\n```\n")
+	// The SBOM names every component of the project, and those names come out
+	// of the project's own dependency files. JSON escaping leaves a backtick
+	// alone, so a dependency named with a run of three would close a
+	// three-backtick fence and put the rest of the document at the top level of
+	// the response.
+	sb.WriteString(toolutil.MarkdownFencedBlock("json", d.Content))
 	return sb.String()
 }
 
