@@ -735,20 +735,53 @@ jobs:
 
       # actions/attest itself rather than the actions/attest-sbom wrapper. The
       # wrapper is deprecated and says so with a warning on every run, and it
-      # delegates to actions/attest v4.1.0, whose Docker Hub credential lookup
+      # delegates to an older actions/attest whose Docker Hub credential lookup
       # matches a docker config key by substring, while the provenance steps
       # above reach v4.2.1 through their own wrapper, which matches the
-      # canonicalized host. One version for all ten attestations. The input is
-      # the one the wrapper forwarded unchanged: sbom-path reads spdxVersion
-      # and derives the predicate type, https://spdx.dev/Document/v2.3 for what
-      # syft writes.
+      # canonicalized host. One version for all twelve attestations.
+      #
+      # predicate-type and predicate-path rather than sbom-path. sbom-path does
+      # two things: it checks the file is SPDX or CycloneDX, which the docker
+      # job's package-count guard already does, and it derives the predicate
+      # type from spdxVersion, which yields https://spdx.dev/Document/v2.3.
+      # The in-toto specification blesses that spelling and the unversioned
+      # https://spdx.dev/Document equally, listing both Type URIs on
+      # spec/predicates/spdx2.md, so this is interoperability rather than
+      # correctness. It matters because Trivy matches in_toto.PredicateSPDX,
+      # the unversioned literal, by exact equality: measured with everything
+      # else held identical, the unversioned form is read as
+      # "sigstore-bundle-spdx-json" and the versioned one as "unknown" and
+      # refused. cosign, BuildKit and in-toto-golang all emit the unversioned
+      # form; actions/attest is the outlier.
+      #
+      # Six steps, index included. An index has no contents of its own, so the
+      # index attestation carries the amd64 document by convention rather than
+      # by right, and it is there because a consumer that resolves a tag looks
+      # at the index and nowhere else: with the SBOM on the platform manifests
+      # alone, `trivy image <tag>` finds nothing and --platform does not change
+      # it. The platform attestations are what a scanner that already resolved
+      # one architecture looks under, which is the digest verifymcp.io reports
+      # as the subject it examined. This is the correction to an earlier
+      # reading here that attesting the index would be "a document about
+      # nothing": true of the semantics, false of what consumers do.
+      - name: Attest SBOM (ghcr.io, index)
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ needs.docker.outputs.digest }}
+          predicate-type: https://spdx.dev/Document
+          predicate-path: image-sbom-amd64.spdx.json
+          push-to-registry: true
+
       - name: Attest SBOM (ghcr.io, linux/amd64)
         if: env.REHEARSAL != 'true'
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ needs.docker.outputs.amd64 }}
-          sbom-path: image-sbom-amd64.spdx.json
+          predicate-type: https://spdx.dev/Document
+          predicate-path: image-sbom-amd64.spdx.json
           push-to-registry: true
 
       - name: Attest SBOM (ghcr.io, linux/arm64)
@@ -757,7 +790,18 @@ jobs:
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ needs.docker.outputs.arm64 }}
-          sbom-path: image-sbom-arm64.spdx.json
+          predicate-type: https://spdx.dev/Document
+          predicate-path: image-sbom-arm64.spdx.json
+          push-to-registry: true
+
+      - name: Attest SBOM (Docker Hub, index)
+        if: env.REHEARSAL != 'true' && env.DOCKERHUB_SKIP == 'false'
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
+          subject-digest: ${{ needs.docker.outputs.digest }}
+          predicate-type: https://spdx.dev/Document
+          predicate-path: image-sbom-amd64.spdx.json
           push-to-registry: true
 
       - name: Attest SBOM (Docker Hub, linux/amd64)
@@ -766,7 +810,8 @@ jobs:
         with:
           subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
           subject-digest: ${{ needs.docker.outputs.amd64 }}
-          sbom-path: image-sbom-amd64.spdx.json
+          predicate-type: https://spdx.dev/Document
+          predicate-path: image-sbom-amd64.spdx.json
           push-to-registry: true
 
       - name: Attest SBOM (Docker Hub, linux/arm64)
@@ -775,8 +820,78 @@ jobs:
         with:
           subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
           subject-digest: ${{ needs.docker.outputs.arm64 }}
-          sbom-path: image-sbom-arm64.spdx.json
+          predicate-type: https://spdx.dev/Document
+          predicate-path: image-sbom-arm64.spdx.json
           push-to-registry: true
+
+      # oras is fetched by hand rather than through an action for the reason
+      # spelled out at syft's install: this job holds the OIDC identity the
+      # attestation store trusts, and an action that resolves code at run time
+      # would run it here. Unlike syft, oras publishes no cosign signature,
+      # only a detached GPG signature, so the certificate check syft's install
+      # performs has no counterpart and the SHA256 pin is the binding control:
+      # it names the exact bytes, and the release's own checksums file is
+      # cross-checked against it so a mismatch says which of the two moved.
+      #
+      # Not gated on the rehearsal switch, for the same reason syft's install
+      # is not: this is the only thing that exercises the download and the pin
+      # before a tag does.
+      - name: Install oras
+        env:
+          ORAS_VERSION: "1.3.4"
+          ORAS_SHA256: "f27adb935022d94df8dc77719c322dda592c78a0d57a6f7dcdd8d900b248c454"
+        run: |
+          set -euo pipefail
+          TARBALL="oras_${ORAS_VERSION}_linux_amd64.tar.gz"
+          BASE="https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${TARBALL}" "${BASE}/${TARBALL}"
+          echo "${ORAS_SHA256}  ${TARBALL}" | sha256sum -c -
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o oras-checksums.txt "${BASE}/oras_${ORAS_VERSION}_checksums.txt"
+          grep " ${TARBALL}\$" oras-checksums.txt | sha256sum -c -
+          tar xzf "${TARBALL}" oras
+          install -m 0755 oras /usr/local/bin/oras
+          rm -f "${TARBALL}" oras-checksums.txt oras
+          oras version
+
+      # A second, unsigned copy of the same documents, published bare, beside
+      # the attestations above and never instead of them. The attestation is
+      # the authenticated answer and needs a Sigstore verifier to unwrap four
+      # layers; this is the one a consumer reads with one referrers query and
+      # one blob GET, and its artifactType is the registered SPDX media type
+      # rather than a signature-container type that says nothing about what is
+      # inside. It is also the shape verifymcp.io's rubric describes, and the
+      # only one that does not depend on which SPDX predicate string sits in
+      # its accepted set, which is not documented anywhere.
+      #
+      # It matters most on ghcr.io, which serves no referrers API: there the
+      # referrers list is the client-maintained sha256-<hex> fallback tag, and
+      # cosign records its own entries with a degraded descriptor carrying no
+      # artifactType and no annotations, so a consumer that filters on the
+      # descriptor is blind to them. oras and actions/attest both write
+      # faithful descriptors, and oras merges rather than replacing.
+      #
+      # Last, and after every attestation, for two reasons: all of these
+      # clients maintain that one fallback tag by read-modify-write, so they
+      # must be sequential; and a failure in the unsigned copy then cannot cost
+      # the signed ones. oras reads the credentials docker/login-action already
+      # wrote and needs none of its own.
+      - name: Publish the SBOMs as bare SPDX referrers
+        if: env.REHEARSAL != 'true'
+        env:
+          GHCR_REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          HUB_REPO: ${{ env.DOCKERHUB_SKIP == 'false' && format('docker.io/{0}', env.DOCKERHUB_IMAGE) || '' }}
+        run: |
+          set -euo pipefail
+          for repo in "${GHCR_REPO}" ${HUB_REPO:+"${HUB_REPO}"}; do
+            for pair in "${INDEX_DIGEST}:amd64" "${AMD64_DIGEST}:amd64" "${ARM64_DIGEST}:arm64"; do
+              digest="${pair%:*}"
+              arch="${pair##*:}"
+              oras attach --artifact-type application/spdx+json \
+                "${repo}@${digest}" \
+                "image-sbom-${arch}.spdx.json:application/spdx+json"
+              echo "attached ${arch} SBOM to ${repo}@${digest}"
+            done
+          done
 
       - name: Nothing to sign in a rehearsal
         if: env.REHEARSAL == 'true'
