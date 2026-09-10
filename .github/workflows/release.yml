@@ -48,9 +48,11 @@
 #     because it validates every one of those entries by fetching them;
 #   * nothing that signs or attests the image lives in the job that builds it.
 #     The build is not byte-reproducible, so a re-run of that job pushes a new
-#     index under the same tags; keeping the twelve signing and attestation
+#     index under the same tags; keeping the fourteen signing and attestation
 #     operations in sign-attest is what makes a failed attestation cost a
-#     re-run of the signing rather than a rebuild that moves the tag.
+#     re-run of the signing rather than a rebuild that moves the tag. The
+#     release job names sign-attest so that a failure there still stops every
+#     publisher, which is what the old arrangement got for free.
 name: Release
 
 on:
@@ -543,7 +545,7 @@ jobs:
   #
   # The first is what a re-run does. The docker job builds and pushes, and its
   # build is not byte-reproducible: BuildKit's `provenance: true` attestation
-  # carries its own timestamps whatever the build args say. While the twelve
+  # carries its own timestamps whatever the build args say. While the fourteen
   # signing and attestation operations lived in that job, one of them failing
   # meant "re-run failed jobs" re-ran the whole thing, rebuilt the image, and
   # pushed a NEW index under the same `3.0.0` and `latest` tags, orphaning the
@@ -907,7 +909,19 @@ jobs:
     # fetch, and the MCP Registry publish validates the server.json OCI entry by
     # fetching ghcr.io for this version's tag — a tag only the docker job
     # pushes. Racing it 404s the registry publish.
-    needs: [preflight, e2e, docker]
+    #
+    # sign-attest is a prerequisite for a reason that this split nearly lost.
+    # While the signing lived in the docker job, a signature or attestation that
+    # failed failed that job, and everything downstream of it stopped: nothing
+    # published. Moving the signing out took that gate with it, and npm, PyPI
+    # and NuGet versions are permanent, so a release that went out beside an
+    # unsigned image could not be withdrawn afterwards. Naming sign-attest here
+    # restores the invariant for this job and, through it, for the five
+    # publishers that need this one. It costs the signing's three minutes on the
+    # critical path, which is the right trade. A rehearsal is unaffected: the job
+    # runs and succeeds with its steps skipped, rather than being skipped itself,
+    # which a needs edge would propagate.
+    needs: [preflight, e2e, docker, sign-attest]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     permissions:
