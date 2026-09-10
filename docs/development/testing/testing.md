@@ -85,10 +85,10 @@
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
 | projects          |   393 |   100.0% |    57 |
-| groups            |   280 |   100.0% |    37 |
+| groups            |   280 |    99.0% |    37 |
 | mergerequests     |   259 |   100.0% |    30 |
 | issues            |   233 |   100.0% |    21 |
-| users             |   220 |    99.9% |    38 |
+| users             |   220 |    99.2% |    38 |
 | dynamic           |   176 |    99.9% |     2 |
 | jobs              |   152 |   100.0% |    17 |
 | packages          |   148 |    99.0% |     9 |
@@ -193,7 +193,7 @@
 | groupprotectedenvs      |        19 |          2 |   100.0% |         5 |
 | grouprelationsexport    |        26 |          2 |   100.0% |         2 |
 | groupreleases           |        18 |          3 |   100.0% |         1 |
-| groups                  |       280 |          8 |   100.0% |        37 |
+| groups                  |       280 |          8 |    99.0% |        37 |
 | groupsaml               |        35 |          3 |   100.0% |         5 |
 | groupscim               |        32 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |        23 |          2 |   100.0% |         8 |
@@ -288,7 +288,7 @@
 | usagedata               |        31 |          1 |   100.0% |         6 |
 | useremails              |        24 |          2 |   100.0% |         6 |
 | usergpgkeys             |        44 |          2 |   100.0% |         8 |
-| users                   |       220 |          7 |    99.9% |        38 |
+| users                   |       220 |          7 |    99.2% |        38 |
 | vulnerabilities         |        66 |          3 |   100.0% |         8 |
 | waitpoll                |        13 |          1 |    99.2% |         0 |
 | wikis                   |        62 |          2 |   100.0% |         6 |
@@ -473,7 +473,7 @@
 | groupprotectedenvs      |   100.0% |
 | grouprelationsexport    |   100.0% |
 | groupreleases           |   100.0% |
-| groups                  |   100.0% |
+| groups                  |    99.0% |
 | groupsaml               |   100.0% |
 | groupscim               |   100.0% |
 | groupserviceaccounts    |   100.0% |
@@ -568,7 +568,7 @@
 | usagedata               |   100.0% |
 | useremails              |   100.0% |
 | usergpgkeys             |   100.0% |
-| users                   |    99.9% |
+| users                   |    99.2% |
 | vulnerabilities         |   100.0% |
 | waitpoll                |    99.2% |
 | wikis                   |   100.0% |

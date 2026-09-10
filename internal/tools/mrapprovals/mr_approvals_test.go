@@ -1168,8 +1168,8 @@ func TestFormatStateMarkdown_WithRules(t *testing.T) {
 	s := StateOutput{
 		ApprovalRulesOverwritten: true,
 		Rules: []StateRuleOutput{
-			{RuleOutput: RuleOutput{ID: 1, Name: "Security", RuleType: "regular", ApprovalsRequired: 2}, Approved: true, ApprovedBy: []*BasicUserOutput{{Name: "Alice"}}},
-			{RuleOutput: RuleOutput{ID: 2, Name: "QA", RuleType: "code_owner", ApprovalsRequired: 1}, Approved: false, ApprovedBy: nil},
+			{ID: 1, Name: "Security", RuleType: "regular", ApprovalsRequired: 2, Approved: true, ApprovedBy: []*BasicUserOutput{{Name: "Alice"}}},
+			{ID: 2, Name: "QA", RuleType: "code_owner", ApprovalsRequired: 1, Approved: false, ApprovedBy: nil},
 		},
 	}
 	md := FormatStateMarkdown(s)

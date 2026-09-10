@@ -5642,6 +5642,9 @@
         "key": {
           "type": "string"
         },
+        "last_used_at": {
+          "type": "string"
+        },
         "title": {
           "type": "string"
         },
@@ -5716,6 +5719,9 @@
           "type": "integer"
         },
         "key": {
+          "type": "string"
+        },
+        "last_used_at": {
           "type": "string"
         },
         "title": {
@@ -48027,6 +48033,9 @@
         "key": {
           "type": "string"
         },
+        "last_used_at": {
+          "type": "string"
+        },
         "title": {
           "type": "string"
         },
@@ -48082,6 +48091,9 @@
           "type": "integer"
         },
         "key": {
+          "type": "string"
+        },
+        "last_used_at": {
           "type": "string"
         },
         "title": {
@@ -55052,8 +55064,72 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "ai_settings": {
+          "additionalProperties": false,
+          "properties": {
+            "ai_catalog_restricted_to_group_hierarchy": {
+              "type": "boolean"
+            },
+            "ai_usage_data_collection_enabled": {
+              "type": "boolean"
+            },
+            "allow_all_unix_sockets": {
+              "type": "boolean"
+            },
+            "allow_project_extension": {
+              "type": "boolean"
+            },
+            "duo_agent_platform_enabled": {
+              "type": "boolean"
+            },
+            "duo_workflow_mcp_enabled": {
+              "type": "boolean"
+            },
+            "foundational_agents_default_enabled": {
+              "type": "boolean"
+            },
+            "include_recommended_allowed": {
+              "type": "boolean"
+            },
+            "minimum_access_level_enable_on_projects": {
+              "type": "string"
+            },
+            "minimum_access_level_execute": {
+              "type": "string"
+            },
+            "minimum_access_level_execute_async": {
+              "type": "string"
+            },
+            "minimum_access_level_manage": {
+              "type": "string"
+            },
+            "prompt_injection_protection_level": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "duo_agent_platform_enabled",
+            "duo_workflow_mcp_enabled",
+            "foundational_agents_default_enabled",
+            "ai_catalog_restricted_to_group_hierarchy",
+            "ai_usage_data_collection_enabled",
+            "include_recommended_allowed",
+            "allow_all_unix_sockets",
+            "allow_project_extension"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "allow_merge_on_skipped_pipeline": {
           "type": "boolean"
+        },
+        "allow_personal_snippets": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "allowed_email_domains_list": {
           "type": "string"
@@ -55061,11 +55137,29 @@
         "archived": {
           "type": "boolean"
         },
+        "auto_ban_user_on_excessive_projects_download": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "auto_devops_enabled": {
           "type": "boolean"
         },
+        "auto_duo_code_review_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "avatar_url": {
           "type": "string"
+        },
+        "built_in_project_templates_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "created_at": {
           "type": "string"
@@ -55156,8 +55250,62 @@
         "duo_availability": {
           "type": "string"
         },
+        "duo_core_features_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_features_enabled": {
           "type": "boolean"
+        },
+        "duo_namespace_access_rules": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "features": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "through_namespace": {
+                "additionalProperties": false,
+                "properties": {
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "full_path"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "required": [
+              "through_namespace",
+              "features"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "emails_disabled": {
           "type": "boolean"
@@ -55230,10 +55378,19 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_built_in_project_templates_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "lock_duo_features_enabled": {
           "type": "boolean"
         },
         "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
+        "lock_resource_access_token_notify_inherited": {
           "type": "boolean"
         },
         "marked_for_deletion_on": {
@@ -55343,6 +55500,12 @@
         "require_two_factor_authentication": {
           "type": "boolean"
         },
+        "resource_access_token_notify_inherited": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "root_storage_statistics": {
           "additionalProperties": false,
           "properties": {
@@ -55431,6 +55594,12 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "service_access_tokens_expiration_enforced": {
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "share_with_group_lock": {
@@ -55525,6 +55694,9 @@
             "array"
           ]
         },
+        "show_diff_preview_in_email": {
+          "type": "boolean"
+        },
         "statistics": {
           "additionalProperties": false,
           "properties": {
@@ -55580,14 +55752,53 @@
             "object"
           ]
         },
+        "step_up_auth_required_oauth_provider": {
+          "type": "string"
+        },
         "subgroup_creation_level": {
           "type": "string"
         },
         "two_factor_grace_period": {
           "type": "integer"
         },
+        "unique_project_download_limit": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "unique_project_download_limit_alertlist": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_allowlist": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_interval_in_seconds": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "visibility": {
           "type": "string"
+        },
+        "web_based_commit_signing_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "web_url": {
           "type": "string"
@@ -55606,13 +55817,10 @@
         "request_access_enabled",
         "lfs_enabled",
         "archived",
-        "prevent_sharing_groups_outside_hierarchy",
         "math_rendering_limits_enabled",
         "lock_math_rendering_limits_enabled",
         "duo_features_enabled",
         "lock_duo_features_enabled",
-        "experiment_features_enabled",
-        "membership_lock",
         "share_with_group_lock",
         "require_two_factor_authentication",
         "auto_devops_enabled",
@@ -55620,6 +55828,12 @@
         "emails_disabled",
         "mentions_disabled",
         "crm_enabled",
+        "show_diff_preview_in_email",
+        "resource_access_token_notify_inherited",
+        "lock_resource_access_token_notify_inherited",
+        "prevent_sharing_groups_outside_hierarchy",
+        "experiment_features_enabled",
+        "membership_lock",
         "prevent_forking_outside_group",
         "only_allow_merge_if_pipeline_succeeds",
         "allow_merge_on_skipped_pipeline",
@@ -56469,8 +56683,72 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "ai_settings": {
+          "additionalProperties": false,
+          "properties": {
+            "ai_catalog_restricted_to_group_hierarchy": {
+              "type": "boolean"
+            },
+            "ai_usage_data_collection_enabled": {
+              "type": "boolean"
+            },
+            "allow_all_unix_sockets": {
+              "type": "boolean"
+            },
+            "allow_project_extension": {
+              "type": "boolean"
+            },
+            "duo_agent_platform_enabled": {
+              "type": "boolean"
+            },
+            "duo_workflow_mcp_enabled": {
+              "type": "boolean"
+            },
+            "foundational_agents_default_enabled": {
+              "type": "boolean"
+            },
+            "include_recommended_allowed": {
+              "type": "boolean"
+            },
+            "minimum_access_level_enable_on_projects": {
+              "type": "string"
+            },
+            "minimum_access_level_execute": {
+              "type": "string"
+            },
+            "minimum_access_level_execute_async": {
+              "type": "string"
+            },
+            "minimum_access_level_manage": {
+              "type": "string"
+            },
+            "prompt_injection_protection_level": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "duo_agent_platform_enabled",
+            "duo_workflow_mcp_enabled",
+            "foundational_agents_default_enabled",
+            "ai_catalog_restricted_to_group_hierarchy",
+            "ai_usage_data_collection_enabled",
+            "include_recommended_allowed",
+            "allow_all_unix_sockets",
+            "allow_project_extension"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "allow_merge_on_skipped_pipeline": {
           "type": "boolean"
+        },
+        "allow_personal_snippets": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "allowed_email_domains_list": {
           "type": "string"
@@ -56478,11 +56756,29 @@
         "archived": {
           "type": "boolean"
         },
+        "auto_ban_user_on_excessive_projects_download": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "auto_devops_enabled": {
           "type": "boolean"
         },
+        "auto_duo_code_review_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "avatar_url": {
           "type": "string"
+        },
+        "built_in_project_templates_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "created_at": {
           "type": "string"
@@ -56573,8 +56869,62 @@
         "duo_availability": {
           "type": "string"
         },
+        "duo_core_features_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_features_enabled": {
           "type": "boolean"
+        },
+        "duo_namespace_access_rules": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "features": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "through_namespace": {
+                "additionalProperties": false,
+                "properties": {
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "full_path"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "required": [
+              "through_namespace",
+              "features"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "emails_disabled": {
           "type": "boolean"
@@ -56647,10 +56997,19 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_built_in_project_templates_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "lock_duo_features_enabled": {
           "type": "boolean"
         },
         "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
+        "lock_resource_access_token_notify_inherited": {
           "type": "boolean"
         },
         "marked_for_deletion_on": {
@@ -56760,6 +57119,12 @@
         "require_two_factor_authentication": {
           "type": "boolean"
         },
+        "resource_access_token_notify_inherited": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "root_storage_statistics": {
           "additionalProperties": false,
           "properties": {
@@ -56848,6 +57213,12 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "service_access_tokens_expiration_enforced": {
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "share_with_group_lock": {
@@ -56942,6 +57313,9 @@
             "array"
           ]
         },
+        "show_diff_preview_in_email": {
+          "type": "boolean"
+        },
         "statistics": {
           "additionalProperties": false,
           "properties": {
@@ -56997,14 +57371,53 @@
             "object"
           ]
         },
+        "step_up_auth_required_oauth_provider": {
+          "type": "string"
+        },
         "subgroup_creation_level": {
           "type": "string"
         },
         "two_factor_grace_period": {
           "type": "integer"
         },
+        "unique_project_download_limit": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "unique_project_download_limit_alertlist": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_allowlist": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_interval_in_seconds": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "visibility": {
           "type": "string"
+        },
+        "web_based_commit_signing_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "web_url": {
           "type": "string"
@@ -57023,13 +57436,10 @@
         "request_access_enabled",
         "lfs_enabled",
         "archived",
-        "prevent_sharing_groups_outside_hierarchy",
         "math_rendering_limits_enabled",
         "lock_math_rendering_limits_enabled",
         "duo_features_enabled",
         "lock_duo_features_enabled",
-        "experiment_features_enabled",
-        "membership_lock",
         "share_with_group_lock",
         "require_two_factor_authentication",
         "auto_devops_enabled",
@@ -57037,6 +57447,12 @@
         "emails_disabled",
         "mentions_disabled",
         "crm_enabled",
+        "show_diff_preview_in_email",
+        "resource_access_token_notify_inherited",
+        "lock_resource_access_token_notify_inherited",
+        "prevent_sharing_groups_outside_hierarchy",
+        "experiment_features_enabled",
+        "membership_lock",
         "prevent_forking_outside_group",
         "only_allow_merge_if_pipeline_succeeds",
         "allow_merge_on_skipped_pipeline",
@@ -59262,11 +59678,11 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "allow_merge_on_skipped_pipeline": {
-                "type": "boolean"
-              },
-              "allowed_email_domains_list": {
-                "type": "string"
+              "allow_personal_snippets": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "archived": {
                 "type": "boolean"
@@ -59274,8 +59690,20 @@
               "auto_devops_enabled": {
                 "type": "boolean"
               },
+              "auto_duo_code_review_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "avatar_url": {
                 "type": "string"
+              },
+              "built_in_project_templates_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -59366,23 +59794,68 @@
               "duo_availability": {
                 "type": "string"
               },
+              "duo_core_features_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "duo_features_enabled": {
                 "type": "boolean"
+              },
+              "duo_namespace_access_rules": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "features": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "through_namespace": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "full_path": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "full_path"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "through_namespace",
+                    "features"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "emails_disabled": {
                 "type": "boolean"
               },
               "emails_enabled": {
                 "type": "boolean"
-              },
-              "enabled_git_access_protocol": {
-                "type": "string"
-              },
-              "experiment_features_enabled": {
-                "type": "boolean"
-              },
-              "extra_shared_runners_minutes_limit": {
-                "type": "integer"
               },
               "file_template_project_id": {
                 "type": "integer"
@@ -59395,9 +59868,6 @@
               },
               "id": {
                 "type": "integer"
-              },
-              "ip_restriction_ranges": {
-                "type": "string"
               },
               "ldap_access": {
                 "type": "integer"
@@ -59440,10 +59910,19 @@
               "lfs_enabled": {
                 "type": "boolean"
               },
+              "lock_built_in_project_templates_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "lock_duo_features_enabled": {
                 "type": "boolean"
               },
               "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
+              "lock_resource_access_token_notify_inherited": {
                 "type": "boolean"
               },
               "marked_for_deletion_on": {
@@ -59454,9 +59933,6 @@
               },
               "max_artifacts_size": {
                 "type": "integer"
-              },
-              "membership_lock": {
-                "type": "boolean"
               },
               "mentions_disabled": {
                 "type": "boolean"
@@ -59473,12 +59949,6 @@
                   "array"
                 ]
               },
-              "only_allow_merge_if_all_discussions_are_resolved": {
-                "type": "boolean"
-              },
-              "only_allow_merge_if_pipeline_succeeds": {
-                "type": "boolean"
-              },
               "organization_id": {
                 "type": "integer"
               },
@@ -59488,61 +59958,8 @@
               "path": {
                 "type": "string"
               },
-              "prevent_forking_outside_group": {
-                "type": "boolean"
-              },
-              "prevent_sharing_groups_outside_hierarchy": {
-                "type": "boolean"
-              },
               "project_creation_level": {
                 "type": "string"
-              },
-              "projects": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "archived": {
-                      "type": "boolean"
-                    },
-                    "created_at": {
-                      "type": "string"
-                    },
-                    "default_branch": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "path_with_namespace": {
-                      "type": "string"
-                    },
-                    "visibility": {
-                      "type": "string"
-                    },
-                    "web_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "name",
-                    "path_with_namespace",
-                    "visibility",
-                    "web_url",
-                    "archived"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
               },
               "repository_storage": {
                 "type": "string"
@@ -59552,6 +59969,12 @@
               },
               "require_two_factor_authentication": {
                 "type": "boolean"
+              },
+              "resource_access_token_notify_inherited": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "root_storage_statistics": {
                 "additionalProperties": false,
@@ -59612,9 +60035,6 @@
                   "object"
                 ]
               },
-              "runners_token": {
-                "type": "string"
-              },
               "saml_group_links": {
                 "items": {
                   "additionalProperties": false,
@@ -59646,94 +60066,11 @@
               "share_with_group_lock": {
                 "type": "boolean"
               },
-              "shared_projects": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "archived": {
-                      "type": "boolean"
-                    },
-                    "created_at": {
-                      "type": "string"
-                    },
-                    "default_branch": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "path_with_namespace": {
-                      "type": "string"
-                    },
-                    "visibility": {
-                      "type": "string"
-                    },
-                    "web_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "name",
-                    "path_with_namespace",
-                    "visibility",
-                    "web_url",
-                    "archived"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
-              "shared_runners_minutes_limit": {
-                "type": "integer"
-              },
               "shared_runners_setting": {
                 "type": "string"
               },
-              "shared_with_groups": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "expires_at": {
-                      "type": "string"
-                    },
-                    "group_access_level": {
-                      "type": "integer"
-                    },
-                    "group_full_path": {
-                      "type": "string"
-                    },
-                    "group_id": {
-                      "type": "integer"
-                    },
-                    "group_name": {
-                      "type": "string"
-                    },
-                    "member_role_id": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "group_id",
-                    "group_name",
-                    "group_full_path",
-                    "group_access_level"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
+              "show_diff_preview_in_email": {
+                "type": "boolean"
               },
               "statistics": {
                 "additionalProperties": false,
@@ -59799,6 +60136,12 @@
               "visibility": {
                 "type": "string"
               },
+              "web_based_commit_signing_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "web_url": {
                 "type": "string"
               },
@@ -59816,13 +60159,10 @@
               "request_access_enabled",
               "lfs_enabled",
               "archived",
-              "prevent_sharing_groups_outside_hierarchy",
               "math_rendering_limits_enabled",
               "lock_math_rendering_limits_enabled",
               "duo_features_enabled",
               "lock_duo_features_enabled",
-              "experiment_features_enabled",
-              "membership_lock",
               "share_with_group_lock",
               "require_two_factor_authentication",
               "auto_devops_enabled",
@@ -59830,10 +60170,9 @@
               "emails_disabled",
               "mentions_disabled",
               "crm_enabled",
-              "prevent_forking_outside_group",
-              "only_allow_merge_if_pipeline_succeeds",
-              "allow_merge_on_skipped_pipeline",
-              "only_allow_merge_if_all_discussions_are_resolved"
+              "show_diff_preview_in_email",
+              "resource_access_token_notify_inherited",
+              "lock_resource_access_token_notify_inherited"
             ],
             "type": "object"
           },
@@ -61131,11 +61470,11 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "allow_merge_on_skipped_pipeline": {
-                "type": "boolean"
-              },
-              "allowed_email_domains_list": {
-                "type": "string"
+              "allow_personal_snippets": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "archived": {
                 "type": "boolean"
@@ -61143,8 +61482,20 @@
               "auto_devops_enabled": {
                 "type": "boolean"
               },
+              "auto_duo_code_review_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "avatar_url": {
                 "type": "string"
+              },
+              "built_in_project_templates_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -61235,23 +61586,68 @@
               "duo_availability": {
                 "type": "string"
               },
+              "duo_core_features_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "duo_features_enabled": {
                 "type": "boolean"
+              },
+              "duo_namespace_access_rules": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "features": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "through_namespace": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "full_path": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "full_path"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "through_namespace",
+                    "features"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "emails_disabled": {
                 "type": "boolean"
               },
               "emails_enabled": {
                 "type": "boolean"
-              },
-              "enabled_git_access_protocol": {
-                "type": "string"
-              },
-              "experiment_features_enabled": {
-                "type": "boolean"
-              },
-              "extra_shared_runners_minutes_limit": {
-                "type": "integer"
               },
               "file_template_project_id": {
                 "type": "integer"
@@ -61264,9 +61660,6 @@
               },
               "id": {
                 "type": "integer"
-              },
-              "ip_restriction_ranges": {
-                "type": "string"
               },
               "ldap_access": {
                 "type": "integer"
@@ -61309,10 +61702,19 @@
               "lfs_enabled": {
                 "type": "boolean"
               },
+              "lock_built_in_project_templates_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "lock_duo_features_enabled": {
                 "type": "boolean"
               },
               "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
+              "lock_resource_access_token_notify_inherited": {
                 "type": "boolean"
               },
               "marked_for_deletion_on": {
@@ -61323,9 +61725,6 @@
               },
               "max_artifacts_size": {
                 "type": "integer"
-              },
-              "membership_lock": {
-                "type": "boolean"
               },
               "mentions_disabled": {
                 "type": "boolean"
@@ -61342,12 +61741,6 @@
                   "array"
                 ]
               },
-              "only_allow_merge_if_all_discussions_are_resolved": {
-                "type": "boolean"
-              },
-              "only_allow_merge_if_pipeline_succeeds": {
-                "type": "boolean"
-              },
               "organization_id": {
                 "type": "integer"
               },
@@ -61357,61 +61750,8 @@
               "path": {
                 "type": "string"
               },
-              "prevent_forking_outside_group": {
-                "type": "boolean"
-              },
-              "prevent_sharing_groups_outside_hierarchy": {
-                "type": "boolean"
-              },
               "project_creation_level": {
                 "type": "string"
-              },
-              "projects": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "archived": {
-                      "type": "boolean"
-                    },
-                    "created_at": {
-                      "type": "string"
-                    },
-                    "default_branch": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "path_with_namespace": {
-                      "type": "string"
-                    },
-                    "visibility": {
-                      "type": "string"
-                    },
-                    "web_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "name",
-                    "path_with_namespace",
-                    "visibility",
-                    "web_url",
-                    "archived"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
               },
               "repository_storage": {
                 "type": "string"
@@ -61421,6 +61761,12 @@
               },
               "require_two_factor_authentication": {
                 "type": "boolean"
+              },
+              "resource_access_token_notify_inherited": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "root_storage_statistics": {
                 "additionalProperties": false,
@@ -61481,9 +61827,6 @@
                   "object"
                 ]
               },
-              "runners_token": {
-                "type": "string"
-              },
               "saml_group_links": {
                 "items": {
                   "additionalProperties": false,
@@ -61515,94 +61858,11 @@
               "share_with_group_lock": {
                 "type": "boolean"
               },
-              "shared_projects": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "archived": {
-                      "type": "boolean"
-                    },
-                    "created_at": {
-                      "type": "string"
-                    },
-                    "default_branch": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "path_with_namespace": {
-                      "type": "string"
-                    },
-                    "visibility": {
-                      "type": "string"
-                    },
-                    "web_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "name",
-                    "path_with_namespace",
-                    "visibility",
-                    "web_url",
-                    "archived"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
-              "shared_runners_minutes_limit": {
-                "type": "integer"
-              },
               "shared_runners_setting": {
                 "type": "string"
               },
-              "shared_with_groups": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "expires_at": {
-                      "type": "string"
-                    },
-                    "group_access_level": {
-                      "type": "integer"
-                    },
-                    "group_full_path": {
-                      "type": "string"
-                    },
-                    "group_id": {
-                      "type": "integer"
-                    },
-                    "group_name": {
-                      "type": "string"
-                    },
-                    "member_role_id": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "group_id",
-                    "group_name",
-                    "group_full_path",
-                    "group_access_level"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
+              "show_diff_preview_in_email": {
+                "type": "boolean"
               },
               "statistics": {
                 "additionalProperties": false,
@@ -61668,6 +61928,12 @@
               "visibility": {
                 "type": "string"
               },
+              "web_based_commit_signing_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "web_url": {
                 "type": "string"
               },
@@ -61685,13 +61951,10 @@
               "request_access_enabled",
               "lfs_enabled",
               "archived",
-              "prevent_sharing_groups_outside_hierarchy",
               "math_rendering_limits_enabled",
               "lock_math_rendering_limits_enabled",
               "duo_features_enabled",
               "lock_duo_features_enabled",
-              "experiment_features_enabled",
-              "membership_lock",
               "share_with_group_lock",
               "require_two_factor_authentication",
               "auto_devops_enabled",
@@ -61699,10 +61962,9 @@
               "emails_disabled",
               "mentions_disabled",
               "crm_enabled",
-              "prevent_forking_outside_group",
-              "only_allow_merge_if_pipeline_succeeds",
-              "allow_merge_on_skipped_pipeline",
-              "only_allow_merge_if_all_discussions_are_resolved"
+              "show_diff_preview_in_email",
+              "resource_access_token_notify_inherited",
+              "lock_resource_access_token_notify_inherited"
             ],
             "type": "object"
           },
@@ -67722,8 +67984,72 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "ai_settings": {
+          "additionalProperties": false,
+          "properties": {
+            "ai_catalog_restricted_to_group_hierarchy": {
+              "type": "boolean"
+            },
+            "ai_usage_data_collection_enabled": {
+              "type": "boolean"
+            },
+            "allow_all_unix_sockets": {
+              "type": "boolean"
+            },
+            "allow_project_extension": {
+              "type": "boolean"
+            },
+            "duo_agent_platform_enabled": {
+              "type": "boolean"
+            },
+            "duo_workflow_mcp_enabled": {
+              "type": "boolean"
+            },
+            "foundational_agents_default_enabled": {
+              "type": "boolean"
+            },
+            "include_recommended_allowed": {
+              "type": "boolean"
+            },
+            "minimum_access_level_enable_on_projects": {
+              "type": "string"
+            },
+            "minimum_access_level_execute": {
+              "type": "string"
+            },
+            "minimum_access_level_execute_async": {
+              "type": "string"
+            },
+            "minimum_access_level_manage": {
+              "type": "string"
+            },
+            "prompt_injection_protection_level": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "duo_agent_platform_enabled",
+            "duo_workflow_mcp_enabled",
+            "foundational_agents_default_enabled",
+            "ai_catalog_restricted_to_group_hierarchy",
+            "ai_usage_data_collection_enabled",
+            "include_recommended_allowed",
+            "allow_all_unix_sockets",
+            "allow_project_extension"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "allow_merge_on_skipped_pipeline": {
           "type": "boolean"
+        },
+        "allow_personal_snippets": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "allowed_email_domains_list": {
           "type": "string"
@@ -67731,11 +68057,29 @@
         "archived": {
           "type": "boolean"
         },
+        "auto_ban_user_on_excessive_projects_download": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "auto_devops_enabled": {
           "type": "boolean"
         },
+        "auto_duo_code_review_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "avatar_url": {
           "type": "string"
+        },
+        "built_in_project_templates_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "created_at": {
           "type": "string"
@@ -67826,8 +68170,62 @@
         "duo_availability": {
           "type": "string"
         },
+        "duo_core_features_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_features_enabled": {
           "type": "boolean"
+        },
+        "duo_namespace_access_rules": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "features": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "through_namespace": {
+                "additionalProperties": false,
+                "properties": {
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "full_path"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "required": [
+              "through_namespace",
+              "features"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "emails_disabled": {
           "type": "boolean"
@@ -67900,10 +68298,19 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_built_in_project_templates_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "lock_duo_features_enabled": {
           "type": "boolean"
         },
         "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
+        "lock_resource_access_token_notify_inherited": {
           "type": "boolean"
         },
         "marked_for_deletion_on": {
@@ -68013,6 +68420,12 @@
         "require_two_factor_authentication": {
           "type": "boolean"
         },
+        "resource_access_token_notify_inherited": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "root_storage_statistics": {
           "additionalProperties": false,
           "properties": {
@@ -68101,6 +68514,12 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "service_access_tokens_expiration_enforced": {
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "share_with_group_lock": {
@@ -68195,6 +68614,9 @@
             "array"
           ]
         },
+        "show_diff_preview_in_email": {
+          "type": "boolean"
+        },
         "statistics": {
           "additionalProperties": false,
           "properties": {
@@ -68250,14 +68672,53 @@
             "object"
           ]
         },
+        "step_up_auth_required_oauth_provider": {
+          "type": "string"
+        },
         "subgroup_creation_level": {
           "type": "string"
         },
         "two_factor_grace_period": {
           "type": "integer"
         },
+        "unique_project_download_limit": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "unique_project_download_limit_alertlist": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_allowlist": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_interval_in_seconds": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "visibility": {
           "type": "string"
+        },
+        "web_based_commit_signing_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "web_url": {
           "type": "string"
@@ -68276,13 +68737,10 @@
         "request_access_enabled",
         "lfs_enabled",
         "archived",
-        "prevent_sharing_groups_outside_hierarchy",
         "math_rendering_limits_enabled",
         "lock_math_rendering_limits_enabled",
         "duo_features_enabled",
         "lock_duo_features_enabled",
-        "experiment_features_enabled",
-        "membership_lock",
         "share_with_group_lock",
         "require_two_factor_authentication",
         "auto_devops_enabled",
@@ -68290,6 +68748,12 @@
         "emails_disabled",
         "mentions_disabled",
         "crm_enabled",
+        "show_diff_preview_in_email",
+        "resource_access_token_notify_inherited",
+        "lock_resource_access_token_notify_inherited",
+        "prevent_sharing_groups_outside_hierarchy",
+        "experiment_features_enabled",
+        "membership_lock",
         "prevent_forking_outside_group",
         "only_allow_merge_if_pipeline_succeeds",
         "allow_merge_on_skipped_pipeline",
@@ -69044,11 +69508,11 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "allow_merge_on_skipped_pipeline": {
-                "type": "boolean"
-              },
-              "allowed_email_domains_list": {
-                "type": "string"
+              "allow_personal_snippets": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "archived": {
                 "type": "boolean"
@@ -69056,8 +69520,20 @@
               "auto_devops_enabled": {
                 "type": "boolean"
               },
+              "auto_duo_code_review_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "avatar_url": {
                 "type": "string"
+              },
+              "built_in_project_templates_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -69148,23 +69624,68 @@
               "duo_availability": {
                 "type": "string"
               },
+              "duo_core_features_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "duo_features_enabled": {
                 "type": "boolean"
+              },
+              "duo_namespace_access_rules": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "features": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "through_namespace": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "full_path": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "full_path"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "through_namespace",
+                    "features"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "emails_disabled": {
                 "type": "boolean"
               },
               "emails_enabled": {
                 "type": "boolean"
-              },
-              "enabled_git_access_protocol": {
-                "type": "string"
-              },
-              "experiment_features_enabled": {
-                "type": "boolean"
-              },
-              "extra_shared_runners_minutes_limit": {
-                "type": "integer"
               },
               "file_template_project_id": {
                 "type": "integer"
@@ -69177,9 +69698,6 @@
               },
               "id": {
                 "type": "integer"
-              },
-              "ip_restriction_ranges": {
-                "type": "string"
               },
               "ldap_access": {
                 "type": "integer"
@@ -69222,10 +69740,19 @@
               "lfs_enabled": {
                 "type": "boolean"
               },
+              "lock_built_in_project_templates_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "lock_duo_features_enabled": {
                 "type": "boolean"
               },
               "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
+              "lock_resource_access_token_notify_inherited": {
                 "type": "boolean"
               },
               "marked_for_deletion_on": {
@@ -69236,9 +69763,6 @@
               },
               "max_artifacts_size": {
                 "type": "integer"
-              },
-              "membership_lock": {
-                "type": "boolean"
               },
               "mentions_disabled": {
                 "type": "boolean"
@@ -69255,12 +69779,6 @@
                   "array"
                 ]
               },
-              "only_allow_merge_if_all_discussions_are_resolved": {
-                "type": "boolean"
-              },
-              "only_allow_merge_if_pipeline_succeeds": {
-                "type": "boolean"
-              },
               "organization_id": {
                 "type": "integer"
               },
@@ -69270,61 +69788,8 @@
               "path": {
                 "type": "string"
               },
-              "prevent_forking_outside_group": {
-                "type": "boolean"
-              },
-              "prevent_sharing_groups_outside_hierarchy": {
-                "type": "boolean"
-              },
               "project_creation_level": {
                 "type": "string"
-              },
-              "projects": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "archived": {
-                      "type": "boolean"
-                    },
-                    "created_at": {
-                      "type": "string"
-                    },
-                    "default_branch": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "path_with_namespace": {
-                      "type": "string"
-                    },
-                    "visibility": {
-                      "type": "string"
-                    },
-                    "web_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "name",
-                    "path_with_namespace",
-                    "visibility",
-                    "web_url",
-                    "archived"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
               },
               "repository_storage": {
                 "type": "string"
@@ -69334,6 +69799,12 @@
               },
               "require_two_factor_authentication": {
                 "type": "boolean"
+              },
+              "resource_access_token_notify_inherited": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "root_storage_statistics": {
                 "additionalProperties": false,
@@ -69394,9 +69865,6 @@
                   "object"
                 ]
               },
-              "runners_token": {
-                "type": "string"
-              },
               "saml_group_links": {
                 "items": {
                   "additionalProperties": false,
@@ -69428,94 +69896,11 @@
               "share_with_group_lock": {
                 "type": "boolean"
               },
-              "shared_projects": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "archived": {
-                      "type": "boolean"
-                    },
-                    "created_at": {
-                      "type": "string"
-                    },
-                    "default_branch": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "path_with_namespace": {
-                      "type": "string"
-                    },
-                    "visibility": {
-                      "type": "string"
-                    },
-                    "web_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "name",
-                    "path_with_namespace",
-                    "visibility",
-                    "web_url",
-                    "archived"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
-              "shared_runners_minutes_limit": {
-                "type": "integer"
-              },
               "shared_runners_setting": {
                 "type": "string"
               },
-              "shared_with_groups": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "expires_at": {
-                      "type": "string"
-                    },
-                    "group_access_level": {
-                      "type": "integer"
-                    },
-                    "group_full_path": {
-                      "type": "string"
-                    },
-                    "group_id": {
-                      "type": "integer"
-                    },
-                    "group_name": {
-                      "type": "string"
-                    },
-                    "member_role_id": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "group_id",
-                    "group_name",
-                    "group_full_path",
-                    "group_access_level"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
+              "show_diff_preview_in_email": {
+                "type": "boolean"
               },
               "statistics": {
                 "additionalProperties": false,
@@ -69581,6 +69966,12 @@
               "visibility": {
                 "type": "string"
               },
+              "web_based_commit_signing_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "web_url": {
                 "type": "string"
               },
@@ -69598,13 +69989,10 @@
               "request_access_enabled",
               "lfs_enabled",
               "archived",
-              "prevent_sharing_groups_outside_hierarchy",
               "math_rendering_limits_enabled",
               "lock_math_rendering_limits_enabled",
               "duo_features_enabled",
               "lock_duo_features_enabled",
-              "experiment_features_enabled",
-              "membership_lock",
               "share_with_group_lock",
               "require_two_factor_authentication",
               "auto_devops_enabled",
@@ -69612,10 +70000,9 @@
               "emails_disabled",
               "mentions_disabled",
               "crm_enabled",
-              "prevent_forking_outside_group",
-              "only_allow_merge_if_pipeline_succeeds",
-              "allow_merge_on_skipped_pipeline",
-              "only_allow_merge_if_all_discussions_are_resolved"
+              "show_diff_preview_in_email",
+              "resource_access_token_notify_inherited",
+              "lock_resource_access_token_notify_inherited"
             ],
             "type": "object"
           },
@@ -71170,11 +71557,11 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "allow_merge_on_skipped_pipeline": {
-                "type": "boolean"
-              },
-              "allowed_email_domains_list": {
-                "type": "string"
+              "allow_personal_snippets": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "archived": {
                 "type": "boolean"
@@ -71182,8 +71569,20 @@
               "auto_devops_enabled": {
                 "type": "boolean"
               },
+              "auto_duo_code_review_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "avatar_url": {
                 "type": "string"
+              },
+              "built_in_project_templates_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -71274,23 +71673,68 @@
               "duo_availability": {
                 "type": "string"
               },
+              "duo_core_features_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "duo_features_enabled": {
                 "type": "boolean"
+              },
+              "duo_namespace_access_rules": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "features": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "through_namespace": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "full_path": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "full_path"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "through_namespace",
+                    "features"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "emails_disabled": {
                 "type": "boolean"
               },
               "emails_enabled": {
                 "type": "boolean"
-              },
-              "enabled_git_access_protocol": {
-                "type": "string"
-              },
-              "experiment_features_enabled": {
-                "type": "boolean"
-              },
-              "extra_shared_runners_minutes_limit": {
-                "type": "integer"
               },
               "file_template_project_id": {
                 "type": "integer"
@@ -71303,9 +71747,6 @@
               },
               "id": {
                 "type": "integer"
-              },
-              "ip_restriction_ranges": {
-                "type": "string"
               },
               "ldap_access": {
                 "type": "integer"
@@ -71348,10 +71789,19 @@
               "lfs_enabled": {
                 "type": "boolean"
               },
+              "lock_built_in_project_templates_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "lock_duo_features_enabled": {
                 "type": "boolean"
               },
               "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
+              "lock_resource_access_token_notify_inherited": {
                 "type": "boolean"
               },
               "marked_for_deletion_on": {
@@ -71362,9 +71812,6 @@
               },
               "max_artifacts_size": {
                 "type": "integer"
-              },
-              "membership_lock": {
-                "type": "boolean"
               },
               "mentions_disabled": {
                 "type": "boolean"
@@ -71381,12 +71828,6 @@
                   "array"
                 ]
               },
-              "only_allow_merge_if_all_discussions_are_resolved": {
-                "type": "boolean"
-              },
-              "only_allow_merge_if_pipeline_succeeds": {
-                "type": "boolean"
-              },
               "organization_id": {
                 "type": "integer"
               },
@@ -71396,61 +71837,8 @@
               "path": {
                 "type": "string"
               },
-              "prevent_forking_outside_group": {
-                "type": "boolean"
-              },
-              "prevent_sharing_groups_outside_hierarchy": {
-                "type": "boolean"
-              },
               "project_creation_level": {
                 "type": "string"
-              },
-              "projects": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "archived": {
-                      "type": "boolean"
-                    },
-                    "created_at": {
-                      "type": "string"
-                    },
-                    "default_branch": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "path_with_namespace": {
-                      "type": "string"
-                    },
-                    "visibility": {
-                      "type": "string"
-                    },
-                    "web_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "name",
-                    "path_with_namespace",
-                    "visibility",
-                    "web_url",
-                    "archived"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
               },
               "repository_storage": {
                 "type": "string"
@@ -71460,6 +71848,12 @@
               },
               "require_two_factor_authentication": {
                 "type": "boolean"
+              },
+              "resource_access_token_notify_inherited": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "root_storage_statistics": {
                 "additionalProperties": false,
@@ -71520,9 +71914,6 @@
                   "object"
                 ]
               },
-              "runners_token": {
-                "type": "string"
-              },
               "saml_group_links": {
                 "items": {
                   "additionalProperties": false,
@@ -71554,94 +71945,11 @@
               "share_with_group_lock": {
                 "type": "boolean"
               },
-              "shared_projects": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "archived": {
-                      "type": "boolean"
-                    },
-                    "created_at": {
-                      "type": "string"
-                    },
-                    "default_branch": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "path_with_namespace": {
-                      "type": "string"
-                    },
-                    "visibility": {
-                      "type": "string"
-                    },
-                    "web_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "name",
-                    "path_with_namespace",
-                    "visibility",
-                    "web_url",
-                    "archived"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
-              "shared_runners_minutes_limit": {
-                "type": "integer"
-              },
               "shared_runners_setting": {
                 "type": "string"
               },
-              "shared_with_groups": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "expires_at": {
-                      "type": "string"
-                    },
-                    "group_access_level": {
-                      "type": "integer"
-                    },
-                    "group_full_path": {
-                      "type": "string"
-                    },
-                    "group_id": {
-                      "type": "integer"
-                    },
-                    "group_name": {
-                      "type": "string"
-                    },
-                    "member_role_id": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "group_id",
-                    "group_name",
-                    "group_full_path",
-                    "group_access_level"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
+              "show_diff_preview_in_email": {
+                "type": "boolean"
               },
               "statistics": {
                 "additionalProperties": false,
@@ -71707,6 +72015,12 @@
               "visibility": {
                 "type": "string"
               },
+              "web_based_commit_signing_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "web_url": {
                 "type": "string"
               },
@@ -71724,13 +72038,10 @@
               "request_access_enabled",
               "lfs_enabled",
               "archived",
-              "prevent_sharing_groups_outside_hierarchy",
               "math_rendering_limits_enabled",
               "lock_math_rendering_limits_enabled",
               "duo_features_enabled",
               "lock_duo_features_enabled",
-              "experiment_features_enabled",
-              "membership_lock",
               "share_with_group_lock",
               "require_two_factor_authentication",
               "auto_devops_enabled",
@@ -71738,10 +72049,9 @@
               "emails_disabled",
               "mentions_disabled",
               "crm_enabled",
-              "prevent_forking_outside_group",
-              "only_allow_merge_if_pipeline_succeeds",
-              "allow_merge_on_skipped_pipeline",
-              "only_allow_merge_if_all_discussions_are_resolved"
+              "show_diff_preview_in_email",
+              "resource_access_token_notify_inherited",
+              "lock_resource_access_token_notify_inherited"
             ],
             "type": "object"
           },
@@ -71835,8 +72145,72 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "ai_settings": {
+          "additionalProperties": false,
+          "properties": {
+            "ai_catalog_restricted_to_group_hierarchy": {
+              "type": "boolean"
+            },
+            "ai_usage_data_collection_enabled": {
+              "type": "boolean"
+            },
+            "allow_all_unix_sockets": {
+              "type": "boolean"
+            },
+            "allow_project_extension": {
+              "type": "boolean"
+            },
+            "duo_agent_platform_enabled": {
+              "type": "boolean"
+            },
+            "duo_workflow_mcp_enabled": {
+              "type": "boolean"
+            },
+            "foundational_agents_default_enabled": {
+              "type": "boolean"
+            },
+            "include_recommended_allowed": {
+              "type": "boolean"
+            },
+            "minimum_access_level_enable_on_projects": {
+              "type": "string"
+            },
+            "minimum_access_level_execute": {
+              "type": "string"
+            },
+            "minimum_access_level_execute_async": {
+              "type": "string"
+            },
+            "minimum_access_level_manage": {
+              "type": "string"
+            },
+            "prompt_injection_protection_level": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "duo_agent_platform_enabled",
+            "duo_workflow_mcp_enabled",
+            "foundational_agents_default_enabled",
+            "ai_catalog_restricted_to_group_hierarchy",
+            "ai_usage_data_collection_enabled",
+            "include_recommended_allowed",
+            "allow_all_unix_sockets",
+            "allow_project_extension"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "allow_merge_on_skipped_pipeline": {
           "type": "boolean"
+        },
+        "allow_personal_snippets": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "allowed_email_domains_list": {
           "type": "string"
@@ -71844,11 +72218,29 @@
         "archived": {
           "type": "boolean"
         },
+        "auto_ban_user_on_excessive_projects_download": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "auto_devops_enabled": {
           "type": "boolean"
         },
+        "auto_duo_code_review_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "avatar_url": {
           "type": "string"
+        },
+        "built_in_project_templates_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "created_at": {
           "type": "string"
@@ -71939,8 +72331,62 @@
         "duo_availability": {
           "type": "string"
         },
+        "duo_core_features_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_features_enabled": {
           "type": "boolean"
+        },
+        "duo_namespace_access_rules": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "features": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "through_namespace": {
+                "additionalProperties": false,
+                "properties": {
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "full_path"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "required": [
+              "through_namespace",
+              "features"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "emails_disabled": {
           "type": "boolean"
@@ -72013,10 +72459,19 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_built_in_project_templates_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "lock_duo_features_enabled": {
           "type": "boolean"
         },
         "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
+        "lock_resource_access_token_notify_inherited": {
           "type": "boolean"
         },
         "marked_for_deletion_on": {
@@ -72126,6 +72581,12 @@
         "require_two_factor_authentication": {
           "type": "boolean"
         },
+        "resource_access_token_notify_inherited": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "root_storage_statistics": {
           "additionalProperties": false,
           "properties": {
@@ -72214,6 +72675,12 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "service_access_tokens_expiration_enforced": {
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "share_with_group_lock": {
@@ -72308,6 +72775,9 @@
             "array"
           ]
         },
+        "show_diff_preview_in_email": {
+          "type": "boolean"
+        },
         "statistics": {
           "additionalProperties": false,
           "properties": {
@@ -72363,14 +72833,53 @@
             "object"
           ]
         },
+        "step_up_auth_required_oauth_provider": {
+          "type": "string"
+        },
         "subgroup_creation_level": {
           "type": "string"
         },
         "two_factor_grace_period": {
           "type": "integer"
         },
+        "unique_project_download_limit": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "unique_project_download_limit_alertlist": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_allowlist": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_interval_in_seconds": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "visibility": {
           "type": "string"
+        },
+        "web_based_commit_signing_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "web_url": {
           "type": "string"
@@ -72389,13 +72898,10 @@
         "request_access_enabled",
         "lfs_enabled",
         "archived",
-        "prevent_sharing_groups_outside_hierarchy",
         "math_rendering_limits_enabled",
         "lock_math_rendering_limits_enabled",
         "duo_features_enabled",
         "lock_duo_features_enabled",
-        "experiment_features_enabled",
-        "membership_lock",
         "share_with_group_lock",
         "require_two_factor_authentication",
         "auto_devops_enabled",
@@ -72403,6 +72909,12 @@
         "emails_disabled",
         "mentions_disabled",
         "crm_enabled",
+        "show_diff_preview_in_email",
+        "resource_access_token_notify_inherited",
+        "lock_resource_access_token_notify_inherited",
+        "prevent_sharing_groups_outside_hierarchy",
+        "experiment_features_enabled",
+        "membership_lock",
         "prevent_forking_outside_group",
         "only_allow_merge_if_pipeline_succeeds",
         "allow_merge_on_skipped_pipeline",
@@ -72588,8 +73100,72 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "ai_settings": {
+          "additionalProperties": false,
+          "properties": {
+            "ai_catalog_restricted_to_group_hierarchy": {
+              "type": "boolean"
+            },
+            "ai_usage_data_collection_enabled": {
+              "type": "boolean"
+            },
+            "allow_all_unix_sockets": {
+              "type": "boolean"
+            },
+            "allow_project_extension": {
+              "type": "boolean"
+            },
+            "duo_agent_platform_enabled": {
+              "type": "boolean"
+            },
+            "duo_workflow_mcp_enabled": {
+              "type": "boolean"
+            },
+            "foundational_agents_default_enabled": {
+              "type": "boolean"
+            },
+            "include_recommended_allowed": {
+              "type": "boolean"
+            },
+            "minimum_access_level_enable_on_projects": {
+              "type": "string"
+            },
+            "minimum_access_level_execute": {
+              "type": "string"
+            },
+            "minimum_access_level_execute_async": {
+              "type": "string"
+            },
+            "minimum_access_level_manage": {
+              "type": "string"
+            },
+            "prompt_injection_protection_level": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "duo_agent_platform_enabled",
+            "duo_workflow_mcp_enabled",
+            "foundational_agents_default_enabled",
+            "ai_catalog_restricted_to_group_hierarchy",
+            "ai_usage_data_collection_enabled",
+            "include_recommended_allowed",
+            "allow_all_unix_sockets",
+            "allow_project_extension"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "allow_merge_on_skipped_pipeline": {
           "type": "boolean"
+        },
+        "allow_personal_snippets": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "allowed_email_domains_list": {
           "type": "string"
@@ -72597,11 +73173,29 @@
         "archived": {
           "type": "boolean"
         },
+        "auto_ban_user_on_excessive_projects_download": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "auto_devops_enabled": {
           "type": "boolean"
         },
+        "auto_duo_code_review_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "avatar_url": {
           "type": "string"
+        },
+        "built_in_project_templates_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "created_at": {
           "type": "string"
@@ -72692,8 +73286,62 @@
         "duo_availability": {
           "type": "string"
         },
+        "duo_core_features_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_features_enabled": {
           "type": "boolean"
+        },
+        "duo_namespace_access_rules": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "features": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "through_namespace": {
+                "additionalProperties": false,
+                "properties": {
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "full_path"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "required": [
+              "through_namespace",
+              "features"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "emails_disabled": {
           "type": "boolean"
@@ -72766,10 +73414,19 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_built_in_project_templates_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "lock_duo_features_enabled": {
           "type": "boolean"
         },
         "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
+        "lock_resource_access_token_notify_inherited": {
           "type": "boolean"
         },
         "marked_for_deletion_on": {
@@ -72879,6 +73536,12 @@
         "require_two_factor_authentication": {
           "type": "boolean"
         },
+        "resource_access_token_notify_inherited": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "root_storage_statistics": {
           "additionalProperties": false,
           "properties": {
@@ -72967,6 +73630,12 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "service_access_tokens_expiration_enforced": {
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "share_with_group_lock": {
@@ -73061,6 +73730,9 @@
             "array"
           ]
         },
+        "show_diff_preview_in_email": {
+          "type": "boolean"
+        },
         "statistics": {
           "additionalProperties": false,
           "properties": {
@@ -73116,14 +73788,53 @@
             "object"
           ]
         },
+        "step_up_auth_required_oauth_provider": {
+          "type": "string"
+        },
         "subgroup_creation_level": {
           "type": "string"
         },
         "two_factor_grace_period": {
           "type": "integer"
         },
+        "unique_project_download_limit": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "unique_project_download_limit_alertlist": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_allowlist": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_interval_in_seconds": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "visibility": {
           "type": "string"
+        },
+        "web_based_commit_signing_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "web_url": {
           "type": "string"
@@ -73142,13 +73853,10 @@
         "request_access_enabled",
         "lfs_enabled",
         "archived",
-        "prevent_sharing_groups_outside_hierarchy",
         "math_rendering_limits_enabled",
         "lock_math_rendering_limits_enabled",
         "duo_features_enabled",
         "lock_duo_features_enabled",
-        "experiment_features_enabled",
-        "membership_lock",
         "share_with_group_lock",
         "require_two_factor_authentication",
         "auto_devops_enabled",
@@ -73156,6 +73864,12 @@
         "emails_disabled",
         "mentions_disabled",
         "crm_enabled",
+        "show_diff_preview_in_email",
+        "resource_access_token_notify_inherited",
+        "lock_resource_access_token_notify_inherited",
+        "prevent_sharing_groups_outside_hierarchy",
+        "experiment_features_enabled",
+        "membership_lock",
         "prevent_forking_outside_group",
         "only_allow_merge_if_pipeline_succeeds",
         "allow_merge_on_skipped_pipeline",
@@ -73732,8 +74446,72 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "ai_settings": {
+          "additionalProperties": false,
+          "properties": {
+            "ai_catalog_restricted_to_group_hierarchy": {
+              "type": "boolean"
+            },
+            "ai_usage_data_collection_enabled": {
+              "type": "boolean"
+            },
+            "allow_all_unix_sockets": {
+              "type": "boolean"
+            },
+            "allow_project_extension": {
+              "type": "boolean"
+            },
+            "duo_agent_platform_enabled": {
+              "type": "boolean"
+            },
+            "duo_workflow_mcp_enabled": {
+              "type": "boolean"
+            },
+            "foundational_agents_default_enabled": {
+              "type": "boolean"
+            },
+            "include_recommended_allowed": {
+              "type": "boolean"
+            },
+            "minimum_access_level_enable_on_projects": {
+              "type": "string"
+            },
+            "minimum_access_level_execute": {
+              "type": "string"
+            },
+            "minimum_access_level_execute_async": {
+              "type": "string"
+            },
+            "minimum_access_level_manage": {
+              "type": "string"
+            },
+            "prompt_injection_protection_level": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "duo_agent_platform_enabled",
+            "duo_workflow_mcp_enabled",
+            "foundational_agents_default_enabled",
+            "ai_catalog_restricted_to_group_hierarchy",
+            "ai_usage_data_collection_enabled",
+            "include_recommended_allowed",
+            "allow_all_unix_sockets",
+            "allow_project_extension"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "allow_merge_on_skipped_pipeline": {
           "type": "boolean"
+        },
+        "allow_personal_snippets": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "allowed_email_domains_list": {
           "type": "string"
@@ -73741,11 +74519,29 @@
         "archived": {
           "type": "boolean"
         },
+        "auto_ban_user_on_excessive_projects_download": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "auto_devops_enabled": {
           "type": "boolean"
         },
+        "auto_duo_code_review_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "avatar_url": {
           "type": "string"
+        },
+        "built_in_project_templates_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "created_at": {
           "type": "string"
@@ -73836,8 +74632,62 @@
         "duo_availability": {
           "type": "string"
         },
+        "duo_core_features_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_features_enabled": {
           "type": "boolean"
+        },
+        "duo_namespace_access_rules": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "features": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "through_namespace": {
+                "additionalProperties": false,
+                "properties": {
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "full_path"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "required": [
+              "through_namespace",
+              "features"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "emails_disabled": {
           "type": "boolean"
@@ -73910,10 +74760,19 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_built_in_project_templates_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "lock_duo_features_enabled": {
           "type": "boolean"
         },
         "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
+        "lock_resource_access_token_notify_inherited": {
           "type": "boolean"
         },
         "marked_for_deletion_on": {
@@ -74023,6 +74882,12 @@
         "require_two_factor_authentication": {
           "type": "boolean"
         },
+        "resource_access_token_notify_inherited": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "root_storage_statistics": {
           "additionalProperties": false,
           "properties": {
@@ -74111,6 +74976,12 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "service_access_tokens_expiration_enforced": {
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "share_with_group_lock": {
@@ -74205,6 +75076,9 @@
             "array"
           ]
         },
+        "show_diff_preview_in_email": {
+          "type": "boolean"
+        },
         "statistics": {
           "additionalProperties": false,
           "properties": {
@@ -74260,14 +75134,53 @@
             "object"
           ]
         },
+        "step_up_auth_required_oauth_provider": {
+          "type": "string"
+        },
         "subgroup_creation_level": {
           "type": "string"
         },
         "two_factor_grace_period": {
           "type": "integer"
         },
+        "unique_project_download_limit": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "unique_project_download_limit_alertlist": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_allowlist": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_interval_in_seconds": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "visibility": {
           "type": "string"
+        },
+        "web_based_commit_signing_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "web_url": {
           "type": "string"
@@ -74286,13 +75199,10 @@
         "request_access_enabled",
         "lfs_enabled",
         "archived",
-        "prevent_sharing_groups_outside_hierarchy",
         "math_rendering_limits_enabled",
         "lock_math_rendering_limits_enabled",
         "duo_features_enabled",
         "lock_duo_features_enabled",
-        "experiment_features_enabled",
-        "membership_lock",
         "share_with_group_lock",
         "require_two_factor_authentication",
         "auto_devops_enabled",
@@ -74300,6 +75210,12 @@
         "emails_disabled",
         "mentions_disabled",
         "crm_enabled",
+        "show_diff_preview_in_email",
+        "resource_access_token_notify_inherited",
+        "lock_resource_access_token_notify_inherited",
+        "prevent_sharing_groups_outside_hierarchy",
+        "experiment_features_enabled",
+        "membership_lock",
         "prevent_forking_outside_group",
         "only_allow_merge_if_pipeline_succeeds",
         "allow_merge_on_skipped_pipeline",
@@ -74346,8 +75262,72 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "ai_settings": {
+          "additionalProperties": false,
+          "properties": {
+            "ai_catalog_restricted_to_group_hierarchy": {
+              "type": "boolean"
+            },
+            "ai_usage_data_collection_enabled": {
+              "type": "boolean"
+            },
+            "allow_all_unix_sockets": {
+              "type": "boolean"
+            },
+            "allow_project_extension": {
+              "type": "boolean"
+            },
+            "duo_agent_platform_enabled": {
+              "type": "boolean"
+            },
+            "duo_workflow_mcp_enabled": {
+              "type": "boolean"
+            },
+            "foundational_agents_default_enabled": {
+              "type": "boolean"
+            },
+            "include_recommended_allowed": {
+              "type": "boolean"
+            },
+            "minimum_access_level_enable_on_projects": {
+              "type": "string"
+            },
+            "minimum_access_level_execute": {
+              "type": "string"
+            },
+            "minimum_access_level_execute_async": {
+              "type": "string"
+            },
+            "minimum_access_level_manage": {
+              "type": "string"
+            },
+            "prompt_injection_protection_level": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "duo_agent_platform_enabled",
+            "duo_workflow_mcp_enabled",
+            "foundational_agents_default_enabled",
+            "ai_catalog_restricted_to_group_hierarchy",
+            "ai_usage_data_collection_enabled",
+            "include_recommended_allowed",
+            "allow_all_unix_sockets",
+            "allow_project_extension"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "allow_merge_on_skipped_pipeline": {
           "type": "boolean"
+        },
+        "allow_personal_snippets": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "allowed_email_domains_list": {
           "type": "string"
@@ -74355,11 +75335,29 @@
         "archived": {
           "type": "boolean"
         },
+        "auto_ban_user_on_excessive_projects_download": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "auto_devops_enabled": {
           "type": "boolean"
         },
+        "auto_duo_code_review_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "avatar_url": {
           "type": "string"
+        },
+        "built_in_project_templates_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "created_at": {
           "type": "string"
@@ -74450,8 +75448,62 @@
         "duo_availability": {
           "type": "string"
         },
+        "duo_core_features_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "duo_features_enabled": {
           "type": "boolean"
+        },
+        "duo_namespace_access_rules": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "features": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "through_namespace": {
+                "additionalProperties": false,
+                "properties": {
+                  "full_path": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "full_path"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              }
+            },
+            "required": [
+              "through_namespace",
+              "features"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "emails_disabled": {
           "type": "boolean"
@@ -74524,10 +75576,19 @@
         "lfs_enabled": {
           "type": "boolean"
         },
+        "lock_built_in_project_templates_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "lock_duo_features_enabled": {
           "type": "boolean"
         },
         "lock_math_rendering_limits_enabled": {
+          "type": "boolean"
+        },
+        "lock_resource_access_token_notify_inherited": {
           "type": "boolean"
         },
         "marked_for_deletion_on": {
@@ -74637,6 +75698,12 @@
         "require_two_factor_authentication": {
           "type": "boolean"
         },
+        "resource_access_token_notify_inherited": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "root_storage_statistics": {
           "additionalProperties": false,
           "properties": {
@@ -74725,6 +75792,12 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "service_access_tokens_expiration_enforced": {
+          "type": [
+            "null",
+            "boolean"
           ]
         },
         "share_with_group_lock": {
@@ -74819,6 +75892,9 @@
             "array"
           ]
         },
+        "show_diff_preview_in_email": {
+          "type": "boolean"
+        },
         "statistics": {
           "additionalProperties": false,
           "properties": {
@@ -74874,14 +75950,53 @@
             "object"
           ]
         },
+        "step_up_auth_required_oauth_provider": {
+          "type": "string"
+        },
         "subgroup_creation_level": {
           "type": "string"
         },
         "two_factor_grace_period": {
           "type": "integer"
         },
+        "unique_project_download_limit": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "unique_project_download_limit_alertlist": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_allowlist": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unique_project_download_limit_interval_in_seconds": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "visibility": {
           "type": "string"
+        },
+        "web_based_commit_signing_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "web_url": {
           "type": "string"
@@ -74900,13 +76015,10 @@
         "request_access_enabled",
         "lfs_enabled",
         "archived",
-        "prevent_sharing_groups_outside_hierarchy",
         "math_rendering_limits_enabled",
         "lock_math_rendering_limits_enabled",
         "duo_features_enabled",
         "lock_duo_features_enabled",
-        "experiment_features_enabled",
-        "membership_lock",
         "share_with_group_lock",
         "require_two_factor_authentication",
         "auto_devops_enabled",
@@ -74914,6 +76026,12 @@
         "emails_disabled",
         "mentions_disabled",
         "crm_enabled",
+        "show_diff_preview_in_email",
+        "resource_access_token_notify_inherited",
+        "lock_resource_access_token_notify_inherited",
+        "prevent_sharing_groups_outside_hierarchy",
+        "experiment_features_enabled",
+        "membership_lock",
         "prevent_forking_outside_group",
         "only_allow_merge_if_pipeline_succeeds",
         "allow_merge_on_skipped_pipeline",
@@ -118613,6 +119731,9 @@
               "key": {
                 "type": "string"
               },
+              "last_used_at": {
+                "type": "string"
+              },
               "title": {
                 "type": "string"
               },
@@ -118755,6 +119876,9 @@
                 "type": "integer"
               },
               "key": {
+                "type": "string"
+              },
+              "last_used_at": {
                 "type": "string"
               },
               "title": {
@@ -124063,47 +125187,6 @@
         "approvals_required": {
           "type": "integer"
         },
-        "approved": {
-          "type": "boolean"
-        },
-        "approved_by": {
-          "items": {
-            "additionalProperties": false,
-            "properties": {
-              "avatar_url": {
-                "type": "string"
-              },
-              "id": {
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "state": {
-                "type": "string"
-              },
-              "username": {
-                "type": "string"
-              },
-              "web_url": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "username",
-              "name"
-            ],
-            "type": [
-              "null",
-              "object"
-            ]
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
         "contains_hidden_groups": {
           "type": "boolean"
         },
@@ -124477,8 +125560,7 @@
         "id",
         "name",
         "rule_type",
-        "approvals_required",
-        "approved"
+        "approvals_required"
       ],
       "type": "object"
     },
@@ -124619,47 +125701,6 @@
         "approvals_required": {
           "type": "integer"
         },
-        "approved": {
-          "type": "boolean"
-        },
-        "approved_by": {
-          "items": {
-            "additionalProperties": false,
-            "properties": {
-              "avatar_url": {
-                "type": "string"
-              },
-              "id": {
-                "type": "integer"
-              },
-              "name": {
-                "type": "string"
-              },
-              "state": {
-                "type": "string"
-              },
-              "username": {
-                "type": "string"
-              },
-              "web_url": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "username",
-              "name"
-            ],
-            "type": [
-              "null",
-              "object"
-            ]
-          },
-          "type": [
-            "null",
-            "array"
-          ]
-        },
         "contains_hidden_groups": {
           "type": "boolean"
         },
@@ -125033,8 +126074,7 @@
         "id",
         "name",
         "rule_type",
-        "approvals_required",
-        "approved"
+        "approvals_required"
       ],
       "type": "object"
     },
@@ -125084,47 +126124,6 @@
             "properties": {
               "approvals_required": {
                 "type": "integer"
-              },
-              "approved": {
-                "type": "boolean"
-              },
-              "approved_by": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "avatar_url": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "state": {
-                      "type": "string"
-                    },
-                    "username": {
-                      "type": "string"
-                    },
-                    "web_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "username",
-                    "name"
-                  ],
-                  "type": [
-                    "null",
-                    "object"
-                  ]
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
               },
               "contains_hidden_groups": {
                 "type": "boolean"
@@ -125499,8 +126498,7 @@
               "id",
               "name",
               "rule_type",
-              "approvals_required",
-              "approved"
+              "approvals_required"
             ],
             "type": "object"
           },
@@ -216299,11 +217297,11 @@
           "items": {
             "additionalProperties": false,
             "properties": {
-              "allow_merge_on_skipped_pipeline": {
-                "type": "boolean"
-              },
-              "allowed_email_domains_list": {
-                "type": "string"
+              "allow_personal_snippets": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "archived": {
                 "type": "boolean"
@@ -216311,8 +217309,20 @@
               "auto_devops_enabled": {
                 "type": "boolean"
               },
+              "auto_duo_code_review_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "avatar_url": {
                 "type": "string"
+              },
+              "built_in_project_templates_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "created_at": {
                 "type": "string"
@@ -216403,23 +217413,68 @@
               "duo_availability": {
                 "type": "string"
               },
+              "duo_core_features_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "duo_features_enabled": {
                 "type": "boolean"
+              },
+              "duo_namespace_access_rules": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "features": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "through_namespace": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "full_path": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "full_path"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "through_namespace",
+                    "features"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "emails_disabled": {
                 "type": "boolean"
               },
               "emails_enabled": {
                 "type": "boolean"
-              },
-              "enabled_git_access_protocol": {
-                "type": "string"
-              },
-              "experiment_features_enabled": {
-                "type": "boolean"
-              },
-              "extra_shared_runners_minutes_limit": {
-                "type": "integer"
               },
               "file_template_project_id": {
                 "type": "integer"
@@ -216432,9 +217487,6 @@
               },
               "id": {
                 "type": "integer"
-              },
-              "ip_restriction_ranges": {
-                "type": "string"
               },
               "ldap_access": {
                 "type": "integer"
@@ -216477,10 +217529,19 @@
               "lfs_enabled": {
                 "type": "boolean"
               },
+              "lock_built_in_project_templates_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "lock_duo_features_enabled": {
                 "type": "boolean"
               },
               "lock_math_rendering_limits_enabled": {
+                "type": "boolean"
+              },
+              "lock_resource_access_token_notify_inherited": {
                 "type": "boolean"
               },
               "marked_for_deletion_on": {
@@ -216491,9 +217552,6 @@
               },
               "max_artifacts_size": {
                 "type": "integer"
-              },
-              "membership_lock": {
-                "type": "boolean"
               },
               "mentions_disabled": {
                 "type": "boolean"
@@ -216510,12 +217568,6 @@
                   "array"
                 ]
               },
-              "only_allow_merge_if_all_discussions_are_resolved": {
-                "type": "boolean"
-              },
-              "only_allow_merge_if_pipeline_succeeds": {
-                "type": "boolean"
-              },
               "organization_id": {
                 "type": "integer"
               },
@@ -216525,61 +217577,8 @@
               "path": {
                 "type": "string"
               },
-              "prevent_forking_outside_group": {
-                "type": "boolean"
-              },
-              "prevent_sharing_groups_outside_hierarchy": {
-                "type": "boolean"
-              },
               "project_creation_level": {
                 "type": "string"
-              },
-              "projects": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "archived": {
-                      "type": "boolean"
-                    },
-                    "created_at": {
-                      "type": "string"
-                    },
-                    "default_branch": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "path_with_namespace": {
-                      "type": "string"
-                    },
-                    "visibility": {
-                      "type": "string"
-                    },
-                    "web_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "name",
-                    "path_with_namespace",
-                    "visibility",
-                    "web_url",
-                    "archived"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
               },
               "repository_storage": {
                 "type": "string"
@@ -216589,6 +217588,12 @@
               },
               "require_two_factor_authentication": {
                 "type": "boolean"
+              },
+              "resource_access_token_notify_inherited": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "root_storage_statistics": {
                 "additionalProperties": false,
@@ -216649,9 +217654,6 @@
                   "object"
                 ]
               },
-              "runners_token": {
-                "type": "string"
-              },
               "saml_group_links": {
                 "items": {
                   "additionalProperties": false,
@@ -216683,94 +217685,11 @@
               "share_with_group_lock": {
                 "type": "boolean"
               },
-              "shared_projects": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "archived": {
-                      "type": "boolean"
-                    },
-                    "created_at": {
-                      "type": "string"
-                    },
-                    "default_branch": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "path_with_namespace": {
-                      "type": "string"
-                    },
-                    "visibility": {
-                      "type": "string"
-                    },
-                    "web_url": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "name",
-                    "path_with_namespace",
-                    "visibility",
-                    "web_url",
-                    "archived"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
-              "shared_runners_minutes_limit": {
-                "type": "integer"
-              },
               "shared_runners_setting": {
                 "type": "string"
               },
-              "shared_with_groups": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "expires_at": {
-                      "type": "string"
-                    },
-                    "group_access_level": {
-                      "type": "integer"
-                    },
-                    "group_full_path": {
-                      "type": "string"
-                    },
-                    "group_id": {
-                      "type": "integer"
-                    },
-                    "group_name": {
-                      "type": "string"
-                    },
-                    "member_role_id": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "group_id",
-                    "group_name",
-                    "group_full_path",
-                    "group_access_level"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
+              "show_diff_preview_in_email": {
+                "type": "boolean"
               },
               "statistics": {
                 "additionalProperties": false,
@@ -216836,6 +217755,12 @@
               "visibility": {
                 "type": "string"
               },
+              "web_based_commit_signing_enabled": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "web_url": {
                 "type": "string"
               },
@@ -216853,13 +217778,10 @@
               "request_access_enabled",
               "lfs_enabled",
               "archived",
-              "prevent_sharing_groups_outside_hierarchy",
               "math_rendering_limits_enabled",
               "lock_math_rendering_limits_enabled",
               "duo_features_enabled",
               "lock_duo_features_enabled",
-              "experiment_features_enabled",
-              "membership_lock",
               "share_with_group_lock",
               "require_two_factor_authentication",
               "auto_devops_enabled",
@@ -216867,10 +217789,9 @@
               "emails_disabled",
               "mentions_disabled",
               "crm_enabled",
-              "prevent_forking_outside_group",
-              "only_allow_merge_if_pipeline_succeeds",
-              "allow_merge_on_skipped_pipeline",
-              "only_allow_merge_if_all_discussions_are_resolved"
+              "show_diff_preview_in_email",
+              "resource_access_token_notify_inherited",
+              "lock_resource_access_token_notify_inherited"
             ],
             "type": "object"
           },

@@ -1540,7 +1540,7 @@ var allMarkdownFixtureData = []markdownFixture{
 	{"mrchanges.RawDiffsOutput", mrchanges.RawDiffsOutput{MRIID: 1, RawDiff: "diff content"}},
 
 	// MR Approvals
-	{"mrapprovals.StateOutput", mrapprovals.StateOutput{Rules: []mrapprovals.StateRuleOutput{{RuleOutput: mrapprovals.RuleOutput{ID: 1, Name: "rule"}}}}},
+	{"mrapprovals.StateOutput", mrapprovals.StateOutput{Rules: []mrapprovals.StateRuleOutput{{ID: 1, Name: "rule"}}}},
 	{"mrapprovals.RulesOutput", mrapprovals.RulesOutput{Rules: []mrapprovals.RuleOutput{{ID: 1, Name: "rule"}}}},
 	{"mrapprovals.ConfigOutput", mrapprovals.ConfigOutput{Approved: true}},
 	{"mrapprovals.RuleOutput", mrapprovals.RuleOutput{ID: 1, Name: "rule"}},

@@ -1233,3 +1233,93 @@ func CapturedInstanceUser(capture *gitlabclient.ResponseCapture) (InstanceUserEx
 func CapturedInstanceUsers(capture *gitlabclient.ResponseCapture, decoded int) ([]InstanceUserExtra, error) {
 	return capturedList[InstanceUserExtra](capture, decoded, "users")
 }
+
+// AISettingsOutput is the ai_settings object ee/lib/api/entities/ai_settings.rb
+// renders. It lives here rather than in a domain package because two entities
+// expose it: GroupDetail, and the application setting.
+//
+// The four minimum-access-level keys are gated on the
+// dap_group_customizable_permissions feature flag, so each is omitted rather
+// than sent empty when the flag is off.
+type AISettingsOutput struct {
+	DuoAgentPlatformEnabled             bool   `json:"duo_agent_platform_enabled"`
+	DuoWorkflowMCPEnabled               bool   `json:"duo_workflow_mcp_enabled"`
+	FoundationalAgentsDefaultEnabled    bool   `json:"foundational_agents_default_enabled"`
+	AICatalogRestrictedToGroupHierarchy bool   `json:"ai_catalog_restricted_to_group_hierarchy"`
+	AIUsageDataCollectionEnabled        bool   `json:"ai_usage_data_collection_enabled"`
+	IncludeRecommendedAllowed           bool   `json:"include_recommended_allowed"`
+	AllowAllUnixSockets                 bool   `json:"allow_all_unix_sockets"`
+	AllowProjectExtension               bool   `json:"allow_project_extension"`
+	PromptInjectionProtectionLevel      string `json:"prompt_injection_protection_level,omitempty"`
+	MinimumAccessLevelExecute           string `json:"minimum_access_level_execute,omitempty"`
+	MinimumAccessLevelExecuteAsync      string `json:"minimum_access_level_execute_async,omitempty"`
+	MinimumAccessLevelManage            string `json:"minimum_access_level_manage,omitempty"`
+	MinimumAccessLevelEnableOnProjects  string `json:"minimum_access_level_enable_on_projects,omitempty"`
+}
+
+// DuoAccessRuleNamespaceOutput is the namespace a Duo access rule is inherited
+// from, absent on a rule the namespace set itself.
+type DuoAccessRuleNamespaceOutput struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	FullPath string `json:"full_path"`
+}
+
+// DuoNamespaceAccessRuleOutput is one entry of the duo_namespace_access_rules
+// array ee/lib/ai/feature_access_rule_transformer.rb builds. Like
+// [AISettingsOutput] it is shared: the application-setting entity exposes the
+// same array.
+type DuoNamespaceAccessRuleOutput struct {
+	ThroughNamespace *DuoAccessRuleNamespaceOutput `json:"through_namespace"`
+	Features         []string                      `json:"features"`
+}
+
+// GroupExtra is what lib/api/entities/group.rb and its EE prepend send on a
+// group that client-go's Group does not carry, read from the captured response
+// (ADR-0021). Every route that renders a group renders this entity, so these
+// are the fields a list row carries too.
+//
+// The pointers are GitLab's own conditions rather than this server's caution:
+// each is exposed behind a licensed feature, a permission or a feature flag,
+// so an absent key and a false one are different answers. The three plain
+// values are exposed unconditionally on the CE entity.
+type GroupExtra struct {
+	ShowDiffPreviewInEmail                 bool                           `json:"show_diff_preview_in_email"`
+	ResourceAccessTokenNotifyInherited     *bool                          `json:"resource_access_token_notify_inherited"`
+	LockResourceAccessTokenNotifyInherited bool                           `json:"lock_resource_access_token_notify_inherited"`
+	DuoCoreFeaturesEnabled                 *bool                          `json:"duo_core_features_enabled"`
+	AutoDuoCodeReviewEnabled               *bool                          `json:"auto_duo_code_review_enabled"`
+	WebBasedCommitSigningEnabled           *bool                          `json:"web_based_commit_signing_enabled"`
+	AllowPersonalSnippets                  *bool                          `json:"allow_personal_snippets"`
+	BuiltInProjectTemplatesEnabled         *bool                          `json:"built_in_project_templates_enabled"`
+	LockBuiltInProjectTemplatesEnabled     *bool                          `json:"lock_built_in_project_templates_enabled"`
+	DuoNamespaceAccessRules                []DuoNamespaceAccessRuleOutput `json:"duo_namespace_access_rules"`
+}
+
+// GroupDetailExtra is [GroupExtra] plus what only lib/api/entities/group_detail.rb
+// adds, which is what a request for one group renders. A list row never
+// carries these, which is why they are a type of their own rather than more
+// fields on the one above.
+type GroupDetailExtra struct {
+	GroupExtra
+	StepUpAuthRequiredOAuthProvider        string            `json:"step_up_auth_required_oauth_provider"`
+	ServiceAccessTokensExpirationEnforced  *bool             `json:"service_access_tokens_expiration_enforced"`
+	AISettings                             *AISettingsOutput `json:"ai_settings"`
+	UniqueProjectDownloadLimit             *int64            `json:"unique_project_download_limit"`
+	UniqueProjectDownloadLimitIntervalSecs *int64            `json:"unique_project_download_limit_interval_in_seconds"`
+	UniqueProjectDownloadLimitAllowlist    []string          `json:"unique_project_download_limit_allowlist"`
+	UniqueProjectDownloadLimitAlertlist    []int64           `json:"unique_project_download_limit_alertlist"`
+	AutoBanUserOnExcessiveProjectsDownload *bool             `json:"auto_ban_user_on_excessive_projects_download"`
+}
+
+// CapturedGroup reads, off the captured answer to a request for one group,
+// everything only that shape carries.
+func CapturedGroup(capture *gitlabclient.ResponseCapture) (GroupDetailExtra, error) {
+	return capturedOne[GroupDetailExtra](capture)
+}
+
+// CapturedGroups reads the list-shaped fields off a list answer, one extra per
+// group in order, the count held to what the SDK decoded.
+func CapturedGroups(capture *gitlabclient.ResponseCapture, decoded int) ([]GroupExtra, error) {
+	return capturedList[GroupExtra](capture, decoded, "groups")
+}
