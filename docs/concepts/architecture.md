@@ -183,7 +183,7 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 | `meta_tool.go`      | Type aliases onto `toolutil` (`MetaToolInput`, `ActionRoute`, `ActionMap`), the `route`/`routeAction` adapters, and the process-wide meta parameter schema mode (`SetMetaParamSchema`) |
 | `markdown.go`       | Thin `markdownForResult` delegator to the type-based Markdown registry                                                                                                                 |
 | `catalog_filter.go` | `FilterActionCatalog()`: applies exclusions, token scopes, read-only and safe mode to a catalog and records what each removed                                                          |
-| `scope_filter.go`   | `MetaToolScopes` and the PAT scope filters for registered tools and catalogs                                                                                                           |
+| `scope_filter.go`   | `MetaToolScopes` and `FilterScopeFilteredCatalog`, the PAT scope filter, applied to the catalog before registration so one group-keyed map reaches all three surfaces                  |
 | `safe_mode.go`      | Safe-mode preview wrappers for the individual surface                                                                                                                                  |
 
 **Representative `internal/tools` package groups** (178 sub-packages total):

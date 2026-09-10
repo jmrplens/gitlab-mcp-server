@@ -15,6 +15,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
@@ -113,60 +114,28 @@ func TestScopeFilter_NonAdminToken(t *testing.T) {
 		t.Error("non-admin token should not have admin_mode scope")
 	}
 
-	// ── Create MCP server with meta-tools and apply scope filter ─────────
-	scopeServer := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e-scope",
-		Version: "test",
-	}, nil)
-	if registerErr := tools.RegisterAllMeta(scopeServer, limitedClient, edition.TierForEnterprise(sess.enterprise)); registerErr != nil {
-		t.Fatalf("RegisterAllMeta() error = %v", registerErr)
-	}
-
-	removed := tools.RemoveScopeFilteredTools(scopeServer, scopes)
-	t.Logf("Scope filter removed %d tools", removed)
-
-	// ── Connect a client to list remaining tools ─────────────────────────
-	st, ct := mcp.NewInMemoryTransports()
-	scopeCtx, scopeCancel := context.WithCancel(ctx)
-	defer scopeCancel()
-
-	go func() {
-		_ = scopeServer.Run(scopeCtx, st)
-	}()
-
-	scopeClient := mcp.NewClient(&mcp.Implementation{
-		Name:    "e2e-scope-client",
-		Version: "test",
-	}, nil)
-	scopeSession, err := scopeClient.Connect(scopeCtx, ct, nil)
-	if err != nil {
-		t.Fatalf("connect scope client: %v", err)
-	}
-	defer scopeSession.Close()
-
-	result, err := scopeSession.ListTools(scopeCtx, nil)
-	requireNoError(t, err, "ListTools on scope-filtered server")
-
-	toolSet := make(map[string]struct{}, len(result.Tools))
-	for _, tool := range result.Tools {
-		toolSet[tool.Name] = struct{}{}
-	}
+	// ── Register the meta surface the way the binary does ────────────────
+	// The catalog is filtered by the token's scopes before registration,
+	// which is the only mechanism there is: a pass over registered names
+	// after the fact could not reach the individual surface at all. Building
+	// the catalog here through the same assembler cmd/server calls is what
+	// keeps this test about the server rather than about a copy of it.
+	toolSet := registeredMetaToolNames(t, ctx, limitedClient, scopes)
 
 	// ── Assertions ───────────────────────────────────────────────────────
 
-	// Admin-only tools must be removed.
-	var adminOnlyTools []string
-	for name, scopes := range tools.MetaToolScopes {
-		if slices.Contains(scopes, "admin_mode") {
-			adminOnlyTools = append(adminOnlyTools, name)
+	// Admin-only tools must be removed. Enterprise groups may not exist at
+	// this tier at all, which is why the assertion is one-directional: a
+	// group that is absent for either reason satisfies it.
+	for name, required := range tools.MetaToolScopes {
+		if !slices.Contains(required, "admin_mode") {
+			continue
 		}
-	}
-	for _, name := range adminOnlyTools {
-		if _, ok := toolSet[name]; ok {
-			// Enterprise tools may not be registered at all — only fail
-			// if the tool is registered AND should have been removed.
-			t.Errorf("admin-only tool %s should have been removed for non-admin token", name)
-		}
+		t.Run("removed/"+name, func(t *testing.T) {
+			if _, ok := toolSet[name]; ok {
+				t.Errorf("admin-only tool %s should have been removed for non-admin token", name)
+			}
+		})
 	}
 
 	// Regular meta-tools must still be present.
@@ -178,24 +147,28 @@ func TestScopeFilter_NonAdminToken(t *testing.T) {
 		"gitlab_user",
 	}
 	for _, name := range regularTools {
-		t.Run(name, func(t *testing.T) {
+		t.Run("kept/"+name, func(t *testing.T) {
 			if _, ok := toolSet[name]; !ok {
 				t.Errorf("regular tool %s should still be registered for non-admin token", name)
 			}
 		})
 	}
 
-	t.Logf("Scope filter test passed: %d tools registered, %d removed", len(result.Tools), removed)
+	t.Logf("Scope filter test passed: %d tools registered for the read_api token", len(toolSet))
 }
 
 // TestScopeFilter_AdminToken creates a PAT with admin_mode scope for the
-// existing admin user and verifies that NO tools are removed by scope filtering.
+// existing admin user and verifies that the scope filter takes nothing away
+// from it.
 //
-// The test issues an admin_mode PAT for the current admin user, detects
-// scopes via the raw GitLab client, builds an in-memory MCP server with
-// meta-tools, and applies the scope filter. The assertion is that the
-// filter reports zero removed tools, since admin_mode grants access to
-// every registered meta-tool.
+// The test issues an admin_mode PAT for the current admin user, detects scopes
+// via the raw GitLab client, and registers the meta surface twice: once with
+// those scopes and once with detection reported unavailable, which is the
+// filter's own "remove nothing" case. The assertion is that the two listings
+// are identical, since admin_mode satisfies every requirement in the map.
+// Comparing against the unfiltered listing rather than against a fixed set of
+// names keeps the test tier-independent: a group absent on this runtime is
+// absent from both sides.
 //
 // Build tag: e2e && !enterprise. Mode: CE. Surface: meta. Admin token required.
 func TestScopeFilter_AdminToken(t *testing.T) {
@@ -251,18 +224,64 @@ func TestScopeFilter_AdminToken(t *testing.T) {
 		t.Fatal("expected admin_mode in detected scopes")
 	}
 
-	// ── Create server, apply scope filter, expect 0 removals ─────────────
-	server := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e-scope-admin",
-		Version: "test",
-	}, nil)
-	if registerErr := tools.RegisterAllMeta(server, adminClient, edition.TierForEnterprise(sess.enterprise)); registerErr != nil {
-		t.Fatalf("RegisterAllMeta() error = %v", registerErr)
+	// ── Register with the admin scopes and with none, and compare ────────
+	withAdmin := registeredMetaToolNames(t, ctx, adminClient, scopes)
+	unfiltered := registeredMetaToolNames(t, ctx, adminClient, nil)
+
+	for name := range unfiltered {
+		if _, kept := withAdmin[name]; !kept {
+			t.Errorf("%s was removed for an admin_mode token", name)
+		}
+	}
+	if len(withAdmin) != len(unfiltered) {
+		t.Errorf("admin_mode listing has %d tools, unfiltered has %d", len(withAdmin), len(unfiltered))
+	}
+	t.Logf("Admin token: %d tools registered, same as with no scope filtering", len(withAdmin))
+}
+
+// registeredMetaToolNames builds the meta surface for one client and one
+// detected scope list the way cmd/server builds it, and returns the tool names
+// a client would be served.
+//
+// The catalog assembler is the shipped one on purpose. The scope filter is
+// applied to the catalog before registration, so a test that registered an
+// unfiltered catalog and then removed names from the server would be exercising
+// its own copy of a mechanism the binary no longer has.
+func registeredMetaToolNames(t *testing.T, ctx context.Context, client *gitlabclient.Client, scopes []string) map[string]struct{} {
+	t.Helper()
+
+	catalog, _, err := tools.SharedMetaCatalog(client, &config.ServerConfig{
+		Tier:        edition.TierForEnterprise(sess.enterprise),
+		TokenScopes: scopes,
+	})
+	if err != nil {
+		t.Fatalf("SharedMetaCatalog(scopes=%v) error = %v", scopes, err)
 	}
 
-	removed := tools.RemoveScopeFilteredTools(server, scopes)
-	if removed != 0 {
-		t.Errorf("expected 0 tools removed for admin_mode token, got %d", removed)
+	server := mcp.NewServer(&mcp.Implementation{Name: "gitlab-mcp-server-e2e-scope", Version: "test"}, nil)
+	tools.RegisterMetaCatalog(server, catalog)
+	tools.RegisterMetaStandaloneTools(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
 	}
-	t.Logf("Admin token: %d tools removed", removed)
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "e2e-scope-client", Version: "test"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
+
+	result, err := session.ListTools(ctx, nil)
+	requireNoError(t, err, "ListTools on the scope-filtered surface")
+
+	names := make(map[string]struct{}, len(result.Tools))
+	for _, tool := range result.Tools {
+		names[tool.Name] = struct{}{}
+	}
+	return names
 }

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"net/http"
 	"slices"
 	"strings"
 	"testing"
@@ -14,85 +13,160 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestRemoveScopeFilteredTools_NilScopes verifies that nil token scopes
-// (detection unavailable) results in no tools removed.
-func TestRemoveScopeFilteredTools_NilScopes(t *testing.T) {
-	server := newMetaServer(t)
-	removed := RemoveScopeFilteredTools(server, nil)
-	if removed != 0 {
-		t.Errorf("expected 0 removed, got %d", removed)
+// TestFilterScopeFilteredCatalog_AdminActionsRemovedOnEverySurface is the
+// regression for the surface the scope filter used to miss.
+//
+// Until 3.0.0 the individual surface was filtered by a pass over registered
+// tool names, and the filter's keys are meta-tool group names: nothing on that
+// surface is ever called gitlab_admin, so the pass matched nothing and all 92
+// admin tools stayed listed for a token with no admin_mode. Filtering the
+// catalog instead reaches every surface at once, because all three are
+// projected from it, so the assertions here are made per surface from one
+// filtered catalog: the actions themselves (which is the whole of what the
+// dynamic surface registers), the meta dispatcher, and every individual tool
+// the admin group projects.
+//
+// The control rows matter as much as the removals. gitlab_project is not in
+// [MetaToolScopes], and a filter that removed it would be a far worse defect
+// than the one being fixed.
+func TestFilterScopeFilteredCatalog_AdminActionsRemovedOnEverySurface(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true})
+
+	admin, ok := catalog.Group("gitlab_admin")
+	if !ok {
+		t.Fatal("source catalog has no gitlab_admin group, so this test proves nothing")
+	}
+	adminTools := individualToolNamesOfGroup(t, admin)
+	adminActions := actionIDsOfGroup(admin)
+
+	// A token with read_api and no admin_mode: the credential the defect was
+	// found with, and the one every read-only OAuth application presents.
+	scoped, err := FilterScopeFilteredCatalog(catalog, []string{"read_api"})
+	if err != nil {
+		t.Fatalf("FilterScopeFilteredCatalog() error = %v", err)
+	}
+
+	t.Run("dynamic: the catalog carries none of the admin actions", func(t *testing.T) {
+		for _, id := range adminActions {
+			if _, found := scoped.Action(id); found {
+				t.Errorf("action %s survived the scope filter", id)
+			}
+		}
+		if _, found := scoped.Action("project.get"); !found {
+			t.Error("project.get was removed, and no scope gates it")
+		}
+	})
+
+	t.Run("meta: the admin dispatcher is not registered", func(t *testing.T) {
+		names := stringSet(registeredNamesForCatalog(t, scoped, false))
+		if _, listed := names["gitlab_admin"]; listed {
+			t.Error("gitlab_admin is still registered for a token with no admin_mode")
+		}
+		if _, listed := names["gitlab_project"]; !listed {
+			t.Error("gitlab_project is not registered, and no scope gates it")
+		}
+	})
+
+	t.Run("individual: no tool of the admin group is registered", func(t *testing.T) {
+		names := stringSet(registeredNamesForCatalog(t, scoped, true))
+		for _, tool := range adminTools {
+			if _, listed := names[tool]; listed {
+				t.Errorf("%s is still registered for a token with no admin_mode", tool)
+			}
+		}
+		if _, listed := names["gitlab_project_get"]; !listed {
+			t.Error("gitlab_project_get is not registered, and no scope gates it")
+		}
+	})
+}
+
+// TestFilterScopeFilteredCatalog_ScopeCombinations_DecideRemoval covers the
+// three answers the filter gives a scope list, which are not two: a nil list
+// means detection was unavailable and removes nothing, an empty list means the
+// token was read and carries nothing and removes every gated group, and a
+// populated list is judged scope by scope.
+//
+// Told apart because the wrong answer is silent in one direction: treating an
+// unknown list as empty would remove five domains from a deployment whose
+// token detection failed, with nothing said about why.
+func TestFilterScopeFilteredCatalog_ScopeCombinations_DecideRemoval(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true})
+	gated := slices.Sorted(maps.Keys(MetaToolScopes))
+
+	cases := []struct {
+		name        string
+		scopes      []string
+		wantRemoved []string
+	}{
+		{name: "detection unavailable removes nothing", scopes: nil},
+		{name: "every required scope present removes nothing", scopes: []string{"api", "admin_mode", "read_api", "read_user"}},
+		{name: "a token with no scopes at all loses every gated group", scopes: []string{}, wantRemoved: gated},
+		{name: "a read_api token loses every gated group", scopes: []string{"read_api"}, wantRemoved: gated},
+		{name: "an api token without admin_mode loses every gated group", scopes: []string{"api", "read_api"}, wantRemoved: gated},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			filtered, filterErr := FilterScopeFilteredCatalog(catalog, tc.scopes)
+			if filterErr != nil {
+				t.Fatalf("FilterScopeFilteredCatalog() error = %v", filterErr)
+			}
+			for _, group := range tc.wantRemoved {
+				if _, found := filtered.Group(group); found {
+					t.Errorf("group %s survived scopes %v", group, tc.scopes)
+				}
+			}
+			want := catalog.CountGroups() - len(tc.wantRemoved)
+			if got := filtered.CountGroups(); got != want {
+				t.Errorf("group count = %d, want %d (source %d minus %d gated)", got, want, catalog.CountGroups(), len(tc.wantRemoved))
+			}
+		})
 	}
 }
 
-// TestRemoveScopeFilteredTools_AllScopesPresent verifies no tools are
-// removed when the token has all required scopes.
-func TestRemoveScopeFilteredTools_AllScopesPresent(t *testing.T) {
-	server := newMetaServer(t)
-	before := countTools(t, server)
-
-	removed := RemoveScopeFilteredTools(server, []string{"api", "admin_mode", "read_api", "read_user"})
-	if removed != 0 {
-		t.Errorf("expected 0 removed, got %d", removed)
-	}
-
-	after := countTools(t, server)
-	if before != after {
-		t.Errorf("tool count changed: before=%d after=%d", before, after)
-	}
-}
-
-// TestRemoveScopeFilteredTools_MissingAdminMode verifies that tools
-// requiring admin_mode are removed when that scope is absent.
-func TestRemoveScopeFilteredTools_MissingAdminMode(t *testing.T) {
-	server := newMetaServer(t)
-	before := countTools(t, server)
-
-	// Token has api but not admin_mode.
-	removed := RemoveScopeFilteredTools(server, []string{"api", "read_api"})
-	if removed == 0 {
-		t.Fatal("expected some tools to be removed for missing admin_mode")
-	}
-
-	after := countTools(t, server)
-	if after != before-removed {
-		t.Errorf("tool count mismatch: before=%d removed=%d after=%d", before, removed, after)
-	}
-}
-
-// TestRemoveScopeFilteredTools_ReadOnlyToken verifies that a read-only
-// token causes admin_mode-requiring tools to be removed.
-func TestRemoveScopeFilteredTools_ReadOnlyToken(t *testing.T) {
-	server := newMetaServer(t)
-
-	// Token with only read_api — all tools requiring "admin_mode" should be removed.
-	removed := RemoveScopeFilteredTools(server, []string{"read_api"})
-	if removed == 0 {
-		t.Fatal("expected tools to be removed for read-only token")
-	}
-
-	// Verify the admin tool was removed.
-	names := toolNames(t, server)
-	for _, name := range names {
-		if name == "gitlab_admin" {
-			t.Error("gitlab_admin should have been removed for read-only token")
+// individualToolNamesOfGroup returns the individual tool name every action of
+// group projects, which is what the individual surface registers and what the
+// scope filter's own keys never match.
+func individualToolNamesOfGroup(t *testing.T, group actioncatalog.Group) []string {
+	t.Helper()
+	names := make([]string, 0, len(group.Actions))
+	for _, action := range group.Actions {
+		if name := action.IndividualTool.Name; name != "" {
+			names = append(names, name)
 		}
 	}
+	if len(names) == 0 {
+		t.Fatalf("group %s projects no individual tool, so nothing can be asserted about that surface", group.ToolName)
+	}
+	slices.Sort(names)
+	return names
 }
 
-// TestRemoveScopeFilteredTools_EmptyScopes verifies that an empty scope
-// list (token detected but no scopes) removes all scope-gated tools.
-func TestRemoveScopeFilteredTools_EmptyScopes(t *testing.T) {
-	server := newMetaServer(t)
-
-	removed := RemoveScopeFilteredTools(server, []string{})
-	if removed == 0 {
-		t.Fatal("expected all scope-gated tools to be removed")
+// actionIDsOfGroup returns the canonical IDs of a group's actions.
+func actionIDsOfGroup(group actioncatalog.Group) []actioncatalog.ActionID {
+	ids := make([]actioncatalog.ActionID, 0, len(group.Actions))
+	for _, action := range group.Actions {
+		ids = append(ids, action.ID)
 	}
+	slices.SortFunc(ids, func(a, b actioncatalog.ActionID) int { return strings.Compare(string(a), string(b)) })
+	return ids
+}
+
+// registeredNamesForCatalog registers catalog on a fresh server, on the
+// individual surface when individual is true and the meta surface otherwise,
+// and returns the tool names a client would be served.
+func registeredNamesForCatalog(t *testing.T, catalog *actioncatalog.Catalog, individual bool) []string {
+	t.Helper()
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
+	if individual {
+		RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{})
+	} else {
+		RegisterMetaCatalog(server, catalog)
+	}
+	return toolNames(t, server)
 }
 
 // TestFilterScopeFilteredCatalog_MissingAdminMode verifies that catalog-level
@@ -390,30 +464,6 @@ func TestAllScopesPresent_Scenarios_CorrectResult(t *testing.T) {
 			}
 		})
 	}
-}
-
-// newMetaServer creates an MCP server with all meta-tools registered
-// (enterprise enabled) for testing scope filtering.
-func newMetaServer(t *testing.T) *mcp.Server {
-	t.Helper()
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
-	})
-	client := newTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
-	if err := RegisterAllMeta(server, client, edition.Ultimate); err != nil {
-		t.Fatalf("RegisterAllMeta() error = %v", err)
-	}
-	return server
-}
-
-// countTools returns the number of tools registered on the server.
-func countTools(t *testing.T, server *mcp.Server) int {
-	t.Helper()
-	names := toolNames(t, server)
-	return len(names)
 }
 
 // toolNames returns the names of all tools registered on the server.

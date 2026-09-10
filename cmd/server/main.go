@@ -2091,12 +2091,13 @@ func applyToolVisibilityConfig(ctx context.Context, server *mcp.Server, cfg *con
 		// there said the opposite of what had happened.
 		slog.InfoContext(ctx, "excluded tools by configuration", "excluded_registered_tools", removed, "patterns", cfg.ExcludeTools)
 	}
-	if cfg.TokenScopes != nil {
-		removed := gitlabtools.RemoveScopeFilteredTools(server, cfg.TokenScopes)
-		if removed > 0 {
-			slog.InfoContext(ctx, "scope-filtered tools", "removed", removed)
-		}
-	}
+	// The token-scope filter is deliberately absent from this function. It is
+	// applied to the catalog, before registration, by the three catalog
+	// assemblers, which is the only place it can reach the individual surface:
+	// its keys are meta-tool group names and this surface registers one tool
+	// per action, so a pass over registered names here matched nothing and
+	// left every admin tool listed for a token with no admin_mode. See
+	// [gitlabtools.MetaToolScopes].
 	if cfg.ReadOnly {
 		removed := gitlabtools.RemoveNonReadOnlyTools(ctx, server)
 		slog.InfoContext(ctx, "read-only mode: removed write tools", "removed", removed)

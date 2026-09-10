@@ -262,6 +262,8 @@ Operations that modify or delete data use a confirmation flow (see [Error Handli
 3. **MCP elicitation** — Interactive user confirmation when supported by the client
 4. **Fail-safe** — If no confirmation mechanism is available, the operation is cancelled
 
+What the guard runs on is one bit, `destructiveHint`, declared per action in the catalog and read by all three surfaces. Deletion is the obvious member of that class and is not the whole of it: an action is classified destructive when its effect cannot be undone by calling the opposite action, and that includes an action that gives a party outside the instance something it did not have. `project.mirror_add` (`gitlab_add_project_mirror`) is the case worth naming, because it does not read as destructive: creating a push mirror deletes nothing, and hands the host named in `url` a continuous copy of the whole repository from then on. The URL is a tool parameter, so a model acting on an issue body that asks for a "backup mirror" would otherwise exfiltrate the repository with one call and no user in the loop. Since 3.0.0 that call requires confirmation like any other destructive one.
+
 ## Read-Only and Safe Mode
 
 Two opt-in modes narrow what the server can do to a GitLab instance, independently of the token's own permissions:
@@ -359,9 +361,11 @@ The server automatically detects the scopes of the Personal Access Token (PAT) a
 - **Graceful degradation**: If scope detection fails (e.g. older GitLab versions), all tools remain registered
 - **Opt-out**: Set `GITLAB_MCP_IGNORE_SCOPES=true` or `--ignore-scopes` to skip detection
 - **Scope map**: Defined in `internal/tools/scope_filter.go` (`MetaToolScopes`)
+- **Applied to the catalog, so it reaches every surface**: the map is keyed by meta-tool group name and is applied before registration, which removes the group on the meta and dynamic surfaces and every tool that group projects on the individual surface. Until 3.0.0 the individual surface was filtered by a second pass over registered tool names instead, and no tool there is ever called `gitlab_admin`, so the pass matched nothing and all of the admin tools stayed listed for a token with no `admin_mode`. Those calls were refused by GitLab with a 403, so what was wrong was the listing rather than the authorization: the tools were advertised as available to a credential that could not use one
+- **Group granularity**: removal is all-or-nothing per group, so a group belongs in the map only when every action in it needs the scopes. `gitlab_admin` is slightly over-broad on that test: a few of its reads (`topic_list`, `topic_get`, `broadcast_message_list`, `broadcast_message_get`) are served to any authenticated token and go with the rest. It errs toward less access, and the meta and dynamic surfaces have always behaved this way
 - **Both transports narrow further**: a token that carries no write scope is served the read-only catalog, exactly as if `--read-only` or `GITLAB_MCP_READ_ONLY` had been set for it, once at startup on stdio and per pool entry in HTTP mode (in both auth modes). The narrowing is per token, so in HTTP mode one client's `read_api` token cannot narrow another client's `api` token. Unknown scopes (detection failed, or `--ignore-scopes`) count as write-capable — a wrong "no" would silently remove tools, while a wrong "yes" simply surfaces as GitLab's own 403 on the call that tried to write
 
-Tools requiring `admin_mode` (e.g. `gitlab_admin`, `gitlab_geo`, `gitlab_storage_move`) are filtered when the token lacks that scope.
+Tools requiring `admin_mode` (`gitlab_admin`, `gitlab_enterprise_user`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_storage_move`) are filtered when the token lacks that scope, on all three surfaces.
 
 ## Prompt Injection Protection
 

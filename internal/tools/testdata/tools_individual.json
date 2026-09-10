@@ -5110,7 +5110,7 @@
   },
   {
     "name": "gitlab_add_project_mirror",
-    "description": "Create a push (remote) mirror on a project. Returns: the created mirror with id, enabled state, redacted URL, and update status. See also: gitlab_list_project_mirrors, gitlab_edit_project_mirror, gitlab_get_project_mirror_public_key.",
+    "description": "Create a push (remote) mirror on a project. Destructive: the host in url receives the whole repository from then on, so confirmation is required. Returns: the created mirror with id, enabled state, redacted URL, and update status. See also: gitlab_list_project_mirrors, gitlab_edit_project_mirror, gitlab_get_project_mirror_public_key.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -5121,6 +5121,10 @@
             "password"
           ],
           "type": "string"
+        },
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
         },
         "enabled": {
           "description": "Whether the mirror is enabled",
@@ -5171,7 +5175,8 @@
         "project_id",
         "url"
       ],
-      "type": "object"
+      "type": "object",
+      "x_destructive": true
     },
     "outputSchema": {
       "additionalProperties": false,
@@ -5251,7 +5256,7 @@
       "type": "object"
     },
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false

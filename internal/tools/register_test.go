@@ -1071,6 +1071,13 @@ var knownNonKeywordDestructive = map[string]struct{}{
 	"cancel_github": {}, "rotate": {}, "mirror_force_push": {},
 	"db_migration_mark": {}, "terraform_state_unlock": {}, "archive": {},
 	"transfer": {}, "detach": {},
+	// mirror_add creates something and deletes nothing, which is why the name
+	// heuristic cannot see it. What makes it destructive is where the data
+	// goes: the host named in the url parameter receives a continuous copy of
+	// the whole repository from then on, and the parameter is one a model can
+	// take from untrusted text. See mirrorAddSpec in
+	// internal/tools/projectmirrors/action_specs.go.
+	"mirror_add": {},
 }
 
 var knownRouteDestructiveExceptions = map[string]struct{}{

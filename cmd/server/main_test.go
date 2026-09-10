@@ -2329,6 +2329,79 @@ func TestCreateServer_FilteringModes(t *testing.T) {
 	}
 }
 
+// TestCreateServer_TokenScopeFilter_AppliesOnEverySurface is the binary-level
+// half of the scope-filter fix: the tools a real server lists for a token with
+// no admin_mode.
+//
+// The filter's keys are meta-tool group names, and until 3.0.0 they were
+// matched against registered tool names after registration. On the meta surface
+// that works, because gitlab_admin is a registered name there. On the
+// individual surface nothing is ever called gitlab_admin, so the pass matched
+// nothing and every admin tool stayed listed for a credential that cannot use
+// one. The filter is applied to the catalog now, before registration, which is
+// why this test asserts through createServer rather than through the filter:
+// what was wrong was never the filter but where it was called from, and only a
+// server built the way the binary builds one can show that.
+func TestCreateServer_TokenScopeFilter_AppliesOnEverySurface(t *testing.T) {
+	client := newMockGitLabClient(t)
+	cases := []struct {
+		name    string
+		surface string
+		// gated is a tool the credential must not be offered, and ungated one
+		// it must keep, both named on that surface.
+		gated   string
+		ungated string
+	}{
+		{
+			name:    "individual",
+			surface: config.ToolSurfaceIndividual,
+			gated:   "gitlab_get_license",
+			ungated: "gitlab_project_get",
+		},
+		{
+			name:    "meta",
+			surface: config.ToolSurfaceMeta,
+			gated:   "gitlab_admin",
+			ungated: "gitlab_project",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			narrow := listedToolNames(t, client, &config.ServerConfig{ToolSurface: tc.surface, TokenScopes: []string{"read_api"}})
+			if _, listed := narrow[tc.gated]; listed {
+				t.Errorf("%s is listed for a token with no admin_mode", tc.gated)
+			}
+			if _, listed := narrow[tc.ungated]; !listed {
+				t.Errorf("%s is not listed, and no scope gates it", tc.ungated)
+			}
+
+			// The control that makes the removal mean something: the same
+			// server with admin_mode still offers the tool, so the row above
+			// cannot pass because of a name that was never registered.
+			admin := listedToolNames(t, client, &config.ServerConfig{ToolSurface: tc.surface, TokenScopes: []string{"api", "admin_mode"}})
+			if _, listed := admin[tc.gated]; !listed {
+				t.Errorf("%s is not listed for a token with admin_mode either, so the removal proves nothing", tc.gated)
+			}
+		})
+	}
+}
+
+// listedToolNames builds a server for cfg and returns the set of tool names it
+// registers.
+func listedToolNames(t *testing.T, client *gitlabclient.Client, cfg *config.ServerConfig) map[string]struct{} {
+	t.Helper()
+	server := mustCreateServer(t, client, cfg)
+	tools, err := listRegisteredTools(server, "scope-filter-"+t.Name())
+	if err != nil {
+		t.Fatalf("list tools: %v", err)
+	}
+	names := make(map[string]struct{}, len(tools))
+	for _, tool := range tools {
+		names[tool.Name] = struct{}{}
+	}
+	return names
+}
+
 // TestCreateServer_ToolManifestInspectionError verifies createServer remains
 // usable when the best-effort visible-tool inspection for the tool manifest
 // fails, covering the defensive warning path.

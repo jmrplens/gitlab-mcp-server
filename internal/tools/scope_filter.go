@@ -6,8 +6,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
 
@@ -41,72 +39,45 @@ var addFilteredGroup = (*actioncatalog.Catalog).AddGroup
 //	k8s_proxy        — Kubernetes API calls via agent
 //	sudo             — Impersonate users
 //
-// The keys are meta-tool group names, which is why the filter reaches only two
-// of the three surfaces. [FilterScopeFilteredCatalog] matches them against
-// Group.ToolName and so covers the dynamic and meta surfaces, where a group is
-// what a caller sees. The individual surface registers one tool per action and
-// nothing there is ever named gitlab_admin, so [RemoveScopeFilteredTools],
-// which matches registered tool names, removes nothing: every admin individual
-// tool stays listed for a token with no admin_mode.
+// The keys are meta-tool group names, and the filter is applied to the
+// **catalog** rather than to registered tool names, which is what lets one set
+// of keys reach all three surfaces. [FilterScopeFilteredCatalog] matches them
+// against Group.ToolName, so on the dynamic and meta surfaces it removes the
+// group a caller would name, and on the individual surface it removes every
+// action projected from that group before any of them is registered.
 //
-// It fails toward GitLab's own 403 rather than toward access, so the tools are
-// listed and then refused by the instance, which is why this is a listing
-// defect and not an authorization one. Closing it is the same shape as the
-// exclusion fix already applied on that surface: filter the catalog before
-// registration instead of the registered names afterwards, by passing the
-// scoped catalog into the individual registration path. That call lives in
-// cmd/server, not here.
+// That last part is the whole reason this comment is here. Until 3.0.0 the
+// individual surface was filtered by a second pass over registered tool names,
+// and nothing on that surface is ever named gitlab_admin: one tool is
+// registered per action, so the pass matched nothing and every admin tool
+// stayed listed for a token with no admin_mode. The calls themselves were
+// refused, by GitLab, with a 403, so what was wrong was the listing rather than
+// the authorization, which is the worse half to leave: a model reads tools/list
+// to decide what is possible and concluded the capability was there. The fix is
+// the shape the exclusion filter already had, and lives in
+// [SharedIndividualCatalog].
+//
+// A group belongs in this map only when **every** action in it needs the
+// scopes, because the removal is all-or-nothing per group. A domain that mixes
+// read and write actions (gitlab_runner, say) is deliberately absent: removing
+// it whole because the token cannot write would hide the reads that work.
+//
+// gitlab_admin is the entry that tests that rule hardest, and the granularity
+// is known to be slightly over-broad there: a handful of its 92 actions are
+// reads GitLab serves to any authenticated token (topic_list, topic_get,
+// broadcast_message_list, broadcast_message_get), and a token with no
+// admin_mode loses them along with the 88 that genuinely need it. That is the
+// direction to err in, and it is not new: the same removal has applied on the
+// meta and dynamic surfaces since the filter existed, so what changed in 3.0.0
+// is that the individual surface stopped being the exception. Splitting those
+// reads out means per-action requirements rather than per-group, which is a
+// change to what all three surfaces serve and wants deciding as such.
 var MetaToolScopes = map[string][]string{
-	// Admin-only tools — every action in these tools requires admin_mode.
-	// Meta-tools that mix read and write actions (e.g., gitlab_runner) are
-	// intentionally excluded: removing the whole tool because the token lacks
-	// write scope would also hide the read actions that work fine with read_api.
 	"gitlab_admin":           {"admin_mode"},
 	"gitlab_enterprise_user": {"admin_mode"},
 	"gitlab_project_alias":   {"admin_mode"},
 	"gitlab_geo":             {"admin_mode"},
 	"gitlab_storage_move":    {"admin_mode"},
-}
-
-// RemoveScopeFilteredTools removes tools whose required scopes are not
-// satisfied by the detected token scopes. Returns the number of tools
-// removed. If tokenScopes is nil (detection unavailable), no tools are
-// removed. Logs a debug entry per removed tool and an info entry
-// summarizing the removal.
-func RemoveScopeFilteredTools(server *mcp.Server, tokenScopes []string) int {
-	if tokenScopes == nil {
-		return 0
-	}
-
-	scopeSet := buildScopeSet(tokenScopes)
-
-	var toRemove []string
-	for name, required := range MetaToolScopes {
-		if !allScopesPresent(scopeSet, required) {
-			toRemove = append(toRemove, name)
-			slog.Debug(
-				"tool requires missing PAT scope",
-				"tool", name,
-				"required", required,
-				"available", tokenScopes,
-			)
-		}
-	}
-
-	if len(toRemove) == 0 {
-		return 0
-	}
-
-	server.RemoveTools(toRemove...)
-
-	slog.Info(
-		"scope-filtered tools removed",
-		"removed", len(toRemove),
-		"tools", strings.Join(toRemove, ", "),
-		"scopes", strings.Join(tokenScopes, ", "),
-	)
-
-	return len(toRemove)
 }
 
 // FilterScopeFilteredCatalog removes catalog groups whose required scopes
@@ -212,8 +183,7 @@ func catalogRelevantScopes(tokenScopes []string) []string {
 }
 
 // buildScopeSet returns a set of token scope strings for O(1) membership
-// tests. Used by [RemoveScopeFilteredTools] and
-// [FilterScopeFilteredCatalog].
+// tests. Used by [FilterScopeFilteredCatalog].
 func buildScopeSet(tokenScopes []string) map[string]struct{} {
 	scopeSet := make(map[string]struct{}, len(tokenScopes))
 	for _, scope := range tokenScopes {
