@@ -51,7 +51,11 @@ func FormatMarkdown(e Output) string {
 	}
 	if e.Details.ChangeObject != nil {
 		if raw, err := json.Marshal(e.Details.ChangeObject); err == nil {
-			fmt.Fprintf(&sb, "\n### Change (object)\n\n```json\n%s\n```\n", string(raw))
+			// The change object echoes whatever the audited change carried, and
+			// JSON escaping leaves a backtick alone, so the fence is sized to
+			// the document rather than written as three.
+			sb.WriteString("\n### Change (object)\n\n")
+			sb.WriteString(toolutil.MarkdownFencedBlock("json", string(raw)))
 		}
 	}
 	toolutil.WriteHints(
