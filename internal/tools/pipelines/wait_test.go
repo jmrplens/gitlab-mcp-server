@@ -181,11 +181,17 @@ func TestWait_PollingTransition(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
+	// 200 for the same reason TestWait_Timeout asks for it, and it is the whole
+	// budget rather than a margin: the seconds here are milliseconds, so this is
+	// 200ms for two loopback round-trips, and a CI runner under load spends more
+	// than that on one. At 60 the test asserted that Wait polls twice while
+	// giving it a budget a single poll could exhaust, and it failed exactly that
+	// way (PollCount = 1, FinalStatus = ""). Do not trim it back.
 	out, err := Wait(context.Background(), nil, client, WaitInput{
 		ProjectID:       "42",
 		PipelineID:      10,
 		IntervalSeconds: 5,
-		TimeoutSeconds:  60,
+		TimeoutSeconds:  200,
 	})
 	if err != nil {
 		t.Fatalf("Wait() unexpected error: %v", err)
