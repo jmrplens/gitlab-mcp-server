@@ -5477,6 +5477,11 @@ func TestServeHTTP_ShutdownDuringServerCardBuild_DrainsCleanly(t *testing.T) {
 // document, the failure is cached the way a success would be so the build is
 // not retried on every fetch, and the rest of the server is unaffected.
 //
+// It fetches the .well-known path because that is where the ENUMERATING card
+// lives, and the build this exercises is the one that registers a catalog.
+// /server-card answers the SEP-2127 document, which is rendered from constants
+// and this deployment's own flags and needs no build to fail.
+//
 // Deliberately not parallel: the builder seam is a package global.
 func TestServeHTTP_ServerCardBuildFails_AnswersUnavailableAndStaysUp(t *testing.T) {
 	gitlab := newMockGitLabServer(t)
@@ -5492,7 +5497,7 @@ func TestServeHTTP_ServerCardBuildFails_AnswersUnavailableAndStaysUp(t *testing.
 	defer shutdown()
 
 	for attempt := range 2 {
-		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+serverCardPath, nil)
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+serverCardLegacyPath, nil)
 		if err != nil {
 			t.Fatalf("build request: %v", err)
 		}
@@ -5551,7 +5556,7 @@ func TestServeHTTP_ServerCardRequestAbandonedMidBuild_DoesNotPoisonTheCard(t *te
 	firstDone := make(chan struct{})
 	go func() {
 		defer close(firstDone)
-		req, reqErr := http.NewRequestWithContext(abandonCtx, http.MethodGet, "http://"+addr+serverCardPath, nil)
+		req, reqErr := http.NewRequestWithContext(abandonCtx, http.MethodGet, "http://"+addr+serverCardLegacyPath, nil)
 		if reqErr != nil {
 			t.Errorf("build card request: %v", reqErr)
 			return
@@ -5574,7 +5579,7 @@ func TestServeHTTP_ServerCardRequestAbandonedMidBuild_DoesNotPoisonTheCard(t *te
 	time.Sleep(100 * time.Millisecond)
 
 	close(releaseBuild)
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+serverCardPath, nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+serverCardLegacyPath, nil)
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}

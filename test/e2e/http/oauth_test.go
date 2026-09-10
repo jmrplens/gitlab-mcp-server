@@ -214,40 +214,121 @@ func TestOAuth_ServerCardFollowsTheAuthMode(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
 	srv := oauthServer(t, gitlab.url)
 
-	// Both locations: /server-card is what the server-card extension
-	// recommends, and the .well-known path its earlier draft did.
-	for _, path := range []string{"/server-card", "/.well-known/mcp/server-card.json"} {
-		t.Run(path, func(t *testing.T) {
-			got := srv.do(t, request{method: http.MethodGet, path: path})
-			if got.status != http.StatusOK {
-				t.Fatalf("status = %d, want %d", got.status, http.StatusOK)
-			}
+	// The `authentication` block belongs to the enumerating SEP-1649
+	// document, which lives at the .well-known path. /server-card answers the
+	// SEP-2127 card, whose equivalent claim is the credential header on its
+	// remote, and which is asserted separately below.
+	got := srv.do(t, request{method: http.MethodGet, path: "/.well-known/mcp/server-card.json"})
+	if got.status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", got.status, http.StatusOK)
+	}
 
-			var card struct {
-				Authentication struct {
-					Required         bool     `json:"required"`
-					Schemes          []string `json:"schemes"`
-					ResourceMetadata string   `json:"resourceMetadata"`
-					Scopes           []string `json:"scopes"`
-				} `json:"authentication"`
-			}
-			if err := json.Unmarshal([]byte(got.body), &card); err != nil {
-				t.Fatalf("card is not JSON: %v\n%s", err, got.body)
-			}
-			if !slices.Equal(card.Authentication.Schemes, []string{"oauth2"}) {
-				t.Errorf("schemes = %v, want [oauth2] in oauth mode", card.Authentication.Schemes)
-			}
-			if !card.Authentication.Required {
-				t.Error("required = false, want true")
-			}
-			if card.Authentication.ResourceMetadata == "" {
-				t.Error("the card should point at the RFC 9728 document in oauth mode")
-			}
-			if !slices.Contains(card.Authentication.Scopes, "api") {
-				t.Errorf("scopes = %v, want it to name the scope this deployment recommends", card.Authentication.Scopes)
+	var card struct {
+		Authentication struct {
+			Required         bool     `json:"required"`
+			Schemes          []string `json:"schemes"`
+			ResourceMetadata string   `json:"resourceMetadata"`
+			Scopes           []string `json:"scopes"`
+		} `json:"authentication"`
+	}
+	if err := json.Unmarshal([]byte(got.body), &card); err != nil {
+		t.Fatalf("card is not JSON: %v\n%s", err, got.body)
+	}
+	if !slices.Equal(card.Authentication.Schemes, []string{"oauth2"}) {
+		t.Errorf("schemes = %v, want [oauth2] in oauth mode", card.Authentication.Schemes)
+	}
+	if !card.Authentication.Required {
+		t.Error("required = false, want true")
+	}
+	if card.Authentication.ResourceMetadata == "" {
+		t.Error("the card should point at the RFC 9728 document in oauth mode")
+	}
+	if !slices.Contains(card.Authentication.Scopes, "api") {
+		t.Errorf("scopes = %v, want it to name the scope this deployment recommends", card.Authentication.Scopes)
+	}
+}
+
+// TestOAuth_DiscoveryCardCarriesNoPrimitivesAndNamesTheCredential pins the
+// half of the split that a conformance checker looks at.
+//
+// /server-card is the location SEP-2127 reserves, and that extension omits
+// primitives on purpose. Until the split this path answered the enumerating
+// document, so a checker reading the reserved location found a shape that
+// extension does not define, and the public deployment had to shadow the route
+// with a static file to be conformant.
+//
+// The credential claim does not disappear with the primitives: it moves to the
+// remote's header input, which is where that extension puts it.
+func TestOAuth_DiscoveryCardCarriesNoPrimitivesAndNamesTheCredential(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := oauthServer(t, gitlab.url)
+
+	got := srv.do(t, request{method: http.MethodGet, path: "/server-card"})
+	if got.status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", got.status, http.StatusOK)
+	}
+
+	var card map[string]any
+	if err := json.Unmarshal([]byte(got.body), &card); err != nil {
+		t.Fatalf("card is not JSON: %v\n%s", err, got.body)
+	}
+	for _, key := range []string{"tools", "resources", "resourceTemplates", "prompts", "capabilities"} {
+		t.Run(key, func(t *testing.T) {
+			if _, found := card[key]; found {
+				t.Errorf("the SEP-2127 card carries %q; that extension omits primitives on purpose", key)
 			}
 		})
 	}
+	for _, key := range []string{"$schema", "name", "version", "description"} {
+		t.Run(key, func(t *testing.T) {
+			if _, found := card[key]; !found {
+				t.Errorf("the SEP-2127 card is missing the required field %q", key)
+			}
+		})
+	}
+
+	// The half this test is named for, and which it did not check until a
+	// review noticed. oauthServer passes --public-url, so the card must carry
+	// exactly one remote pointing at it, and the credential must be stated as
+	// an input on that remote: it is where a card says what the enumerating
+	// document says in an authentication block. Without this the route wiring
+	// could regress to publishing no remote at all and everything above would
+	// still pass.
+	t.Run("the remote names the credential", func(t *testing.T) {
+		var carded struct {
+			Remotes []struct {
+				Type    string `json:"type"`
+				URL     string `json:"url"`
+				Headers []struct {
+					Name       string `json:"name"`
+					IsRequired bool   `json:"isRequired"`
+					IsSecret   bool   `json:"isSecret"`
+				} `json:"headers"`
+			} `json:"remotes"`
+		}
+		if err := json.Unmarshal([]byte(got.body), &carded); err != nil {
+			t.Fatalf("card is not JSON: %v\n%s", err, got.body)
+		}
+		if len(carded.Remotes) != 1 {
+			t.Fatalf("remotes = %d, want exactly one for a deployment that names a public URL: %s", len(carded.Remotes), got.body)
+		}
+		remote := carded.Remotes[0]
+		if remote.URL != publicURL {
+			t.Errorf("remote url = %q, want the deployment's public URL %q", remote.URL, publicURL)
+		}
+		if remote.Type != "streamable-http" {
+			t.Errorf("remote type = %q, want streamable-http", remote.Type)
+		}
+		if len(remote.Headers) != 1 || remote.Headers[0].Name != "Authorization" {
+			t.Fatalf("headers = %+v, want Authorization in oauth mode", remote.Headers)
+		}
+		if !remote.Headers[0].IsRequired {
+			t.Error("isRequired = false, but a connection with no credential is answered 401")
+		}
+		if !remote.Headers[0].IsSecret {
+			t.Error("isSecret = false for a credential header")
+		}
+	})
 }
 
 // TestOAuth_RejectedTokenSaysInvalidToken verifies that a refused credential is

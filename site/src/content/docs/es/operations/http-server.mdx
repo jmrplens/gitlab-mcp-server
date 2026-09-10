@@ -661,13 +661,23 @@ Una respuesta exitosa devuelve un resultado JSON-RPC con la lista de herramienta
 
 ### Ficha del servidor
 
-`GET /server-card` tampoco necesita credenciales, y responde con el documento server-card de MCP: cada herramienta, recurso, plantilla de recurso y prompt que registra este despliegue, con sus esquemas, más las capacidades que anuncia.
+Son dos documentos, en dos rutas, y ninguno necesita credenciales. No son el mismo documento.
+
+`GET /server-card` responde con la **ficha SEP-2127**: quién es este servidor y cómo conectarse. Identidad (`name`, `version`, `description`, `title`, `websiteUrl`, `repository`) y, cuando el despliegue declara `--public-url`, una entrada `remotes` con la cabecera de credencial que debe enviar el cliente. **No lleva herramientas, recursos, prompts ni capacidades**, y es una decisión de esa extensión: lo que un servidor expone varía según el usuario autenticado, la sesión, la configuración y los feature flags, así que un documento estático no puede responder a eso.
 
 ```bash
 curl -s http://localhost:8080/server-card
 ```
 
-La respuesta lleva `Content-Type: application/mcp-server-card+json`. El mismo documento se sirve en la ruta heredada `/.well-known/mcp/server-card.json` como `application/json`, para clientes escritos contra la ubicación anterior. Ambas se montan también bajo el prefijo de ruta de `--public-url`, para un proxy que reenvía su prefijo en lugar de quitarlo.
+La respuesta lleva `Content-Type: application/mcp-server-card+json`.
+
+`GET /.well-known/mcp/server-card.json` responde con el **documento SEP-1649 anterior**, que sí enumera: cada herramienta, recurso, plantilla de recurso y prompt que registra este despliegue, con sus esquemas, más las capacidades que anuncia y los bloques de autenticación, suscripciones y telemetría. Se sirve como `application/json`, y es lo que hay que pedir cuando quieres el catálogo sin credencial.
+
+```bash
+curl -s http://localhost:8080/.well-known/mcp/server-card.json
+```
+
+Ambas se montan también bajo el prefijo de ruta de `--public-url`, para un proxy que reenvía su prefijo en lugar de quitarlo. Antes de la 3.1.0 las dos rutas respondían el documento enumerante y solo cambiaba el `Content-Type`, lo que dejaba la forma antigua en la ubicación que SEP-2127 reserva.
 
 Es la vía sancionada para publicar el catálogo a algo que no tiene credencial — un directorio, un escáner, una compilación de documentación. `tools/list` sigue autenticado, porque la especificación de autorización de MCP exige que un servidor que requiere autorización valide el token antes de procesar la petición.
 

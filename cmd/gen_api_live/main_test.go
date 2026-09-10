@@ -720,9 +720,17 @@ esac
 // pause between two, which is where a twenty-minute wait spends nearly all of
 // its time and so where a real interrupt almost always lands.
 func TestWaitForRails_WhenTheRunIsCancelledWhileItSleeps_StopsWaiting(t *testing.T) {
+	// The inspect sleeps past the deadline on purpose, so the cancellation
+	// lands WHILE the running() check is in flight rather than before it.
+	// That is the window a guard placed only ahead of the check leaves open:
+	// running() asks docker through this same context, so the cancelled
+	// inspect fails and reads as a container that died. Without the sleep
+	// this test only reaches that interleaving when process spawning happens
+	// to lose the race, which is what made it pass on Linux and fail on
+	// macOS.
 	docker := stubDocker(t, `case "$1" in
   exec) exit 1 ;;
-  inspect) echo true ;;
+  inspect) sleep 0.3; echo true ;;
 esac
 `)
 	previousPoll := pollInterval
@@ -739,6 +747,9 @@ esac
 	}
 	if !strings.Contains(err.Error(), "waiting for the application") {
 		t.Errorf("error = %q, want it to name what it was waiting for", err)
+	}
+	if strings.Contains(err.Error(), "the container stopped") {
+		t.Errorf("error = %q, want it not to blame the container for an interrupt", err)
 	}
 }
 

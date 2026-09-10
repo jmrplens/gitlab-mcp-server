@@ -391,6 +391,16 @@ func waitForRails(ctx context.Context, docker dockerPath) error {
 			return fmt.Errorf("waiting for the application: %w", ctx.Err())
 		}
 		if !running(ctx, docker) {
+			// And again on this side of it, for the same reason: the check
+			// above closes the window before the inspect, not the one during
+			// it. running() asks docker through this same context, so a
+			// cancellation landing while that call is in flight fails it and
+			// is indistinguishable here from a container that died. Asking
+			// once, before, left a race that only showed up where process
+			// spawning is slow enough to lose to a short deadline.
+			if ctx.Err() != nil {
+				return fmt.Errorf("waiting for the application: %w", ctx.Err())
+			}
 			out, _ := docker.command(ctx, "logs", "--tail", "20", containerName).CombinedOutput()
 			return fmt.Errorf("the container stopped before the application was ready:\n%s", strings.TrimSpace(string(out)))
 		}

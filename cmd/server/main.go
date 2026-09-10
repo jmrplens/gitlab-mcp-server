@@ -118,6 +118,13 @@ const (
 	projectDescription = "Model Context Protocol server for GitLab: projects, issues, merge requests, " +
 		"pipelines, repositories, releases, groups, and admin workflows over the " +
 		"GitLab REST and GraphQL APIs."
+
+	// serverDisplayTitle is the human-readable name a client or registry
+	// renders instead of the identifier. One constant because two documents
+	// state it, the handshake's Implementation and the SEP-2127 server card,
+	// and a display name that differs between them is a display name nobody
+	// can rely on.
+	serverDisplayTitle = "GitLab MCP Server"
 )
 
 // httpConfig holds CLI-flag configuration for HTTP server mode.
@@ -1716,7 +1723,7 @@ func newServerShell(
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:        "gitlab-mcp-server",
-		Title:       "GitLab MCP Server",
+		Title:       serverDisplayTitle,
 		Description: projectDescription,
 		Version:     version,
 		WebsiteURL:  projectWebsite,
@@ -2721,7 +2728,26 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		w.Header().Set("Access-Control-Max-Age", "3600")
 		w.WriteHeader(http.StatusNoContent)
 	}
-	cardHandler := func(w http.ResponseWriter, r *http.Request) {
+	// The SEP-2127 card is identity and connection metadata, so it is built
+	// here, once, rather than through the build-once-in-the-background dance
+	// the enumerating document needs: it registers no catalog and opens no
+	// session. A failure can only be a marshaling bug, and the route answers
+	// 503 rather than serving a card this process could not render.
+	discoveryCardJSON, discoveryCardErr := buildDiscoveryCard(cfg)
+	if discoveryCardErr != nil {
+		slog.WarnContext(ctx, "failed to build the server card, "+serverCardPath+" returns 503", "error", discoveryCardErr)
+	}
+	discoveryCardHandler := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(headerAllowOrigin, "*")
+		if discoveryCardJSON == nil {
+			writeCardUnavailable(w)
+			return
+		}
+		w.Header().Set(hdrContentType, serverCardMediaType(r.URL.Path))
+		w.Header().Set(hdrCacheControl, cacheControlPublic1h)
+		_, _ = w.Write(discoveryCardJSON)
+	}
+	legacyCardHandler := func(w http.ResponseWriter, r *http.Request) {
 		// The card's audience is browser-based registry scanners; without
 		// CORS they cannot fetch it cross-origin (the SDK's OAuth metadata
 		// handler on this same server already sends the header).
@@ -2749,19 +2775,35 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 			return
 		}
 		w.Header().Set(hdrContentType, serverCardMediaType(r.URL.Path))
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Header().Set(hdrCacheControl, cacheControlPublic1h)
 		_, _ = w.Write(serverCardJSON)
 	}
-	// /server-card is the location the server-card extension recommends: a
-	// card is application-level metadata about one server, not the
-	// site-wide metadata /.well-known is reserved for, and the extension
-	// says so in writing since commit 10e958fa (2026-06-08). The
-	// .well-known path the earlier draft recommended stays mounted because
-	// scanners written against that draft are already fetching it, and a
-	// card is a public document with nothing to gain from breaking them.
-	for _, path := range publicPaths(cfg, serverCardPath, serverCardLegacyPath) {
+	// The two paths serve two different documents, which is the whole point.
+	//
+	// /server-card is the location SEP-2127 reserves, and it gets the SEP-2127
+	// card: identity and how to connect, and no primitives, because that
+	// extension omits them on purpose (see cmd/server/discovery_card.go). A
+	// card is application-level metadata about one server rather than the
+	// site-wide metadata /.well-known is reserved for, and the extension has
+	// said so in writing since commit 10e958fa (2026-06-08).
+	//
+	// The .well-known path the earlier draft recommended keeps the
+	// enumerating SEP-1649 document. Scanners written against that draft are
+	// already fetching it, and it is the only unauthenticated answer this
+	// project publishes to what the server can do, so breaking it would cost
+	// something and gain nothing.
+	//
+	// Both used to answer the enumerating document, differing only in
+	// Content-Type. That put the older shape at the location reserved for the
+	// newer one, and a deployment that wanted to be conformant had to shadow
+	// this route with a static file in its reverse proxy.
+	for _, path := range publicPaths(cfg, serverCardPath) {
 		mux.HandleFunc("OPTIONS "+path, cardPreflight)
-		mux.HandleFunc("GET "+path, cardHandler)
+		mux.HandleFunc("GET "+path, discoveryCardHandler)
+	}
+	for _, path := range publicPaths(cfg, serverCardLegacyPath) {
+		mux.HandleFunc("OPTIONS "+path, cardPreflight)
+		mux.HandleFunc("GET "+path, legacyCardHandler)
 	}
 
 	registerHTTPMCPHandlers(ctx, cfg, httpAddr, pool, binding, mux)
@@ -3559,7 +3601,7 @@ func securityHeadersMiddleware(limits inboundLimits, next http.Handler) http.Han
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
-		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set(hdrCacheControl, cacheControlNoStore)
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		if r.Body != nil {
 			r.Body = http.MaxBytesReader(w, newDepthLimitedBody(r.Body, limits.maxDepth), maxBytes)
@@ -3753,7 +3795,13 @@ const (
 // the literal, which is what SonarCloud flags.
 const (
 	hdrContentType = "Content-Type"
-	mimeJSON       = "application/json"
+	// hdrCacheControl and the two policies this package sets under it. The
+	// card is public and changes only with a release, so an hour of shared
+	// caching is free; everything credential-shaped is no-store.
+	hdrCacheControl      = "Cache-Control"
+	cacheControlPublic1h = "public, max-age=3600"
+	cacheControlNoStore  = "no-store"
+	mimeJSON             = "application/json"
 	// mimeServerCard is the media type the MCP server-card extension registers.
 	// Only the recommended path serves it: the legacy .well-known location ends
 	// in .json and is fetched by scanners written against the earlier draft,

@@ -32,6 +32,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -542,7 +543,10 @@ func TestServerCard_LegacyModeDeclaresHeaderToken(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
 	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
 
-	got := srv.do(t, request{method: http.MethodGet, path: "/server-card"})
+	// The authentication block is part of the enumerating SEP-1649 document,
+	// which is served at the .well-known path; /server-card answers the
+	// SEP-2127 card, checked below for the same claim in its own idiom.
+	got := srv.do(t, request{method: http.MethodGet, path: "/.well-known/mcp/server-card.json"})
 	if got.status != http.StatusOK {
 		t.Fatalf("status = %d, want %d", got.status, http.StatusOK)
 	}
@@ -567,6 +571,139 @@ func TestServerCard_LegacyModeDeclaresHeaderToken(t *testing.T) {
 	// send a client into a discovery flow that cannot complete.
 	if card.Authentication.ResourceMetadata != "" {
 		t.Errorf("resourceMetadata = %q, want none in legacy mode", card.Authentication.ResourceMetadata)
+	}
+}
+
+// TestServerCard_DiscoveryCardNamesTheLegacyHeader is the SEP-2127 half of the
+// branch above: the card states the credential as an input on its remote
+// rather than as an authentication block, and in legacy mode the header a
+// client must send is PRIVATE-TOKEN, not Authorization.
+//
+// It needs --public-url because a card describes a remote server, and a
+// deployment that names no public address publishes no remote at all rather
+// than advertising a listen address a client cannot reach.
+func TestServerCard_DiscoveryCardNamesTheLegacyHeader(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--public-url=https://mcp.example.com")
+
+	got := srv.do(t, request{method: http.MethodGet, path: "/server-card"})
+	if got.status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", got.status, http.StatusOK)
+	}
+
+	var card struct {
+		Remotes []struct {
+			Type    string `json:"type"`
+			URL     string `json:"url"`
+			Headers []struct {
+				Name       string `json:"name"`
+				IsRequired bool   `json:"isRequired"`
+				IsSecret   bool   `json:"isSecret"`
+			} `json:"headers"`
+		} `json:"remotes"`
+	}
+	if err := json.Unmarshal([]byte(got.body), &card); err != nil {
+		t.Fatalf("card is not JSON: %v\n%s", err, got.body)
+	}
+	if len(card.Remotes) != 1 {
+		t.Fatalf("remotes = %d, want 1 when --public-url is set: %s", len(card.Remotes), got.body)
+	}
+	remote := card.Remotes[0]
+	if remote.URL != "https://mcp.example.com" {
+		t.Errorf("remote url = %q, want the public URL", remote.URL)
+	}
+	if len(remote.Headers) != 1 || remote.Headers[0].Name != "PRIVATE-TOKEN" {
+		t.Fatalf("headers = %+v, want PRIVATE-TOKEN in legacy mode", remote.Headers)
+	}
+	if !remote.Headers[0].IsRequired {
+		t.Error("isRequired = false; the connection fails without a credential, which is what the card schema asks about")
+	}
+	if !remote.Headers[0].IsSecret {
+		t.Error("isSecret = false for a credential header")
+	}
+}
+
+// TestServerCard_DeclaredProtocolVersionsAreWhatTheServerAccepts is the check
+// that makes the card's supportedProtocolVersions worth declaring.
+//
+// The extension asks a card to reflect runtime behavior and not to contradict
+// what a client observes once connected, so a list that drifts is worse than
+// no list: it sends a client into a handshake that fails. The list has to be
+// written by hand because the SDK keeps its own set unexported, so the only
+// thing standing between it and an SDK bump is this test.
+//
+// It does not read the Go slice. It asks the running binary the same way an
+// operator would, by sending a version nothing supports and reading the set
+// back out of the refusal, and compares that with what the card published.
+func TestServerCard_DeclaredProtocolVersionsAreWhatTheServerAccepts(t *testing.T) {
+	tests := []struct {
+		name  string
+		flags []string
+	}{
+		// The stateful case is the one that matters. A stateful deployment
+		// does not serve 2026-07-28, and a card carrying its own copy of the
+		// list advertised it anyway until this test existed.
+		{name: "stateless", flags: nil},
+		{name: "stateful", flags: []string{"--stateless=false"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+			flags := append([]string{"--gitlab-url=" + gitlab.url, "--public-url=https://mcp.example.com"}, tt.flags...)
+			srv := startServer(t, nil, flags...)
+
+			card := srv.do(t, request{method: http.MethodGet, path: "/server-card"})
+			if card.status != http.StatusOK {
+				t.Fatalf("GET /server-card = %d, want 200", card.status)
+			}
+			var declared struct {
+				Remotes []struct {
+					SupportedProtocolVersions []string `json:"supportedProtocolVersions"`
+				} `json:"remotes"`
+			}
+			if err := json.Unmarshal([]byte(card.body), &declared); err != nil {
+				t.Fatalf("card is not JSON: %v\n%s", err, card.body)
+			}
+			if len(declared.Remotes) != 1 {
+				t.Fatalf("remotes = %d, want 1", len(declared.Remotes))
+			}
+
+			// -32022 is CodeUnsupportedProtocolVersion, and the transport puts
+			// the set it would have accepted in error.data.supported.
+			refusal := srv.do(t, request{
+				method: http.MethodPost,
+				path:   "/mcp",
+				body:   `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`,
+				headers: map[string]string{
+					"Content-Type":         "application/json",
+					"Accept":               "application/json, text/event-stream",
+					"MCP-Protocol-Version": "1999-01-01",
+					"PRIVATE-TOKEN":        "glpat-whatever",
+				},
+			})
+			if refusal.status != http.StatusBadRequest {
+				t.Fatalf("an unsupported protocol version answered %d, want 400: %s", refusal.status, refusal.body)
+			}
+			var served struct {
+				Error struct {
+					Code int `json:"code"`
+					Data struct {
+						Supported []string `json:"supported"`
+					} `json:"data"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(refusal.body), &served); err != nil {
+				t.Fatalf("the refusal is not JSON: %v\n%s", err, refusal.body)
+			}
+			if len(served.Error.Data.Supported) == 0 {
+				t.Fatalf("the refusal named no supported versions, so this test can prove nothing: %s", refusal.body)
+			}
+
+			if !slices.Equal(declared.Remotes[0].SupportedProtocolVersions, served.Error.Data.Supported) {
+				t.Errorf("the card declares %v and the server accepts %v",
+					declared.Remotes[0].SupportedProtocolVersions, served.Error.Data.Supported)
+			}
+		})
 	}
 }
 

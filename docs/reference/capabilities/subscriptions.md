@@ -55,8 +55,9 @@ can drift from the others:
   `resources.subscribe` capability);
 - the **`gitlab://tools` manifest** carries the full list under
   `subscriptions.subscribable_uri_templates`;
-- in HTTP mode, the **Server Card** at `/server-card` (also served at the
-  legacy `/.well-known/mcp/server-card.json` path)
+- in HTTP mode, the **enumerating Server Card** at
+  `/.well-known/mcp/server-card.json` (not the SEP-2127 card at
+  `/server-card`, which states no capabilities)
   carries a top-level `subscriptions` block with the same list plus a
   per-method `available` boolean (on stateless HTTP,
   `resources/subscribe` is listed with `available: false` and a

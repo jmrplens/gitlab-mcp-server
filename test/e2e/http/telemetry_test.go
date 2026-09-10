@@ -42,9 +42,14 @@ func TestTelemetry_ServerCardAnnouncesItWithoutNamingTheCollector(t *testing.T) 
 	env["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://collector.internal.example:4318"
 	srv := startServer(t, env)
 
-	got := srv.do(t, request{method: http.MethodGet, path: "/server-card"})
+	// The telemetry block belongs to the enumerating SEP-1649 document at the
+	// .well-known path. The SEP-2127 card at /server-card states no
+	// capabilities at all, so it cannot carry this and cannot leak the
+	// collector either.
+	const cardPath = "/.well-known/mcp/server-card.json"
+	got := srv.do(t, request{method: http.MethodGet, path: cardPath})
 	if got.status != http.StatusOK {
-		t.Fatalf("GET /server-card = %d, want 200: %s", got.status, got.body)
+		t.Fatalf("GET %s = %d, want 200: %s", cardPath, got.status, got.body)
 	}
 
 	if strings.Contains(got.body, "collector.internal.example") {

@@ -784,7 +784,8 @@ It runs `--auth-mode=oauth`, so the credential travels as `Authorization: Bearer
 | Scopes          | `api` for the full surface; a `read_api` token is admitted and served a read-only one                                                                                                                   |
 | Health          | `GET https://mcp.jmrp.io/gitlab/health` → `200` with `{"status":"ok",…}`                                                                                                                                |
 | Server card     | [`https://mcp.jmrp.io/servers/gitlab/`](https://mcp.jmrp.io/servers/gitlab/) — the catalog and per-client config, unauthenticated                                                                       |
-| MCP server card | `GET https://mcp.jmrp.io/gitlab/server-card` → `200 application/mcp-server-card+json`, unauthenticated; the same document is served at `/gitlab/.well-known/mcp/server-card.json` as `application/json` |
+| MCP server card | `GET https://mcp.jmrp.io/gitlab/server-card` → `200 application/mcp-server-card+json`, unauthenticated: the SEP-2127 card, identity and how to connect, no primitives                                   |
+| MCP catalog     | `GET https://mcp.jmrp.io/gitlab/.well-known/mcp/server-card.json` → `200 application/json`, unauthenticated: the earlier enumerating document, with every tool, prompt and resource                      |
 
 Because it is multi-tenant, each distinct token+URL pair gets its own pooled MCP server (see [Server Pool](#server-pool)). A `read_api` token is admitted and served a read-only surface rather than refused, so a credential that cannot change anything is a supported way to use it.
 
@@ -1075,25 +1076,48 @@ curl -s -o /dev/null -w "%{http_code}" \
 
 ### Server Card
 
-`GET /server-card` needs no credentials either, and answers with the MCP
-server-card document: every tool, resource, resource template and prompt this
-deployment registers, with its schemas, plus the capabilities it advertises.
+Two documents, at two paths, and neither needs a credential. They are not the
+same document, and which one you want depends on the question you are asking.
+
+`GET /server-card` answers the **SEP-2127 Server Card**: who this server is and
+how to connect to it. Identity (`name`, `version`, `description`, `title`,
+`websiteUrl`, `repository`) and, when the deployment names a `--public-url`, a
+`remotes` entry with the credential header a client must send. It carries **no
+tools, resources, prompts or capabilities**, and that is the extension's own
+decision rather than an omission here: what a server exposes varies by
+authenticated user, session, configuration and feature flags, so a static
+document cannot answer it and the extension says as much.
 
 ```bash
 curl -s http://localhost:8080/server-card
 ```
 
-The response carries `Content-Type: application/mcp-server-card+json`. The same
-document is served at the legacy path `/.well-known/mcp/server-card.json` as
-`application/json`, for clients written against the earlier location.
+The response carries `Content-Type: application/mcp-server-card+json`.
 
-This is the sanctioned way to publish the catalog to something holding no
-credential — a directory, a scanner, a documentation build. `tools/list` stays
-authenticated, because the MCP authorization specification requires a server
-that requires authorization to validate the token before processing a request;
-see [ADR-0018](../development/adr/adr-0018-authorization-admits-per-action-gating.md).
+`GET /.well-known/mcp/server-card.json` answers the **earlier SEP-1649
+document**, which does enumerate: every tool, resource, resource template and
+prompt this deployment registers, with its schemas, plus the capabilities it
+advertises and blocks describing authentication, subscriptions and telemetry.
+It is served as `application/json`, and it is what to fetch when you want the
+catalog without a credential.
+
+```bash
+curl -s http://localhost:8080/.well-known/mcp/server-card.json
+```
+
+That second URL is the sanctioned way to publish the catalog to something
+holding no credential: a directory, a scanner, a documentation build.
+`tools/list` stays authenticated, because the MCP authorization specification
+requires a server that requires authorization to validate the token before
+processing a request; see
+[ADR-0018](../development/adr/adr-0018-authorization-admits-per-action-gating.md).
+
 Both paths are mounted under `--public-url`'s path prefix as well, for a proxy
-that forwards its prefix rather than stripping it.
+that forwards its prefix rather than stripping it. Before 3.1.0 both answered
+the enumerating document and differed only in `Content-Type`, which left the
+older shape at the location SEP-2127 reserves; a deployment that wanted to be
+conformant had to shadow `/server-card` with a static file in its proxy, and
+that workaround can now be removed.
 
 ## Security Considerations
 

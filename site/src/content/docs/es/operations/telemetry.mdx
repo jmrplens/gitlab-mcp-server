@@ -429,8 +429,10 @@ lo hacen, y un valor vacío cuenta como no definido.
 
 ## Cómo saber si está activo
 
+Lo indica la ficha enumerante, en la ruta `.well-known`. La ficha SEP-2127 de `/server-card` solo declara identidad y datos de conexión, y no lleva bloques de capacidades.
+
 ```bash
-curl -s http://localhost:8080/server-card | jq .telemetry
+curl -s http://localhost:8080/.well-known/mcp/server-card.json | jq .telemetry
 ```
 
 ```json

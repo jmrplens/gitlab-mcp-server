@@ -39,9 +39,9 @@ func metadataDocument(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			w.Header().Set("Cache-Control", discoveryCacheControl)
+			w.Header().Set(hdrCacheControl, discoveryCacheControl)
 		case http.MethodHead:
-			w.Header().Set("Cache-Control", discoveryCacheControl)
+			w.Header().Set(hdrCacheControl, discoveryCacheControl)
 			// The SDK checks the method itself, so it has to see a GET. The
 			// response body is dropped by net/http before it reaches the wire.
 			r = r.Clone(r.Context())
