@@ -459,6 +459,62 @@ func TestFormatApprovalRuleMarkdown_NonEmpty(t *testing.T) {
 	}
 }
 
+// TestApprovalRuleHandlers_ReadTheCoverageThresholdOffTheCapture verifies the
+// one key client-go's ProjectApprovalRule does not model reaches the output on
+// every rule handler, and that an answer whose threshold is not a number is
+// an error rather than a rule with the key quietly dropped.
+func TestApprovalRuleHandlers_ReadTheCoverageThresholdOffTheCapture(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		body     string
+		call     func(context.Context, *testing.T, string) (*int64, error)
+		wantFail bool
+	}{
+		{name: "get", body: `{"id":10,"report_type":"code_coverage","coverage_minimum_threshold":80}`, call: getRuleThreshold},
+		{name: "list", body: `[{"id":10,"report_type":"code_coverage","coverage_minimum_threshold":80}]`, call: listRuleThreshold},
+		{name: "get with a threshold that is not a number", body: `{"id":10,"coverage_minimum_threshold":"high"}`, call: getRuleThreshold, wantFail: true},
+		{name: "list with a threshold that is not a number", body: `[{"id":10,"coverage_minimum_threshold":"high"}]`, call: listRuleThreshold, wantFail: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := testCase.call(t.Context(), t, testCase.body)
+			if testCase.wantFail {
+				if err == nil {
+					t.Error("handler succeeded on a threshold its extra cannot hold")
+				}
+				return
+			}
+			if err != nil || got == nil || *got != 80 {
+				t.Errorf("threshold = %v, %v; want 80", got, err)
+			}
+		})
+	}
+}
+
+// getRuleThreshold serves body as the answer to a single approval rule and
+// returns the threshold the handler read.
+func getRuleThreshold(ctx context.Context, t *testing.T, body string) (*int64, error) {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	out, err := GetApprovalRule(ctx, client, GetApprovalRuleInput{ProjectID: "42", RuleID: 10})
+	return out.CoverageMinimumThreshold, err
+}
+
+// listRuleThreshold serves body as a page of approval rules and returns the
+// first row's threshold.
+func listRuleThreshold(ctx context.Context, t *testing.T, body string) (*int64, error) {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	out, err := ListApprovalRules(ctx, client, ListApprovalRulesInput{ProjectID: "42"})
+	if err != nil || len(out.Rules) == 0 {
+		return nil, err
+	}
+	return out.Rules[0].CoverageMinimumThreshold, nil
+}
+
 // TestFormatListApprovalRulesMarkdown_NonEmpty verifies FormatListApprovalRulesMarkdown produces non-empty markdown containing each rule's name.
 func TestFormatListApprovalRulesMarkdown_NonEmpty(t *testing.T) {
 	md := FormatListApprovalRulesMarkdown(ListApprovalRulesOutput{

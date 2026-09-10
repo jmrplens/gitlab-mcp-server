@@ -4521,3 +4521,60 @@ func TestChangeIssueSubscription_NotModifiedError_FallsBackToGet(t *testing.T) {
 		t.Errorf("IID = %d, want the issue the fall-back Get fetched", out.IID)
 	}
 }
+
+// TestIssueHandlers_ACaptureThatDoesNotDecode_IsAnError verifies the issue
+// handlers that read keys client-go does not model off the captured answer
+// fail when one of those keys arrives in a shape the extra cannot hold,
+// instead of answering with the SDK's half alone.
+func TestIssueHandlers_ACaptureThatDoesNotDecode_IsAnError(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"get", `{"id":1,"iid":2,"epic_iid":"first"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{ProjectID: "1", IssueIID: 2})
+			return err
+		}},
+		{"list", `[{"id":1,"iid":2,"type":5}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{ProjectID: "1"})
+			return err
+		}},
+		{"list group", `[{"id":1,"iid":2,"type":5}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListGroup(ctx, c, ListGroupInput{GroupID: "1"})
+			return err
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, testCase.body)
+			}))
+			if err := testCase.call(t.Context(), client); err == nil {
+				t.Error("handler succeeded on a captured answer its extra cannot hold")
+			}
+		})
+	}
+}
+
+// TestToBasicOutputs_PairsEachIssueWithItsCapturedRow verifies the converter
+// the packages outside this one call for the basic issue entity: each issue
+// gets the keys of its own row, and a page that does not decode into the
+// basic extra is an error rather than rows with those keys dropped.
+func TestToBasicOutputs_PairsEachIssueWithItsCapturedRow(t *testing.T) {
+	out, err := ToBasicOutputs(
+		[]*gl.Issue{{ID: 1, IID: 10}, {ID: 2, IID: 20}},
+		gitlabclient.CapturedBody([]byte(`[{"type":"ISSUE","blocking_issues_count":0},{"type":"INCIDENT","start_date":"2026-02-01"}]`)),
+	)
+	if err != nil {
+		t.Fatalf("ToBasicOutputs() error = %v", err)
+	}
+	if len(out) != 2 || out[0].Type != "ISSUE" || out[1].Type != "INCIDENT" || out[1].StartDate != "2026-02-01" {
+		t.Errorf("rows = %+v, want each issue paired with its own captured row", out)
+	}
+	if out[0].BlockingIssuesCount == nil || *out[0].BlockingIssuesCount != 0 {
+		t.Errorf("BlockingIssuesCount = %v, want a sent zero kept as zero rather than absent", out[0].BlockingIssuesCount)
+	}
+	if _, err = ToBasicOutputs([]*gl.Issue{{ID: 1}}, gitlabclient.CapturedBody([]byte(`[{"type":7}]`))); err == nil {
+		t.Error("ToBasicOutputs() succeeded on a row whose type is not a string")
+	}
+}

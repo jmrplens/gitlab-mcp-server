@@ -4261,3 +4261,41 @@ func TestUpdate_NewOptions(t *testing.T) {
 		})
 	}
 }
+
+// TestGroupHandlers_ACaptureThatDoesNotDecode_IsAnError verifies the group and
+// hook handlers that read keys client-go does not model off the captured
+// answer fail when one of those keys arrives in a shape the extra cannot
+// hold, instead of answering with the SDK's half alone.
+func TestGroupHandlers_ACaptureThatDoesNotDecode_IsAnError(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"get", `{"id":1,"name":"g","allow_personal_snippets":"sometimes"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{GroupID: "1"})
+			return err
+		}},
+		{"list", `[{"id":1,"name":"g","show_diff_preview_in_email":"sometimes"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{})
+			return err
+		}},
+		{"hook", `{"id":2,"url":"https://hook","repository_update_events":"sometimes"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetHook(ctx, c, GetHookInput{GroupID: "1", HookID: 2})
+			return err
+		}},
+		{"hooks", `[{"id":2,"url":"https://hook","repository_update_events":"sometimes"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListHooks(ctx, c, ListHooksInput{GroupID: "1"})
+			return err
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, testCase.body)
+			}))
+			if err := testCase.call(t.Context(), client); err == nil {
+				t.Error("handler succeeded on a captured answer its extra cannot hold")
+			}
+		})
+	}
+}

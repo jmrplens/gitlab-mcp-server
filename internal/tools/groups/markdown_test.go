@@ -21,6 +21,9 @@ func TestFormatDetailOutputMarkdown_DetailRowsCloseBeforeTheHints(t *testing.T) 
 		Visibility:                             "private",
 		WebURL:                                 "https://gl/acme/platform",
 		EnabledGitAccessProtocol:               "ssh",
+		StepUpAuthRequiredOAuthProvider:        "okta",
+		SharedWithGroups:                       []SharedWithGroupOutput{{GroupID: 3}},
+		Projects:                               []ProjectItem{{ID: 4, Name: "api"}},
 		RunnersToken:                           "glrt-secret-value",
 		AutoBanUserOnExcessiveProjectsDownload: &autoBan,
 	})
@@ -29,7 +32,13 @@ func TestFormatDetailOutputMarkdown_DetailRowsCloseBeforeTheHints(t *testing.T) 
 	if hints < 0 {
 		t.Fatalf("card has no next-steps block:\n%s", md)
 	}
-	for _, row := range []string{"- **Git Access Protocol**: ssh", "- **Auto-ban on Excessive Downloads**:"} {
+	for _, row := range []string{
+		"- **Git Access Protocol**: ssh",
+		"- **Step-up Auth Provider**: okta",
+		"- **Shared With**: 1 group(s)",
+		"- **Projects**: 1",
+		"- **Auto-ban on Excessive Downloads**:",
+	} {
 		t.Run(row, func(t *testing.T) {
 			at := strings.Index(md, row)
 			if at < 0 {

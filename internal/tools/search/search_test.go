@@ -2517,3 +2517,25 @@ func TestSearchActionSpecs_MetaTags_ReachTheSpec(t *testing.T) {
 		}
 	}
 }
+
+// TestIssues_ReadsTheBasicIssueKeysOffTheCapture verifies the issue search
+// answers with the basic issue entity, its three keys client-go does not
+// model read from the captured page, and that a page those keys do not decode
+// from is an error rather than rows with the keys dropped.
+func TestIssues_ReadsTheBasicIssueKeysOffTheCapture(t *testing.T) {
+	serve := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	out, err := Issues(context.Background(), serve(`[{"id":1,"iid":3,"title":"t","type":"INCIDENT"}]`), IssuesInput{Query: "t"})
+	if err != nil {
+		t.Fatalf("Issues() error = %v", err)
+	}
+	if len(out.Issues) != 1 || out.Issues[0].Type != "INCIDENT" {
+		t.Errorf("issues = %+v, want the captured type on the row", out.Issues)
+	}
+	if _, err = Issues(context.Background(), serve(`[{"id":1,"iid":3,"type":9}]`), IssuesInput{Query: "t"}); err == nil {
+		t.Error("Issues() succeeded on a page whose type is not a string")
+	}
+}

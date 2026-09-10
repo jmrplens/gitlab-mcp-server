@@ -8331,3 +8331,70 @@ func TestListForks_CustomAttributesFilterReachesQuery(t *testing.T) {
 		t.Errorf("query = %q, want custom_attributes[tier]=gold", decoded)
 	}
 }
+
+// TestProjectHandlers_ACaptureThatDoesNotDecode_IsAnError verifies every
+// handler that reads keys client-go does not model off the captured answer
+// fails when one of them arrives in a shape its extra cannot hold, rather
+// than answering with the SDK's half alone. The SDK ignores a key it does
+// not model, so the capture is the only thing that can refuse such a body.
+func TestProjectHandlers_ACaptureThatDoesNotDecode_IsAnError(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"get", `{"id":1,"max_pipelines_per_merge_train":"many"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{ProjectID: "1"})
+			return err
+		}},
+		{"list", `[{"id":1,"repository_object_format":5}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{})
+			return err
+		}},
+		{"forks", `[{"id":1,"repository_object_format":5}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListForks(ctx, c, ListForksInput{ProjectID: "1"})
+			return err
+		}},
+		{"user projects", `[{"id":1,"repository_object_format":5}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListUserProjects(ctx, c, ListUserProjectsInput{UserID: "7"})
+			return err
+		}},
+		{"project users", `[{"id":3,"username":"u","locked":"yes"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListProjectUsers(ctx, c, ListProjectUsersInput{ProjectID: "1"})
+			return err
+		}},
+		{"starrers", `[{"starred_since":"2026-01-02T00:00:00Z","user":{"id":3,"locked":"yes"}}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListProjectStarrers(ctx, c, ListProjectStarrersInput{ProjectID: "1"})
+			return err
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, testCase.body)
+			}))
+			if err := testCase.call(t.Context(), client); err == nil {
+				t.Error("handler succeeded on a captured answer its extra cannot hold")
+			}
+		})
+	}
+}
+
+// TestFormatListMarkdown_SimpleRowsRenderWithoutAnArchivedClaim verifies a page
+// of BasicProjectDetails rows renders like any other page, linked, and that
+// no row is marked archived or implied otherwise, since the basic entity does
+// not say.
+func TestFormatListMarkdown_SimpleRowsRenderWithoutAnArchivedClaim(t *testing.T) {
+	md := FormatListMarkdown(ListOutput{
+		SimpleProjects: []BasicOutput{{ID: 9, Name: "lean", PathWithNamespace: "g/lean", Visibility: "public", WebURL: "https://gl/g/lean"}},
+		Pagination:     toolutil.PaginationOutput{TotalItems: 1},
+	})
+	if !strings.Contains(md, "[lean](https://gl/g/lean)") {
+		t.Errorf("simple row was not rendered as a linked row:\n%s", md)
+	}
+	if strings.Contains(md, toolutil.EmojiArchived) {
+		t.Errorf("a simple row claimed an archived state the basic entity never sends:\n%s", md)
+	}
+	if empty := FormatListForksMarkdown(ListForksOutput{}); !strings.Contains(empty, "No forks found.") {
+		t.Errorf("an empty fork page = %q, want the empty line", empty)
+	}
+}
