@@ -165,6 +165,12 @@ func TestMetadataDocument_AFailureIsForwardedUntagged(t *testing.T) {
 	if got := rec.Header().Get(hdrETag); got != "" {
 		t.Errorf("ETag = %q on a failure, which a client could then revalidate into", got)
 	}
+	// The lifetime is set before the document is rendered, on the assumption
+	// that a document is what comes back. Left in place on a 500, a shared
+	// cache would serve the failure to everyone behind it for an hour.
+	if got := rec.Header().Get(hdrCacheControl); got != cacheControlNoStore {
+		t.Errorf("Cache-Control = %q on a failure, want %q", got, cacheControlNoStore)
+	}
 	if !strings.Contains(rec.Body.String(), "Failed to encode metadata") {
 		t.Errorf("body = %q, want the handler's own message", rec.Body.String())
 	}

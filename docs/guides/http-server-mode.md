@@ -1121,12 +1121,18 @@ that workaround can now be removed.
 
 ### Caching the cards
 
-Both cards, and the RFC 9728 document at
-`/.well-known/oauth-protected-resource[/path]`, are rendered once at startup and
-served unchanged until the process restarts. All three say so twice: with
+Both cards and the RFC 9728 document at
+`/.well-known/oauth-protected-resource[/<path of --public-url>]` answer the same
+bytes until the process restarts, and all three say so twice: with
 `Cache-Control: public, max-age=3600`, which is how long a client may reuse a
 copy without asking, and with an `ETag`, which is what it sends back afterwards
 to find out whether the copy is still current.
+
+The two cards are built once, at startup. The RFC 9728 document is serialized on
+each request, from a value fixed at startup, and its tag is computed from the
+bytes that request produced rather than from a copy made here. That costs a hash
+of a few hundred bytes on a route a client reaches once per discovery, and it
+buys a validator that cannot describe a body nobody sent.
 
 ```console
 $ curl -sI http://localhost:8080/.well-known/mcp/server-card.json | grep -i '^etag'

@@ -46,13 +46,22 @@ func metadataDocument(next http.Handler) http.Handler {
 		switch r.Method {
 		case http.MethodGet, http.MethodHead:
 			w.Header().Set(hdrCacheControl, discoveryCacheControl)
-			// So a cross-origin script can read the validator back. The
-			// request half is not ours to fix: the SDK's preflight answers
-			// Access-Control-Allow-Headers: Content-Type and nothing else, and
-			// If-None-Match is not CORS-safelisted, so a browser will not send
-			// it here. A server-side client, which is what fetches this
-			// document during discovery, is unaffected.
-			w.Header().Set(headerExposeHeaders, hdrETag)
+			// So a cross-origin script can read the validator back, and only
+			// when nothing published a list already: corsMiddleware sets a
+			// longer one for a trusted origin, ETag included, and replacing it
+			// here would cost that origin the headers it names.
+			//
+			// The request half is answered by whoever gets the preflight
+			// first. A trusted origin reaches corsMiddleware, whose allow-list
+			// names If-None-Match. Any other origin reaches the SDK handler,
+			// which answers Access-Control-Allow-Headers: Content-Type and
+			// nothing else, so a browser there will not send the header at
+			// all. That half is upstream's to widen; the server-side clients
+			// that fetch this document during discovery are unaffected either
+			// way.
+			if w.Header().Get(headerExposeHeaders) == "" {
+				w.Header().Set(headerExposeHeaders, hdrETag)
+			}
 			serveMetadataDocument(w, r, next)
 		case http.MethodOptions:
 			// Left to the SDK, which answers the CORS preflight.
@@ -85,9 +94,15 @@ func serveMetadataDocument(w http.ResponseWriter, r *http.Request, next http.Han
 	next.ServeHTTP(captured, rendered)
 	if !captured.ok() {
 		// A failure the SDK answered with is forwarded exactly as it wrote
-		// it. A validator identifies a representation of the resource, and an
-		// error page is not one: tagging it would let a client cache the
-		// failure under the document's own identity.
+		// it, with one correction. It carries no validator, because a
+		// validator identifies a representation of the resource and an error
+		// page is not one; and the lifetime set above is withdrawn, because
+		// the branch that set it assumed the document was about to be
+		// rendered. Left in place, a 500 would go out marked cacheable for an
+		// hour and a shared cache would serve the failure to everyone behind
+		// it for that long. http.Error, which is how the SDK answers, sets a
+		// content type and a status and clears nothing.
+		w.Header().Set(hdrCacheControl, cacheControlNoStore)
 		captured.replay(w)
 		return
 	}

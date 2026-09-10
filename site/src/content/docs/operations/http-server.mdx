@@ -684,7 +684,7 @@ This is the sanctioned way to publish the catalog to something holding no creden
 
 ### Caching the cards
 
-Both cards, and the RFC 9728 document at `/.well-known/oauth-protected-resource`, are rendered once at startup and served unchanged until the process restarts. All three say so twice: `Cache-Control: public, max-age=3600` is how long a client may reuse a copy without asking, and the `ETag` is what it sends back afterwards to ask whether that copy is still current.
+Both cards and the RFC 9728 document at `/.well-known/oauth-protected-resource/<path of --public-url>` answer the same bytes until the process restarts, and all three say so twice: `Cache-Control: public, max-age=3600` is how long a client may reuse a copy without asking, and the `ETag` is what it sends back afterwards to ask whether that copy is still current. The cards are built once at startup; the RFC 9728 document is serialized per request from a value fixed at startup, and its tag is computed from the bytes that request produced.
 
 ```bash
 curl -sI -H 'If-None-Match: "<the etag>"' \

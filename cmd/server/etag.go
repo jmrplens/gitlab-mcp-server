@@ -4,11 +4,13 @@
 //
 // Three routes qualify: the SEP-2127 card, the enumerating card at the
 // .well-known path, and the RFC 9728 protected-resource metadata. All three
-// are public, all three are fetched far more often than they change (they
-// change only when the process restarts with different flags), and one of
-// them is 137 KB, which is the whole reason this file exists: a registry
-// scanner polling it costs the fleet that much per poll, per replica, for a
-// document that has not moved since startup.
+// are public, all three answer the same bytes until the process restarts with
+// different flags, and one of them is 137 KB, which is the whole reason this
+// file exists: a registry scanner polling it costs the fleet that much per
+// poll, per replica, for a document that has not moved since startup. The two
+// cards are built once and kept; the metadata is serialized per request by the
+// SDK handler from a value fixed at startup, which is why its tag is computed
+// per request rather than beside a cached copy.
 //
 // /health deliberately does not qualify. Its body carries uptime_seconds and
 // so differs on every probe: that is a document with no validator, not one

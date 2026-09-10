@@ -912,72 +912,151 @@ func TestServerCard_ConditionalFetchIsAnsweredNotModified(t *testing.T) {
 			if tag == "" {
 				t.Fatal("no ETag, so a scanner has nothing to revalidate with and every poll is a full fetch")
 			}
-			// The card's audience is browser-based registry scanners, and a
-			// cross-origin script is handed the safelisted response headers
-			// and nothing else. Without this the validator is published to an
-			// audience that cannot read it.
-			if exposed := first.header.Get("Access-Control-Expose-Headers"); !strings.Contains(exposed, "ETag") {
-				t.Errorf("Access-Control-Expose-Headers = %q, want it to name ETag", exposed)
-			}
-			// The other half: If-None-Match is not CORS-safelisted, so sending
-			// it preflights, and the preflight has to allow it back.
-			preflight := srv.do(t, request{
-				method: http.MethodOptions,
-				path:   path,
-				headers: map[string]string{
-					"Origin":                         "https://scanner.example",
-					"Access-Control-Request-Method":  http.MethodGet,
-					"Access-Control-Request-Headers": "If-None-Match",
-				},
-			})
-			if allowed := preflight.header.Get("Access-Control-Allow-Headers"); !strings.Contains(allowed, "If-None-Match") {
-				t.Errorf("the preflight allows %q, so a browser will not send If-None-Match at all", allowed)
-			}
+			assertValidatorReachesABrowser(t, srv, path, first)
+			assertConditionalFetches(t, srv, path, tag, first.body)
+		})
+	}
+}
 
-			conditional := []struct {
-				name        string
-				ifNoneMatch string
-				wantStatus  int
-			}{
-				{name: "the tag as published", ifNoneMatch: tag, wantStatus: http.StatusNotModified},
-				{name: "weakened by a compressing proxy", ifNoneMatch: "W/" + tag, wantStatus: http.StatusNotModified},
-				{name: "the wildcard", ifNoneMatch: "*", wantStatus: http.StatusNotModified},
-				{name: "a tag from an older build", ifNoneMatch: `"0123456789abcdef0123456789abcdef"`, wantStatus: http.StatusOK},
-			}
-			for _, tt := range conditional {
-				t.Run(tt.name, func(t *testing.T) {
-					got := srv.do(t, request{
-						method:  http.MethodGet,
-						path:    path,
-						headers: map[string]string{"If-None-Match": tt.ifNoneMatch},
-					})
-					if got.status != tt.wantStatus {
-						t.Fatalf("status = %d, want %d", got.status, tt.wantStatus)
-					}
-					if got.header.Get("ETag") != tag {
-						t.Errorf("ETag = %q, want %q on every answer", got.header.Get("ETag"), tag)
-					}
-					// RFC 9110 section 15.4.5: the 304 carries the caching
-					// directives a 200 would have, or the client cannot tell
-					// how long the copy it was just told to keep stays fresh.
-					if got.header.Get("Cache-Control") != "public, max-age=3600" {
-						t.Errorf("Cache-Control = %q, want the same lifetime the 200 states", got.header.Get("Cache-Control"))
-					}
-					if tt.wantStatus == http.StatusNotModified {
-						if got.body != "" {
-							t.Errorf("304 carried %d bytes of body", len(got.body))
-						}
-						// RFC 9110 section 15.4.5 again: a 304 sends no
-						// representation, so it states no type or length.
-						if ct := got.header.Get("Content-Type"); ct != "" {
-							t.Errorf("Content-Type = %q on a 304, which describes a body that was not sent", ct)
-						}
-					} else if got.body != first.body {
-						t.Error("a fetch carrying an unknown tag did not return the document")
-					}
-				})
+// assertValidatorReachesABrowser covers the two halves a cross-origin script
+// needs before it can revalidate at all.
+//
+// A browser hands a script the safelisted response headers and nothing else,
+// so an ETag it was never told about cannot be sent back; and If-None-Match is
+// not itself safelisted, so sending it preflights and the preflight has to
+// allow it. Miss either half and the validator is published to an audience
+// that cannot use it, which for the card is the stated audience: browser-based
+// registry scanners.
+func assertValidatorReachesABrowser(t *testing.T, srv *server, path string, fetched response) {
+	t.Helper()
+
+	if exposed := fetched.header.Get("Access-Control-Expose-Headers"); !strings.Contains(exposed, "ETag") {
+		t.Errorf("Access-Control-Expose-Headers = %q, want it to name ETag", exposed)
+	}
+	preflight := srv.do(t, request{
+		method: http.MethodOptions,
+		path:   path,
+		headers: map[string]string{
+			"Origin":                         "https://scanner.example",
+			"Access-Control-Request-Method":  http.MethodGet,
+			"Access-Control-Request-Headers": "If-None-Match",
+		},
+	})
+	if allowed := preflight.header.Get("Access-Control-Allow-Headers"); !strings.Contains(allowed, "If-None-Match") {
+		t.Errorf("the preflight allows %q, so a browser will not send If-None-Match at all", allowed)
+	}
+}
+
+// TestServerCard_TrustedOriginCanRevalidateToo covers the preflight path a
+// listed origin takes, which is not the one above.
+//
+// corsMiddleware answers the preflight for every trusted origin, on every
+// path, before the route's own handler is reached, so the card's echoing
+// preflight never runs for one. Its allow-list decides instead, and while that
+// list omitted If-None-Match the conditional request worked for an origin
+// nobody had listed and failed for the ones the operator named. The response
+// half has the mirror shape: the middleware publishes the expose list on its
+// way in, so the route must add to that answer rather than replace it.
+func TestServerCard_TrustedOriginCanRevalidateToo(t *testing.T) {
+	const origin = "https://listed.example"
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--trusted-origins="+origin)
+
+	preflight := srv.do(t, request{
+		method: http.MethodOptions,
+		path:   "/server-card",
+		headers: map[string]string{
+			"Origin":                         origin,
+			"Access-Control-Request-Method":  http.MethodGet,
+			"Access-Control-Request-Headers": "If-None-Match",
+		},
+	})
+	if allowed := preflight.header.Get("Access-Control-Allow-Headers"); !strings.Contains(allowed, "If-None-Match") {
+		t.Errorf("a trusted origin is allowed %q, so its browser will not send If-None-Match", allowed)
+	}
+
+	got := srv.do(t, request{
+		method:  http.MethodGet,
+		path:    "/server-card",
+		headers: map[string]string{"Origin": origin},
+	})
+	exposed := got.header.Get("Access-Control-Expose-Headers")
+	if !strings.Contains(exposed, "ETag") {
+		t.Errorf("Access-Control-Expose-Headers = %q, want it to name ETag", exposed)
+	}
+	// The middleware's own list must survive: replacing it here would take
+	// these away from exactly the origins the operator listed.
+	for _, header := range []string{"WWW-Authenticate", "Mcp-Session-Id"} {
+		t.Run(header, func(t *testing.T) {
+			if !strings.Contains(exposed, header) {
+				t.Errorf("Access-Control-Expose-Headers = %q, want it to keep naming %s", exposed, header)
 			}
 		})
+	}
+}
+
+// assertConditionalFetches drives the four shapes of If-None-Match that reach a
+// public endpoint.
+//
+// The weak form is here because a compressing proxy rewrites the tag it
+// forwards as W/"…", which is what the public deployment's clients are
+// actually holding; the wildcard because it is a value of its own rather than
+// a tag to compare; and the stale tag because the whole scheme is worthless if
+// a document that did change is answered 304.
+func assertConditionalFetches(t *testing.T, srv *server, path, tag, document string) {
+	t.Helper()
+
+	for _, tt := range []struct {
+		name        string
+		ifNoneMatch string
+		wantStatus  int
+	}{
+		{name: "the tag as published", ifNoneMatch: tag, wantStatus: http.StatusNotModified},
+		{name: "weakened by a compressing proxy", ifNoneMatch: "W/" + tag, wantStatus: http.StatusNotModified},
+		{name: "the wildcard", ifNoneMatch: "*", wantStatus: http.StatusNotModified},
+		{name: "a tag from an older build", ifNoneMatch: `"0123456789abcdef0123456789abcdef"`, wantStatus: http.StatusOK},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := srv.do(t, request{
+				method:  http.MethodGet,
+				path:    path,
+				headers: map[string]string{"If-None-Match": tt.ifNoneMatch},
+			})
+			if got.status != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", got.status, tt.wantStatus)
+			}
+			if got.header.Get("ETag") != tag {
+				t.Errorf("ETag = %q, want %q on every answer", got.header.Get("ETag"), tag)
+			}
+			// RFC 9110 section 15.4.5: the 304 carries the caching directives
+			// a 200 would have, or the client cannot tell how long the copy it
+			// was just told to keep stays fresh.
+			if got.header.Get("Cache-Control") != "public, max-age=3600" {
+				t.Errorf("Cache-Control = %q, want the same lifetime the 200 states", got.header.Get("Cache-Control"))
+			}
+			assertNotModifiedShape(t, got, tt.wantStatus, document)
+		})
+	}
+}
+
+// assertNotModifiedShape holds a 304 to sending no representation, and a 200 to
+// sending the one the caller already has.
+func assertNotModifiedShape(t *testing.T, got response, wantStatus int, document string) {
+	t.Helper()
+
+	if wantStatus != http.StatusNotModified {
+		if got.body != document {
+			t.Error("a fetch carrying an unknown tag did not return the document")
+		}
+		return
+	}
+	if got.body != "" {
+		t.Errorf("304 carried %d bytes of body", len(got.body))
+	}
+	// RFC 9110 section 15.4.5 again: a 304 sends no representation, so it
+	// states neither its type nor its length.
+	if ct := got.header.Get("Content-Type"); ct != "" {
+		t.Errorf("Content-Type = %q on a 304, which describes a body that was not sent", ct)
 	}
 }
 

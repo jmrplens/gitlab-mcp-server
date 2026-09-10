@@ -18,9 +18,9 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,358 |
+| Total test functions                                  | 15,360 |
 | Unit test functions                                   | 14,747 |
-| E2E test functions                                    |    611 |
+| E2E test functions                                    |    613 |
 | cmd test functions                                    |  3,020 |
 | Test files (internal/)                                |    531 |
 | Test files (cmd/)                                     |    206 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,136 | 79.0% |
+| `TestFunc_Scenario` (2-part)           | 12,138 | 79.0% |
 | `TestFunc` (no underscore)             |    975 |  6.3% |
 | `TestFunc_Scenario_Expected` (3+ part) |  2,247 | 14.6% |
 
@@ -48,9 +48,9 @@
 | Core packages           |          2,488 |        150 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            336 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (177) |          8,903 |        365 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            611 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| E2E integration         |            613 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          3,020 |        206 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,358** |    **977** |                                                                                                 |
+| **Total**               |     **15,360** |    **977** |                                                                                                 |
 
 ### Core Packages
 
@@ -363,7 +363,7 @@
 | cmd/internal/provenance                        |   100.0% |
 | cmd/internal/requestinventory                  |   100.0% |
 | cmd/internal/testsource                        |   100.0% |
-| cmd/server                                     |    99.6% |
+| cmd/server                                     |    99.7% |
 
 ### Core Packages
 

@@ -96,41 +96,63 @@ func TestProtectedResourceMetadata_BehavesLikeAnHTTPDocument(t *testing.T) {
 			t.Error("the preflight carries no Access-Control-Allow-Origin, so a browser drops the fetch")
 		}
 	})
+}
 
-	t.Run("the document carries a validator and answers a conditional fetch", func(t *testing.T) {
-		// The lifetime above says how long a client may reuse the document and
-		// gives it nothing to say once that runs out, so the fetch after it
-		// expires is a full one however unchanged the document is. The tag is
-		// what turns that into a conditional request.
-		first := srv.do(t, request{method: http.MethodGet, path: path})
-		tag := first.header.Get("ETag")
-		if tag == "" {
-			t.Fatal("no ETag on the discovery document, so an expired copy can only be re-downloaded")
-		}
+// TestProtectedResourceMetadata_CarriesAValidator covers what the wrapper adds
+// on top of the lifetime the document already published.
+//
+// max-age says how long a client may reuse a copy and gives it nothing to say
+// once that runs out, so the fetch after expiry is a full one however
+// unchanged the document is. The tag is what turns that into a conditional
+// request the origin can answer with 304.
+//
+// It is a test of its own rather than one more leg of the one above because
+// the question is a different shape: that one asks what a document owes any
+// client on a single request, this one is about the round trip between two.
+func TestProtectedResourceMetadata_CarriesAValidator(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil,
+		"--gitlab-url="+gitlab.url,
+		"--auth-mode=oauth",
+		"--public-url=https://mcp.example.invalid/gitlab",
+	)
+	const path = "/.well-known/oauth-protected-resource/gitlab"
 
-		second := srv.do(t, request{
+	first := srv.do(t, request{method: http.MethodGet, path: path})
+	tag := first.header.Get("ETag")
+	if tag == "" {
+		t.Fatal("no ETag on the discovery document, so an expired copy can only be re-downloaded")
+	}
+
+	t.Run("a fetch carrying the tag is answered 304", func(t *testing.T) {
+		got := srv.do(t, request{
 			method:  http.MethodGet,
 			path:    path,
 			headers: map[string]string{"If-None-Match": tag},
 		})
-		if second.status != http.StatusNotModified {
-			t.Fatalf("status = %d on a fetch carrying the published tag, want 304", second.status)
+		if got.status != http.StatusNotModified {
+			t.Fatalf("status = %d, want 304", got.status)
 		}
-		if second.body != "" {
-			t.Errorf("304 carried %d bytes of body", len(second.body))
+		if got.body != "" {
+			t.Errorf("304 carried %d bytes of body", len(got.body))
 		}
-		if second.header.Get("Cache-Control") != first.header.Get("Cache-Control") {
-			t.Errorf("Cache-Control = %q on the 304 and %q on the 200; a client cannot tell how long the copy it kept stays fresh",
-				second.header.Get("Cache-Control"), first.header.Get("Cache-Control"))
+		// RFC 9110 section 15.4.5: without the directives a 200 would have
+		// carried, a client cannot tell how long the copy it was just told to
+		// keep stays fresh.
+		if got.header.Get("Cache-Control") != first.header.Get("Cache-Control") {
+			t.Errorf("Cache-Control = %q on the 304 and %q on the 200",
+				got.header.Get("Cache-Control"), first.header.Get("Cache-Control"))
 		}
+	})
 
-		stale := srv.do(t, request{
+	t.Run("a fetch carrying an unknown tag gets the document", func(t *testing.T) {
+		got := srv.do(t, request{
 			method:  http.MethodGet,
 			path:    path,
 			headers: map[string]string{"If-None-Match": `"0123456789abcdef0123456789abcdef"`},
 		})
-		if stale.status != http.StatusOK || stale.body != first.body {
-			t.Errorf("a fetch carrying an unknown tag = %d, want the document back with 200", stale.status)
+		if got.status != http.StatusOK || got.body != first.body {
+			t.Errorf("status = %d, want the document back with 200", got.status)
 		}
 	})
 }

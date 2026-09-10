@@ -683,7 +683,7 @@ Es la vía sancionada para publicar el catálogo a algo que no tiene credencial 
 
 ### Caché de las fichas
 
-Ambas fichas, y el documento RFC 9728 en `/.well-known/oauth-protected-resource`, se generan una vez al arrancar y se sirven sin cambios hasta que el proceso se reinicia. Las tres lo dicen dos veces: `Cache-Control: public, max-age=3600` es cuánto tiempo puede reutilizar una copia el cliente sin preguntar, y el `ETag` es lo que envía después para preguntar si esa copia sigue vigente.
+Ambas fichas y el documento RFC 9728 en `/.well-known/oauth-protected-resource/<ruta de --public-url>` responden los mismos bytes hasta que el proceso se reinicia, y las tres lo dicen dos veces: `Cache-Control: public, max-age=3600` es cuánto tiempo puede reutilizar una copia el cliente sin preguntar, y el `ETag` es lo que envía después para preguntar si esa copia sigue vigente. Las fichas se construyen una sola vez al arrancar; el documento RFC 9728 se serializa en cada petición, a partir de un valor fijado al arrancar, y su tag se calcula sobre los bytes que produjo esa petición.
 
 ```bash
 curl -sI -H 'If-None-Match: "<el etag>"' \

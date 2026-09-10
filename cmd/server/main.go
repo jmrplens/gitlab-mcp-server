@@ -2750,14 +2750,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 			writeCardUnavailable(w)
 			return
 		}
-		w.Header().Set(hdrContentType, serverCardMediaType(r.URL.Path))
-		w.Header().Set(hdrCacheControl, cacheControlPublic1h)
-		// Named so a cross-origin script can read the validator back. The
-		// request half already works: If-None-Match is not CORS-safelisted, so
-		// sending it preflights, and cardPreflight echoes whatever headers the
-		// browser asks for.
-		w.Header().Set(headerExposeHeaders, hdrETag)
-		serveCachedDocument(w, r, discoveryCardETag, discoveryCardJSON)
+		writeServerCard(w, r, discoveryCardETag, discoveryCardJSON)
 	}
 	legacyCardHandler := func(w http.ResponseWriter, r *http.Request) {
 		// The card's audience is browser-based registry scanners; without
@@ -2787,14 +2780,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 			writeCardUnavailable(w)
 			return
 		}
-		w.Header().Set(hdrContentType, serverCardMediaType(r.URL.Path))
-		w.Header().Set(hdrCacheControl, cacheControlPublic1h)
-		// Named so a cross-origin script can read the validator back. The
-		// request half already works: If-None-Match is not CORS-safelisted, so
-		// sending it preflights, and cardPreflight echoes whatever headers the
-		// browser asks for.
-		w.Header().Set(headerExposeHeaders, hdrETag)
-		serveCachedDocument(w, r, serverCardETag, serverCardJSON)
+		writeServerCard(w, r, serverCardETag, serverCardJSON)
 	}
 	// The two paths serve two different documents, which is the whole point.
 	//
@@ -3727,7 +3713,14 @@ const (
 	// the same failure for every call on the default surface — a browser drops
 	// the unauthorized header, and the server rejects the call for its
 	// absence.
-	corsBaseAllowHeaders = "Authorization, Content-Type, Accept, " +
+	//
+	// If-None-Match is here because this middleware answers the preflight for
+	// every trusted origin, on every path, before the route's own handler is
+	// reached: a card route's preflight echoes whatever the browser asks for,
+	// and a trusted origin never gets that far. Leaving it out therefore
+	// disabled conditional requests for exactly the origins the operator
+	// trusts most, while an unlisted origin kept them, which is backwards.
+	corsBaseAllowHeaders = "Authorization, Content-Type, Accept, If-None-Match, " +
 		"Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID, " +
 		"Mcp-Method, Mcp-Name, " + dynamictools.ExecuteActionHeaderName
 	// The session and protocol headers are unsafelisted response headers, so
@@ -3745,7 +3738,13 @@ const (
 	// tool-call limiter, and GitLab's own throttle passed through — and a
 	// browser client that cannot read it has to guess a backoff, which is how
 	// a rate limit turns into a retry storm against the limit that caused it.
-	corsExposeHeaders = "Mcp-Session-Id, Mcp-Protocol-Version, WWW-Authenticate, Retry-After"
+	//
+	// ETag joins them for the same reason If-None-Match is in the allow-list
+	// above: a validator a script cannot read is a validator it cannot send
+	// back. This list is what a trusted origin gets, since the middleware sets
+	// it on the way in and the route's own value would replace it rather than
+	// add to it.
+	corsExposeHeaders = "Mcp-Session-Id, Mcp-Protocol-Version, WWW-Authenticate, Retry-After, ETag"
 	corsMaxAge        = "86400"
 )
 
@@ -4045,6 +4044,28 @@ var buildServerCardFn = buildServerCard //nolint:gochecknoglobals // test seam
 // also carries X-Content-Type-Options: nosniff — so a browser would be told
 // not to sniff, and then told the wrong type. The body has always been JSON;
 // only the header was wrong.
+// writeServerCard answers a card request with the document, the policy for
+// reusing it and the validator that makes reuse checkable. It is what both
+// card routes do once each has decided which document it is serving.
+//
+// The expose header is set only when nothing published a list already:
+// corsMiddleware sets a longer one for a trusted origin, ETag included, and
+// replacing it here would take Mcp-Session-Id and WWW-Authenticate away from
+// the origins the operator named. For every other origin the card answers
+// Access-Control-Allow-Origin: * on its own and this is the only place the
+// validator is named, without which a cross-origin script is handed the
+// safelisted headers and cannot read the tag at all. The request half is
+// cardPreflight, which echoes whatever the browser asks for, since
+// If-None-Match is not CORS-safelisted and sending it preflights.
+func writeServerCard(w http.ResponseWriter, r *http.Request, etag string, body []byte) {
+	w.Header().Set(hdrContentType, serverCardMediaType(r.URL.Path))
+	w.Header().Set(hdrCacheControl, cacheControlPublic1h)
+	if w.Header().Get(headerExposeHeaders) == "" {
+		w.Header().Set(headerExposeHeaders, hdrETag)
+	}
+	serveCachedDocument(w, r, etag, body)
+}
+
 func writeCardUnavailable(w http.ResponseWriter) {
 	w.Header().Set(hdrContentType, mimeJSON)
 	w.WriteHeader(http.StatusServiceUnavailable)
