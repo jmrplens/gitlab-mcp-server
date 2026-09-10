@@ -253,6 +253,10 @@ curl -L https://github.com/sigstore/cosign/releases/latest/download/cosign-linux
 chmod +x cosign && sudo mv cosign /usr/local/bin/
 ```
 
+:::caution[Use Cosign 3.x for the container image]
+Signatures are produced by Cosign 3.x, which attaches them as OCI 1.1 referrers. Cosign 2.x looks for the older `sha256-<digest>.sig` tag instead and reports **`no signatures found`** on a correctly signed image, with nothing to say it is looking in the wrong place. That message means your client is too old, not that the image is unsigned. Check with `cosign version` and upgrade if it reports 2.x. Blob verification of `checksums.txt` (step 3) is unaffected.
+:::
+
 ### 2. Download release artifacts
 
 From the [Releases page](https://github.com/jmrplens/gitlab-mcp-server/releases), download:
@@ -300,6 +304,27 @@ gh attestation verify gitlab-mcp-server-linux-amd64 -R jmrplens/gitlab-mcp-serve
 ```
 
 This is independent of the Cosign signature: the signature says the checksums came from this repository's release pipeline, the attestation says which workflow run built this exact file.
+
+### 6. Verify the container image
+
+The image is published to two registries, and the same index is pushed to both, so the digest is identical and either reference verifies the same artifact:
+
+```bash
+# Signature: who pushed this index
+cosign verify ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 \
+  --certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+
+# Build provenance: which commit and which workflow run produced it
+gh attestation verify oci://ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server
+gh attestation verify oci://docker.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server
+```
+
+The two commands answer different questions and neither substitutes for the other. The signature binds the index to the release workflow's identity; its predicate is empty, so it says who pushed the image and not what went into it. The provenance attestation names the source commit and the workflow run.
+
+:::note
+Image provenance attestations start with the first release after 3.0.0. On 3.0.0 itself the `gh attestation verify` commands above answer that no attestation was found: that release was signed but not attested. The signature command works on 3.0.0.
+:::
 
 ## Does the token appear in logs?
 

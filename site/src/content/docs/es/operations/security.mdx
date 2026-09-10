@@ -253,6 +253,10 @@ curl -L https://github.com/sigstore/cosign/releases/latest/download/cosign-linux
 chmod +x cosign && sudo mv cosign /usr/local/bin/
 ```
 
+:::caution[Para la imagen de contenedor usa Cosign 3.x]
+Las firmas las produce Cosign 3.x, que las adjunta como referrers OCI 1.1. Cosign 2.x busca en su lugar la etiqueta antigua `sha256-<digest>.sig` y responde **`no signatures found`** sobre una imagen correctamente firmada, sin nada que indique que está mirando donde no es. Ese mensaje significa que tu cliente es demasiado antiguo, no que la imagen no esté firmada. Compruébalo con `cosign version` y actualiza si informa de una 2.x. La verificación del blob `checksums.txt` (paso 3) no se ve afectada.
+:::
+
 ### 2. Descargar los artefactos del release
 
 Desde la [página de Releases](https://github.com/jmrplens/gitlab-mcp-server/releases), descarga:
@@ -300,6 +304,27 @@ gh attestation verify gitlab-mcp-server-linux-amd64 -R jmrplens/gitlab-mcp-serve
 ```
 
 Es independiente de la firma Cosign: la firma dice que los checksums vienen del pipeline de release de este repositorio; la atestación dice qué ejecución construyó exactamente este fichero.
+
+### 6. Verificar la imagen de contenedor
+
+La imagen se publica en dos registros, y a ambos se sube el mismo índice, así que el digest es idéntico y cualquiera de las dos referencias verifica el mismo artefacto:
+
+```bash
+# Firma: quién subió este índice
+cosign verify ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 \
+  --certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+
+# Procedencia de compilación: qué commit y qué ejecución de workflow la produjeron
+gh attestation verify oci://ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server
+gh attestation verify oci://docker.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server
+```
+
+Los dos comandos responden preguntas distintas y ninguno sustituye al otro. La firma liga el índice a la identidad del workflow de release; su predicado está vacío, así que dice quién subió la imagen y no qué entró en ella. La atestación de procedencia nombra el commit de origen y la ejecución del workflow.
+
+:::note
+Las atestaciones de procedencia de la imagen empiezan en el primer release posterior al 3.0.0. Sobre el propio 3.0.0 los comandos `gh attestation verify` de arriba responden que no encuentran atestación: ese release está firmado pero no atestado. El comando de firma sí funciona sobre 3.0.0.
+:::
 
 ## ¿El token aparece en los logs?
 
