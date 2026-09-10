@@ -27,31 +27,29 @@ import (
 // in client-go and are surfaced unconditionally (no omitempty) so a false
 // value is explicit in the output.
 type GroupDatadogItem struct {
-	ID                             int64  `json:"id"`
-	Title                          string `json:"title"`
-	Slug                           string `json:"slug"`
-	Active                         bool   `json:"active"`
-	CreatedAt                      string `json:"created_at,omitempty"`
-	UpdatedAt                      string `json:"updated_at,omitempty"`
-	AlertEvents                    bool   `json:"alert_events"`
-	CommitEvents                   bool   `json:"commit_events"`
-	ConfidentialIssuesEvents       bool   `json:"confidential_issues_events"`
-	ConfidentialNoteEvents         bool   `json:"confidential_note_events"`
-	DeploymentEvents               bool   `json:"deployment_events"`
-	GroupConfidentialMentionEvents bool   `json:"group_confidential_mention_events"`
-	GroupMentionEvents             bool   `json:"group_mention_events"`
-	IncidentEvents                 bool   `json:"incident_events"`
-	IssuesEvents                   bool   `json:"issues_events"`
-	JobEvents                      bool   `json:"job_events"`
-	MergeRequestsEvents            bool   `json:"merge_requests_events"`
-	NoteEvents                     bool   `json:"note_events"`
-	PipelineEvents                 bool   `json:"pipeline_events"`
-	PushEvents                     bool   `json:"push_events"`
-	TagPushEvents                  bool   `json:"tag_push_events"`
-	VulnerabilityEvents            bool   `json:"vulnerability_events"`
-	WikiPageEvents                 bool   `json:"wiki_page_events"`
-	CommentOnEventEnabled          bool   `json:"comment_on_event_enabled"`
-	Inherited                      bool   `json:"inherited"`
+	ID                       int64  `json:"id"`
+	Title                    string `json:"title"`
+	Slug                     string `json:"slug"`
+	Active                   bool   `json:"active"`
+	CreatedAt                string `json:"created_at,omitempty"`
+	UpdatedAt                string `json:"updated_at,omitempty"`
+	AlertEvents              bool   `json:"alert_events"`
+	CommitEvents             bool   `json:"commit_events"`
+	ConfidentialIssuesEvents bool   `json:"confidential_issues_events"`
+	ConfidentialNoteEvents   bool   `json:"confidential_note_events"`
+	DeploymentEvents         bool   `json:"deployment_events"`
+	IncidentEvents           bool   `json:"incident_events"`
+	IssuesEvents             bool   `json:"issues_events"`
+	JobEvents                bool   `json:"job_events"`
+	MergeRequestsEvents      bool   `json:"merge_requests_events"`
+	NoteEvents               bool   `json:"note_events"`
+	PipelineEvents           bool   `json:"pipeline_events"`
+	PushEvents               bool   `json:"push_events"`
+	TagPushEvents            bool   `json:"tag_push_events"`
+	VulnerabilityEvents      bool   `json:"vulnerability_events"`
+	WikiPageEvents           bool   `json:"wiki_page_events"`
+	CommentOnEventEnabled    bool   `json:"comment_on_event_enabled"`
+	Inherited                bool   `json:"inherited"`
 
 	Properties *GroupDatadogProperties `json:"properties,omitempty" jsonschema:"The Datadog configuration GitLab returns for the integration"`
 }
@@ -75,29 +73,27 @@ func groupDatadogToItem(g *gl.GroupDatadogIntegration) GroupDatadogItem {
 		return GroupDatadogItem{}
 	}
 	item := GroupDatadogItem{
-		ID:                             g.ID,
-		Title:                          g.Title,
-		Slug:                           g.Slug,
-		Active:                         g.Active,
-		AlertEvents:                    g.AlertEvents,
-		CommitEvents:                   g.CommitEvents,
-		ConfidentialIssuesEvents:       g.ConfidentialIssuesEvents,
-		ConfidentialNoteEvents:         g.ConfidentialNoteEvents,
-		DeploymentEvents:               g.DeploymentEvents,
-		GroupConfidentialMentionEvents: g.GroupConfidentialMentionEvents,
-		GroupMentionEvents:             g.GroupMentionEvents,
-		IncidentEvents:                 g.IncidentEvents,
-		IssuesEvents:                   g.IssuesEvents,
-		JobEvents:                      g.JobEvents,
-		MergeRequestsEvents:            g.MergeRequestsEvents,
-		NoteEvents:                     g.NoteEvents,
-		PipelineEvents:                 g.PipelineEvents,
-		PushEvents:                     g.PushEvents,
-		TagPushEvents:                  g.TagPushEvents,
-		VulnerabilityEvents:            g.VulnerabilityEvents,
-		WikiPageEvents:                 g.WikiPageEvents,
-		CommentOnEventEnabled:          g.CommentOnEventEnabled,
-		Inherited:                      g.Inherited,
+		ID:                       g.ID,
+		Title:                    g.Title,
+		Slug:                     g.Slug,
+		Active:                   g.Active,
+		AlertEvents:              g.AlertEvents,
+		CommitEvents:             g.CommitEvents,
+		ConfidentialIssuesEvents: g.ConfidentialIssuesEvents,
+		ConfidentialNoteEvents:   g.ConfidentialNoteEvents,
+		DeploymentEvents:         g.DeploymentEvents,
+		IncidentEvents:           g.IncidentEvents,
+		IssuesEvents:             g.IssuesEvents,
+		JobEvents:                g.JobEvents,
+		MergeRequestsEvents:      g.MergeRequestsEvents,
+		NoteEvents:               g.NoteEvents,
+		PipelineEvents:           g.PipelineEvents,
+		PushEvents:               g.PushEvents,
+		TagPushEvents:            g.TagPushEvents,
+		VulnerabilityEvents:      g.VulnerabilityEvents,
+		WikiPageEvents:           g.WikiPageEvents,
+		CommentOnEventEnabled:    g.CommentOnEventEnabled,
+		Inherited:                g.Inherited,
 	}
 	if g.CreatedAt != nil {
 		item.CreatedAt = g.CreatedAt.UTC().Format(time.RFC3339)

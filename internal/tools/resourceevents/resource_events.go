@@ -708,15 +708,18 @@ type ListIterationEventsOutput struct {
 // ---------------------------------------------------------------------------.
 
 // WeightEventOutput represents a resource weight event.
+// The weight entity is the odd one among the resource-event entities: its
+// siblings (iteration, state and milestone events) do expose resource_type and
+// resource_id, and ee/lib/api/entities/resource_weight_event.rb exposes exactly
+// id, user, created_at, issue_id and weight. client-go's WeightEvent carries
+// the other three anyway, copied from those siblings, so publishing them here
+// asserted an empty type, a zero id and an empty state on every event.
 type WeightEventOutput struct {
-	ID           int64            `json:"id"`
-	CreatedAt    string           `json:"created_at"`
-	ResourceType string           `json:"resource_type"`
-	ResourceID   int64            `json:"resource_id"`
-	State        string           `json:"state"`
-	IssueID      int64            `json:"issue_id"`
-	Weight       int64            `json:"weight"`
-	User         *EventUserOutput `json:"user,omitempty"`
+	ID        int64            `json:"id"`
+	CreatedAt string           `json:"created_at"`
+	IssueID   int64            `json:"issue_id"`
+	Weight    int64            `json:"weight"`
+	User      *EventUserOutput `json:"user,omitempty"`
 }
 
 // ListWeightEventsOutput wraps a list of weight events.
@@ -831,13 +834,10 @@ func toWeightEventOutput(e *gl.WeightEvent) WeightEventOutput {
 		return WeightEventOutput{}
 	}
 	out := WeightEventOutput{
-		ID:           e.ID,
-		ResourceType: e.ResourceType,
-		ResourceID:   e.ResourceID,
-		State:        string(e.State),
-		IssueID:      e.IssueID,
-		Weight:       e.Weight,
-		User:         eventUserOutput(e.User),
+		ID:      e.ID,
+		IssueID: e.IssueID,
+		Weight:  e.Weight,
+		User:    eventUserOutput(e.User),
 	}
 	if e.CreatedAt != nil {
 		out.CreatedAt = e.CreatedAt.Format(toolutil.DateTimeFormat)

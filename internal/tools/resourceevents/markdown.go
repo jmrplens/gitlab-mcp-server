@@ -135,9 +135,12 @@ func FormatWeightEventsMarkdown(out ListWeightEventsOutput) string {
 		return "No weight events found.\n"
 	}
 	var sb strings.Builder
-	sb.WriteString("## Weight Events\n\n| ID | Weight | User | Resource | Date |\n|---|---|---|---|---|\n")
+	// Issue rather than the Resource column its siblings render: the weight
+	// entity exposes issue_id and no resource_type or resource_id, so that
+	// column read " #0" on every row.
+	sb.WriteString("## Weight Events\n\n| ID | Weight | User | Issue | Date |\n|---|---|---|---|---|\n")
 	for _, e := range out.Events {
-		fmt.Fprintf(&sb, "| %d | %d | %s | %s #%d | %s |\n", e.ID, e.Weight, eventUsername(e.User), e.ResourceType, e.ResourceID, toolutil.FormatTime(e.CreatedAt))
+		fmt.Fprintf(&sb, "| %d | %d | %s | #%d | %s |\n", e.ID, e.Weight, eventUsername(e.User), e.IssueID, toolutil.FormatTime(e.CreatedAt))
 	}
 	toolutil.WriteHints(&sb, "Use filters to narrow down weight events by date")
 	return sb.String()

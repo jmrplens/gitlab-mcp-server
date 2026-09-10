@@ -1086,6 +1086,58 @@ fails because the author is not a member there. A merge request's source
 cannot be re-pointed after it is opened, so moving one means opening a new one
 from the community fork and closing the old with a note.
 
+### Nine modelled fields that no Grape entity exposes, removed from this server's output
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: not needed. This server simply stopped publishing them. The
+  cost is that `audit_1to1`'s R-OUTPUT diff now reports nine `missing_output`
+  rows against these SDK structs, which is this entry's reason for existing:
+  they are answered here, not gaps to fill.
+
+**What**: nine fields the SDK models, on structs this server's output types
+pair with, that no Grape entity renders. Every one of them was published
+**without `omitempty`**, so each asserted a value on every response rather than
+being merely dead:
+
+| SDK struct                               | Field                                                       | What we emitted                                                                                        |
+| ---------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `Integration`, `GroupDatadogIntegration` | `group_mention_events`, `group_confidential_mention_events` | `false` on every integration listed                                                                    |
+| `Project`                                | `ci_opt_in_jwt`                                             | `false` on the busiest output type this server has                                                     |
+| `PendingInvite`                          | `id`                                                        | `0`, and the Markdown rendered it as `(ID: 0)`                                                         |
+| `WeightEvent`                            | `resource_type`, `resource_id`, `state`                     | `""`, `0` and `""`, and two of them rendered a whole Markdown column as an empty type followed by `#0` |
+| `BasicMergeRequest`                      | `label_details`                                             | `null` on every related merge request row                                                              |
+
+**Evidence**, against the 19.4.0-pre tree at `/opt/gitlab-source/gitlab`:
+
+- `group_mention_events` and its confidential twin appear nowhere under
+  `lib/api` or `ee/lib/api`. They are columns on `web_hooks` that no entity
+  renders.
+- `ci_opt_in_jwt` appears nowhere under `lib/api`, `ee/lib/api` or `doc/api`.
+- `lib/api/entities/invitation.rb` exposes exactly `access_level`,
+  `created_at`, `expires_at`, `invite_email`, `invite_token`, `user_name` (if
+  the member has a user) and `created_by_name`. There is no `id`. The list
+  example in `doc/api/invitations.md` prints one, which Grape cannot have
+  produced.
+- `ee/lib/api/entities/resource_weight_event.rb` exposes exactly `id`, `user`,
+  `created_at`, `issue_id` and `weight`. Its siblings (iteration, state and
+  milestone events) do expose `resource_type` and `resource_id`, which is
+  where the SDK's three came from; the weight entity is the odd one out.
+- `label_details` is not a key GitLab sends at all: `merge_request_basic.rb`
+  renders the `labels` array as `LabelBasic` objects when
+  `with_labels_details` is set. `MergeRequest.UnmarshalJSON` re-keys that into
+  `label_details`, and it is defined on `MergeRequest` only. The two endpoints
+  behind `issues.RelatedMROutput` return `[]*BasicMergeRequest`, which has the
+  field and no unmarshaller, so it could never be filled.
+
+**Effort**: small per field and breaking for the SDK, since removing a public
+field is a signature change. `PendingInvite.id` travels with the
+`invite_token` gap already recorded above, so one merge request settles that
+struct in both directions. The rest are candidates for the v4 line rather than
+work to do now, which is why they are recorded rather than sent.
+
 ### The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity
 
 - **Reported**: no.

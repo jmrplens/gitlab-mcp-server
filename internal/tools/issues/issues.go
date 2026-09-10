@@ -1206,7 +1206,6 @@ type RelatedMROutput struct {
 	ClosedBy                    *toolutil.BasicUserOutput            `json:"closed_by"`
 	Milestone                   *toolutil.MRMilestoneOutput          `json:"milestone"`
 	Labels                      []string                             `json:"labels"`
-	LabelDetails                []*toolutil.LabelDetailsOutput       `json:"label_details"`
 	References                  *toolutil.ReferencesOutput           `json:"references"`
 	TimeStats                   *TimeStatsOutput                     `json:"time_stats"`
 	TaskCompletionStatus        *toolutil.TaskCompletionStatusOutput `json:"task_completion_status"`
@@ -1285,7 +1284,6 @@ func basicMRToOutput(mr *gl.BasicMergeRequest, extra toolutil.MergeRequestExtra)
 		ClosedBy:                    toolutil.NewBasicUserOutput(mr.ClosedBy),
 		Milestone:                   mrMilestoneOutputPtr(mr.Milestone),
 		Labels:                      []string(mr.Labels),
-		LabelDetails:                toolutil.NewLabelDetailsOutputs(mr.LabelDetails),
 		References:                  toolutil.NewReferencesOutput(mr.References),
 		TimeStats:                   timeStatsPtr(mr.TimeStats),
 		TaskCompletionStatus:        toolutil.NewTaskCompletionStatusOutput(mr.TaskCompletionStatus),
