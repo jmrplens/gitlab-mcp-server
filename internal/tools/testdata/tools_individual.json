@@ -86067,6 +86067,30 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "_links": {
+                "additionalProperties": false,
+                "properties": {
+                  "award_emoji": {
+                    "type": "string"
+                  },
+                  "closed_as_duplicate_of": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "self": {
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "assignee": {
                 "additionalProperties": false,
                 "properties": {
@@ -86178,6 +86202,51 @@
                   "object"
                 ]
               },
+              "blocking_issues_count": {
+                "type": "integer"
+              },
+              "closed_at": {
+                "type": "string"
+              },
+              "closed_by": {
+                "additionalProperties": false,
+                "properties": {
+                  "avatar_url": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "locked": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "public_email": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "username",
+                  "name",
+                  "locked"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "confidential": {
                 "type": "boolean"
               },
@@ -86187,7 +86256,59 @@
               "description": {
                 "type": "string"
               },
+              "discussion_locked": {
+                "type": "boolean"
+              },
+              "downvotes": {
+                "type": "integer"
+              },
               "due_date": {
+                "type": "string"
+              },
+              "epic": {
+                "additionalProperties": false,
+                "properties": {
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "human_readable_end_date": {
+                    "type": "string"
+                  },
+                  "human_readable_timestamp": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "group_id",
+                  "title",
+                  "url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "epic_iid": {
+                "type": "integer"
+              },
+              "has_tasks": {
+                "type": "boolean"
+              },
+              "health_status": {
                 "type": "string"
               },
               "id": {
@@ -86196,8 +86317,72 @@
               "iid": {
                 "type": "integer"
               },
+              "imported": {
+                "type": "boolean"
+              },
+              "imported_from": {
+                "type": "string"
+              },
               "issue_link_id": {
                 "type": "integer"
+              },
+              "issue_type": {
+                "type": "string"
+              },
+              "iteration": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "due_date": {
+                    "type": "string"
+                  },
+                  "group_id": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "sequence": {
+                    "type": "integer"
+                  },
+                  "start_date": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "web_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "sequence",
+                  "group_id",
+                  "title",
+                  "description",
+                  "state",
+                  "web_url"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "labels": {
                 "items": {
@@ -86216,6 +86401,9 @@
               },
               "link_updated_at": {
                 "type": "string"
+              },
+              "merge_requests_count": {
+                "type": "integer"
               },
               "milestone": {
                 "additionalProperties": false,
@@ -86278,6 +86466,9 @@
                   "object"
                 ]
               },
+              "moved_to_id": {
+                "type": "integer"
+              },
               "project_id": {
                 "type": "integer"
               },
@@ -86304,14 +86495,78 @@
                   "object"
                 ]
               },
+              "service_desk_reply_to": {
+                "type": "string"
+              },
+              "severity": {
+                "type": "string"
+              },
+              "start_date": {
+                "type": "string"
+              },
               "state": {
                 "type": "string"
+              },
+              "task_completion_status": {
+                "additionalProperties": false,
+                "properties": {
+                  "completed_count": {
+                    "type": "integer"
+                  },
+                  "count": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "count",
+                  "completed_count"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "task_status": {
+                "type": "string"
+              },
+              "time_stats": {
+                "additionalProperties": false,
+                "properties": {
+                  "human_time_estimate": {
+                    "type": "string"
+                  },
+                  "human_total_time_spent": {
+                    "type": "string"
+                  },
+                  "time_estimate": {
+                    "type": "integer"
+                  },
+                  "total_time_spent": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "human_time_estimate",
+                  "human_total_time_spent",
+                  "time_estimate",
+                  "total_time_spent"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "title": {
                 "type": "string"
               },
+              "type": {
+                "type": "string"
+              },
               "updated_at": {
                 "type": "string"
+              },
+              "upvotes": {
+                "type": "integer"
               },
               "user_notes_count": {
                 "type": "integer"
@@ -86332,7 +86587,10 @@
               "title",
               "web_url",
               "issue_link_id",
-              "link_type"
+              "link_type",
+              "discussion_locked",
+              "has_tasks",
+              "imported"
             ],
             "type": "object"
           },

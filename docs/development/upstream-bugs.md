@@ -1239,6 +1239,75 @@ already opened for another set of structs. The conditional ones want pointers
 rather than values, since a zero follower count and a profile the caller may
 not read are different answers.
 
+### IssueRelation models an issue basic where GitLab renders a whole issue
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. Every gap is worked around.
+- **Workaround**: yes. The twenty-four keys are read from the captured
+  response beside the SDK's decode (ADR-0021), through
+  `issuelinks.capturedRelations`.
+
+**What**: `IssueRelation` in client-go v3.0.0's `issue_links.go` carries 23
+keys and is what `ListIssueRelations` decodes
+`GET /projects/:id/issues/:issue_iid/links` into. That endpoint presents
+[lib/api/entities/related_issue.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/related_issue.rb),
+which is `API::Entities::Issue` plus four link keys, and the struct models
+roughly the shape of `IssueBasic` instead. Measured against the `v19.3.1-ee`
+entities the committed live record was taken from, twenty-four keys are
+missing and only one key of the entity is genuinely absent from that response.
+
+- Nineteen are exposed with no condition, so every relation of every response
+  carries them: `_links`, `blocking_issues_count`, `closed_at`, `closed_by`,
+  `discussion_locked`, `downvotes`, `has_tasks`, `imported`, `imported_from`,
+  `issue_type`, `merge_requests_count`, `moved_to_id`,
+  `service_desk_reply_to`, `severity`, `start_date`, `task_completion_status`,
+  `time_stats`, `type` and `upvotes`. `blocking_issues_count` is the one of
+  the nineteen that comes from the Enterprise module prepended onto the
+  entity,
+  [ee/lib/ee/api/entities/issue_basic.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/ee/api/entities/issue_basic.rb),
+  and it is exposed there under no licensed feature, so an Enterprise instance
+  sends it on every relation whatever its plan and a Community one sends
+  nothing. It wants no pointer for that reason: the key is present or the
+  whole edition is absent.
+- Four are licensed, all from
+  [ee/lib/ee/api/entities/issue.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/ee/api/entities/issue.rb):
+  `epic` and `epic_iid` under `epics`, `iteration` under `iterations` and
+  `health_status` under `issuable_health_status`. The first three resolve to
+  Premium in the record's own licensed-feature table and the last to Ultimate.
+- One, `task_status`, is gated on the issue's own content rather than on a
+  licence or a permission.
+
+`epic` is worth a sentence of its own, because the obvious modelling of it is
+wrong. It is not `gl.Epic`: the entity renders it `using: EpicBaseEntity`,
+[ee/app/serializers/epic_base_entity.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/app/serializers/epic_base_entity.rb),
+which is `id`, `iid`, `title`, `url` and `group_id`, plus two human-readable
+date strings when the epic has the dates behind them. A struct reusing the
+full epic here would advertise twenty keys the endpoint has never sent, and
+`EpicBaseEntity` is not an `API::Entities` class, so the generated record
+cannot describe it and the Ruby is the only oracle.
+
+The one key of the entity that is genuinely not on this response is
+`subscribed`, and it is instructive. `lib/api/entities/issue.rb` exposes it
+under `options.fetch(:include_subscribed, true)`, a presenter option whose
+default is to **send**, so reading the condition the way the other presenter
+options in this register are read gives the wrong answer. `lib/api/issue_links.rb`
+settles it: the route's `present` call passes `include_subscribed: false`,
+because computing the flag renders Markdown and GitLab will not do that for
+every row of a list. The key belongs on the single-issue endpoints, which do
+send it and where the SDK's `Issue` already models it.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), whose
+oracle is `docs/development/gitlab-api-live.json`. Every finding carries
+`sdk_models: false`, which is what says the gap is upstream rather than ours.
+
+**Effort**: additive and small for the scalars, two new sub-structs for `epic`
+and the `_links` object. `_links` is a fifth key wider than `gl.IssueLinks`:
+the same nested block renders `closed_as_duplicate_of` for an issue closed as
+a duplicate, which no struct in the SDK carries.
+
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
 ### No keep-alive interval for SSE streams on StreamableHTTPOptions

@@ -89,7 +89,20 @@ const (
 	docUsers                = "users.md"
 	docUsersEnterpriseGroup = docUsers + " (enterprise_group_id and enterprise_group_associated_at, exposed by " +
 		"ee/lib/ee/api/entities/user_with_admin.rb under the domain_verification license and printed on no page)"
-	docServiceAccounts    = "service_accounts.md"
+	docServiceAccounts = "service_accounts.md"
+	// API::Entities::RelatedIssue inherits API::Entities::Issue and adds four
+	// link keys, so the issue object is what the relation list answers with
+	// and doc/api/issues.md prints that object in full: every key cited here
+	// appears in its example bodies. doc/api/issue_links.md is not the
+	// citation because its own list example is abbreviated to fourteen keys
+	// and shows none of them. The four licensed keys are exposed by
+	// ee/lib/ee/api/entities/issue.rb, so the feature gating them is named
+	// beside the page rather than left to the reader.
+	docIssueLinksRelation = "issues.md"
+	docIssueLinksEpic     = docIssueLinksRelation + " (epic and epic_iid, exposed by ee/lib/ee/api/entities/issue.rb when the " +
+		"issue's group has the epics licensed feature)"
+	docIssueLinksLicensed = docIssueLinksRelation + " (health_status under the issuable_health_status licensed feature and " +
+		"iteration under iterations, both exposed by ee/lib/ee/api/entities/issue.rb)"
 	docPATList            = "personal_access_tokens.md#list-all-personal-access-tokens"
 	docProjectTokensList  = "project_access_tokens.md#list-all-project-access-tokens"
 	docGroupTokensList    = "group_access_tokens.md"
@@ -708,6 +721,41 @@ var docAddedFields = map[string]string{
 	"groupsaml.SAMLUserOutput.followers":              docUsers,
 	"groupsaml.SAMLUserOutput.following":              docUsers,
 	"groupsaml.SAMLUserOutput.is_followed":            docUsers,
+
+	// issuelinks: what API::Entities::RelatedIssue sends on a related issue
+	// that client-go's IssueRelation declares on no field of its own, read
+	// from the captured response (ADR-0021, issuelinks.capturedRelations).
+	// RelatedIssue inherits API::Entities::Issue, so nineteen of these are on
+	// every response of the one route this type serves; the four licensed
+	// ones and task_status arrive under their own condition. `subscribed` is
+	// the one key of that entity this type does not publish, because the
+	// route turns its presenter option off, and it is answered in
+	// cmd/audit_1to1/internal/paths/sent_declarations.go instead. Recorded in
+	// docs/development/upstream-bugs.md.
+	"issuelinks.RelationOutput._links":                 docIssueLinksRelation,
+	"issuelinks.RelationOutput.blocking_issues_count":  docIssueLinksRelation,
+	"issuelinks.RelationOutput.closed_at":              docIssueLinksRelation,
+	"issuelinks.RelationOutput.closed_by":              docIssueLinksRelation,
+	"issuelinks.RelationOutput.discussion_locked":      docIssueLinksRelation,
+	"issuelinks.RelationOutput.downvotes":              docIssueLinksRelation,
+	"issuelinks.RelationOutput.epic":                   docIssueLinksEpic,
+	"issuelinks.RelationOutput.epic_iid":               docIssueLinksEpic,
+	"issuelinks.RelationOutput.has_tasks":              docIssueLinksRelation,
+	"issuelinks.RelationOutput.health_status":          docIssueLinksLicensed,
+	"issuelinks.RelationOutput.imported":               docIssueLinksRelation,
+	"issuelinks.RelationOutput.imported_from":          docIssueLinksRelation,
+	"issuelinks.RelationOutput.issue_type":             docIssueLinksRelation,
+	"issuelinks.RelationOutput.iteration":              docIssueLinksLicensed,
+	"issuelinks.RelationOutput.merge_requests_count":   docIssueLinksRelation,
+	"issuelinks.RelationOutput.moved_to_id":            docIssueLinksRelation,
+	"issuelinks.RelationOutput.service_desk_reply_to":  docIssueLinksRelation,
+	"issuelinks.RelationOutput.severity":               docIssueLinksRelation,
+	"issuelinks.RelationOutput.start_date":             docIssueLinksRelation,
+	"issuelinks.RelationOutput.task_completion_status": docIssueLinksRelation,
+	"issuelinks.RelationOutput.task_status":            docIssueLinksRelation,
+	"issuelinks.RelationOutput.time_stats":             docIssueLinksRelation,
+	"issuelinks.RelationOutput.type":                   docIssueLinksRelation,
+	"issuelinks.RelationOutput.upvotes":                docIssueLinksRelation,
 }
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we

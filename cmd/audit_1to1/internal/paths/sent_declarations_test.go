@@ -97,6 +97,7 @@ func TestDeclaredUnsurfaced_NamesWhatTheTreeHolds(t *testing.T) {
 			}
 			known := declaration.Category == categoryDocumentedNotSent ||
 				declaration.Category == categoryOptionNeverPassed ||
+				declaration.Category == categoryOptionTurnedOff ||
 				declaration.Category == categoryEntityPublishedElsewhere ||
 				declaration.Category == categorySDKRouteNeverCalled ||
 				declaration.Category == categorySDKRouteFillsAnotherType

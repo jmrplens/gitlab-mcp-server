@@ -398,7 +398,7 @@ func TestToRelationOutput_AllNestedObjects(t *testing.T) {
 		LinkCreatedAt:  "2026-01-04T00:00:00Z",
 		LinkUpdatedAt:  "2026-01-05T00:00:00Z",
 	}
-	if out := toRelationOutput(r); !reflect.DeepEqual(out, want) {
+	if out := toRelationOutput(r, relationExtra{}); !reflect.DeepEqual(out, want) {
 		t.Errorf("toRelationOutput = %+v, want %+v", out, want)
 	}
 }
@@ -406,7 +406,7 @@ func TestToRelationOutput_AllNestedObjects(t *testing.T) {
 // TestToRelationOutput_NilSubObjects verifies the relation converter handles a
 // relation with all optional sub-objects and timestamps absent.
 func TestToRelationOutput_NilSubObjects(t *testing.T) {
-	out := toRelationOutput(&gl.IssueRelation{ID: 1, IID: 2, Title: "Bare"})
+	out := toRelationOutput(&gl.IssueRelation{ID: 1, IID: 2, Title: "Bare"}, relationExtra{})
 	if out.Author != nil || out.Milestone != nil || out.Assignee != nil ||
 		out.Assignees != nil || out.References != nil ||
 		out.CreatedAt != "" || out.UpdatedAt != "" || out.DueDate != "" ||

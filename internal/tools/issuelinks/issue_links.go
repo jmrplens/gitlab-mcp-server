@@ -69,6 +69,13 @@ type Output struct {
 // the full gitlab.IssueRelation struct: author/assignee/assignees/milestone/
 // references are surfaced as full nested objects and labels as a []string
 // (1:1 audit policy).
+//
+// The block after the SDK's own fields is what lib/api/entities/related_issue.rb
+// sends and client-go's IssueRelation declares on no field, read from the
+// captured response beside the SDK's decode (ADR-0021) and described on
+// [relationExtra]. Nineteen of them are on every response; `epic`, `epic_iid`,
+// `iteration` and `health_status` arrive under their licensed feature, and
+// `task_status` under the issue's own task state.
 type RelationOutput struct {
 	ID             int               `json:"id"`
 	IID            int               `json:"iid"`
@@ -93,6 +100,31 @@ type RelationOutput struct {
 	LinkType       string            `json:"link_type"`
 	LinkCreatedAt  string            `json:"link_created_at,omitempty"`
 	LinkUpdatedAt  string            `json:"link_updated_at,omitempty"`
+
+	Links                *RelationLinksOutput        `json:"_links,omitempty"`
+	BlockingIssuesCount  int64                       `json:"blocking_issues_count,omitempty"`
+	ClosedAt             string                      `json:"closed_at,omitempty"`
+	ClosedBy             *toolutil.UserBasicOutput   `json:"closed_by,omitempty"`
+	DiscussionLocked     bool                        `json:"discussion_locked"`
+	Downvotes            int64                       `json:"downvotes,omitempty"`
+	Epic                 *RelationEpicOutput         `json:"epic,omitempty" tier:"premium"`
+	EpicIID              int64                       `json:"epic_iid,omitempty" tier:"premium"`
+	HasTasks             bool                        `json:"has_tasks"`
+	HealthStatus         string                      `json:"health_status,omitempty" tier:"ultimate"`
+	Imported             bool                        `json:"imported"`
+	ImportedFrom         string                      `json:"imported_from,omitempty"`
+	IssueType            string                      `json:"issue_type,omitempty"`
+	Iteration            *IterationOutput            `json:"iteration,omitempty" tier:"premium"`
+	MergeRequestsCount   int64                       `json:"merge_requests_count,omitempty"`
+	MovedToID            int64                       `json:"moved_to_id,omitempty"`
+	ServiceDeskReplyTo   string                      `json:"service_desk_reply_to,omitempty"`
+	Severity             string                      `json:"severity,omitempty"`
+	StartDate            string                      `json:"start_date,omitempty"`
+	TaskCompletionStatus *TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
+	TaskStatus           string                      `json:"task_status,omitempty"`
+	TimeStats            *TimeStatsOutput            `json:"time_stats,omitempty"`
+	Type                 string                      `json:"type,omitempty"`
+	Upvotes              int64                       `json:"upvotes,omitempty"`
 }
 
 // ListOutput represents a list of issue relations.
@@ -118,8 +150,10 @@ func toOutput(link *gitlab.IssueLink) Output {
 
 // toRelationOutput converts the GitLab API response to the tool output format,
 // mirroring every field of gitlab.IssueRelation (full nested objects for
-// author/assignee/assignees/milestone/references; labels as []string).
-func toRelationOutput(r *gitlab.IssueRelation) RelationOutput {
+// author/assignee/assignees/milestone/references; labels as []string), and
+// takes beside it the keys the capture read that the SDK struct does not
+// model.
+func toRelationOutput(r *gitlab.IssueRelation, extra relationExtra) RelationOutput {
 	return RelationOutput{
 		ID:             int(r.ID),
 		IID:            int(r.IID),
@@ -144,6 +178,31 @@ func toRelationOutput(r *gitlab.IssueRelation) RelationOutput {
 		LinkType:       r.LinkType,
 		LinkCreatedAt:  toolutil.FormatTimePtr(r.LinkCreatedAt),
 		LinkUpdatedAt:  toolutil.FormatTimePtr(r.LinkUpdatedAt),
+
+		Links:                extra.Links,
+		BlockingIssuesCount:  extra.BlockingIssuesCount,
+		ClosedAt:             toolutil.FormatTimePtr(extra.ClosedAt),
+		ClosedBy:             extra.ClosedBy,
+		DiscussionLocked:     extra.DiscussionLocked,
+		Downvotes:            extra.Downvotes,
+		Epic:                 extra.Epic,
+		EpicIID:              extra.EpicIID,
+		HasTasks:             extra.HasTasks,
+		HealthStatus:         extra.HealthStatus,
+		Imported:             extra.Imported,
+		ImportedFrom:         extra.ImportedFrom,
+		IssueType:            extra.IssueType,
+		Iteration:            extra.Iteration,
+		MergeRequestsCount:   extra.MergeRequestsCount,
+		MovedToID:            extra.MovedToID,
+		ServiceDeskReplyTo:   extra.ServiceDeskReplyTo,
+		Severity:             extra.Severity,
+		StartDate:            extra.StartDate,
+		TaskCompletionStatus: extra.TaskCompletionStatus,
+		TaskStatus:           extra.TaskStatus,
+		TimeStats:            extra.TimeStats,
+		Type:                 extra.Type,
+		Upvotes:              extra.Upvotes,
 	}
 }
 
@@ -166,17 +225,23 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.WrapErrWithMessage(toolListIssueLinks, err)
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	relations, _, err := client.GL().IssueLinks.ListIssueRelations(string(input.ProjectID), int64(input.IssueIID), gitlab.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint(toolListIssueLinks, err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get and issue_iid with gitlab_issue_list")
 	}
 
+	extras, err := capturedRelations(captured, len(relations))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr(toolListIssueLinks, err)
+	}
+
 	out := ListOutput{
 		Relations: make([]RelationOutput, 0, len(relations)),
 	}
-	for _, r := range relations {
-		out.Relations = append(out.Relations, toRelationOutput(r))
+	for i, r := range relations {
+		out.Relations = append(out.Relations, toRelationOutput(r, extras[i]))
 	}
 	return out, nil
 }
