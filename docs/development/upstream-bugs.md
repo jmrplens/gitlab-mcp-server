@@ -1086,19 +1086,22 @@ fails because the author is not a member there. A merge request's source
 cannot be re-pointed after it is opened, so moving one means opening a new one
 from the community fork and closing the old with a note.
 
-### Nine modelled fields that no Grape entity exposes, removed from this server's output
+### Ten modelled fields that no Grape entity exposes, removed from this server's output
 
 - **Reported**: no.
 - **In review**: no.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: not needed. This server simply stopped publishing them. The
-  cost is that `audit_1to1`'s R-OUTPUT diff now reports nine `missing_output`
+  cost is that `audit_1to1`'s R-OUTPUT diff now reports ten `missing_output`
   rows against these SDK structs, which is this entry's reason for existing:
   they are answered here, not gaps to fill.
 
-**What**: nine fields the SDK models, on structs this server's output types
-pair with, that no Grape entity renders. Every one of them was published
+**What**: ten struct fields the SDK models, on structs this server's output
+types pair with, that no Grape entity renders. They carry eight distinct names
+across five structs; `group_mention_events` and its confidential twin are
+declared on `Integration` and again on `GroupDatadogIntegration`, which is why
+the field count and the name count differ. Every one of them was published
 **without `omitempty`**, so each asserted a value on every response rather than
 being merely dead:
 

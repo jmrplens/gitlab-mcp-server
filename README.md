@@ -468,9 +468,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
 | Source (`.go`, non-test) |     1,248 |     267,476 |
-| Unit tests (`_test.go`)  |       737 |     438,025 |
+| Unit tests (`_test.go`)  |       737 |     438,038 |
 | End-to-end tests         |       246 |      66,959 |
-| **Total**                | **2,231** | **772,460** |
+| **Total**                | **2,231** | **772,473** |
 
 ### Functions
 

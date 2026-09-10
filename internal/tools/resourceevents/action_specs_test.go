@@ -188,6 +188,19 @@ func TestFormatWeightEventsMarkdown_NonEmpty(t *testing.T) {
 	if md == "" || !strings.Contains(md, "5") {
 		t.Fatalf("unexpected markdown: %q", md)
 	}
+	// The column this table used to render came from resource_type and
+	// resource_id, which the weight entity does not expose, so every row read
+	// as an empty type followed by #0. Asserting the weight alone would pass a
+	// renderer that still did that, or one that dropped the column.
+	if !strings.Contains(md, "| Issue |") {
+		t.Errorf("the header names no Issue column: %q", md)
+	}
+	if !strings.Contains(md, "#10") {
+		t.Errorf("the row does not render the issue the entity names: %q", md)
+	}
+	if strings.Contains(md, "#0") {
+		t.Errorf("the row still renders a zero identifier: %q", md)
+	}
 }
 
 // TestMarkdownHints_IterationAndWeight verifies the init() registered formatters
