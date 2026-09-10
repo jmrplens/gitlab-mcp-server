@@ -53,9 +53,47 @@
 // destination. Everything else is prose and is skipped, because a paragraph
 // holds a pipe, an angle bracket and a newline without changing shape, and the
 // formatters that render GitLab-authored prose route it through WrapGFMBody.
-// The -contexts flag narrows the run to some of the five, since the claim a
+// The -contexts flag narrows the run to some of the six, since the claim a
 // table cell makes is stronger than the one a list item makes and the sweep
 // can be staged by it.
+//
+// The sixth context is the exception to "the line decides", and is described
+// below.
+//
+// # Inside a fenced code block
+//
+// A fenced code block is opened on one line and closed on another, so no line
+// of a template says whether the hole on it is inside one. The fence context is
+// decided by the writes that came before instead: one pass over each function
+// body follows the text written to each strings.Builder or bytes.Buffer in
+// source order, opening a block at a line that starts with three or more
+// backticks and closing it at a line that starts with at least as many. A hole
+// written while a block is open is judged in the fence context, whatever the
+// line it sits on would otherwise say, since inside a block a pipe is text and
+// a '#' is text and the only thing a value can do is end the block. The info
+// string of the opening fence counts as inside it: a newline there ends the
+// fence line, and everything the value carries after it is a line of the
+// document.
+//
+// The rule that follows is that a backtick run this server wrote must not be
+// the containment around a value it did not write. There is no way to escape a
+// value into a fence, so the answer is always the same: build the block with
+// toolutil.MarkdownFencedBlock, or size the fence with
+// toolutil.MarkdownCodeFence, both of which measure the body and write a fence
+// longer than the longest run in it. A block built that way has no literal
+// backtick run in the source at all, so this pass sees no fence and judges
+// nothing, which is what makes the rule self-enforcing rather than a list of
+// approved call sites.
+//
+// Two deliberate limits keep it from inventing findings. A nested block
+// inherits the state it is entered with and hands nothing back, so a chart
+// whose fence is written at the top of a function and whose rows are written in
+// a loop is judged, while a fence opened in one branch of an if and closed in
+// another leaves the outer state closed and is not. And a call this pass does
+// not read that is handed the builder gives up the state rather than keeping
+// it, because the text that call writes may well be the closing fence. Both
+// lose findings rather than invent them, which is the direction a gate has to
+// err in.
 //
 // The value is then followed backwards to where it came from. It is safe when
 // it is a compile-time constant, when its static type cannot render as text
@@ -97,9 +135,23 @@
 // function value, through a call with several results, or out of a struct
 // built positionally is reported unresolved rather than judged. Whether a
 // struct is GitLab-derived at all is assumed rather than proven, which is what
-// the directive is for. And a value breaking out of a fenced code block is out
-// of scope entirely: those holes classify as prose, so a value carrying a
-// fence of its own is a defect class this audit does not cover.
+// the directive is for.
+//
+// The fence rule adds limits of its own, beyond the two above that are there to
+// keep it quiet. A fence written with tildes is not read as a fence, since
+// nothing here writes one. A run shorter than three backticks is not a fence at
+// all: it opens an inline code span, which ends with its own line, and the
+// value between two of them is already judged by the cell, list item or heading
+// that line is. A block whose fence is written in one function and whose body
+// is written in another is seen by neither, because the state does not follow
+// the builder into a call, and neither is one kept in a struct field rather
+// than in a variable. A marker split across two writes ("“" and then "`") is
+// read as neither, since each write is scanned as the text it is. And the text
+// a value itself carries is taken to
+// change nothing, so a hole is judged against the document the server wrote:
+// assuming otherwise would mean assuming the breakout the rule exists to
+// prevent, and every later hole would be judged against a document that never
+// renders.
 //
 // Usage:
 //

@@ -75,7 +75,7 @@ func TestFormatDownloadMarkdown_FenceOutlivesBacktickRunsInTheSBOM(t *testing.T)
 func fencedSpan(t *testing.T, rendered string) (fence, bodyStart, bodyEnd int) {
 	t.Helper()
 	offset := 0
-	bodyStart, bodyEnd = -1, -1
+	bodyStart = -1
 	for _, line := range strings.SplitAfter(rendered, "\n") {
 		text := strings.TrimSuffix(line, "\n")
 		run := backtickRun(text)

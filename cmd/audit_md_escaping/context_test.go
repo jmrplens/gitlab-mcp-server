@@ -63,6 +63,7 @@ func TestMdContext_Values_NameTheHelperTheyNeed(t *testing.T) {
 		{name: "heading", ctx: ctxHeading, label: "heading", wants: "toolutil.EscapeMdHeading", structural: true},
 		{name: "link label", ctx: ctxLinkLabel, label: "link-label", wants: "toolutil.MdTitleLink", structural: true},
 		{name: "link destination", ctx: ctxLinkDest, label: "link-destination", wants: "toolutil.MdTitleLink", structural: true},
+		{name: "fence", ctx: ctxFence, label: "fence", wants: "toolutil.MarkdownFencedBlock", structural: true},
 		{name: "prose", ctx: ctxProse, label: "prose", wants: "", structural: false},
 		{name: "a value that names nothing", ctx: mdContext(99), label: "prose", wants: "", structural: true},
 	}
@@ -86,7 +87,7 @@ func TestMdContext_Values_NameTheHelperTheyNeed(t *testing.T) {
 // spellings: the default, the empty value that means the same, and a list with
 // the spacing and repetition a command line really carries.
 func TestParseContexts_Values_SelectsWhatToJudge(t *testing.T) {
-	everything := "table-cell, heading, list-item, link-label, link-destination"
+	everything := "table-cell, heading, list-item, link-label, link-destination, fence"
 	cases := []struct {
 		name      string
 		value     string
@@ -98,7 +99,7 @@ func TestParseContexts_Values_SelectsWhatToJudge(t *testing.T) {
 			name:      "all",
 			value:     allContexts,
 			wantLabel: everything,
-			judges:    []mdContext{ctxCell, ctxHeading, ctxListItem, ctxLinkLabel, ctxLinkDest},
+			judges:    []mdContext{ctxCell, ctxHeading, ctxListItem, ctxLinkLabel, ctxLinkDest, ctxFence},
 			refuses:   []mdContext{ctxProse},
 		},
 		{name: "empty means all", value: "   ", wantLabel: everything, judges: []mdContext{ctxCell}},

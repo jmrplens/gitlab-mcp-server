@@ -395,20 +395,28 @@ MCP tool output contains user-generated content (UGC) from GitLab — issue desc
 
 Markdown formatters apply context-appropriate escaping to UGC fields:
 
-| Context                  | Escape Function       | Purpose                                                     |
-| ------------------------ | --------------------- | ----------------------------------------------------------- |
-| Table cells              | `EscapeMdTableCell()` | Prevents pipe characters from breaking table structure      |
-| Headings                 | `EscapeMdHeading()`   | Prevents `#` injection that would break heading hierarchy   |
-| Multi-line body content  | `WrapGFMBody()`       | Wraps in blockquote (`>`) to contain structural Markdown    |
-| List items (single-line) | `EscapeMdTableCell()` | Strips newlines and pipes from inline values                |
-| Links                    | `MdTitleLink()`       | Escapes both halves, so neither can end the link it sits in |
+| Context                  | Escape Function         | Purpose                                                           |
+| ------------------------ | ----------------------- | ----------------------------------------------------------------- |
+| Table cells              | `EscapeMdTableCell()`   | Prevents pipe characters from breaking table structure            |
+| Headings                 | `EscapeMdHeading()`     | Prevents `#` injection that would break heading hierarchy         |
+| Multi-line body content  | `WrapGFMBody()`         | Wraps in blockquote (`>`) to contain structural Markdown          |
+| List items (single-line) | `EscapeMdTableCell()`   | Strips newlines and pipes from inline values                      |
+| Links                    | `MdTitleLink()`         | Escapes both halves, so neither can end the link it sits in       |
+| Fenced code blocks       | `MarkdownFencedBlock()` | Sizes the fence to the body, so nothing in it can close the block |
 
-Habit and review are not what holds this: `make check-md-escaping` type-checks
-every formatter under `internal/` and fails when a value that came from GitLab
-reaches one of those constructs with no helper between it and the page. A value
-that needs no escaping is declared where it is written, with
-`//gitlab:allow-unescaped <expression>: <reason>`, and a declaration that
-excuses nothing fails the gate too. See
+A code block is the one construct where escaping is not the answer. A file, a
+job log, a diff, an SBOM or a JSON document is shown as it is, so containment
+comes from the fence instead: `MarkdownFencedBlock` measures the longest
+backtick run in the body and opens with a longer one, and sanitises the info
+string, which is why a formatter never writes three backticks around
+GitLab-authored content by hand.
+
+Habit and review are not what holds any of this: `make check-md-escaping`
+type-checks every formatter under `internal/` and fails when a value that came
+from GitLab reaches one of those constructs with no helper between it and the
+page, the fence included. A value that needs no escaping is declared where it is
+written, with `//gitlab:allow-unescaped <expression>: <reason>`, and a
+declaration that excuses nothing fails the gate too. See
 [cmd utilities](../development/cmd-utilities.md#audit_md_escaping).
 
 ### UGC Boundary Markers
