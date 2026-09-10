@@ -115,6 +115,16 @@ const (
 	docMemberRolePermissions = "member_roles.md (ee/lib/api/entities/member_role.rb exposes every " +
 		"::MemberRole.all_customizable_permissions entry with default: false and no condition; the page prints four of the " +
 		"forty-five in its examples and refers to user/custom_roles/abilities.md for the rest)"
+	// The twelve keys API::Entities::Ci::Pipeline adds to the basic entity
+	// reach pipelines.Output through one route, the merge request pipeline
+	// creation, so its section on doc/api/merge_requests.md is the citation
+	// rather than doc/api/pipelines.md, whose own pipeline endpoints fill
+	// pipelines.DetailOutput. That example body prints eleven of the twelve
+	// and leaves queued_duration out, which the entity exposes with no
+	// condition beside the other eleven.
+	docMRCreatePipeline      = docMergeRequests + "#create-merge-request-pipeline"
+	docMRCreatePipelineQueue = docMRCreatePipeline + " (queued_duration, exposed unconditionally by " +
+		"lib/api/entities/ci/pipeline.rb and absent from that section's example body)"
 	docPATList            = "personal_access_tokens.md#list-all-personal-access-tokens"
 	docProjectTokensList  = "project_access_tokens.md#list-all-project-access-tokens"
 	docGroupTokensList    = "group_access_tokens.md"
@@ -800,6 +810,27 @@ var docAddedFields = map[string]string{
 	"memberroles.Output.read_virtual_registry":           docMemberRolePermissions,
 	"memberroles.Output.update_sec_ai_workflow_settings": docMemberRolePermissions,
 	"memberroles.Output.update_security_scan_profiles":   docMemberRolePermissions,
+
+	// pipelines: the twelve keys API::Entities::Ci::Pipeline adds to
+	// API::Entities::Ci::PipelineBasic, which is what gl.PipelineInfo models.
+	// Read from the captured response (ADR-0021, pipelines.CapturedOutput) on
+	// the one route filling this type that presents the full entity, the
+	// merge request pipeline creation in internal/tools/mergerequests. The two
+	// pipeline lists present the basic entity and send none of them, which is
+	// why every one carries omitempty. Recorded in
+	// docs/development/upstream-bugs.md.
+	"pipelines.Output.before_sha":      docMRCreatePipeline,
+	"pipelines.Output.tag":             docMRCreatePipeline,
+	"pipelines.Output.yaml_errors":     docMRCreatePipeline,
+	"pipelines.Output.user":            docMRCreatePipeline,
+	"pipelines.Output.started_at":      docMRCreatePipeline,
+	"pipelines.Output.finished_at":     docMRCreatePipeline,
+	"pipelines.Output.committed_at":    docMRCreatePipeline,
+	"pipelines.Output.duration":        docMRCreatePipeline,
+	"pipelines.Output.queued_duration": docMRCreatePipelineQueue,
+	"pipelines.Output.coverage":        docMRCreatePipeline,
+	"pipelines.Output.detailed_status": docMRCreatePipeline,
+	"pipelines.Output.archived":        docMRCreatePipeline,
 }
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we

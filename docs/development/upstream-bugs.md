@@ -1372,6 +1372,91 @@ fixture. Pointers are not needed upstream the way they are here: this server
 keeps them nil to distinguish a permission an older instance never had from one
 it denies, and a struct field decoding a body is under no such obligation.
 
+### PipelineInfo decodes two entities and models only the smaller one
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. Every gap is worked around.
+- **Workaround**: yes. The twelve keys are read from the captured response
+  beside the SDK's decode (ADR-0021), through `pipelines.CapturedOutput` on
+  the one route that sends them.
+
+**What**: `PipelineInfo` in client-go v3.0.0's `pipelines.go` carries 11 keys
+and is the return type of three methods that do not answer with the same
+thing. `ListProjectPipelines` and `ListMergeRequestPipelines` reach endpoints
+GitLab presents
+[lib/api/entities/ci/pipeline_basic.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/ci/pipeline_basic.rb)
+with, ten keys, and the struct models those. `CreateMergeRequestPipeline`
+reaches `POST /projects/:id/merge_requests/:merge_request_iid/pipelines`, which
+`lib/api/merge_requests.rb` presents `::API::Entities::Ci::Pipeline` with:
+[lib/api/entities/ci/pipeline.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/ci/pipeline.rb)
+inherits the basic entity and adds twelve keys, every one exposed with no
+condition. So a created merge request pipeline always carries `before_sha`,
+`tag`, `yaml_errors`, `user`, `started_at`, `finished_at`, `committed_at`,
+`duration`, `queued_duration`, `coverage`, `detailed_status` and `archived`,
+and the struct decoding it drops all twelve.
+
+The SDK already models eleven of them, on `Pipeline`, which is what the
+single-pipeline endpoints decode into. Only `archived` is on neither, and this
+register's
+[entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+is the wider statement of that half. So the fix is not new modelling: it is
+either widening `PipelineInfo` or giving `CreateMergeRequestPipeline` the
+return type its endpoint's entity already matches, which would be breaking.
+
+**Two of the twelve are objects, and neither takes the obvious struct.**
+`user` is `API::Entities::UserBasic`, which sends `public_email` and `locked`
+and no `created_at`; `gl.BasicUser` declares `created_at` and neither of the
+other two, so decoding this key into it loses two keys and offers one GitLab
+never sends. `detailed_status` is not an `API::Entities` class at all but
+[app/serializers/detailed_status_entity.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/app/serializers/detailed_status_entity.rb),
+so the generated record cannot describe it and the Ruby is the only oracle.
+
+**A second gap sits one level inside that object and is recorded rather than
+closed here**, because the audit's nested comparison cannot reach a type the
+record does not hold. `DetailedStatusEntity` renders an `action` object when
+the status has one, six keys (`icon`, `title`, `path`, `method`,
+`button_title`, `confirmation_message`), and its `illustration` merges the
+status's own `size`, `title` and `content` beside the `image` path.
+`gl.DetailedStatus` has neither the action nor those three, and
+`doc/api/merge_requests.md` documents all of them on `head_pipeline`, so the
+documentation is ahead of the struct. This server does not publish them
+either: `pipelines.StatusOutput` is filled from the SDK on the single-pipeline
+routes, and adding a key there that only the captured path could fill would
+leave it empty on every other one. Closing it means reading `detailed_status`
+from the capture everywhere, which is the next layer's work rather than this
+one's.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), which
+unions the endpoints every method returning the struct reaches and holds the
+output type against all of them. That union is what makes this finding
+readable: the twelve appear against a type whose own package never receives
+them, and the route that does is in another package entirely.
+
+**Two more things this endpoint's oracles disagree about**, both recorded and
+neither acted on:
+
+- The
+  [create merge request pipeline](https://docs.gitlab.com/api/merge_requests/#create-merge-request-pipeline)
+  section's example body prints eleven of the twelve keys and omits
+  `queued_duration`, which `lib/api/entities/ci/pipeline.rb` exposes on the
+  line after `duration` with no condition. That is a documentation merge
+  request of the kind
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes, held back by the same batching.
+- `PipelineInfo` and `Pipeline` both declare a `name`, and neither
+  `Ci::PipelineBasic` nor `Ci::Pipeline` exposes one, so the field decodes on
+  none of these endpoints. The audit reports it in the other direction, as a
+  phantom on this server's own output, where it is undeclared and part of that
+  backlog. Removing an exported field is breaking, so it is recorded here the
+  way `LicenseTemplate.Featured` and the two event `Title` fields are.
+
+**Effort**: small for the eleven scalars and the timestamps. The two objects
+want the shapes above rather than the nearest existing struct, and the nested
+`action` is a struct that does not exist upstream yet.
+
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
 ### No keep-alive interval for SSE streams on StreamableHTTPOptions

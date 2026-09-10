@@ -18,11 +18,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,334 |
-| Unit test functions                                   | 14,728 |
+| Total test functions                                  | 15,341 |
+| Unit test functions                                   | 14,735 |
 | E2E test functions                                    |    606 |
 | cmd test functions                                    |  3,008 |
-| Test files (internal/)                                |    530 |
+| Test files (internal/)                                |    531 |
 | Test files (cmd/)                                     |    204 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,113 | 79.0% |
+| `TestFunc_Scenario` (2-part)           | 12,120 | 79.0% |
 | `TestFunc` (no underscore)             |    975 |  6.4% |
 | `TestFunc_Scenario_Expected` (3+ part) |  2,246 | 14.6% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,488 |        150 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            336 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,896 |        364 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,903 |        365 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            606 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          3,008 |        204 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,334** |    **974** |                                                                                                 |
+| **Total**               |     **15,341** |    **975** |                                                                                                 |
 
 ### Core Packages
 
@@ -86,7 +86,7 @@
 | ----------------- | ----: | -------: | ----: |
 | projects          |   393 |   100.0% |    57 |
 | groups            |   280 |   100.0% |    37 |
-| mergerequests     |   257 |   100.0% |    30 |
+| mergerequests     |   259 |   100.0% |    30 |
 | issues            |   233 |   100.0% |    21 |
 | users             |   220 |    99.9% |    38 |
 | dynamic           |   176 |    99.9% |     2 |
@@ -94,10 +94,10 @@
 | packages          |   148 |    99.0% |     9 |
 | search            |   126 |   100.0% |    10 |
 | workitems         |   120 |   100.0% |     6 |
+| pipelines         |   118 |   100.0% |    12 |
 | commits           |   115 |    99.8% |    13 |
 | resourceevents    |   115 |   100.0% |    17 |
 | awardemoji        |   113 |   100.0% |    24 |
-| pipelines         |   113 |   100.0% |    12 |
 | runners           |   113 |   100.0% |    19 |
 | snippets          |   107 |    99.6% |    15 |
 | containerregistry |   102 |   100.0% |    16 |
@@ -223,7 +223,7 @@
 | markdown                |         8 |          1 |   100.0% |         1 |
 | memberroles             |        53 |          4 |   100.0% |         6 |
 | members                 |        63 |          2 |   100.0% |         6 |
-| mergerequests           |       257 |          3 |   100.0% |        30 |
+| mergerequests           |       259 |          3 |   100.0% |        30 |
 | mergetrains             |        16 |          2 |   100.0% |         4 |
 | metadata                |         8 |          1 |   100.0% |         1 |
 | milestones              |        73 |          1 |   100.0% |         7 |
@@ -240,7 +240,7 @@
 | orbit                   |        57 |          4 |   100.0% |         6 |
 | packages                |       148 |          6 |    99.0% |         9 |
 | pages                   |        55 |          2 |   100.0% |         9 |
-| pipelines               |       113 |          3 |   100.0% |        12 |
+| pipelines               |       118 |          4 |   100.0% |        12 |
 | pipelineschedules       |        94 |          2 |    99.7% |        11 |
 | pipelinetriggers        |        60 |          2 |   100.0% |         6 |
 | planlimits              |        13 |          2 |   100.0% |         2 |
@@ -294,7 +294,7 @@
 | wikis                   |        62 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,896** |    **364** |          | **1,187** |
+| **Total**               | **8,903** |    **365** |          | **1,187** |
 
 </details>
 

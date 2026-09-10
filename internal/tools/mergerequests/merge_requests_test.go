@@ -963,6 +963,94 @@ func TestMRCreatePipeline_Success(t *testing.T) {
 	}
 }
 
+// mrPipelineCaptureBody is what GitLab answers this POST with:
+// API::Entities::Ci::Pipeline, which is the basic entity the two pipeline
+// lists send plus the twelve keys client-go's PipelineInfo does not model.
+const mrPipelineCaptureBody = `{"id":500,"iid":10,"project_id":42,"status":"pending","source":"merge_request_event",` +
+	`"ref":"feature/login","sha":"abc123","web_url":"http://pipe/500",` +
+	`"created_at":"2026-04-01T00:00:00Z","updated_at":"2026-04-01T00:00:00Z",` +
+	`"before_sha":"0000000000000000000000000000000000000000","tag":true,"yaml_errors":"needs widgets:test",` +
+	`"user":{"id":1,"username":"user1","public_email":"user1@e.com","name":"John","state":"active",` +
+	`"locked":false,"avatar_url":"http://e.com/a.png","web_url":"http://e.com/user1"},` +
+	`"started_at":"2026-04-01T00:01:00Z","finished_at":"2026-04-01T00:03:07Z","committed_at":"2026-04-01T00:00:30Z",` +
+	`"duration":127,"queued_duration":63,"coverage":"98.29",` +
+	`"detailed_status":{"icon":"status_pending","text":"pending","label":"pending","group":"pending",` +
+	`"tooltip":"pending","has_details":true,"details_path":"/p/pipelines/500","favicon":"/f.png"},` +
+	`"archived":true}`
+
+// TestMRCreatePipeline_PublishesTheCapturedKeys verifies that the twelve keys
+// the full pipeline entity adds reach the caller through this handler.
+//
+// It matters here rather than only in internal/tools/pipelines because this is
+// the one route in the repository that fills that package's list output from
+// the full entity: the reader lives beside the type and the capture is wrapped
+// here, so a handler that dropped the wrap would publish nothing and no test
+// of the reader alone would notice.
+func TestMRCreatePipeline_PublishesTheCapturedKeys(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/pipelines" {
+			testutil.RespondJSON(w, http.StatusCreated, mrPipelineCaptureBody)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := CreatePipeline(context.Background(), client, CreatePipelineInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("CreatePipeline() unexpected error: %v", err)
+	}
+	cases := map[string][2]any{
+		"before_sha":      {out.BeforeSHA, "0000000000000000000000000000000000000000"},
+		"tag":             {out.Tag, true},
+		"yaml_errors":     {out.YamlErrors, "needs widgets:test"},
+		"started_at":      {out.StartedAt, "2026-04-01T00:01:00Z"},
+		"finished_at":     {out.FinishedAt, "2026-04-01T00:03:07Z"},
+		"committed_at":    {out.CommittedAt, "2026-04-01T00:00:30Z"},
+		"duration":        {out.Duration, int64(127)},
+		"queued_duration": {out.QueuedDuration, int64(63)},
+		"coverage":        {out.Coverage, "98.29"},
+		"archived":        {out.Archived, true},
+	}
+	for name, pair := range cases {
+		t.Run(name, func(t *testing.T) {
+			if pair[0] != pair[1] {
+				t.Errorf("CreatePipeline() published %s = %v, want %v", name, pair[0], pair[1])
+			}
+		})
+	}
+	t.Run("user", func(t *testing.T) {
+		if out.User == nil || out.User.PublicEmail != "user1@e.com" {
+			t.Errorf("user = %+v, want the UserBasic object", out.User)
+		}
+	})
+	t.Run("detailed_status", func(t *testing.T) {
+		if out.DetailedStatus == nil || out.DetailedStatus.Group != "pending" {
+			t.Errorf("detailed_status = %+v, want the status object", out.DetailedStatus)
+		}
+	})
+}
+
+// TestMRCreatePipeline_CaptureUnreadable verifies the handler reports a body
+// the pipeline reader cannot hold rather than serving a pipeline with the
+// twelve keys silently missing.
+func TestMRCreatePipeline_CaptureUnreadable(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/pipelines" {
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":500,"duration":"quick"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := CreatePipeline(context.Background(), client, CreatePipelineInput{ProjectID: testProjectID, MRIID: 1})
+	if err == nil {
+		t.Fatal("CreatePipeline() accepted a captured body the pipeline reader cannot hold")
+	}
+	if !strings.Contains(err.Error(), "mrCreatePipeline") {
+		t.Errorf("error = %v, want it to name the operation", err)
+	}
+}
+
 // TestMRCreatePipeline_MissingProject verifies MRCreatePipeline when missing project.
 func TestMRCreatePipeline_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
