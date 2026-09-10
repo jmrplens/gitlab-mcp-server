@@ -96,4 +96,41 @@ func TestProtectedResourceMetadata_BehavesLikeAnHTTPDocument(t *testing.T) {
 			t.Error("the preflight carries no Access-Control-Allow-Origin, so a browser drops the fetch")
 		}
 	})
+
+	t.Run("the document carries a validator and answers a conditional fetch", func(t *testing.T) {
+		// The lifetime above says how long a client may reuse the document and
+		// gives it nothing to say once that runs out, so the fetch after it
+		// expires is a full one however unchanged the document is. The tag is
+		// what turns that into a conditional request.
+		first := srv.do(t, request{method: http.MethodGet, path: path})
+		tag := first.header.Get("ETag")
+		if tag == "" {
+			t.Fatal("no ETag on the discovery document, so an expired copy can only be re-downloaded")
+		}
+
+		second := srv.do(t, request{
+			method:  http.MethodGet,
+			path:    path,
+			headers: map[string]string{"If-None-Match": tag},
+		})
+		if second.status != http.StatusNotModified {
+			t.Fatalf("status = %d on a fetch carrying the published tag, want 304", second.status)
+		}
+		if second.body != "" {
+			t.Errorf("304 carried %d bytes of body", len(second.body))
+		}
+		if second.header.Get("Cache-Control") != first.header.Get("Cache-Control") {
+			t.Errorf("Cache-Control = %q on the 304 and %q on the 200; a client cannot tell how long the copy it kept stays fresh",
+				second.header.Get("Cache-Control"), first.header.Get("Cache-Control"))
+		}
+
+		stale := srv.do(t, request{
+			method:  http.MethodGet,
+			path:    path,
+			headers: map[string]string{"If-None-Match": `"0123456789abcdef0123456789abcdef"`},
+		})
+		if stale.status != http.StatusOK || stale.body != first.body {
+			t.Errorf("a fetch carrying an unknown tag = %d, want the document back with 200", stale.status)
+		}
+	})
 }

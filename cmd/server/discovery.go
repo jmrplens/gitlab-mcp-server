@@ -35,22 +35,63 @@ const discoveryCacheControl = "public, max-age=3600"
 // securityHeadersMiddleware, which is right to default every response to
 // no-store; this is the one document that wants the opposite, and saying so at
 // the mount keeps the default strict.
+//
+// The validator is added here for the same reason. A lifetime on its own tells
+// a client how long it may reuse the document and gives it nothing to say when
+// that lifetime runs out, so the next fetch is a full one however unchanged
+// the document is; an entity tag turns that fetch into a conditional request
+// the origin can answer with 304.
 func metadataDocument(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
-		case http.MethodGet:
+		case http.MethodGet, http.MethodHead:
 			w.Header().Set(hdrCacheControl, discoveryCacheControl)
-		case http.MethodHead:
-			w.Header().Set(hdrCacheControl, discoveryCacheControl)
-			// The SDK checks the method itself, so it has to see a GET. The
-			// response body is dropped by net/http before it reaches the wire.
-			r = r.Clone(r.Context())
-			r.Method = http.MethodGet
+			// So a cross-origin script can read the validator back. The
+			// request half is not ours to fix: the SDK's preflight answers
+			// Access-Control-Allow-Headers: Content-Type and nothing else, and
+			// If-None-Match is not CORS-safelisted, so a browser will not send
+			// it here. A server-side client, which is what fetches this
+			// document during discovery, is unaffected.
+			w.Header().Set(headerExposeHeaders, hdrETag)
+			serveMetadataDocument(w, r, next)
 		case http.MethodOptions:
 			// Left to the SDK, which answers the CORS preflight.
+			next.ServeHTTP(w, r)
 		default:
 			w.Header().Set("Allow", "GET, HEAD, OPTIONS")
+			next.ServeHTTP(w, r)
 		}
-		next.ServeHTTP(w, r)
 	})
+}
+
+// serveMetadataDocument renders the metadata through next and serves it with
+// an entity tag derived from the bytes next produced.
+//
+// The document is small, so this hashes per request rather than caching a tag
+// beside a copy of the body. That is deliberate: the handler this wraps is the
+// SDK's and its output is not this package's to assume constant, and a tag
+// computed from whatever it wrote this time cannot be stale. What it costs is
+// a SHA-256 over a few hundred bytes on a route a client reaches once per
+// discovery.
+func serveMetadataDocument(w http.ResponseWriter, r *http.Request, next http.Handler) {
+	// The SDK checks the method itself, so it has to see a GET. The response
+	// body is dropped by net/http before it reaches the wire.
+	rendered := r
+	if r.Method == http.MethodHead {
+		rendered = r.Clone(r.Context())
+		rendered.Method = http.MethodGet
+	}
+	captured := &capturedResponse{ResponseWriter: w}
+	next.ServeHTTP(captured, rendered)
+	if !captured.ok() {
+		// A failure the SDK answered with is forwarded exactly as it wrote
+		// it. A validator identifies a representation of the resource, and an
+		// error page is not one: tagging it would let a client cache the
+		// failure under the document's own identity.
+		captured.replay(w)
+		return
+	}
+	// r rather than rendered, so ServeContent knows it is answering a HEAD
+	// and sends the length without the body.
+	serveCachedDocument(w, r, entityTagFor(captured.body.Bytes()), captured.body.Bytes())
 }

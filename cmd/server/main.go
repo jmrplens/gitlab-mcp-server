@@ -2681,6 +2681,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		serverCardOnce sync.Once
 		serverCardDone = make(chan struct{})
 		serverCardJSON []byte
+		serverCardETag string
 	)
 	startServerCardBuild := func() {
 		serverCardOnce.Do(func() {
@@ -2692,6 +2693,11 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 					return
 				}
 				serverCardJSON = cardJSON
+				// Hashed here, once, rather than per request: this document
+				// is the largest thing the server publishes, and a validator
+				// recomputed on every fetch would spend more on the requests
+				// it saves nothing on than it saves on the ones it does.
+				serverCardETag = entityTagFor(cardJSON)
 			}()
 		})
 	}
@@ -2737,6 +2743,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	if discoveryCardErr != nil {
 		slog.WarnContext(ctx, "failed to build the server card, "+serverCardPath+" returns 503", "error", discoveryCardErr)
 	}
+	discoveryCardETag := entityTagFor(discoveryCardJSON)
 	discoveryCardHandler := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(headerAllowOrigin, "*")
 		if discoveryCardJSON == nil {
@@ -2745,7 +2752,12 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		}
 		w.Header().Set(hdrContentType, serverCardMediaType(r.URL.Path))
 		w.Header().Set(hdrCacheControl, cacheControlPublic1h)
-		_, _ = w.Write(discoveryCardJSON)
+		// Named so a cross-origin script can read the validator back. The
+		// request half already works: If-None-Match is not CORS-safelisted, so
+		// sending it preflights, and cardPreflight echoes whatever headers the
+		// browser asks for.
+		w.Header().Set(headerExposeHeaders, hdrETag)
+		serveCachedDocument(w, r, discoveryCardETag, discoveryCardJSON)
 	}
 	legacyCardHandler := func(w http.ResponseWriter, r *http.Request) {
 		// The card's audience is browser-based registry scanners; without
@@ -2758,8 +2770,9 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// hold graceful shutdown hostage for however long the build took.
 		// This way a request caught by shutdown returns 503 immediately,
 		// Shutdown drains, and a build that does finish stays cached for
-		// the next request. serverCardJSON is safe to read after the
-		// channel closes: the write happens before close(serverCardDone).
+		// the next request. serverCardJSON and serverCardETag are safe to
+		// read after the channel closes: both writes happen before
+		// close(serverCardDone).
 		startServerCardBuild()
 		select {
 		case <-serverCardDone:
@@ -2776,7 +2789,12 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		}
 		w.Header().Set(hdrContentType, serverCardMediaType(r.URL.Path))
 		w.Header().Set(hdrCacheControl, cacheControlPublic1h)
-		_, _ = w.Write(serverCardJSON)
+		// Named so a cross-origin script can read the validator back. The
+		// request half already works: If-None-Match is not CORS-safelisted, so
+		// sending it preflights, and cardPreflight echoes whatever headers the
+		// browser asks for.
+		w.Header().Set(headerExposeHeaders, hdrETag)
+		serveCachedDocument(w, r, serverCardETag, serverCardJSON)
 	}
 	// The two paths serve two different documents, which is the whole point.
 	//
@@ -3781,7 +3799,15 @@ const (
 	headerAllowOrigin    = "Access-Control-Allow-Origin"
 	headerRequestMethod  = "Access-Control-Request-Method"
 	headerRequestHeaders = "Access-Control-Request-Headers"
-	headerOrigin         = "Origin"
+	// headerExposeHeaders names the response headers a cross-origin script is
+	// allowed to read. Without it a browser hands the script the body and a
+	// handful of safelisted headers and nothing else, so an ETag it was never
+	// told about cannot be sent back on the next fetch. The card's stated
+	// audience is browser-based registry scanners, which makes this the
+	// difference between publishing a validator and publishing one nobody in
+	// that audience can use.
+	headerExposeHeaders = "Access-Control-Expose-Headers"
+	headerOrigin        = "Origin"
 	// headerSecFetchSite carries the browser's own statement about where the
 	// request came from. It outranks an Origin comparison because only the
 	// browser knows whether a navigation was same-origin.

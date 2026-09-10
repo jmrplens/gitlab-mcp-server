@@ -6,6 +6,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -91,5 +92,80 @@ func TestMetadataDocument_HEAD_DoesNotMutateTheCallersRequest(t *testing.T) {
 
 	if req.Method != http.MethodHead {
 		t.Errorf("the caller's request now says %q; the rewrite must happen on a clone", req.Method)
+	}
+}
+
+// TestMetadataDocument_CarriesAValidatorAndAnswersAConditionalFetch covers
+// what the wrapper adds on top of the lifetime it already published.
+//
+// max-age on its own tells a client how long it may reuse the document and
+// gives it nothing to say when that runs out, so the next fetch is a full one
+// however unchanged the document is. The tag is derived from the bytes the SDK
+// handler actually wrote rather than from a second marshaling here, so it
+// cannot describe a body nobody sent.
+func TestMetadataDocument_CarriesAValidatorAndAnswersAConditionalFetch(t *testing.T) {
+	t.Parallel()
+
+	document := `{"resource":"https://mcp.example.test/gitlab"}` + "\n"
+	handler := metadataDocument(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set(hdrContentType, mimeJSON)
+		_, _ = w.Write([]byte(document))
+	}))
+
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/oauth-protected-resource", http.NoBody))
+
+	tag := first.Header().Get(hdrETag)
+	if tag == "" {
+		t.Fatal("no ETag on the metadata document, so a client has nothing to revalidate with")
+	}
+	if tag != entityTagFor([]byte(document)) {
+		t.Errorf("ETag = %q, want the tag of the bytes the handler below wrote", tag)
+	}
+	if first.Body.String() != document {
+		t.Errorf("body = %q, want the document the handler below wrote", first.Body.String())
+	}
+	if got := first.Header().Get(hdrContentType); got != mimeJSON {
+		t.Errorf("Content-Type = %q, want %q; the buffering must not let ServeContent sniff it", got, mimeJSON)
+	}
+
+	conditional := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/oauth-protected-resource", http.NoBody)
+	conditional.Header.Set("If-None-Match", tag)
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, conditional)
+
+	if second.Code != http.StatusNotModified {
+		t.Errorf("status = %d on a fetch carrying the tag we published, want 304", second.Code)
+	}
+	if second.Body.Len() != 0 {
+		t.Errorf("304 carried %d bytes of body", second.Body.Len())
+	}
+}
+
+// TestMetadataDocument_AFailureIsForwardedUntagged covers the branch where the
+// SDK handler answers with something that is not the document.
+//
+// It encodes into the response writer, so a marshaling failure is answered
+// after the status is chosen. Tagging that answer would publish a validator
+// for an error page under the document's own identity, and a client
+// revalidating would be handed the failure back.
+func TestMetadataDocument_AFailureIsForwardedUntagged(t *testing.T) {
+	t.Parallel()
+
+	handler := metadataDocument(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "Failed to encode metadata", http.StatusInternalServerError)
+	}))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/oauth-protected-resource", http.NoBody))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want the 500 the handler below chose", rec.Code)
+	}
+	if got := rec.Header().Get(hdrETag); got != "" {
+		t.Errorf("ETag = %q on a failure, which a client could then revalidate into", got)
+	}
+	if !strings.Contains(rec.Body.String(), "Failed to encode metadata") {
+		t.Errorf("body = %q, want the handler's own message", rec.Body.String())
 	}
 }

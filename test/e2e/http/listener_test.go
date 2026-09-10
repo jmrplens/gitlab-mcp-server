@@ -886,3 +886,143 @@ func TestServerCard_MediaTypeMatchesThePath(t *testing.T) {
 		})
 	}
 }
+
+// TestServerCard_ConditionalFetchIsAnsweredNotModified drives both card routes
+// the way a registry scanner polling them does.
+//
+// Both documents are rendered once at startup and then served unchanged until
+// the process restarts, and the enumerating one is 137 KB. Without a validator
+// every poll costs that in full, because a lifetime alone gives a client
+// nothing to say when the lifetime expires. The weak form is here because a
+// compressing proxy rewrites the tag it forwards as W/"…", which is what the
+// public deployment's clients will actually be holding, and a stale tag is
+// here because the whole thing is worthless if a changed document is answered
+// 304.
+func TestServerCard_ConditionalFetchIsAnsweredNotModified(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+
+	for _, path := range []string{"/server-card", "/.well-known/mcp/server-card.json"} {
+		t.Run(path, func(t *testing.T) {
+			first := srv.do(t, request{method: http.MethodGet, path: path})
+			if first.status != http.StatusOK {
+				t.Fatalf("status = %d, want 200: %s", first.status, first.body)
+			}
+			tag := first.header.Get("ETag")
+			if tag == "" {
+				t.Fatal("no ETag, so a scanner has nothing to revalidate with and every poll is a full fetch")
+			}
+			// The card's audience is browser-based registry scanners, and a
+			// cross-origin script is handed the safelisted response headers
+			// and nothing else. Without this the validator is published to an
+			// audience that cannot read it.
+			if exposed := first.header.Get("Access-Control-Expose-Headers"); !strings.Contains(exposed, "ETag") {
+				t.Errorf("Access-Control-Expose-Headers = %q, want it to name ETag", exposed)
+			}
+			// The other half: If-None-Match is not CORS-safelisted, so sending
+			// it preflights, and the preflight has to allow it back.
+			preflight := srv.do(t, request{
+				method: http.MethodOptions,
+				path:   path,
+				headers: map[string]string{
+					"Origin":                         "https://scanner.example",
+					"Access-Control-Request-Method":  http.MethodGet,
+					"Access-Control-Request-Headers": "If-None-Match",
+				},
+			})
+			if allowed := preflight.header.Get("Access-Control-Allow-Headers"); !strings.Contains(allowed, "If-None-Match") {
+				t.Errorf("the preflight allows %q, so a browser will not send If-None-Match at all", allowed)
+			}
+
+			conditional := []struct {
+				name        string
+				ifNoneMatch string
+				wantStatus  int
+			}{
+				{name: "the tag as published", ifNoneMatch: tag, wantStatus: http.StatusNotModified},
+				{name: "weakened by a compressing proxy", ifNoneMatch: "W/" + tag, wantStatus: http.StatusNotModified},
+				{name: "the wildcard", ifNoneMatch: "*", wantStatus: http.StatusNotModified},
+				{name: "a tag from an older build", ifNoneMatch: `"0123456789abcdef0123456789abcdef"`, wantStatus: http.StatusOK},
+			}
+			for _, tt := range conditional {
+				t.Run(tt.name, func(t *testing.T) {
+					got := srv.do(t, request{
+						method:  http.MethodGet,
+						path:    path,
+						headers: map[string]string{"If-None-Match": tt.ifNoneMatch},
+					})
+					if got.status != tt.wantStatus {
+						t.Fatalf("status = %d, want %d", got.status, tt.wantStatus)
+					}
+					if got.header.Get("ETag") != tag {
+						t.Errorf("ETag = %q, want %q on every answer", got.header.Get("ETag"), tag)
+					}
+					// RFC 9110 section 15.4.5: the 304 carries the caching
+					// directives a 200 would have, or the client cannot tell
+					// how long the copy it was just told to keep stays fresh.
+					if got.header.Get("Cache-Control") != "public, max-age=3600" {
+						t.Errorf("Cache-Control = %q, want the same lifetime the 200 states", got.header.Get("Cache-Control"))
+					}
+					if tt.wantStatus == http.StatusNotModified {
+						if got.body != "" {
+							t.Errorf("304 carried %d bytes of body", len(got.body))
+						}
+						// RFC 9110 section 15.4.5 again: a 304 sends no
+						// representation, so it states no type or length.
+						if ct := got.header.Get("Content-Type"); ct != "" {
+							t.Errorf("Content-Type = %q on a 304, which describes a body that was not sent", ct)
+						}
+					} else if got.body != first.body {
+						t.Error("a fetch carrying an unknown tag did not return the document")
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestServerCard_TwoReplicasPublishTheSameValidator is the property the whole
+// scheme rests on for a deployment behind a balancer.
+//
+// mcp.jmrp.io runs three replicas. A client revalidating reaches whichever one
+// the balancer picked, almost never the one that answered it first, so a tag
+// carrying anything about the process — a start instant, a random string, even
+// the build digest, which is equal here only by accident of these two
+// processes being the same binary — would miss on nearly every conditional
+// request. It would do it silently, too: the 200 that comes back is a correct
+// response, and the only symptom is that the caching never helps.
+//
+// Two processes, same flags, same rendered document, therefore one tag.
+func TestServerCard_TwoReplicasPublishTheSameValidator(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	first := startServer(t, nil, "--gitlab-url="+gitlab.url)
+	second := startServer(t, nil, "--gitlab-url="+gitlab.url)
+
+	for _, path := range []string{"/server-card", "/.well-known/mcp/server-card.json"} {
+		t.Run(path, func(t *testing.T) {
+			one := first.do(t, request{method: http.MethodGet, path: path})
+			two := second.do(t, request{method: http.MethodGet, path: path})
+			if one.status != http.StatusOK || two.status != http.StatusOK {
+				t.Fatalf("statuses = %d and %d, want 200 from both", one.status, two.status)
+			}
+			if one.header.Get("ETag") != two.header.Get("ETag") {
+				t.Errorf("replicas published %q and %q; a client revalidating across them would never be answered 304",
+					one.header.Get("ETag"), two.header.Get("ETag"))
+			}
+			// The premise of that comparison: if the documents themselves
+			// differed, equal tags would be the defect instead.
+			if one.body != two.body {
+				t.Error("the two replicas rendered different documents, so the tag comparison above proves nothing")
+			}
+
+			crossed := second.do(t, request{
+				method:  http.MethodGet,
+				path:    path,
+				headers: map[string]string{"If-None-Match": one.header.Get("ETag")},
+			})
+			if crossed.status != http.StatusNotModified {
+				t.Errorf("revalidating one replica's tag against the other = %d, want 304", crossed.status)
+			}
+		})
+	}
+}

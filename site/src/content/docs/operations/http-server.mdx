@@ -13,7 +13,7 @@ faq:
     a: "Two independent layers govern lifetime: the **MCP session** idle timeout (`--session-timeout`, default `30m`) and the **HTTP idle connection** timeout (`--http-idle-timeout`, default `0` = disabled). Because `--http-idle-timeout` defaults to `0`, the HTTP layer does not close idle connections, so `--session-timeout` is the effective idle lifetime. If sessions drop early, a low `--http-idle-timeout` or a reverse-proxy read/idle timeout is usually closing long-lived SSE streams; raise the proxy timeout for long-running MCP streams."
 ---
 
-import { Tabs, TabItem } from "@astrojs/starlight/components";
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 import FAQ from "../../../components/FAQ.astro";
 
 :::tip[At a glance]
@@ -681,6 +681,24 @@ curl -s http://localhost:8080/.well-known/mcp/server-card.json
 Both are mounted under `--public-url`'s path prefix as well, for a proxy that forwards its prefix rather than stripping it. Before 3.1.0 both paths answered the enumerating document and differed only in `Content-Type`, which left the older shape at the location SEP-2127 reserves.
 
 This is the sanctioned way to publish the catalog to something holding no credential — a directory, a scanner, a documentation build. `tools/list` stays authenticated, because the MCP authorization specification requires a server that requires authorization to validate the token before processing a request.
+
+### Caching the cards
+
+Both cards, and the RFC 9728 document at `/.well-known/oauth-protected-resource`, are rendered once at startup and served unchanged until the process restarts. All three say so twice: `Cache-Control: public, max-age=3600` is how long a client may reuse a copy without asking, and the `ETag` is what it sends back afterwards to ask whether that copy is still current.
+
+```bash
+curl -sI -H 'If-None-Match: "<the etag>"' \
+  http://localhost:8080/.well-known/mcp/server-card.json
+# HTTP/1.1 304 Not Modified
+```
+
+It matters most for the enumerating document, which is around 137 KB on the default surface: a scanner polling it hourly downloads all of that every time without a validator, once per replica.
+
+<Aside type="tip" title="Replicas agree on the tag">
+The tag is a hash of the document's own bytes and carries nothing about the process, so replicas serving the same configuration publish the same one. A client that revalidates against a different replica than the one that answered it first is still told 304. Nothing needs configuring for that, and nothing in front should replace the tag with a per-instance value.
+</Aside>
+
+A CDN can cache all three routes on the strength of those headers. It must not cache `/mcp`, which is a credentialed `POST` carrying `Cache-Control: no-store`, nor `/health`, whose body changes on every probe.
 
 :::tip
 For production deployments, place the server behind a reverse proxy (nginx, Caddy) that handles TLS termination. The MCP endpoint at `/mcp` supports standard HTTP load balancing.
