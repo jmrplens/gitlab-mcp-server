@@ -285,27 +285,32 @@ func FormatProvisionedUsersListMarkdown(out ProvisionedUsersListOutput) string {
 // [DetailOutput] needs its own even though it embeds [Output]: without it the
 // group get, create, update, restore and transfer tools would fall through to
 // no formatter at all.
+//
+// runners_token is deliberately absent. It is a live credential, and this
+// package renders into a conversation transcript; the JSON keeps it for a
+// caller that needs it, which is the decision internal/tools/invites already
+// took for invite_token and the reasoning is the same.
 func FormatDetailOutputMarkdown(g DetailOutput) string {
 	var b strings.Builder
 	b.WriteString(FormatOutputMarkdown(g.Output))
 	// Only what a single-group route adds, and only when GitLab sent it: each
 	// of these is behind a condition of its own, so an absent key is an answer
 	// rather than a gap.
-	if g.RunnersToken != "" {
-		fmt.Fprintf(&b, "| Runners Token | %s |\n", toolutil.EscapeMdTableCell(g.RunnersToken))
-	}
 	if g.EnabledGitAccessProtocol != "" {
 		//gitlab:allow-unescaped g.EnabledGitAccessProtocol: a protocol GitLab picks from a fixed set (ssh, http, all).
-		fmt.Fprintf(&b, "| Git Access Protocol | %s |\n", g.EnabledGitAccessProtocol)
+		fmt.Fprintf(&b, "- **Git Access Protocol**: %s\n", g.EnabledGitAccessProtocol)
 	}
 	if g.StepUpAuthRequiredOAuthProvider != "" {
-		fmt.Fprintf(&b, "| Step-up Auth Provider | %s |\n", toolutil.EscapeMdTableCell(g.StepUpAuthRequiredOAuthProvider))
+		fmt.Fprintf(&b, "- **Step-up Auth Provider**: %s\n", toolutil.EscapeMdTableCell(g.StepUpAuthRequiredOAuthProvider))
 	}
 	if len(g.SharedWithGroups) > 0 {
-		fmt.Fprintf(&b, "| Shared With | %d group(s) |\n", len(g.SharedWithGroups))
+		fmt.Fprintf(&b, "- **Shared With**: %d group(s)\n", len(g.SharedWithGroups))
 	}
 	if len(g.Projects) > 0 {
-		fmt.Fprintf(&b, "| Projects | %d |\n", len(g.Projects))
+		fmt.Fprintf(&b, "- **Projects**: %d\n", len(g.Projects))
+	}
+	if g.AutoBanUserOnExcessiveProjectsDownload != nil {
+		fmt.Fprintf(&b, "- **Auto-ban on Excessive Downloads**: %s\n", toolutil.BoolEmoji(*g.AutoBanUserOnExcessiveProjectsDownload))
 	}
 	return b.String()
 }
