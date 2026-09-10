@@ -251,6 +251,20 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
+// writeMermaidChart writes a Mermaid diagram as a fenced code block whose fence
+// is sized to the diagram it wraps.
+//
+// Every chart in this package carries GitLab-authored text: a label name, a
+// contributor's name, a username, the argument the caller passed. A fence
+// written as three backticks is closed by the first run of three any of them
+// contains, and the rest of the prompt renders as Markdown from there, so the
+// diagram is assembled first and [toolutil.MarkdownFencedBlock] measures it.
+func writeMermaidChart(b *strings.Builder, diagram func(*strings.Builder)) {
+	var chart strings.Builder
+	diagram(&chart)
+	b.WriteString(toolutil.MarkdownFencedBlock("mermaid", chart.String()))
+}
+
 // writeMRTable writes a Markdown table of merge requests with standard columns.
 func writeMRTable(b *strings.Builder, mrs []*gl.BasicMergeRequest) {
 	if len(mrs) == 0 {

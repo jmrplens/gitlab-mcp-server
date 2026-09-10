@@ -139,21 +139,24 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 	if len(events) > 0 {
 		byDay := groupEventsByDay(events)
 		b.WriteString("## Daily Activity\n\n")
-		b.WriteString("```mermaid\nxychart-beta\n  title \"Daily Events\"\n  x-axis [")
-		for i, d := range byDay {
-			if i > 0 {
-				b.WriteString(", ")
+		writeMermaidChart(&b, func(chart *strings.Builder) {
+			chart.WriteString("xychart-beta\n  title \"Daily Events\"\n  x-axis [")
+			for i, d := range byDay {
+				if i > 0 {
+					chart.WriteString(", ")
+				}
+				chart.WriteString(d.date)
 			}
-			b.WriteString(d.date)
-		}
-		b.WriteString("]\n  y-axis \"Events\"\n  bar [")
-		for i, d := range byDay {
-			if i > 0 {
-				b.WriteString(", ")
+			chart.WriteString("]\n  y-axis \"Events\"\n  bar [")
+			for i, d := range byDay {
+				if i > 0 {
+					chart.WriteString(", ")
+				}
+				fmt.Fprintf(chart, "%d", d.count)
 			}
-			fmt.Fprintf(&b, "%d", d.count)
-		}
-		b.WriteString("]\n```\n\n")
+			chart.WriteString("]\n")
+		})
+		b.WriteString("\n")
 	}
 
 	b.WriteString("---\nPlease analyze this team member's activity, highlight strengths and areas for improvement, and compare workload balance.\n")
@@ -276,13 +279,16 @@ func writeTeamOverviewChart(b *strings.Builder, stats map[string]*teamOverviewMe
 	if len(stats) == 0 {
 		return
 	}
-	b.WriteString("## Workload Distribution (Open MRs)\n\n```mermaid\npie title Open MRs by Author\n")
-	for _, username := range sortedKeys(stats) {
-		if stats[username].openMRs > 0 {
-			fmt.Fprintf(b, "  \"%s\" : %d\n", username, stats[username].openMRs)
+	b.WriteString("## Workload Distribution (Open MRs)\n\n")
+	writeMermaidChart(b, func(chart *strings.Builder) {
+		chart.WriteString("pie title Open MRs by Author\n")
+		for _, username := range sortedKeys(stats) {
+			if stats[username].openMRs > 0 {
+				fmt.Fprintf(chart, "  \"%s\" : %d\n", username, stats[username].openMRs)
+			}
 		}
-	}
-	b.WriteString("```\n\n")
+	})
+	b.WriteString("\n")
 }
 
 // registerGroupMRDashboardPrompt registers the group_mr_dashboard prompt.
@@ -486,11 +492,14 @@ func writeReviewerWorkloadChart(b *strings.Builder, stats map[string]*reviewerWo
 	if activeReviewers == 0 {
 		return
 	}
-	b.WriteString("## Distribution Chart\n\n```mermaid\npie title Review Distribution\n")
-	for _, username := range sortedKeys(stats) {
-		if stats[username].count > 0 {
-			fmt.Fprintf(b, "  \"%s\" : %d\n", username, stats[username].count)
+	b.WriteString("## Distribution Chart\n\n")
+	writeMermaidChart(b, func(chart *strings.Builder) {
+		chart.WriteString("pie title Review Distribution\n")
+		for _, username := range sortedKeys(stats) {
+			if stats[username].count > 0 {
+				fmt.Fprintf(chart, "  \"%s\" : %d\n", username, stats[username].count)
+			}
 		}
-	}
-	b.WriteString("```\n\n")
+	})
+	b.WriteString("\n")
 }

@@ -327,21 +327,23 @@ func handleMyActivitySummary(ctx context.Context, client *gitlabclient.Client, r
 // writeDailyActivityChart renders a Mermaid bar chart of daily event counts.
 func writeDailyActivityChart(b *strings.Builder, dailyData []dayActivity) {
 	b.WriteString("\n## Daily Activity\n\n")
-	b.WriteString("```mermaid\nxychart-beta\n  title \"Daily Activity\"\n  x-axis [")
-	for i, d := range dailyData {
-		if i > 0 {
-			b.WriteString(", ")
+	writeMermaidChart(b, func(chart *strings.Builder) {
+		chart.WriteString("xychart-beta\n  title \"Daily Activity\"\n  x-axis [")
+		for i, d := range dailyData {
+			if i > 0 {
+				chart.WriteString(", ")
+			}
+			chart.WriteString("\"" + d.date[5:] + "\"")
 		}
-		b.WriteString("\"" + d.date[5:] + "\"")
-	}
-	b.WriteString("]\n  y-axis \"Events\"\n  bar [")
-	for i, d := range dailyData {
-		if i > 0 {
-			b.WriteString(", ")
+		chart.WriteString("]\n  y-axis \"Events\"\n  bar [")
+		for i, d := range dailyData {
+			if i > 0 {
+				chart.WriteString(", ")
+			}
+			fmt.Fprintf(chart, "%d", d.count)
 		}
-		fmt.Fprintf(b, "%d", d.count)
-	}
-	b.WriteString("]\n```\n")
+		chart.WriteString("]\n")
+	})
 }
 
 // registerCrossProjectPrompts registers all cross-project prompts.
