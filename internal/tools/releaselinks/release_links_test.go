@@ -780,7 +780,6 @@ func TestFormatOutputMarkdown_WithData(t *testing.T) {
 		Name:           "Binary amd64",
 		URL:            "https://example.com/bin/amd64",
 		LinkType:       "package",
-		External:       true,
 		DirectAssetURL: "https://direct.example.com",
 	})
 
@@ -789,7 +788,6 @@ func TestFormatOutputMarkdown_WithData(t *testing.T) {
 		"- **ID**: 10",
 		"- **URL**: [https://example.com/bin/amd64](https://example.com/bin/amd64)",
 		"- **Type**: package",
-		"- **External**: true",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(md, want) {
@@ -817,9 +815,8 @@ func TestFormatOutputMarkdown_ExternalFalse(t *testing.T) {
 		Name:     "Runbook",
 		URL:      "https://example.com/runbook",
 		LinkType: "runbook",
-		External: false,
 	})
-	if !strings.Contains(md, "- **External**: false") {
+	if !strings.Contains(md, "- **Type**: runbook") {
 		t.Errorf("expected External=false:\n%s", md)
 	}
 }
@@ -985,9 +982,6 @@ func TestToOutput_AllFields(t *testing.T) {
 	}
 	if out.LinkType != "package" {
 		t.Errorf("LinkType = %q, want %q", out.LinkType, "package")
-	}
-	if !out.External {
-		t.Error("expected External=true")
 	}
 	if out.DirectAssetURL != "https://direct.example.com" {
 		t.Errorf("DirectAssetURL = %q, want %q", out.DirectAssetURL, "https://direct.example.com")

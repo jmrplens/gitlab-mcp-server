@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,360 |
-| Unit test functions                                   | 14,747 |
+| Total test functions                                  | 15,358 |
+| Unit test functions                                   | 14,745 |
 | E2E test functions                                    |    613 |
 | cmd test functions                                    |  3,020 |
 | Test files (internal/)                                |    531 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,138 | 79.0% |
+| `TestFunc_Scenario` (2-part)           | 12,136 | 79.0% |
 | `TestFunc` (no underscore)             |    975 |  6.3% |
 | `TestFunc_Scenario_Expected` (3+ part) |  2,247 | 14.6% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,488 |        150 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            336 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,903 |        365 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,901 |        365 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            613 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          3,020 |        206 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,360** |    **977** |                                                                                                 |
+| **Total**               |     **15,358** |    **977** |                                                                                                 |
 
 ### Core Packages
 
@@ -169,7 +169,7 @@
 | epics                   |        72 |          2 |   100.0% |         6 |
 | epicworkitems           |         3 |          1 |   100.0% |         0 |
 | errortracking           |        25 |          2 |   100.0% |         5 |
-| events                  |        62 |          2 |   100.0% |         2 |
+| events                  |        60 |          2 |   100.0% |         2 |
 | externalstatuschecks    |        51 |          3 |   100.0% |         8 |
 | featureflags            |        45 |          2 |   100.0% |         5 |
 | features                |        24 |          2 |    98.2% |         4 |
@@ -294,7 +294,7 @@
 | wikis                   |        62 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,903** |    **365** |          | **1,187** |
+| **Total**               | **8,901** |    **365** |          | **1,187** |
 
 </details>
 

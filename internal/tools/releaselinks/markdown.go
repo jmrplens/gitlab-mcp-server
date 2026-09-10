@@ -15,7 +15,6 @@ func FormatOutputMarkdown(l Output) string {
 	toolutil.WriteMdURL(&b, l.URL)
 	//gitlab:allow-unescaped l.LinkType: a release link type GitLab picks from a fixed set (other, runbook, image, package).
 	fmt.Fprintf(&b, "- **Type**: %s\n", l.LinkType)
-	fmt.Fprintf(&b, "- **External**: %v\n", l.External)
 	toolutil.WriteHints(
 		&b,
 		"Use action 'link_update' to modify this link",

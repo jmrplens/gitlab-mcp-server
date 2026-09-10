@@ -634,9 +634,6 @@ func TestListInstance_AllDetails(t *testing.T) {
 	if e.EventName != "project_access_granted" {
 		t.Errorf("EventName = %q, want %q", e.EventName, "project_access_granted")
 	}
-	if e.EventType != "security" {
-		t.Errorf("EventType = %q, want %q", e.EventType, "security")
-	}
 	if e.CreatedAt == "" {
 		t.Error("CreatedAt should not be empty")
 	}
@@ -741,7 +738,6 @@ func TestFormatMarkdown_Full(t *testing.T) {
 		EntityID:   5,
 		EntityType: "Project",
 		EventName:  "project_update",
-		EventType:  "admin",
 		CreatedAt:  "2026-06-15T12:00:00Z",
 		Details: DetailsOutput{
 			AuthorName:    "admin",
@@ -784,7 +780,6 @@ func TestFormatMarkdown_Minimal(t *testing.T) {
 		EntityID:   0,
 		EntityType: "User",
 		EventName:  "login",
-		EventType:  "auth",
 	}
 	md := FormatMarkdown(e)
 	if !strings.Contains(md, "## Audit Event #1") {

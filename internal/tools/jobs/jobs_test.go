@@ -263,9 +263,6 @@ func assertJobFullFields(t *testing.T, out Output) {
 	if !out.Archived {
 		t.Error("Archived = false, want true")
 	}
-	if out.Source != "push" {
-		t.Errorf("Source = %q, want %q", out.Source, "push")
-	}
 	if out.Runner == nil {
 		t.Fatal("Runner = nil, want populated")
 	}
@@ -384,9 +381,6 @@ func TestJobGet_OlderInstanceOmitsFields(t *testing.T) {
 	}
 	if out.Archived {
 		t.Error("Archived = true, want false (field absent on older instance)")
-	}
-	if out.Source != "" {
-		t.Errorf("Source = %q, want empty (field absent on older instance)", out.Source)
 	}
 	if out.RunnerManager != nil {
 		t.Errorf("RunnerManager = %+v, want nil (field absent on older instance)", out.RunnerManager)

@@ -11477,7 +11477,6 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `auto_devops_deploy_strategy` (string): Auto DevOps deploy strategy: continuous (auto-deploy to production), manual (require manual gate), or timed_incremental (deploy incrementally with time delays).
 - `auto_devops_enabled` (boolean): Enable Auto DevOps for the project
 - `autoclose_referenced_issues` (boolean): Auto-close referenced issues on merge
-- `build_coverage_regex` (string): Regex used to extract test coverage from job logs
 - `build_git_strategy` (string): Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).
 - `build_timeout` (integer): Build timeout in seconds
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
@@ -11528,7 +11527,6 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `only_allow_merge_if_all_discussions_are_resolved` (boolean): Only allow merge when all discussions are resolved
 - `only_allow_merge_if_all_status_checks_passed` (boolean): Only allow merge when all external status checks pass
 - `only_allow_merge_if_pipeline_succeeds` (boolean): Only allow merge when pipeline succeeds
-- `operations_access_level` (string): Operations access level (disabled, private, enabled)
 - `package_registry_access_level` (string): Package registry access level (disabled, private, enabled)
 - `packages_enabled` (boolean): Enable packages feature (deprecated: use package_registry_access_level)
 - `pages_access_level` (string): Pages access level (disabled, private, enabled, public)
@@ -11579,7 +11577,6 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `auto_devops_deploy_strategy` (string): Auto DevOps deploy strategy: continuous (auto-deploy to production), manual (require manual gate), or timed_incremental (deploy incrementally with time delays).
 - `auto_devops_enabled` (boolean): Enable Auto DevOps for the project
 - `autoclose_referenced_issues` (boolean): Auto-close referenced issues on merge
-- `build_coverage_regex` (string): Regex used to extract test coverage from job logs
 - `build_git_strategy` (string): Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).
 - `build_timeout` (integer): Build timeout in seconds
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
@@ -11630,7 +11627,6 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `only_allow_merge_if_all_discussions_are_resolved` (boolean): Only allow merge when all discussions are resolved
 - `only_allow_merge_if_all_status_checks_passed` (boolean): Only allow merge when all external status checks pass
 - `only_allow_merge_if_pipeline_succeeds` (boolean): Only allow merge when pipeline succeeds
-- `operations_access_level` (string): Operations access level (disabled, private, enabled)
 - `package_registry_access_level` (string): Package registry access level (disabled, private, enabled)
 - `packages_enabled` (boolean): Enable packages feature (deprecated: use package_registry_access_level)
 - `pages_access_level` (string): Pages access level (disabled, private, enabled, public)
@@ -12808,7 +12804,6 @@ Update a project's settings. Returns: the updated project with its current confi
 - `auto_devops_enabled` (boolean): Enable Auto DevOps for the project
 - `auto_duo_code_review_enabled` (boolean): Enable automatic GitLab Duo code review
 - `autoclose_referenced_issues` (boolean): Auto-close referenced issues on merge
-- `build_coverage_regex` (string): Regex used to extract test coverage from job logs
 - `build_git_strategy` (string): Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).
 - `build_timeout` (integer): Build timeout in seconds
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
@@ -12872,7 +12867,6 @@ Update a project's settings. Returns: the updated project with its current confi
 - `only_allow_merge_if_all_status_checks_passed` (boolean): Only allow merge when all external status checks pass
 - `only_allow_merge_if_pipeline_succeeds` (boolean): Only allow merge when pipeline succeeds
 - `only_mirror_protected_branches` (boolean): Only mirror protected branches
-- `operations_access_level` (string): Operations access level (disabled, private, enabled)
 - `package_registry_access_level` (string): Package registry access level (disabled, private, enabled)
 - `packages_enabled` (boolean): Enable packages feature (deprecated: use package_registry_access_level)
 - `pages_access_level` (string): Pages access level (disabled, private, enabled, public)

@@ -1141,6 +1141,32 @@ field is a signature change. `PendingInvite.id` travels with the
 struct in both directions. The rest are candidates for the v4 line rather than
 work to do now, which is why they are recorded rather than sent.
 
+**A second batch followed**, of fields that were dead rather than fabricated:
+each carried `omitempty`, so nothing was asserted, but each advertised an
+output field that could never be filled. Nine more `missing_output` rows come
+from these, plus four in the R-INPUT direction:
+
+| SDK struct                          | Field                     | Why no response carries it                                                                                                                                      |
+| ----------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ContributionEvent`, `ProjectEvent` | `title`                   | `lib/api/entities/event.rb` exposes `target_title` and no `title`                                                                                               |
+| `ProjectEvent`                      | `data`                    | the same entity carries a push payload under `push_data`; `doc/api/events.md` still prints `"data": null` from the API v3 era                                   |
+| `Project`                           | `build_coverage_regex`    | absent from `lib/api`, `ee/lib/api` and `doc/api` alike, as a parameter as well as a field                                                                      |
+| `Project`                           | `operations_access_level` | GitLab renamed it to `monitor_access_level`, which the entity exposes and `projects_helpers.rb` accepts; the old name survives only as a database column        |
+| `Issue`                             | `issue_link_id`           | belongs to `API::Entities::RelatedIssue`, which only `GET /projects/:id/issues/:iid/links` presents, decoded into `IssueRelation` and served by another package |
+| `PipelineTrigger`                   | `deleted_at`              | `lib/api/entities/trigger.rb` exposes eight keys without it, and `ci_triggers` has no such column                                                               |
+| `ReleaseLink`                       | `external`                | removed from the API in 16.0 per `doc/update/deprecations.md`; the 19.4 entity has no trace of it                                                               |
+| `AuditEvent`                        | `event_type`              | the entity sends `event_name`, which this server already publishes                                                                                              |
+
+Two of that batch produce no audit row at all, because the SDK never modelled
+them either: `two_factor_enabled` on a project member, which
+`config/authz/roles/owner.yml` grants at group scope alone, and a job's
+`source`, which this server was reading from a raw fetch on the strength of a
+`doc/api/jobs.md` example that prints several keys no entity exposes.
+
+`build_coverage_regex` and `operations_access_level` are the only two removed
+from the **request** as well: GitLab accepts neither, so offering them was
+inviting a caller to send a parameter that is discarded.
+
 ### The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity
 
 - **Reported**: no.

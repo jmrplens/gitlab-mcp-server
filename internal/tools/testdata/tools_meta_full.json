@@ -23579,9 +23579,6 @@
           "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
-        "issue_link_id": {
-          "type": "integer"
-        },
         "issue_type": {
           "type": "string"
         },
@@ -24937,9 +24934,6 @@
         "avatar_url": {
           "type": "string"
         },
-        "build_coverage_regex": {
-          "type": "string"
-        },
         "build_git_strategy": {
           "type": "string"
         },
@@ -25380,9 +25374,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -43587,10 +43578,6 @@
                     "boolean"
                   ]
                 },
-                "build_coverage_regex": {
-                  "description": "Regex used to extract test coverage from job logs",
-                  "type": "string"
-                },
                 "build_git_strategy": {
                   "description": "Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).",
                   "enum": [
@@ -43886,10 +43873,6 @@
                 "only_allow_merge_if_pipeline_succeeds": {
                   "description": "Only allow merge when pipeline succeeds",
                   "type": "boolean"
-                },
-                "operations_access_level": {
-                  "description": "Operations access level (disabled, private, enabled)",
-                  "type": "string"
                 },
                 "package_registry_access_level": {
                   "description": "Package registry access level (disabled, private, enabled)",
@@ -44169,10 +44152,6 @@
                     "boolean"
                   ]
                 },
-                "build_coverage_regex": {
-                  "description": "Regex used to extract test coverage from job logs",
-                  "type": "string"
-                },
                 "build_git_strategy": {
                   "description": "Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).",
                   "enum": [
@@ -44468,10 +44447,6 @@
                 "only_allow_merge_if_pipeline_succeeds": {
                   "description": "Only allow merge when pipeline succeeds",
                   "type": "boolean"
-                },
-                "operations_access_level": {
-                  "description": "Operations access level (disabled, private, enabled)",
-                  "type": "string"
                 },
                 "package_registry_access_level": {
                   "description": "Package registry access level (disabled, private, enabled)",
@@ -50883,10 +50858,6 @@
                     "boolean"
                   ]
                 },
-                "build_coverage_regex": {
-                  "description": "Regex used to extract test coverage from job logs",
-                  "type": "string"
-                },
                 "build_git_strategy": {
                   "description": "Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).",
                   "enum": [
@@ -51281,10 +51252,6 @@
                     "null",
                     "boolean"
                   ]
-                },
-                "operations_access_level": {
-                  "description": "Operations access level (disabled, private, enabled)",
-                  "type": "string"
                 },
                 "package_registry_access_level": {
                   "description": "Package registry access level (disabled, private, enabled)",

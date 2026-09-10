@@ -62,7 +62,6 @@ type BasicUserOutput struct {
 	State     string `json:"state"`
 	AvatarURL string `json:"avatar_url,omitempty"`
 	WebURL    string `json:"web_url,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
 }
 
 // basicUserOutput converts a gl.BasicUser to its output shape, returning nil
@@ -73,7 +72,7 @@ func basicUserOutput(u *gl.BasicUser) *BasicUserOutput {
 	}
 	return &BasicUserOutput{
 		ID: u.ID, Username: u.Username, Name: u.Name, State: u.State,
-		AvatarURL: u.AvatarURL, WebURL: u.WebURL, CreatedAt: toolutil.FormatTimePtr(u.CreatedAt),
+		AvatarURL: u.AvatarURL, WebURL: u.WebURL,
 	}
 }
 

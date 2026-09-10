@@ -2381,9 +2381,6 @@
           "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
-        "issue_link_id": {
-          "type": "integer"
-        },
         "issue_type": {
           "type": "string"
         },
@@ -3739,9 +3736,6 @@
         "avatar_url": {
           "type": "string"
         },
-        "build_coverage_regex": {
-          "type": "string"
-        },
         "build_git_strategy": {
           "type": "string"
         },
@@ -4182,9 +4176,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,

@@ -4197,7 +4197,6 @@ func TestToOutput_AdditiveSubObjects(t *testing.T) {
 		ID:                   1,
 		IID:                  10,
 		ExternalID:           "EXT-7",
-		IssueLinkID:          55,
 		ServiceDeskReplyTo:   "sd@example.com",
 		LabelDetails:         []*gl.LabelDetails{{ID: 3, Name: "bug", Color: "#ff0000", TextColor: "#ffffff"}},
 		Iteration:            &gl.GroupIteration{ID: 8, IID: 2, Title: "Sprint 1", State: 1, WebURL: "https://gl/iter/2"},
@@ -4207,8 +4206,8 @@ func TestToOutput_AdditiveSubObjects(t *testing.T) {
 	}
 
 	out := ToOutput(issue)
-	if out.ExternalID != "EXT-7" || out.IssueLinkID != 55 || out.ServiceDeskReplyTo != "sd@example.com" {
-		t.Errorf("scalars = %q/%d/%q", out.ExternalID, out.IssueLinkID, out.ServiceDeskReplyTo)
+	if out.ExternalID != "EXT-7" || out.ServiceDeskReplyTo != "sd@example.com" {
+		t.Errorf("scalars = %q/%q", out.ExternalID, out.ServiceDeskReplyTo)
 	}
 	if len(out.LabelDetails) != 1 || out.LabelDetails[0].Name != "bug" || out.LabelDetails[0].Color != "#ff0000" {
 		t.Errorf("label_details = %+v", out.LabelDetails)
@@ -4234,7 +4233,7 @@ func TestToOutput_AdditiveSubObjects_NilSafe(t *testing.T) {
 	if out.LabelDetails != nil || out.Iteration != nil || out.Links != nil || out.TimeStats != nil || out.TaskCompletionStatus != nil {
 		t.Errorf("expected nil additive sub-objects, got %+v", out)
 	}
-	if out.ExternalID != "" || out.IssueLinkID != 0 || out.ServiceDeskReplyTo != "" {
+	if out.ExternalID != "" || out.ServiceDeskReplyTo != "" {
 		t.Errorf("expected zero additive scalars")
 	}
 }

@@ -249,7 +249,7 @@ func TestFormatRelease_ListMarkdown(t *testing.T) {
 
 // TestFormatRelease_LinkMarkdown verifies release link fields in Markdown output.
 func TestFormatRelease_LinkMarkdown(t *testing.T) {
-	l := releaselinks.Output{ID: 1, Name: "binary", URL: "https://example.com/bin", LinkType: "package", External: false}
+	l := releaselinks.Output{ID: 1, Name: "binary", URL: "https://example.com/bin", LinkType: "package"}
 	md := releaselinks.FormatOutputMarkdown(l)
 
 	if !strings.Contains(md, "## Release Link: binary") {

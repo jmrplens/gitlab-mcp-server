@@ -131,7 +131,6 @@ type Output struct {
 	TagList           []string             `json:"tag_list,omitempty"`
 	ErasedAt          string               `json:"erased_at,omitempty"`
 	Archived          bool                 `json:"archived,omitempty"`
-	Source            string               `json:"source,omitempty"`
 	Commit            *CommitObject        `json:"commit,omitempty"`
 	Pipeline          *PipelineObject      `json:"pipeline,omitempty"`
 	Project           *ProjectObject       `json:"project,omitempty"`

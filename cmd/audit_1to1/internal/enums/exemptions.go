@@ -172,7 +172,6 @@ var projectFeatureAccessLevels = []string{
 	"model_experiments_access_level",
 	"model_registry_access_level",
 	"monitor_access_level",
-	"operations_access_level",
 	"package_registry_access_level",
 	"releases_access_level",
 	"repository_access_level",

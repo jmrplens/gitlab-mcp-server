@@ -499,7 +499,7 @@ func TestCovtoContributionEventOutput_WithDate(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatContributionListMarkdown_Wrapper(t *testing.T) {
 	out := ListContributionEventsOutput{
-		Events: []ContributionEventOutput{{ID: 1, Title: "covTitle", ActionName: "pushed"}},
+		Events: []ContributionEventOutput{{ID: 1, TargetTitle: "covTitle", ActionName: "pushed"}},
 	}
 	res := FormatContributionListMarkdown(out)
 	if res == nil {
@@ -568,7 +568,7 @@ func TestCovtoProject_EventOutputFieldMapping(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Wrapper(t *testing.T) {
 	out := ListProjectEventsOutput{
-		Events: []ProjectEventOutput{{ID: 1, Title: "covTitle", ActionName: "pushed"}},
+		Events: []ProjectEventOutput{{ID: 1, TargetTitle: "covTitle", ActionName: "pushed"}},
 	}
 	res := FormatListMarkdown(out)
 	if res == nil {
@@ -1017,46 +1017,14 @@ func TestToProjectEventOutput_FullMirror(t *testing.T) {
 	assertTrue(t, out.Author != nil && out.Author.ID == 5, "author")
 	assertTrue(t, out.PushData != nil && out.PushData.CommitTitle == "ct", "push_data")
 	assertTrue(t, out.Note != nil && out.Note.NoteableType == "Issue" && out.Note.Author != nil && out.Note.Author.Email == "n@e" && out.Note.CreatedAt != "", "note")
-	assertProjectData(t, out.Data)
-}
-
-// assertProjectData validates the project event data mirror, including the
-// repository and the nested commit with stats and pipeline.
-func assertProjectData(t *testing.T, d *ProjectEventDataOutput) {
-	t.Helper()
-	assertTrue(t, d != nil && d.Ref == "refs/heads/main" && d.UserName == "dev" && d.TotalCommitsCount == 1, "data")
-	assertTrue(t, d.Repository != nil && d.Repository.PathWithNamespace == "ns/repo" && d.Repository.Visibility == "public", "repository")
-	assertTrue(t, len(d.Commits) == 1, "commit count (nil skipped)")
-	c := d.Commits[0]
-	assertTrue(t, c.ID == "c1" && c.Status == "success" && c.AuthoredDate != "" && c.CommittedDate != "" && c.CreatedAt != "", "commit")
-	assertTrue(t, c.Stats != nil && c.Stats.Total == 3, "commit stats")
-	assertTrue(t, c.LastPipeline != nil && c.LastPipeline.ID == 100 && c.LastPipeline.UpdatedAt != "" && c.LastPipeline.CreatedAt != "", "commit last_pipeline")
-	assertTrue(t, c.Trailers["k"] == "v" && c.ExtendedTrailers["k2"] == "v2", "commit trailers")
 }
 
 // TestToProjectEventOutput_EmptySubObjects verifies zero-valued ProjectEvent sub
 // objects are omitted.
 func TestToProjectEventOutput_EmptySubObjects(t *testing.T) {
 	out := toProjectEventOutput(&gl.ProjectEvent{ID: 1}, toolutil.EventExtra{})
-	if out.PushData != nil || out.Note != nil || out.Data != nil || out.Author != nil {
+	if out.PushData != nil || out.Note != nil || out.Author != nil {
 		t.Errorf("expected nil sub-objects, got %+v", out)
-	}
-}
-
-// TestToProjectEventDataOutput_MinimalCommit covers a commit
-// with nil stats/pipeline and timestamps, and a data block with nil repository.
-func TestToProjectEventDataOutput_MinimalCommit(t *testing.T) {
-	d := gl.ProjectEventData{
-		Ref:     "main",
-		Commits: []*gl.Commit{{ID: "c1"}},
-	}
-	out := toProjectEventDataOutput(d)
-	if out == nil || out.Repository != nil || len(out.Commits) != 1 {
-		t.Fatalf("unexpected data output: %+v", out)
-	}
-	c := out.Commits[0]
-	if c.Stats != nil || c.LastPipeline != nil || c.AuthoredDate != "" || c.Status != "" {
-		t.Fatalf("expected minimal commit, got %+v", c)
 	}
 }
 
@@ -1346,34 +1314,6 @@ func TestNoteAuthorOutput_AnySingleFilledFieldMakesTheAuthorPresent(t *testing.T
 	}
 }
 
-// TestToProjectEventDataOutput_AnySingleFilledFieldMakesTheDataPresent
-// verifies a push event's data survives however little of it GitLab sent, and
-// that data carrying no commit publishes no commit list.
-func TestToProjectEventDataOutput_AnySingleFilledFieldMakesTheDataPresent(t *testing.T) {
-	for name, data := range map[string]gl.ProjectEventData{
-		"before":              {Before: "abc"},
-		"after":               {After: "def"},
-		"ref":                 {Ref: "refs/heads/main"},
-		"user_id":             {UserID: 5},
-		"user_name":           {UserName: "Alice"},
-		"repository":          {Repository: &gl.Repository{Name: "repo"}},
-		"commits":             {Commits: []*gl.Commit{{ID: "abc"}}},
-		"total_commits_count": {TotalCommitsCount: 3},
-	} {
-		t.Run(name, func(t *testing.T) {
-			if toProjectEventDataOutput(data) == nil {
-				t.Errorf("toProjectEventDataOutput(%+v) = nil, want the data", data)
-			}
-		})
-	}
-	if toProjectEventDataOutput(gl.ProjectEventData{}) != nil {
-		t.Error("toProjectEventDataOutput of empty data should be nil")
-	}
-	if out := toProjectEventDataOutput(gl.ProjectEventData{Ref: "refs/heads/main"}); out.Commits != nil {
-		t.Errorf("Commits = %+v, want none for data carrying no commit", out.Commits)
-	}
-}
-
 // TestToProjectEventNoteOutput_AnySingleFilledFieldMakesTheNotePresent
 // verifies a comment event's note survives however little of it GitLab sent.
 func TestToProjectEventNoteOutput_AnySingleFilledFieldMakesTheNotePresent(t *testing.T) {
@@ -1410,14 +1350,6 @@ func TestEventConverters_LeaveOutTheTimestampsGitLabDidNotSend(t *testing.T) {
 	}
 	if note.CreatedAt != "" || note.UpdatedAt != "" || note.ExpiresAt != "" || note.ResolvedAt != "" {
 		t.Errorf("note timestamps = %+v, want all empty", note)
-	}
-
-	pipeline := toPipelineInfoOutput(&gl.PipelineInfo{ID: 3, Status: "success"})
-	if pipeline == nil {
-		t.Fatal("toPipelineInfoOutput = nil, want the pipeline")
-	}
-	if pipeline.CreatedAt != "" || pipeline.UpdatedAt != "" {
-		t.Errorf("pipeline timestamps = %+v, want both empty", pipeline)
 	}
 }
 

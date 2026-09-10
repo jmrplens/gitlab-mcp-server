@@ -95,7 +95,6 @@ type Output struct {
 	EntityID   int64         `json:"entity_id"`
 	EntityType string        `json:"entity_type"`
 	EventName  string        `json:"event_name"`
-	EventType  string        `json:"event_type"`
 	Details    DetailsOutput `json:"details"`
 	CreatedAt  string        `json:"created_at"`
 }
@@ -114,7 +113,6 @@ func toOutput(e *gl.AuditEvent) Output {
 		EntityID:   e.EntityID,
 		EntityType: e.EntityType,
 		EventName:  e.EventName,
-		EventType:  e.EventType,
 	}
 	if e.CreatedAt != nil {
 		o.CreatedAt = e.CreatedAt.Format(time.RFC3339)

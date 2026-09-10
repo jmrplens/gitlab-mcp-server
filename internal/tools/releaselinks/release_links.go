@@ -31,7 +31,6 @@ type Output struct {
 	Name           string `json:"name"`
 	URL            string `json:"url"`
 	LinkType       string `json:"link_type"`
-	External       bool   `json:"external"`
 	DirectAssetURL string `json:"direct_asset_url,omitempty"`
 }
 
@@ -113,7 +112,6 @@ func ToOutput(l *gl.ReleaseLink) Output {
 		Name:           l.Name,
 		URL:            l.URL,
 		LinkType:       string(l.LinkType),
-		External:       l.External,
 		DirectAssetURL: l.DirectAssetURL,
 	}
 }
