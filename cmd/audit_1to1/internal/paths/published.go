@@ -274,13 +274,16 @@ func parsePackage(dir string) parsedPackage {
 }
 
 // resolveAlternatives marks as enveloped the payloads of every struct that
-// wraps more than one type, when those types are shapes of one entity: each
-// embeds, or is embedded by, another of them. That is how a list GitLab
-// answers with one of two entities, chosen by the caller, keeps each in a
-// field of its own (projects.ListOutput holds the full project and, under
-// simple=true, BasicProjectDetails), and both are then responses of the
+// wraps more than one type, when those types are distinct shapes of one
+// entity: each embeds, or is embedded by, another of them, directly or
+// through types of the package that are not payloads themselves. That is how
+// a list GitLab answers with one of two entities, chosen by the caller, keeps
+// each in a field of its own (projects.ListOutput holds the full project and,
+// under simple=true, BasicProjectDetails), and both are then responses of the
 // endpoint. Two unrelated objects stay unwrapped, because a response carrying
-// a group and a project carries two references and neither is the response.
+// a group and a project carries two references and neither is the response;
+// so do two fields of one type, a before and an after, which are two
+// references to the same kind of object rather than two shapes of it.
 func resolveAlternatives(parsed *parsedPackage) {
 	embeds := map[string]map[string]bool{}
 	for _, declared := range parsed.structs {
@@ -291,7 +294,7 @@ func resolveAlternatives(parsed *parsedPackage) {
 			embeds[declared.Name][embedded] = true
 		}
 	}
-	related := func(a, b string) bool { return embeds[a][b] || embeds[b][a] }
+	related := func(a, b string) bool { return embedsTransitively(embeds, a, b) || embedsTransitively(embeds, b, a) }
 	for _, payloads := range parsed.alternatives {
 		if !oneFamily(payloads, related) {
 			continue
@@ -302,15 +305,38 @@ func resolveAlternatives(parsed *parsedPackage) {
 	}
 }
 
-// oneFamily reports whether the types are connected under related, so that
-// every one of them reaches every other through a chain of embeds rather than
-// the set being two groups side by side.
+// embedsTransitively reports whether from reaches to by following embeds
+// through any type of the package, so that a chain whose middle link is not a
+// payload still ties its two ends into one family.
+func embedsTransitively(embeds map[string]map[string]bool, from, to string) bool {
+	seen := map[string]bool{from: true}
+	stack := []string{from}
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		for next := range embeds[current] {
+			if next == to {
+				return true
+			}
+			if !seen[next] {
+				seen[next] = true
+				stack = append(stack, next)
+			}
+		}
+	}
+	return false
+}
+
+// oneFamily reports whether the types are distinct and connected under
+// related, so that every one of them reaches every other through a chain of
+// embeds rather than the set being two groups side by side. A type named
+// twice is not a second shape, so a set that repeats one is no family.
 func oneFamily(types []string, related func(a, b string) bool) bool {
 	distinct := map[string]bool{}
 	for _, name := range types {
 		distinct[name] = true
 	}
-	if len(distinct) == 0 {
+	if len(distinct) == 0 || len(distinct) != len(types) {
 		return false
 	}
 	reached := map[string]bool{types[0]: true}

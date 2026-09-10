@@ -509,16 +509,28 @@ func TestResolveAlternatives_OnlyShapesOfOneEntityAreTheResponse(t *testing.T) {
 			{Name: "Output", Fields: []string{"archived"}, Embeds: []string{"BasicOutput"}},
 			{Name: "GroupOutput", Fields: []string{"id"}},
 			{Name: "ProjectObject", Fields: []string{"id"}},
+			// A chain whose middle link is not a payload: the wide shape
+			// embeds a type that embeds the narrow one.
+			{Name: "DetailOutput", Fields: []string{"runners_token"}, Embeds: []string{"RowOutput"}},
+			{Name: "RowOutput", Fields: []string{"path"}, Embeds: []string{"CoreOutput"}},
+			{Name: "CoreOutput", Fields: []string{"id"}},
+			{Name: "UserOutput", Fields: []string{"id"}},
 		},
 		alternatives: [][]string{
 			{"Output", "BasicOutput"},
 			{"GroupOutput", "ProjectObject"},
+			{"DetailOutput", "CoreOutput"},
+			// A before and an after: one type named twice is two
+			// references, not two shapes.
+			{"UserOutput", "UserOutput"},
 		},
 	}
 	resolveAlternatives(&parsed)
 	for name, want := range map[string]bool{
 		"Output": true, "BasicOutput": true,
 		"GroupOutput": false, "ProjectObject": false,
+		"DetailOutput": true, "CoreOutput": true, "RowOutput": false,
+		"UserOutput": false,
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
