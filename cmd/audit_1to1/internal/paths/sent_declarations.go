@@ -40,6 +40,14 @@ const (
 	// option of the presenter, which no endpoint of the package passes: the
 	// record marks it sent-when, and on these routes the when never holds.
 	categoryOptionNeverPassed = "entity-option-no-endpoint-passes"
+	// categoryOptionTurnedOff is its mirror image, for a presenter option
+	// whose default is to send: the endpoint does name the option, and names
+	// it false. The two are kept apart because reading the condition alone
+	// gives the wrong answer for each. `options.fetch(:x, false)` is silent
+	// unless a route asks, so "no route passes it" settles it; a default of
+	// true is sent unless a route refuses, so the same reasoning would
+	// publish a key the endpoint suppresses on every response.
+	categoryOptionTurnedOff = "entity-option-the-endpoint-turns-off"
 	// categoryEntityPublishedElsewhere is an entity the package does surface,
 	// on another type or under a shape of this server's own, so the field
 	// names the comparison looks for are not the names the caller reads.
@@ -208,6 +216,24 @@ const reasonRenderHTMLNeverPassed = "lib/api/entities/merge_request_basic.rb exp
 	"parameter, so Grape passes the option on neither and the keys have never been on either response. The single-merge-request GET does declare it, " +
 	"which is where the same two keys are published rather than declared."
 
+// reasonIncludeSubscribedTurnedOff answers `subscribed` on the related issue
+// the issue links list renders.
+//
+// It is the one presenter option in this table whose default sends. The three
+// above it read `options.fetch(:only_path, false)` and friends, where a route
+// that says nothing sends nothing; this one reads
+// `options.fetch(:include_subscribed, true)`, where a route that says nothing
+// sends the key. Applying the earlier rule here, that no route declares the
+// option so it is never sent, would have been right about the routes and
+// wrong about the field. The route settles it in the other direction: it does
+// name the option, and passes false, with the entity's own comment saying why
+// (computing the flag renders Markdown, which cannot be done per row of a
+// list).
+const reasonIncludeSubscribedTurnedOff = "lib/api/entities/issue.rb exposes subscribed under `options.fetch(:include_subscribed, true)`, which sends the " +
+	"key unless the endpoint refuses it. GET /projects/:id/issues/:issue_iid/links is the only route filling this type and its `present` call in " +
+	"lib/api/issue_links.rb passes `include_subscribed: false`, so the key has never been on one of its responses. The entity says why above the " +
+	"exposure: the value triggers Markdown processing, which GitLab will not do for every row of a list."
+
 // declaredUnsurfaced holds every field GitLab's document lists that the
 // endpoint does not send, each with the source that says so.
 //
@@ -313,6 +339,17 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	{Package: groupSAMLPkg, Entity: userWithAdminEntity, Field: "enterprise_group_associated_at", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
 	{Package: groupSAMLPkg, Entity: userWithAdminEntity, Field: "provisioned_by_group_id", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
 	{Package: groupSAMLPkg, Entity: serviceAccountEntity, Field: "unconfirmed_email", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+
+	// subscribed on the related issue, named alone rather than with a splat:
+	// every other key of that entity is published on the same type, and a
+	// splat would swallow the next one GitLab adds.
+	{
+		Package:  toolsDir + "/issuelinks",
+		Entity:   "API::Entities::RelatedIssue",
+		Field:    "subscribed",
+		Category: categoryOptionTurnedOff,
+		Reason:   reasonIncludeSubscribedTurnedOff,
+	},
 
 	{
 		Package:  toolsDir + "/geo",

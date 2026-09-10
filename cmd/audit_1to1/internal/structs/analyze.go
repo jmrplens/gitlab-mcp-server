@@ -89,7 +89,42 @@ const (
 	docUsers                = "users.md"
 	docUsersEnterpriseGroup = docUsers + " (enterprise_group_id and enterprise_group_associated_at, exposed by " +
 		"ee/lib/ee/api/entities/user_with_admin.rb under the domain_verification license and printed on no page)"
-	docServiceAccounts    = "service_accounts.md"
+	docServiceAccounts = "service_accounts.md"
+	// API::Entities::RelatedIssue inherits API::Entities::Issue and adds four
+	// link keys, so the issue object is what the relation list answers with
+	// and doc/api/issues.md prints that object in full: every key cited here
+	// appears in its example bodies. doc/api/issue_links.md is not the
+	// citation because its own list example is abbreviated to fourteen keys
+	// and shows none of them. The four licensed keys are exposed by
+	// ee/lib/ee/api/entities/issue.rb, so the feature gating them is named
+	// beside the page rather than left to the reader.
+	docIssueLinksRelation = "issues.md"
+	docIssueLinksEpic     = docIssueLinksRelation + " (epic and epic_iid, exposed by ee/lib/ee/api/entities/issue.rb when the " +
+		"issue's group has the epics licensed feature)"
+	docIssueLinksLicensed = docIssueLinksRelation + " (health_status under the issuable_health_status licensed feature and " +
+		"iteration under iterations, both exposed by ee/lib/ee/api/entities/issue.rb)"
+	// The member role page is the one citation here that is deliberately not a
+	// page reference to the fields themselves, because no page carries them.
+	// doc/api/member_roles.md prints four permission keys in its example
+	// bodies and sends the reader elsewhere for the rest, so the entity is the
+	// oracle: ee/lib/api/entities/member_role.rb exposes every permission by
+	// looping over a constant the running application assembles, with
+	// `default: false` and no condition. The names are in no source a scan
+	// could read, which is why the committed live record is where they came
+	// from.
+	docMemberRolePermissions = "member_roles.md (ee/lib/api/entities/member_role.rb exposes every " +
+		"::MemberRole.all_customizable_permissions entry with default: false and no condition; the page prints four of the " +
+		"forty-five in its examples and refers to user/custom_roles/abilities.md for the rest)"
+	// The twelve keys API::Entities::Ci::Pipeline adds to the basic entity
+	// reach pipelines.Output through one route, the merge request pipeline
+	// creation, so its section on doc/api/merge_requests.md is the citation
+	// rather than doc/api/pipelines.md, whose own pipeline endpoints fill
+	// pipelines.DetailOutput. That example body prints eleven of the twelve
+	// and leaves queued_duration out, which the entity exposes with no
+	// condition beside the other eleven.
+	docMRCreatePipeline      = docMergeRequests + "#create-merge-request-pipeline"
+	docMRCreatePipelineQueue = docMRCreatePipeline + " (queued_duration, exposed unconditionally by " +
+		"lib/api/entities/ci/pipeline.rb and absent from that section's example body)"
 	docPATList            = "personal_access_tokens.md#list-all-personal-access-tokens"
 	docProjectTokensList  = "project_access_tokens.md#list-all-project-access-tokens"
 	docGroupTokensList    = "group_access_tokens.md"
@@ -708,6 +743,94 @@ var docAddedFields = map[string]string{
 	"groupsaml.SAMLUserOutput.followers":              docUsers,
 	"groupsaml.SAMLUserOutput.following":              docUsers,
 	"groupsaml.SAMLUserOutput.is_followed":            docUsers,
+
+	// issuelinks: what API::Entities::RelatedIssue sends on a related issue
+	// that client-go's IssueRelation declares on no field of its own, read
+	// from the captured response (ADR-0021, issuelinks.capturedRelations).
+	// RelatedIssue inherits API::Entities::Issue, so nineteen of these are on
+	// every response of the one route this type serves; the four licensed
+	// ones and task_status arrive under their own condition. `subscribed` is
+	// the one key of that entity this type does not publish, because the
+	// route turns its presenter option off, and it is answered in
+	// cmd/audit_1to1/internal/paths/sent_declarations.go instead. Recorded in
+	// docs/development/upstream-bugs.md.
+	"issuelinks.RelationOutput._links":                 docIssueLinksRelation,
+	"issuelinks.RelationOutput.blocking_issues_count":  docIssueLinksRelation,
+	"issuelinks.RelationOutput.closed_at":              docIssueLinksRelation,
+	"issuelinks.RelationOutput.closed_by":              docIssueLinksRelation,
+	"issuelinks.RelationOutput.discussion_locked":      docIssueLinksRelation,
+	"issuelinks.RelationOutput.downvotes":              docIssueLinksRelation,
+	"issuelinks.RelationOutput.epic":                   docIssueLinksEpic,
+	"issuelinks.RelationOutput.epic_iid":               docIssueLinksEpic,
+	"issuelinks.RelationOutput.has_tasks":              docIssueLinksRelation,
+	"issuelinks.RelationOutput.health_status":          docIssueLinksLicensed,
+	"issuelinks.RelationOutput.imported":               docIssueLinksRelation,
+	"issuelinks.RelationOutput.imported_from":          docIssueLinksRelation,
+	"issuelinks.RelationOutput.issue_type":             docIssueLinksRelation,
+	"issuelinks.RelationOutput.iteration":              docIssueLinksLicensed,
+	"issuelinks.RelationOutput.merge_requests_count":   docIssueLinksRelation,
+	"issuelinks.RelationOutput.moved_to_id":            docIssueLinksRelation,
+	"issuelinks.RelationOutput.service_desk_reply_to":  docIssueLinksRelation,
+	"issuelinks.RelationOutput.severity":               docIssueLinksRelation,
+	"issuelinks.RelationOutput.start_date":             docIssueLinksRelation,
+	"issuelinks.RelationOutput.task_completion_status": docIssueLinksRelation,
+	"issuelinks.RelationOutput.task_status":            docIssueLinksRelation,
+	"issuelinks.RelationOutput.time_stats":             docIssueLinksRelation,
+	"issuelinks.RelationOutput.type":                   docIssueLinksRelation,
+	"issuelinks.RelationOutput.upvotes":                docIssueLinksRelation,
+
+	// memberroles: the twenty-five customizable permissions
+	// API::Entities::MemberRole sends that client-go's MemberRole declares no
+	// field for, read from the captured response (ADR-0021,
+	// memberroles.capturedRole and capturedRoles). All twenty-five are on
+	// every response of all four member role routes. Recorded in
+	// docs/development/upstream-bugs.md.
+	"memberroles.Output.admin_ai_catalog_item":           docMemberRolePermissions,
+	"memberroles.Output.admin_ai_catalog_item_consumer":  docMemberRolePermissions,
+	"memberroles.Output.admin_integrations":              docMemberRolePermissions,
+	"memberroles.Output.admin_protected_branch":          docMemberRolePermissions,
+	"memberroles.Output.admin_protected_environments":    docMemberRolePermissions,
+	"memberroles.Output.admin_runners":                   docMemberRolePermissions,
+	"memberroles.Output.admin_security_attributes":       docMemberRolePermissions,
+	"memberroles.Output.apply_security_scan_profiles":    docMemberRolePermissions,
+	"memberroles.Output.create_security_scan_profiles":   docMemberRolePermissions,
+	"memberroles.Output.delete_security_scan_profiles":   docMemberRolePermissions,
+	"memberroles.Output.destroy_package":                 docMemberRolePermissions,
+	"memberroles.Output.read_admin_cicd":                 docMemberRolePermissions,
+	"memberroles.Output.read_admin_groups":               docMemberRolePermissions,
+	"memberroles.Output.read_admin_monitoring":           docMemberRolePermissions,
+	"memberroles.Output.read_admin_projects":             docMemberRolePermissions,
+	"memberroles.Output.read_admin_subscription":         docMemberRolePermissions,
+	"memberroles.Output.read_admin_users":                docMemberRolePermissions,
+	"memberroles.Output.read_agent_artifacts":            docMemberRolePermissions,
+	"memberroles.Output.read_compliance_dashboard":       docMemberRolePermissions,
+	"memberroles.Output.read_crm_contact":                docMemberRolePermissions,
+	"memberroles.Output.read_security_attribute":         docMemberRolePermissions,
+	"memberroles.Output.read_security_scan_profiles":     docMemberRolePermissions,
+	"memberroles.Output.read_virtual_registry":           docMemberRolePermissions,
+	"memberroles.Output.update_sec_ai_workflow_settings": docMemberRolePermissions,
+	"memberroles.Output.update_security_scan_profiles":   docMemberRolePermissions,
+
+	// pipelines: the twelve keys API::Entities::Ci::Pipeline adds to
+	// API::Entities::Ci::PipelineBasic, which is what gl.PipelineInfo models.
+	// Read from the captured response (ADR-0021, pipelines.CapturedOutput) on
+	// the one route filling this type that presents the full entity, the
+	// merge request pipeline creation in internal/tools/mergerequests. The two
+	// pipeline lists present the basic entity and send none of them, which is
+	// why every one carries omitempty. Recorded in
+	// docs/development/upstream-bugs.md.
+	"pipelines.Output.before_sha":      docMRCreatePipeline,
+	"pipelines.Output.tag":             docMRCreatePipeline,
+	"pipelines.Output.yaml_errors":     docMRCreatePipeline,
+	"pipelines.Output.user":            docMRCreatePipeline,
+	"pipelines.Output.started_at":      docMRCreatePipeline,
+	"pipelines.Output.finished_at":     docMRCreatePipeline,
+	"pipelines.Output.committed_at":    docMRCreatePipeline,
+	"pipelines.Output.duration":        docMRCreatePipeline,
+	"pipelines.Output.queued_duration": docMRCreatePipelineQueue,
+	"pipelines.Output.coverage":        docMRCreatePipeline,
+	"pipelines.Output.detailed_status": docMRCreatePipeline,
+	"pipelines.Output.archived":        docMRCreatePipeline,
 }
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we

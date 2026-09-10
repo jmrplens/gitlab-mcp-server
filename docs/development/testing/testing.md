@@ -18,11 +18,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,322 |
-| Unit test functions                                   | 14,716 |
+| Total test functions                                  | 15,341 |
+| Unit test functions                                   | 14,735 |
 | E2E test functions                                    |    606 |
 | cmd test functions                                    |  3,008 |
-| Test files (internal/)                                |    528 |
+| Test files (internal/)                                |    531 |
 | Test files (cmd/)                                     |    204 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,101 | 79.0% |
+| `TestFunc_Scenario` (2-part)           | 12,120 | 79.0% |
 | `TestFunc` (no underscore)             |    975 |  6.4% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,246 | 14.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,246 | 14.6% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,488 |        150 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            336 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,884 |        362 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,903 |        365 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            606 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          3,008 |        204 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,322** |    **972** |                                                                                                 |
+| **Total**               |     **15,341** |    **975** |                                                                                                 |
 
 ### Core Packages
 
@@ -64,7 +64,7 @@
 | config        |       109 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                   |
 | edition       |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                      |
 | elicitation   |       129 |    98.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                       |
-| freshness     |         3 |      n/a | Package freshness reads the one harness setting that decides whether a test comparing a committed, generated artifact runs that comparison now or leaves it to the run where the artifact is refreshed.                                                            |
+| freshness     |         3 |   100.0% | Package freshness reads the one harness setting that decides whether a test comparing a committed, generated artifact runs that comparison now or leaves it to the run where the artifact is refreshed.                                                            |
 | gatewaycompat |        19 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions. |
 | gitlab        |       109 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                            |
 | graphqlschema |        20 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                   |
@@ -86,18 +86,18 @@
 | ----------------- | ----: | -------: | ----: |
 | projects          |   393 |   100.0% |    57 |
 | groups            |   280 |   100.0% |    37 |
-| mergerequests     |   257 |   100.0% |    30 |
+| mergerequests     |   259 |   100.0% |    30 |
 | issues            |   233 |   100.0% |    21 |
-| users             |   220 |   100.0% |    38 |
+| users             |   220 |    99.9% |    38 |
 | dynamic           |   176 |    99.9% |     2 |
 | jobs              |   152 |   100.0% |    17 |
 | packages          |   148 |    99.0% |     9 |
 | search            |   126 |   100.0% |    10 |
 | workitems         |   120 |   100.0% |     6 |
+| pipelines         |   118 |   100.0% |    12 |
 | commits           |   115 |    99.8% |    13 |
 | resourceevents    |   115 |   100.0% |    17 |
 | awardemoji        |   113 |   100.0% |    24 |
-| pipelines         |   113 |   100.0% |    12 |
 | runners           |   113 |   100.0% |    19 |
 | snippets          |   107 |    99.6% |    15 |
 | containerregistry |   102 |   100.0% |    16 |
@@ -161,7 +161,7 @@
 | dynamic                 |       176 |          8 |    99.9% |         2 |
 | dynamiccatalog          |         7 |          1 |   100.0% |         0 |
 | elicitationtools        |        65 |          2 |    98.7% |         4 |
-| enterpriseusers         |        39 |          3 |   100.0% |         4 |
+| enterpriseusers         |        39 |          3 |    99.5% |         4 |
 | environments            |        59 |          2 |   100.0% |         6 |
 | epicdiscussions         |        20 |          2 |   100.0% |         6 |
 | epicissues              |        19 |          2 |   100.0% |         4 |
@@ -208,7 +208,7 @@
 | integrations            |        88 |          4 |    99.6% |        12 |
 | invites                 |        48 |          1 |   100.0% |         4 |
 | issuediscussions        |        45 |          2 |   100.0% |         6 |
-| issuelinks              |        68 |          3 |   100.0% |         4 |
+| issuelinks              |        74 |          4 |   100.0% |         4 |
 | issuenotes              |        49 |          2 |   100.0% |         5 |
 | issues                  |       233 |          2 |   100.0% |        21 |
 | issuestatistics         |        43 |          1 |   100.0% |         3 |
@@ -221,9 +221,9 @@
 | license                 |        18 |          2 |   100.0% |         3 |
 | licensetemplates        |        22 |          1 |   100.0% |         2 |
 | markdown                |         8 |          1 |   100.0% |         1 |
-| memberroles             |        47 |          3 |   100.0% |         6 |
+| memberroles             |        53 |          4 |   100.0% |         6 |
 | members                 |        63 |          2 |   100.0% |         6 |
-| mergerequests           |       257 |          3 |   100.0% |        30 |
+| mergerequests           |       259 |          3 |   100.0% |        30 |
 | mergetrains             |        16 |          2 |   100.0% |         4 |
 | metadata                |         8 |          1 |   100.0% |         1 |
 | milestones              |        73 |          1 |   100.0% |         7 |
@@ -240,7 +240,7 @@
 | orbit                   |        57 |          4 |   100.0% |         6 |
 | packages                |       148 |          6 |    99.0% |         9 |
 | pages                   |        55 |          2 |   100.0% |         9 |
-| pipelines               |       113 |          3 |   100.0% |        12 |
+| pipelines               |       118 |          4 |   100.0% |        12 |
 | pipelineschedules       |        94 |          2 |    99.7% |        11 |
 | pipelinetriggers        |        60 |          2 |   100.0% |         6 |
 | planlimits              |        13 |          2 |   100.0% |         2 |
@@ -288,13 +288,13 @@
 | usagedata               |        31 |          1 |   100.0% |         6 |
 | useremails              |        24 |          2 |   100.0% |         6 |
 | usergpgkeys             |        44 |          2 |   100.0% |         8 |
-| users                   |       220 |          7 |   100.0% |        38 |
+| users                   |       220 |          7 |    99.9% |        38 |
 | vulnerabilities         |        66 |          3 |   100.0% |         8 |
 | waitpoll                |        13 |          1 |    99.2% |         0 |
 | wikis                   |        62 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,884** |    **362** |          | **1,187** |
+| **Total**               | **8,903** |    **365** |          | **1,187** |
 
 </details>
 
@@ -377,7 +377,7 @@
 | config        |   100.0% |
 | edition       |    87.0% |
 | elicitation   |    98.3% |
-| freshness     |      n/a |
+| freshness     |   100.0% |
 | gatewaycompat |    99.4% |
 | gitlab        |   100.0% |
 | graphqlschema |   100.0% |
@@ -441,7 +441,7 @@
 | dynamic                 |    99.9% |
 | dynamiccatalog          |   100.0% |
 | elicitationtools        |    98.7% |
-| enterpriseusers         |   100.0% |
+| enterpriseusers         |    99.5% |
 | environments            |   100.0% |
 | epicdiscussions         |   100.0% |
 | epicissues              |   100.0% |
@@ -568,7 +568,7 @@
 | usagedata               |   100.0% |
 | useremails              |   100.0% |
 | usergpgkeys             |   100.0% |
-| users                   |   100.0% |
+| users                   |    99.9% |
 | vulnerabilities         |   100.0% |
 | waitpoll                |    99.2% |
 | wikis                   |   100.0% |

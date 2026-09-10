@@ -1026,11 +1026,10 @@ captured response, so each carries a live workaround:
   `created_by`, `email`, both identities, `override` and `member_role`, belong
   in the same merge request as a second group.
 
-One lead rather than a finding, because nothing has measured it: the record's
-`API::Entities::MemberRole` exposes about fifty permission flags where
-`gl.MemberRole` and this server's own member role output mirror twenty-two. The
-audit's nested comparison does not reach that object, so it is unmeasured
-rather than measured and clean.
+That lead has since been measured and is
+[its own entry](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends):
+the record's `API::Entities::MemberRole` carries 50 keys, of which 45 are
+permissions, and `gl.MemberRole` models 20 of them.
 
 **Where these merge requests come from**: the
 [community fork](https://gitlab.com/gitlab-community/gitlab-org/api/client-go),
@@ -1244,6 +1243,225 @@ parameter, and no route in the whole 2110-route record declares it.
 already opened for another set of structs. The conditional ones want pointers
 rather than values, since a zero follower count and a profile the caller may
 not read are different answers.
+
+### IssueRelation models an issue basic where GitLab renders a whole issue
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. Every gap is worked around.
+- **Workaround**: yes. The twenty-four keys are read from the captured
+  response beside the SDK's decode (ADR-0021), through
+  `issuelinks.capturedRelations`.
+
+**What**: `IssueRelation` in client-go v3.0.0's `issue_links.go` carries 23
+keys and is what `ListIssueRelations` decodes
+`GET /projects/:id/issues/:issue_iid/links` into. That endpoint presents
+[lib/api/entities/related_issue.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/related_issue.rb),
+which is `API::Entities::Issue` plus four link keys, and the struct models
+roughly the shape of `IssueBasic` instead. Measured against the `v19.3.1-ee`
+entities the committed live record was taken from, twenty-four keys are
+missing and only one key of the entity is genuinely absent from that response.
+
+- Nineteen are exposed with no condition, so every relation of every response
+  carries them: `_links`, `blocking_issues_count`, `closed_at`, `closed_by`,
+  `discussion_locked`, `downvotes`, `has_tasks`, `imported`, `imported_from`,
+  `issue_type`, `merge_requests_count`, `moved_to_id`,
+  `service_desk_reply_to`, `severity`, `start_date`, `task_completion_status`,
+  `time_stats`, `type` and `upvotes`. `blocking_issues_count` is the one of
+  the nineteen that comes from the Enterprise module prepended onto the
+  entity,
+  [ee/lib/ee/api/entities/issue_basic.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/ee/api/entities/issue_basic.rb),
+  and it is exposed there under no licensed feature, so an Enterprise instance
+  sends it on every relation whatever its plan and a Community one sends
+  nothing. It wants no pointer for that reason: the key is present or the
+  whole edition is absent.
+- Four are licensed, all from
+  [ee/lib/ee/api/entities/issue.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/ee/api/entities/issue.rb):
+  `epic` and `epic_iid` under `epics`, `iteration` under `iterations` and
+  `health_status` under `issuable_health_status`. The first three resolve to
+  Premium in the record's own licensed-feature table and the last to Ultimate.
+- One, `task_status`, is gated on the issue's own content rather than on a
+  licence or a permission.
+
+`epic` is worth a sentence of its own, because the obvious modelling of it is
+wrong. It is not `gl.Epic`: the entity renders it `using: EpicBaseEntity`,
+[ee/app/serializers/epic_base_entity.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/app/serializers/epic_base_entity.rb),
+which is `id`, `iid`, `title`, `url` and `group_id`, plus two human-readable
+date strings when the epic has the dates behind them. A struct reusing the
+full epic here would advertise twenty keys the endpoint has never sent, and
+`EpicBaseEntity` is not an `API::Entities` class, so the generated record
+cannot describe it and the Ruby is the only oracle.
+
+The one key of the entity that is genuinely not on this response is
+`subscribed`, and it is instructive. `lib/api/entities/issue.rb` exposes it
+under `options.fetch(:include_subscribed, true)`, a presenter option whose
+default is to **send**, so reading the condition the way the other presenter
+options in this register are read gives the wrong answer. `lib/api/issue_links.rb`
+settles it: the route's `present` call passes `include_subscribed: false`,
+because computing the flag renders Markdown and GitLab will not do that for
+every row of a list. The key belongs on the single-issue endpoints, which do
+send it and where the SDK's `Issue` already models it.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), whose
+oracle is `docs/development/gitlab-api-live.json`. Every finding carries
+`sdk_models: false`, which is what says the gap is upstream rather than ours.
+
+**Effort**: additive and small for the scalars, two new sub-structs for `epic`
+and the `_links` object. `_links` is a fifth key wider than `gl.IssueLinks`:
+the same nested block renders `closed_as_duplicate_of` for an issue closed as
+a duplicate, which no struct in the SDK carries.
+
+### MemberRole models twenty of the forty-five permissions GitLab sends
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. Every gap is worked around.
+- **Workaround**: yes. The twenty-five permissions are read from the captured
+  response beside the SDK's decode (ADR-0021), through
+  `memberroles.capturedRole` and `capturedRoles`.
+
+**What**: `MemberRole` in client-go v3.0.0's `member_roles.go` carries 25 keys,
+20 of them permission flags, and is what all four member role routes decode
+into. `API::Entities::MemberRole` at `v19.3.1-ee` carries 50 keys, 45 of them
+permissions, every one exposed with `default: false` and no condition. So 25
+permissions are on every response of every one of those routes and the SDK
+drops all of them: `admin_ai_catalog_item`, `admin_ai_catalog_item_consumer`,
+`admin_integrations`, `admin_protected_branch`,
+`admin_protected_environments`, `admin_runners`, `admin_security_attributes`,
+`apply_security_scan_profiles`, `create_security_scan_profiles`,
+`delete_security_scan_profiles`, `destroy_package`, `read_admin_cicd`,
+`read_admin_groups`, `read_admin_monitoring`, `read_admin_projects`,
+`read_admin_subscription`, `read_admin_users`, `read_agent_artifacts`,
+`read_compliance_dashboard`, `read_crm_contact`, `read_security_attribute`,
+`read_security_scan_profiles`, `read_virtual_registry`,
+`update_sec_ai_workflow_settings` and `update_security_scan_profiles`.
+
+**This one could not have been found by reading GitLab's source, and that is
+the point of it.**
+[ee/lib/api/entities/member_role.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/api/entities/member_role.rb)
+exposes its permissions by looping over
+`::MemberRole.all_customizable_permissions`, a constant the running
+application assembles, so the file says "expose the loop variable" and names
+none of the forty-five. A scanner reading that Ruby sees zero permission keys;
+the committed live record, taken from a booted GitLab that was asked what the
+entity exposes, has all of them. This is the same class as the Geo status
+matrix in
+[entry 35](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity),
+and it is why `cmd/gen_api_live` evaluates rather than parses.
+
+The documentation cannot stand in for the entity either.
+[doc/api/member_roles.md](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/doc/api/member_roles.md)
+prints four permission keys across its example bodies and refers the reader to
+the abilities page under `doc/user` for the rest, so a contributor working from
+the page would model four.
+
+**What must not be copied across with it**: `CreateMemberRoleOptions` accepts
+the same twenty the response struct models, and this server's create inputs are
+built from those options. Whether GitLab's `POST` accepts the other twenty-five
+is a separate question this register does not answer, so the twenty-five stay
+off the input fragment here and belong in a separate change upstream if they
+are added to the options at all.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`). It had
+been recorded as an unmeasured lead in
+[entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+on the strength of the record's key count alone; the set difference against the
+SDK struct's own json names is what turned it into 25 named fields.
+
+**Effort**: trivial and mechanical. Twenty-five additive `bool` fields with
+`json` tags on one struct, and twenty-five keys added to an existing test
+fixture. Pointers are not needed upstream the way they are here: this server
+keeps them nil to distinguish a permission an older instance never had from one
+it denies, and a struct field decoding a body is under no such obligation.
+
+### PipelineInfo decodes two entities and models only the smaller one
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. Every gap is worked around.
+- **Workaround**: yes. The twelve keys are read from the captured response
+  beside the SDK's decode (ADR-0021), through `pipelines.CapturedOutput` on
+  the one route that sends them.
+
+**What**: `PipelineInfo` in client-go v3.0.0's `pipelines.go` carries 11 keys
+and is the return type of three methods that do not answer with the same
+thing. `ListProjectPipelines` and `ListMergeRequestPipelines` reach endpoints
+GitLab presents
+[lib/api/entities/ci/pipeline_basic.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/ci/pipeline_basic.rb)
+with, ten keys, and the struct models those. `CreateMergeRequestPipeline`
+reaches `POST /projects/:id/merge_requests/:merge_request_iid/pipelines`, which
+`lib/api/merge_requests.rb` presents `::API::Entities::Ci::Pipeline` with:
+[lib/api/entities/ci/pipeline.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/ci/pipeline.rb)
+inherits the basic entity and adds twelve keys, every one exposed with no
+condition. So a created merge request pipeline always carries `before_sha`,
+`tag`, `yaml_errors`, `user`, `started_at`, `finished_at`, `committed_at`,
+`duration`, `queued_duration`, `coverage`, `detailed_status` and `archived`,
+and the struct decoding it drops all twelve.
+
+The SDK already models eleven of them, on `Pipeline`, which is what the
+single-pipeline endpoints decode into. Only `archived` is on neither, and this
+register's
+[entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+is the wider statement of that half. So the fix is not new modelling: it is
+either widening `PipelineInfo` or giving `CreateMergeRequestPipeline` the
+return type its endpoint's entity already matches, which would be breaking.
+
+**Two of the twelve are objects, and neither takes the obvious struct.**
+`user` is `API::Entities::UserBasic`, which sends `public_email` and `locked`
+and no `created_at`; `gl.BasicUser` declares `created_at` and neither of the
+other two, so decoding this key into it loses two keys and offers one GitLab
+never sends. `detailed_status` is not an `API::Entities` class at all but
+[app/serializers/detailed_status_entity.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/app/serializers/detailed_status_entity.rb),
+so the generated record cannot describe it and the Ruby is the only oracle.
+
+**A second gap sits one level inside that object and is recorded rather than
+closed here**, because the audit's nested comparison cannot reach a type the
+record does not hold. `DetailedStatusEntity` renders an `action` object when
+the status has one, six keys (`icon`, `title`, `path`, `method`,
+`button_title`, `confirmation_message`), and its `illustration` merges the
+status's own `size`, `title` and `content` beside the `image` path.
+`gl.DetailedStatus` has neither the action nor those three, and
+`doc/api/merge_requests.md` documents all of them on `head_pipeline`, so the
+documentation is ahead of the struct. This server does not publish them
+either: `pipelines.StatusOutput` is filled from the SDK on the single-pipeline
+routes, and adding a key there that only the captured path could fill would
+leave it empty on every other one. Closing it means reading `detailed_status`
+from the capture everywhere, which is the next layer's work rather than this
+one's.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), which
+unions the endpoints every method returning the struct reaches and holds the
+output type against all of them. That union is what makes this finding
+readable: the twelve appear against a type whose own package never receives
+them, and the route that does is in another package entirely.
+
+**Two more things this endpoint's oracles disagree about**, both recorded and
+neither acted on:
+
+- The
+  [create merge request pipeline](https://docs.gitlab.com/api/merge_requests/#create-merge-request-pipeline)
+  section's example body prints eleven of the twelve keys and omits
+  `queued_duration`, which `lib/api/entities/ci/pipeline.rb` exposes on the
+  line after `duration` with no condition. That is a documentation merge
+  request of the kind
+  [entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+  describes, held back by the same batching.
+- `PipelineInfo` and `Pipeline` both declare a `name`, and neither
+  `Ci::PipelineBasic` nor `Ci::Pipeline` exposes one, so the field decodes on
+  none of these endpoints. The audit reports it in the other direction, as a
+  phantom on this server's own output, where it is undeclared and part of that
+  backlog. Removing an exported field is breaking, so it is recorded here the
+  way `LicenseTemplate.Featured` and the two event `Title` fields are.
+
+**Effort**: small for the eleven scalars and the timestamps. The two objects
+want the shapes above rather than the nearest existing struct, and the nested
+`action` is a struct that does not exist upstream yet.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

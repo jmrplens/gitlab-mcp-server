@@ -104,6 +104,113 @@ func TestIssueLinkList_Empty(t *testing.T) {
 	}
 }
 
+// TestIssueLinkList_PublishesTheCapturedKeys verifies that the keys
+// API::Entities::RelatedIssue sends and client-go's IssueRelation does not
+// model reach the caller through the handler, off the same bytes the SDK
+// decoded. The body carries a licensed key and a content-gated one beside the
+// unconditional ones, so a shape that dropped the capture would fail here and
+// not only in the reader's own test.
+func TestIssueLinkList_PublishesTheCapturedKeys(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testPathIssueLinks && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, relationCaptureBody)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not found"}`)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{ProjectID: testProjectID, IssueIID: 5})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Relations) != 1 {
+		t.Fatalf("expected 1 relation, got %d", len(out.Relations))
+	}
+	got := out.Relations[0]
+	scalars := map[string][2]any{
+		"severity":              {got.Severity, "HIGH"},
+		"type":                  {got.Type, "ISSUE"},
+		"issue_type":            {got.IssueType, "issue"},
+		"closed_at":             {got.ClosedAt, "2026-01-06T09:00:00Z"},
+		"epic_iid":              {got.EpicIID, int64(2)},
+		"health_status":         {got.HealthStatus, "on_track"},
+		"task_status":           {got.TaskStatus, "2 of 4 tasks completed"},
+		"blocking_issues_count": {got.BlockingIssuesCount, int64(2)},
+		"merge_requests_count":  {got.MergeRequestsCount, int64(5)},
+		"upvotes":               {got.Upvotes, int64(6)},
+		"downvotes":             {got.Downvotes, int64(3)},
+		"imported":              {got.Imported, true},
+		"imported_from":         {got.ImportedFrom, "github"},
+		"has_tasks":             {got.HasTasks, true},
+		"discussion_locked":     {got.DiscussionLocked, true},
+		"moved_to_id":           {got.MovedToID, int64(44)},
+		"start_date":            {got.StartDate, "2026-01-03"},
+		"service_desk_reply_to": {got.ServiceDeskReplyTo, "desk@e.com"},
+	}
+	for name, pair := range scalars {
+		t.Run(name, func(t *testing.T) {
+			if pair[0] != pair[1] {
+				t.Errorf("List() published %s = %v, want %v", name, pair[0], pair[1])
+			}
+		})
+	}
+	assertRelationObjectsPublished(t, got)
+}
+
+// assertRelationObjectsPublished checks the five objects the relation carries,
+// each dereferenced through its own guard so a nil never panics the test.
+func assertRelationObjectsPublished(t *testing.T, got RelationOutput) {
+	t.Helper()
+	t.Run("epic", func(t *testing.T) {
+		if got.Epic == nil || got.Epic.IID != 2 {
+			t.Errorf("epic = %+v, want the EpicBaseEntity object", got.Epic)
+		}
+	})
+	t.Run("iteration", func(t *testing.T) {
+		if got.Iteration == nil || got.Iteration.Title != "Sprint 4" {
+			t.Errorf("iteration = %+v", got.Iteration)
+		}
+	})
+	t.Run("_links", func(t *testing.T) {
+		if got.Links == nil || got.Links.Notes == "" {
+			t.Errorf("_links = %+v", got.Links)
+		}
+	})
+	t.Run("closed_by", func(t *testing.T) {
+		if got.ClosedBy == nil || got.ClosedBy.Username != "cara" {
+			t.Errorf("closed_by = %+v", got.ClosedBy)
+		}
+	})
+	t.Run("the two stat objects", func(t *testing.T) {
+		if got.TimeStats == nil || got.TaskCompletionStatus == nil {
+			t.Errorf("time_stats/task_completion_status = %+v/%+v", got.TimeStats, got.TaskCompletionStatus)
+		}
+	})
+}
+
+// TestIssueLinkList_CaptureUnreadable verifies the handler reports a body the
+// relation reader cannot hold rather than serving a relation with the keys
+// silently missing. GitLab cannot send this, so the mock is where it is
+// reachable: the SDK decodes a list of objects and the reader is handed the
+// same bytes with a key typed as something it is not.
+func TestIssueLinkList_CaptureUnreadable(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testPathIssueLinks && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":100,"blocking_issues_count":"two"}]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not found"}`)
+	}))
+
+	_, err := List(context.Background(), client, ListInput{ProjectID: testProjectID, IssueIID: 5})
+	if err == nil {
+		t.Fatal("expected an error for a captured body the relation reader cannot hold")
+	}
+	if !strings.Contains(err.Error(), toolListIssueLinks) {
+		t.Errorf("error = %v, want it to name the operation", err)
+	}
+}
+
 // TestIssueLinkList_MissingProjectID verifies IssueLinkList when missing project ID.
 func TestIssueLinkList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -698,7 +805,7 @@ func TestToRelationOutput_FullFields(t *testing.T) {
 		IssueLinkID: 1,
 		WebURL:      "https://gitlab.example.com/group/project/-/issues/8",
 	}
-	out := toRelationOutput(r)
+	out := toRelationOutput(r, relationExtra{})
 
 	if out.ID != 100 {
 		t.Errorf("ID = %d, want 100", out.ID)

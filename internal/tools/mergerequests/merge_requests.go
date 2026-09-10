@@ -1517,6 +1517,10 @@ func CreatePipeline(ctx context.Context, client *gitlabclient.Client, input Crea
 	if input.MRIID <= 0 {
 		return pipelines.Output{}, toolutil.ErrRequiredInt64("mrCreatePipeline", "merge_request_iid")
 	}
+	// This POST presents API::Entities::Ci::Pipeline, twelve keys wider than
+	// the basic entity the two pipeline lists send and than gl.PipelineInfo
+	// models, so the answer is read through the capture (ADR-0021).
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	pi, _, err := client.GL().MergeRequests.CreateMergeRequestPipeline(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -1530,7 +1534,7 @@ func CreatePipeline(ctx context.Context, client *gitlabclient.Client, input Crea
 		return pipelines.Output{}, toolutil.WrapErrWithStatusHint("mrCreatePipeline", err, http.StatusNotFound,
 			hintVerifyMR)
 	}
-	return pipelines.ToOutput(pi), nil
+	return pipelines.CapturedOutput("mrCreatePipeline", pi, captured)
 }
 
 // ---------------------------------------------------------------------------

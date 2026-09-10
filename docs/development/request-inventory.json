@@ -8530,6 +8530,16 @@
     {
       "package": "internal/tools/memberroles",
       "kind": "rest",
+      "method": "POST",
+      "path": "/groups/:group_id/member_roles",
+      "body": [
+        "base_access_level",
+        "name"
+      ]
+    },
+    {
+      "package": "internal/tools/memberroles",
+      "kind": "rest",
       "method": "GET",
       "path": "/groups/mygroup/member_roles"
     },

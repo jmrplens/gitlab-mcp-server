@@ -34,6 +34,14 @@ type ListInput struct {
 }
 
 // Output represents a single pipeline in the list response.
+//
+// The block after the SDK's own fields is what
+// `API::Entities::Ci::Pipeline` adds to the basic entity and client-go's
+// PipelineInfo declares on no field, read from the captured response
+// (ADR-0021) and described on [infoExtra]. The two pipeline lists present the
+// basic entity and send none of them; the merge request pipeline creation
+// presents the full one and sends all twelve, so each is omitted when the
+// route that filled this type did not send it.
 type Output struct {
 	toolutil.HintableOutput
 	ID        int64  `json:"id"`
@@ -47,6 +55,19 @@ type Output struct {
 	WebURL    string `json:"web_url"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
+
+	BeforeSHA      string                    `json:"before_sha,omitempty"`
+	Tag            bool                      `json:"tag,omitempty"`
+	YamlErrors     string                    `json:"yaml_errors,omitempty"`
+	User           *toolutil.UserBasicOutput `json:"user,omitempty"`
+	StartedAt      string                    `json:"started_at,omitempty"`
+	FinishedAt     string                    `json:"finished_at,omitempty"`
+	CommittedAt    string                    `json:"committed_at,omitempty"`
+	Duration       int64                     `json:"duration,omitempty"`
+	QueuedDuration int64                     `json:"queued_duration,omitempty"`
+	Coverage       string                    `json:"coverage,omitempty"`
+	DetailedStatus *StatusOutput             `json:"detailed_status,omitempty"`
+	Archived       bool                      `json:"archived,omitempty"`
 }
 
 // ListOutput holds a paginated list of pipelines.
@@ -123,6 +144,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 }
 
 // ToOutput converts a GitLab API [gl.PipelineInfo] to MCP output format.
+//
+// It is what the two pipeline lists use, whose entity sends nothing beyond
+// what the SDK models. A route presenting the full pipeline entity goes
+// through [CapturedOutput] instead.
 func ToOutput(p *gl.PipelineInfo) Output {
 	out := Output{
 		ID:        p.ID,
@@ -142,6 +167,34 @@ func ToOutput(p *gl.PipelineInfo) Output {
 		out.UpdatedAt = p.UpdatedAt.Format(time.RFC3339)
 	}
 	return out
+}
+
+// CapturedOutput converts one pipeline together with the keys its captured
+// answer carries beside the SDK's decode, or reports the answer the type
+// cannot hold.
+//
+// It is exported because the route that sends them is not in this package:
+// `POST /projects/:id/merge_requests/:iid/pipelines` is served by
+// internal/tools/mergerequests and answers with this package's type.
+func CapturedOutput(op string, p *gl.PipelineInfo, captured *gitlabclient.ResponseCapture) (Output, error) {
+	extra, err := capturedInfo(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(op, err)
+	}
+	out := ToOutput(p)
+	out.BeforeSHA = extra.BeforeSHA
+	out.Tag = extra.Tag
+	out.YamlErrors = extra.YamlErrors
+	out.User = extra.User
+	out.StartedAt = toolutil.FormatTimePtr(extra.StartedAt)
+	out.FinishedAt = toolutil.FormatTimePtr(extra.FinishedAt)
+	out.CommittedAt = toolutil.FormatTimePtr(extra.CommittedAt)
+	out.Duration = extra.Duration
+	out.QueuedDuration = extra.QueuedDuration
+	out.Coverage = extra.Coverage
+	out.DetailedStatus = extra.DetailedStatus
+	out.Archived = extra.Archived
+	return out, nil
 }
 
 // GetInput defines parameters for retrieving a single pipeline.

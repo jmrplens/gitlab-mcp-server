@@ -27,26 +27,9 @@ func FormatOutputMarkdown(o Output) string {
 	b.WriteString("\n### Permissions\n\n")
 	b.WriteString("| Permission | Granted |\n")
 	b.WriteString("| ---------- | :-----: |\n")
-	writePermRow(&b, "Admin CI/CD Variables", o.AdminCICDVariables)
-	writePermRow(&b, "Admin Compliance Framework", o.AdminComplianceFramework)
-	writePermRow(&b, "Admin Group Members", o.AdminGroupMembers)
-	writePermRow(&b, "Admin Merge Requests", o.AdminMergeRequests)
-	writePermRow(&b, "Admin Push Rules", o.AdminPushRules)
-	writePermRow(&b, "Admin Terraform State", o.AdminTerraformState)
-	writePermRow(&b, "Admin Vulnerability", o.AdminVulnerability)
-	writePermRow(&b, "Admin Webhooks", o.AdminWebHook)
-	writePermRow(&b, "Archive Project", o.ArchiveProject)
-	writePermRow(&b, "Manage Deploy Tokens", o.ManageDeployTokens)
-	writePermRow(&b, "Manage Group Access Tokens", o.ManageGroupAccessTokens)
-	writePermRow(&b, "Manage MR Settings", o.ManageMergeRequestSettings)
-	writePermRow(&b, "Manage Project Access Tokens", o.ManageProjectAccessTokens)
-	writePermRow(&b, "Manage Security Policy Link", o.ManageSecurityPolicyLink)
-	writePermRow(&b, "Read Code", o.ReadCode)
-	writePermRow(&b, "Read Runners", o.ReadRunners)
-	writePermRow(&b, "Read Dependency", o.ReadDependency)
-	writePermRow(&b, "Read Vulnerability", o.ReadVulnerability)
-	writePermRow(&b, "Remove Group", o.RemoveGroup)
-	writePermRow(&b, "Remove Project", o.RemoveProject)
+	for _, row := range permissionRows(o) {
+		writePermRow(&b, row.label, row.granted)
+	}
 	toolutil.WriteHints(
 		&b,
 		"Use `gitlab_list_instance_member_roles` or `gitlab_list_group_member_roles` to view all roles",
@@ -54,8 +37,74 @@ func FormatOutputMarkdown(o Output) string {
 	return b.String()
 }
 
+// permissionRow is one line of the permissions table: the label a reader sees
+// and the flag deciding whether the role carries it.
+type permissionRow struct {
+	label   string
+	granted *bool
+}
+
+// permissionRows is every customizable permission a member role can carry, in
+// the order the table prints them: the twenty client-go models, then the
+// twenty-five read from the captured response.
+//
+// A table rather than a run of calls because the second half grows whenever
+// GitLab adds a customizable permission, which is most releases, and a list is
+// where that is one line rather than a line plus a call site.
+func permissionRows(o Output) []permissionRow {
+	return []permissionRow{
+		{"Admin CI/CD Variables", o.AdminCICDVariables},
+		{"Admin Compliance Framework", o.AdminComplianceFramework},
+		{"Admin Group Members", o.AdminGroupMembers},
+		{"Admin Merge Requests", o.AdminMergeRequests},
+		{"Admin Push Rules", o.AdminPushRules},
+		{"Admin Terraform State", o.AdminTerraformState},
+		{"Admin Vulnerability", o.AdminVulnerability},
+		{"Admin Webhooks", o.AdminWebHook},
+		{"Archive Project", o.ArchiveProject},
+		{"Manage Deploy Tokens", o.ManageDeployTokens},
+		{"Manage Group Access Tokens", o.ManageGroupAccessTokens},
+		{"Manage MR Settings", o.ManageMergeRequestSettings},
+		{"Manage Project Access Tokens", o.ManageProjectAccessTokens},
+		{"Manage Security Policy Link", o.ManageSecurityPolicyLink},
+		{"Read Code", o.ReadCode},
+		{"Read Runners", o.ReadRunners},
+		{"Read Dependency", o.ReadDependency},
+		{"Read Vulnerability", o.ReadVulnerability},
+		{"Remove Group", o.RemoveGroup},
+		{"Remove Project", o.RemoveProject},
+		{"Admin AI Catalog Item", o.AdminAICatalogItem},
+		{"Admin AI Catalog Item Consumer", o.AdminAICatalogItemConsumer},
+		{"Admin Integrations", o.AdminIntegrations},
+		{"Admin Protected Branch", o.AdminProtectedBranch},
+		{"Admin Protected Environments", o.AdminProtectedEnvironments},
+		{"Admin Runners", o.AdminRunners},
+		{"Admin Security Attributes", o.AdminSecurityAttributes},
+		{"Apply Security Scan Profiles", o.ApplySecurityScanProfiles},
+		{"Create Security Scan Profiles", o.CreateSecurityScanProfiles},
+		{"Delete Security Scan Profiles", o.DeleteSecurityScanProfiles},
+		{"Destroy Package", o.DestroyPackage},
+		{"Read Admin CI/CD", o.ReadAdminCICD},
+		{"Read Admin Groups", o.ReadAdminGroups},
+		{"Read Admin Monitoring", o.ReadAdminMonitoring},
+		{"Read Admin Projects", o.ReadAdminProjects},
+		{"Read Admin Subscription", o.ReadAdminSubscription},
+		{"Read Admin Users", o.ReadAdminUsers},
+		{"Read Agent Artifacts", o.ReadAgentArtifacts},
+		{"Read Compliance Dashboard", o.ReadComplianceDashboard},
+		{"Read CRM Contact", o.ReadCRMContact},
+		{"Read Security Attribute", o.ReadSecurityAttribute},
+		{"Read Security Scan Profiles", o.ReadSecurityScanProfiles},
+		{"Read Virtual Registry", o.ReadVirtualRegistry},
+		{"Update Security AI Workflow Settings", o.UpdateSecAIWorkflowSettings},
+		{"Update Security Scan Profiles", o.UpdateSecurityScanProfiles},
+	}
+}
+
 // writePermRow appends a table row for an enabled permission. The value cell
 // holds a check mark (✓), written as an escape so the source stays ASCII.
+//
+//gitlab:allow-unescaped name: a permission label from permissionRows, written by this file and never a value GitLab sent.
 func writePermRow(b *strings.Builder, name string, val *bool) {
 	if val != nil && *val {
 		fmt.Fprintf(b, "| %s | \u2713 |\n", name)
