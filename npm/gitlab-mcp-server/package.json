@@ -1,6 +1,6 @@
 {
   "name": "@jmrp.io/gitlab-mcp-server",
-  "version": "2.7.5",
+  "version": "3.0.0",
   "mcpName": "io.github.jmrplens/gitlab-mcp-server",
   "description": "Model Context Protocol (MCP) server exposing GitLab REST v4 and GraphQL as tools for AI assistants. Runs as a local binary over stdio or HTTP.",
   "keywords": [
@@ -32,12 +32,12 @@
     "README.md"
   ],
   "optionalDependencies": {
-    "@jmrp.io/gitlab-mcp-server-linux-x64": "2.7.5",
-    "@jmrp.io/gitlab-mcp-server-linux-arm64": "2.7.5",
-    "@jmrp.io/gitlab-mcp-server-darwin-x64": "2.7.5",
-    "@jmrp.io/gitlab-mcp-server-darwin-arm64": "2.7.5",
-    "@jmrp.io/gitlab-mcp-server-win32-x64": "2.7.5",
-    "@jmrp.io/gitlab-mcp-server-win32-arm64": "2.7.5"
+    "@jmrp.io/gitlab-mcp-server-linux-x64": "3.0.0",
+    "@jmrp.io/gitlab-mcp-server-linux-arm64": "3.0.0",
+    "@jmrp.io/gitlab-mcp-server-darwin-x64": "3.0.0",
+    "@jmrp.io/gitlab-mcp-server-darwin-arm64": "3.0.0",
+    "@jmrp.io/gitlab-mcp-server-win32-x64": "3.0.0",
+    "@jmrp.io/gitlab-mcp-server-win32-arm64": "3.0.0"
   },
   "engines": {
     "node": ">=18"

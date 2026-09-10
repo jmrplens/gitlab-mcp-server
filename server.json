@@ -3,7 +3,7 @@
   "name": "io.github.jmrplens/gitlab-mcp-server",
   "title": "GitLab MCP Server",
   "description": "Go MCP server for GitLab: 2 dynamic tools reach 1000+ REST/GraphQL actions. Free/CE, no paid tier.",
-  "version": "2.7.5",
+  "version": "3.0.0",
   "repository": {
     "url": "https://github.com/jmrplens/gitlab-mcp-server",
     "source": "github",
@@ -29,9 +29,9 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.7.5/gitlab-mcp-server.mcpb",
-      "version": "2.7.5",
-      "fileSha256": "c224f7dca31ca5b3e53d450413ea46155798f82f9cada8c4e34e01642f60e4fe",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.0.0/gitlab-mcp-server.mcpb",
+      "version": "3.0.0",
+      "fileSha256": "61b2603175eac1be89070c945ee4330071a9fffb9e37d8fe7171323a4d0a20d2",
       "transport": {
         "type": "stdio"
       },
@@ -176,7 +176,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/jmrplens/gitlab-mcp-server:2.7.5@sha256:8eec1825b266712cd544bf1b2144e55c1eb711b4540def40e963a664c4e97168",
+      "identifier": "ghcr.io/jmrplens/gitlab-mcp-server:3.0.0@sha256:80990c658d2ac1b95c98540fbd8fc2bcf300a86a9b18c73483ed7412441b2c04",
       "transport": {
         "type": "stdio"
       },
@@ -322,7 +322,7 @@
     {
       "registryType": "npm",
       "identifier": "@jmrp.io/gitlab-mcp-server",
-      "version": "2.7.5",
+      "version": "3.0.0",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
@@ -470,7 +470,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "jmrplens-gitlab-mcp-server",
-      "version": "2.7.5",
+      "version": "3.0.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -618,7 +618,7 @@
       "registryType": "nuget",
       "registryBaseUrl": "https://api.nuget.org/v3/index.json",
       "identifier": "gitlab-mcp-server",
-      "version": "2.7.5",
+      "version": "3.0.0",
       "runtimeHint": "dnx",
       "transport": {
         "type": "stdio"
