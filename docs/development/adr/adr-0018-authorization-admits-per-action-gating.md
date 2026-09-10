@@ -95,9 +95,12 @@ decision here does not rest on that stricter reading, since nothing in any
 revision sanctions the partially anonymous surface either.
 
 Revision 2026-07-28 removed the `initialize` handshake, so the question now
-concerns `server/discover`, which servers **MUST** implement and which the
-specification nowhere requires to be anonymous; this deployment authenticates
-it like every other method.
+concerns `server/discover`. A server **implementing that revision** must
+implement the method, though calling it stays optional for the client, and
+nothing in the specification requires it to be served anonymously; this
+deployment authenticates it like every other method. The requirement is scoped
+to that revision on purpose: it says nothing about a server still speaking an
+initialization-era revision, and this one speaks several.
 
 **The catalog is published unauthenticated, and not by the mechanism this once
 named.** A Server Card under SEP-2127 deliberately carries no primitives: the
@@ -176,8 +179,10 @@ without executing.
 - NEG-004: VerifyMCP's score does not move. Six of its seven categories need
   an unauthenticated `server/discover` and `tools/list`, which this ADR
   declines to provide. The catalog those categories are looking for is at
-  `/server-card`, unauthenticated, and a scorer that reads only the JSON-RPC
-  surface will not find it.
+  `/.well-known/mcp/server-card.json`, unauthenticated, and a scorer that
+  reads only the JSON-RPC surface will not find it. VerifyMCP's own remedy is
+  to claim the listing and supply a read-only token, which is exactly the
+  `read_api` credential this ADR admits.
 
 ### Neutral
 
