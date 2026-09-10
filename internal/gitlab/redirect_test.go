@@ -5,11 +5,16 @@ package gitlab
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
 // newRedirectRequest builds the request net/http would hand to a
@@ -327,4 +332,105 @@ func TestCredentialSafeRedirect_SaysNothingWhenNothingWasDropped(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCredentialSafeRedirect_HopToMetadataAddress_Refused pins the half of the
+// redirect policy that stripping credentials never covered.
+//
+// Following a cross-host 302 is not optional: six shipped read-only actions
+// exist only because GitLab answers artifact, trace and package reads with a
+// redirect to object storage. What the credential policy cannot decide is
+// WHERE that hop goes, because the destination is chosen by whatever answered
+// rather than by the operator, and the body comes back to the caller —
+// job.trace returns up to 100 KiB of it raw. A GitLab that is compromised, or
+// a cleartext leg where a response can be injected, therefore reached a cloud
+// metadata endpoint and reflected it, on an ordinary pinned deployment the
+// instance allow-list had nothing to say about.
+//
+// The two rows are the whole trade. Object storage on the same private network
+// as a self-managed instance still works, because a deployment whose instance
+// is itself private is already inside that network. The metadata address does
+// not, on the same deployment, in the same test: tier A applies to every hop
+// of every client, and is not what --allow-private-instances permits.
+func TestCredentialSafeRedirect_HopToMetadataAddress_Refused(t *testing.T) {
+	// "localhost" and "127.0.0.1" name the same loopback address and are
+	// different hosts, which is what makes the hop leave the instance without
+	// either end becoming unreachable. httptest listens on the literal, so the
+	// instance is the end addressed by name.
+	storage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("artifact bytes"))
+	}))
+	t.Cleanup(storage.Close)
+
+	tests := []struct {
+		name        string
+		location    string
+		wantRefused bool
+		wantBody    string
+	}{
+		{
+			name:     "a hop to ordinary object storage still succeeds",
+			location: storage.URL + "/artifact.zip",
+			wantBody: "artifact bytes",
+		},
+		{
+			name:        "a hop to the cloud metadata address is refused",
+			location:    "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+			wantRefused: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := followOneRedirect(t, tt.location)
+			if resp != nil {
+				defer resp.Body.Close()
+			}
+
+			if tt.wantRefused {
+				if !errors.Is(err, ErrDestinationRefused) {
+					t.Fatalf("err = %v, want a refusal: the hop reached a metadata address", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("a hop to object storage on the instance's own private network was refused: %v", err)
+			}
+			body, readErr := io.ReadAll(resp.Body)
+			if readErr != nil {
+				t.Fatalf("reading the redirected body: %v", readErr)
+			}
+			if string(body) != tt.wantBody {
+				t.Errorf("body = %q, want %q", body, tt.wantBody)
+			}
+		})
+	}
+}
+
+// followOneRedirect stands up a GitLab that answers /api/v4/version with a 302
+// to location, and reads that redirect through a client configured for it.
+//
+// The instance is addressed as "localhost" while httptest listens on the
+// literal 127.0.0.1, which is what makes any hop to another loopback service a
+// hop that left the instance: the two names are different hosts and the same
+// address.
+func followOneRedirect(t *testing.T, location string) (*http.Response, error) {
+	t.Helper()
+
+	instance := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, location, http.StatusFound)
+	}))
+	t.Cleanup(instance.Close)
+
+	instanceURL := strings.Replace(instance.URL, "127.0.0.1", "localhost", 1)
+	client, err := NewClient(&config.Config{GitLabURL: instanceURL, GitLabToken: "glpat-x", DisableRetries: true})
+	if err != nil {
+		t.Fatalf("NewClient() unexpected error: %v", err)
+	}
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, instanceURL+"/api/v4/version", http.NoBody)
+	if err != nil {
+		t.Fatalf("http.NewRequestWithContext() unexpected error: %v", err)
+	}
+	return client.healthClient.Do(req)
 }

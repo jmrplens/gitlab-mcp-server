@@ -556,6 +556,71 @@ func TestMcpServerGate_WithIdentity_AttachesThePooledUser(t *testing.T) {
 	}
 }
 
+// TestMcpServerGate_Resolve_RefusesACallerNamedPrivateInstance covers the
+// early refusal the gate makes when the header names an address this server
+// would decline to dial anyway.
+//
+// The dialer is the authority and would refuse the same destination, but only
+// after the credential has been admitted, a pool entry built and every action
+// attempted. Refusing here costs one comparison and gives an operator a 400
+// that names the flag instead of a server that starts and then fails
+// everything (ADR-0022).
+//
+// The published-instance row is the other half of the rule and the one that
+// keeps every ordinary deployment working: with an instance published, the
+// header selects among the operator's own, so nothing here judges it. The
+// gate never resolves a name either, which the hostname row pins: only the
+// dialer sees what a name resolved to.
+//
+// Which address classes count as private is settled by the predicate's own
+// table in internal/gitlab and is not restated here. A row naming a publicly
+// routable literal would be admitted, and an admitted row goes on to build a
+// pool entry: against a blackholed address that costs ten seconds of dial
+// timeout for an assertion the predicate already makes for nothing.
+func TestMcpServerGate_Resolve_RefusesACallerNamedPrivateInstance(t *testing.T) {
+	tests := []struct {
+		name        string
+		published   []string
+		header      string
+		wantRefused bool
+	}{
+		{name: "an unpinned deployment refuses a loopback instance", header: "http://127.0.0.1:8080", wantRefused: true},
+		{name: "an unpinned deployment refuses a metadata address", header: "http://169.254.169.254", wantRefused: true},
+		{name: "an unpinned deployment leaves a host name to the dialer", header: "https://gitlab.example.com", wantRefused: false},
+		{
+			name:      "a published instance is the operator's own",
+			published: []string{"http://127.0.0.1:8080"}, header: "http://127.0.0.1:8080", wantRefused: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Retries off: an admitted row goes on to build a pool entry
+			// against an address nothing answers on, and retryablehttp's
+			// linear backoff would spend seconds on a probe whose answer this
+			// test does not read.
+			cfg := &config.Config{GitLabURL: "https://gitlab.example.com", IgnoreScopes: true, TierExplicit: true, DisableRetries: true}
+			pool := serverpool.New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+				return mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil), nil
+			})
+			t.Cleanup(pool.Close)
+			gate := &mcpServerGate{pool: pool, gitlabURLs: tt.published, challenge: legacyAuthChallenge}
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+			req.Header.Set("PRIVATE-TOKEN", "glpat-caller")
+			req.Header.Set("GITLAB-URL", tt.header)
+
+			_, failure := gate.resolve(req)
+
+			refused := failure != nil && failure.status == http.StatusBadRequest &&
+				strings.Contains(failure.message, "destination refused")
+			if refused != tt.wantRefused {
+				t.Fatalf("refused = %v, want %v (failure = %+v)", refused, tt.wantRefused, failure)
+			}
+		})
+	}
+}
+
 // TestMcpServerGate_WithIdentity_UnknownTokenLeavesContextAlone verifies that
 // an unresolved identity is left absent rather than stored empty, so a handler
 // can tell "the lookup did not succeed" from "a user with no name".

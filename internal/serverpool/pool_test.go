@@ -77,6 +77,51 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// TestBuildEntry_UnpublishedInstance_IsCallerNamed verifies that the pool
+// tells a new client who chose its instance, which is the one thing the
+// outbound destination guard cannot work out for itself.
+//
+// A client is built from a URL string, and the string looks identical whether
+// --gitlab-url published it or a caller's GITLAB-URL header did. Only the pool
+// knows, because only the pool knows what the deployment published, and
+// getting it wrong is expensive in both directions: mark every client and
+// every self-hosted GitLab on a private address stops working, mark none and
+// the escape hatch is an unrestricted outbound proxy again.
+//
+// It is asserted through a real call rather than by reading the client's
+// state, because the state is only interesting if it reaches the dialer.
+// Both instances here are the same loopback stub, so the address is held
+// constant and the only variable is who named it.
+func TestBuildEntry_UnpublishedInstance_IsCallerNamed(t *testing.T) {
+	tests := []struct {
+		name        string
+		published   string
+		wantRefused bool
+	}{
+		{name: "the deployment publishes no instance", published: "", wantRefused: true},
+		{name: "the deployment publishes this instance", published: stubGitLabBase, wantRefused: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := testConfig(tt.published)
+			pool := New(cfg, testFactory())
+			t.Cleanup(pool.Close)
+
+			entry, err := pool.GetOrCreateEntry("glpat-token", stubGitLabBase, nil)
+			if err != nil {
+				t.Fatalf("GetOrCreateEntry() unexpected error: %v", err)
+			}
+
+			_, err = entry.Client().Ping(t.Context())
+
+			if got := errors.Is(err, gitlabclient.ErrDestinationRefused); got != tt.wantRefused {
+				t.Fatalf("destination refused = %v, want %v (err = %v)", got, tt.wantRefused, err)
+			}
+		})
+	}
+}
+
 // TestGetOrCreate_A401OnACallDropsTheEntry verifies the first data call
 // GitLab refuses drops the entry, so the next request re-verifies the
 // credential instead of being served a revoked token until the periodic

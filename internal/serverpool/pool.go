@@ -694,6 +694,13 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (
 	if err != nil {
 		return nil, fmt.Errorf("creating gitlab client for pool: %w", err)
 	}
+	// A deployment that publishes no instance is --allow-any-gitlab-url, so
+	// this URL came out of a caller's GITLAB-URL header rather than out of the
+	// operator's configuration. The client is the only place that can tell the
+	// difference, and it cannot tell it from the string. See ADR-0022.
+	if len(p.cfg.InstanceURLs()) == 0 {
+		client.MarkInstanceCallerNamed()
+	}
 	client.SetTier(p.cfg.Tier)
 
 	if verifyErr := p.verifyUnderProbeBound(client); verifyErr != nil {

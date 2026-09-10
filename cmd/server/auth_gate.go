@@ -14,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -503,6 +504,26 @@ func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailur
 			status:  http.StatusBadRequest,
 			code:    errCodeInvalidRequest,
 			message: g.invalidURLMessage(r, err),
+		}
+	}
+	// A caller who spells a private or a cloud-metadata address in the header
+	// is refused at the door rather than at the dialer. Both would refuse, and
+	// the dialer is still the authority — this consults the same predicate —
+	// but reaching it means admitting the credential, building a pool entry
+	// and failing every action afterwards, for a destination this server was
+	// never going to connect to.
+	//
+	// Only where the header chooses the instance. With one or more published,
+	// the header selects among the operator's own, which is exempt by
+	// construction: see ADR-0022.
+	if len(g.gitlabURLs) == 0 {
+		if refusal := gitlabclient.CheckCallerNamedInstance(options.GitLabURL); refusal != nil {
+			refusalLog.log(r.Context(), slog.LevelInfo, "request rejected: the GITLAB-URL header named a destination this server will not connect to", "error", refusal)
+			return nil, &gateFailure{
+				status:  http.StatusBadRequest,
+				code:    errCodeInvalidRequest,
+				message: capitalizeFirst(refusal.Error()) + ".",
+			}
 		}
 	}
 	logIgnoredRequestOptions(token, options)

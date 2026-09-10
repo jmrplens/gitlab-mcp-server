@@ -1762,6 +1762,79 @@ func TestWrapErr_UnboundClient_ComposesTheWholeMessageWithoutTheSyntheticHost(t 
 	}
 }
 
+// TestWrapErr_DestinationRefused_NamesTheFlagThatPermitsIt covers what a model
+// is told when this server declined to open the connection an action needed.
+//
+// Three things have to be true of that message and none of them is automatic.
+// It must say the request never left the process, because every network-shaped
+// reading of the symptom sends an operator to check DNS and firewalls for a
+// connection nobody attempted. It must name the flag, because that is the one
+// string that changes the outcome and the cause deliberately does not carry
+// it. And it must keep the chain, or nothing downstream can recognize the
+// refusal for what it is.
+func TestWrapErr_DestinationRefused_NamesTheFlagThatPermitsIt(t *testing.T) {
+	cause := &url.Error{
+		Op:  "Get",
+		URL: "https://gitlab.example.com/api/v4/jobs/1/trace",
+		Err: fmt.Errorf("%w: a redirect away from gitlab.example.com reached the private address 10.0.0.1",
+			gitlabclient.ErrDestinationRefused),
+	}
+
+	wrappers := map[string]func() error{
+		"WrapErr":               func() error { return WrapErr("jobTrace", cause) },
+		"WrapErrWithMessage":    func() error { return WrapErrWithMessage("jobTrace", cause) },
+		"WrapErrWithHint":       func() error { return WrapErrWithHint("jobTrace", cause, "check the job id") },
+		"WrapErrWithStatusHint": func() error { return WrapErrWithStatusHint("jobTrace", cause, 404, "check the job id") },
+	}
+
+	for name, wrap := range wrappers {
+		t.Run(name, func(t *testing.T) {
+			got := wrap()
+			text := got.Error()
+
+			if !strings.Contains(text, DestinationRefusedMessage) {
+				t.Errorf("the composed message does not say the request never left the process:\n%s", text)
+			}
+			if !strings.Contains(text, "--allow-private-instances") {
+				t.Errorf("the composed message does not name the flag that permits it:\n%s", text)
+			}
+			if !strings.Contains(text, "10.0.0.1") {
+				t.Errorf("the composed message does not name the address that was refused:\n%s", text)
+			}
+			if !errors.Is(got, gitlabclient.ErrDestinationRefused) {
+				t.Error("the wrapping lost the cause, so nothing downstream can recognize it any more")
+			}
+		})
+	}
+}
+
+// TestClassifyError_DestinationRefused_IsNotAnUnreachableHost pins the
+// classification apart from the network branches below it.
+//
+// "GitLab server is unreachable" and "network error reaching GitLab" are both
+// wrong here and wrong in the expensive direction: they describe something
+// between this server and GitLab, when what happened is that this server
+// declined to make the connection and nothing was sent anywhere.
+func TestClassifyError_DestinationRefused_IsNotAnUnreachableHost(t *testing.T) {
+	tests := map[string]error{
+		"as the transport reports it": &url.Error{
+			Op:  "Get",
+			URL: "https://gitlab.example.com/api/v4/user",
+			Err: fmt.Errorf("%w: the GITLAB-URL header named an instance on the private address 10.0.0.1",
+				gitlabclient.ErrDestinationRefused),
+		},
+		"wrapped without a round trip": fmt.Errorf("dialing: %w", gitlabclient.ErrDestinationRefused),
+	}
+
+	for name, err := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := ClassifyError(err); got != DestinationRefusedMessage {
+				t.Errorf("ClassifyError() = %q, want %q", got, DestinationRefusedMessage)
+			}
+		})
+	}
+}
+
 // TestSanitizeError_UnboundClient_ExplainsItselfToTheHandlersThatNeverWrap
 // covers the forty-eight handlers that do not go through the wrapping helpers.
 //

@@ -258,10 +258,17 @@ func TestGate_SinglePublishedInstance_IgnoresTheHeader(t *testing.T) {
 // requests for anyone who can reach it. The warning is emitted by startup code
 // no request-level assertion would ever look at, so it is read out of the
 // process's own output.
+//
+// The hatch is two flags now, and that is the shape a local deployment really
+// takes: --allow-any-gitlab-url says a caller may name the instance, and
+// --allow-private-instances says that instance may be on this machine. The
+// fake GitLab here is on a loopback address, so without the second flag the
+// outbound destination guard refuses the header before the pool sees it
+// (ADR-0022), and this test would be asserting the wrong policy.
 func TestGate_InstanceEscapeHatch_AcceptsAHeaderNamedInstance(t *testing.T) {
 	named := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
 
-	srv := startServer(t, nil, "--allow-any-gitlab-url")
+	srv := startServer(t, nil, "--allow-any-gitlab-url", "--allow-private-instances=true")
 
 	t.Run("the header names the instance and the call is served", func(t *testing.T) {
 		got := srv.do(t, mcpPOST(map[string]string{
@@ -1256,4 +1263,94 @@ func TestGate_StatefulServesEveryRevisionExceptTheStatelessOne(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestAllowAnyGitLabURL_LinkLocalHeader_Refused pins the destination guard on
+// the one deployment shape where a caller chooses the instance.
+//
+// Under --allow-any-gitlab-url the GITLAB-URL header names the host for every
+// request, and the thing choosing that header on a single-user local
+// deployment is a model that has read untrusted content. That is the
+// prompt-injection network-scanner shape rather than a remote attacker, and it
+// is what tier B of the guard is for: a destination this server's operator did
+// not choose may not be a private, loopback, CGNAT or link-local address.
+//
+// The refusal is made at the gate rather than left to the dialer, which is why
+// this is deterministic: no connection is attempted to any of these addresses,
+// in either direction of the assertion. The dialer is still the authority and
+// covers the case the gate cannot see, a host spelled as a name that resolves
+// to a private address.
+//
+// The four rows are one policy read from four sides: refused, refused with the
+// flag named, admitted once the flag is passed, and still refused with the
+// flag passed when the address is a cloud metadata endpoint. See ADR-0022.
+func TestAllowAnyGitLabURL_LinkLocalHeader_Refused(t *testing.T) {
+	t.Run("a link-local instance is refused", func(t *testing.T) {
+		srv := startServer(t, nil)
+
+		got := srv.do(t, mcpPOST(map[string]string{
+			"PRIVATE-TOKEN": "glpat-x",
+			"GITLAB-URL":    "http://169.254.169.254",
+		}))
+
+		if got.status != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusBadRequest, truncate(got.body))
+		}
+		body := decodeJSONRPCError(t, got.body)
+		if !strings.Contains(body.Error.Message, "169.254.169.254") {
+			t.Errorf("the refusal should name the address it refused, got %q", body.Error.Message)
+		}
+	})
+
+	t.Run("a loopback instance is refused and names the flag", func(t *testing.T) {
+		gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+		srv := startServer(t, nil)
+
+		got := srv.do(t, mcpPOST(map[string]string{
+			"PRIVATE-TOKEN": "glpat-x",
+			"GITLAB-URL":    gitlab.url,
+		}))
+
+		if got.status != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusBadRequest, truncate(got.body))
+		}
+		body := decodeJSONRPCError(t, got.body)
+		if !strings.Contains(body.Error.Message, "--allow-private-instances") {
+			t.Errorf("the refusal should name the flag that permits it, got %q", body.Error.Message)
+		}
+		if gitlab.calls() != 0 {
+			t.Error("the credential was sent to an instance this server had already decided not to connect to")
+		}
+	})
+
+	t.Run("--allow-private-instances admits the same instance", func(t *testing.T) {
+		gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+		srv := startServer(t, nil, "--allow-private-instances=true")
+
+		got := srv.do(t, mcpPOST(map[string]string{
+			"PRIVATE-TOKEN": "glpat-x",
+			"GITLAB-URL":    gitlab.url,
+		}))
+
+		if got.status != http.StatusOK {
+			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusOK, truncate(got.body))
+		}
+		if gitlab.calls() == 0 {
+			t.Error("the instance was never contacted; the opt-out did not reach the guard")
+		}
+	})
+
+	t.Run("the metadata address stays refused with the flag", func(t *testing.T) {
+		srv := startServer(t, nil, "--allow-private-instances=true")
+
+		got := srv.do(t, mcpPOST(map[string]string{
+			"PRIVATE-TOKEN": "glpat-x",
+			"GITLAB-URL":    "http://169.254.169.254",
+		}))
+
+		if got.status != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d: --allow-private-instances is not a claim about metadata addresses: %s",
+				got.status, http.StatusBadRequest, truncate(got.body))
+		}
+	})
 }

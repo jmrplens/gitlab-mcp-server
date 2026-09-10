@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
 // envBackedFlags are the settings whose only home used to be an environment
@@ -71,6 +72,11 @@ var envBackedFlags = []struct {
 		flagName: "description-substitutions",
 		envName:  "GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS",
 		usage:    "Rewrite listed descriptions and titles for strict gateway validators: comma-separated old=new pairs (escape with backslash)",
+	},
+	{
+		flagName: "allow-private-instances",
+		envName:  gitlabclient.AllowPrivateInstancesEnv,
+		usage:    "Permit a destination this server's operator did not choose (a GITLAB-URL header under --allow-any-gitlab-url, or a redirect hop that left the instance) to resolve to a private, loopback or CGNAT address: true or false. Cloud metadata addresses stay refused",
 	},
 	{
 		flagName: "pprof-addr",
