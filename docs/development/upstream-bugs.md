@@ -996,7 +996,9 @@ merge requests have gone to `gitlab-org/gitlab` from its own
 [!254542](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254542),
 [!254543](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254543),
 [!254547](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254547) and
-[!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552).
+[!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552). The
+first of them, `!254507`, was merged into `master` on 2026-09-10; the other
+eight are open.
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
 response attribute tables as well as the examples, and the other entities
@@ -2020,8 +2022,10 @@ markdown. We keep emitting both.
 
 ### Three job token scope endpoints declare a response entity they do not send
 
-- **Reported**: no, not yet.
-- **In review**: no.
+- **Reported**: yes.
+- **In review**: yes,
+  [gitlab-org/gitlab!254698](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254698),
+  labelled `workflow::ready for review` and `tw::triaged`.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes, a declaration. The 13 findings this produces against
