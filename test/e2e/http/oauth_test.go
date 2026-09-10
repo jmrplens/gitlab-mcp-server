@@ -286,6 +286,49 @@ func TestOAuth_DiscoveryCardCarriesNoPrimitivesAndNamesTheCredential(t *testing.
 			}
 		})
 	}
+
+	// The half this test is named for, and which it did not check until a
+	// review noticed. oauthServer passes --public-url, so the card must carry
+	// exactly one remote pointing at it, and the credential must be stated as
+	// an input on that remote: it is where a card says what the enumerating
+	// document says in an authentication block. Without this the route wiring
+	// could regress to publishing no remote at all and everything above would
+	// still pass.
+	t.Run("the remote names the credential", func(t *testing.T) {
+		var carded struct {
+			Remotes []struct {
+				Type    string `json:"type"`
+				URL     string `json:"url"`
+				Headers []struct {
+					Name       string `json:"name"`
+					IsRequired bool   `json:"isRequired"`
+					IsSecret   bool   `json:"isSecret"`
+				} `json:"headers"`
+			} `json:"remotes"`
+		}
+		if err := json.Unmarshal([]byte(got.body), &carded); err != nil {
+			t.Fatalf("card is not JSON: %v\n%s", err, got.body)
+		}
+		if len(carded.Remotes) != 1 {
+			t.Fatalf("remotes = %d, want exactly one for a deployment that names a public URL: %s", len(carded.Remotes), got.body)
+		}
+		remote := carded.Remotes[0]
+		if remote.URL != publicURL {
+			t.Errorf("remote url = %q, want the deployment's public URL %q", remote.URL, publicURL)
+		}
+		if remote.Type != "streamable-http" {
+			t.Errorf("remote type = %q, want streamable-http", remote.Type)
+		}
+		if len(remote.Headers) != 1 || remote.Headers[0].Name != "Authorization" {
+			t.Fatalf("headers = %+v, want Authorization in oauth mode", remote.Headers)
+		}
+		if !remote.Headers[0].IsRequired {
+			t.Error("isRequired = false, but a connection with no credential is answered 401")
+		}
+		if !remote.Headers[0].IsSecret {
+			t.Error("isSecret = false for a credential header")
+		}
+	})
 }
 
 // TestOAuth_RejectedTokenSaysInvalidToken verifies that a refused credential is

@@ -443,9 +443,11 @@ empty value counts as unset.
 
 ## Seeing whether it is on
 
-The enumerating server card reports it. That is the document at the
-`.well-known` path: the SEP-2127 card at `/server-card` states identity and
-connection details only, and carries no capability blocks at all.
+The server card reports it, and it has to be the right one of the two. The
+`.well-known` path serves the **SEP-1649 enumerating document**, which is the
+one carrying the capability blocks and this `telemetry` block among them. The
+SEP-2127 card at `/server-card` states identity and connection details only,
+so the same query against that path returns nothing.
 
 ```bash
 curl -s http://localhost:8080/.well-known/mcp/server-card.json | jq .telemetry
