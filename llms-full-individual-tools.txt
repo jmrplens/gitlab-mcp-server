@@ -443,11 +443,12 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_add_project_mirror
 
-Create a push (remote) mirror on a project. Returns: the created mirror with id, enabled state, redacted URL, and update status. See also: gitlab_list_project_mirrors, gitlab_edit_project_mirror, gitlab_get_project_mirror_public_key.
+Create a push (remote) mirror on a project. Destructive: the host in url receives the whole repository from then on, so confirmation is required. Returns: the created mirror with id, enabled state, redacted URL, and update status. See also: gitlab_list_project_mirrors, gitlab_edit_project_mirror, gitlab_get_project_mirror_public_key.
 
 **Parameters:**
 
 - `auth_method` (string): Authentication method (password or ssh_public_key)
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `enabled` (boolean): Whether the mirror is enabled
 - `host_keys` (array of strings): SSH host keys for the remote mirror
 - `keep_divergent_refs` (boolean): Keep divergent refs on the remote
@@ -456,7 +457,7 @@ Create a push (remote) mirror on a project. Returns: the created mirror with id,
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `url` (string) (required): Remote push mirror URL (e.g. https://user:token@example.com/repo.git). URL-embedded credentials are supported only for push mirrors. Treat them as secrets, do not log or store them, and redact tokens or passwords in telemetry/errors
 
-Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 #### gitlab_add_snippet_discussion_note
 

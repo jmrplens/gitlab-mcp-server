@@ -262,6 +262,8 @@ Operations that modify or delete data use a confirmation flow (see [Error Handli
 3. **MCP elicitation** — Interactive user confirmation when supported by the client
 4. **Fail-safe** — If no confirmation mechanism is available, the operation is cancelled
 
+What the guard runs on is one bit, `destructiveHint`, declared per action in the catalog and read by all three surfaces. Deletion is the obvious member of that class and is not the whole of it: an action is classified destructive when its effect cannot be undone by calling the opposite action, and that includes an action that gives a party outside the instance something it did not have. `project.mirror_add` (`gitlab_add_project_mirror`) is the case worth naming, because it does not read as destructive: creating a push mirror deletes nothing, and hands the host named in `url` a continuous copy of the whole repository from then on. The URL is a tool parameter, so a model acting on an issue body that asks for a "backup mirror" would otherwise exfiltrate the repository with one call and no user in the loop. Since 3.0.0 that call requires confirmation like any other destructive one.
+
 ## Read-Only and Safe Mode
 
 Two opt-in modes narrow what the server can do to a GitLab instance, independently of the token's own permissions:
