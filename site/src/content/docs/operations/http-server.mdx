@@ -662,13 +662,23 @@ A successful response returns a JSON-RPC result with the list of available tools
 
 ### Server card
 
-`GET /server-card` needs no credentials either, and answers with the MCP server-card document: every tool, resource, resource template and prompt this deployment registers, with its schemas, plus the capabilities it advertises.
+Two documents, at two paths, and neither needs a credential. They are not the same document.
+
+`GET /server-card` answers the **SEP-2127 Server Card**: who this server is and how to connect to it. Identity (`name`, `version`, `description`, `title`, `websiteUrl`, `repository`) and, when the deployment names a `--public-url`, a `remotes` entry with the credential header a client must send. It carries **no tools, resources, prompts or capabilities**, which is that extension's own decision: what a server exposes varies by authenticated user, session, configuration and feature flags, so a static document cannot answer it.
 
 ```bash
 curl -s http://localhost:8080/server-card
 ```
 
-The response carries `Content-Type: application/mcp-server-card+json`. The same document is served at the legacy path `/.well-known/mcp/server-card.json` as `application/json`, for clients written against the earlier location. Both are mounted under `--public-url`'s path prefix as well, for a proxy that forwards its prefix rather than stripping it.
+The response carries `Content-Type: application/mcp-server-card+json`.
+
+`GET /.well-known/mcp/server-card.json` answers the **earlier SEP-1649 document**, which does enumerate: every tool, resource, resource template and prompt this deployment registers, with its schemas, plus the capabilities it advertises and blocks describing authentication, subscriptions and telemetry. It is served as `application/json`, and it is what to fetch when you want the catalog without a credential.
+
+```bash
+curl -s http://localhost:8080/.well-known/mcp/server-card.json
+```
+
+Both are mounted under `--public-url`'s path prefix as well, for a proxy that forwards its prefix rather than stripping it. Before 3.1.0 both paths answered the enumerating document and differed only in `Content-Type`, which left the older shape at the location SEP-2127 reserves.
 
 This is the sanctioned way to publish the catalog to something holding no credential — a directory, a scanner, a documentation build. `tools/list` stays authenticated, because the MCP authorization specification requires a server that requires authorization to validate the token before processing a request.
 

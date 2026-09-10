@@ -214,39 +214,73 @@ func TestOAuth_ServerCardFollowsTheAuthMode(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
 	srv := oauthServer(t, gitlab.url)
 
-	// Both locations: /server-card is what the server-card extension
-	// recommends, and the .well-known path its earlier draft did.
-	for _, path := range []string{"/server-card", "/.well-known/mcp/server-card.json"} {
-		t.Run(path, func(t *testing.T) {
-			got := srv.do(t, request{method: http.MethodGet, path: path})
-			if got.status != http.StatusOK {
-				t.Fatalf("status = %d, want %d", got.status, http.StatusOK)
-			}
+	// The `authentication` block belongs to the enumerating SEP-1649
+	// document, which lives at the .well-known path. /server-card answers the
+	// SEP-2127 card, whose equivalent claim is the credential header on its
+	// remote, and which is asserted separately below.
+	got := srv.do(t, request{method: http.MethodGet, path: "/.well-known/mcp/server-card.json"})
+	if got.status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", got.status, http.StatusOK)
+	}
 
-			var card struct {
-				Authentication struct {
-					Required         bool     `json:"required"`
-					Schemes          []string `json:"schemes"`
-					ResourceMetadata string   `json:"resourceMetadata"`
-					Scopes           []string `json:"scopes"`
-				} `json:"authentication"`
-			}
-			if err := json.Unmarshal([]byte(got.body), &card); err != nil {
-				t.Fatalf("card is not JSON: %v\n%s", err, got.body)
-			}
-			if !slices.Equal(card.Authentication.Schemes, []string{"oauth2"}) {
-				t.Errorf("schemes = %v, want [oauth2] in oauth mode", card.Authentication.Schemes)
-			}
-			if !card.Authentication.Required {
-				t.Error("required = false, want true")
-			}
-			if card.Authentication.ResourceMetadata == "" {
-				t.Error("the card should point at the RFC 9728 document in oauth mode")
-			}
-			if !slices.Contains(card.Authentication.Scopes, "api") {
-				t.Errorf("scopes = %v, want it to name the scope this deployment recommends", card.Authentication.Scopes)
-			}
-		})
+	var card struct {
+		Authentication struct {
+			Required         bool     `json:"required"`
+			Schemes          []string `json:"schemes"`
+			ResourceMetadata string   `json:"resourceMetadata"`
+			Scopes           []string `json:"scopes"`
+		} `json:"authentication"`
+	}
+	if err := json.Unmarshal([]byte(got.body), &card); err != nil {
+		t.Fatalf("card is not JSON: %v\n%s", err, got.body)
+	}
+	if !slices.Equal(card.Authentication.Schemes, []string{"oauth2"}) {
+		t.Errorf("schemes = %v, want [oauth2] in oauth mode", card.Authentication.Schemes)
+	}
+	if !card.Authentication.Required {
+		t.Error("required = false, want true")
+	}
+	if card.Authentication.ResourceMetadata == "" {
+		t.Error("the card should point at the RFC 9728 document in oauth mode")
+	}
+	if !slices.Contains(card.Authentication.Scopes, "api") {
+		t.Errorf("scopes = %v, want it to name the scope this deployment recommends", card.Authentication.Scopes)
+	}
+}
+
+// TestOAuth_DiscoveryCardCarriesNoPrimitivesAndNamesTheCredential pins the
+// half of the split that a conformance checker looks at.
+//
+// /server-card is the location SEP-2127 reserves, and that extension omits
+// primitives on purpose. Until the split this path answered the enumerating
+// document, so a checker reading the reserved location found a shape that
+// extension does not define, and the public deployment had to shadow the route
+// with a static file to be conformant.
+//
+// The credential claim does not disappear with the primitives: it moves to the
+// remote's header input, which is where that extension puts it.
+func TestOAuth_DiscoveryCardCarriesNoPrimitivesAndNamesTheCredential(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := oauthServer(t, gitlab.url)
+
+	got := srv.do(t, request{method: http.MethodGet, path: "/server-card"})
+	if got.status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", got.status, http.StatusOK)
+	}
+
+	var card map[string]any
+	if err := json.Unmarshal([]byte(got.body), &card); err != nil {
+		t.Fatalf("card is not JSON: %v\n%s", err, got.body)
+	}
+	for _, key := range []string{"tools", "resources", "resourceTemplates", "prompts", "capabilities"} {
+		if _, found := card[key]; found {
+			t.Errorf("the SEP-2127 card carries %q; that extension omits primitives on purpose", key)
+		}
+	}
+	for _, key := range []string{"$schema", "name", "version", "description"} {
+		if _, found := card[key]; !found {
+			t.Errorf("the SEP-2127 card is missing the required field %q", key)
+		}
 	}
 }
 

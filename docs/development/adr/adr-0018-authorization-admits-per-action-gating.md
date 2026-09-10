@@ -180,9 +180,11 @@ without executing.
   an unauthenticated `server/discover` and `tools/list`, which this ADR
   declines to provide. The catalog those categories are looking for is at
   `/.well-known/mcp/server-card.json`, unauthenticated, and a scorer that
-  reads only the JSON-RPC surface will not find it. VerifyMCP's own remedy is
-  to claim the listing and supply a read-only token, which is exactly the
-  `read_api` credential this ADR admits.
+  reads only the JSON-RPC surface will not find it. Fetching `/server-card`
+  instead will not help either: that path answers the SEP-2127 card, which
+  omits primitives by design. VerifyMCP's own remedy is to claim the listing
+  and supply a read-only token, which is exactly the `read_api` credential
+  this ADR admits.
 
 ### Neutral
 

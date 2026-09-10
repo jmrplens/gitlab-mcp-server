@@ -443,10 +443,12 @@ empty value counts as unset.
 
 ## Seeing whether it is on
 
-The server card reports it:
+The enumerating server card reports it. That is the document at the
+`.well-known` path: the SEP-2127 card at `/server-card` states identity and
+connection details only, and carries no capability blocks at all.
 
 ```bash
-curl -s http://localhost:8080/server-card | jq .telemetry
+curl -s http://localhost:8080/.well-known/mcp/server-card.json | jq .telemetry
 ```
 
 ```json
