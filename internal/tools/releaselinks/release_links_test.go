@@ -808,8 +808,10 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_ExternalFalse verifies FormatOutputMarkdown when external false.
-func TestFormatOutputMarkdown_ExternalFalse(t *testing.T) {
+// TestFormatOutputMarkdown_LinkType verifies FormatOutputMarkdown renders the
+// link type GitLab sends. It used to assert the `external` flag beside it,
+// which no Grape entity has exposed since 16.0.
+func TestFormatOutputMarkdown_LinkType(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:       5,
 		Name:     "Runbook",
@@ -817,7 +819,7 @@ func TestFormatOutputMarkdown_ExternalFalse(t *testing.T) {
 		LinkType: "runbook",
 	})
 	if !strings.Contains(md, "- **Type**: runbook") {
-		t.Errorf("expected External=false:\n%s", md)
+		t.Errorf("expected the runbook link type:\n%s", md)
 	}
 }
 
