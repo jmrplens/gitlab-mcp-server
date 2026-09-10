@@ -382,23 +382,72 @@ jobs:
       # own `provenance: true` attestation, which is unsigned in-toto JSON
       # inside the index and binds to no verifiable identity.
       #
-      # One attestation per registry, over the one digest both of them serve:
+      # Three attestations per registry, over the digests both of them serve:
       # the multi-platform build is pushed once and the two registries hold the
-      # identical index, so `docker-push.outputs.digest` is the subject for
-      # both and the two steps differ only in the name they bind it to.
-      # push-to-registry attaches the attestation to the index as well as
-      # storing it in GitHub's attestation store, because a scanner reading a
-      # registry cannot see that store. It changes the index's referrers and
-      # never the index itself, so the digest server.json pins stays exactly
-      # what docker-push reported and no re-stamp is needed.
+      # identical index, so `docker-push.outputs.digest` and the two platform
+      # manifests it lists are the subjects for both, and the steps differ only
+      # in the name they bind them to. push-to-registry attaches each
+      # attestation to its subject as well as storing it in GitHub's
+      # attestation store, because a scanner reading a registry cannot see that
+      # store. It changes the subject's referrers and never the subject itself,
+      # so the digest server.json pins stays exactly what docker-push reported
+      # and no re-stamp is needed.
+      #
+      # The platform manifests are attested as well as the index because a
+      # verifier does not agree with itself about which digest "the image" is.
+      # `gh attestation verify oci://` resolves a tag to the index and asks
+      # GitHub's store for that digest. A scanner that pulls the image for its
+      # own platform resolves the index to one platform manifest and looks for
+      # referrers of THAT digest: the verifymcp.io scan of 3.0.0 reports its
+      # subject as the linux/amd64 manifest, not the index, and found the
+      # cosign signature there only because `cosign sign --recursive` signs
+      # every manifest the index lists. An attestation over the index alone is
+      # invisible to that reading; one per platform manifest is what the
+      # recursive signature already does for the signature.
       #
       # Verify: gh attestation verify oci://<ref>@<digest> -R jmrplens/gitlab-mcp-server
-      - name: Attest build provenance (ghcr.io)
+      - name: Read the platform manifest digests
+        id: platform-digests
+        if: env.REHEARSAL != 'true'
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.docker-push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          index=$(docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .Manifest}}')
+          for arch in amd64 arm64; do
+            digest=$(jq -r --arg a "$arch" \
+              '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $a) | .digest][0] // ""' \
+              <<< "$index")
+            if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::the pushed index lists no linux/${arch} manifest (got '${digest}')"
+              exit 1
+            fi
+            echo "${arch}=${digest}" >> "$GITHUB_OUTPUT"
+            echo "linux/${arch} manifest ${digest}"
+          done
+
+      - name: Attest build provenance (ghcr.io, index)
         if: env.REHEARSAL != 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.docker-push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest build provenance (ghcr.io, linux/amd64)
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.platform-digests.outputs.amd64 }}
+          push-to-registry: true
+
+      - name: Attest build provenance (ghcr.io, linux/arm64)
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.platform-digests.outputs.arm64 }}
           push-to-registry: true
 
       # Docker Hub is a published channel of this image, not a mirror: it is
@@ -416,12 +465,28 @@ jobs:
       # credential up. Writing registry-1.docker.io here to "help" would only
       # put a name in the attestation that no other file of this repository
       # uses.
-      - name: Attest build provenance (Docker Hub)
+      - name: Attest build provenance (Docker Hub, index)
         if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
           subject-digest: ${{ steps.docker-push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest build provenance (Docker Hub, linux/amd64)
+        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
+          subject-digest: ${{ steps.platform-digests.outputs.amd64 }}
+          push-to-registry: true
+
+      - name: Attest build provenance (Docker Hub, linux/arm64)
+        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
+          subject-digest: ${{ steps.platform-digests.outputs.arm64 }}
           push-to-registry: true
 
       # The Docker Hub repository descriptions are owned by this repo so they
