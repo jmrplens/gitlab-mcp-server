@@ -423,17 +423,11 @@ func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecO
 			toolutil.SchemaApproverIDsOverride("approver_ids"),
 			toolutil.SchemaApproverIDsOverride("approved_by_ids"),
 		}
-	case "list_global":
-		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"opened", "closed", "locked", "merged", "all"}}),
-			toolutil.SchemaPropertyOverride("scope", map[string]any{"enum": []any{"created_by_me", "assigned_to_me", "all"}}),
-			toolutil.SchemaPropertyOverride("order_by", map[string]any{"enum": []any{"created_at", "updated_at"}}),
-			toolutil.SchemaPropertyOverride("wip", map[string]any{"enum": []any{"yes", "no"}}),
-			toolutil.SchemaPropertyOverride("view", map[string]any{"enum": []any{"simple"}}),
-			toolutil.SchemaApproverIDsOverride("approver_ids"),
-			toolutil.SchemaApproverIDsOverride("approved_by_ids"),
-		}
-	case "list_group":
+	// The global and group listings take the same overrides, and their enums
+	// differ from the project listing's in one value: neither accepts title as
+	// an order_by. Spelling them once says they agree on purpose, where two
+	// identical blocks left a reader comparing seven lines by eye to find out.
+	case "list_global", "list_group":
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"opened", "closed", "locked", "merged", "all"}}),
 			toolutil.SchemaPropertyOverride("scope", map[string]any{"enum": []any{"created_by_me", "assigned_to_me", "all"}}),
