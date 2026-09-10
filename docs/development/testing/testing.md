@@ -18,12 +18,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,307 |
-| Unit test functions                                   | 14,701 |
+| Total test functions                                  | 15,322 |
+| Unit test functions                                   | 14,716 |
 | E2E test functions                                    |    606 |
-| cmd test functions                                    |  2,995 |
-| Test files (internal/)                                |    526 |
-| Test files (cmd/)                                     |    203 |
+| cmd test functions                                    |  3,008 |
+| Test files (internal/)                                |    528 |
+| Test files (cmd/)                                     |    204 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     22 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,099 | 79.0% |
+| `TestFunc_Scenario` (2-part)           | 12,101 | 79.0% |
 | `TestFunc` (no underscore)             |    975 |  6.4% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,233 | 14.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,246 | 14.7% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,488 |        150 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            336 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,882 |        360 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,884 |        362 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            606 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,995 |        203 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,307** |    **969** |                                                                                                 |
+| cmd packages            |          3,008 |        204 | server entry point and developer command utilities                                              |
+| **Total**               |     **15,322** |    **972** |                                                                                                 |
 
 ### Core Packages
 
@@ -149,7 +149,7 @@
 | customattributes        |        32 |          1 |   100.0% |         4 |
 | customemoji             |        29 |          2 |   100.0% |         3 |
 | dbmigrations            |         7 |          1 |   100.0% |         1 |
-| dependencies            |        17 |          2 |   100.0% |         4 |
+| dependencies            |        18 |          3 |   100.0% |         4 |
 | dependencyfirewall      |        19 |          3 |   100.0% |         1 |
 | dependencyproxy         |         5 |          1 |   100.0% |         1 |
 | deploykeys              |        76 |          2 |   100.0% |         9 |
@@ -259,7 +259,7 @@
 | releaselinks            |        60 |          2 |   100.0% |         6 |
 | releases                |        67 |          1 |   100.0% |         6 |
 | repository              |        70 |          1 |   100.0% |         9 |
-| repositorysubmodules    |        53 |          3 |   100.0% |         3 |
+| repositorysubmodules    |        54 |          4 |   100.0% |         3 |
 | resourceevents          |       115 |          3 |   100.0% |        17 |
 | resourcegroups          |        16 |          1 |   100.0% |         4 |
 | runnercontrollers       |        34 |          2 |   100.0% |         5 |
@@ -294,7 +294,7 @@
 | wikis                   |        62 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,882** |    **360** |          | **1,187** |
+| **Total**               | **8,884** |    **362** |          | **1,187** |
 
 </details>
 
