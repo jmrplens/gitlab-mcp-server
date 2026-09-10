@@ -198,6 +198,49 @@ connecting it to the output type.
 **Effort**: small. A documentation correction, though the deprecated POST's
 example needs to stay reachable for callers still using it.
 
+### Two project group listings are annotated with the whole Group entity
+
+- **Reported**: yes.
+- **In review**: yes,
+  [gitlab-org/gitlab!254699](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254699).
+- **Merged**: no.
+- **Blocking**: no. Our output type is already the right shape; only the audit
+  was misled.
+- **Workaround**: yes, a declaration. `cmd/audit_1to1/internal/paths/sent_declarations.go`
+  answers the 49 findings this raised against `projects.ProjectGroupOutput`
+  under `documented-response-is-not-the-one-sent`.
+
+**Where**: `lib/api/projects.rb`, the `desc` blocks for
+`GET :id/share_locations` and `GET :id/invited_groups`.
+
+**What**: both descriptions say `success Entities::Group`, and both handlers
+call `present_groups`, defined a few hundred lines above in the same file,
+which presents `with: Entities::PublicGroupDetails`. `PublicGroupDetails` is
+`BasicGroupDetails` plus `avatar_url`, `full_name` and `full_path`, so six keys
+in total, against roughly seventy for `Group`.
+
+Their sibling `GET :id/groups` calls the same helper and is annotated
+`Entities::PublicGroupDetails`, correctly, so three adjacent routes share one
+helper and two of them disagree with it.
+
+**Confirmed against the API**, not by reading alone. All three endpoints answer
+with exactly six keys on GitLab.com: `id`, `name`, `avatar_url`, `web_url`,
+`full_name`, `full_path`.
+
+**Root cause**: the same class as the three job token scope annotations
+recorded above. A `desc` block naming an entity the handler does not present is
+invisible to every test, because Grape uses it for documentation only.
+
+**How we found it**: the R-PATH sent dimension read `Entities::Group` off the
+route annotation and reported all 49 of that entity's fields as missing from
+`ProjectGroupOutput`, which publishes the six the endpoint really sends. It was
+the largest single block left in the backlog, 49 of 117, and it was not work at
+all.
+
+**Effort**: small. One line in `lib/api/projects.rb` plus the regenerated
+OpenAPI document, where the change is a single `$ref`, because
+`APIEntitiesPublicGroupDetails` is already a component of the document.
+
 ## GitLab client (`gitlab.com/gitlab-org/api/client-go`)
 
 ### Panic unmarshalling an issue with no id

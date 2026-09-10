@@ -261,6 +261,20 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 			"pending-invitation object is what the GET at the same path lists. The shape declaration for the other " +
 			"direction of this join records the same thing.",
 	},
+	{
+		Package:  toolsDir + "/projects",
+		Entity:   "API::Entities::Group",
+		Field:    declaredSegment,
+		Category: categoryDocumentedNotSent,
+		Reason: "lib/api/projects.rb describes GET :id/share_locations and GET :id/invited_groups as answering with " +
+			"Entities::Group, and both call present_groups, the helper defined in the same file, which presents " +
+			"Entities::PublicGroupDetails. Their sibling GET :id/groups calls the same helper and is annotated " +
+			"PublicGroupDetails, correctly. PublicGroupDetails is BasicGroupDetails plus avatar_url, full_name and " +
+			"full_path, which is six keys, and all three endpoints answer with exactly those six on GitLab.com: id, " +
+			"name, avatar_url, web_url, full_name, full_path. ProjectGroupOutput publishes all six, so the type is " +
+			"already 1:1 and the 49 fields read against it are the whole Group entity arriving through the wrong " +
+			"annotation. Recorded in docs/development/upstream-bugs.md; the fix is gitlab-org/gitlab!254699.",
+	},
 	// The nine membership keys the billable members list is read against.
 	// Named one by one rather than with a splat: internal/tools/groupmembers
 	// also publishes API::Entities::Member on its own Output, where a finding

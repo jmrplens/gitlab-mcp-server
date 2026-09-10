@@ -467,10 +467,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,246 |     267,003 |
+| Source (`.go`, non-test) |     1,246 |     267,017 |
 | Unit tests (`_test.go`)  |       735 |     437,473 |
 | End-to-end tests         |       246 |      66,458 |
-| **Total**                | **2,227** | **770,934** |
+| **Total**                | **2,227** | **770,948** |
 
 ### Functions
 
@@ -523,7 +523,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | Source code printed at 55 lines/page | ~4,854 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 15,510 (impossible to avoid)                                                                         |
+| Source lines mentioning `"gitlab"`   | 15,512 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
