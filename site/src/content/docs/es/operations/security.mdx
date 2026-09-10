@@ -326,14 +326,24 @@ gh attestation verify oci://docker.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrple
 
 Los dos comandos responden preguntas distintas y ninguno sustituye al otro. La firma liga el índice a la identidad del workflow de release; su predicado está vacío, así que dice quién subió la imagen y no qué entró en ella. La atestación de procedencia nombra el commit de origen y la ejecución del workflow.
 
-La imagen lleva además una atestación de SBOM, una por manifiesto de plataforma y no una sobre el índice, porque un índice no tiene contenido propio. `gh attestation verify` resuelve una etiqueta al índice y allí no encuentra ningún SBOM, así que verifícalo por el digest del manifiesto que ejecutas:
+La imagen lleva además una atestación de SBOM sobre el índice **y** sobre cada manifiesto de plataforma, de modo que tanto un escáner que resuelve una etiqueta como uno que resuelve la plataforma que ejecuta encuentran un documento. El tipo de predicado es `https://spdx.dev/Document` sin versión, que es la forma con la que comparan los escáneres:
 
 ```bash
-# SBOM: qué hay dentro de la imagen, un documento por plataforma
+# SBOM: qué hay dentro de la imagen. Una etiqueta resuelve al índice, que lleva uno.
+gh attestation verify oci://ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server \
+  --predicate-type https://spdx.dev/Document
+
+# O por el digest del manifiesto de plataforma que realmente ejecutas
 digest=$(docker buildx imagetools inspect ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 \
   --format '{{range .Manifest.Manifests}}{{if and .Platform (eq .Platform.Architecture "amd64")}}{{.Digest}}{{end}}{{end}}')
 gh attestation verify "oci://ghcr.io/jmrplens/gitlab-mcp-server@${digest}" -R jmrplens/gitlab-mcp-server \
-  --predicate-type https://spdx.dev/Document/v2.3
+  --predicate-type https://spdx.dev/Document
+```
+
+Cada uno de esos documentos se adjunta una segunda vez como referrer `application/spdx+json` en crudo, porque lo que escribe la atestación es un bundle de sigstore y un lector que busca el propio tipo de medio SPDX no lo reconoce. Ambos aparecen juntos:
+
+```bash
+oras discover --format tree ghcr.io/jmrplens/gitlab-mcp-server:3.0.0
 ```
 
 :::note

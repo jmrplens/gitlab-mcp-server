@@ -45,7 +45,14 @@
 #     and NuGet pushes the runtime-identifier packages before the pointer that
 #     names them;
 #   * the MCP Registry publish runs after npm, PyPI, NuGet and the image push,
-#     because it validates every one of those entries by fetching them.
+#     because it validates every one of those entries by fetching them;
+#   * nothing that signs or attests the image lives in the job that builds it.
+#     The build is not byte-reproducible, so a re-run of that job pushes a new
+#     index under the same tags; keeping the fourteen signing and attestation
+#     operations in sign-attest is what makes a failed attestation cost a
+#     re-run of the signing rather than a rebuild that moves the tag. The
+#     release job names sign-attest so that a failure there still stops every
+#     publisher, which is what the old arrangement got for free.
 name: Release
 
 on:
@@ -180,11 +187,18 @@ jobs:
       # layout the same build was exported to, so the stamping jobs pin the
       # index the registry would have received.
       digest: ${{ steps.docker-push.outputs.digest || steps.rehearsal-digest.outputs.digest }}
+      # The two platform manifests the index lists, read once here and passed
+      # on so sign-attest does not have to inspect the registry again.
+      amd64: ${{ steps.platform-digests.outputs.amd64 }}
+      arm64: ${{ steps.platform-digests.outputs.arm64 }}
+      dockerhub: ${{ steps.dockerhub-login.outputs.skip }}
     permissions:
       contents: read # checkout
       packages: write # ghcr.io push via GITHUB_TOKEN login
-      id-token: write # cosign keyless signing
-      attestations: write # actions/attest-build-provenance for the image index
+      # No id-token and no attestations: this job builds and pushes, and the
+      # signing identity lives in sign-attest, which runs no third-party build
+      # action. Splitting them is what keeps a re-run of a failed attestation
+      # from rebuilding the image and moving the tag (see sign-attest).
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -240,9 +254,27 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # The commit's own timestamp, not the wall clock. `date -u` made every
+      # run of this job produce a different label and index annotation, so two
+      # runs over one commit could never agree, and the digest moved with them.
+      # That is the difference between re-running this job being free and it
+      # replacing what the tag points at. It does not make the build fully
+      # reproducible on its own, because BuildKit's `provenance: true`
+      # attestation carries timestamps of its own, but it removes the one
+      # source of churn this workflow controls.
       - name: Compute build date
         id: build-date
-        run: echo "date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          date=$(git show -s --format=%cI "$COMMIT_SHA" | sed 's/+00:00/Z/')
+          if ! [[ "$date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
+            echo "::error::could not read the commit timestamp (got '${date}')"
+            exit 1
+          fi
+          echo "date=$date" >> "$GITHUB_OUTPUT"
+          echo "build date ${date}, from the commit rather than the clock"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4
@@ -332,20 +364,6 @@ jobs:
             ${{ steps.dockerhub-login.outputs.skip == 'false' && format('docker.io/{0}:{1}', env.DOCKERHUB_IMAGE, steps.version.outputs.version) || '' }}
             ${{ steps.dockerhub-login.outputs.skip == 'false' && format('docker.io/{0}:latest', env.DOCKERHUB_IMAGE) || '' }}
 
-      # Keyless signing reads an OIDC token from the ambient GitHub endpoint,
-      # which intermittently answers with a plain-text error body instead of
-      # JSON. cosign then fails with "fetching ambient OIDC credentials:
-      # invalid character 'u' looking for beginning of value" and takes the
-      # whole release down even though the image pushed fine (v2.5.3 failed
-      # this way and signed cleanly on a rerun with no code change). Retry
-      # before giving up so a blip on that endpoint stops leaving published
-      # images unsigned.
-      - name: Sign Docker image (ghcr.io)
-        if: env.REHEARSAL != 'true'
-        env:
-          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.docker-push.outputs.digest }}
-        run: bash .github/scripts/cosign-sign-retry.sh "$IMAGE_REF"
-
       # Rehearsal only: the action reports the exported index's digest the same
       # way it reports a pushed one, and the OCI layout's own index.json is
       # read if it does not, so the stamping jobs never run on an empty value.
@@ -367,45 +385,10 @@ jobs:
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           echo "rehearsed image index ${digest}, exported to a tarball and pushed nowhere"
 
-      - name: Sign Docker image (Docker Hub)
-        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
-        env:
-          IMAGE_REF: docker.io/${{ env.DOCKERHUB_IMAGE }}@${{ steps.docker-push.outputs.digest }}
-        run: bash .github/scripts/cosign-sign-retry.sh "$IMAGE_REF"
-
-      # The cosign signatures above prove who pushed the index, and their
-      # in-toto predicate is empty: they answer "was this pushed by our release
-      # job" and not "which commit and which run produced it". That second
-      # question is what build provenance is, and every release binary and the
-      # .mcpb already answer it through actions/attest-build-provenance while
-      # the image did not. The only provenance the image carried was BuildKit's
-      # own `provenance: true` attestation, which is unsigned in-toto JSON
-      # inside the index and binds to no verifiable identity.
-      #
-      # Three attestations per registry, over the digests both of them serve:
-      # the multi-platform build is pushed once and the two registries hold the
-      # identical index, so `docker-push.outputs.digest` and the two platform
-      # manifests it lists are the subjects for both, and the steps differ only
-      # in the name they bind them to. push-to-registry attaches each
-      # attestation to its subject as well as storing it in GitHub's
-      # attestation store, because a scanner reading a registry cannot see that
-      # store. It changes the subject's referrers and never the subject itself,
-      # so the digest server.json pins stays exactly what docker-push reported
-      # and no re-stamp is needed.
-      #
-      # The platform manifests are attested as well as the index because a
-      # verifier does not agree with itself about which digest "the image" is.
-      # `gh attestation verify oci://` resolves a tag to the index and asks
-      # GitHub's store for that digest. A scanner that pulls the image for its
-      # own platform resolves the index to one platform manifest and looks for
-      # referrers of THAT digest: the verifymcp.io scan of 3.0.0 reports its
-      # subject as the linux/amd64 manifest, not the index, and found the
-      # cosign signature there only because `cosign sign --recursive` signs
-      # every manifest the index lists. An attestation over the index alone is
-      # invisible to that reading; one per platform manifest is what the
-      # recursive signature already does for the signature.
-      #
-      # Verify: gh attestation verify oci://<ref>@<digest> -R jmrplens/gitlab-mcp-server
+      # The two platform manifests the pushed index lists. Read here rather
+      # than in sign-attest so the registry is inspected once, and published as
+      # a job output because every attestation subject downstream is one of
+      # these three digests.
       - name: Read the platform manifest digests
         id: platform-digests
         if: env.REHEARSAL != 'true'
@@ -425,69 +408,6 @@ jobs:
             echo "${arch}=${digest}" >> "$GITHUB_OUTPUT"
             echo "linux/${arch} manifest ${digest}"
           done
-
-      - name: Attest build provenance (ghcr.io, index)
-        if: env.REHEARSAL != 'true'
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
-        with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.docker-push.outputs.digest }}
-          push-to-registry: true
-
-      - name: Attest build provenance (ghcr.io, linux/amd64)
-        if: env.REHEARSAL != 'true'
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
-        with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.platform-digests.outputs.amd64 }}
-          push-to-registry: true
-
-      - name: Attest build provenance (ghcr.io, linux/arm64)
-        if: env.REHEARSAL != 'true'
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
-        with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.platform-digests.outputs.arm64 }}
-          push-to-registry: true
-
-      # Docker Hub is a published channel of this image, not a mirror: it is
-      # declared in server.json, its repository description is owned by this
-      # repository, and the image is signed there separately above. It is
-      # attested on the same terms. Gated on the same login check as the push,
-      # so a release without Docker Hub credentials skips it instead of
-      # failing on an image that was never pushed.
-      #
-      # `docker.io/...` is the right spelling here even though
-      # https://docker.io/v2/ serves no registry API at all (it redirects to
-      # the marketing site): actions/attest canonicalizes any registry ending
-      # in docker.io to registry-1.docker.io before it builds the client, and
-      # canonicalizes the same three aliases when it looks the docker login
-      # credential up. Writing registry-1.docker.io here to "help" would only
-      # put a name in the attestation that no other file of this repository
-      # uses.
-      - name: Attest build provenance (Docker Hub, index)
-        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
-        with:
-          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
-          subject-digest: ${{ steps.docker-push.outputs.digest }}
-          push-to-registry: true
-
-      - name: Attest build provenance (Docker Hub, linux/amd64)
-        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
-        with:
-          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
-          subject-digest: ${{ steps.platform-digests.outputs.amd64 }}
-          push-to-registry: true
-
-      - name: Attest build provenance (Docker Hub, linux/arm64)
-        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
-        with:
-          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
-          subject-digest: ${{ steps.platform-digests.outputs.arm64 }}
-          push-to-registry: true
 
       # An SBOM of the image, discoverable as a referrer, beside the one
       # BuildKit already writes. `sbom: true` on the build puts an SPDX
@@ -585,50 +505,17 @@ jobs:
             echo "linux/${arch}: ${packages} packages from ${source}"
           done
 
-      # actions/attest itself rather than the actions/attest-sbom wrapper. The
-      # wrapper is deprecated and says so with a warning on every run, and it
-      # delegates to actions/attest v4.1.0, whose Docker Hub credential lookup
-      # matches a docker config key by substring, while the provenance steps
-      # above reach v4.2.1 through their own wrapper, which matches the
-      # canonicalized host. One version for all ten steps. The input is the
-      # one the wrapper forwarded unchanged: sbom-path reads spdxVersion and
-      # derives the predicate type, https://spdx.dev/Document/v2.3 for what
-      # syft writes.
-      - name: Attest SBOM (ghcr.io, linux/amd64)
-        if: env.REHEARSAL != 'true'
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+      # The documents cross to sign-attest as an artifact rather than being
+      # attested here, because the signing identity is no longer in this job.
+      # A rehearsal uploads too: the upload is part of the path a release takes
+      # and costs a few hundred kilobytes.
+      - name: Keep the SBOMs for the signing job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.platform-digests.outputs.amd64 }}
-          sbom-path: image-sbom-amd64.spdx.json
-          push-to-registry: true
-
-      - name: Attest SBOM (ghcr.io, linux/arm64)
-        if: env.REHEARSAL != 'true'
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
-        with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.platform-digests.outputs.arm64 }}
-          sbom-path: image-sbom-arm64.spdx.json
-          push-to-registry: true
-
-      - name: Attest SBOM (Docker Hub, linux/amd64)
-        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
-        with:
-          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
-          subject-digest: ${{ steps.platform-digests.outputs.amd64 }}
-          sbom-path: image-sbom-amd64.spdx.json
-          push-to-registry: true
-
-      - name: Attest SBOM (Docker Hub, linux/arm64)
-        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
-        with:
-          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
-          subject-digest: ${{ steps.platform-digests.outputs.arm64 }}
-          sbom-path: image-sbom-arm64.spdx.json
-          push-to-registry: true
+          name: image-sboms
+          path: image-sbom-*.spdx.json
+          retention-days: 1
+          if-no-files-found: error
 
       # The Docker Hub repository descriptions are owned by this repo so they
       # cannot drift (they had been empty since the repository was published,
@@ -653,6 +540,417 @@ jobs:
           short-description: "MCP server exposing 1,000+ GitLab operations as AI-accessible tools. By jmrp.io"
           readme-filepath: ./.github/dockerhub-description.md
 
+  # Signing and attestation, in a job of their own, for two reasons that both
+  # bite in practice.
+  #
+  # The first is what a re-run does. The docker job builds and pushes, and its
+  # build is not byte-reproducible: BuildKit's `provenance: true` attestation
+  # carries its own timestamps whatever the build args say. While the fourteen
+  # signing and attestation operations lived in that job, one of them failing
+  # meant "re-run failed jobs" re-ran the whole thing, rebuilt the image, and
+  # pushed a NEW index under the same `3.0.0` and `latest` tags, orphaning the
+  # index that had already been signed and attested and leaving server.json
+  # pinning a digest the tag no longer resolves to. Here, a failed attestation
+  # re-runs three minutes of signing against the image that is already
+  # published, and no tag moves. The GitHub release being immutable does not
+  # help with this: the thing that moves is a registry tag.
+  #
+  # The second is who holds the identity. This job runs no third-party build
+  # action: no QEMU image, no BuildKit, no GoReleaser. The docker job keeps
+  # `packages: write` and loses `id-token`, so the credential the attestation
+  # store trusts is no longer live while code fetched at build time runs.
+  #
+  # The SBOMs are generated in the docker job rather than here, and cross as an
+  # artifact, because a rehearsal has no pushed image to scan and does have the
+  # two smoke images in that job's daemon. Generating them there is what keeps
+  # syft's install and the scan rehearsable; attesting them there is what this
+  # split undoes.
+  sign-attest:
+    name: "🔏 Sign and attest"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [preflight, docker]
+    env:
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+      INDEX_DIGEST: ${{ needs.docker.outputs.digest }}
+      AMD64_DIGEST: ${{ needs.docker.outputs.amd64 }}
+      ARM64_DIGEST: ${{ needs.docker.outputs.arm64 }}
+      DOCKERHUB_SKIP: ${{ needs.docker.outputs.dockerhub }}
+    permissions:
+      contents: read # checkout, for cosign-sign-retry.sh
+      packages: write # ghcr.io referrer writes
+      id-token: write # cosign keyless signing and the attestation identity
+      attestations: write # actions/attest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
+
+      # Nothing is signed or attested in a rehearsal, so nothing below runs and
+      # this job needs no credential then either.
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        if: env.REHEARSAL != 'true'
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        if: env.REHEARSAL != 'true' && env.DOCKERHUB_SKIP == 'false'
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Take the SBOMs the docker job generated
+        if: env.REHEARSAL != 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: image-sboms
+
+      # The digests this job was handed must be real before anything is signed
+      # against them: a job output that arrived empty would otherwise sign the
+      # string "@" and fail somewhere less legible.
+      - name: Check the digests the docker job handed over
+        if: env.REHEARSAL != 'true'
+        run: |
+          set -euo pipefail
+          for name in INDEX_DIGEST AMD64_DIGEST ARM64_DIGEST; do
+            value="${!name}"
+            if ! [[ "$value" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::${name} is not a sha256 digest (got '${value}')"
+              exit 1
+            fi
+            echo "${name}=${value}"
+          done
+
+      # Keyless signing reads an OIDC token from the ambient GitHub endpoint,
+      # which intermittently answers with a plain-text error body instead of
+      # JSON. cosign then fails with "fetching ambient OIDC credentials:
+      # invalid character 'u' looking for beginning of value" and takes the
+      # whole release down even though the image pushed fine (v2.5.3 failed
+      # this way and signed cleanly on a rerun with no code change). Retry
+      # before giving up so a blip on that endpoint stops leaving published
+      # images unsigned.
+      - name: Sign Docker image (ghcr.io)
+        if: env.REHEARSAL != 'true'
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.docker.outputs.digest }}
+        run: bash .github/scripts/cosign-sign-retry.sh "$IMAGE_REF"
+
+      - name: Sign Docker image (Docker Hub)
+        if: env.REHEARSAL != 'true' && env.DOCKERHUB_SKIP == 'false'
+        env:
+          IMAGE_REF: docker.io/${{ env.DOCKERHUB_IMAGE }}@${{ needs.docker.outputs.digest }}
+        run: bash .github/scripts/cosign-sign-retry.sh "$IMAGE_REF"
+
+      # The cosign signatures above prove who pushed the index, and their
+      # in-toto predicate is empty: they answer "was this pushed by our release
+      # job" and not "which commit and which run produced it". That second
+      # question is what build provenance is, and every release binary and the
+      # .mcpb already answer it through actions/attest-build-provenance while
+      # the image did not. The only provenance the image carried was BuildKit's
+      # own `provenance: true` attestation, which is unsigned in-toto JSON
+      # inside the index and binds to no verifiable identity.
+      #
+      # Three attestations per registry, over the digests both of them serve:
+      # the multi-platform build is pushed once and the two registries hold the
+      # identical index, so the index digest and the two platform manifests it
+      # lists are the subjects for both, and the steps differ only in the name
+      # they bind them to. push-to-registry attaches each attestation to its
+      # subject as well as storing it in GitHub's attestation store, because a
+      # scanner reading a registry cannot see that store. It changes the
+      # subject's referrers and never the subject itself, so the digest
+      # server.json pins stays exactly what docker-push reported and no
+      # re-stamp is needed.
+      #
+      # The platform manifests are attested as well as the index because a
+      # verifier does not agree with itself about which digest "the image" is.
+      # `gh attestation verify oci://` resolves a tag to the index and asks
+      # GitHub's store for that digest. A scanner that pulls the image for its
+      # own platform resolves the index to one platform manifest and looks for
+      # referrers of THAT digest: the verifymcp.io scan of 3.0.0 reports its
+      # subject as the linux/amd64 manifest, not the index, and found the
+      # cosign signature there only because `cosign sign --recursive` signs
+      # every manifest the index lists. An attestation over the index alone is
+      # invisible to that reading; one per platform manifest is what the
+      # recursive signature already does for the signature.
+      #
+      # `docker.io/...` is the right spelling even though https://docker.io/v2/
+      # serves no registry API at all (it redirects to the marketing site):
+      # actions/attest canonicalizes any registry ending in docker.io to
+      # registry-1.docker.io before it builds the client, and canonicalizes the
+      # same three aliases when it looks the docker login credential up.
+      #
+      # Verify: gh attestation verify oci://<ref>@<digest> -R jmrplens/gitlab-mcp-server
+      - name: Attest build provenance (ghcr.io, index)
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ needs.docker.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest build provenance (ghcr.io, linux/amd64)
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ needs.docker.outputs.amd64 }}
+          push-to-registry: true
+
+      - name: Attest build provenance (ghcr.io, linux/arm64)
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ needs.docker.outputs.arm64 }}
+          push-to-registry: true
+
+      - name: Attest build provenance (Docker Hub, index)
+        if: env.REHEARSAL != 'true' && env.DOCKERHUB_SKIP == 'false'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
+          subject-digest: ${{ needs.docker.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest build provenance (Docker Hub, linux/amd64)
+        if: env.REHEARSAL != 'true' && env.DOCKERHUB_SKIP == 'false'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
+          subject-digest: ${{ needs.docker.outputs.amd64 }}
+          push-to-registry: true
+
+      - name: Attest build provenance (Docker Hub, linux/arm64)
+        if: env.REHEARSAL != 'true' && env.DOCKERHUB_SKIP == 'false'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
+          subject-digest: ${{ needs.docker.outputs.arm64 }}
+          push-to-registry: true
+
+      # actions/attest itself rather than the actions/attest-sbom wrapper. The
+      # wrapper is deprecated and says so with a warning on every run, and it
+      # delegates to an older actions/attest whose Docker Hub credential lookup
+      # matches a docker config key by substring, while the provenance steps
+      # above reach v4.2.1 through their own wrapper, which matches the
+      # canonicalized host. One version for all twelve attestations.
+      #
+      # predicate-type and predicate-path rather than sbom-path. sbom-path does
+      # two things: it checks the file is SPDX or CycloneDX, which the docker
+      # job's package-count guard already does, and it derives the predicate
+      # type from spdxVersion, which yields https://spdx.dev/Document/v2.3.
+      # The in-toto specification blesses that spelling and the unversioned
+      # https://spdx.dev/Document equally, listing both Type URIs on
+      # spec/predicates/spdx2.md, so this is interoperability rather than
+      # correctness. It matters because Trivy matches in_toto.PredicateSPDX,
+      # the unversioned literal, by exact equality: measured with everything
+      # else held identical, the unversioned form is read as
+      # "sigstore-bundle-spdx-json" and the versioned one as "unknown" and
+      # refused. cosign, BuildKit and in-toto-golang all emit the unversioned
+      # form; actions/attest is the outlier.
+      #
+      # Six steps, index included. An index has no contents of its own, so the
+      # index attestation carries the amd64 document by convention rather than
+      # by right, and it is there because a consumer that resolves a tag looks
+      # at the index and nowhere else: with the SBOM on the platform manifests
+      # alone, `trivy image <tag>` finds nothing and --platform does not change
+      # it. The platform attestations are what a scanner that already resolved
+      # one architecture looks under, which is the digest verifymcp.io reports
+      # as the subject it examined. This is the correction to an earlier
+      # reading here that attesting the index would be "a document about
+      # nothing": true of the semantics, false of what consumers do.
+      - name: Attest SBOM (ghcr.io, index)
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ needs.docker.outputs.digest }}
+          predicate-type: https://spdx.dev/Document
+          predicate-path: image-sbom-amd64.spdx.json
+          push-to-registry: true
+
+      - name: Attest SBOM (ghcr.io, linux/amd64)
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ needs.docker.outputs.amd64 }}
+          predicate-type: https://spdx.dev/Document
+          predicate-path: image-sbom-amd64.spdx.json
+          push-to-registry: true
+
+      - name: Attest SBOM (ghcr.io, linux/arm64)
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ needs.docker.outputs.arm64 }}
+          predicate-type: https://spdx.dev/Document
+          predicate-path: image-sbom-arm64.spdx.json
+          push-to-registry: true
+
+      - name: Attest SBOM (Docker Hub, index)
+        if: env.REHEARSAL != 'true' && env.DOCKERHUB_SKIP == 'false'
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
+          subject-digest: ${{ needs.docker.outputs.digest }}
+          predicate-type: https://spdx.dev/Document
+          predicate-path: image-sbom-amd64.spdx.json
+          push-to-registry: true
+
+      - name: Attest SBOM (Docker Hub, linux/amd64)
+        if: env.REHEARSAL != 'true' && env.DOCKERHUB_SKIP == 'false'
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
+          subject-digest: ${{ needs.docker.outputs.amd64 }}
+          predicate-type: https://spdx.dev/Document
+          predicate-path: image-sbom-amd64.spdx.json
+          push-to-registry: true
+
+      - name: Attest SBOM (Docker Hub, linux/arm64)
+        if: env.REHEARSAL != 'true' && env.DOCKERHUB_SKIP == 'false'
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
+          subject-digest: ${{ needs.docker.outputs.arm64 }}
+          predicate-type: https://spdx.dev/Document
+          predicate-path: image-sbom-arm64.spdx.json
+          push-to-registry: true
+
+      # oras is fetched by hand rather than through an action for the reason
+      # spelled out at syft's install: this job holds the OIDC identity the
+      # attestation store trusts, and an action that resolves code at run time
+      # would run it here. Unlike syft, oras publishes no cosign signature,
+      # only a detached GPG signature, so the certificate check syft's install
+      # performs has no counterpart and the SHA256 pin is the binding control:
+      # it names the exact bytes, and the release's own checksums file is
+      # cross-checked against it so a mismatch says which of the two moved.
+      #
+      # Not gated on the rehearsal switch, for the same reason syft's install
+      # is not: this is the only thing that exercises the download and the pin
+      # before a tag does.
+      - name: Install oras
+        env:
+          ORAS_VERSION: "1.3.4"
+          ORAS_SHA256: "f27adb935022d94df8dc77719c322dda592c78a0d57a6f7dcdd8d900b248c454"
+        run: |
+          set -euo pipefail
+          TARBALL="oras_${ORAS_VERSION}_linux_amd64.tar.gz"
+          BASE="https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${TARBALL}" "${BASE}/${TARBALL}"
+          echo "${ORAS_SHA256}  ${TARBALL}" | sha256sum -c -
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o oras-checksums.txt "${BASE}/oras_${ORAS_VERSION}_checksums.txt"
+          grep " ${TARBALL}\$" oras-checksums.txt | sha256sum -c -
+          tar xzf "${TARBALL}" oras
+          install -m 0755 oras /usr/local/bin/oras
+          rm -f "${TARBALL}" oras-checksums.txt oras
+          oras version
+
+      # A second, unsigned copy of the same documents, published bare, beside
+      # the attestations above and never instead of them. The attestation is
+      # the authenticated answer and needs a Sigstore verifier to unwrap four
+      # layers; this is the one a consumer reads with one referrers query and
+      # one blob GET, and its artifactType is the registered SPDX media type
+      # rather than a signature-container type that says nothing about what is
+      # inside. It is also the shape verifymcp.io's rubric describes, and the
+      # only one that does not depend on which SPDX predicate string sits in
+      # its accepted set, which is not documented anywhere.
+      #
+      # It matters most on ghcr.io, which serves no referrers API: there the
+      # referrers list is the client-maintained sha256-<hex> fallback tag, and
+      # an entry in it says only what the client that appended it wrote. oras
+      # and actions/attest both write the descriptor the spec asks for, and
+      # oras merges rather than replacing. What cosign writes there is short
+      # of that, and is the subject of the step after this one.
+      #
+      # Last, and after every attestation, for two reasons: all of these
+      # clients maintain that one fallback tag by read-modify-write, so they
+      # must be sequential; and a failure in the unsigned copy then cannot cost
+      # the signed ones. oras reads the credentials docker/login-action already
+      # wrote and needs none of its own.
+      - name: Publish the SBOMs as bare SPDX referrers
+        if: env.REHEARSAL != 'true'
+        env:
+          GHCR_REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          HUB_REPO: ${{ env.DOCKERHUB_SKIP == 'false' && format('docker.io/{0}', env.DOCKERHUB_IMAGE) || '' }}
+        run: |
+          set -euo pipefail
+          for repo in "${GHCR_REPO}" ${HUB_REPO:+"${HUB_REPO}"}; do
+            for pair in "${INDEX_DIGEST}:amd64" "${AMD64_DIGEST}:amd64" "${ARM64_DIGEST}:arm64"; do
+              digest="${pair%:*}"
+              arch="${pair##*:}"
+              oras attach --artifact-type application/spdx+json \
+                "${repo}@${digest}" \
+                "image-sbom-${arch}.spdx.json:application/spdx+json"
+              echo "attached ${arch} SBOM to ${repo}@${digest}"
+            done
+          done
+
+      # ghcr.io only, and last of all. The fallback tag is an index of
+      # descriptors, and the distribution spec says the descriptor a client
+      # appends there MUST carry the pushed manifest's artifactType and copy
+      # all of its annotations. cosign writes the tag through
+      # go-containerregistry, whose releases before v0.22.1 wrote less: the
+      # config's media type as the artifactType until v0.21.6, and no
+      # annotations until v0.22.1. The signature manifest was always right;
+      # the list entry for it was not. 3.0.0 was signed by cosign v3.0.6
+      # (go-containerregistry v0.21.3), and its entry on ghcr.io reads
+      # "application/vnd.oci.empty.v1+json" with no annotations; v3.1.3
+      # (v0.21.7) writes the artifactType and still no annotations, measured
+      # against a registry:2. cosign main carries v0.22.1 since 2026-09-05
+      # (sigstore/cosign#5098) and no release ships it yet, and even that
+      # repairs nothing already written, since the update path skips a digest
+      # the index already lists.
+      #
+      # Who reads the descriptor rather than the manifest: `gh attestation
+      # verify --bundle-from-oci`, Kyverno's ClusterPolicy SigstoreBundle
+      # type, and Trivy's SBOM and VEX discovery all filter the list on
+      # artifactType, and oras and regctl on annotations too. On ghcr.io
+      # every one of them reports 3.0.0 unsigned; on Docker Hub, which serves
+      # the referrers API and builds the descriptors itself, every one of
+      # them finds the same signature. `cosign verify` reads every entry and
+      # opens each manifest, so it never depended on the descriptor and is
+      # unaffected either way. Trivy will then try the signature as an SBOM
+      # candidate, warn and move on, which is what it already does against
+      # Docker Hub.
+      #
+      # The script reads each listed manifest and rewrites the tag only when
+      # an entry says less than its manifest does, so it is a no-op once
+      # cosign ships the fix and a guard for any client that regresses. Last
+      # because it rewrites what every step above appended to.
+      #
+      # A failure here warns and does not fail the job. This job gates every
+      # publisher, and that gate exists so that an image nobody signed or
+      # attested never ships beside npm, PyPI and NuGet versions that cannot
+      # be withdrawn. A tag whose entries are what cosign wrote is what every
+      # earlier release shipped with, and every signature and attestation
+      # above stands whatever happens here; holding the publishers for it
+      # would price a list entry as a signature. The warning names the
+      # command to run by hand.
+      - name: Make the ghcr.io referrers fallback tags say what they list
+        if: env.REHEARSAL != 'true'
+        env:
+          GHCR_REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        run: |
+          set -uo pipefail
+          if ! bash .github/scripts/referrers-fallback-repair.sh "${GHCR_REPO}" "${INDEX_DIGEST}" "${AMD64_DIGEST}" "${ARM64_DIGEST}"; then
+            echo "::warning title=ghcr.io referrers fallback tags::not rewritten; the signatures and attestations stand and the entries are what cosign wrote. Run by hand: bash .github/scripts/referrers-fallback-repair.sh ${GHCR_REPO} ${INDEX_DIGEST} ${AMD64_DIGEST} ${ARM64_DIGEST}"
+          fi
+
+      - name: Nothing to sign in a rehearsal
+        if: env.REHEARSAL == 'true'
+        run: |
+          echo "::notice::rehearsal: the image was exported rather than pushed, so there is no published index to sign or attest; the SBOMs were still generated and their guard still ran in the docker job"
+
   release:
     name: "📦 GoReleaser"
     runs-on: ubuntu-latest
@@ -662,7 +960,19 @@ jobs:
     # fetch, and the MCP Registry publish validates the server.json OCI entry by
     # fetching ghcr.io for this version's tag — a tag only the docker job
     # pushes. Racing it 404s the registry publish.
-    needs: [preflight, e2e, docker]
+    #
+    # sign-attest is a prerequisite for a reason that this split nearly lost.
+    # While the signing lived in the docker job, a signature or attestation that
+    # failed failed that job, and everything downstream of it stopped: nothing
+    # published. Moving the signing out took that gate with it, and npm, PyPI
+    # and NuGet versions are permanent, so a release that went out beside an
+    # unsigned image could not be withdrawn afterwards. Naming sign-attest here
+    # restores the invariant for this job and, through it, for the five
+    # publishers that need this one. It costs the signing's three minutes on the
+    # critical path, which is the right trade. A rehearsal is unaffected: the job
+    # runs and succeeds with its steps skipped, rather than being skipped itself,
+    # which a needs edge would propagate.
+    needs: [preflight, e2e, docker, sign-attest]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     permissions:
@@ -1120,7 +1430,7 @@ jobs:
     # verify-published because this job is what points installers at the npm,
     # PyPI and NuGet packages: the listing must not advertise bytes nobody
     # compared with the signed checksums.
-    needs: [preflight, release, npm, pypi, nuget, docker, verify-published]
+    needs: [preflight, release, npm, pypi, nuget, docker, sign-attest, verify-published]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: release
@@ -1307,7 +1617,7 @@ jobs:
     # is listed for the same reason and not left to transitivity through
     # mcp-registry: if what the registries serve does not match the signed
     # checksums, main must not gain a manifest advertising it.
-    needs: [preflight, release, docker, npm, pypi, nuget, homebrew, mcp-registry, verify-published]
+    needs: [preflight, release, docker, sign-attest, npm, pypi, nuget, homebrew, mcp-registry, verify-published]
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     environment: release
@@ -1421,7 +1731,12 @@ jobs:
     name: "🪟 Winget"
     runs-on: windows-latest
     timeout-minutes: 20
-    needs: [release]
+    # verify-published for the reason homebrew already waits on it: this opens
+    # a pull request against microsoft/winget-pkgs naming a version, and a
+    # version whose published packages do not match the signed checksums must
+    # not be announced to a third-party repository. It needed only `release`
+    # until now, so a failed verification still submitted the manifest.
+    needs: [release, verify-published]
     # Nothing here can run dry: the sync writes to the fork and the releaser
     # opens a pull request against microsoft/winget-pkgs, so a rehearsal skips
     # the job whole. env is not readable at job level, hence the event test.
