@@ -19,8 +19,14 @@ import (
 const EnvPrefix = "GITLAB_MCP_"
 
 // prefixedNames are the variables that gained EnvPrefix in 2.8.0 and still
-// answer to their old name. The old spelling is removed in v3, which is the
-// release that renumbers anyway when client-go does.
+// answer to their old name. The old spelling is removed in 3.1.0.
+//
+// It was to have gone in 3.0.0, the release that renumbers when client-go
+// does, and it was held back one release on purpose: 2.7.5 still carries a
+// self-updater and 3.0.0 does not, so a 2.7.5 deployment updates itself into
+// 3.0.0 without anyone reading a release note. Removing the old spellings in
+// the release that arrives unannounced would break those deployments in
+// silence. 3.1.0 is the first version nobody is carried into.
 //
 // Every variable this server defines is on this list; the rule has no
 // exception for a name that already began with GITLAB_. Two names stay bare
@@ -168,7 +174,7 @@ func DeprecatedEnvWarnings() []string {
 				" are set; "+EnvPrefix+name+" is being used and "+legacy+" is ignored")
 			continue
 		}
-		warnings = append(warnings, legacy+" is deprecated and will be removed in v3; rename it to "+EnvPrefix+name)
+		warnings = append(warnings, legacy+" is deprecated and will be removed in 3.1.0; rename it to "+EnvPrefix+name)
 	}
 	return warnings
 }

@@ -555,7 +555,7 @@ FLAGS
 
 ENVIRONMENT VARIABLES (stdio mode)
   Settings this project defines are read as GITLAB_MCP_<NAME>. The unprefixed
-  spelling of a renamed variable still works and is removed in v3; when both
+  spelling of a renamed variable still works and is removed in 3.1.0; when both
   are set the prefixed one wins and a warning names the one being ignored.
   GITLAB_URL and GITLAB_TOKEN keep their bare names, and so does every OTEL_*
   variable, which the OpenTelemetry exporters read themselves.

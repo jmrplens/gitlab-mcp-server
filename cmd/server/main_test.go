@@ -10097,7 +10097,13 @@ func TestApplyLocalFilesystemPolicy_FollowsTheParsedFlag_NotTheArgumentScan(t *t
 //
 // The warning is what makes the rename a migration rather than a permanent
 // shim: an old name that keeps working and says nothing is one nobody moves off
-// before v3 removes it under them.
+// before the release that removes it does so under them.
+//
+// The removal version is asserted rather than left to the message, because it
+// moved once already: it was to be 3.0.0 and is 3.1.0, since a 2.7.5 deployment
+// updates itself into 3.0.0 with nobody reading a release note. A warning that
+// names the wrong release is worse than none, so it is pinned here as well as
+// where the text is built.
 func TestLogDeprecatedEnvNames_WarnsThroughTheConfiguredLogger(t *testing.T) {
 	// The prefixed name is cleared rather than assumed absent: another test in
 	// this package passes -log-level, and that flag writes the prefixed
@@ -10115,7 +10121,7 @@ func TestLogDeprecatedEnvNames_WarnsThroughTheConfiguredLogger(t *testing.T) {
 
 	logDeprecatedEnvNames()
 
-	for _, want := range []string{"LOG_LEVEL", config.EnvPrefix + "LOG_LEVEL", "v3"} {
+	for _, want := range []string{"LOG_LEVEL", config.EnvPrefix + "LOG_LEVEL", "3.1.0"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(logged.String(), want) {
 				t.Errorf("the startup warning does not mention %q: %s", want, logged.String())

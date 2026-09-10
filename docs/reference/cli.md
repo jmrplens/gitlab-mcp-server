@@ -110,7 +110,7 @@ gitlab-mcp-server
 
 Most flags on this page fall back to an environment variable when they are not
 passed, and the settings this project defines are named `GITLAB_MCP_<NAME>`
-from 2.8.0. The unprefixed spelling still works and is removed in v3; when
+from 2.8.0. The unprefixed spelling still works and is removed in 3.1.0; when
 both are set the prefixed one wins and a startup warning names the one being
 ignored. `GITLAB_URL`, `GITLAB_TOKEN`, the `GITLAB_`-prefixed switches and
 every `OTEL_*` variable keep their bare names. The flags with no variable at

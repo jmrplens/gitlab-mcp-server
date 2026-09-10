@@ -21,19 +21,19 @@ or `RATE_LIMIT_RPS` may already be owned by something else there, and the
 collision is silent: the server reads a value nobody gave it and behaves in a
 way nobody configured.
 
-The unprefixed spelling still works and is removed in v3. When both are set the
+The unprefixed spelling still works and is removed in 3.1.0. When both are set the
 prefixed one wins, and a warning at startup names the one being ignored.
 
-The switches that already began with `GITLAB_` were renamed as well, so that every variable of this server reads alike: `GITLAB_TIER`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_IGNORE_SCOPES` and `GITLAB_SKIP_TLS_VERIFY` are now `GITLAB_MCP_TIER`, `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_IGNORE_SCOPES` and `GITLAB_MCP_SKIP_TLS_VERIFY`, and `YOLO_MODE` is `GITLAB_MCP_YOLO_MODE`. The old spellings keep working until v3 with the same warning. `GITLAB_ENTERPRISE`, deprecated before this in favour of the tier, stays as it is.
+The switches that already began with `GITLAB_` were renamed as well, so that every variable of this server reads alike: `GITLAB_TIER`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_IGNORE_SCOPES` and `GITLAB_SKIP_TLS_VERIFY` are now `GITLAB_MCP_TIER`, `GITLAB_MCP_READ_ONLY`, `GITLAB_MCP_SAFE_MODE`, `GITLAB_MCP_IGNORE_SCOPES` and `GITLAB_MCP_SKIP_TLS_VERIFY`, and `YOLO_MODE` is `GITLAB_MCP_YOLO_MODE`. The old spellings keep working until 3.1.0 with the same warning. They were to have gone in 3.0.0 and were held back one release, because 2.7.5 carries a self-updater and 3.0.0 does not: a 2.7.5 deployment updates itself into 3.0.0 with nobody reading a release note, so removing them there would break those deployments in silence. `GITLAB_ENTERPRISE`, deprecated before this in favour of the tier, stays as it is.
 
 Some names stay bare on purpose:
 
-| Names                        | Why they were not renamed                                                                                                                                                                                         |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_URL`, `GITLAB_TOKEN` | GitLab's own convention. Every existing configuration sets them, and they are the two most likely to be written into a client configuration from memory                                                           |
-| `OTEL_*`                     | Owned by the OpenTelemetry specification. The exporters read those names themselves and would never see a prefixed spelling                                                                                       |
-| `AUTOPILOT`                  | A convention other agent tooling sets, honored as an alias of `GITLAB_MCP_YOLO_MODE` and never warned about. The setting itself is ours and carries the prefix; its old spelling `YOLO_MODE` still works until v3 |
-| `EVAL_SURFACE_*`             | The surface evaluator's own variables, set by `make` targets in this repository. They never appear beside another tool's variables in a user's shell                                                              |
+| Names                        | Why they were not renamed                                                                                                                                                                                            |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`, `GITLAB_TOKEN` | GitLab's own convention. Every existing configuration sets them, and they are the two most likely to be written into a client configuration from memory                                                              |
+| `OTEL_*`                     | Owned by the OpenTelemetry specification. The exporters read those names themselves and would never see a prefixed spelling                                                                                          |
+| `AUTOPILOT`                  | A convention other agent tooling sets, honored as an alias of `GITLAB_MCP_YOLO_MODE` and never warned about. The setting itself is ours and carries the prefix; its old spelling `YOLO_MODE` still works until 3.1.0 |
+| `EVAL_SURFACE_*`             | The surface evaluator's own variables, set by `make` targets in this repository. They never appear beside another tool's variables in a user's shell                                                                 |
 
 The tables below always give the name to set, so read the name rather than
 deriving it.

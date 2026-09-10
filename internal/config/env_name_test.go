@@ -112,7 +112,7 @@ func TestDeprecatedEnvWarnings_ReportWhatWasRead(t *testing.T) {
 			env:         map[string]string{"AUTH_MODE": "oauth"},
 			read:        []string{"AUTH_MODE", "AUTH_MODE"},
 			wantCount:   1,
-			wantMention: []string{"AUTH_MODE", EnvPrefix + "AUTH_MODE", "v3"},
+			wantMention: []string{"AUTH_MODE", EnvPrefix + "AUTH_MODE", "3.1.0"},
 		},
 		{
 			name:        "both set says which one is ignored",
@@ -196,7 +196,7 @@ func TestGetenv_RenamedGitLabSwitch_FallsBackToItsOldSpelling(t *testing.T) {
 		{
 			name: "only the old spelling set", old: "premium", new: "",
 			want:        "premium",
-			wantWarning: "GITLAB_TIER is deprecated and will be removed in v3; rename it to GITLAB_MCP_TIER",
+			wantWarning: "GITLAB_TIER is deprecated and will be removed in 3.1.0; rename it to GITLAB_MCP_TIER",
 		},
 		{
 			name: "both set, the prefixed one wins", old: "premium", new: "ultimate",

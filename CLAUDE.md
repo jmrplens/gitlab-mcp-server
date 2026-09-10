@@ -447,7 +447,7 @@ Every variable this server defines carries the prefix, with no exception for
 a name that already began with `GITLAB_`: the switches that did (`GITLAB_TIER`,
 `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_IGNORE_SCOPES`,
 `GITLAB_SKIP_TLS_VERIFY`) and `YOLO_MODE` were renamed in 2.8.0, and the old
-spellings keep working until v3 with the same startup warning, resolved through
+spellings keep working until 3.1.0 with the same startup warning, resolved through
 `config.LegacyEnvName`. Only three groups stay bare, because prefixing them
 would be wrong rather than churn: `GITLAB_URL` and `GITLAB_TOKEN` (GitLab's own
 convention, and what a user already has in the environment, so they are never
