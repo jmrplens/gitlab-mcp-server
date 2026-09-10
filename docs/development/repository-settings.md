@@ -62,11 +62,15 @@ the source.
 gh api repos/jmrplens/gitlab-mcp-server/releases/latest --jq '{tag: .tag_name, immutable}'
 ```
 
-**Current state.** Not enabled. `v2.7.5` and every release before it report
-`"immutable": false`.
+**Current state.** Enabled, as of 2026-09-10. The check above answers about a
+release rather than about the setting, so it keeps reporting the old state until
+a release is published under it: `v2.7.5` and everything before it predate the
+change and stay mutable. 3.0.0 is the first release the setting covers, and it
+is the one to check the field on. Nothing in the repository API reports the
+toggle itself, so this page is the record.
 
-**Caveat.** The setting is not retroactive. Releases published before it is
-turned on stay mutable forever, so enabling it protects future releases only.
+**Caveat.** The setting is not retroactive. Releases published before it was
+turned on stay mutable forever, so it protects future releases only.
 Nothing in the workflow needs to change: GoReleaser already creates the release
 as a draft and a later step publishes it, which is the shape the feature
 requires.
