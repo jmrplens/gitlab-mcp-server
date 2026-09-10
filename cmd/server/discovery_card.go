@@ -72,6 +72,29 @@ const (
 	discoveryCardRepositoryURL = "https://github.com/jmrplens/gitlab-mcp-server"
 )
 
+// discoveryCardProtocolVersions is what this server really accepts at
+// initialize, newest first.
+//
+// The extension asks for it: a card "SHOULD accurately reflect the server's
+// runtime behavior", and the versions it declares "SHOULD NOT contradict the
+// equivalent values" a client observes once connected. A card that overstates
+// this sends a client into a handshake that fails.
+//
+// It is a hand-written list because the SDK keeps its own set unexported, and
+// a hand-written list is only worth having if something checks it. That is
+// TestServerCard_DeclaredProtocolVersionsAreWhatTheServerAccepts in
+// test/e2e/http, which asks the running binary rather than this file: it sends
+// a version no server supports and reads the set back out of the refusal, so
+// an SDK bump that changes what is accepted fails there instead of quietly
+// making this card wrong.
+var discoveryCardProtocolVersions = []string{
+	"2026-07-28",
+	"2025-11-25",
+	"2025-06-18",
+	"2025-03-26",
+	"2024-11-05",
+}
+
 // buildDiscoveryCard renders the SEP-2127 Server Card for this deployment.
 //
 // It is cheap and deterministic: identity constants, the running binary's own
@@ -116,10 +139,15 @@ func discoveryCardRemote(cfg *config.Config) map[string]any {
 	if cfg.PublicURL == "" {
 		return nil
 	}
+	versions := make([]any, 0, len(discoveryCardProtocolVersions))
+	for _, v := range discoveryCardProtocolVersions {
+		versions = append(versions, v)
+	}
 	return map[string]any{
-		"type":    "streamable-http",
-		"url":     cfg.PublicURL,
-		"headers": []any{discoveryCardCredentialHeader(cfg)},
+		"type":                      "streamable-http",
+		"url":                       cfg.PublicURL,
+		"headers":                   []any{discoveryCardCredentialHeader(cfg)},
+		"supportedProtocolVersions": versions,
 	}
 }
 
