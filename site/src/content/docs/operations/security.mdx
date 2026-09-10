@@ -310,8 +310,12 @@ This is independent of the Cosign signature: the signature says the checksums ca
 The image is published to two registries, and the same index is pushed to both, so the digest is identical and either reference verifies the same artifact:
 
 ```bash
-# Signature: who pushed this index
+# Signature: who pushed this index. Either registry, same answer.
 cosign verify ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 \
+  --certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+
+cosign verify docker.io/jmrplens/gitlab-mcp-server:3.0.0 \
   --certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 

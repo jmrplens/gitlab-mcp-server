@@ -310,8 +310,12 @@ Es independiente de la firma Cosign: la firma dice que los checksums vienen del 
 La imagen se publica en dos registros, y a ambos se sube el mismo índice, así que el digest es idéntico y cualquiera de las dos referencias verifica el mismo artefacto:
 
 ```bash
-# Firma: quién subió este índice
+# Firma: quién subió este índice. Cualquiera de los dos registros, misma respuesta.
 cosign verify ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 \
+  --certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+
+cosign verify docker.io/jmrplens/gitlab-mcp-server:3.0.0 \
   --certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
