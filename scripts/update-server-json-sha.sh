@@ -72,15 +72,24 @@ jq --arg v "$VERSION" '
 ' "$SERVER_JSON" > tmp.$$.json && mv tmp.$$.json "$SERVER_JSON"
 echo "Identifiers pinned to v$VERSION"
 
-# 3b. Pin the OCI image reference. An OCI identifier carries its version in the
-# tag rather than in a version field, so step 3's URL rewrite never reaches it.
-# The reference is <repo>:<tag>@<digest>: the tag stays readable and matches
+# 3b. Pin every OCI image reference. An OCI identifier carries its version in
+# the tag rather than in a version field, so step 3's URL rewrite never reaches
+# it. The reference is <repo>:<tag>@<digest>: the tag stays readable and matches
 # every doc, the digest is what a client actually resolves, so a retag of a
 # published version cannot change what the registry serves.
-oci_current=$(jq -r '[.packages[] | select(.registryType == "oci") | .identifier][0] // ""' "$SERVER_JSON")
-if [[ -n "$oci_current" ]]; then
-  if [[ "$oci_current" == *"@"* && -z "$OCI_DIGEST" ]]; then
-    echo "ERROR: the OCI identifier is digest-pinned but no digest was passed as the" >&2
+#
+# There is more than one such entry (ghcr.io and Docker Hub), and each keeps its
+# own repository: the rewrite happens inside jq, per entry, rather than by
+# computing one identifier in the shell and assigning it to all of them, which
+# is what this step used to do and which would have republished the ghcr.io
+# reference under the Docker Hub entry. One digest serves both because the
+# multi-platform build is pushed once and both registries hold the identical
+# index; the digest is validated once, here, and applied to each.
+oci_count=$(jq '[.packages[] | select(.registryType == "oci")] | length' "$SERVER_JSON")
+if [[ "$oci_count" -gt 0 ]]; then
+  oci_digest_pinned=$(jq '[.packages[] | select(.registryType == "oci") | .identifier | select(contains("@"))] | length' "$SERVER_JSON")
+  if [[ "$oci_digest_pinned" -gt 0 && -z "$OCI_DIGEST" ]]; then
+    echo "ERROR: an OCI identifier is digest-pinned but no digest was passed as the" >&2
     echo "       fourth argument. Stamping the tag alone would leave the previous" >&2
     echo "       release's image pinned under the new version." >&2
     exit 1
@@ -89,14 +98,20 @@ if [[ -n "$oci_current" ]]; then
     echo "ERROR: oci-digest must look like sha256:<64 hex chars> (got: $OCI_DIGEST)" >&2
     exit 1
   fi
-  oci_repo="${oci_current%%@*}"
-  oci_repo="${oci_repo%:*}"
-  oci_new="${oci_repo}:${VERSION}"
-  [[ -n "$OCI_DIGEST" ]] && oci_new="${oci_new}@${OCI_DIGEST}"
-  jq --arg id "$oci_new" \
-    '(.packages[] | select(.registryType == "oci") | .identifier) = $id' \
-    "$SERVER_JSON" > tmp.$$.json && mv tmp.$$.json "$SERVER_JSON"
-  echo "OCI image reference pinned to $oci_new"
+  jq --arg v "$VERSION" --arg d "$OCI_DIGEST" '
+    # Drop the digest, then the tag. The tag is whatever follows the last colon,
+    # matching the shell parameter expansion this replaced; a reference with no
+    # tag at all keeps its whole repository.
+    def repo_of:
+      (split("@")[0]) as $t
+      | ($t | rindex(":")) as $i
+      | if $i == null then $t else $t[0:$i] end;
+    (.packages[] | select(.registryType == "oci") | .identifier) |=
+      (repo_of + ":" + $v + (if $d == "" then "" else "@" + $d end))
+  ' "$SERVER_JSON" > tmp.$$.json && mv tmp.$$.json "$SERVER_JSON"
+  while read -r pinned; do
+    echo "OCI image reference pinned to $pinned"
+  done < <(jq -r '.packages[] | select(.registryType == "oci") | .identifier' "$SERVER_JSON")
 fi
 
 # 4. Update fileSha256 for each entry in checksums

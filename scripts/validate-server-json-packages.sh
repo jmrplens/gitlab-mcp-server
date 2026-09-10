@@ -128,11 +128,28 @@ while read -r identifier; do
     fail "carries field(s) the registry rejects for OCI packages: $banned"
   fi
 
+  # Both published registries are inspected, because both are declared and a
+  # client picks whichever it likes. They differ in two mechanical ways and in
+  # nothing else: Docker Hub's registry API does not live on the hostname the
+  # reference names (https://docker.io/v2/ redirects to the marketing site), and
+  # its token endpoint is a separate host that wants a `service` parameter.
   registry="${identifier%%/*}"
-  if [[ "$registry" != "ghcr.io" ]]; then
-    echo "  NOTE: $registry is not ghcr.io, skipping the image inspection"
-    continue
-  fi
+  case "$registry" in
+    ghcr.io)
+      api_base="https://ghcr.io"
+      token_url_prefix="https://ghcr.io/token?scope=repository:"
+      token_url_suffix=":pull"
+      ;;
+    docker.io | index.docker.io | registry-1.docker.io)
+      api_base="https://registry-1.docker.io"
+      token_url_prefix="https://auth.docker.io/token?service=registry.docker.io&scope=repository:"
+      token_url_suffix=":pull"
+      ;;
+    *)
+      echo "  NOTE: $registry is neither ghcr.io nor Docker Hub, skipping the image inspection"
+      continue
+      ;;
+  esac
 
   # The registry accepts repo:tag, repo@digest and repo:tag@digest. This
   # manifest uses the third form: the tag stays readable, the digest is what a
@@ -155,13 +172,13 @@ while read -r identifier; do
     continue
   fi
 
-  token=$(curl "${CURL_META[@]}" -fsS "https://ghcr.io/token?scope=repository:${repo}:pull" \
+  token=$(curl "${CURL_META[@]}" -fsS "${token_url_prefix}${repo}${token_url_suffix}" \
     | jq -r '.token')
   accept='application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json'
 
   # Resolve the digest when there is one — that is what a client installs.
   if ! index=$(curl "${CURL_META[@]}" -fsS -H "Authorization: Bearer $token" -H "Accept: $accept" \
-    "https://ghcr.io/v2/${repo}/manifests/${digest:-$tag}"); then
+    "${api_base}/v2/${repo}/manifests/${digest:-$tag}"); then
     fail "image ${digest:-$tag} not found in the registry"
     continue
   fi
@@ -171,7 +188,7 @@ while read -r identifier; do
   # mean the reference no longer describes what this release shipped.
   if [[ -n "$digest" && -n "$tag" ]]; then
     tag_digest=$(curl "${CURL_META[@]}" -fsSI -H "Authorization: Bearer $token" -H "Accept: $accept" \
-      "https://ghcr.io/v2/${repo}/manifests/${tag}" \
+      "${api_base}/v2/${repo}/manifests/${tag}" \
       | awk 'BEGIN { IGNORECASE = 1 } /^docker-content-digest:/ { print $2 }' | tr -d '\r')
     if [[ -z "$tag_digest" ]]; then
       fail "tag $tag does not resolve in the registry"
@@ -211,7 +228,7 @@ while read -r identifier; do
     if [[ "$manifests_are_index" -eq 1 ]]; then
       [[ -n "$child" ]] || continue
       manifest=$(curl "${CURL_META[@]}" -fsS -H "Authorization: Bearer $token" -H "Accept: $accept" \
-        "https://ghcr.io/v2/${repo}/manifests/${child}")
+        "${api_base}/v2/${repo}/manifests/${child}")
     else
       manifest="$index"
     fi
@@ -226,7 +243,7 @@ while read -r identifier; do
       continue
     fi
     if ! config=$(curl "${CURL_META[@]}" -fsSL -H "Authorization: Bearer $token" \
-      "https://ghcr.io/v2/${repo}/blobs/${config_digest}"); then
+      "${api_base}/v2/${repo}/blobs/${config_digest}"); then
       fail "$child_platform: image config blob $config_digest could not be fetched"
       entry_failed=1
       continue
