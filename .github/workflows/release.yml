@@ -184,6 +184,7 @@ jobs:
       contents: read # checkout
       packages: write # ghcr.io push via GITHUB_TOKEN login
       id-token: write # cosign keyless signing
+      attestations: write # actions/attest-build-provenance for the image index
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -193,7 +194,19 @@ jobs:
         id: version
         run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
 
+      # cosign-release is pinned here and in the eight other installs of this
+      # action, because the cosign major decides how a signature is attached
+      # and therefore who can find it afterwards. cosign 2.x writes a legacy
+      # `sha256-<digest>.sig` tag; cosign 3.x attaches an OCI 1.1 referrer,
+      # falling back to a tag on a registry that serves no referrers API
+      # (ghcr.io today; Docker Hub does serve one). A 2.x client asked to
+      # verify a 3.x-signed image answers "no signatures found" and says
+      # nothing about why, which is what the 3.0.0 image looked like from a
+      # machine running 2.5.3. Letting the installer's default float means the
+      # release could change that behaviour without a commit here.
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
 
       # No registry login in a rehearsal: the smoke builds pull through the
       # Actions cache and the multi-platform build is exported to disk, so a
@@ -360,6 +373,57 @@ jobs:
           IMAGE_REF: docker.io/${{ env.DOCKERHUB_IMAGE }}@${{ steps.docker-push.outputs.digest }}
         run: bash .github/scripts/cosign-sign-retry.sh "$IMAGE_REF"
 
+      # The cosign signatures above prove who pushed the index, and their
+      # in-toto predicate is empty: they answer "was this pushed by our release
+      # job" and not "which commit and which run produced it". That second
+      # question is what build provenance is, and every release binary and the
+      # .mcpb already answer it through actions/attest-build-provenance while
+      # the image did not. The only provenance the image carried was BuildKit's
+      # own `provenance: true` attestation, which is unsigned in-toto JSON
+      # inside the index and binds to no verifiable identity.
+      #
+      # One attestation per registry, over the one digest both of them serve:
+      # the multi-platform build is pushed once and the two registries hold the
+      # identical index, so `docker-push.outputs.digest` is the subject for
+      # both and the two steps differ only in the name they bind it to.
+      # push-to-registry attaches the attestation to the index as well as
+      # storing it in GitHub's attestation store, because a scanner reading a
+      # registry cannot see that store. It changes the index's referrers and
+      # never the index itself, so the digest server.json pins stays exactly
+      # what docker-push reported and no re-stamp is needed.
+      #
+      # Verify: gh attestation verify oci://<ref>@<digest> -R jmrplens/gitlab-mcp-server
+      - name: Attest build provenance (ghcr.io)
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.docker-push.outputs.digest }}
+          push-to-registry: true
+
+      # Docker Hub is a published channel of this image, not a mirror: it is
+      # declared in server.json, its repository description is owned by this
+      # repository, and the image is signed there separately above. It is
+      # attested on the same terms. Gated on the same login check as the push,
+      # so a release without Docker Hub credentials skips it instead of
+      # failing on an image that was never pushed.
+      #
+      # `docker.io/...` is the right spelling here even though
+      # https://docker.io/v2/ serves no registry API at all (it redirects to
+      # the marketing site): actions/attest canonicalizes any registry ending
+      # in docker.io to registry-1.docker.io before it builds the client, and
+      # canonicalizes the same three aliases when it looks the docker login
+      # credential up. Writing registry-1.docker.io here to "help" would only
+      # put a name in the attestation that no other file of this repository
+      # uses.
+      - name: Attest build provenance (Docker Hub)
+        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
+          subject-digest: ${{ steps.docker-push.outputs.digest }}
+          push-to-registry: true
+
       # The Docker Hub repository descriptions are owned by this repo so they
       # cannot drift (they had been empty since the repository was published,
       # across thousands of pulls): the short description and the curated
@@ -419,6 +483,8 @@ jobs:
           cache: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
 
       # Fetched by hand rather than through anchore/sbom-action/download-syft.
       # That action is SHA-pinned, but on Linux it downloads
@@ -570,6 +636,8 @@ jobs:
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
 
       # This job produces no binaries of its own: it downloads what the release
       # actually published and verifies it against the cosign-signed
@@ -643,6 +711,8 @@ jobs:
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
 
       - name: Take the rehearsal's own build
         if: env.REHEARSAL == 'true'
@@ -694,6 +764,8 @@ jobs:
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
 
       - name: Take the rehearsal's own build
         if: env.REHEARSAL == 'true'
@@ -785,6 +857,8 @@ jobs:
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
 
       - name: Take the rehearsal's own build
         if: env.REHEARSAL == 'true'
@@ -854,6 +928,8 @@ jobs:
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
 
       - name: Take the rehearsal's own build
         if: env.REHEARSAL == 'true'
@@ -973,6 +1049,8 @@ jobs:
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
 
       - name: Take the rehearsal's own build
         if: env.REHEARSAL == 'true'
@@ -1047,6 +1125,8 @@ jobs:
           persist-credentials: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
 
       - name: Take the rehearsal's own build
         if: env.REHEARSAL == 'true'
