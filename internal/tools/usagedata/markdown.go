@@ -88,6 +88,8 @@ func FormatQueriesMarkdown(out QueriesOutput) string {
 func FormatMetricDefinitionsMarkdown(out MetricDefinitionsOutput) string {
 	var sb strings.Builder
 	sb.WriteString("## Metric Definitions (YAML)\n\n")
+	// The fence is written by hand here, and stays that way.
+	//gitlab:allow-unescaped yaml: the instance's own metric definition document, shipped with GitLab rather than written by anyone with an account, and served by an endpoint only an administrator may call.
 	sb.WriteString("```yaml\n")
 	// Truncate if very large
 	yaml := out.YAML

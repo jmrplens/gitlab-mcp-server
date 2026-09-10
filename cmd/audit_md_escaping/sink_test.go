@@ -73,6 +73,7 @@ func TestCollectSinks_Fixture_ReadsANamedConstantTemplate(t *testing.T) {
 // with no template, and a template that is not a constant.
 func TestSinkOf_Fixture_RefusesWhatCarriesNoTemplate(t *testing.T) {
 	prog := loadFixture(t, caseFixture)
+	fences := collectFences(prog)
 	refused := map[string]bool{}
 	for _, pkg := range prog.order {
 		if !strings.HasPrefix(pkg.PkgPath, modulePath+"/"+fixtureDir) {
@@ -84,7 +85,7 @@ func TestSinkOf_Fixture_RefusesWhatCarriesNoTemplate(t *testing.T) {
 				if !ok {
 					return true
 				}
-				if _, isSink := sinkOf(pkg, call); !isSink {
+				if _, isSink := sinkOf(pkg, call, fences); !isSink {
 					refused[calleeName(pkg, call)] = true
 				}
 				return true

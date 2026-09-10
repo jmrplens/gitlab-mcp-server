@@ -4001,6 +4001,10 @@ func formatDescribeOutput(output DescribeOutput) string {
 		fmt.Fprintf(&b, "- **Schema URI**: `%s`\n", action.SchemaURI)
 		if schemaJSON := compactSchemaJSON(action.InputSchema); schemaJSON != "" {
 			b.WriteString("- **Input schema**:\n\n")
+			// The fence is written by hand here, and stays that way: the body is
+			// this server's own input schema, generated from the Go types an
+			// ActionSpec names, so nothing GitLab or an account holder wrote
+			// reaches it.
 			b.WriteString("```json\n")
 			b.WriteString(schemaJSON)
 			b.WriteString("\n```\n")

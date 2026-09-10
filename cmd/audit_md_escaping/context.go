@@ -25,13 +25,19 @@ const (
 	ctxLinkLabel
 	// ctxLinkDest is between '](' and the ')' that closes the destination.
 	ctxLinkDest
+	// ctxFence is inside a fenced code block the formatter opened with a
+	// backtick run of its own, the info string of that opening fence included.
+	// It is the one context decided by the writes around the hole rather than
+	// by the line it sits on, because a fence is opened on one line and closed
+	// on another.
+	ctxFence
 )
 
 // structuralContexts are the contexts a value can change the shape of, in the
 // order a report lists them. Prose is absent because a paragraph holds a pipe,
 // an angle bracket and a newline without the document changing shape, and the
 // formatters that render GitLab-authored prose route it through WrapGFMBody.
-var structuralContexts = []mdContext{ctxCell, ctxHeading, ctxListItem, ctxLinkLabel, ctxLinkDest}
+var structuralContexts = []mdContext{ctxCell, ctxHeading, ctxListItem, ctxLinkLabel, ctxLinkDest, ctxFence}
 
 // contextLabels name each context for the command line and for a report.
 var contextLabels = map[mdContext]string{
@@ -41,6 +47,7 @@ var contextLabels = map[mdContext]string{
 	ctxListItem:  "list-item",
 	ctxLinkLabel: "link-label",
 	ctxLinkDest:  "link-destination",
+	ctxFence:     "fence",
 }
 
 // String names the context for a report.
@@ -61,6 +68,8 @@ func (c mdContext) wants() string {
 		return "toolutil.EscapeMdHeading"
 	case ctxLinkLabel, ctxLinkDest:
 		return "toolutil.MdTitleLink"
+	case ctxFence:
+		return "toolutil.MarkdownFencedBlock"
 	default:
 		return ""
 	}

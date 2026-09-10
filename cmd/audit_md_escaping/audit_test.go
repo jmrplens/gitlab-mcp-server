@@ -222,7 +222,7 @@ func TestAudit_Fixture_SummarisesWhatItSaw(t *testing.T) {
 	if summary.ByContext["table-cell"] == 0 || summary.ByPackage[fixtureDir+"/mdcase"] == 0 {
 		t.Errorf("summary breakdowns %v / %v are missing the packages that failed", summary.ByContext, summary.ByPackage)
 	}
-	if summary.Contexts != "table-cell, heading, list-item, link-label, link-destination" {
+	if summary.Contexts != "table-cell, heading, list-item, link-label, link-destination, fence" {
 		t.Errorf("summary names contexts %q, want every structural one", summary.Contexts)
 	}
 }

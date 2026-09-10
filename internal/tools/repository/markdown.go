@@ -151,9 +151,10 @@ func FormatRawBlobContentMarkdown(out RawBlobContentOutput) string {
 	case "binary":
 		b.WriteString("- **Content type**: binary (content omitted, not viewable as text)\n")
 	default:
-		b.WriteString("\n```\n")
-		b.WriteString(out.Content)
-		b.WriteString("\n```\n")
+		// The blob is a file of the repository, so a fixed fence is closed by
+		// the first run of three backticks whoever pushed it wrote.
+		b.WriteString("\n")
+		b.WriteString(toolutil.MarkdownFencedBlock("", out.Content))
 	}
 	toolutil.WriteHints(
 		&b,

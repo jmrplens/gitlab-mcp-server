@@ -251,33 +251,17 @@ func prettyAny(value any) string {
 	return string(buf)
 }
 
-// fencedBlock returns a Markdown fenced code block for the given language and content.
-// The fence length is auto-detected to avoid conflicts with backticks in the content.
+// fencedBlock returns a Markdown fenced code block for the given language and
+// content, with the fence sized to the content by [toolutil.MarkdownCodeFence].
+//
+// This package kept a copy of that sizing of its own. The copy agreed with the
+// shared helper, which is exactly why it was worth removing: a second
+// implementation of a containment rule is one that can drift from it silently,
+// and the audit that gates hand-written fences recognizes the shared helper.
 func fencedBlock(language, content string) string {
-	fence := markdownFence(content)
+	fence := toolutil.MarkdownCodeFence(content)
 	if language != "" {
 		return fmt.Sprintf("%s%s\n%s\n%s\n", fence, language, content, fence)
 	}
 	return fmt.Sprintf("%s\n%s\n%s\n", fence, content, fence)
-}
-
-// markdownFence returns the appropriate Markdown code fence for a content block.
-// If the content contains 3 or more consecutive backticks, the fence is lengthened to avoid collision.
-func markdownFence(content string) string {
-	longest := 0
-	current := 0
-	for _, char := range content {
-		if char == '`' {
-			current++
-			if current > longest {
-				longest = current
-			}
-			continue
-		}
-		current = 0
-	}
-	if longest < 3 {
-		return "```"
-	}
-	return strings.Repeat("`", longest+1)
 }

@@ -210,11 +210,13 @@ func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, r
 		}
 	}
 	if len(pieLabels) > 0 {
-		b.WriteString("```mermaid\npie title Open Issues by Label\n")
-		for _, line := range pieLabels {
-			b.WriteString(line + "\n")
-		}
-		b.WriteString("```\n\n")
+		writeMermaidChart(&b, func(chart *strings.Builder) {
+			chart.WriteString("pie title Open Issues by Label\n")
+			for _, line := range pieLabels {
+				chart.WriteString(line + "\n")
+			}
+		})
+		b.WriteString("\n")
 	}
 
 	b.WriteString("---\nPlease analyze label usage patterns, identify underused labels, and suggest improvements to the labeling strategy.\n")
@@ -350,11 +352,13 @@ func handleProjectContributors(ctx context.Context, client *gitlabclient.Client,
 		pieEntries = append(pieEntries, fmt.Sprintf("    %q : %d", c.Name, c.Commits))
 	}
 	if len(pieEntries) > 0 {
-		b.WriteString("```mermaid\npie title Commits by Contributor\n")
-		for _, line := range pieEntries {
-			b.WriteString(line + "\n")
-		}
-		b.WriteString("```\n\n")
+		writeMermaidChart(&b, func(chart *strings.Builder) {
+			chart.WriteString("pie title Commits by Contributor\n")
+			for _, line := range pieEntries {
+				chart.WriteString(line + "\n")
+			}
+		})
+		b.WriteString("\n")
 	}
 
 	b.WriteString("---\nPlease analyze contributor distribution, identify key contributors, and note any bus factor risks.\n")

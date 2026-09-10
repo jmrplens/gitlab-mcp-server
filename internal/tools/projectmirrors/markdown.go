@@ -89,6 +89,8 @@ func FormatPublicKeyMarkdown(pk PublicKeyOutput) string {
 	}
 	var b strings.Builder
 	b.WriteString("## Mirror SSH Public Key\n\n")
+	// The fence is written by hand here, and stays that way.
+	//gitlab:allow-unescaped pk.PublicKey: the key GitLab generated for this mirror, which the API offers no way to set: one line of an SSH key type and base64, with no backtick and no newline in it.
 	b.WriteString("```\n")
 	b.WriteString(pk.PublicKey)
 	b.WriteString("\n```\n")

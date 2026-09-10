@@ -14,11 +14,16 @@ func FormatGetMarkdown(out GetOutput) string {
 	// A saved view's name is free text whoever saved it typed.
 	fmt.Fprintf(&sb, "## Saved View: %s\n\n", toolutil.EscapeMdHeading(out.SavedView.Name))
 	writeViewDetails(&sb, out.SavedView)
+	// Both documents are what whoever saved the view typed, rendered back as
+	// JSON, and JSON escaping leaves a backtick alone: the fence has to be
+	// sized to the document rather than written as three.
 	if out.SavedView.Filters != nil {
-		fmt.Fprintf(&sb, "\n### Filters\n\n```json\n%s\n```\n", prettyJSON(out.SavedView.Filters))
+		sb.WriteString("\n### Filters\n\n")
+		sb.WriteString(toolutil.MarkdownFencedBlock("json", prettyJSON(out.SavedView.Filters)))
 	}
 	if out.SavedView.DisplaySettings != nil {
-		fmt.Fprintf(&sb, "\n### Display Settings\n\n```json\n%s\n```\n", prettyJSON(out.SavedView.DisplaySettings))
+		sb.WriteString("\n### Display Settings\n\n")
+		sb.WriteString(toolutil.MarkdownFencedBlock("json", prettyJSON(out.SavedView.DisplaySettings)))
 	}
 	toolutil.WriteHints(&sb, "Use `work_item_saved_view.update` to change this view, or `work_item_saved_view.subscribe` to follow it")
 	return sb.String()

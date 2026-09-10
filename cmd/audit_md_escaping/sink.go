@@ -48,8 +48,11 @@ var cellArgFuncs = map[string]bool{
 //
 // A WriteString of a constant carries no runtime value, and one of a
 // concatenation builds its pieces with Sprintf in this codebase, which is
-// itself a sink.
+// itself a sink. A WriteString of a value is a sink only inside a fenced code
+// block, which is the one construct a whole line of prose can break out of;
+// collectFences is what knows where those are.
 func collectSinks(prog *program) []sink {
+	fences := collectFences(prog)
 	var sinks []sink
 	for _, pkg := range prog.order {
 		for _, file := range pkg.Syntax {
@@ -58,25 +61,25 @@ func collectSinks(prog *program) []sink {
 				if !ok {
 					return true
 				}
-				if s, isSink := sinkOf(pkg, call); isSink {
+				if s, isSink := sinkOf(pkg, call, fences); isSink {
 					sinks = append(sinks, s)
 				}
 				return true
 			})
 		}
 	}
-	return sinks
+	return append(sinks, fences.writes...)
 }
 
 // sinkOf recognizes a Markdown-writing call and splits it into its holes.
-func sinkOf(pkg *packages.Package, call *ast.CallExpr) (sink, bool) {
+func sinkOf(pkg *packages.Package, call *ast.CallExpr, fences *fenceIndex) (sink, bool) {
 	callee := calleeOf(pkg, call)
 	if callee == nil || callee.Pkg() == nil {
 		return sink{}, false
 	}
 	switch callee.Pkg().Path() {
 	case "fmt":
-		return formatSink(pkg, call, callee.Name())
+		return formatSink(pkg, call, callee.Name(), fences)
 	case toolutilPath:
 		return cellSink(pkg, call, callee.Name())
 	default:
@@ -90,7 +93,11 @@ func sinkOf(pkg *packages.Package, call *ast.CallExpr) (sink, bool) {
 // the type checker resolves a named constant as readily as a literal, which
 // matters because several formatters pass a shared template constant rather
 // than writing the string at the call.
-func formatSink(pkg *packages.Package, call *ast.CallExpr, name string) (sink, bool) {
+// A hole inside a fenced code block is judged as one, whatever the line it sits
+// on would otherwise say: inside a block a pipe is text and a '#' is text, and
+// the only thing the value can do is end the block, so the fence is the
+// containment that has to hold.
+func formatSink(pkg *packages.Package, call *ast.CallExpr, name string, fences *fenceIndex) (sink, bool) {
 	index, known := formatArgIndex[name]
 	if !known || index >= len(call.Args) {
 		return sink{}, false
@@ -104,14 +111,20 @@ func formatSink(pkg *packages.Package, call *ast.CallExpr, name string) (sink, b
 		return sink{}, false
 	}
 	args := call.Args[index+1:]
+	holes := parseVerbs(template)
+	fenced := fenceHoles(template, fences.cursorFor(call), holes)
 	s := sink{pkg: pkg, call: call, callee: name}
-	for _, h := range parseVerbs(template) {
+	for i, h := range holes {
 		if !stringishVerbs[h.verb] || h.arg >= len(args) {
 			continue
 		}
+		ctx := contextAt(template, h.offset)
+		if fenced[i] {
+			ctx = ctxFence
+		}
 		s.holes = append(s.holes, sinkHole{
 			expr: args[h.arg],
-			ctx:  contextAt(template, h.offset),
+			ctx:  ctx,
 			verb: "%" + string(h.verb),
 		})
 	}

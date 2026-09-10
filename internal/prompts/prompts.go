@@ -1295,27 +1295,27 @@ func writeDailyActivity(b *strings.Builder, username string, dailyActivity []day
 	}
 
 	b.WriteString("\n## Activity Chart\n\n")
-	b.WriteString("```mermaid\n")
-	b.WriteString("xychart-beta\n")
-	fmt.Fprintf(b, "    title \"Daily Activity for @%s\"\n", username)
-	b.WriteString("    x-axis [")
-	for i, da := range dailyActivity {
-		if i > 0 {
-			b.WriteString(", ")
+	writeMermaidChart(b, func(chart *strings.Builder) {
+		chart.WriteString("xychart-beta\n")
+		fmt.Fprintf(chart, "    title \"Daily Activity for @%s\"\n", username)
+		chart.WriteString("    x-axis [")
+		for i, da := range dailyActivity {
+			if i > 0 {
+				chart.WriteString(", ")
+			}
+			fmt.Fprintf(chart, "\"%s\"", da.date)
 		}
-		fmt.Fprintf(b, "\"%s\"", da.date)
-	}
-	b.WriteString("]\n")
-	b.WriteString("    y-axis \"Events\"\n")
-	b.WriteString("    bar [")
-	for i, da := range dailyActivity {
-		if i > 0 {
-			b.WriteString(", ")
+		chart.WriteString("]\n")
+		chart.WriteString("    y-axis \"Events\"\n")
+		chart.WriteString("    bar [")
+		for i, da := range dailyActivity {
+			if i > 0 {
+				chart.WriteString(", ")
+			}
+			fmt.Fprintf(chart, "%d", da.count)
 		}
-		fmt.Fprintf(b, "%d", da.count)
-	}
-	b.WriteString("]\n")
-	b.WriteString("```\n")
+		chart.WriteString("]\n")
+	})
 }
 
 // dayActivity holds the event count for a single calendar day.

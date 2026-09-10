@@ -123,21 +123,24 @@ func writeDailyMergeChart(b *strings.Builder, mrs []*gl.BasicMergeRequest) {
 
 	b.WriteString("## Daily Merged MRs\n\n")
 	sortedDays := sortedKeys(dailyCounts)
-	b.WriteString("```mermaid\nxychart-beta\n  title \"Merged MRs per day\"\n  x-axis [")
-	for i, day := range sortedDays {
-		if i > 0 {
-			b.WriteString(", ")
+	writeMermaidChart(b, func(chart *strings.Builder) {
+		chart.WriteString("xychart-beta\n  title \"Merged MRs per day\"\n  x-axis [")
+		for i, day := range sortedDays {
+			if i > 0 {
+				chart.WriteString(", ")
+			}
+			chart.WriteString(day[5:]) // MM-DD
 		}
-		b.WriteString(day[5:]) // MM-DD
-	}
-	b.WriteString("]\n  y-axis \"MRs merged\"\n  bar [")
-	for i, day := range sortedDays {
-		if i > 0 {
-			b.WriteString(", ")
+		chart.WriteString("]\n  y-axis \"MRs merged\"\n  bar [")
+		for i, day := range sortedDays {
+			if i > 0 {
+				chart.WriteString(", ")
+			}
+			fmt.Fprintf(chart, "%d", dailyCounts[day])
 		}
-		fmt.Fprintf(b, "%d", dailyCounts[day])
-	}
-	b.WriteString("]\n```\n\n")
+		chart.WriteString("]\n")
+	})
+	b.WriteString("\n")
 }
 
 // registerReleaseReadinessPrompt registers the release_readiness prompt.

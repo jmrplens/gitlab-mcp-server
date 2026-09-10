@@ -53,7 +53,13 @@ func FormatReadMarkdown(out ReadOutput) *mcp.CallToolResult {
 	fmt.Fprintf(&b, "- **Resolved Project**: %s\n", toolutil.EscapeMdTableCell(out.ResolvedProject))
 	fmt.Fprintf(&b, "- **Commit**: `%s`\n", sha)
 	fmt.Fprintf(&b, "- **File**: `%s` (%d bytes)\n\n", toolutil.EscapeMdTableCell(out.FilePath), out.Size)
-	fmt.Fprintf(&b, "```%s\n%s\n```\n", ext, out.Content)
+	// The body is a file of the submodule's own repository, so whoever can push
+	// there chooses it: a three-backtick fence would be closed by the first run
+	// of three the file contains, and everything after it would render as
+	// Markdown of this response. The extension is read off the file name and is
+	// as much the pusher's choice, which is why the info string goes through the
+	// same helper rather than into the fence line by hand.
+	b.WriteString(toolutil.MarkdownFencedBlock(ext, out.Content))
 	toolutil.WriteHints(&b, "Use `gitlab_update_repository_submodule` to change the commit SHA reference")
 	return toolutil.ToolResultWithMarkdown(b.String())
 }
