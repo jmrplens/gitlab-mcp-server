@@ -18,10 +18,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,285 |
-| Unit test functions                                   | 14,680 |
+| Total test functions                                  | 15,286 |
+| Unit test functions                                   | 14,681 |
 | E2E test functions                                    |    605 |
-| cmd test functions                                    |  2,993 |
+| cmd test functions                                    |  2,994 |
 | Test files (internal/)                                |    525 |
 | Test files (cmd/)                                     |    203 |
 | Test files (test/e2e/)                                |    240 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,090 | 79.1% |
+| `TestFunc_Scenario` (2-part)           | 12,088 | 79.1% |
 | `TestFunc` (no underscore)             |    975 |  6.4% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,220 | 14.5% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,223 | 14.5% |
 
 ## Test Distribution
 
@@ -46,11 +46,11 @@
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,469 |        149 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            338 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,880 |        360 | domain-specific GitLab tool handlers                                                            |
+| Tools orchestration     |            336 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Tool sub-packages (177) |          8,882 |        360 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            605 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          2,993 |        203 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,285** |    **968** |                                                                                                 |
+| cmd packages            |          2,994 |        203 | server entry point and developer command utilities                                              |
+| **Total**               |     **15,286** |    **968** |                                                                                                 |
 
 ### Core Packages
 
@@ -248,7 +248,7 @@
 | projectdiscovery        |        19 |          1 |   100.0% |         1 |
 | projectimportexport     |        40 |          1 |    99.6% |         5 |
 | projectiterations       |        18 |          1 |   100.0% |         1 |
-| projectmirrors          |        63 |          2 |   100.0% |         7 |
+| projectmirrors          |        65 |          2 |   100.0% |         7 |
 | projects                |       393 |          6 |   100.0% |        57 |
 | projectserviceaccounts  |        14 |          2 |   100.0% |         8 |
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
@@ -294,7 +294,7 @@
 | wikis                   |        62 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,880** |    **360** |          | **1,187** |
+| **Total**               | **8,882** |    **360** |          | **1,187** |
 
 </details>
 
