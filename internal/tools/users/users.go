@@ -362,6 +362,10 @@ type SSHKeyOutput struct {
 	CreatedAt string `json:"created_at,omitempty"`
 	ExpiresAt string `json:"expires_at,omitempty"`
 	UsageType string `json:"usage_type,omitempty"`
+	// LastUsedAt is what lib/api/entities/ssh_key.rb sends unconditionally and
+	// client-go's SSHKey does not model, read from the captured response
+	// (ADR-0021). internal/tools/keys already publishes the same value.
+	LastUsedAt string `json:"last_used_at,omitempty"`
 }
 
 // SSHKeyListOutput holds a paginated list of SSH keys.
@@ -385,15 +389,21 @@ func ListSSHKeys(ctx context.Context, client *gitlabclient.Client, input ListSSH
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	applyOrderSort(&opts.ListOptions, input.OrderBy, input.Sort)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	keys, resp, err := client.GL().Users.ListSSHKeys(opts, gl.WithContext(ctx))
 	if err != nil {
 		return SSHKeyListOutput{}, toolutil.WrapErrWithStatusHint("list_ssh_keys", err, http.StatusUnauthorized,
 			"listing your SSH keys requires a valid token with read_user or api scope")
 	}
 
+	extras, err := toolutil.CapturedKeys(captured, len(keys))
+	if err != nil {
+		return SSHKeyListOutput{}, toolutil.WrapErr("list_ssh_keys", err)
+	}
+
 	out := make([]SSHKeyOutput, 0, len(keys))
-	for _, k := range keys {
-		out = append(out, toSSHKeyOutput(k))
+	for i, k := range keys {
+		out = append(out, toSSHKeyOutput(k, extras[i]))
 	}
 	return SSHKeyListOutput{
 		Keys:       out,
@@ -749,12 +759,13 @@ func toStatusOutput(s *gl.UserStatus) StatusOutput {
 }
 
 // toSSHKeyOutput converts the GitLab API response to the tool output format.
-func toSSHKeyOutput(k *gl.SSHKey) SSHKeyOutput {
+func toSSHKeyOutput(k *gl.SSHKey, extra toolutil.KeyExtra) SSHKeyOutput {
 	o := SSHKeyOutput{
-		ID:        k.ID,
-		Title:     k.Title,
-		Key:       k.Key,
-		UsageType: k.UsageType,
+		ID:         k.ID,
+		Title:      k.Title,
+		Key:        k.Key,
+		UsageType:  k.UsageType,
+		LastUsedAt: toolutil.FormatTimePtr(extra.LastUsedAt),
 	}
 	if k.CreatedAt != nil {
 		o.CreatedAt = k.CreatedAt.Format(time.RFC3339)

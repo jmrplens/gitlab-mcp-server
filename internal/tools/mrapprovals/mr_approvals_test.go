@@ -178,8 +178,6 @@ type approvalRuleExpected struct {
 	name              string
 	ruleType          string
 	approvalsRequired int
-	approved          bool
-	approvedByCount   int
 	eligibleCount     int
 }
 
@@ -197,12 +195,6 @@ func assertApprovalRule(t *testing.T, r RuleOutput, exp approvalRuleExpected) {
 	}
 	if r.ApprovalsRequired != exp.approvalsRequired {
 		t.Errorf("ApprovalsRequired = %d, want %d", r.ApprovalsRequired, exp.approvalsRequired)
-	}
-	if r.Approved != exp.approved {
-		t.Errorf("Approved = %v, want %v", r.Approved, exp.approved)
-	}
-	if len(r.ApprovedBy) != exp.approvedByCount {
-		t.Errorf("ApprovedBy count = %d, want %d", len(r.ApprovedBy), exp.approvedByCount)
 	}
 	if len(r.EligibleApprovers) != exp.eligibleCount {
 		t.Errorf("EligibleApprovers count = %d, want %d", len(r.EligibleApprovers), exp.eligibleCount)
@@ -254,8 +246,8 @@ func TestMRApprovalRules_Success(t *testing.T) {
 		idx  int
 		exp  approvalRuleExpected
 	}{
-		{"CodeOwners", 0, approvalRuleExpected{1, "Code Owners", "code_owner", 1, true, 1, 2}},
-		{"SecurityReview", 1, approvalRuleExpected{2, "Security Review", "regular", 2, false, 0, 1}},
+		{"CodeOwners", 0, approvalRuleExpected{1, "Code Owners", "code_owner", 1, 2}},
+		{"SecurityReview", 1, approvalRuleExpected{2, "Security Review", "regular", 2, 1}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -348,9 +340,6 @@ func TestApprovalRuleToOutput_NilUsers(t *testing.T) {
 		ApprovedBy:        nil,
 		EligibleApprovers: nil,
 	})
-	if rule.ApprovedBy != nil {
-		t.Errorf("expected nil ApprovedBy, got %v", rule.ApprovedBy)
-	}
 	if rule.EligibleApprovers != nil {
 		t.Errorf("expected nil EligibleApprovers, got %v", rule.EligibleApprovers)
 	}
@@ -374,13 +363,10 @@ func TestApprovalRuleToOutput_MultipleUsers(t *testing.T) {
 			{Name: "Charlie"},
 		},
 	})
-	if len(rule.ApprovedBy) != 2 {
-		t.Errorf("ApprovedBy count = %d, want 2", len(rule.ApprovedBy))
-	}
 	if len(rule.EligibleApprovers) != 3 {
 		t.Errorf("EligibleApprovers count = %d, want 3", len(rule.EligibleApprovers))
 	}
-	if rule.ID != 5 || rule.Name != "Team Lead" || rule.ApprovalsRequired != 3 || !rule.Approved {
+	if rule.ID != 5 || rule.Name != "Team Lead" || rule.ApprovalsRequired != 3 {
 		t.Errorf("unexpected output: %+v", rule)
 	}
 }
@@ -391,9 +377,6 @@ func TestApprovalRuleToOutputSkips_NilEntries(t *testing.T) {
 		ApprovedBy:        []*gl.BasicUser{nil, {Name: "Valid"}},
 		EligibleApprovers: []*gl.BasicUser{{Name: "E1"}, nil},
 	})
-	if len(rule.ApprovedBy) != 1 || rule.ApprovedBy[0] == nil || rule.ApprovedBy[0].Name != "Valid" {
-		t.Errorf("ApprovedBy = %v, want [Valid]", rule.ApprovedBy)
-	}
 	if len(rule.EligibleApprovers) != 1 || rule.EligibleApprovers[0] == nil || rule.EligibleApprovers[0].Name != "E1" {
 		t.Errorf("EligibleApprovers = %v, want [E1]", rule.EligibleApprovers)
 	}
@@ -1184,9 +1167,9 @@ func TestConfig_ToOutputNilEntries(t *testing.T) {
 func TestFormatStateMarkdown_WithRules(t *testing.T) {
 	s := StateOutput{
 		ApprovalRulesOverwritten: true,
-		Rules: []RuleOutput{
-			{ID: 1, Name: "Security", RuleType: "regular", ApprovalsRequired: 2, Approved: true, ApprovedBy: []*BasicUserOutput{{Name: "Alice"}}},
-			{ID: 2, Name: "QA", RuleType: "code_owner", ApprovalsRequired: 1, Approved: false, ApprovedBy: nil},
+		Rules: []StateRuleOutput{
+			{RuleOutput: RuleOutput{ID: 1, Name: "Security", RuleType: "regular", ApprovalsRequired: 2}, Approved: true, ApprovedBy: []*BasicUserOutput{{Name: "Alice"}}},
+			{RuleOutput: RuleOutput{ID: 2, Name: "QA", RuleType: "code_owner", ApprovalsRequired: 1}, Approved: false, ApprovedBy: nil},
 		},
 	}
 	md := FormatStateMarkdown(s)
@@ -1214,14 +1197,16 @@ func TestFormatStateMarkdown_Empty(t *testing.T) {
 func TestFormatRulesMarkdown_WithRules(t *testing.T) {
 	out := RulesOutput{
 		Rules: []RuleOutput{
-			{ID: 10, Name: "Team", RuleType: "regular", ApprovalsRequired: 1, Approved: true, EligibleApprovers: []*BasicUserOutput{{Name: "Eve"}, {Name: "Frank"}}},
+			{ID: 10, Name: "Team", RuleType: "regular", ApprovalsRequired: 1, EligibleApprovers: []*BasicUserOutput{{Name: "Eve"}, {Name: "Frank"}}},
 		},
 	}
 	md := FormatRulesMarkdown(out)
 	assertContains(t, md, "## MR Approval Rules (1)")
 	assertContains(t, md, "| 10 |")
-	assertContains(t, md, "✅")
 	assertContains(t, md, "Eve, Frank")
+	// The approval_rules routes do not send approved, so the table does not
+	// claim one either.
+	assertNotContains(t, md, "Approved")
 }
 
 // TestFormatRulesMarkdown_Empty verifies FormatRulesMarkdown when empty.
@@ -1308,7 +1293,6 @@ func TestFormatRuleMarkdown_Full(t *testing.T) {
 		Name:              "Team Leads",
 		RuleType:          "regular",
 		ApprovalsRequired: 2,
-		Approved:          true,
 		EligibleApprovers: []*BasicUserOutput{{Name: "Alice"}, {Name: "Bob"}},
 		Users:             []*BasicUserOutput{{Name: "Alice"}},
 		Groups:            []*GroupOutput{{Name: "Leads"}},
@@ -1318,7 +1302,7 @@ func TestFormatRuleMarkdown_Full(t *testing.T) {
 	assertContains(t, md, "| ID | 1 |")
 	assertContains(t, md, "| Type | regular |")
 	assertContains(t, md, "| Approvals Required | 2 |")
-	assertContains(t, md, "✅")
+	assertNotContains(t, md, "| Approved |")
 	assertContains(t, md, "| Eligible | Alice, Bob |")
 	assertContains(t, md, "| Users | Alice |")
 	assertContains(t, md, "| Groups | Leads |")
@@ -1331,11 +1315,10 @@ func TestFormatRuleMarkdown_Minimal(t *testing.T) {
 		Name:              "Basic",
 		RuleType:          "any_approver",
 		ApprovalsRequired: 0,
-		Approved:          false,
 	}
 	md := FormatRuleMarkdown(r)
 	assertContains(t, md, "## Approval Rule: Basic")
-	assertContains(t, md, "❌")
+	assertNotContains(t, md, "| Approved |")
 	assertNotContains(t, md, "| Eligible |")
 	assertNotContains(t, md, "| Users |")
 	assertNotContains(t, md, "| Groups |")
@@ -1540,15 +1523,15 @@ func TestRules_OverriddenVersionTolerant(t *testing.T) {
 
 // TestRawRuleToOutput_NilNested verifies rawRuleToOutput is nil-safe for absent
 // nested approver/user/group/source-rule objects and maps the scalar fields.
-func TestRawRuleToOutput_NilNested(t *testing.T) {
-	out := rawRuleToOutput(&mergeRequestApprovalRuleAPI{
+func TestRawStateRuleToOutput_NilNested(t *testing.T) {
+	out := rawStateRuleToOutput(&mergeRequestApprovalRuleAPI{
 		ID: 3, Name: "n", RuleType: "regular", ReportType: "rt", Section: "s",
 		ApprovalsRequired: 4, Approved: true, ContainsHiddenGroups: true, Overridden: true,
 	})
 	if out.ID != 3 || out.Name != "n" || out.RuleType != "regular" || out.ReportType != "rt" ||
 		out.Section != "s" || out.ApprovalsRequired != 4 || !out.Approved ||
 		!out.ContainsHiddenGroups || !out.Overridden {
-		t.Fatalf("rawRuleToOutput scalar mapping = %+v", out)
+		t.Fatalf("rawStateRuleToOutput scalar mapping = %+v", out)
 	}
 	if out.ApprovedBy != nil || out.EligibleApprovers != nil || out.Users != nil ||
 		out.Groups != nil || out.SourceRule != nil {
@@ -1556,11 +1539,11 @@ func TestRawRuleToOutput_NilNested(t *testing.T) {
 	}
 }
 
-// TestRawRuleToOutput_NestedSubsets verifies rawRuleToOutput projects nested
+// TestRawStateRuleToOutput_NestedSubsets verifies the state converter projects nested
 // objects through the documented-reference-subset converters (BasicUserOutput,
 // GroupOutput, ProjectApprovalRuleOutput).
-func TestRawRuleToOutput_NestedSubsets(t *testing.T) {
-	out := rawRuleToOutput(&mergeRequestApprovalRuleAPI{
+func TestRawStateRuleToOutput_NestedSubsets(t *testing.T) {
+	out := rawStateRuleToOutput(&mergeRequestApprovalRuleAPI{
 		ID:                1,
 		ApprovedBy:        []*gl.BasicUser{{Name: "Ann"}},
 		EligibleApprovers: []*gl.BasicUser{{Name: "Eli"}},

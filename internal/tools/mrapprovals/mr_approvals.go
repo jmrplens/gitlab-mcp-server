@@ -86,22 +86,36 @@ type RuleOutput struct {
 	ReportType           string                     `json:"report_type,omitempty"`
 	Section              string                     `json:"section,omitempty"`
 	ApprovalsRequired    int                        `json:"approvals_required"`
-	Approved             bool                       `json:"approved"`
 	ContainsHiddenGroups bool                       `json:"contains_hidden_groups,omitempty"`
 	Overridden           bool                       `json:"overridden,omitempty"`
-	ApprovedBy           []*BasicUserOutput         `json:"approved_by,omitempty"`
 	EligibleApprovers    []*BasicUserOutput         `json:"eligible_approvers,omitempty"`
 	Users                []*BasicUserOutput         `json:"users,omitempty"`
 	Groups               []*GroupOutput             `json:"groups,omitempty"`
 	SourceRule           *ProjectApprovalRuleOutput `json:"source_rule,omitempty"`
 }
 
+// StateRuleOutput is a rule as the approval-state endpoint renders it: the
+// rule, plus whether it is satisfied and by whom.
+//
+// It exists because one Go type used to serve two GitLab entities.
+// ee/lib/api/entities/merge_request_approval_state_rule.rb adds approved and
+// approved_by, and only GET .../approval_state presents it; the three
+// approval_rules routes present MergeRequestApprovalRule, which adds section,
+// source_rule and overridden and neither of these. Publishing both on one type
+// meant every rules row asserted "approved": false, since that field carried no
+// omitempty, which is the shape of issue 580 one entity over.
+type StateRuleOutput struct {
+	RuleOutput
+	Approved   bool               `json:"approved"`
+	ApprovedBy []*BasicUserOutput `json:"approved_by,omitempty"`
+}
+
 // StateOutput holds the overall approval state for a merge request,
 // including whether rules have been overridden and the list of applicable rules.
 type StateOutput struct {
 	toolutil.HintableOutput
-	ApprovalRulesOverwritten bool         `json:"approval_rules_overwritten"`
-	Rules                    []RuleOutput `json:"rules"`
+	ApprovalRulesOverwritten bool              `json:"approval_rules_overwritten"`
+	Rules                    []StateRuleOutput `json:"rules"`
 }
 
 // RulesOutput holds the list of approval rules for a merge request.
@@ -147,9 +161,7 @@ func RuleToOutput(r *gl.MergeRequestApprovalRule) RuleOutput {
 		ReportType:           r.ReportType,
 		Section:              r.Section,
 		ApprovalsRequired:    int(r.ApprovalsRequired),
-		Approved:             r.Approved,
 		ContainsHiddenGroups: r.ContainsHiddenGroups,
-		ApprovedBy:           basicUserOutputs(r.ApprovedBy),
 		EligibleApprovers:    basicUserOutputs(r.EligibleApprovers),
 		Users:                basicUserOutputs(r.Users),
 		Groups:               groupOutputs(r.Groups),
@@ -169,14 +181,23 @@ func rawRuleToOutput(r *mergeRequestApprovalRuleAPI) RuleOutput {
 		ReportType:           r.ReportType,
 		Section:              r.Section,
 		ApprovalsRequired:    int(r.ApprovalsRequired),
-		Approved:             r.Approved,
 		ContainsHiddenGroups: r.ContainsHiddenGroups,
 		Overridden:           r.Overridden,
-		ApprovedBy:           basicUserOutputs(r.ApprovedBy),
 		EligibleApprovers:    basicUserOutputs(r.EligibleApprovers),
 		Users:                basicUserOutputs(r.Users),
 		Groups:               groupOutputs(r.Groups),
 		SourceRule:           projectApprovalRuleOutput(r.SourceRule),
+	}
+}
+
+// rawStateRuleToOutput converts a raw-fetch rule as the approval-state
+// endpoint renders it, wrapping [rawRuleToOutput] with the two fields only
+// that entity adds.
+func rawStateRuleToOutput(r *mergeRequestApprovalRuleAPI) StateRuleOutput {
+	return StateRuleOutput{
+		RuleOutput: rawRuleToOutput(r),
+		Approved:   r.Approved,
+		ApprovedBy: basicUserOutputs(r.ApprovedBy),
 	}
 }
 
@@ -267,7 +288,7 @@ func State(ctx context.Context, client *gitlabclient.Client, input StateInput) (
 	}
 	for _, r := range state.Rules {
 		if r != nil {
-			out.Rules = append(out.Rules, rawRuleToOutput(r))
+			out.Rules = append(out.Rules, rawStateRuleToOutput(r))
 		}
 	}
 	return out, nil

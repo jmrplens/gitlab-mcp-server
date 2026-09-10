@@ -41,6 +41,12 @@ func CapturedKey(capture *gitlabclient.ResponseCapture) (KeyExtra, error) {
 	return capturedOne[KeyExtra](capture)
 }
 
+// CapturedKeys reads the same off a list answer, one extra per key in order,
+// the count held to what the SDK decoded.
+func CapturedKeys(capture *gitlabclient.ResponseCapture, decoded int) ([]KeyExtra, error) {
+	return capturedList[KeyExtra](capture, decoded, "ssh keys")
+}
+
 // RunnerExtra is what lib/api/entities/ci/runner.rb sends on a runner that
 // client-go's Runner and RunnerDetails do not carry: when it was created,
 // who created it, sent to a caller allowed to read that user, and the job
