@@ -21,8 +21,8 @@
     },
     "ultimate": {
       "visible_tools": 1085,
-      "tool_schema_tokens": 674354,
-      "reduction_factor_vs_dynamic": 442
+      "tool_schema_tokens": 675530,
+      "reduction_factor_vs_dynamic": 443
     }
   }
 }

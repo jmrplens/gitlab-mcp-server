@@ -1020,11 +1020,10 @@ captured response, so each carries a live workaround:
   `created_by`, `email`, both identities, `override` and `member_role`, belong
   in the same merge request as a second group.
 
-One lead rather than a finding, because nothing has measured it: the record's
-`API::Entities::MemberRole` exposes about fifty permission flags where
-`gl.MemberRole` and this server's own member role output mirror twenty-two. The
-audit's nested comparison does not reach that object, so it is unmeasured
-rather than measured and clean.
+That lead has since been measured and is
+[its own entry](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends):
+the record's `API::Entities::MemberRole` carries 50 keys, of which 45 are
+permissions, and `gl.MemberRole` models 20 of them.
 
 **Where these merge requests come from**: the
 [community fork](https://gitlab.com/gitlab-community/gitlab-org/api/client-go),
@@ -1307,6 +1306,71 @@ oracle is `docs/development/gitlab-api-live.json`. Every finding carries
 and the `_links` object. `_links` is a fifth key wider than `gl.IssueLinks`:
 the same nested block renders `closed_as_duplicate_of` for an issue closed as
 a duplicate, which no struct in the SDK carries.
+
+### MemberRole models twenty of the forty-five permissions GitLab sends
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. Every gap is worked around.
+- **Workaround**: yes. The twenty-five permissions are read from the captured
+  response beside the SDK's decode (ADR-0021), through
+  `memberroles.capturedRole` and `capturedRoles`.
+
+**What**: `MemberRole` in client-go v3.0.0's `member_roles.go` carries 25 keys,
+20 of them permission flags, and is what all four member role routes decode
+into. `API::Entities::MemberRole` at `v19.3.1-ee` carries 50 keys, 45 of them
+permissions, every one exposed with `default: false` and no condition. So 25
+permissions are on every response of every one of those routes and the SDK
+drops all of them: `admin_ai_catalog_item`, `admin_ai_catalog_item_consumer`,
+`admin_integrations`, `admin_protected_branch`,
+`admin_protected_environments`, `admin_runners`, `admin_security_attributes`,
+`apply_security_scan_profiles`, `create_security_scan_profiles`,
+`delete_security_scan_profiles`, `destroy_package`, `read_admin_cicd`,
+`read_admin_groups`, `read_admin_monitoring`, `read_admin_projects`,
+`read_admin_subscription`, `read_admin_users`, `read_agent_artifacts`,
+`read_compliance_dashboard`, `read_crm_contact`, `read_security_attribute`,
+`read_security_scan_profiles`, `read_virtual_registry`,
+`update_sec_ai_workflow_settings` and `update_security_scan_profiles`.
+
+**This one could not have been found by reading GitLab's source, and that is
+the point of it.**
+[ee/lib/api/entities/member_role.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/api/entities/member_role.rb)
+exposes its permissions by looping over
+`::MemberRole.all_customizable_permissions`, a constant the running
+application assembles, so the file says "expose the loop variable" and names
+none of the forty-five. A scanner reading that Ruby sees zero permission keys;
+the committed live record, taken from a booted GitLab that was asked what the
+entity exposes, has all of them. This is the same class as the Geo status
+matrix in
+[entry 35](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity),
+and it is why `cmd/gen_api_live` evaluates rather than parses.
+
+The documentation cannot stand in for the entity either.
+[doc/api/member_roles.md](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/doc/api/member_roles.md)
+prints four permission keys across its example bodies and refers the reader to
+the abilities page under `doc/user` for the rest, so a contributor working from
+the page would model four.
+
+**What must not be copied across with it**: `CreateMemberRoleOptions` accepts
+the same twenty the response struct models, and this server's create inputs are
+built from those options. Whether GitLab's `POST` accepts the other twenty-five
+is a separate question this register does not answer, so the twenty-five stay
+off the input fragment here and belong in a separate change upstream if they
+are added to the options at all.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`). It had
+been recorded as an unmeasured lead in
+[entry 34](#response-structs-that-miss-a-field-gitlab-sends-unconditionally)
+on the strength of the record's key count alone; the set difference against the
+SDK struct's own json names is what turned it into 25 named fields.
+
+**Effort**: trivial and mechanical. Twenty-five additive `bool` fields with
+`json` tags on one struct, and twenty-five keys added to an existing test
+fixture. Pointers are not needed upstream the way they are here: this server
+keeps them nil to distinguish a permission an older instance never had from one
+it denies, and a struct field decoding a body is under no such obligation.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

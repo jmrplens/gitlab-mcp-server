@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -38,6 +39,150 @@ func TestListInstance_Success(t *testing.T) {
 	}
 	if out.Roles[0].BaseAccessLevel != 30 {
 		t.Errorf("expected base_access_level 30, got %d", out.Roles[0].BaseAccessLevel)
+	}
+}
+
+// TestMemberRoleHandlers_PublishTheCapturedPermissions verifies that the
+// twenty-five permissions API::Entities::MemberRole sends and client-go's
+// MemberRole does not model reach the caller through each of the four routes
+// that answer with a role, off the same bytes the SDK decoded.
+//
+// All four are driven from one table because the reader is the same on each
+// and the interesting failure is a handler that forgot to wrap its context: a
+// call made without gitlabclient.WithResponseCapture reaches no capture and
+// publishes nothing, which no test of the reader alone can see.
+func TestMemberRoleHandlers_PublishTheCapturedPermissions(t *testing.T) {
+	cases := []struct {
+		name   string
+		path   string
+		method string
+		list   bool
+		call   func(context.Context, *gitlabclient.Client) (Output, error)
+	}{
+		{
+			name: "list instance", path: "/api/v4/member_roles", method: http.MethodGet, list: true,
+			call: func(ctx context.Context, c *gitlabclient.Client) (Output, error) {
+				out, err := ListInstance(ctx, c, ListInstanceInput{})
+				return firstRole(out), err
+			},
+		},
+		{
+			name: "list group", path: "/api/v4/groups/100/member_roles", method: http.MethodGet, list: true,
+			call: func(ctx context.Context, c *gitlabclient.Client) (Output, error) {
+				out, err := ListGroup(ctx, c, ListGroupInput{GroupID: "100"})
+				return firstRole(out), err
+			},
+		},
+		{
+			name: "create instance", path: "/api/v4/member_roles", method: http.MethodPost,
+			call: func(ctx context.Context, c *gitlabclient.Client) (Output, error) {
+				return CreateInstance(ctx, c, CreateInstanceInput{Name: "custom-dev", BaseAccessLevel: 30})
+			},
+		},
+		{
+			name: "create group", path: "/api/v4/groups/100/member_roles", method: http.MethodPost,
+			call: func(ctx context.Context, c *gitlabclient.Client) (Output, error) {
+				return CreateGroup(ctx, c, CreateGroupInput{GroupID: "100", Name: "custom-dev", BaseAccessLevel: 30})
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := roleCaptureBody
+			if tc.list {
+				body = "[" + roleCaptureBody + "]"
+			}
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == tc.method && r.URL.Path == tc.path {
+					testutil.RespondJSON(w, http.StatusOK, body)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			got, err := tc.call(context.Background(), client)
+			if err != nil {
+				t.Fatalf("%s error: %v", tc.name, err)
+			}
+			if got.ReadAdminUsers == nil || !*got.ReadAdminUsers {
+				t.Errorf("read_admin_users = %v, want it published as true", got.ReadAdminUsers)
+			}
+			if got.ReadAdminCICD == nil || *got.ReadAdminCICD {
+				t.Errorf("read_admin_cicd = %v, want it published as false rather than omitted", got.ReadAdminCICD)
+			}
+			if got.UpdateSecurityScanProfiles == nil || !*got.UpdateSecurityScanProfiles {
+				t.Errorf("update_security_scan_profiles = %v, want it published", got.UpdateSecurityScanProfiles)
+			}
+		})
+	}
+}
+
+// firstRole takes the one role a list answer carries, or a zero role so the
+// caller's own assertions report the miss.
+func firstRole(out ListOutput) Output {
+	if len(out.Roles) == 0 {
+		return Output{}
+	}
+	return out.Roles[0]
+}
+
+// TestMemberRoleHandlers_CaptureUnreadable verifies each role-returning
+// handler reports a body the permission reader cannot hold rather than
+// serving a role with the permissions silently missing.
+func TestMemberRoleHandlers_CaptureUnreadable(t *testing.T) {
+	cases := []struct {
+		name   string
+		path   string
+		method string
+		body   string
+		call   func(context.Context, *gitlabclient.Client) error
+	}{
+		{
+			name: "list instance", path: "/api/v4/member_roles", method: http.MethodGet,
+			body: `[{"id":1,"read_admin_users":"yes"}]`,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := ListInstance(ctx, c, ListInstanceInput{})
+				return err
+			},
+		},
+		{
+			name: "list group", path: "/api/v4/groups/100/member_roles", method: http.MethodGet,
+			body: `[{"id":1,"read_admin_users":"yes"}]`,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := ListGroup(ctx, c, ListGroupInput{GroupID: "100"})
+				return err
+			},
+		},
+		{
+			name: "create instance", path: "/api/v4/member_roles", method: http.MethodPost,
+			body: `{"id":1,"read_admin_users":"yes"}`,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := CreateInstance(ctx, c, CreateInstanceInput{Name: "n", BaseAccessLevel: 30})
+				return err
+			},
+		},
+		{
+			name: "create group", path: "/api/v4/groups/100/member_roles", method: http.MethodPost,
+			body: `{"id":1,"read_admin_users":"yes"}`,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := CreateGroup(ctx, c, CreateGroupInput{GroupID: "100", Name: "n", BaseAccessLevel: 30})
+				return err
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == tc.method && r.URL.Path == tc.path {
+					testutil.RespondJSON(w, http.StatusOK, tc.body)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			if err := tc.call(context.Background(), client); err == nil {
+				t.Errorf("%s accepted a captured body the permission reader cannot hold", tc.name)
+			}
+		})
 	}
 }
 
@@ -606,7 +751,7 @@ func assertGroupMemberRoleDeprecationHint(t *testing.T, err error) {
 // TestToOutput_Nil verifies that toOutput returns a zero-value Output when
 // given a nil MemberRole pointer, preventing nil-pointer dereferences.
 func TestToOutput_Nil(t *testing.T) {
-	out := toOutput(nil)
+	out := toOutput(nil, roleExtra{})
 	if out.ID != 0 {
 		t.Errorf("expected ID 0 for nil input, got %d", out.ID)
 	}

@@ -103,6 +103,18 @@ const (
 		"issue's group has the epics licensed feature)"
 	docIssueLinksLicensed = docIssueLinksRelation + " (health_status under the issuable_health_status licensed feature and " +
 		"iteration under iterations, both exposed by ee/lib/ee/api/entities/issue.rb)"
+	// The member role page is the one citation here that is deliberately not a
+	// page reference to the fields themselves, because no page carries them.
+	// doc/api/member_roles.md prints four permission keys in its example
+	// bodies and sends the reader elsewhere for the rest, so the entity is the
+	// oracle: ee/lib/api/entities/member_role.rb exposes every permission by
+	// looping over a constant the running application assembles, with
+	// `default: false` and no condition. The names are in no source a scan
+	// could read, which is why the committed live record is where they came
+	// from.
+	docMemberRolePermissions = "member_roles.md (ee/lib/api/entities/member_role.rb exposes every " +
+		"::MemberRole.all_customizable_permissions entry with default: false and no condition; the page prints four of the " +
+		"forty-five in its examples and refers to user/custom_roles/abilities.md for the rest)"
 	docPATList            = "personal_access_tokens.md#list-all-personal-access-tokens"
 	docProjectTokensList  = "project_access_tokens.md#list-all-project-access-tokens"
 	docGroupTokensList    = "group_access_tokens.md"
@@ -756,6 +768,38 @@ var docAddedFields = map[string]string{
 	"issuelinks.RelationOutput.time_stats":             docIssueLinksRelation,
 	"issuelinks.RelationOutput.type":                   docIssueLinksRelation,
 	"issuelinks.RelationOutput.upvotes":                docIssueLinksRelation,
+
+	// memberroles: the twenty-five customizable permissions
+	// API::Entities::MemberRole sends that client-go's MemberRole declares no
+	// field for, read from the captured response (ADR-0021,
+	// memberroles.capturedRole and capturedRoles). All twenty-five are on
+	// every response of all four member role routes. Recorded in
+	// docs/development/upstream-bugs.md.
+	"memberroles.Output.admin_ai_catalog_item":           docMemberRolePermissions,
+	"memberroles.Output.admin_ai_catalog_item_consumer":  docMemberRolePermissions,
+	"memberroles.Output.admin_integrations":              docMemberRolePermissions,
+	"memberroles.Output.admin_protected_branch":          docMemberRolePermissions,
+	"memberroles.Output.admin_protected_environments":    docMemberRolePermissions,
+	"memberroles.Output.admin_runners":                   docMemberRolePermissions,
+	"memberroles.Output.admin_security_attributes":       docMemberRolePermissions,
+	"memberroles.Output.apply_security_scan_profiles":    docMemberRolePermissions,
+	"memberroles.Output.create_security_scan_profiles":   docMemberRolePermissions,
+	"memberroles.Output.delete_security_scan_profiles":   docMemberRolePermissions,
+	"memberroles.Output.destroy_package":                 docMemberRolePermissions,
+	"memberroles.Output.read_admin_cicd":                 docMemberRolePermissions,
+	"memberroles.Output.read_admin_groups":               docMemberRolePermissions,
+	"memberroles.Output.read_admin_monitoring":           docMemberRolePermissions,
+	"memberroles.Output.read_admin_projects":             docMemberRolePermissions,
+	"memberroles.Output.read_admin_subscription":         docMemberRolePermissions,
+	"memberroles.Output.read_admin_users":                docMemberRolePermissions,
+	"memberroles.Output.read_agent_artifacts":            docMemberRolePermissions,
+	"memberroles.Output.read_compliance_dashboard":       docMemberRolePermissions,
+	"memberroles.Output.read_crm_contact":                docMemberRolePermissions,
+	"memberroles.Output.read_security_attribute":         docMemberRolePermissions,
+	"memberroles.Output.read_security_scan_profiles":     docMemberRolePermissions,
+	"memberroles.Output.read_virtual_registry":           docMemberRolePermissions,
+	"memberroles.Output.update_sec_ai_workflow_settings": docMemberRolePermissions,
+	"memberroles.Output.update_security_scan_profiles":   docMemberRolePermissions,
 }
 
 // isDocAddedField reports whether an MCP output field is a doc-justified field we

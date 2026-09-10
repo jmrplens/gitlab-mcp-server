@@ -16387,6 +16387,18 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "admin_ai_catalog_item": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "admin_ai_catalog_item_consumer": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "admin_cicd_variables": {
           "description": "Allow admin CI/CD variables",
           "type": [
@@ -16408,6 +16420,12 @@
             "boolean"
           ]
         },
+        "admin_integrations": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "admin_merge_request": {
           "description": "Allow admin merge requests",
           "type": [
@@ -16415,8 +16433,32 @@
             "boolean"
           ]
         },
+        "admin_protected_branch": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "admin_protected_environments": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "admin_push_rules": {
           "description": "Allow admin push rules",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "admin_runners": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "admin_security_attributes": {
           "type": [
             "null",
             "boolean"
@@ -16443,6 +16485,12 @@
             "boolean"
           ]
         },
+        "apply_security_scan_profiles": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "archive_project": {
           "description": "Allow archive project",
           "type": [
@@ -16453,8 +16501,26 @@
         "base_access_level": {
           "type": "integer"
         },
+        "create_security_scan_profiles": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "delete_security_scan_profiles": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "description": {
           "type": "string"
+        },
+        "destroy_package": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "group_id": {
           "type": "integer"
@@ -16509,8 +16575,62 @@
             "array"
           ]
         },
+        "read_admin_cicd": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_admin_groups": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_admin_monitoring": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_admin_projects": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_admin_subscription": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_admin_users": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_agent_artifacts": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "read_code": {
           "description": "Allow read code",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_compliance_dashboard": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_crm_contact": {
           "type": [
             "null",
             "boolean"
@@ -16525,6 +16645,24 @@
         },
         "read_runners": {
           "description": "Allow read runners",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_security_attribute": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_security_scan_profiles": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_virtual_registry": {
           "type": [
             "null",
             "boolean"
@@ -16546,6 +16684,18 @@
         },
         "remove_project": {
           "description": "Allow remove project",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "update_sec_ai_workflow_settings": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "update_security_scan_profiles": {
           "type": [
             "null",
             "boolean"
@@ -16956,6 +17106,18 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "admin_ai_catalog_item": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "admin_ai_catalog_item_consumer": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "admin_cicd_variables": {
           "description": "Allow admin CI/CD variables",
           "type": [
@@ -16977,6 +17139,12 @@
             "boolean"
           ]
         },
+        "admin_integrations": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "admin_merge_request": {
           "description": "Allow admin merge requests",
           "type": [
@@ -16984,8 +17152,32 @@
             "boolean"
           ]
         },
+        "admin_protected_branch": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "admin_protected_environments": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "admin_push_rules": {
           "description": "Allow admin push rules",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "admin_runners": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "admin_security_attributes": {
           "type": [
             "null",
             "boolean"
@@ -17012,6 +17204,12 @@
             "boolean"
           ]
         },
+        "apply_security_scan_profiles": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "archive_project": {
           "description": "Allow archive project",
           "type": [
@@ -17022,8 +17220,26 @@
         "base_access_level": {
           "type": "integer"
         },
+        "create_security_scan_profiles": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "delete_security_scan_profiles": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "description": {
           "type": "string"
+        },
+        "destroy_package": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "group_id": {
           "type": "integer"
@@ -17078,8 +17294,62 @@
             "array"
           ]
         },
+        "read_admin_cicd": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_admin_groups": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_admin_monitoring": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_admin_projects": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_admin_subscription": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_admin_users": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_agent_artifacts": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "read_code": {
           "description": "Allow read code",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_compliance_dashboard": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_crm_contact": {
           "type": [
             "null",
             "boolean"
@@ -17094,6 +17364,24 @@
         },
         "read_runners": {
           "description": "Allow read runners",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_security_attribute": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_security_scan_profiles": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "read_virtual_registry": {
           "type": [
             "null",
             "boolean"
@@ -17115,6 +17403,18 @@
         },
         "remove_project": {
           "description": "Allow remove project",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "update_sec_ai_workflow_settings": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "update_security_scan_profiles": {
           "type": [
             "null",
             "boolean"
@@ -110774,6 +111074,18 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "admin_ai_catalog_item": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "admin_ai_catalog_item_consumer": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "admin_cicd_variables": {
                 "description": "Allow admin CI/CD variables",
                 "type": [
@@ -110795,6 +111107,12 @@
                   "boolean"
                 ]
               },
+              "admin_integrations": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "admin_merge_request": {
                 "description": "Allow admin merge requests",
                 "type": [
@@ -110802,8 +111120,32 @@
                   "boolean"
                 ]
               },
+              "admin_protected_branch": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "admin_protected_environments": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "admin_push_rules": {
                 "description": "Allow admin push rules",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "admin_runners": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "admin_security_attributes": {
                 "type": [
                   "null",
                   "boolean"
@@ -110830,6 +111172,12 @@
                   "boolean"
                 ]
               },
+              "apply_security_scan_profiles": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "archive_project": {
                 "description": "Allow archive project",
                 "type": [
@@ -110840,8 +111188,26 @@
               "base_access_level": {
                 "type": "integer"
               },
+              "create_security_scan_profiles": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "delete_security_scan_profiles": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "description": {
                 "type": "string"
+              },
+              "destroy_package": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "group_id": {
                 "type": "integer"
@@ -110896,8 +111262,62 @@
                   "array"
                 ]
               },
+              "read_admin_cicd": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_admin_groups": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_admin_monitoring": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_admin_projects": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_admin_subscription": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_admin_users": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_agent_artifacts": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "read_code": {
                 "description": "Allow read code",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_compliance_dashboard": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_crm_contact": {
                 "type": [
                   "null",
                   "boolean"
@@ -110912,6 +111332,24 @@
               },
               "read_runners": {
                 "description": "Allow read runners",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_security_attribute": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_security_scan_profiles": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_virtual_registry": {
                 "type": [
                   "null",
                   "boolean"
@@ -110933,6 +111371,18 @@
               },
               "remove_project": {
                 "description": "Allow remove project",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "update_sec_ai_workflow_settings": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "update_security_scan_profiles": {
                 "type": [
                   "null",
                   "boolean"
@@ -112709,6 +113159,18 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "admin_ai_catalog_item": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "admin_ai_catalog_item_consumer": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "admin_cicd_variables": {
                 "description": "Allow admin CI/CD variables",
                 "type": [
@@ -112730,6 +113192,12 @@
                   "boolean"
                 ]
               },
+              "admin_integrations": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "admin_merge_request": {
                 "description": "Allow admin merge requests",
                 "type": [
@@ -112737,8 +113205,32 @@
                   "boolean"
                 ]
               },
+              "admin_protected_branch": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "admin_protected_environments": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "admin_push_rules": {
                 "description": "Allow admin push rules",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "admin_runners": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "admin_security_attributes": {
                 "type": [
                   "null",
                   "boolean"
@@ -112765,6 +113257,12 @@
                   "boolean"
                 ]
               },
+              "apply_security_scan_profiles": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "archive_project": {
                 "description": "Allow archive project",
                 "type": [
@@ -112775,8 +113273,26 @@
               "base_access_level": {
                 "type": "integer"
               },
+              "create_security_scan_profiles": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "delete_security_scan_profiles": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "description": {
                 "type": "string"
+              },
+              "destroy_package": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "group_id": {
                 "type": "integer"
@@ -112831,8 +113347,62 @@
                   "array"
                 ]
               },
+              "read_admin_cicd": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_admin_groups": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_admin_monitoring": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_admin_projects": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_admin_subscription": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_admin_users": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_agent_artifacts": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "read_code": {
                 "description": "Allow read code",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_compliance_dashboard": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_crm_contact": {
                 "type": [
                   "null",
                   "boolean"
@@ -112847,6 +113417,24 @@
               },
               "read_runners": {
                 "description": "Allow read runners",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_security_attribute": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_security_scan_profiles": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "read_virtual_registry": {
                 "type": [
                   "null",
                   "boolean"
@@ -112868,6 +113456,18 @@
               },
               "remove_project": {
                 "description": "Allow remove project",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "update_sec_ai_workflow_settings": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
+              "update_security_scan_profiles": {
                 "type": [
                   "null",
                   "boolean"

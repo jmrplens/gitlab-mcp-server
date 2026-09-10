@@ -83,6 +83,14 @@ type Permissions struct {
 }
 
 // Output represents a member role.
+//
+// The block after [Permissions] is what ee/lib/api/entities/member_role.rb
+// sends and client-go's MemberRole declares on no field, read from the
+// captured response beside the SDK's decode (ADR-0021) and described on
+// [roleExtra]. The entity exposes every customizable permission with
+// `default: false` and no condition, so all of them are on every response of
+// every member role route, and each stays nil when the instance sent no key
+// for it.
 type Output struct {
 	toolutil.HintableOutput
 	ID              int64  `json:"id"`
@@ -91,6 +99,32 @@ type Output struct {
 	GroupID         int64  `json:"group_id,omitempty"`
 	BaseAccessLevel int    `json:"base_access_level"`
 	Permissions
+
+	AdminAICatalogItem          *bool `json:"admin_ai_catalog_item,omitempty"`
+	AdminAICatalogItemConsumer  *bool `json:"admin_ai_catalog_item_consumer,omitempty"`
+	AdminIntegrations           *bool `json:"admin_integrations,omitempty"`
+	AdminProtectedBranch        *bool `json:"admin_protected_branch,omitempty"`
+	AdminProtectedEnvironments  *bool `json:"admin_protected_environments,omitempty"`
+	AdminRunners                *bool `json:"admin_runners,omitempty"`
+	AdminSecurityAttributes     *bool `json:"admin_security_attributes,omitempty"`
+	ApplySecurityScanProfiles   *bool `json:"apply_security_scan_profiles,omitempty"`
+	CreateSecurityScanProfiles  *bool `json:"create_security_scan_profiles,omitempty"`
+	DeleteSecurityScanProfiles  *bool `json:"delete_security_scan_profiles,omitempty"`
+	DestroyPackage              *bool `json:"destroy_package,omitempty"`
+	ReadAdminCICD               *bool `json:"read_admin_cicd,omitempty"`
+	ReadAdminGroups             *bool `json:"read_admin_groups,omitempty"`
+	ReadAdminMonitoring         *bool `json:"read_admin_monitoring,omitempty"`
+	ReadAdminProjects           *bool `json:"read_admin_projects,omitempty"`
+	ReadAdminSubscription       *bool `json:"read_admin_subscription,omitempty"`
+	ReadAdminUsers              *bool `json:"read_admin_users,omitempty"`
+	ReadAgentArtifacts          *bool `json:"read_agent_artifacts,omitempty"`
+	ReadComplianceDashboard     *bool `json:"read_compliance_dashboard,omitempty"`
+	ReadCRMContact              *bool `json:"read_crm_contact,omitempty"`
+	ReadSecurityAttribute       *bool `json:"read_security_attribute,omitempty"`
+	ReadSecurityScanProfiles    *bool `json:"read_security_scan_profiles,omitempty"`
+	ReadVirtualRegistry         *bool `json:"read_virtual_registry,omitempty"`
+	UpdateSecAIWorkflowSettings *bool `json:"update_sec_ai_workflow_settings,omitempty"`
+	UpdateSecurityScanProfiles  *bool `json:"update_security_scan_profiles,omitempty"`
 }
 
 // ListOutput holds the list response.
@@ -101,12 +135,13 @@ type ListOutput struct {
 
 // toOutput converts a [gl.MemberRole] into the package's [Output]
 // shape, wrapping every permission flag in a *bool so omitted flags
-// round-trip cleanly through the MCP tool input schema.
-func toOutput(r *gl.MemberRole) Output {
+// round-trip cleanly through the MCP tool input schema, and takes beside it
+// the permissions the capture read that the SDK struct does not model.
+func toOutput(r *gl.MemberRole, extra roleExtra) Output {
 	if r == nil {
 		return Output{}
 	}
-	return Output{
+	out := withCapturedPermissions(Output{
 		ID:                         r.ID,
 		Name:                       r.Name,
 		Description:                r.Description,
@@ -132,7 +167,44 @@ func toOutput(r *gl.MemberRole) Output {
 		ReadVulnerability:          new(r.ReadVulnerability),
 		RemoveGroup:                new(r.RemoveGroup),
 		RemoveProject:              new(r.RemoveProject),
-	}
+	}, extra)
+	return out
+}
+
+// withCapturedPermissions places the twenty-five permissions the capture read
+// onto the output.
+//
+// It is a function of its own rather than twenty-five more lines in the
+// literal above because the two halves answer different questions: everything
+// in the literal comes from the SDK's decode, and everything here from the
+// bytes beside it.
+func withCapturedPermissions(out Output, extra roleExtra) Output {
+	out.AdminAICatalogItem = extra.AdminAICatalogItem
+	out.AdminAICatalogItemConsumer = extra.AdminAICatalogItemConsumer
+	out.AdminIntegrations = extra.AdminIntegrations
+	out.AdminProtectedBranch = extra.AdminProtectedBranch
+	out.AdminProtectedEnvironments = extra.AdminProtectedEnvironments
+	out.AdminRunners = extra.AdminRunners
+	out.AdminSecurityAttributes = extra.AdminSecurityAttributes
+	out.ApplySecurityScanProfiles = extra.ApplySecurityScanProfiles
+	out.CreateSecurityScanProfiles = extra.CreateSecurityScanProfiles
+	out.DeleteSecurityScanProfiles = extra.DeleteSecurityScanProfiles
+	out.DestroyPackage = extra.DestroyPackage
+	out.ReadAdminCICD = extra.ReadAdminCICD
+	out.ReadAdminGroups = extra.ReadAdminGroups
+	out.ReadAdminMonitoring = extra.ReadAdminMonitoring
+	out.ReadAdminProjects = extra.ReadAdminProjects
+	out.ReadAdminSubscription = extra.ReadAdminSubscription
+	out.ReadAdminUsers = extra.ReadAdminUsers
+	out.ReadAgentArtifacts = extra.ReadAgentArtifacts
+	out.ReadComplianceDashboard = extra.ReadComplianceDashboard
+	out.ReadCRMContact = extra.ReadCRMContact
+	out.ReadSecurityAttribute = extra.ReadSecurityAttribute
+	out.ReadSecurityScanProfiles = extra.ReadSecurityScanProfiles
+	out.ReadVirtualRegistry = extra.ReadVirtualRegistry
+	out.UpdateSecAIWorkflowSettings = extra.UpdateSecAIWorkflowSettings
+	out.UpdateSecurityScanProfiles = extra.UpdateSecurityScanProfiles
+	return out
 }
 
 // buildCreateOpts assembles a [gl.CreateMemberRoleOptions] from a
@@ -236,16 +308,36 @@ func ListInstance(ctx context.Context, client *gitlabclient.Client, _ ListInstan
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
 	}
-	roles, _, err := client.GL().MemberRolesService.ListInstanceMemberRoles()
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	roles, _, err := client.GL().MemberRolesService.ListInstanceMemberRoles(gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list instance member roles", err, http.StatusForbidden,
 			"requires administrator access; self-managed Ultimate only. Instance-level custom roles are not available on GitLab.com")
 	}
+	return capturedRoleList("list instance member roles", roles, captured)
+}
+
+// capturedRoleList assembles a role list with the permissions the capture read
+// beside the SDK's decode, or reports the answer the reader cannot hold.
+func capturedRoleList(op string, roles []*gl.MemberRole, captured *gitlabclient.ResponseCapture) (ListOutput, error) {
+	extras, err := capturedRoles(captured, len(roles))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr(op, err)
+	}
 	out := ListOutput{Roles: make([]Output, 0, len(roles))}
-	for _, r := range roles {
-		out.Roles = append(out.Roles, toOutput(r))
+	for i, r := range roles {
+		out.Roles = append(out.Roles, toOutput(r, extras[i]))
 	}
 	return out, nil
+}
+
+// capturedRoleOne assembles one role the same way.
+func capturedRoleOne(op string, role *gl.MemberRole, captured *gitlabclient.ResponseCapture) (Output, error) {
+	extra, err := capturedRole(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(op, err)
+	}
+	return toOutput(role, extra), nil
 }
 
 // ListGroup lists every custom member role for a top-level group via
@@ -258,7 +350,8 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, in ListGroupInp
 	if in.GroupID.String() == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
-	roles, _, err := client.GL().MemberRolesService.ListMemberRoles(in.GroupID.String())
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	roles, _, err := client.GL().MemberRolesService.ListMemberRoles(in.GroupID.String(), gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return ListOutput{}, toolutil.WrapErrWithHint("list group member roles", err, groupMemberRoleSelfManagedHint)
@@ -266,11 +359,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, in ListGroupInp
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list group member roles", err, http.StatusForbidden,
 			"requires Owner role on the group + Ultimate license; group-level custom roles are available on GitLab.com Ultimate; verify group_id with gitlab_group_list")
 	}
-	out := ListOutput{Roles: make([]Output, 0, len(roles))}
-	for _, r := range roles {
-		out.Roles = append(out.Roles, toOutput(r))
-	}
-	return out, nil
+	return capturedRoleList("list group member roles", roles, captured)
 }
 
 // CreateInstance creates a new instance-level custom member role via
@@ -287,12 +376,13 @@ func CreateInstance(ctx context.Context, client *gitlabclient.Client, in CreateI
 		return Output{}, toolutil.ErrFieldRequired("base_access_level")
 	}
 	opts := buildCreateOpts(in)
-	role, _, err := client.GL().MemberRolesService.CreateInstanceMemberRole(opts)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	role, _, err := client.GL().MemberRolesService.CreateInstanceMemberRole(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("create instance member role", err, http.StatusBadRequest,
 			"requires admin + self-managed Ultimate; base_access_level must be 10/15/20/25/30/40/50 (Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner); 0, 5=Minimal access and 60=Admin are not valid; name must be unique; permissions are a list of valid permission strings")
 	}
-	return toOutput(role), nil
+	return capturedRoleOne("create instance member role", role, captured)
 }
 
 // CreateGroup creates a new group-level custom member role via the
@@ -317,7 +407,8 @@ func CreateGroup(ctx context.Context, client *gitlabclient.Client, in CreateGrou
 		Description:     in.Description,
 		Permissions:     in.Permissions,
 	})
-	role, _, err := client.GL().MemberRolesService.CreateMemberRole(in.GroupID.String(), opts)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	role, _, err := client.GL().MemberRolesService.CreateMemberRole(in.GroupID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return Output{}, toolutil.WrapErrWithHint("create group member role", err, groupMemberRoleSelfManagedHint)
@@ -325,7 +416,7 @@ func CreateGroup(ctx context.Context, client *gitlabclient.Client, in CreateGrou
 		return Output{}, toolutil.WrapErrWithStatusHint("create group member role", err, http.StatusBadRequest,
 			"requires Owner + Ultimate; base_access_level 10/15/20/25/30/40/50 (0, 5=Minimal access and 60=Admin are not valid); name unique within group; permissions must be valid; group_id must reference a top-level group")
 	}
-	return toOutput(role), nil
+	return capturedRoleOne("create group member role", role, captured)
 }
 
 // DeleteInstance deletes an instance-level custom member role via the
@@ -338,7 +429,7 @@ func DeleteInstance(ctx context.Context, client *gitlabclient.Client, in DeleteI
 	if in.MemberRoleID == 0 {
 		return toolutil.ErrFieldRequired("member_role_id")
 	}
-	_, err := client.GL().MemberRolesService.DeleteInstanceMemberRole(in.MemberRoleID)
+	_, err := client.GL().MemberRolesService.DeleteInstanceMemberRole(in.MemberRoleID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("delete instance member role", err, http.StatusForbidden,
 			"requires admin + self-managed Ultimate; verify member_role_id with gitlab_list_instance_member_roles; deletion is irreversible and may fail if role is still assigned")
@@ -359,7 +450,7 @@ func DeleteGroup(ctx context.Context, client *gitlabclient.Client, in DeleteGrou
 	if in.MemberRoleID == 0 {
 		return toolutil.ErrFieldRequired("member_role_id")
 	}
-	_, err := client.GL().MemberRolesService.DeleteMemberRole(in.GroupID.String(), in.MemberRoleID)
+	_, err := client.GL().MemberRolesService.DeleteMemberRole(in.GroupID.String(), in.MemberRoleID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return toolutil.WrapErrWithHint("delete group member role", err, groupMemberRoleSelfManagedHint)

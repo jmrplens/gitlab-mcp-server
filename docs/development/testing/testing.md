@@ -18,11 +18,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,328 |
-| Unit test functions                                   | 14,722 |
+| Total test functions                                  | 15,334 |
+| Unit test functions                                   | 14,728 |
 | E2E test functions                                    |    606 |
 | cmd test functions                                    |  3,008 |
-| Test files (internal/)                                |    529 |
+| Test files (internal/)                                |    530 |
 | Test files (cmd/)                                     |    204 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,107 | 79.0% |
+| `TestFunc_Scenario` (2-part)           | 12,113 | 79.0% |
 | `TestFunc` (no underscore)             |    975 |  6.4% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,246 | 14.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,246 | 14.6% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,488 |        150 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            336 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          8,890 |        363 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          8,896 |        364 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            606 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          3,008 |        204 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,328** |    **973** |                                                                                                 |
+| **Total**               |     **15,334** |    **974** |                                                                                                 |
 
 ### Core Packages
 
@@ -221,7 +221,7 @@
 | license                 |        18 |          2 |   100.0% |         3 |
 | licensetemplates        |        22 |          1 |   100.0% |         2 |
 | markdown                |         8 |          1 |   100.0% |         1 |
-| memberroles             |        47 |          3 |   100.0% |         6 |
+| memberroles             |        53 |          4 |   100.0% |         6 |
 | members                 |        63 |          2 |   100.0% |         6 |
 | mergerequests           |       257 |          3 |   100.0% |        30 |
 | mergetrains             |        16 |          2 |   100.0% |         4 |
@@ -294,7 +294,7 @@
 | wikis                   |        62 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **8,890** |    **363** |          | **1,187** |
+| **Total**               | **8,896** |    **364** |          | **1,187** |
 
 </details>
 
