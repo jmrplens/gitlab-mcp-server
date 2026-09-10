@@ -72,21 +72,56 @@ action.**
   write, and `read_api` alone for one that cannot.
 
 **`tools/list` stays authenticated.** The MCP authorization specification
-(checked against 2025-11-25 and 2026-07-28) states that MCP servers "**MUST**
-validate access tokens before processing the request … and take all necessary
-steps to ensure no data is returned to unauthorized parties" (Authorization —
-Security Considerations, Access Token Privilege Restriction), and the
-Streamable HTTP binding adds that servers "**SHOULD** implement proper
-authentication for all connections". No revision carves out a method that may
-be served anonymously. Authorization is optional for a server as a whole; a
-server that requires it has no sanctioned partially anonymous surface.
+(checked against 2025-06-18, 2025-11-25, 2026-07-28 and the draft) states that
+MCP servers "**MUST** validate access tokens before processing the request …
+and take all necessary steps to ensure no data is returned to unauthorized
+parties" (Authorization — Security Considerations, Access Token Privilege
+Restriction), and the Streamable HTTP binding adds that servers "**SHOULD**
+implement proper authentication for all connections". No revision carves out a
+method that may be served anonymously. Authorization is optional for a server
+as a whole; a server that requires it has no sanctioned partially anonymous
+surface.
+
+Two things about that citation are worth pinning, because getting either wrong
+reopens a settled question. **The sentence was never removed**: it dates from
+the 2025-03 rewrite and stands unchanged in every revision above. In 2026-07-28
+it moved file rather than disappearing, because that revision split
+`basic/authorization.mdx` into a directory; fetching the old single-file path
+against 2026-07-28 returns 404, and reading that 404 as "the rule is gone" is
+the specific mistake to avoid. And the sentence sits under a heading about
+audience validation, so read strictly it governs a token that **was** presented
+rather than literally forbidding an answer to a request carrying none; the
+decision here does not rest on that stricter reading, since nothing in any
+revision sanctions the partially anonymous surface either.
 
 Revision 2026-07-28 removed the `initialize` handshake, so the question now
-concerns `server/discover`, which servers **MUST** implement and which the
-specification nowhere requires to be anonymous; this deployment authenticates
-it like every other method. The catalog is published instead through the
-mechanism designed for it: the server card at `/server-card`, unauthenticated,
-carrying every tool, resource, template and prompt with its schemas.
+concerns `server/discover`. A server **implementing that revision** must
+implement the method, though calling it stays optional for the client, and
+nothing in the specification requires it to be served anonymously; this
+deployment authenticates it like every other method. The requirement is scoped
+to that revision on purpose: it says nothing about a server still speaking an
+initialization-era revision, and this one speaks several.
+
+**The catalog is published unauthenticated, and not by the mechanism this once
+named.** A Server Card under SEP-2127 deliberately carries no primitives: the
+SEP says it "intentionally omits primitive definitions (tools, resources, and
+prompts)", because what a server exposes "can vary by authenticated user,
+session, configuration, feature flags, deployment state", leaving "no viable
+substitute for runtime listing … with the logged-in user's identity". So a
+conformant card answers nothing about the catalog by design, and no scanner
+should be helped by enriching one. What does publish the catalog here is the
+**earlier SEP-1649 shape**, which this server still serves unauthenticated (2
+tools with their schemas, 37 prompts, 8 resources and 37 resource templates)
+and which a deployment reaches at `/.well-known/mcp/server-card.json`. Anyone
+comparing this deployment against the specification should hold the two apart:
+the conformant card is small on purpose, and the enumerating document is the
+older thing that happens to answer the question a directory asks.
+
+Practice agrees with the reading. Of 31 public remote MCP endpoints probed on
+2026-09-10, the 26 that require a credential refuse `tools/list` with 401,
+GitLab's own `gitlab.com/api/v4/mcp` among them; the five that answer it
+anonymously answer `tools/call` anonymously too. Nothing in the sample lists
+without executing.
 
 ## Consequences
 
@@ -144,8 +179,10 @@ carrying every tool, resource, template and prompt with its schemas.
 - NEG-004: VerifyMCP's score does not move. Six of its seven categories need
   an unauthenticated `server/discover` and `tools/list`, which this ADR
   declines to provide. The catalog those categories are looking for is at
-  `/server-card`, unauthenticated, and a scorer that reads only the JSON-RPC
-  surface will not find it.
+  `/.well-known/mcp/server-card.json`, unauthenticated, and a scorer that
+  reads only the JSON-RPC surface will not find it. VerifyMCP's own remedy is
+  to claim the listing and supply a read-only token, which is exactly the
+  `read_api` credential this ADR admits.
 
 ### Neutral
 
