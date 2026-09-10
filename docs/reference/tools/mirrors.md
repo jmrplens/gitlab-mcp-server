@@ -34,7 +34,11 @@ With `GITLAB_MCP_TOOL_SURFACE=meta` and the Enterprise/Premium catalog enabled, 
 | **Update** |    —     |     No      |    Yes     | Modifies an existing resource                  |
 | **Delete** |    —     |     Yes     |    Yes     | Destroys a resource; protected by confirmation |
 
-Tools marked **Delete** require user confirmation before execution.
+Confirmation follows the **Destructive** column, not the shape. Every **Delete**
+is destructive and so requires it; another shape is annotated destructive
+individually where its effect cannot be undone, which is why
+`gitlab_add_project_mirror` below is annotated **Create**, destructive and
+requires confirmation like any delete.
 
 ---
 
