@@ -511,8 +511,13 @@ jobs:
       # pinned by SHA256 and cosign proves they came from anchore's release
       # workflow, whose certificate identity ends in refs/heads/main because
       # syft releases from main rather than from the tag.
+      #
+      # Not gated on the rehearsal switch. This install, the scan and the
+      # package-count guard below are every run: block of the SBOM feature,
+      # and a rehearsal is the only thing that runs them before a tag does;
+      # gated, a typo here would have failed for the first time on a release,
+      # after the image was already pushed.
       - name: Install syft
-        if: env.REHEARSAL != 'true'
         env:
           SYFT_SHA256: "8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3"
         run: |
@@ -539,9 +544,19 @@ jobs:
 
       # Scanned from ghcr.io alone: the two registries hold the byte-identical
       # index, so a platform digest names the same bytes on either, and the
-      # document is what gets attested to both.
+      # document is what gets attested to both. --platform beside the digest
+      # is for the document's own record: a manifest digest names one
+      # platform's bytes, but syft learns the architecture only from the flag,
+      # and without it the image purl the document carries has an empty arch
+      # qualifier.
+      #
+      # A rehearsal pushes nothing, so there is no registry image to scan. It
+      # scans the two smoke images the daemon already holds instead, built from
+      # the same layers and listing the same packages, which exercises the
+      # install above, the scan and the guard below. The attest steps stay
+      # skipped: an attestation whose subject exists nowhere is pollution of
+      # the store rather than a rehearsal of it.
       - name: Generate the per-platform image SBOMs
-        if: env.REHEARSAL != 'true'
         env:
           IMAGE_REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           AMD64_DIGEST: ${{ steps.platform-digests.outputs.amd64 }}
@@ -553,7 +568,13 @@ jobs:
               amd64) digest="${AMD64_DIGEST}" ;;
               arm64) digest="${ARM64_DIGEST}" ;;
             esac
-            syft scan "registry:${IMAGE_REPO}@${digest}" -o spdx-json > "image-sbom-${arch}.spdx.json"
+            if [ "$REHEARSAL" = "true" ]; then
+              source="docker:gitlab-mcp-server:smoke-${arch}"
+              syft scan "$source" -o spdx-json > "image-sbom-${arch}.spdx.json"
+            else
+              source="registry:${IMAGE_REPO}@${digest}"
+              syft scan "$source" --platform "linux/${arch}" -o spdx-json > "image-sbom-${arch}.spdx.json"
+            fi
             # A document with no packages means syft read nothing, which would
             # attest an empty claim rather than fail.
             packages=$(jq '.packages | length' "image-sbom-${arch}.spdx.json")
@@ -561,12 +582,21 @@ jobs:
               echo "::error::the ${arch} SBOM lists no packages; syft scanned nothing"
               exit 1
             fi
-            echo "linux/${arch}: ${packages} packages"
+            echo "linux/${arch}: ${packages} packages from ${source}"
           done
 
+      # actions/attest itself rather than the actions/attest-sbom wrapper. The
+      # wrapper is deprecated and says so with a warning on every run, and it
+      # delegates to actions/attest v4.1.0, whose Docker Hub credential lookup
+      # matches a docker config key by substring, while the provenance steps
+      # above reach v4.2.1 through their own wrapper, which matches the
+      # canonicalized host. One version for all ten steps. The input is the
+      # one the wrapper forwarded unchanged: sbom-path reads spdxVersion and
+      # derives the predicate type, https://spdx.dev/Document/v2.3 for what
+      # syft writes.
       - name: Attest SBOM (ghcr.io, linux/amd64)
         if: env.REHEARSAL != 'true'
-        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.platform-digests.outputs.amd64 }}
@@ -575,7 +605,7 @@ jobs:
 
       - name: Attest SBOM (ghcr.io, linux/arm64)
         if: env.REHEARSAL != 'true'
-        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.platform-digests.outputs.arm64 }}
@@ -584,7 +614,7 @@ jobs:
 
       - name: Attest SBOM (Docker Hub, linux/amd64)
         if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
-        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
           subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
           subject-digest: ${{ steps.platform-digests.outputs.amd64 }}
@@ -593,7 +623,7 @@ jobs:
 
       - name: Attest SBOM (Docker Hub, linux/arm64)
         if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
-        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
           subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
           subject-digest: ${{ steps.platform-digests.outputs.arm64 }}
