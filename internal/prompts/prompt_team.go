@@ -135,33 +135,39 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 		}
 	}
 
-	// Daily activity chart
-	if len(events) > 0 {
-		byDay := groupEventsByDay(events)
-		b.WriteString("## Daily Activity\n\n")
-		writeMermaidChart(&b, func(chart *strings.Builder) {
-			chart.WriteString("xychart-beta\n  title \"Daily Events\"\n  x-axis [")
-			for i, d := range byDay {
-				if i > 0 {
-					chart.WriteString(", ")
-				}
-				chart.WriteString(d.date)
-			}
-			chart.WriteString("]\n  y-axis \"Events\"\n  bar [")
-			for i, d := range byDay {
-				if i > 0 {
-					chart.WriteString(", ")
-				}
-				fmt.Fprintf(chart, "%d", d.count)
-			}
-			chart.WriteString("]\n")
-		})
-		b.WriteString("\n")
-	}
+	writeUserDailyEventsChart(&b, events)
 
 	b.WriteString("---\nPlease analyze this team member's activity, highlight strengths and areas for improvement, and compare workload balance.\n")
 
 	return promptResult(b.String()), nil
+}
+
+// writeUserDailyEventsChart writes the daily event counts as a Mermaid bar
+// chart, and nothing at all when there were no events.
+func writeUserDailyEventsChart(b *strings.Builder, events []*gl.ContributionEvent) {
+	if len(events) == 0 {
+		return
+	}
+	byDay := groupEventsByDay(events)
+	b.WriteString("## Daily Activity\n\n")
+	writeMermaidChart(b, func(chart *strings.Builder) {
+		chart.WriteString("xychart-beta\n  title \"Daily Events\"\n  x-axis [")
+		for i, d := range byDay {
+			if i > 0 {
+				chart.WriteString(", ")
+			}
+			chart.WriteString(d.date)
+		}
+		chart.WriteString("]\n  y-axis \"Events\"\n  bar [")
+		for i, d := range byDay {
+			if i > 0 {
+				chart.WriteString(", ")
+			}
+			fmt.Fprintf(chart, "%d", d.count)
+		}
+		chart.WriteString("]\n")
+	})
+	b.WriteString("\n")
 }
 
 // registerTeamOverviewPrompt registers the team_overview prompt.
