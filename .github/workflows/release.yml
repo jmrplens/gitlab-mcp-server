@@ -489,6 +489,117 @@ jobs:
           subject-digest: ${{ steps.platform-digests.outputs.arm64 }}
           push-to-registry: true
 
+      # An SBOM of the image, discoverable as a referrer, beside the one
+      # BuildKit already writes. `sbom: true` on the build puts an SPDX
+      # document inside the index as an attestation manifest, one per platform,
+      # and a client reading the registry's referrers never sees it: the two
+      # `unknown/unknown` manifests are part of the index rather than referrers
+      # of anything. Both are kept. They answer to different readers and
+      # neither replaces the other.
+      #
+      # Per platform and not over the index, because an SBOM describes contents
+      # and an index has none of its own: it lists manifests. The two platform
+      # images have different contents, so one document over the index would be
+      # a document about nothing. The platform digest is also the subject a
+      # scanner that pulls the image for its own platform looks under, which is
+      # the same reason the provenance steps above cover them.
+      #
+      # syft is fetched by hand rather than through anchore/sbom-action for the
+      # reason spelled out at the release job's own copy of this: that action
+      # downloads an install script from a branch head and runs it, and this
+      # job holds the OIDC identity the attestation store trusts. The bytes are
+      # pinned by SHA256 and cosign proves they came from anchore's release
+      # workflow, whose certificate identity ends in refs/heads/main because
+      # syft releases from main rather than from the tag.
+      - name: Install syft
+        if: env.REHEARSAL != 'true'
+        env:
+          SYFT_SHA256: "8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3"
+        run: |
+          set -euo pipefail
+          TARBALL="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
+          BASE="https://github.com/anchore/syft/releases/download/${SYFT_VERSION}"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o "${TARBALL}" "${BASE}/${TARBALL}"
+          echo "${SYFT_SHA256}  ${TARBALL}" | sha256sum -c -
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o syft-checksums.txt "${BASE}/syft_${SYFT_VERSION#v}_checksums.txt"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o syft-checksums.pem "${BASE}/syft_${SYFT_VERSION#v}_checksums.txt.pem"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-connrefused -o syft-checksums.sig "${BASE}/syft_${SYFT_VERSION#v}_checksums.txt.sig"
+          base64 -d syft-checksums.pem > syft-checksums.decoded.pem
+          cosign verify-blob \
+            --certificate syft-checksums.decoded.pem \
+            --signature syft-checksums.sig \
+            --certificate-identity "https://github.com/anchore/syft/.github/workflows/release.yaml@refs/heads/main" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            syft-checksums.txt
+          grep " ${TARBALL}\$" syft-checksums.txt | sha256sum -c -
+          tar xzf "${TARBALL}" syft
+          install -m 0755 syft /usr/local/bin/syft
+          rm -f "${TARBALL}" syft-checksums.txt syft-checksums.pem syft-checksums.decoded.pem syft-checksums.sig syft
+          syft --version
+
+      # Scanned from ghcr.io alone: the two registries hold the byte-identical
+      # index, so a platform digest names the same bytes on either, and the
+      # document is what gets attested to both.
+      - name: Generate the per-platform image SBOMs
+        if: env.REHEARSAL != 'true'
+        env:
+          IMAGE_REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          AMD64_DIGEST: ${{ steps.platform-digests.outputs.amd64 }}
+          ARM64_DIGEST: ${{ steps.platform-digests.outputs.arm64 }}
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            case "$arch" in
+              amd64) digest="${AMD64_DIGEST}" ;;
+              arm64) digest="${ARM64_DIGEST}" ;;
+            esac
+            syft scan "registry:${IMAGE_REPO}@${digest}" -o spdx-json > "image-sbom-${arch}.spdx.json"
+            # A document with no packages means syft read nothing, which would
+            # attest an empty claim rather than fail.
+            packages=$(jq '.packages | length' "image-sbom-${arch}.spdx.json")
+            if [ "${packages:-0}" -lt 1 ]; then
+              echo "::error::the ${arch} SBOM lists no packages; syft scanned nothing"
+              exit 1
+            fi
+            echo "linux/${arch}: ${packages} packages"
+          done
+
+      - name: Attest SBOM (ghcr.io, linux/amd64)
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.platform-digests.outputs.amd64 }}
+          sbom-path: image-sbom-amd64.spdx.json
+          push-to-registry: true
+
+      - name: Attest SBOM (ghcr.io, linux/arm64)
+        if: env.REHEARSAL != 'true'
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.platform-digests.outputs.arm64 }}
+          sbom-path: image-sbom-arm64.spdx.json
+          push-to-registry: true
+
+      - name: Attest SBOM (Docker Hub, linux/amd64)
+        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
+          subject-digest: ${{ steps.platform-digests.outputs.amd64 }}
+          sbom-path: image-sbom-amd64.spdx.json
+          push-to-registry: true
+
+      - name: Attest SBOM (Docker Hub, linux/arm64)
+        if: env.REHEARSAL != 'true' && steps.dockerhub-login.outputs.skip == 'false'
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: docker.io/${{ env.DOCKERHUB_IMAGE }}
+          subject-digest: ${{ steps.platform-digests.outputs.arm64 }}
+          sbom-path: image-sbom-arm64.spdx.json
+          push-to-registry: true
+
       # The Docker Hub repository descriptions are owned by this repo so they
       # cannot drift (they had been empty since the repository was published,
       # across thousands of pulls): the short description and the curated
