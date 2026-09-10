@@ -3477,7 +3477,15 @@ func TestServeHTTP_CrossOriginProtection_RejectsCrossSitePost(t *testing.T) {
 
 // TestServeHTTP_RequestWithTokenAndGitLabURLHeader verifies that HTTP mode
 // accepts request-level GitLab instance selection when --gitlab-url is omitted.
+//
+// The opt-out is set because the mock instance is on a loopback address and
+// the header is what names it, which is exactly the combination the outbound
+// destination guard refuses: an instance the operator did not choose may not
+// be a private address (ADR-0022). Nothing about the routing under test
+// changes with the flag, and a deployment that really points the header at a
+// local GitLab passes the same one.
 func TestServeHTTP_RequestWithTokenAndGitLabURLHeader(t *testing.T) {
+	t.Setenv(gitlabclient.AllowPrivateInstancesEnv, "true")
 	mockGL := newMockGitLabServer(t)
 	cfg := &config.Config{
 		GitLabURL:      "",

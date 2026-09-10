@@ -35,6 +35,16 @@ import (
 const UnattributedRequestMessage = "this request could not be attributed to a credential and was not sent to GitLab; " +
 	"retry, and report it if it persists"
 
+// DestinationRefusedMessage is what a caller is told when this server declined
+// to open the connection an action needed.
+//
+// It says the request never left the process, because that is the fact every
+// other reading of the symptom gets wrong: nothing was sent, nothing answered,
+// and no credential was disclosed to the address named in the cause. Retrying
+// changes nothing, which is why the sentence does not suggest it and the hint
+// names a flag instead.
+const DestinationRefusedMessage = "this server refused to connect to that address, so the request never left the process"
+
 // UnattributedRequestError is [UnattributedRequestMessage] as a JSON-RPC
 // internal error, for the surfaces that answer with an error value rather than
 // a classified string.
@@ -99,8 +109,31 @@ func WrapErr(operation string, err error) error {
 	if unattributed := wrapUnattributed(operation, err); unattributed != nil {
 		return unattributed
 	}
+	if refused := wrapDestinationRefused(operation, err); refused != nil {
+		return refused
+	}
 	semantic := ClassifyError(err)
 	return fmt.Errorf("%s: %s: %w", operation, semantic, sanitize(err))
+}
+
+// wrapDestinationRefused returns the message for a request this server
+// declined to send, or nil when that is not the cause.
+//
+// The interception is here, in the one funnel every handler passes through,
+// rather than in the 178 packages under internal/tools: a destination refusal
+// can happen on any call that reaches GitLab, including a redirect hop away
+// from an instance that was perfectly reachable, so there is no subset of
+// handlers it belongs to.
+//
+// The cause is kept, unlike [wrapUnattributed]: it names the address that was
+// refused and which of the two rules refused it, which is the whole of the
+// diagnosis. What it does not carry is the flag that changes the outcome, and
+// that is what the hint adds.
+func wrapDestinationRefused(operation string, err error) error {
+	if !errors.Is(err, gitlabclient.ErrDestinationRefused) {
+		return nil
+	}
+	return hintedError(operation, err, gitlabclient.DestinationRefusedHint)
 }
 
 // wrapUnattributed returns the whole message for a request that never reached
@@ -159,6 +192,14 @@ func ClassifyError(err error) string {
 	// exist.
 	if errors.Is(err, gitlabclient.ErrUnboundClient) {
 		return UnattributedRequestMessage
+	}
+
+	// This server declined to open the connection. Checked here for the same
+	// reason as the line above: the network branches below would call it a
+	// host being unreachable and send an operator to check DNS and firewalls
+	// for a connection that was never attempted.
+	if errors.Is(err, gitlabclient.ErrDestinationRefused) {
+		return DestinationRefusedMessage
 	}
 
 	// GitLab API returned an HTTP error response
@@ -679,6 +720,9 @@ func WrapErrWithMessage(operation string, err error) error {
 	if unattributed := wrapUnattributed(operation, err); unattributed != nil {
 		return unattributed
 	}
+	if refused := wrapDestinationRefused(operation, err); refused != nil {
+		return refused
+	}
 	semantic := ClassifyError(err)
 	glMsg := ExtractGitLabMessage(err)
 	if glMsg != "" {
@@ -699,6 +743,20 @@ func WrapErrWithHint(operation string, err error, hint string) error {
 	if unattributed := wrapUnattributed(operation, err); unattributed != nil {
 		return unattributed
 	}
+	// The caller's hint is replaced rather than kept alongside, for the reason
+	// [wrapUnattributed] drops one altogether: a handler's hint advises about
+	// GitLab state ("check the job id"), and GitLab was never asked. The one
+	// suggestion that can change this outcome is the flag.
+	if refused := wrapDestinationRefused(operation, err); refused != nil {
+		return refused
+	}
+	return hintedError(operation, err, hint)
+}
+
+// hintedError is the composition [WrapErrWithHint] produces, shared with
+// [wrapDestinationRefused] so a refusal reads exactly like every other hinted
+// error rather than like a second format that has to be kept in step by hand.
+func hintedError(operation string, err error, hint string) error {
 	semantic := ClassifyError(err)
 	glMsg := ExtractGitLabMessage(err)
 	if glMsg != "" {

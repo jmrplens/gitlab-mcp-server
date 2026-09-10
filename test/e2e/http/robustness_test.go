@@ -200,32 +200,42 @@ func TestRobust_RawSocketAttacks(t *testing.T) {
 // --allow-any-gitlab-url over a startup warning. The harness supplies that flag
 // here (see withInstancePolicy), which is why the first half runs at all.
 //
-// Under the hatch the header still names any host, private and link-local
-// addresses included, and the upstream body is returned to the caller, so this
-// is a request-forgery pivot rather than a blind one. That is the whole trade
-// the flag exists to make, for the single-user deployment where the operator is
-// the caller, and it is asserted rather than left implicit so that a change
-// narrowing it is a visible failure here.
+// Under the hatch the header names any PUBLIC host, and the upstream body is
+// returned to the caller, so this is a request-forgery pivot rather than a
+// blind one. That is the trade the flag exists to make, for the single-user
+// deployment where the operator is the caller, and it is asserted rather than
+// left implicit so that a change narrowing it is a visible failure here.
 //
-// Publishing an instance closes it: the header is then ignored, which the
-// second half asserts.
+// What the header no longer reaches is a private, loopback, CGNAT or
+// link-local address, which the outbound destination guard refuses because the
+// operator did not choose it (ADR-0022). The first half asserts that refusal
+// is not what happens to a public host; the policy itself is pinned in
+// TestAllowAnyGitLabURL_LinkLocalHeader_Refused.
+//
+// Publishing an instance closes the header entirely: it is then ignored, which
+// the second half asserts.
 func TestRobust_GitLabURLHostIsNotRestricted(t *testing.T) {
-	t.Run("unpinned deployment accepts any host", func(t *testing.T) {
+	t.Run("unpinned deployment accepts any public host", func(t *testing.T) {
 		srv := startServer(t, nil)
 
 		got := srv.do(t, request{
 			method: http.MethodPost, path: "/mcp", body: toolsListBody,
 			headers: map[string]string{
 				"PRIVATE-TOKEN": "glpat-x",
-				"GITLAB-URL":    "http://169.254.169.254",
+				// A name rather than an address, and a reserved one (RFC 6761)
+				// that is guaranteed never to resolve. The gate judges only a
+				// host spelled as a literal address, so this reaches the pool
+				// exactly as a real public hostname would, and the lookup that
+				// follows fails without anything leaving the machine.
+				"GITLAB-URL": "http://gitlab.invalid",
 			},
 		})
-		// Refused because nothing there speaks the GitLab API, not because
-		// the address was rejected: the distinction is the point.
+		// Whatever becomes of the call, the deployment did not refuse the host
+		// on sight: that is the trade --allow-any-gitlab-url makes.
 		if got.status == http.StatusBadRequest {
-			t.Log("note: this build rejects link-local hosts outright, which is stricter than documented")
+			t.Errorf("a public host was refused outright under --allow-any-gitlab-url: %s", truncate(got.body))
 		}
-		assertStillServing(t, srv, "a link-local GITLAB-URL")
+		assertStillServing(t, srv, "a public GITLAB-URL")
 	})
 
 	t.Run("pinned deployment ignores the header", func(t *testing.T) {

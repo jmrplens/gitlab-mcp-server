@@ -581,6 +581,12 @@ ENVIRONMENT VARIABLES (stdio mode)
                                     is refused, not buffered
   GITLAB_MCP_MAX_LISTEN_STREAMS     Concurrent subscriptions/listen streams one credential may hold open
                                     (default 64; 0 disables the per-credential ceiling). Both transports
+  GITLAB_MCP_ALLOW_PRIVATE_INSTANCES
+                                    Permit a private, loopback or CGNAT address as a destination this
+                                    server's operator did not choose: an instance a caller named in
+                                    GITLAB-URL under --allow-any-gitlab-url, or a redirect hop that left
+                                    the configured instance (default false). An address GITLAB_URL named
+                                    is never checked; cloud metadata addresses are always refused
   GITLAB_MCP_YOLO_MODE              Skip destructive action confirmation prompts (default false)
   GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS
                                     Rewrite listed descriptions and titles for strict gateway validators:

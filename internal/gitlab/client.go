@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -59,6 +60,12 @@ type Client struct {
 	// maxResponse caps how many bytes of one decompressed response body this
 	// client will read. See [DefaultMaxResponseBytes].
 	maxResponse atomic.Int64
+
+	// destination is what this client may open a connection to. It is read
+	// per request by [destinationTransport] and enforced at the dialer, so it
+	// covers the first hop and every redirect alike. See [destinationPolicy]
+	// and ADR-0022.
+	destination atomic.Pointer[destinationPolicy]
 
 	// initialized tracks whether Initialize() completed successfully.
 	// Uses atomic.Bool for lock-free reads in the hot path (EnsureInitialized).
@@ -166,6 +173,7 @@ func NewClient(cfg *config.Config) (*Client, error) {
 	}
 	c.SetTier(cfg.Tier)
 	c.maxResponse.Store(DefaultMaxResponseBytes)
+	c.destination.Store(newDestinationPolicy(cfg.GitLabURL, false, allowPrivateInstances()))
 	c.healthClient = newHealthClient(base, cfg.GitLabURL, c)
 
 	sdkHTTPClient := &http.Client{
@@ -218,6 +226,7 @@ func NewClientWithTokenRetries(baseURL, token string, skipTLSVerify, disableRetr
 		token:     token,
 	}
 	c.maxResponse.Store(DefaultMaxResponseBytes)
+	c.destination.Store(newDestinationPolicy(baseURL, false, allowPrivateInstances()))
 	c.healthClient = newHealthClient(base, baseURL, c)
 
 	sdkHTTPClient := &http.Client{
@@ -263,6 +272,7 @@ func NewOAuthClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client
 		bearerAuth: true,
 	}
 	c.maxResponse.Store(DefaultMaxResponseBytes)
+	c.destination.Store(newDestinationPolicy(baseURL, false, allowPrivateInstances()))
 	c.healthClient = newHealthClient(base, baseURL, c)
 
 	sdkHTTPClient := &http.Client{
@@ -581,7 +591,7 @@ func IsCredentialRejection(err error) bool {
 // [Client.SetMaxResponseBytes] means the same thing everywhere.
 func newHealthClient(base http.RoundTripper, baseURL string, c *Client) *http.Client {
 	return &http.Client{
-		Transport:     &responseLimitTransport{base: base, client: c},
+		Transport:     &responseLimitTransport{base: &destinationTransport{base: base, client: c}, client: c},
 		Timeout:       healthTimeout,
 		CheckRedirect: credentialSafeRedirect(baseURL),
 	}
@@ -615,6 +625,13 @@ var sharedBaseTransport = sync.OnceValue(func() http.RoundTripper {
 
 // newBaseTransport clones net/http's default transport and applies this
 // package's timeouts, optionally replacing the TLS configuration.
+//
+// The dialer is this package's own so that [guardDestination] can run as
+// ControlContext: it fires after resolution and once per candidate address,
+// which is the only position from which a name that resolves somewhere else
+// than it claims can be judged by what it resolved to. Its timeouts restate
+// net/http's defaults, because replacing DialContext replaces the dialer that
+// carried them.
 func newBaseTransport(tlsConfig *tls.Config) *http.Transport {
 	var t *http.Transport
 	if def, ok := http.DefaultTransport.(*http.Transport); ok {
@@ -623,6 +640,11 @@ func newBaseTransport(tlsConfig *tls.Config) *http.Transport {
 		t = &http.Transport{}
 	}
 	t.ResponseHeaderTimeout = responseHeaderTimeout
+	t.DialContext = (&net.Dialer{
+		Timeout:        30 * time.Second,
+		KeepAlive:      30 * time.Second,
+		ControlContext: guardDestination,
+	}).DialContext
 	if tlsConfig != nil {
 		t.TLSClientConfig = tlsConfig
 	}
@@ -673,12 +695,20 @@ func buildBaseTransport(skipTLSVerify bool) http.RoundTripper {
 // happens to see the wire bytes. The capture sits just outside it, so the
 // body a handler reads a field from under [WithResponseCapture] is the
 // bounded one.
+//
+// The destination stamp is one layer further in still, because what it must
+// name is the request as the dialer will see it: each redirect hop reaches
+// this chain as a request of its own, and the stamp says whether that hop's
+// URL is still the instance's own host.
 func apiTransport(base http.RoundTripper, c *Client) http.RoundTripper {
 	return mcpotel.NewTransport(&outboundBoundaryTransport{
 		base: &dotUnescapeTransport{
 			base: &resilienceTransport{
 				base: &captureTransport{
-					base: &responseLimitTransport{base: base, client: c},
+					base: &responseLimitTransport{
+						base:   &destinationTransport{base: base, client: c},
+						client: c,
+					},
 				},
 				client: c,
 			},

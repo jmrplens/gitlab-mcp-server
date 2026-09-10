@@ -467,21 +467,21 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,241 |     265,196 |
-| Unit tests (`_test.go`)  |       728 |     434,750 |
-| End-to-end tests         |       246 |      66,351 |
-| **Total**                | **2,215** | **766,297** |
+| Source (`.go`, non-test) |     1,242 |     265,764 |
+| Unit tests (`_test.go`)  |       729 |     435,735 |
+| End-to-end tests         |       246 |      66,458 |
+| **Total**                | **2,217** | **767,957** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  9,723 |
-| . Exported (public)             |  3,067 |
-| . Unexported (private)          |  6,656 |
-| Unit test functions (`TestXxx`) | 14,681 |
-| Subtests (`t.Run(...)`)         |  5,929 |
-| End-to-end test functions       |    605 |
+| Source functions                |  9,743 |
+| . Exported (public)             |  3,070 |
+| . Unexported (private)          |  6,673 |
+| Unit test functions (`TestXxx`) | 14,701 |
+| Subtests (`t.Run(...)`)         |  5,960 |
+| End-to-end test functions       |    606 |
 
 ### Ratios worth noting
 
@@ -489,17 +489,17 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.64× more tests than code |
 | Average source file length         |                 ~214 lines |
-| Average test file length           |                 ~597 lines |
-| Comment lines in source            |  49,363 (~18.6% of source) |
+| Average test file length           |                 ~598 lines |
+| Comment lines in source            |  49,616 (~18.7% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 8,151 |
-| `defer` statements                 | 1,368 |
-| `struct` types defined             | 3,217 |
+| `if err != nil` checks             | 8,165 |
+| `defer` statements                 | 1,371 |
+| `struct` types defined             | 3,221 |
 | `//nolint` suppressions            |   349 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
@@ -515,15 +515,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Record              | File                                    |
 | ------------------- | --------------------------------------- |
-| Longest source file | `cmd/server/main.go`. 4,661 lines       |
-| Longest test file   | `cmd/server/main_test.go`. 10,650 lines |
+| Longest source file | `cmd/server/main.go`. 4,667 lines       |
+| Longest test file   | `cmd/server/main_test.go`. 10,658 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~4,821 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 15,447 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~4,832 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 15,481 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

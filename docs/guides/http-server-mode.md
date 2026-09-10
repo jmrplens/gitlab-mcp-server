@@ -55,7 +55,8 @@ gitlab-mcp-server --http \
 | `--transport`                   | _(empty)_      | `stdio`, `http` or `auto`. Empty defers to `--http`; given both, `--transport` wins. `auto` reads file descriptor 0 and serves HTTP only when stdin is the null device (a container started without `-i`), stdio for the pipe an MCP client connects                                                                                                                                                                                                 |
 | `--env-file`                    | _(empty)_      | Dotenv file to load besides `~/.gitlab-mcp-server.env`; the same setting as `GITLAB_MCP_ENV_FILE`, and wins over it                                                                                                                                                                                                                                                                                                                                  |
 | `--gitlab-url`                  | _(required)_   | GitLab instance URL. **Required in HTTP mode** unless `--allow-any-gitlab-url` is passed. Repeatable (or comma-separated) to publish several instances, among which the `GITLAB-URL` header then selects; see [Publishing more than one instance](#publishing-more-than-one-instance)                                                                                                                                                                |
-| `--allow-any-gitlab-url`        | `false`        | Start with no instance published and let the `GITLAB-URL` header name any host; a request without the header is refused. Every request is then served against a host the caller chose, so it is refused unless `--http-addr` binds a loopback address or a unix socket, and warns at startup even there                                                                                                                                              |
+| `--allow-any-gitlab-url`        | `false`        | Start with no instance published and let the `GITLAB-URL` header name any host; a request without the header is refused. Every request is then served against a host the caller chose, so it is refused unless `--http-addr` binds a loopback address or a unix socket, and warns at startup even there. A header naming a private address needs `--allow-private-instances` too; see [Outbound destinations](#outbound-destinations)                |
+| `--allow-private-instances`     | `false`        | Permit a destination this deployment's operator did not choose to be a private, loopback, CGNAT, link-local, unique-local or unspecified address. Cloud metadata addresses stay refused whatever it says, and an address `--gitlab-url` named is never checked. See [Outbound destinations](#outbound-destinations)                                                                                                                                  |
 | `--http-addr`                   | `:8080`        | Listen address. `host:port` binds TCP; a path (e.g. `/run/gitlab-mcp.sock`) binds a unix socket instead                                                                                                                                                                                                                                                                                                                                              |
 | `--http-socket-mode`            | `0660`         | Permission mode, in octal, for a unix socket named by `--http-addr`                                                                                                                                                                                                                                                                                                                                                                                  |
 | `--tls-cert` / `--tls-key`      | _(empty)_      | PEM certificate and key. Serves HTTPS on the listener itself, for a proxy that does not share the machine. Both or neither                                                                                                                                                                                                                                                                                                                           |
@@ -330,17 +331,44 @@ gitlab-mcp-server --http --auth-mode=oauth \
   --gitlab-url=https://gitlab.internal.example.com
 ```
 
-| Instances published             | No `GITLAB-URL` header | Header naming a published instance | Header naming anything else                       |
-| ------------------------------- | ---------------------- | ---------------------------------- | ------------------------------------------------- |
-| none (`--allow-any-gitlab-url`) | **refused**: `400`     | honored                            | honored                                           |
-| one                             | that instance          | ignored                            | ignored                                           |
-| several                         | **refused**: `400`     | honored                            | **refused**: `403` in OAuth mode, `400` in legacy |
+| Instances published             | No `GITLAB-URL` header | Header naming a published instance | Header naming anything else                                                                                                     |
+| ------------------------------- | ---------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| none (`--allow-any-gitlab-url`) | **refused**: `400`     | honored                            | honored if the host is public; a private or metadata address is **refused**: `400` unless `--allow-private-instances` is passed |
+| one                             | that instance          | ignored                            | ignored                                                                                                                         |
+| several                         | **refused**: `400`     | honored                            | **refused**: `403` in OAuth mode, `400` in legacy                                                                               |
 
 A request that names no instance is refused rather than resolved to a default, in both the none and several rows. Publishing nothing means the caller chooses, so there is nothing to fall back to; publishing several means the operator deliberately declined to choose, so falling back to the first would put the caller's token on the wire to an instance they never named. Only the one-instance row has an unambiguous answer, and it is the instance the operator pinned.
 
 The two refusal statuses for a header naming an unpublished instance differ because the layers differ: OAuth mode refuses in the bearer guard, before the credential is sent anywhere, which is a permission decision (`403`); legacy mode refuses while resolving the request options, which is a malformed request (`400`). Either way the instance is never contacted.
 
 The refusal for a **missing** header is `400` in both modes, and only its message differs: OAuth mode names the published instances, since RFC 9728 metadata already serves that same set unauthenticated, while legacy mode says to ask the operator, so that any non-empty token cannot be used to enumerate the operator's hostnames.
+
+### Outbound destinations
+
+Choosing the instance is one half of the question; the other half is which addresses this server will open a connection to at all. That is decided at the dialer, after DNS resolution, so it covers the first request and every redirect hop alike ([ADR-0022](../development/adr/adr-0022-operator-named-destinations-are-exempt.md)).
+
+**An address the operator named is never checked.** `--gitlab-url` and `GITLAB_URL` are the operator's own configuration, so a GitLab on `localhost`, on `10.x`, on `192.168.x` or behind a VPN on `100.64.0.0/10` works with nothing set and no list to maintain. There is no configuration for this and none is needed.
+
+Two kinds of destination are **not** the operator's choice, and those are checked:
+
+- an instance a caller named in the `GITLAB-URL` header under `--allow-any-gitlab-url`
+- a redirect hop that left the configured instance's own host, which is how GitLab answers artifact, trace and package downloads when object storage is configured
+
+For those two, a private, loopback, CGNAT, link-local, unique-local or unspecified address is refused unless `--allow-private-instances` (or `GITLAB_MCP_ALLOW_PRIVATE_INSTANCES=true`) is passed. One case is allowed without the flag: a redirect to a private address when the configured instance **itself** resolves to a private address, which is the ordinary self-managed GitLab with its object store on the same network.
+
+**The cloud metadata addresses are refused on every hop, for every deployment, and `--allow-private-instances` does not permit them**: `169.254.169.254`, `169.254.170.2`, `fd00:ec2::254` and `100.100.100.200`. Nothing legitimate serves a GitLab API or a presigned object-storage URL from one of them.
+
+For a local deployment against a GitLab on this machine, the hatch is therefore two flags:
+
+```bash
+gitlab-mcp-server --http --http-addr=127.0.0.1:8080 \
+  --allow-any-gitlab-url \
+  --allow-private-instances=true
+```
+
+A refused destination is answered as `400` from the gate when the header spells a literal address, and as a tool error naming the flag when the refusal happens at the dialer. Nothing is sent to the address in either case.
+
+### Why the allow-list matters
 
 The refusal is the point. In OAuth mode the server **verifies the bearer token against the instance it is about to use**, so a free-form header would let a caller name a host of their own and be handed the token. An allow-list keeps that choice with the operator: the published instances are listed in the RFC 9728 `authorization_servers` array, so a client discovers which ones it may pick, and a token is verified — and cached — per instance, never across them. A rejection is scoped the same way, so a `401` from one published instance never refuses a valid token on another.
 

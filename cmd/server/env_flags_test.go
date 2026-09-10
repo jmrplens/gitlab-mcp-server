@@ -114,6 +114,7 @@ func TestEnvBackedFlags_EverySettingIsReachableFromTheCommandLine(t *testing.T) 
 		"yolo-mode":                 "GITLAB_MCP_YOLO_MODE",
 		"description-substitutions": "GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS",
 		"pprof-addr":                "GITLAB_MCP_PPROF_ADDR",
+		"allow-private-instances":   "GITLAB_MCP_ALLOW_PRIVATE_INSTANCES",
 	}
 
 	got := make(map[string]string, len(envBackedFlags))
