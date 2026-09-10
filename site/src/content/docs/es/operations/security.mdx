@@ -326,8 +326,18 @@ gh attestation verify oci://docker.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrple
 
 Los dos comandos responden preguntas distintas y ninguno sustituye al otro. La firma liga el índice a la identidad del workflow de release; su predicado está vacío, así que dice quién subió la imagen y no qué entró en ella. La atestación de procedencia nombra el commit de origen y la ejecución del workflow.
 
+La imagen lleva además una atestación de SBOM, una por manifiesto de plataforma y no una sobre el índice, porque un índice no tiene contenido propio. `gh attestation verify` resuelve una etiqueta al índice y allí no encuentra ningún SBOM, así que verifícalo por el digest del manifiesto que ejecutas:
+
+```bash
+# SBOM: qué hay dentro de la imagen, un documento por plataforma
+digest=$(docker buildx imagetools inspect ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 \
+  --format '{{range .Manifest.Manifests}}{{if and .Platform (eq .Platform.Architecture "amd64")}}{{.Digest}}{{end}}{{end}}')
+gh attestation verify "oci://ghcr.io/jmrplens/gitlab-mcp-server@${digest}" -R jmrplens/gitlab-mcp-server \
+  --predicate-type https://spdx.dev/Document/v2.3
+```
+
 :::note
-Las atestaciones de procedencia de la imagen empiezan en el primer release posterior al 3.0.0. Sobre el propio 3.0.0 los comandos `gh attestation verify` de arriba responden que no encuentran atestación: ese release está firmado pero no atestado. El comando de firma sí funciona sobre 3.0.0.
+Las atestaciones de procedencia y de SBOM de la imagen empiezan en el primer release posterior al 3.0.0. Sobre el propio 3.0.0 los comandos `gh attestation verify` de arriba responden que no encuentran atestación: ese release está firmado pero no atestado. El comando de firma sí funciona sobre 3.0.0.
 :::
 
 ## ¿El token aparece en los logs?

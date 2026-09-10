@@ -326,8 +326,18 @@ gh attestation verify oci://docker.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrple
 
 The two commands answer different questions and neither substitutes for the other. The signature binds the index to the release workflow's identity; its predicate is empty, so it says who pushed the image and not what went into it. The provenance attestation names the source commit and the workflow run.
 
+The image also carries an SBOM attestation, one per platform manifest rather than one over the index, because an index has no contents of its own. `gh attestation verify` resolves a tag to the index and finds no SBOM there, so verify it by the digest of the manifest you run:
+
+```bash
+# SBOM: what is inside the image, one document per platform
+digest=$(docker buildx imagetools inspect ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 \
+  --format '{{range .Manifest.Manifests}}{{if and .Platform (eq .Platform.Architecture "amd64")}}{{.Digest}}{{end}}{{end}}')
+gh attestation verify "oci://ghcr.io/jmrplens/gitlab-mcp-server@${digest}" -R jmrplens/gitlab-mcp-server \
+  --predicate-type https://spdx.dev/Document/v2.3
+```
+
 :::note
-Image provenance attestations start with the first release after 3.0.0. On 3.0.0 itself the `gh attestation verify` commands above answer that no attestation was found: that release was signed but not attested. The signature command works on 3.0.0.
+Image provenance and SBOM attestations start with the first release after 3.0.0. On 3.0.0 itself the `gh attestation verify` commands above answer that no attestation was found: that release was signed but not attested. The signature command works on 3.0.0.
 :::
 
 ## Does the token appear in logs?
