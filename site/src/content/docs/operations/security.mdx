@@ -326,14 +326,24 @@ gh attestation verify oci://docker.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrple
 
 The two commands answer different questions and neither substitutes for the other. The signature binds the index to the release workflow's identity; its predicate is empty, so it says who pushed the image and not what went into it. The provenance attestation names the source commit and the workflow run.
 
-The image also carries an SBOM attestation, one per platform manifest rather than one over the index, because an index has no contents of its own. `gh attestation verify` resolves a tag to the index and finds no SBOM there, so verify it by the digest of the manifest you run:
+The image also carries an SBOM attestation over the index **and** over each platform manifest, so a scanner that resolves a tag and one that resolves the platform it runs both find a document. The predicate type is the unversioned `https://spdx.dev/Document`, which is the spelling scanners match on:
 
 ```bash
-# SBOM: what is inside the image, one document per platform
+# SBOM: what is inside the image. A tag resolves to the index, which carries one.
+gh attestation verify oci://ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 -R jmrplens/gitlab-mcp-server \
+  --predicate-type https://spdx.dev/Document
+
+# Or by the digest of the platform manifest you actually run
 digest=$(docker buildx imagetools inspect ghcr.io/jmrplens/gitlab-mcp-server:3.0.0 \
   --format '{{range .Manifest.Manifests}}{{if and .Platform (eq .Platform.Architecture "amd64")}}{{.Digest}}{{end}}{{end}}')
 gh attestation verify "oci://ghcr.io/jmrplens/gitlab-mcp-server@${digest}" -R jmrplens/gitlab-mcp-server \
-  --predicate-type https://spdx.dev/Document/v2.3
+  --predicate-type https://spdx.dev/Document
+```
+
+Each of those documents is attached a second time as a bare `application/spdx+json` referrer, because what the attestation writes is a sigstore bundle and a reader that looks for the SPDX media type itself does not match one. Both are listed side by side:
+
+```bash
+oras discover --format tree ghcr.io/jmrplens/gitlab-mcp-server:3.0.0
 ```
 
 :::note
