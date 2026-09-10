@@ -289,9 +289,13 @@ type IssuesInput struct {
 }
 
 // IssuesOutput holds a paginated list of issue search results.
+//
+// Search renders API::Entities::IssueBasic (lib/api/search.rb), so the rows
+// are the basic issue and not the full one: what only the issues API adds is
+// not sent here.
 type IssuesOutput struct {
 	toolutil.HintableOutput
-	Issues     []issues.Output           `json:"issues"`
+	Issues     []issues.BasicOutput      `json:"issues"`
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
@@ -299,6 +303,7 @@ type IssuesOutput struct {
 // Scope priority: project_id > group_id > global.
 func Issues(ctx context.Context, client *gitlabclient.Client, input IssuesInput) (IssuesOutput, error) {
 	searchClient := client.GL().Search
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	foundIssues, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Issue]{
 		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
 		searchType: input.SearchType, operation: "searchIssues", projectSearch: searchClient.IssuesByProject,
@@ -307,7 +312,10 @@ func Issues(ctx context.Context, client *gitlabclient.Client, input IssuesInput)
 	if err != nil {
 		return IssuesOutput{}, err
 	}
-	out := convertSearchResults(foundIssues, issues.ToOutput)
+	out, err := issues.ToBasicOutputs(foundIssues, captured)
+	if err != nil {
+		return IssuesOutput{}, toolutil.WrapErr("searchIssues", err)
+	}
 	return IssuesOutput{Issues: out, Pagination: searchPagination(resp, len(out))}, nil
 }
 
@@ -478,9 +486,13 @@ type ProjectsInput struct {
 }
 
 // ProjectsOutput holds a paginated list of project search results.
+//
+// Search renders API::Entities::BasicProjectDetails (lib/api/search.rb), so
+// the rows are the basic project and not the full one: none of what only the
+// project entity adds is sent here.
 type ProjectsOutput struct {
 	toolutil.HintableOutput
-	Projects   []projects.Output         `json:"projects"`
+	Projects   []projects.BasicOutput    `json:"projects"`
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
@@ -513,9 +525,9 @@ func Projects(ctx context.Context, client *gitlabclient.Client, input ProjectsIn
 		return ProjectsOutput{}, wrapSearchErr("searchProjects", err)
 	}
 
-	out := make([]projects.Output, len(projs))
+	out := make([]projects.BasicOutput, len(projs))
 	for i, p := range projs {
-		out[i] = projects.ToOutput(p)
+		out[i] = projects.ToBasicOutput(p)
 	}
 	pag := toolutil.PaginationFromResponse(resp)
 	toolutil.AdjustPagination(&pag, len(out))

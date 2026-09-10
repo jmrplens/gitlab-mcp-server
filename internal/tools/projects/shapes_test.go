@@ -214,7 +214,7 @@ func TestToOutput_NestedObjects(t *testing.T) {
 		Mirror:                    true,
 		PublicJobs:                true,
 	}
-	out := ToOutput(p)
+	out := ToOutput(p, toolutil.ProjectExtra{})
 	assertNestedObjects(t, out)
 	if out.MarkedForDeletionAt == "" {
 		t.Error("expected MarkedForDeletionAt populated")

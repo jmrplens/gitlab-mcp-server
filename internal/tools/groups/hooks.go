@@ -143,6 +143,10 @@ type HookOutput struct {
 	CreatedAt                 string                   `json:"created_at,omitempty"`
 	CustomWebhookTemplate     string                   `json:"custom_webhook_template,omitempty"`
 	CustomHeaders             []HookCustomHeaderOutput `json:"custom_headers,omitempty"`
+	// RepositoryUpdateEvents is sent on every group hook and client-go models
+	// it on the project hook and the system hook only, so it is read from the
+	// captured answer (ADR-0021).
+	RepositoryUpdateEvents bool `json:"repository_update_events"`
 }
 
 // HookListOutput holds a paginated list of group hooks.
@@ -152,9 +156,20 @@ type HookListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
+// hookOutput finishes a handler that answers with one hook, reading the key
+// client-go does not model off the captured answer.
+func hookOutput(op string, h *gl.GroupHook, captured *gitlabclient.ResponseCapture) (HookOutput, error) {
+	extra, err := toolutil.CapturedGroupHook(captured)
+	if err != nil {
+		return HookOutput{}, toolutil.WrapErr(op, err)
+	}
+	return hookToOutput(h, extra), nil
+}
+
 // hookToOutput converts a GitLab API [gl.GroupHook] to the MCP tool output format.
-func hookToOutput(h *gl.GroupHook) HookOutput {
+func hookToOutput(h *gl.GroupHook, extra toolutil.GroupHookExtra) HookOutput {
 	out := HookOutput{
+		RepositoryUpdateEvents:    extra.RepositoryUpdateEvents,
 		ID:                        h.ID,
 		URL:                       h.URL,
 		Name:                      h.Name,
@@ -236,18 +251,23 @@ func ListHooks(ctx context.Context, client *gitlabclient.Client, input ListHooks
 		opts.Sort = input.Sort
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	hooks, resp, err := client.GL().Groups.ListGroupHooks(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return HookListOutput{}, toolutil.WrapErrWithStatusHint("ListHooks", err, http.StatusForbidden,
 			"requires Owner role on the group; verify group_id with gitlab_group_list; group webhooks fire for events in the group and all its subgroups/projects")
 	}
 
+	extras, err := toolutil.CapturedGroupHooks(captured, len(hooks))
+	if err != nil {
+		return HookListOutput{}, toolutil.WrapErr("ListHooks", err)
+	}
 	out := HookListOutput{
 		Hooks:      make([]HookOutput, len(hooks)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
 	for i, h := range hooks {
-		out.Hooks[i] = hookToOutput(h)
+		out.Hooks[i] = hookToOutput(h, extras[i])
 	}
 	return out, nil
 }
@@ -264,12 +284,13 @@ func GetHook(ctx context.Context, client *gitlabclient.Client, input GetHookInpu
 		return HookOutput{}, toolutil.ErrRequiredInt64("GetHook", "hook_id")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	h, _, err := client.GL().Groups.GetGroupHook(string(input.GroupID), input.HookID, gl.WithContext(ctx))
 	if err != nil {
 		return HookOutput{}, toolutil.WrapErrWithStatusHint("GetHook", err, http.StatusNotFound,
 			"verify group_id + hook_id with gitlab_group_hook_list; requires Owner role")
 	}
-	return hookToOutput(h), nil
+	return hookOutput("GetHook", h, captured)
 }
 
 func applyGroupHookOptions(input HookInput, opts *gl.AddGroupHookOptions) {
@@ -421,12 +442,13 @@ func AddHook(ctx context.Context, client *gitlabclient.Client, input AddHookInpu
 
 	opts := applyAddHookOpts(input.HookInput)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	h, _, err := client.GL().Groups.AddGroupHook(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return HookOutput{}, toolutil.WrapErrWithStatusHint("AddHook", err, http.StatusBadRequest,
 			"requires Owner role; url must be HTTP(S) and reachable; token is shared secret for X-Gitlab-Token header; enable specific event flags (push_events, merge_requests_events, etc.); enable_ssl_verification recommended")
 	}
-	return hookToOutput(h), nil
+	return hookOutput("AddHook", h, captured)
 }
 
 // EditHook updates an existing group webhook configuration.
@@ -443,12 +465,13 @@ func EditHook(ctx context.Context, client *gitlabclient.Client, input EditHookIn
 
 	opts := applyEditHookOpts(input.HookInput)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	h, _, err := client.GL().Groups.EditGroupHook(string(input.GroupID), input.HookID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return HookOutput{}, toolutil.WrapErrWithStatusHint("EditHook", err, http.StatusNotFound,
 			"verify hook_id with gitlab_group_hook_list; requires Owner role; updates merge with existing config. Unset fields keep current values")
 	}
-	return hookToOutput(h), nil
+	return hookOutput("EditHook", h, captured)
 }
 
 // DeleteHook removes a webhook from a group.

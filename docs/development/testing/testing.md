@@ -28,7 +28,7 @@
 | Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     22 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  98.4% |
-| Overall coverage (`go test ./internal/...`)           |  98.6% |
+| Overall coverage (`go test ./internal/...`)           |  98.5% |
 | Average package coverage                              |  98.7% |
 
 ### Naming Convention Stats
@@ -77,22 +77,22 @@
 | subscriptions |        99 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        94 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
-| toolutil      |       888 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
+| toolutil      |       888 |    98.2% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
 | **Subtotal**  | **2,488** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   393 |   100.0% |    57 |
-| groups            |   280 |    99.0% |    37 |
-| mergerequests     |   259 |   100.0% |    30 |
-| issues            |   233 |   100.0% |    21 |
+| projects          |   393 |    99.6% |    57 |
+| groups            |   280 |    98.9% |    37 |
+| mergerequests     |   259 |    99.9% |    30 |
+| issues            |   233 |    98.7% |    21 |
 | users             |   220 |    99.2% |    38 |
 | dynamic           |   176 |    99.9% |     2 |
 | jobs              |   152 |   100.0% |    17 |
 | packages          |   148 |    99.0% |     9 |
-| search            |   126 |   100.0% |    10 |
+| search            |   126 |    99.8% |    10 |
 | workitems         |   120 |   100.0% |     6 |
 | pipelines         |   118 |   100.0% |    12 |
 | commits           |   115 |    99.8% |    13 |
@@ -193,7 +193,7 @@
 | groupprotectedenvs      |        19 |          2 |   100.0% |         5 |
 | grouprelationsexport    |        26 |          2 |   100.0% |         2 |
 | groupreleases           |        18 |          3 |   100.0% |         1 |
-| groups                  |       280 |          8 |    99.0% |        37 |
+| groups                  |       280 |          8 |    98.9% |        37 |
 | groupsaml               |        35 |          3 |   100.0% |         5 |
 | groupscim               |        32 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |        23 |          2 |   100.0% |         8 |
@@ -210,7 +210,7 @@
 | issuediscussions        |        45 |          2 |   100.0% |         6 |
 | issuelinks              |        74 |          4 |   100.0% |         4 |
 | issuenotes              |        49 |          2 |   100.0% |         5 |
-| issues                  |       233 |          2 |   100.0% |        21 |
+| issues                  |       233 |          2 |    98.7% |        21 |
 | issuestatistics         |        43 |          1 |   100.0% |         3 |
 | iterationdata           |         8 |          1 |   100.0% |         0 |
 | jobs                    |       152 |          4 |   100.0% |        17 |
@@ -223,7 +223,7 @@
 | markdown                |         8 |          1 |   100.0% |         1 |
 | memberroles             |        53 |          4 |   100.0% |         6 |
 | members                 |        63 |          2 |   100.0% |         6 |
-| mergerequests           |       259 |          3 |   100.0% |        30 |
+| mergerequests           |       259 |          3 |    99.9% |        30 |
 | mergetrains             |        16 |          2 |   100.0% |         4 |
 | metadata                |         8 |          1 |   100.0% |         1 |
 | milestones              |        73 |          1 |   100.0% |         7 |
@@ -249,7 +249,7 @@
 | projectimportexport     |        40 |          1 |    99.6% |         5 |
 | projectiterations       |        18 |          1 |   100.0% |         1 |
 | projectmirrors          |        65 |          2 |   100.0% |         7 |
-| projects                |       393 |          6 |   100.0% |        57 |
+| projects                |       393 |          6 |    99.6% |        57 |
 | projectserviceaccounts  |        14 |          2 |   100.0% |         8 |
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
 | projectstoragemoves     |        20 |          2 |   100.0% |         6 |
@@ -266,7 +266,7 @@
 | runnercontrollerscopes  |        34 |          2 |   100.0% |         5 |
 | runnercontrollertokens  |        41 |          2 |   100.0% |         5 |
 | runners                 |       113 |          2 |   100.0% |        19 |
-| search                  |       126 |          1 |   100.0% |        10 |
+| search                  |       126 |          1 |    99.8% |        10 |
 | securefiles             |        30 |          2 |   100.0% |         4 |
 | securityattributes      |        24 |          1 |   100.0% |         5 |
 | securitycategories      |        16 |          1 |   100.0% |         3 |
@@ -390,7 +390,7 @@
 | subscriptions |   100.0% |
 | telemetry     |    93.1% |
 | testutil      |   100.0% |
-| toolutil      |    98.6% |
+| toolutil      |    98.2% |
 
 ### Tool Sub-Packages
 
@@ -473,7 +473,7 @@
 | groupprotectedenvs      |   100.0% |
 | grouprelationsexport    |   100.0% |
 | groupreleases           |   100.0% |
-| groups                  |    99.0% |
+| groups                  |    98.9% |
 | groupsaml               |   100.0% |
 | groupscim               |   100.0% |
 | groupserviceaccounts    |   100.0% |
@@ -490,7 +490,7 @@
 | issuediscussions        |   100.0% |
 | issuelinks              |   100.0% |
 | issuenotes              |   100.0% |
-| issues                  |   100.0% |
+| issues                  |    98.7% |
 | issuestatistics         |   100.0% |
 | iterationdata           |   100.0% |
 | jobs                    |   100.0% |
@@ -503,7 +503,7 @@
 | markdown                |   100.0% |
 | memberroles             |   100.0% |
 | members                 |   100.0% |
-| mergerequests           |   100.0% |
+| mergerequests           |    99.9% |
 | mergetrains             |   100.0% |
 | metadata                |   100.0% |
 | milestones              |   100.0% |
@@ -529,7 +529,7 @@
 | projectimportexport     |    99.6% |
 | projectiterations       |   100.0% |
 | projectmirrors          |   100.0% |
-| projects                |   100.0% |
+| projects                |    99.6% |
 | projectserviceaccounts  |   100.0% |
 | projectstatistics       |   100.0% |
 | projectstoragemoves     |   100.0% |
@@ -546,7 +546,7 @@
 | runnercontrollerscopes  |   100.0% |
 | runnercontrollertokens  |   100.0% |
 | runners                 |   100.0% |
-| search                  |   100.0% |
+| search                  |    99.8% |
 | securefiles             |   100.0% |
 | securityattributes      |   100.0% |
 | securitycategories      |   100.0% |

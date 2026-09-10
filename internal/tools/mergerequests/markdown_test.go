@@ -117,7 +117,7 @@ func TestFormatListMarkdown_HostileBranchAndTitle_StayInOneCell(t *testing.T) {
 		{name: "ListOutput", rendered: FormatListMarkdown(ListOutput{MergeRequests: []Output{mr}})},
 		{
 			name: "IssuesClosedOutput",
-			rendered: FormatIssuesClosedMarkdown(IssuesClosedOutput{Issues: []issues.Output{{
+			rendered: FormatIssuesClosedMarkdown(IssuesClosedOutput{Issues: []issues.BasicOutput{{
 				IID: 2, Title: hostileTitle, State: "opened", Labels: []string{hostileTitle},
 			}}}),
 		},

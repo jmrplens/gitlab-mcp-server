@@ -1323,3 +1323,183 @@ func CapturedGroup(capture *gitlabclient.ResponseCapture) (GroupDetailExtra, err
 func CapturedGroups(capture *gitlabclient.ResponseCapture, decoded int) ([]GroupExtra, error) {
 	return capturedList[GroupExtra](capture, decoded, "groups")
 }
+
+// IssueBasicExtra is what lib/api/entities/issue_basic.rb sends on an issue
+// that client-go's Issue does not carry, read from the captured response
+// (ADR-0021). Every route that renders an issue renders this entity, so these
+// three are on a search hit and on a merge request's closing issue too.
+//
+// The count is a pointer because ee/lib/ee/api/entities/issue_basic.rb gates
+// it on the blocked-issues licensed feature, and zero blockers is not the same
+// answer as an instance that does not count them.
+type IssueBasicExtra struct {
+	BlockingIssuesCount *int64 `json:"blocking_issues_count"`
+	StartDate           string `json:"start_date"`
+	// Type is the issue type upcased. GitLab exposes the same attribute twice,
+	// as issue_type through the plain expose and as type through one carrying
+	// format_with: :upcase, so this is read rather than derived here: the
+	// spelling is GitLab's decision, not ours.
+	Type string `json:"type"`
+}
+
+// IssueExtra is [IssueBasicExtra] plus what only lib/api/entities/issue.rb
+// adds, which is what the fifteen routes of the issues API render. A search
+// hit and a merge request's closing issue never carry these.
+//
+// has_tasks and imported are pointers for the reason the count above is: the
+// entity sends them on every issue it renders, and a nil here means the body
+// came from somewhere that renders less, which is a different answer from
+// false.
+type IssueExtra struct {
+	IssueBasicExtra
+	EpicIID      *int64 `json:"epic_iid"`
+	HasTasks     *bool  `json:"has_tasks"`
+	Imported     *bool  `json:"imported"`
+	ImportedFrom string `json:"imported_from"`
+	Severity     string `json:"severity"`
+	TaskStatus   string `json:"task_status"`
+}
+
+// CapturedIssueBasic reads, off the captured answer to a request that renders
+// the basic issue entity, the fields client-go's Issue does not model.
+func CapturedIssueBasic(capture *gitlabclient.ResponseCapture) (IssueBasicExtra, error) {
+	return capturedOne[IssueBasicExtra](capture)
+}
+
+// CapturedIssueBasics reads the same off a list answer, one extra per issue in
+// order, the count held to what the SDK decoded.
+func CapturedIssueBasics(capture *gitlabclient.ResponseCapture, decoded int) ([]IssueBasicExtra, error) {
+	return capturedList[IssueBasicExtra](capture, decoded, "issues")
+}
+
+// CapturedIssue reads everything [CapturedIssueBasic] reads and the six keys
+// the full issue entity adds.
+func CapturedIssue(capture *gitlabclient.ResponseCapture) (IssueExtra, error) {
+	return capturedOne[IssueExtra](capture)
+}
+
+// CapturedIssues reads the same off a list answer, one extra per issue.
+func CapturedIssues(capture *gitlabclient.ResponseCapture, decoded int) ([]IssueExtra, error) {
+	return capturedList[IssueExtra](capture, decoded, "issues")
+}
+
+// ProjectExtra is what lib/api/entities/project.rb and its EE override send
+// that client-go's Project does not model. Every field is a pointer because
+// none of them is unconditional in practice: the first four are absent
+// whenever the caller asked for the simple form, which renders
+// BasicProjectDetails instead, and the rest are gated on a licensed feature,
+// on an ability, or on GitLab.com.
+//
+// The tiers here are read from the licensed feature each lambda names rather
+// than from the audit's resolved tier, because gen_api_live captures a
+// condition as source text over a line range and the text of every expose in
+// ee/lib/ee/api/entities/project.rb runs on into the next one. Two fields are
+// mis-tiered by that bleed: max_pipelines_per_merge_train gates on
+// merge_trains (Premium) and reads as Ultimate from its neighbour's
+// external_status_checks, and duo_foundational_flows_enabled gates on
+// ai_workflows (Premium) and reads as Ultimate from ai_features.
+type ProjectExtra struct {
+	DescriptionHTML                        *string `json:"description_html"`
+	RepositoryObjectFormat                 *string `json:"repository_object_format"`
+	ShowDiffPreviewInEmail                 *bool   `json:"show_diff_preview_in_email"`
+	WarnAboutPotentiallyUnwantedCharacters *bool   `json:"warn_about_potentially_unwanted_characters"`
+	SecretPushProtectionEnabled            *bool   `json:"secret_push_protection_enabled"`
+	WebBasedCommitSigningEnabled           *bool   `json:"web_based_commit_signing_enabled"`
+	MergeTrainEnforcement                  *bool   `json:"merge_train_enforcement"`
+	MaxPipelinesPerMergeTrain              *int64  `json:"max_pipelines_per_merge_train"`
+	DuoRemoteFlowsEnabled                  *bool   `json:"duo_remote_flows_enabled"`
+	DuoFoundationalFlowsEnabled            *bool   `json:"duo_foundational_flows_enabled"`
+	OnlyAllowMergeIfAllStatusChecksPassed  *bool   `json:"only_allow_merge_if_all_status_checks_passed"`
+	DuoSastFPDetectionEnabled              *bool   `json:"duo_sast_fp_detection_enabled"`
+	DuoSastVRWorkflowEnabled               *bool   `json:"duo_sast_vr_workflow_enabled"`
+	DuoSecretDetectionFPEnabled            *bool   `json:"duo_secret_detection_fp_enabled"`
+	DuoDependencyBumpBreakingChanges       *bool   `json:"duo_dependency_bump_breaking_changes_enabled"`
+	SecurityPolicyPipelineMustSucceed      *bool   `json:"security_policy_pipeline_must_succeed"`
+	SPPRepositoryPipelineAccess            *bool   `json:"spp_repository_pipeline_access"`
+}
+
+// CapturedProject reads, off the captured answer to a request that renders the
+// full project entity, the keys client-go's Project does not model.
+func CapturedProject(capture *gitlabclient.ResponseCapture) (ProjectExtra, error) {
+	return capturedOne[ProjectExtra](capture)
+}
+
+// CapturedProjects reads the same off a list answer, one extra per project in
+// order, the count held to what the SDK decoded.
+func CapturedProjects(capture *gitlabclient.ResponseCapture, decoded int) ([]ProjectExtra, error) {
+	return capturedList[ProjectExtra](capture, decoded, "projects")
+}
+
+// UserBasicExtra is what lib/api/entities/user_basic.rb sends that client-go's
+// ProjectUser does not model. Both are unconditional on that entity, so a
+// plain value is the honest shape here.
+type UserBasicExtra struct {
+	Locked      bool   `json:"locked"`
+	PublicEmail string `json:"public_email"`
+}
+
+// CapturedUserBasics reads, off the captured answer to a request that renders
+// a page of the basic user entity, the two keys the SDK does not model, one
+// extra per user in order.
+func CapturedUserBasics(capture *gitlabclient.ResponseCapture, decoded int) ([]UserBasicExtra, error) {
+	return capturedList[UserBasicExtra](capture, decoded, "users")
+}
+
+// nestedUserExtra is a row that carries the basic user under a `user` key,
+// which is how lib/api/entities/user_stars_project.rb renders a starrer.
+type nestedUserExtra struct {
+	User UserBasicExtra `json:"user"`
+}
+
+// CapturedNestedUserBasics reads the same two keys off a list answer whose
+// rows nest the user rather than being one, one extra per row in order.
+func CapturedNestedUserBasics(capture *gitlabclient.ResponseCapture, decoded int) ([]UserBasicExtra, error) {
+	rows, err := capturedList[nestedUserExtra](capture, decoded, "users")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]UserBasicExtra, len(rows))
+	for i, row := range rows {
+		out[i] = row.User
+	}
+	return out, nil
+}
+
+// GroupHookExtra is what lib/api/entities/group_hook.rb sends that client-go's
+// GroupHook does not model. The SDK carries repository_update_events on the
+// project hook and on the system hook and not on this one; the entity sends it
+// on every group hook, so a plain value is the honest shape.
+type GroupHookExtra struct {
+	RepositoryUpdateEvents bool `json:"repository_update_events"`
+}
+
+// CapturedGroupHook reads that key off the answer to a request for one hook.
+func CapturedGroupHook(capture *gitlabclient.ResponseCapture) (GroupHookExtra, error) {
+	return capturedOne[GroupHookExtra](capture)
+}
+
+// CapturedGroupHooks reads the same off a list answer, one extra per hook in
+// order.
+func CapturedGroupHooks(capture *gitlabclient.ResponseCapture, decoded int) ([]GroupHookExtra, error) {
+	return capturedList[GroupHookExtra](capture, decoded, "hooks")
+}
+
+// ProjectApprovalRuleExtra is what ee/lib/api/entities/project_approval_rule.rb
+// sends that client-go's ProjectApprovalRule does not model. The threshold is
+// exposed only on a rule whose report_type is code_coverage, so nil here means
+// "not a coverage rule" rather than a threshold of zero.
+type ProjectApprovalRuleExtra struct {
+	CoverageMinimumThreshold *int64 `json:"coverage_minimum_threshold"`
+}
+
+// CapturedProjectApprovalRule reads that key off the answer to a request for
+// one rule.
+func CapturedProjectApprovalRule(capture *gitlabclient.ResponseCapture) (ProjectApprovalRuleExtra, error) {
+	return capturedOne[ProjectApprovalRuleExtra](capture)
+}
+
+// CapturedProjectApprovalRules reads the same off a list answer, one extra per
+// rule in order.
+func CapturedProjectApprovalRules(capture *gitlabclient.ResponseCapture, decoded int) ([]ProjectApprovalRuleExtra, error) {
+	return capturedList[ProjectApprovalRuleExtra](capture, decoded, "approval rules")
+}

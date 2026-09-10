@@ -5008,7 +5008,7 @@ func TestToOutput_WithNamespace(t *testing.T) {
 		Visibility: gl.PublicVisibility,
 		Namespace:  &gl.ProjectNamespace{FullPath: testMyGroup},
 	}
-	out := ToOutput(p)
+	out := ToOutput(p, toolutil.ProjectExtra{})
 	if out.Namespace == nil || out.Namespace.FullPath != testMyGroup {
 		t.Errorf("Namespace = %+v, want FullPath %q", out.Namespace, testMyGroup)
 	}
@@ -5022,7 +5022,7 @@ func TestToOutput_WithCreatedAt(t *testing.T) {
 		Name:      "test",
 		CreatedAt: &now,
 	}
-	out := ToOutput(p)
+	out := ToOutput(p, toolutil.ProjectExtra{})
 	if out.CreatedAt == "" {
 		t.Error("expected CreatedAt to be set")
 	}
@@ -7353,7 +7353,7 @@ func TestToOutput_NilOptionalFields(t *testing.T) {
 		PathWithNamespace: "ns/test",
 		DefaultBranch:     "main",
 	}
-	out := ToOutput(p)
+	out := ToOutput(p, toolutil.ProjectExtra{})
 	if out.Namespace != nil {
 		t.Errorf("Namespace = %+v, want nil", out.Namespace)
 	}
@@ -7464,7 +7464,7 @@ func TestToOutput_WithAllOptionals(t *testing.T) {
 		UpdatedAt:                    &now,
 		LastActivityAt:               &now,
 	}
-	out := ToOutput(p)
+	out := ToOutput(p, toolutil.ProjectExtra{})
 	if out.Namespace == nil || out.Namespace.FullPath != "ns" {
 		t.Errorf("Namespace = %+v, want FullPath %q", out.Namespace, "ns")
 	}

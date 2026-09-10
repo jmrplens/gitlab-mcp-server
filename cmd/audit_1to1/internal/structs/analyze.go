@@ -58,6 +58,13 @@ const (
 	docGroupLabelsList = "group_labels.md#list-group-labels"
 	docPipelinesGet    = "pipelines.md#retrieve-a-single-pipeline"
 	docTriggersRun     = "pipeline_triggers.md#trigger-a-pipeline-with-a-token"
+
+	docGroupsList       = "groups.md#list-all-groups"
+	docGroupsGet        = "groups.md#get-a-single-group"
+	docGroupHooks       = "group_webhooks.md"
+	docIssuesList       = "issues.md#list-issues"
+	docProjectsGet      = "projects.md#get-a-single-project"
+	docProjectUsersList = "projects.md#list-a-projects-users"
 	// The personal access tokens page prints granular_scopes and
 	// last_used_ips in its list example and names both in its notes;
 	// granular, impersonation and the resource pair are exposed by the
@@ -625,6 +632,75 @@ var docAddedFields = map[string]string{
 	"grouplabels.Output.description_html":        docGroupLabelsList,
 	"pipelines.DetailOutput.archived":            docPipelinesGet,
 	"pipelinetriggers.RunOutput.archived":        docTriggersRun,
+
+	// groups, issues and projects — the three entity families whose Grape
+	// entity sends keys the client-go struct does not declare, read from the
+	// captured response (ADR-0021, the readers in toolutil/sent_shapes.go).
+	// A key appears twice where one type embeds the other, because the diff
+	// sees the promoted field on both. Recorded in
+	// docs/development/upstream-bugs.md.
+	"groups.Output.allow_personal_snippets":                                 docGroupsList,
+	"groups.Output.auto_duo_code_review_enabled":                            docGroupsList,
+	"groups.Output.built_in_project_templates_enabled":                      docGroupsList,
+	"groups.Output.duo_core_features_enabled":                               docGroupsList,
+	"groups.Output.duo_namespace_access_rules":                              docGroupsList,
+	"groups.Output.lock_built_in_project_templates_enabled":                 docGroupsList,
+	"groups.Output.lock_resource_access_token_notify_inherited":             docGroupsList,
+	"groups.Output.resource_access_token_notify_inherited":                  docGroupsList,
+	"groups.Output.show_diff_preview_in_email":                              docGroupsList,
+	"groups.Output.web_based_commit_signing_enabled":                        docGroupsList,
+	"groups.DetailOutput.allow_personal_snippets":                           docGroupsGet,
+	"groups.DetailOutput.auto_ban_user_on_excessive_projects_download":      docGroupsGet,
+	"groups.DetailOutput.auto_duo_code_review_enabled":                      docGroupsGet,
+	"groups.DetailOutput.built_in_project_templates_enabled":                docGroupsGet,
+	"groups.DetailOutput.duo_core_features_enabled":                         docGroupsGet,
+	"groups.DetailOutput.duo_namespace_access_rules":                        docGroupsGet,
+	"groups.DetailOutput.lock_built_in_project_templates_enabled":           docGroupsGet,
+	"groups.DetailOutput.lock_resource_access_token_notify_inherited":       docGroupsGet,
+	"groups.DetailOutput.resource_access_token_notify_inherited":            docGroupsGet,
+	"groups.DetailOutput.service_access_tokens_expiration_enforced":         docGroupsGet,
+	"groups.DetailOutput.show_diff_preview_in_email":                        docGroupsGet,
+	"groups.DetailOutput.step_up_auth_required_oauth_provider":              docGroupsGet,
+	"groups.DetailOutput.unique_project_download_limit":                     docGroupsGet,
+	"groups.DetailOutput.unique_project_download_limit_alertlist":           docGroupsGet,
+	"groups.DetailOutput.unique_project_download_limit_allowlist":           docGroupsGet,
+	"groups.DetailOutput.unique_project_download_limit_interval_in_seconds": docGroupsGet,
+	"groups.DetailOutput.web_based_commit_signing_enabled":                  docGroupsGet,
+	"groups.HookOutput.repository_update_events":                            docGroupHooks,
+
+	"issues.BasicOutput.blocking_issues_count": docIssuesList,
+	"issues.BasicOutput.start_date":            docIssuesList,
+	"issues.BasicOutput.type":                  docIssuesList,
+	"issues.Output.blocking_issues_count":      docIssuesList,
+	"issues.Output.epic_iid":                   docIssuesList,
+	"issues.Output.has_tasks":                  docIssuesList,
+	"issues.Output.imported":                   docIssuesList,
+	"issues.Output.imported_from":              docIssuesList,
+	"issues.Output.severity":                   docIssuesList,
+	"issues.Output.start_date":                 docIssuesList,
+	"issues.Output.task_status":                docIssuesList,
+	"issues.Output.type":                       docIssuesList,
+
+	"projects.Output.description_html":                             docProjectsGet,
+	"projects.Output.duo_dependency_bump_breaking_changes_enabled": docProjectsGet,
+	"projects.Output.duo_foundational_flows_enabled":               docProjectsGet,
+	"projects.Output.duo_remote_flows_enabled":                     docProjectsGet,
+	"projects.Output.duo_sast_fp_detection_enabled":                docProjectsGet,
+	"projects.Output.duo_sast_vr_workflow_enabled":                 docProjectsGet,
+	"projects.Output.duo_secret_detection_fp_enabled":              docProjectsGet,
+	"projects.Output.max_pipelines_per_merge_train":                docProjectsGet,
+	"projects.Output.merge_train_enforcement":                      docProjectsGet,
+	"projects.Output.only_allow_merge_if_all_status_checks_passed": docProjectsGet,
+	"projects.Output.repository_object_format":                     docProjectsGet,
+	"projects.Output.secret_push_protection_enabled":               docProjectsGet,
+	"projects.Output.security_policy_pipeline_must_succeed":        docProjectsGet,
+	"projects.Output.show_diff_preview_in_email":                   docProjectsGet,
+	"projects.Output.spp_repository_pipeline_access":               docProjectsGet,
+	"projects.Output.warn_about_potentially_unwanted_characters":   docProjectsGet,
+	"projects.Output.web_based_commit_signing_enabled":             docProjectsGet,
+	"projects.ApprovalRuleOutput.coverage_minimum_threshold":       docMRApprovals,
+	"projects.ProjectUserOutput.locked":                            docProjectUsersList,
+	"projects.ProjectUserOutput.public_email":                      docProjectUsersList,
 
 	// tokens — lib/api/entities/personal_access_token.rb exposes granular on
 	// every token, and the entities inheriting it add granular_scopes and

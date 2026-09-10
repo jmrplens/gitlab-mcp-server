@@ -2073,7 +2073,7 @@ func TestFormatReviewersMarkdown_Empty(t *testing.T) {
 // TestFormatIssuesClosedMarkdown_Populated verifies FormatIssuesClosedMarkdown when populated.
 func TestFormatIssuesClosedMarkdown_Populated(t *testing.T) {
 	md := FormatIssuesClosedMarkdown(IssuesClosedOutput{
-		Issues: []issues.Output{
+		Issues: []issues.BasicOutput{
 			{IID: 5, Title: "Bug fix", State: testStateOpened, Author: &toolutil.IssueUserOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
@@ -2150,7 +2150,7 @@ func TestFormatTimeStatsMarkdown_Empty(t *testing.T) {
 // TestFormatRelatedIssuesMarkdown_Populated verifies FormatRelatedIssuesMarkdown when populated.
 func TestFormatRelatedIssuesMarkdown_Populated(t *testing.T) {
 	md := FormatRelatedIssuesMarkdown(RelatedIssuesOutput{
-		Issues: []issues.Output{
+		Issues: []issues.BasicOutput{
 			{IID: 10, Title: "Related bug", State: testStateOpened, Author: &toolutil.IssueUserOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug, "critical"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},

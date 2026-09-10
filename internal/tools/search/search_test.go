@@ -1369,7 +1369,7 @@ func TestFormatIssuesMarkdown_Empty(t *testing.T) {
 // TestFormatIssuesMarkdown_WithResults verifies FormatIssuesMarkdown when with results.
 func TestFormatIssuesMarkdown_WithResults(t *testing.T) {
 	s := FormatIssuesMarkdown(IssuesOutput{
-		Issues:     []issues.Output{{IID: 3, Title: "Fix login", State: "opened", Author: &toolutil.IssueUserOutput{Username: "dev1"}, Labels: []string{"bug", "critical"}}},
+		Issues:     []issues.BasicOutput{{IID: 3, Title: "Fix login", State: "opened", Author: &toolutil.IssueUserOutput{Username: "dev1"}, Labels: []string{"bug", "critical"}}},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
 	})
 	if !strings.Contains(s, "#3") {
@@ -1490,7 +1490,7 @@ func TestFormatProjectsMarkdown_Empty(t *testing.T) {
 // TestFormatProjectsMarkdown_WithResults verifies FormatProjectsMarkdown when with results.
 func TestFormatProjectsMarkdown_WithResults(t *testing.T) {
 	s := FormatProjectsMarkdown(ProjectsOutput{
-		Projects:   []projects.Output{{Name: "my-project", PathWithNamespace: "user/my-project", Visibility: "private", DefaultBranch: "main"}},
+		Projects:   []projects.BasicOutput{{Name: "my-project", PathWithNamespace: "user/my-project", Visibility: "private", DefaultBranch: "main"}},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
 	})
 	if !strings.Contains(s, "user/my-project") {

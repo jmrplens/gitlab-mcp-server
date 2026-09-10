@@ -920,7 +920,11 @@ type mergeRequestItemsListArgs struct {
 	notFoundHint      string
 }
 
-func listMergeRequestItems[T, O, R any](ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, mrItemListOptions, ...gl.RequestOptionFunc) ([]T, *gl.Response, error), convert func(T) O, buildOutput func([]O, toolutil.PaginationOutput) R) (R, error) {
+// listMergeRequestItems converts the whole page at once rather than one item
+// at a time, because a converter may need the captured response beside what
+// the SDK decoded (ADR-0021) and a capture answers for the page. A converter
+// that needs nothing of the sort is adapted by [plainItems].
+func listMergeRequestItems[T, O, R any](ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, mrItemListOptions, ...gl.RequestOptionFunc) ([]T, *gl.Response, error), convert func([]T) ([]O, error), buildOutput func([]O, toolutil.PaginationOutput) R) (R, error) {
 	var zero R
 	if err := ctx.Err(); err != nil {
 		return zero, err
@@ -935,11 +939,23 @@ func listMergeRequestItems[T, O, R any](ctx context.Context, args mergeRequestIt
 	if err != nil {
 		return zero, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusNotFound, args.notFoundHint)
 	}
-	out := make([]O, len(items))
-	for i, item := range items {
-		out[i] = convert(item)
+	out, err := convert(items)
+	if err != nil {
+		return zero, toolutil.WrapErr(args.operation, err)
 	}
 	return buildOutput(out, toolutil.PaginationFromResponse(resp)), nil
+}
+
+// plainItems adapts a per-item converter that reads nothing but what the SDK
+// decoded to the page-at-a-time form [listMergeRequestItems] takes.
+func plainItems[T, O any](convert func(T) O) func([]T) ([]O, error) {
+	return func(items []T) ([]O, error) {
+		out := make([]O, len(items))
+		for i, item := range items {
+			out[i] = convert(item)
+		}
+		return out, nil
+	}
 }
 
 // Commits retrieves the list of commits in a merge request.
@@ -957,7 +973,7 @@ func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInpu
 			listOptions := &gl.GetMergeRequestCommitsOptions{}
 			lo.applyTo(&listOptions.ListOptions)
 			return client.GL().MergeRequests.GetMergeRequestCommits(projectID, mrIID, listOptions, opts...)
-		}, commits.ToOutput, func(out []commits.Output, pagination toolutil.PaginationOutput) CommitsOutput {
+		}, plainItems(commits.ToOutput), func(out []commits.Output, pagination toolutil.PaginationOutput) CommitsOutput {
 			return CommitsOutput{Commits: out, Pagination: pagination}
 		})
 }
@@ -1552,9 +1568,12 @@ type IssuesClosedInput struct {
 }
 
 // IssuesClosedOutput holds the list of issues that would be closed by merging an MR.
+//
+// The route renders API::Entities::IssueBasic, so the rows are the basic issue
+// and not the full one: what only the issues API adds is not sent here.
 type IssuesClosedOutput struct {
 	toolutil.HintableOutput
-	Issues     []issues.Output           `json:"issues"`
+	Issues     []issues.BasicOutput      `json:"issues"`
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
@@ -1578,8 +1597,11 @@ func IssuesClosed(ctx context.Context, client *gitlabclient.Client, input Issues
 }
 
 func listMergeRequestIssues(ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, mrItemListOptions, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (IssuesClosedOutput, error) {
-	return listMergeRequestItems(ctx, args,
-		list, issues.ToOutput, func(out []issues.Output, pagination toolutil.PaginationOutput) IssuesClosedOutput {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	return listMergeRequestItems(ctx, args, list,
+		func(items []*gl.Issue) ([]issues.BasicOutput, error) {
+			return issues.ToBasicOutputs(items, captured)
+		}, func(out []issues.BasicOutput, pagination toolutil.PaginationOutput) IssuesClosedOutput {
 			return IssuesClosedOutput{Issues: out, Pagination: pagination}
 		})
 }
@@ -1839,9 +1861,12 @@ type RelatedIssuesInput struct {
 }
 
 // RelatedIssuesOutput holds the list of issues related to a merge request.
+//
+// The route renders API::Entities::IssueBasic, so the rows are the basic issue
+// and not the full one: what only the issues API adds is not sent here.
 type RelatedIssuesOutput struct {
 	toolutil.HintableOutput
-	Issues     []issues.Output           `json:"issues"`
+	Issues     []issues.BasicOutput      `json:"issues"`
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
@@ -1864,8 +1889,11 @@ func RelatedIssues(ctx context.Context, client *gitlabclient.Client, input Relat
 }
 
 func listMergeRequestRelatedIssues(ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, mrItemListOptions, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (RelatedIssuesOutput, error) {
-	return listMergeRequestItems(ctx, args,
-		list, issues.ToOutput, func(out []issues.Output, pagination toolutil.PaginationOutput) RelatedIssuesOutput {
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
+	return listMergeRequestItems(ctx, args, list,
+		func(items []*gl.Issue) ([]issues.BasicOutput, error) {
+			return issues.ToBasicOutputs(items, captured)
+		}, func(out []issues.BasicOutput, pagination toolutil.PaginationOutput) RelatedIssuesOutput {
 			return RelatedIssuesOutput{Issues: out, Pagination: pagination}
 		})
 }

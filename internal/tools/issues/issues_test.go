@@ -2060,7 +2060,7 @@ func TestToOutput_Populated(t *testing.T) {
 		Subscribed:           true,
 		TimeStats:            &gl.TimeStats{TimeEstimate: 3600, TotalTimeSpent: 1800},
 	}
-	out := ToOutput(issue)
+	out := ToOutput(issue, toolutil.IssueExtra{})
 	assertPopulatedObjects(t, out)
 	if out.TaskCompletionStatus == nil || out.TaskCompletionStatus.CompletedCount != 2 || out.TaskCompletionStatus.Count != 5 {
 		t.Errorf("TaskCompletionStatus = %+v, want 2/5", out.TaskCompletionStatus)
@@ -2090,7 +2090,7 @@ func TestToOutput_NilOptionalFields(t *testing.T) {
 	issue := &gl.Issue{
 		ID: 2, IID: 20, Title: "Minimal", State: "opened",
 	}
-	out := ToOutput(issue)
+	out := ToOutput(issue, toolutil.IssueExtra{})
 	if out.Author != nil {
 		t.Errorf("Author = %v, want nil for nil author", out.Author)
 	}
@@ -2141,7 +2141,7 @@ func TestToOutput_ConverterBranches(t *testing.T) {
 		// Epic with a nil author exercises the epicAuthorOutput nil branch.
 		Epic: &gl.Epic{ID: 5, Title: "E", StartDate: now, DueDate: now},
 	}
-	out := ToOutput(issue)
+	out := ToOutput(issue, toolutil.IssueExtra{})
 	if len(out.Assignees) != 1 || out.Assignees[0].Username != "real" {
 		t.Fatalf("Assignees = %v, want one entry 'real' (nil skipped)", out.Assignees)
 	}
@@ -2193,7 +2193,7 @@ func TestFormatMarkdown_ClosedNoCloser(t *testing.T) {
 // TestToOutput_IssueType verifies ToOutput when issue type.
 func TestToOutput_IssueType(t *testing.T) {
 	issue := &gl.Issue{ID: 3, IssueType: new("task")}
-	out := ToOutput(issue)
+	out := ToOutput(issue, toolutil.IssueExtra{})
 	if out.IssueType != "task" {
 		t.Errorf("IssueType = %q, want task", out.IssueType)
 	}
@@ -4205,7 +4205,7 @@ func TestToOutput_AdditiveSubObjects(t *testing.T) {
 		TaskCompletionStatus: &gl.TasksCompletionStatus{Count: 5, CompletedCount: 2},
 	}
 
-	out := ToOutput(issue)
+	out := ToOutput(issue, toolutil.IssueExtra{})
 	if out.ExternalID != "EXT-7" || out.ServiceDeskReplyTo != "sd@example.com" {
 		t.Errorf("scalars = %q/%q", out.ExternalID, out.ServiceDeskReplyTo)
 	}
@@ -4229,7 +4229,7 @@ func TestToOutput_AdditiveSubObjects(t *testing.T) {
 // TestToOutput_AdditiveSubObjects_NilSafe verifies the additive sub-objects are
 // nil/empty when absent on the SDK issue.
 func TestToOutput_AdditiveSubObjects_NilSafe(t *testing.T) {
-	out := ToOutput(&gl.Issue{ID: 1, IID: 10})
+	out := ToOutput(&gl.Issue{ID: 1, IID: 10}, toolutil.IssueExtra{})
 	if out.LabelDetails != nil || out.Iteration != nil || out.Links != nil || out.TimeStats != nil || out.TaskCompletionStatus != nil {
 		t.Errorf("expected nil additive sub-objects, got %+v", out)
 	}
@@ -4513,7 +4513,7 @@ func TestChangeIssueSubscription_NotModifiedError_FallsBackToGet(t *testing.T) {
 		Response:   &http.Response{StatusCode: http.StatusNotModified},
 	}
 	out, err := changeIssueSubscription(context.Background(), client, testProjectID, 10, "issueSubscribe",
-		func(string, int64) (*gl.Issue, *gl.Response, error) { return nil, nil, notModified })
+		func(context.Context, string, int64) (*gl.Issue, *gl.Response, error) { return nil, nil, notModified })
 	if err != nil {
 		t.Fatalf("changeIssueSubscription() unexpected error: %v", err)
 	}

@@ -17894,6 +17894,12 @@
             "object"
           ]
         },
+        "blocking_issues_count": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "closed_at": {
           "type": "string"
         },
@@ -18087,11 +18093,23 @@
             "object"
           ]
         },
+        "epic_iid": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "epic_issue_id": {
           "type": "integer"
         },
         "external_id": {
           "type": "string"
+        },
+        "has_tasks": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "health_status": {
           "type": "string"
@@ -18102,6 +18120,15 @@
         "iid": {
           "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
+        },
+        "imported": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "imported_from": {
+          "type": "string"
         },
         "issue_type": {
           "type": "string"
@@ -18316,6 +18343,12 @@
         "service_desk_reply_to": {
           "type": "string"
         },
+        "severity": {
+          "type": "string"
+        },
+        "start_date": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
         },
@@ -18340,6 +18373,9 @@
             "null",
             "object"
           ]
+        },
+        "task_status": {
+          "type": "string"
         },
         "time_stats": {
           "additionalProperties": false,
@@ -18378,6 +18414,9 @@
           ]
         },
         "title": {
+          "type": "string"
+        },
+        "type": {
           "type": "string"
         },
         "updated_at": {
@@ -19611,6 +19650,48 @@
         "description": {
           "type": "string"
         },
+        "description_html": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "duo_dependency_bump_breaking_changes_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "duo_foundational_flows_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "duo_remote_flows_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "duo_sast_fp_detection_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "duo_sast_vr_workflow_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "duo_secret_detection_fp_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "emails_disabled": {
           "type": "boolean"
         },
@@ -19772,6 +19853,12 @@
         "max_artifacts_size": {
           "type": "integer"
         },
+        "max_pipelines_per_merge_train": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "merge_commit_template": {
           "type": "string"
         },
@@ -19795,6 +19882,12 @@
         },
         "merge_requests_template": {
           "type": "string"
+        },
+        "merge_train_enforcement": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "merge_trains_enabled": {
           "type": "boolean"
@@ -19889,6 +19982,12 @@
         },
         "only_allow_merge_if_all_discussions_are_resolved": {
           "type": "boolean"
+        },
+        "only_allow_merge_if_all_status_checks_passed": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "only_allow_merge_if_pipeline_succeeds": {
           "type": "boolean"
@@ -20043,6 +20142,12 @@
         "repository_access_level": {
           "type": "string"
         },
+        "repository_object_format": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "repository_storage": {
           "type": "string"
         },
@@ -20073,11 +20178,23 @@
         "runners_token": {
           "type": "string"
         },
+        "secret_push_protection_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "security_and_compliance_access_level": {
           "type": "string"
         },
         "security_and_compliance_enabled": {
           "type": "boolean"
+        },
+        "security_policy_pipeline_must_succeed": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "service_desk_address": {
           "type": "string"
@@ -20121,11 +20238,23 @@
             "array"
           ]
         },
+        "show_diff_preview_in_email": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "snippets_access_level": {
           "type": "string"
         },
         "snippets_enabled": {
           "type": "boolean"
+        },
+        "spp_repository_pipeline_access": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "squash_commit_template": {
           "type": "string"
@@ -20221,6 +20350,18 @@
         "visibility": {
           "type": "string"
         },
+        "warn_about_potentially_unwanted_characters": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "web_based_commit_signing_enabled": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "web_url": {
           "type": "string"
         },
@@ -20236,16 +20377,16 @@
         "name",
         "path",
         "path_with_namespace",
+        "description",
         "visibility",
         "default_branch",
         "web_url",
-        "description",
-        "archived",
         "topics",
+        "created_at",
+        "archived",
         "only_allow_merge_if_pipeline_succeeds",
         "only_allow_merge_if_all_discussions_are_resolved",
         "remove_source_branch_after_merge",
-        "created_at",
         "request_access_enabled",
         "lfs_enabled",
         "allow_merge_on_skipped_pipeline",
