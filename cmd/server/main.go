@@ -2744,7 +2744,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 			return
 		}
 		w.Header().Set(hdrContentType, serverCardMediaType(r.URL.Path))
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Header().Set(hdrCacheControl, cacheControlPublic1h)
 		_, _ = w.Write(discoveryCardJSON)
 	}
 	legacyCardHandler := func(w http.ResponseWriter, r *http.Request) {
@@ -2775,7 +2775,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 			return
 		}
 		w.Header().Set(hdrContentType, serverCardMediaType(r.URL.Path))
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Header().Set(hdrCacheControl, cacheControlPublic1h)
 		_, _ = w.Write(serverCardJSON)
 	}
 	// The two paths serve two different documents, which is the whole point.
@@ -3601,7 +3601,7 @@ func securityHeadersMiddleware(limits inboundLimits, next http.Handler) http.Han
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
-		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set(hdrCacheControl, cacheControlNoStore)
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		if r.Body != nil {
 			r.Body = http.MaxBytesReader(w, newDepthLimitedBody(r.Body, limits.maxDepth), maxBytes)
@@ -3795,7 +3795,13 @@ const (
 // the literal, which is what SonarCloud flags.
 const (
 	hdrContentType = "Content-Type"
-	mimeJSON       = "application/json"
+	// hdrCacheControl and the two policies this package sets under it. The
+	// card is public and changes only with a release, so an hour of shared
+	// caching is free; everything credential-shaped is no-store.
+	hdrCacheControl      = "Cache-Control"
+	cacheControlPublic1h = "public, max-age=3600"
+	cacheControlNoStore  = "no-store"
+	mimeJSON             = "application/json"
 	// mimeServerCard is the media type the MCP server-card extension registers.
 	// Only the recommended path serves it: the legacy .well-known location ends
 	// in .json and is fetched by scanners written against the earlier draft,

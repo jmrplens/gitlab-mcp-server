@@ -95,7 +95,7 @@ func healthHandler(digest string, draining *atomic.Bool) http.HandlerFunc {
 		w.Header().Set(hdrContentType, mimeJSON)
 		if body.Status == healthStatusDraining {
 			// A balancer must not cache the last 200 across the flip.
-			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set(hdrCacheControl, cacheControlNoStore)
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}
 		// A client that went away mid-write is not something the handler can
