@@ -826,13 +826,18 @@ of change whose test is one assertion on the built URL.
   where the maintainers had said there was no good way to detect this drift.
   Every merge request references it with a non-closing `Related to`, so the
   first merge does not close the umbrella.
-- **In review**: `!3041`, `!3043`, `!3044`, `!3045` and `!3047` are open.
+- **In review**: `!3041`, `!3044`, `!3048`, `!3049`, `!3050`, `!3051`, `!3052`
+  and `!3053` are open.
 - **Merged**: `!3042` (`BroadcastMessage.Color`) in **v3.1.0**, tagged on
   2026-09-09 eighteen minutes after the merge; then `!3040`
   (`Appearance.SiteName`) and `!3046` (the `GroupSCIMIdentity` json tag) in
-  **v3.2.0** the same day. Do not read a merge as a release: `!3040` sat
+  **v3.2.0** the same day; then `!3043` (`Agent.IsReceptive`) and `!3045`
+  (`SecureFile.FileExtension`) in **v3.3.0**, and `!3047`
+  (`GroupServiceAccount.PublicEmail` and `UnconfirmedEmail`) in **v3.4.0**,
+  all on 2026-09-10. Do not read a merge as a release: `!3040` sat
   merged and in no tag for hours, so the version is read from which tags
-  contain the merge commit rather than from the newest tag.
+  contain the merge commit rather than from the newest tag. Six releases in
+  two days is why: the newest tag was wrong for five of these six.
 - **Blocking**: no.
 - **Workaround**: yes. Each field is read from the captured response beside
   the SDK's decode, through the readers in `internal/toolutil/sent_shapes.go`.
