@@ -516,15 +516,16 @@ func TestResolveAlternatives_OnlyShapesOfOneEntityAreTheResponse(t *testing.T) {
 		},
 	}
 	resolveAlternatives(&parsed)
-	for _, name := range []string{"Output", "BasicOutput"} {
-		if !parsed.enveloped[name] {
-			t.Errorf("%s is one of two shapes of one entity and was not treated as the response", name)
-		}
-	}
-	for _, name := range []string{"GroupOutput", "ProjectObject"} {
-		if parsed.enveloped[name] {
-			t.Errorf("%s is a reference beside an unrelated object and was treated as the response", name)
-		}
+	for name, want := range map[string]bool{
+		"Output": true, "BasicOutput": true,
+		"GroupOutput": false, "ProjectObject": false,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got := parsed.enveloped[name]; got != want {
+				t.Errorf("enveloped[%s] = %v, want %v: shapes of one entity are the response, unrelated objects are references", name, got, want)
+			}
+		})
 	}
 	if oneFamily(nil, func(string, string) bool { return true }) {
 		t.Error("an empty set was reported as one family")
