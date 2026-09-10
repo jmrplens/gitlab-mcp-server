@@ -1119,6 +1119,46 @@ older shape at the location SEP-2127 reserves; a deployment that wanted to be
 conformant had to shadow `/server-card` with a static file in its proxy, and
 that workaround can now be removed.
 
+### Caching the cards
+
+Both cards and the RFC 9728 document at
+`/.well-known/oauth-protected-resource[/<path of --public-url>]` answer the same
+bytes until the process restarts, and all three say so twice: with
+`Cache-Control: public, max-age=3600`, which is how long a client may reuse a
+copy without asking, and with an `ETag`, which is what it sends back afterwards
+to find out whether the copy is still current.
+
+The two cards are built once, at startup. The RFC 9728 document is serialized on
+each request, from a value fixed at startup, and its tag is computed from the
+bytes that request produced rather than from a copy made here. That costs a hash
+of a few hundred bytes on a route a client reaches once per discovery, and it
+buys a validator that cannot describe a body nobody sent.
+
+```console
+$ curl -sI http://localhost:8080/.well-known/mcp/server-card.json | grep -i '^etag'
+etag: "b1946ac92492d2347c6235b4d2611184"
+
+$ curl -sI -H 'If-None-Match: "b1946ac92492d2347c6235b4d2611184"' \
+    http://localhost:8080/.well-known/mcp/server-card.json | head -1
+HTTP/1.1 304 Not Modified
+```
+
+This matters most for the enumerating document, which is around 137 KB on the
+default surface: a registry scanner polling it hourly downloads that every time
+without a validator, and once per replica behind a balancer.
+
+The tag is derived from the document's own bytes and from nothing about the
+process, so **replicas serving the same configuration publish the same tag**. A
+client that revalidates against a different replica than the one that answered
+it first is still told 304. Nothing has to be configured for that to hold, and
+nothing should be added in front that replaces the tag with a per-instance
+value.
+
+A CDN in front of the deployment can cache all three routes on the strength of
+those headers. It must not cache `/mcp` itself, which is a credentialed
+`POST` and carries `Cache-Control: no-store`, nor `/health`, whose body changes
+on every probe.
+
 ## Security Considerations
 
 - **Tokens in transit**: Use HTTPS in production or ensure the network is trusted

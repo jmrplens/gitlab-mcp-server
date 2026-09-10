@@ -35,22 +35,78 @@ const discoveryCacheControl = "public, max-age=3600"
 // securityHeadersMiddleware, which is right to default every response to
 // no-store; this is the one document that wants the opposite, and saying so at
 // the mount keeps the default strict.
+//
+// The validator is added here for the same reason. A lifetime on its own tells
+// a client how long it may reuse the document and gives it nothing to say when
+// that lifetime runs out, so the next fetch is a full one however unchanged
+// the document is; an entity tag turns that fetch into a conditional request
+// the origin can answer with 304.
 func metadataDocument(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
-		case http.MethodGet:
+		case http.MethodGet, http.MethodHead:
 			w.Header().Set(hdrCacheControl, discoveryCacheControl)
-		case http.MethodHead:
-			w.Header().Set(hdrCacheControl, discoveryCacheControl)
-			// The SDK checks the method itself, so it has to see a GET. The
-			// response body is dropped by net/http before it reaches the wire.
-			r = r.Clone(r.Context())
-			r.Method = http.MethodGet
+			// So a cross-origin script can read the validator back, and only
+			// when nothing published a list already: corsMiddleware sets a
+			// longer one for a trusted origin, ETag included, and replacing it
+			// here would cost that origin the headers it names.
+			//
+			// The request half is answered by whoever gets the preflight
+			// first. A trusted origin reaches corsMiddleware, whose allow-list
+			// names If-None-Match. Any other origin reaches the SDK handler,
+			// which answers Access-Control-Allow-Headers: Content-Type and
+			// nothing else, so a browser there will not send the header at
+			// all. That half is upstream's to widen; the server-side clients
+			// that fetch this document during discovery are unaffected either
+			// way.
+			if w.Header().Get(headerExposeHeaders) == "" {
+				w.Header().Set(headerExposeHeaders, hdrETag)
+			}
+			serveMetadataDocument(w, r, next)
 		case http.MethodOptions:
 			// Left to the SDK, which answers the CORS preflight.
+			next.ServeHTTP(w, r)
 		default:
 			w.Header().Set("Allow", "GET, HEAD, OPTIONS")
+			next.ServeHTTP(w, r)
 		}
-		next.ServeHTTP(w, r)
 	})
+}
+
+// serveMetadataDocument renders the metadata through next and serves it with
+// an entity tag derived from the bytes next produced.
+//
+// The document is small, so this hashes per request rather than caching a tag
+// beside a copy of the body. That is deliberate: the handler this wraps is the
+// SDK's and its output is not this package's to assume constant, and a tag
+// computed from whatever it wrote this time cannot be stale. What it costs is
+// a SHA-256 over a few hundred bytes on a route a client reaches once per
+// discovery.
+func serveMetadataDocument(w http.ResponseWriter, r *http.Request, next http.Handler) {
+	// The SDK checks the method itself, so it has to see a GET. The response
+	// body is dropped by net/http before it reaches the wire.
+	rendered := r
+	if r.Method == http.MethodHead {
+		rendered = r.Clone(r.Context())
+		rendered.Method = http.MethodGet
+	}
+	captured := &capturedResponse{ResponseWriter: w}
+	next.ServeHTTP(captured, rendered)
+	if !captured.ok() {
+		// A failure the SDK answered with is forwarded exactly as it wrote
+		// it, with one correction. It carries no validator, because a
+		// validator identifies a representation of the resource and an error
+		// page is not one; and the lifetime set above is withdrawn, because
+		// the branch that set it assumed the document was about to be
+		// rendered. Left in place, a 500 would go out marked cacheable for an
+		// hour and a shared cache would serve the failure to everyone behind
+		// it for that long. http.Error, which is how the SDK answers, sets a
+		// content type and a status and clears nothing.
+		w.Header().Set(hdrCacheControl, cacheControlNoStore)
+		captured.replay(w)
+		return
+	}
+	// r rather than rendered, so ServeContent knows it is answering a HEAD
+	// and sends the length without the body.
+	serveCachedDocument(w, r, entityTagFor(captured.body.Bytes()), captured.body.Bytes())
 }

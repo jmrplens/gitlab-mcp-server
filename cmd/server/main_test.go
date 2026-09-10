@@ -6903,7 +6903,7 @@ func TestCorsMiddleware_TrustedOriginPreflight_IsAnswered(t *testing.T) {
 		// against the function that produced it would pass whatever the
 		// function returned. What the list must CONTAIN per mode is pinned by
 		// TestCorsAllowHeaders_FollowTheAuthMode.
-		"Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, " +
+		"Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, If-None-Match, " +
 			"Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID, " +
 			"Mcp-Method, Mcp-Name, Mcp-Param-Action, " +
 			"PRIVATE-TOKEN, GITLAB-URL",
