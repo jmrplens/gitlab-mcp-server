@@ -29,7 +29,7 @@ const (
 // envDisable is the environment kill-switch: GITLAB_MCP_CLIENT_COMPAT=off
 // disables the middleware entirely (both stdio and HTTP modes read the process
 // env). Read through [config.Getenv], so the deprecated CLIENT_COMPAT spelling
-// keeps working until v3.
+// keeps working until 3.1.0.
 const envDisable = "CLIENT_COMPAT"
 
 // Enabled reports whether the compatibility middleware should be installed.
