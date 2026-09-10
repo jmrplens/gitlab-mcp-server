@@ -12,6 +12,15 @@ import (
 
 const groupMemberRoleSelfManagedHint = "group-level custom roles are deprecated on self-managed GitLab; use instance-level member roles with list_instance/create_instance on gitlab_member_role, or retry group-level roles only on GitLab.com Ultimate where supported"
 
+// The two group operations name themselves three times each: the deprecation
+// hint, the status hint and the captured-response reader all take the operation
+// name. The instance and delete operations name themselves twice and stay
+// literals, so these are the two the reader benefits from and not a sweep.
+const (
+	opListGroupMemberRoles  = "list group member roles"
+	opCreateGroupMemberRole = "create group member role"
+)
+
 // ListInstanceInput holds parameters for listing instance member roles.
 type ListInstanceInput struct{}
 
@@ -354,12 +363,12 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, in ListGroupInp
 	roles, _, err := client.GL().MemberRolesService.ListMemberRoles(in.GroupID.String(), gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return ListOutput{}, toolutil.WrapErrWithHint("list group member roles", err, groupMemberRoleSelfManagedHint)
+			return ListOutput{}, toolutil.WrapErrWithHint(opListGroupMemberRoles, err, groupMemberRoleSelfManagedHint)
 		}
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list group member roles", err, http.StatusForbidden,
+		return ListOutput{}, toolutil.WrapErrWithStatusHint(opListGroupMemberRoles, err, http.StatusForbidden,
 			"requires Owner role on the group + Ultimate license; group-level custom roles are available on GitLab.com Ultimate; verify group_id with gitlab_group_list")
 	}
-	return capturedRoleList("list group member roles", roles, captured)
+	return capturedRoleList(opListGroupMemberRoles, roles, captured)
 }
 
 // CreateInstance creates a new instance-level custom member role via
@@ -411,12 +420,12 @@ func CreateGroup(ctx context.Context, client *gitlabclient.Client, in CreateGrou
 	role, _, err := client.GL().MemberRolesService.CreateMemberRole(in.GroupID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint("create group member role", err, groupMemberRoleSelfManagedHint)
+			return Output{}, toolutil.WrapErrWithHint(opCreateGroupMemberRole, err, groupMemberRoleSelfManagedHint)
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("create group member role", err, http.StatusBadRequest,
+		return Output{}, toolutil.WrapErrWithStatusHint(opCreateGroupMemberRole, err, http.StatusBadRequest,
 			"requires Owner + Ultimate; base_access_level 10/15/20/25/30/40/50 (0, 5=Minimal access and 60=Admin are not valid); name unique within group; permissions must be valid; group_id must reference a top-level group")
 	}
-	return capturedRoleOne("create group member role", role, captured)
+	return capturedRoleOne(opCreateGroupMemberRole, role, captured)
 }
 
 // DeleteInstance deletes an instance-level custom member role via the
