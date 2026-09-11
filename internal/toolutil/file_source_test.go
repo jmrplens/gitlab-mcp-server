@@ -1,6 +1,7 @@
 package toolutil
 
 import (
+	"bytes"
 	"encoding/base64"
 	"io"
 	"os"
@@ -178,6 +179,67 @@ func TestFileOrBase64_Base64SizeLimit(t *testing.T) {
 			t.Errorf("OpenFileOrBase64Source oversized err = %v, want the pre-decode size refusal", err)
 		}
 	})
+}
+
+// TestFileOrBase64_NoLimitConfigured_DecodesWhateverArrives verifies that a
+// MaxFileSize of zero means unlimited on the content_base64 branch, as it
+// already does on the file_path branch.
+//
+// Neither of the two checks that enforce the limit — the cheap one against
+// base64.DecodedLen before decoding and the exact one after it — may read "no
+// limit" as a limit of zero bytes, which would refuse every inline payload a
+// deployment that configured no maximum ever sends.
+func TestFileOrBase64_NoLimitConfigured_DecodesWhateverArrives(t *testing.T) {
+	original := GetUploadConfig()
+	SetUploadConfig(0)
+	t.Cleanup(func() { SetUploadConfig(original.MaxFileSize) })
+
+	payload := strings.Repeat("payload", 64)
+	encoded := base64.StdEncoding.EncodeToString([]byte(payload))
+
+	reader, size, cleanup, err := OpenFileOrBase64Source("op", "", encoded)
+	if err != nil {
+		t.Fatalf("OpenFileOrBase64Source() error = %v, want nil with no configured limit", err)
+	}
+	defer cleanup()
+	if size != int64(len(payload)) {
+		t.Errorf("size = %d, want %d", size, len(payload))
+	}
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("io.ReadAll() error = %v, want nil", err)
+	}
+	if string(data) != payload {
+		t.Errorf("read %d bytes, want the whole %d-byte payload", len(data), len(payload))
+	}
+}
+
+// TestNewLimitedFileReader_DrawsAtMostOneByteBeyondTheLimit verifies that the
+// reader stops pulling from its source as soon as it can prove the source is
+// over the limit, whatever buffer the caller handed it.
+//
+// The byte past the limit is the proof, and it is also the whole budget. A
+// source that lies about its size — a procfs entry reports zero and yields
+// whatever the kernel has — would otherwise be drained into the caller's
+// buffer in full before the refusal, which is the read the limit exists to
+// prevent rather than merely to report.
+func TestNewLimitedFileReader_DrawsAtMostOneByteBeyondTheLimit(t *testing.T) {
+	const maxSize = 8
+	const sourceSize = 4096
+	source := bytes.NewReader(bytes.Repeat([]byte("x"), sourceSize))
+	reader := newLimitedFileReader("op", source, maxSize)
+
+	if n, err := reader.Read(make([]byte, 4)); n != 4 || err != nil {
+		t.Fatalf("first Read() = %d, %v; want 4, nil", n, err)
+	}
+	_, err := reader.Read(make([]byte, sourceSize))
+	if err == nil || !strings.Contains(err.Error(), "op: file exceeds maximum allowed size") {
+		t.Fatalf("second Read() error = %v, want the op-prefixed size refusal", err)
+	}
+	if drawn := sourceSize - source.Len(); drawn > maxSize+1 {
+		t.Errorf("the reader drew %d bytes from the source, want at most %d: the limit plus the byte that proves it was passed",
+			drawn, maxSize+1)
+	}
 }
 
 // TestOpenFileOrBase64Source_ZeroStatSizeFile_Bounded verifies that the

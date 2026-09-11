@@ -25,20 +25,20 @@ func ResourceTemplateVariables(template string) ([]string, error) {
 	var names []string
 	rest := template
 	for {
-		open := strings.IndexByte(rest, '{')
-		if open == -1 {
+		_, afterOpen, opened := strings.Cut(rest, "{")
+		if !opened {
 			return names, nil
 		}
-		closing := strings.IndexByte(rest[open:], '}')
-		if closing == -1 {
-			return nil, fmt.Errorf("resource template %q has an unterminated variable at %q", template, rest[open:])
+		name, afterClose, closed := strings.Cut(afterOpen, "}")
+		if !closed {
+			return nil, fmt.Errorf("resource template %q has an unterminated variable at %q", template, "{"+afterOpen)
 		}
-		name := strings.TrimPrefix(rest[open+1:open+closing], "+")
+		name = strings.TrimPrefix(name, "+")
 		if name == "" {
 			return nil, fmt.Errorf("resource template %q has a variable with no name", template)
 		}
 		names = append(names, name)
-		rest = rest[open+closing+1:]
+		rest = afterClose
 	}
 }
 
