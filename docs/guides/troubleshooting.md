@@ -205,7 +205,7 @@ The `WWW-Authenticate: Bearer` header carries a `resource_metadata` URL. Fetch i
 curl -s https://mcp.example.com/.well-known/oauth-protected-resource | jq .
 ```
 
-Read the fields rather than hard-coding them: `resource` is the identifier this deployment is known by, `authorization_servers` is where to authorize, `scopes_supported` lists the scopes a client may authorize with (most capable first), and `resource_documentation` links the setup guide. A client that never fetches that document does not implement RFC 9728 discovery — send it a personal access token as `Authorization: Bearer glpat-…` instead; it is verified the same way. See [OAuth App Setup — The 401 challenge](oauth-app-setup.md#the-401-challenge) for what the `scope` hint in the challenge means.
+Read the fields rather than hard-coding them: `resource` is the identifier this deployment is known by, `authorization_servers` is where to authorize, `scopes_supported` names the one scope a client should authorize with (`api`, or `read_api` on a read-only deployment), and `resource_documentation` links the setup guide. A client that never fetches that document does not implement RFC 9728 discovery — send it a personal access token as `Authorization: Bearer glpat-…` instead; it is verified the same way. See [OAuth App Setup — The 401 challenge](oauth-app-setup.md#the-401-challenge) for what the `scope` hint in the challenge means.
 
 The public instance at `https://mcp.jmrp.io/gitlab` answers exactly this way, so it is a working reference to compare a deployment against; its metadata lives at `https://mcp.jmrp.io/.well-known/oauth-protected-resource/gitlab`.
 

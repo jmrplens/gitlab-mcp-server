@@ -612,7 +612,7 @@ Para gestión de tokens sin configuración manual, usa el modo OAuth. Los usuari
 Los clientes MCP que soportan OAuth 2.1 (VS Code, Claude Code) descubren el servidor de autorización automáticamente vía `/.well-known/oauth-protected-resource`. Consulta [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) para crear la Aplicación OAuth de GitLab requerida.
 
 :::caution
-Los clientes deben configurarse con el `clientId` de una Aplicación OAuth de GitLab que tenga marcados los scopes `api` y `read_api` en un despliegue que puede escribir (clientes como Claude Code piden ambos, y GitLab rechaza la autorización con `invalid_scope` si a la aplicación le falta alguno), o solo `read_api` en uno que usa `--read-only` o `--safe-mode`, que no pide nada más. Sin `clientId`, los clientes recurren al Registro Dinámico de Clientes (DCR) que asigna el scope `mcp` en lugar de `api`, causando que la mayoría de las operaciones fallen. Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para ejemplos por cliente.
+Los clientes deben configurarse con el `clientId` de una Aplicación OAuth de GitLab que tenga marcado el scope que pide el despliegue: `api` en uno que puede escribir, `read_api` en uno que usa `--read-only` o `--safe-mode`. GitLab rechaza la autorización con `invalid_scope` si a la aplicación le falta el scope que pide el cliente. Sin `clientId`, los clientes recurren al Registro Dinámico de Clientes (DCR) que asigna el scope `mcp` en lugar de `api`, causando que la mayoría de las operaciones fallen. Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para ejemplos por cliente.
 :::
 
 ## GitLab autoalojado

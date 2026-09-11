@@ -65,26 +65,11 @@ func NewRejectedTokens(capacity int, ttl time.Duration) *RejectedTokens {
 }
 
 // Contains reports whether the token was rejected recently enough to answer
-// from memory. An expired entry is dropped on the way out, so a caller never
-// sees a stale rejection.
+// from memory. It is [RejectedTokens.Lookup] without the reason, so an expired
+// entry is dropped on the way out and a caller never sees a stale rejection.
 func (r *RejectedTokens) Contains(gitlabURL, token string) bool {
-	if r.max <= 0 || r.ttl <= 0 {
-		return false
-	}
-	key := rejectedKey(gitlabURL, token)
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	entry, ok := r.entries[key]
-	if !ok {
-		return false
-	}
-	if !time.Now().Before(entry.expiresAt) {
-		delete(r.entries, key)
-		return false
-	}
-	return true
+	_, ok := r.Lookup(gitlabURL, token)
+	return ok
 }
 
 // Record notes that GitLab rejected this token.
@@ -99,6 +84,9 @@ func (r *RejectedTokens) Record(gitlabURL, token string) {
 // RecordKind notes a refusal and why, so [RejectedTokens.Lookup] can reproduce
 // it rather than collapsing every cached refusal into GitLab's verdict.
 func (r *RejectedTokens) RecordKind(gitlabURL, token string, kind RejectionKind) {
+	// The cache's one "disabled" check, and the only one it needs: this is the
+	// only place an entry is stored, so a disabled cache stays empty and every
+	// read misses because there is nothing to find.
 	if r.max <= 0 || r.ttl <= 0 {
 		return
 	}
@@ -122,10 +110,12 @@ func (r *RejectedTokens) RecordKind(gitlabURL, token string, kind RejectionKind)
 
 // Lookup returns why a token was refused, and whether the refusal still
 // applies. An expired entry is dropped on the way out.
+//
+// There is no "disabled" check here. One used to sit at the top of this method
+// and of Contains, repeating the one in [RejectedTokens.RecordKind]; since a
+// disabled cache never stores anything, the lookup below misses on it anyway,
+// and the copies could change no answer.
 func (r *RejectedTokens) Lookup(gitlabURL, token string) (RejectionKind, bool) {
-	if r.max <= 0 || r.ttl <= 0 {
-		return RejectionInvalid, false
-	}
 	key := rejectedKey(gitlabURL, token)
 
 	r.mu.Lock()
@@ -135,8 +125,8 @@ func (r *RejectedTokens) Lookup(gitlabURL, token string) (RejectionKind, bool) {
 	if !ok {
 		return RejectionInvalid, false
 	}
-	// expired, not time.Now().After: the three other deadline checks in this
-	// file already treat the instant of the deadline as reached, and this one
+	// expired, not time.Now().After: the other deadline checks in this file
+	// already treat the instant of the deadline as reached, and this one
 	// disagreeing meant a refusal outlived its TTL by a clock tick, which on
 	// Windows is long enough to be observable.
 	if expired(entry.expiresAt) {

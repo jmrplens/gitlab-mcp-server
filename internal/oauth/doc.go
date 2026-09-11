@@ -32,8 +32,8 @@
 // [NewProtectedResourceHandler] serves OAuth Protected Resource Metadata so MCP
 // clients can discover the GitLab authorization servers this deployment
 // publishes — plural: a deployment may serve more than one instance, and the
-// RFC 9728 field is an array. It advertises the scopes a client may authorize
-// with, most capable first; see [SupportedScopes].
+// RFC 9728 field is an array. It advertises the one scope a client should
+// authorize with; see [SupportedScopes].
 //
 // Admission and recommendation are separate. [MinimumScope] is what a token
 // must carry to be served at all, checked with [SatisfiesMinimum], which

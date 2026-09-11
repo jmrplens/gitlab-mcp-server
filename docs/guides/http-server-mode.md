@@ -580,13 +580,13 @@ curl http://localhost:8080/.well-known/oauth-protected-resource/gitlab
   "resource": "https://mcp.example.com",
   "authorization_servers": ["https://gitlab.example.com"],
   "bearer_methods_supported": ["header"],
-  "scopes_supported": ["api", "read_api"],
+  "scopes_supported": ["api"],
   "resource_name": "GitLab MCP Server",
   "resource_documentation": "https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/"
 }
 ```
 
-`scopes_supported` lists `api` first and `read_api` second on a deployment that can write; under `--read-only` or `--safe-mode` it lists `read_api` alone. `resource_documentation` is whatever `--resource-documentation` names, and the project's HTTP server page when that flag is empty; `--resource-policy-uri` and `--resource-tos-uri` add `resource_policy_uri` and `resource_tos_uri`, which are omitted when unset.
+`scopes_supported` lists `api` on a deployment that can write and `read_api` under `--read-only` or `--safe-mode`, one scope and never both: a client asks GitLab for every scope listed, and GitLab refuses a request naming a scope the OAuth application does not have. A `read_api` token is still admitted by a writing deployment and served its read-only surface; the client that wants one names the scope itself. `resource_documentation` is whatever `--resource-documentation` names, and the project's HTTP server page when that flag is empty; `--resource-policy-uri` and `--resource-tos-uri` add `resource_policy_uri` and `resource_tos_uri`, which are omitted when unset.
 
 **Token caching:**
 

@@ -130,6 +130,12 @@ func TestRejectedTokens_Cleanup_DropsOnlyExpired(t *testing.T) {
 // bound turns the cache off without breaking: every method still works and
 // Contains never hits, so a deployment configured that way loses the
 // optimization rather than failing.
+//
+// The entries are counted before anything reads the cache. RecordKind is the
+// only "disabled" check left, and a read sweeps what has expired: an entry
+// stored with a lifetime of zero is expired the moment it lands, so counting
+// after a read would find nothing whether or not the zero-TTL cache had
+// stored it.
 func TestRejectedTokens_Disabled_NeverReportsAHit(t *testing.T) {
 	t.Parallel()
 
@@ -140,11 +146,11 @@ func TestRejectedTokens_Disabled_NeverReportsAHit(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			r.Record(testInstance, "gloas-bad")
+			if got := r.Len(); got != 0 {
+				t.Errorf("Len() = %d, want 0: a disabled cache must store nothing", got)
+			}
 			if r.Contains(testInstance, "gloas-bad") {
 				t.Error("a disabled cache must never report a hit")
-			}
-			if got := r.Len(); got != 0 {
-				t.Errorf("Len() = %d, want 0 for a disabled cache", got)
 			}
 		})
 	}
@@ -224,13 +230,6 @@ func TestRejectedTokens_IsScopedToTheInstance(t *testing.T) {
 	}
 }
 
-// TestRejectedTokens_Lookup_HonorsDisabledAndExpiry pins the two answers Lookup
-// gives without consulting a live entry.
-//
-// A disabled cache must answer "not refused" rather than its zero RejectionKind
-// as though it knew something, and an entry past its TTL must be dropped on the
-// way out so a token refused an hour ago is verified upstream again rather than
-// refused from memory forever.
 // TestRejectedTokens_Lookup_AnswersWhatItKnows verifies the two answers the
 // negative cache gives on an enabled cache that has not expired: the recorded
 // reason for a token it holds, and "nothing known" for one it does not.
@@ -276,6 +275,15 @@ func TestRejectedTokens_Lookup_AnswersWhatItKnows(t *testing.T) {
 	}
 }
 
+// TestRejectedTokens_Lookup_HonorsDisabledAndExpiry pins the two answers Lookup
+// gives without consulting a live entry.
+//
+// A disabled cache must answer "not refused" rather than its zero RejectionKind
+// as though it knew something, and an entry past its TTL must be dropped on the
+// way out so a token refused an hour ago is verified upstream again rather than
+// refused from memory forever. The disabled rows hold with no check of their
+// own in Lookup: RecordKind stores nothing on a disabled cache, so there is
+// nothing for Lookup to find.
 func TestRejectedTokens_Lookup_HonorsDisabledAndExpiry(t *testing.T) {
 	t.Parallel()
 
