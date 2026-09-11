@@ -272,20 +272,45 @@ func TestDelete_MissingKey(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{Key: "MY_VAR", Value: "secret", VariableType: "env_var", Protected: true, EnvironmentScope: "*"}
-	md := FormatOutputMarkdown(out)
-	if md == "" {
-		t.Fatal("FormatOutputMarkdown returned empty string")
+	want := "## Group Variable: MY_VAR\n\n" +
+		"- **Type**: env_var\n" +
+		"- **Protected**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Masked**: " + toolutil.EmojiCross + "\n" +
+		"- **Raw**: " + toolutil.EmojiCross + "\n" +
+		"- **Environment Scope**: *\n" +
+		"- **Value**: secret\n" +
+		groupVariableCardHints
+	if md := FormatOutputMarkdown(out); md != want {
+		t.Errorf("FormatOutputMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
+
+// groupVariableCardHints is the guidance section a group variable card closes
+// with. The two hints name the bare action words the shared renderer writes;
+// on the group surface those resolve to the group_update and group_delete
+// actions, which the hints do not spell.
+const groupVariableCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'update' to change this variable\n" +
+	"- Use action 'delete' to remove this variable\n"
 
 // TestFormatOutputMarkdown_Masked verifies the OutputMarkdown_Masked Markdown formatter for a representative output_masked input.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_Masked(t *testing.T) {
 	out := Output{Key: "MY_VAR", Value: "secret", Masked: true, VariableType: "env_var"}
+	want := "## Group Variable: MY_VAR\n\n" +
+		"- **Type**: env_var\n" +
+		"- **Protected**: " + toolutil.EmojiCross + "\n" +
+		"- **Masked**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Raw**: " + toolutil.EmojiCross + "\n" +
+		"- **Value**: [masked]\n" +
+		groupVariableCardHints
 	md := FormatOutputMarkdown(out)
-	if md == "" {
-		t.Fatal("FormatOutputMarkdown returned empty string")
+	if md != want {
+		t.Errorf("FormatOutputMarkdown(masked)\n got %q\nwant %q", md, want)
+	}
+	if strings.Contains(md, "secret") {
+		t.Errorf("a masked variable's value reached the Markdown:\n%s", md)
 	}
 }
 
@@ -297,9 +322,9 @@ func TestFormatListMarkdown_Empty_NilVariables(t *testing.T) {
 		Variables:  nil,
 		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 20, TotalItems: 0, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
-	if md == "" {
-		t.Fatal("FormatListMarkdown returned empty string")
+	const want = "No group CI/CD variables found.\n"
+	if md := FormatListMarkdown(out); md != want {
+		t.Errorf("FormatListMarkdown(nil variables)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -311,11 +336,22 @@ func TestFormatListMarkdown(t *testing.T) {
 		Variables:  []Output{{Key: "MY_VAR", VariableType: "env_var", Protected: true, EnvironmentScope: "*"}},
 		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 20, TotalItems: 1, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
-	if md == "" {
-		t.Fatal("FormatListMarkdown returned empty string")
+	want := "## Group CI/CD Variables (1)\n\n" +
+		"| Key | Type | Protected | Masked | Scope |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| MY_VAR | env_var | " + toolutil.EmojiSuccess + " | " + toolutil.EmojiCross + " | * |\n" +
+		"\nPage 1 of 1 | 1 items total | 20 per page\n" +
+		groupVariableListHints
+	if md := FormatListMarkdown(out); md != want {
+		t.Errorf("FormatListMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
+
+// groupVariableListHints is the guidance section the group variable list
+// closes with.
+const groupVariableListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'get' with key for full details\n" +
+	"- Use action 'create' to add a new group variable\n"
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
@@ -897,22 +933,15 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
-
-	for _, want := range []string{
-		"## Group CI/CD Variables (2)",
-		"| Key |",
-		"| --- |",
-		"| DB_HOST |",
-		"| API_KEY |",
-		"env_var",
-		"production",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Group CI/CD Variables (2)\n\n" +
+		"| Key | Type | Protected | Masked | Scope |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| DB_HOST | env_var | " + toolutil.EmojiCross + " | " + toolutil.EmojiCross + " | * |\n" +
+		"| API_KEY | env_var | " + toolutil.EmojiSuccess + " | " + toolutil.EmojiSuccess + " | production |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		groupVariableListHints
+	if md := FormatListMarkdown(out); md != want {
+		t.Errorf("FormatListMarkdown(with variables)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -920,12 +949,9 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No group CI/CD variables found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| Key |") {
-		t.Error("should not contain table header when empty")
+	const want = "No group CI/CD variables found.\n"
+	if md := FormatListMarkdown(ListOutput{}); md != want {
+		t.Errorf("FormatListMarkdown(empty)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -939,9 +965,9 @@ func TestFormatListMarkdown_EscapesTableCells(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
-	if strings.Contains(md, "| MY|VAR |") {
-		t.Errorf("pipe in key should be escaped:\n%s", md)
+	const wantRow = "| MY&#124;VAR | env_var | " + toolutil.EmojiCross + " | " + toolutil.EmojiCross + " | scope&#124;test |\n"
+	if md := FormatListMarkdown(out); !strings.Contains(md, wantRow) {
+		t.Errorf("FormatListMarkdown() missing %q:\n%s", wantRow, md)
 	}
 }
 

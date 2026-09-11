@@ -864,7 +864,7 @@ func TestFormatPipeline_DetailMarkdown(t *testing.T) {
 		YamlErrors: "", User: &toolutil.BasicUserOutput{Username: "admin"}, WebURL: "https://gl.example.com/p/100",
 	}
 	md := pipelines.FormatDetailMarkdown(p)
-	checks := []string{"Pipeline #100", "success", "**Duration**: 120s", "**Coverage**: 85.5%", "**User**: admin"}
+	checks := []string{"Pipeline #100", "success", "**Duration**: 120s", "**Coverage**: 85.5%", "**User**: @admin"}
 	for _, c := range checks {
 		t.Run(c, func(t *testing.T) {
 			if !strings.Contains(md, c) {
@@ -1305,7 +1305,9 @@ func TestFormatJob_TraceMarkdown(t *testing.T) {
 	t.Run("truncated trace", func(t *testing.T) {
 		tr := jobs.TraceOutput{JobID: 99, Trace: "big output", Truncated: true}
 		md := jobs.FormatTraceMarkdown(tr)
-		if !strings.Contains(md, "truncated") {
+		// The note names the end that is missing: the log is cut at the first
+		// 100 KB and a failure is almost always at the end of it.
+		if !strings.Contains(md, "Showing the first 100 KB of the log.") {
 			t.Error("missing truncation warning")
 		}
 	})

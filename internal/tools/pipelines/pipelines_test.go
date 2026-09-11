@@ -1404,7 +1404,16 @@ func TestGetLatest_WithRef(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithPipelines verifies FormatListMarkdown when with pipelines.
+// listHints is the guidance section every pipeline list closes with.
+const listHints = "\n---\n💡 **Next steps:**\n" +
+	"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+	"- Use action 'pipeline.get' to see one pipeline in full\n" +
+	"- Use action 'job.list' to see the jobs of a pipeline\n"
+
+// TestFormatListMarkdown_WithPipelines checks the whole list rendering: the
+// heading counting the total GitLab reported, one linked row per pipeline with
+// its status glyph and abbreviated SHA, the pagination footer, and the
+// guidance section.
 func TestFormatListMarkdown_WithPipelines(t *testing.T) {
 	out := ListOutput{
 		Pipelines: []Output{
@@ -1413,54 +1422,49 @@ func TestFormatListMarkdown_WithPipelines(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
-
-	for _, want := range []string{
-		"## Pipelines (2)",
-		"| ID |",
-		"[#1]",
-		"[#2]",
-		"abc123de", // SHA truncated to 8 chars
-		"short",    // SHA shorter than 8 kept as-is
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Pipelines (2)\n\n" +
+		"| ID | Status | Source | Ref | SHA |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| [#1](https://gitlab.example.com/-/pipelines/1) | ✅ success | push | main | abc123de |\n" +
+		"| [#2](https://gitlab.example.com/-/pipelines/2) | ❌ failed | web | develop | short |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		listHints
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("FormatListMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty checks that an empty page is the one sentence
+// and nothing else: no heading counting zero above it, and no table header.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{
 		Pipelines:  []Output{},
 		Pagination: toolutil.PaginationOutput{},
 	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "No pipelines found") {
-		t.Errorf("expected 'No pipelines found' in markdown:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+	const want = "No pipelines found.\n"
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("FormatListMarkdown(empty)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_ClickablePipelineLinks verifies that pipeline IDs
-// in the list are rendered as clickable Markdown links [#ID](weburl).
-func TestFormatListMarkdown_ClickablePipelineLinks(t *testing.T) {
+// TestFormatListMarkdown_KeysetPageCountsTheRowsShown checks the heading of a
+// keyset page, which carries no total: it counts the rows shown and says more
+// follow, rather than the "(0)" a missing total used to print above a table of
+// rows.
+func TestFormatListMarkdown_KeysetPageCountsTheRowsShown(t *testing.T) {
 	out := ListOutput{
 		Pipelines: []Output{
-			{
-				ID: 42, Status: "success", Source: "push", Ref: "main", SHA: "abc12345",
-				WebURL: "https://gitlab.example.com/-/pipelines/42",
-			},
+			{ID: 42, Status: "running", Source: "push", Ref: "main", SHA: "abc12345", WebURL: "https://gitlab.example.com/-/pipelines/42"},
 		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1},
+		Pagination: toolutil.PaginationOutput{HasMore: true},
 	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "[#42](https://gitlab.example.com/-/pipelines/42)") {
-		t.Errorf("expected clickable pipeline link, got:\n%s", md)
+	want := "## Pipelines (1 shown, more available)\n\n" +
+		"| ID | Status | Source | Ref | SHA |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| [#42](https://gitlab.example.com/-/pipelines/42) | 🔵 running | push | main | abc12345 |\n" +
+		listHints
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("FormatListMarkdown(keyset)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1497,32 +1501,38 @@ func TestFormatDetailMarkdown_Full(t *testing.T) {
 		CommittedAt: "2026-02-28T09:00:00Z",
 		User:        &toolutil.BasicUserOutput{Username: "testuser"},
 	}
-	md := FormatDetailMarkdown(out)
-
-	for _, want := range []string{
-		"Pipeline #99",
-		"success",
-		"**Source**: push",
-		"**Ref**: main (tag: true)",
-		"**SHA**: abc123",
-		"**Before SHA**: 000",
-		"**Name**: Full Pipeline",
-		"**Duration**: 300s",
-		"**Queued**: 15s",
-		"**Coverage**: 92.5%",
-		"**YAML Errors**: some error",
-		"**User**: testuser",
-		"**URL**:",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## ✅ Pipeline #99: success\n\n" +
+		"- **IID**: 99\n" +
+		"- **Source**: push\n" +
+		"- **Ref**: main\n" +
+		"- **Tag**: ✅\n" +
+		"- **SHA**: `abc123`\n" +
+		"- **Before SHA**: `000`\n" +
+		"- **Name**: Full Pipeline\n" +
+		"- **Detailed Status**: passed\n" +
+		"- **Duration**: 300s\n" +
+		"- **Queued**: 15s\n" +
+		"- **Coverage**: 92.5%\n" +
+		"- **YAML Errors**: some error\n" +
+		"- **User**: @testuser\n" +
+		"- **Created**: 1 Mar 2026 10:00 UTC\n" +
+		"- **Started**: 1 Mar 2026 10:00 UTC\n" +
+		"- **Finished**: 1 Mar 2026 10:05 UTC\n" +
+		"- **URL**: [https://gitlab.example.com/-/pipelines/99](https://gitlab.example.com/-/pipelines/99)\n" +
+		detailHints
+	if got := FormatDetailMarkdown(out); got != want {
+		t.Errorf("FormatDetailMarkdown(full)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatDetailMarkdown_Minimal verifies FormatDetailMarkdown when minimal.
+// detailHints is the guidance section the pipeline card closes with.
+const detailHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'job.list' to see the jobs of this pipeline\n" +
+	"- Use action 'pipeline.variables' to see the variables it ran with\n" +
+	"- Use action 'pipeline.test_report' to see its test results\n"
+
+// TestFormatDetailMarkdown_Minimal checks that a pipeline GitLab sent little
+// about renders only the rows it answered: no label stands without a value.
 func TestFormatDetailMarkdown_Minimal(t *testing.T) {
 	out := DetailOutput{
 		ID:     1,
@@ -1532,23 +1542,103 @@ func TestFormatDetailMarkdown_Minimal(t *testing.T) {
 		SHA:    "xyz",
 		WebURL: "https://gitlab.example.com/-/pipelines/1",
 	}
-	md := FormatDetailMarkdown(out)
-
-	if !strings.Contains(md, "Pipeline #1") {
-		t.Errorf("missing header:\n%s", md)
+	want := "## 🟡 Pipeline #1: pending\n\n" +
+		"- **IID**: 0\n" +
+		"- **Source**: web\n" +
+		"- **Ref**: dev\n" +
+		"- **Tag**: ❌\n" +
+		"- **SHA**: `xyz`\n" +
+		"- **URL**: [https://gitlab.example.com/-/pipelines/1](https://gitlab.example.com/-/pipelines/1)\n" +
+		detailHints
+	if got := FormatDetailMarkdown(out); got != want {
+		t.Errorf("FormatDetailMarkdown(minimal)\n got %q\nwant %q", got, want)
 	}
-	for _, absent := range []string{
-		"**Before SHA**",
-		"**Name**",
-		"**Duration**",
-		"**Queued**",
-		"**Coverage**",
-		"**YAML Errors**",
-		"**User**",
-	} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
+}
+
+// TestFormatDetailMarkdown_ArchivedIsMarked checks that an archived pipeline
+// says so twice over — in the heading and as a row — since an archived
+// pipeline can be neither retried nor cancelled and nothing else in the card
+// would tell a reader that.
+func TestFormatDetailMarkdown_ArchivedIsMarked(t *testing.T) {
+	out := DetailOutput{
+		ID:       7,
+		Status:   "success",
+		Ref:      "main",
+		SHA:      "abc",
+		Archived: true,
+		WebURL:   "https://gitlab.example.com/-/pipelines/7",
+	}
+	want := "## ✅ Pipeline #7: success 📦\n\n" +
+		"- **IID**: 0\n" +
+		"- **Ref**: main\n" +
+		"- **Tag**: ❌\n" +
+		"- **SHA**: `abc`\n" +
+		"- 📦 **Archived**\n" +
+		"- **URL**: [https://gitlab.example.com/-/pipelines/7](https://gitlab.example.com/-/pipelines/7)\n" +
+		detailHints
+	if got := FormatDetailMarkdown(out); got != want {
+		t.Errorf("FormatDetailMarkdown(archived)\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestFormatDetailMarkdown_HostileValuesStayInTheirRow checks what a value
+// GitLab could carry does to the card: a ref that ends a table cell, a name
+// that opens a heading and a SHA that spells an HTML anchor all stay inside
+// the row that shows them.
+//
+// The SHA is a code span, and a code span's content is literal: the anchor is
+// shown as the text it is, and MdCodeSpan sizes the fence so the value cannot
+// close the span it sits in. The runtime scan reports the anchor's bytes as a
+// raw tag because it reads the line rather than the span; the assertion below
+// is what the reader actually sees.
+func TestFormatDetailMarkdown_HostileValuesStayInTheirRow(t *testing.T) {
+	out := DetailOutput{
+		ID:     4,
+		Status: "success",
+		Ref:    "a|b",
+		SHA:    `<a href="http://attacker.invalid">click</a>`,
+		Name:   "x\r\n## injected heading",
+		WebURL: "https://gitlab.example.com/-/pipelines/4",
+	}
+	want := "## ✅ Pipeline #4: success\n\n" +
+		"- **IID**: 0\n" +
+		"- **Ref**: a&#124;b\n" +
+		"- **Tag**: ❌\n" +
+		"- **SHA**: `<a href=\"http://attacker.invalid\">click</a>`\n" +
+		"- **Name**: x ## injected heading\n" +
+		"- **URL**: [https://gitlab.example.com/-/pipelines/4](https://gitlab.example.com/-/pipelines/4)\n" +
+		detailHints
+	if got := FormatDetailMarkdown(out); got != want {
+		t.Errorf("FormatDetailMarkdown(hostile)\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestFormatDetailMarkdown_DetailedStatusOnlyWhenItSaysMore checks that the
+// detailed status is written only when it differs from the status word already
+// on the card: GitLab sends "success" as "passed" for every successful
+// pipeline, and a row repeating that says nothing.
+func TestFormatDetailMarkdown_DetailedStatusOnlyWhenItSaysMore(t *testing.T) {
+	base := DetailOutput{ID: 3, Status: "failed", Ref: "main", SHA: "abc", WebURL: "https://gitlab.example.com/-/pipelines/3"}
+	cases := []struct {
+		name  string
+		label string
+		want  string
+	}{
+		{name: "same word", label: "Failed", want: ""},
+		{name: "says more", label: "failed (allowed to fail)", want: "- **Detailed Status**: failed (allowed to fail)\n"},
+		{name: "absent", label: "", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := base
+			out.DetailedStatus = &StatusOutput{Label: tc.label}
+			md := FormatDetailMarkdown(out)
+			row := "- **Detailed Status**: " + tc.label + "\n"
+			if tc.want == "" && strings.Contains(md, "**Detailed Status**") {
+				t.Errorf("detailed status row written for label %q:\n%s", tc.label, md)
+			}
+			if tc.want != "" && !strings.Contains(md, row) {
+				t.Errorf("missing %q:\n%s", row, md)
 			}
 		})
 	}
@@ -1566,37 +1656,25 @@ func TestFormatVariablesMarkdown_WithData(t *testing.T) {
 			{Key: "SECRET_FILE", Value: "/tmp/secret", VariableType: "file"},
 		},
 	}
-	md := FormatVariablesMarkdown(out)
-
-	for _, want := range []string{
-		"## Pipeline Variables (2)",
-		"| Key |",
-		"CI_VAR",
-		"SECRET_FILE",
-		"env_var",
-		"file",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Pipeline Variables (2)\n\n" +
+		"| Key | Value | Type |\n" +
+		"| --- | --- | --- |\n" +
+		"| CI_VAR | hello | env_var |\n" +
+		"| SECRET_FILE | /tmp/secret | file |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'pipeline.get' to see the pipeline these variables ran\n"
+	if got := FormatVariablesMarkdown(out); got != want {
+		t.Errorf("FormatVariablesMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatVariablesMarkdown_Empty verifies FormatVariablesMarkdown when empty.
+// TestFormatVariablesMarkdown_Empty checks that a pipeline with no variables
+// renders the one sentence: the heading counting zero above it said the same
+// thing twice.
 func TestFormatVariablesMarkdown_Empty(t *testing.T) {
-	out := VariablesOutput{Variables: nil}
-	md := FormatVariablesMarkdown(out)
-
-	if !strings.Contains(md, "## Pipeline Variables (0)") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	if !strings.Contains(md, "No pipeline variables found") {
-		t.Errorf("expected 'No pipeline variables found' in markdown:\n%s", md)
-	}
-	if strings.Contains(md, "| Key |") {
-		t.Error("should not contain table header when empty")
+	const want = "No pipeline variables found.\n"
+	if got := FormatVariablesMarkdown(VariablesOutput{Variables: nil}); got != want {
+		t.Errorf("FormatVariablesMarkdown(empty)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1618,44 +1696,42 @@ func TestFormatTestReportMarkdown_WithSuites(t *testing.T) {
 			{Name: "Integration", TotalTime: 60.5, TotalCount: 5, SuccessCount: 4, FailedCount: 0, SkippedCount: 1, ErrorCount: 0},
 		},
 	}
-	md := FormatTestReportMarkdown(out)
-
-	for _, want := range []string{
-		"## Pipeline Test Report",
-		"**Total**: 10 tests",
-		"120.50s",
-		"**Passed**: 8",
-		"**Failed**: 1",
-		"**Skipped**: 1",
-		"**Errors**: 0",
-		"### Test Suites",
-		"| Suite |",
-		"Unit Tests",
-		"Integration",
-		"60.00s",
-		"60.50s",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Pipeline Test Report\n\n" +
+		"- **Total**: 10\n" +
+		"- **Time**: 120.50s\n" +
+		"- **Passed**: 8\n" +
+		"- **Failed**: 1\n" +
+		"- **Skipped**: 1\n" +
+		"- **Errors**: 0\n" +
+		"\n### Test Suites\n\n" +
+		"| Suite | Total | Passed | Failed | Skipped | Errors | Time |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| Unit Tests | 5 | 4 | 1 | 0 | 0 | 60.00s |\n" +
+		"| Integration | 5 | 4 | 0 | 1 | 0 | 60.50s |\n" +
+		reportHints
+	if got := FormatTestReportMarkdown(out); got != want {
+		t.Errorf("FormatTestReportMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatTestReportMarkdown_Empty verifies FormatTestReportMarkdown when empty.
-func TestFormatTestReportMarkdown_Empty(t *testing.T) {
-	out := TestReportOutput{}
-	md := FormatTestReportMarkdown(out)
+// reportHints is the guidance section the full test report closes with.
+const reportHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'job.list' to see the jobs these suites ran in\n" +
+	"- Use action 'job.trace' to read the log of a failing job\n"
 
-	if !strings.Contains(md, "## Pipeline Test Report") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	if !strings.Contains(md, "**Total**: 0 tests") {
-		t.Errorf("expected zero counts:\n%s", md)
-	}
-	if strings.Contains(md, "### Test Suites") {
-		t.Error("should not contain suites section when empty")
+// TestFormatTestReportMarkdown_Empty checks that a report of zeros keeps every
+// count row — a zero is an answer GitLab gave — and opens no suites section.
+func TestFormatTestReportMarkdown_Empty(t *testing.T) {
+	want := "## Pipeline Test Report\n\n" +
+		"- **Total**: 0\n" +
+		"- **Time**: 0.00s\n" +
+		"- **Passed**: 0\n" +
+		"- **Failed**: 0\n" +
+		"- **Skipped**: 0\n" +
+		"- **Errors**: 0\n" +
+		reportHints
+	if got := FormatTestReportMarkdown(TestReportOutput{}); got != want {
+		t.Errorf("FormatTestReportMarkdown(empty)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1676,38 +1752,43 @@ func TestFormatTestReportSummaryMarkdown_WithSuites(t *testing.T) {
 			{Name: "Unit", TotalTime: 100.0, TotalCount: 10, SuccessCount: 9, FailedCount: 1, SkippedCount: 0, ErrorCount: 0, BuildIDs: []int64{101, 102}},
 		},
 	}
-	md := FormatTestReportSummaryMarkdown(out)
-
-	for _, want := range []string{
-		"## Pipeline Test Report Summary",
-		"**Total**: 20 tests",
-		"200.00s",
-		"**Passed**: 18",
-		"### Test Suites",
-		"Unit",
-		"100.00s",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Pipeline Test Report Summary\n\n" +
+		"- **Total**: 20\n" +
+		"- **Time**: 200.00s\n" +
+		"- **Passed**: 18\n" +
+		"- **Failed**: 1\n" +
+		"- **Skipped**: 1\n" +
+		"- **Errors**: 0\n" +
+		"\n### Test Suites\n\n" +
+		"| Suite | Total | Passed | Failed | Skipped | Errors | Time |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| Unit | 10 | 9 | 1 | 0 | 0 | 100.00s |\n" +
+		summaryHints
+	if got := FormatTestReportSummaryMarkdown(out); got != want {
+		t.Errorf("FormatTestReportSummaryMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatTestReportSummaryMarkdown_Empty verifies FormatTestReportSummaryMarkdown when empty.
-func TestFormatTestReportSummaryMarkdown_Empty(t *testing.T) {
-	out := TestReportSummaryOutput{}
-	md := FormatTestReportSummaryMarkdown(out)
+// summaryHints is the guidance section the summary closes with. It offers the
+// full report's per-suite totals rather than "full test details", which the
+// full report does not carry either.
+const summaryHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'pipeline.test_report' to see the same per-suite totals in the full report\n" +
+	"- Use action 'job.list' to investigate failures job by job\n"
 
-	if !strings.Contains(md, "## Pipeline Test Report Summary") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	if !strings.Contains(md, "**Total**: 0 tests") {
-		t.Errorf("expected zero counts:\n%s", md)
-	}
-	if strings.Contains(md, "### Test Suites") {
-		t.Error("should not contain suites section when empty")
+// TestFormatTestReportSummaryMarkdown_Empty checks the summary of a pipeline
+// that ran no tests: every count row stays and no suites section opens.
+func TestFormatTestReportSummaryMarkdown_Empty(t *testing.T) {
+	want := "## Pipeline Test Report Summary\n\n" +
+		"- **Total**: 0\n" +
+		"- **Time**: 0.00s\n" +
+		"- **Passed**: 0\n" +
+		"- **Failed**: 0\n" +
+		"- **Skipped**: 0\n" +
+		"- **Errors**: 0\n" +
+		summaryHints
+	if got := FormatTestReportSummaryMarkdown(TestReportSummaryOutput{}); got != want {
+		t.Errorf("FormatTestReportSummaryMarkdown(empty)\n got %q\nwant %q", got, want)
 	}
 }
 

@@ -134,11 +134,20 @@ func TestListUpcomingJobs_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// TestFormatListMarkdown checks the whole list rendering. The two next steps
+// are named separately: reading one group and changing its process mode are
+// different actions, and one hint offering both named a tool that only reads.
 func TestFormatListMarkdown(t *testing.T) {
+	want := "## Resource Groups (1)\n\n" +
+		"| ID | Key | Process Mode |\n" +
+		"| --- | --- | --- |\n" +
+		"| 1 | prod | unordered |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'pipeline.resource_group_get' to see one resource group in full\n" +
+		"- Use action 'pipeline.resource_group_edit' to change a group's process mode\n"
 	md := FormatListMarkdown(ListOutput{Groups: []ResourceGroupItem{{ID: 1, Key: "prod", ProcessMode: "unordered"}}})
-	if md == "" {
-		t.Error("expected non-empty markdown")
+	if md != want {
+		t.Errorf("FormatListMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -150,12 +159,9 @@ func TestFormatListMarkdown(t *testing.T) {
 
 // TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{Groups: nil})
-	if !strings.Contains(md, "No resource groups found") {
-		t.Errorf("expected empty message, got:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+	const want = "No resource groups found.\n"
+	if md := FormatListMarkdown(ListOutput{Groups: nil}); md != want {
+		t.Errorf("FormatListMarkdown(empty)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -166,17 +172,15 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // TestFormatGroupMarkdown verifies FormatGroupMarkdown.
 func TestFormatGroupMarkdown(t *testing.T) {
 	md := FormatGroupMarkdown(ResourceGroupItem{ID: 42, Key: "staging", ProcessMode: "oldest_first"})
-	for _, want := range []string{
-		"## Resource Group",
-		"**ID**: 42",
-		"**Key**: staging",
-		"**Process Mode**: oldest_first",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Resource Group: staging\n\n" +
+		"- **ID**: 42\n" +
+		"- **Key**: staging\n" +
+		"- **Process Mode**: oldest_first\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'pipeline.resource_group_upcoming_jobs' to see the jobs waiting on this group\n" +
+		"- Use action 'pipeline.resource_group_edit' to change its process mode\n"
+	if md != want {
+		t.Errorf("FormatGroupMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -192,32 +196,27 @@ func TestFormatJobsMarkdown_WithData(t *testing.T) {
 			{ID: 11, Name: "build", Status: "created", Stage: "build"},
 		},
 	})
-	for _, want := range []string{
-		"## Upcoming Jobs",
-		"| ID |",
-		"| 10 |",
-		"| 11 |",
-		"deploy",
-		"build",
-		"pending",
-		"created",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	// The status carries the glyph every job row in the tree shows, which this
+	// table was the one place not to.
+	want := "## Upcoming Jobs (2)\n\n" +
+		"| ID | Name | Status | Stage |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 10 | deploy | 🟡 pending | deploy |\n" +
+		"| 11 | build | 🆕 created | build |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'job.get' to see one of these jobs in full\n" +
+		"- Use action 'job.trace' to read a job's log\n" +
+		"- Use action 'pipeline.resource_group_list' to see the other resource groups of this project\n"
+	if md != want {
+		t.Errorf("FormatJobsMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
 // TestFormatJobsMarkdown_Empty verifies FormatJobsMarkdown when empty.
 func TestFormatJobsMarkdown_Empty(t *testing.T) {
-	md := FormatJobsMarkdown(ListUpcomingJobsOutput{Jobs: nil})
-	if !strings.Contains(md, "No upcoming jobs") {
-		t.Errorf("expected empty message, got:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+	const want = "No upcoming jobs found.\n"
+	if md := FormatJobsMarkdown(ListUpcomingJobsOutput{Jobs: nil}); md != want {
+		t.Errorf("FormatJobsMarkdown(empty)\n got %q\nwant %q", md, want)
 	}
 }
 

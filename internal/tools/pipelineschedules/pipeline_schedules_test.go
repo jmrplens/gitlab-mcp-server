@@ -1509,7 +1509,10 @@ func TestListTriggeredPipelines_OrderByAndSort(t *testing.T) {
 // toOutput — all optional fields (owner, timestamps)
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_AllOptionalFields verifies ToOutput when all optional fields.
+// TestToOutput_AllOptionalFields checks the whole card of a schedule GitLab
+// answered in full, the variables and inputs included: a reader deciding
+// whether to run a schedule needs to know which are set, and the card used to
+// show neither. The values never appear — a schedule variable may be a secret.
 func TestToOutput_AllOptionalFields(t *testing.T) {
 	out := FormatOutputMarkdown(Output{
 		ID:           1,
@@ -1518,34 +1521,41 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 		Cron:         "0 1 * * *",
 		CronTimezone: "UTC",
 		Active:       true,
-		Owner:        &OwnerOutput{Username: "admin"},
+		Owner:        &OwnerOutput{Username: "admin", WebURL: "https://gitlab.example.com/admin"},
 		LastPipeline: &LastPipelineOutput{ID: 99, Status: "success"},
+		Variables:    []VariableObject{{Key: "DEPLOY_TOKEN", Value: "s3cret", VariableType: "env_var"}, {Key: "CONFIG", Value: "x", VariableType: "file"}},
+		Inputs:       []InputObject{{Name: "environment", Value: "staging"}},
 		NextRunAt:    "2026-03-08T01:00:00Z",
 		CreatedAt:    "2026-01-01T00:00:00Z",
 		UpdatedAt:    "2026-03-07T12:00:00Z",
 	})
-
-	for _, want := range []string{
-		"## Pipeline Schedule #1",
-		"| Description | Nightly |",
-		"| Ref | main |",
-		"| Cron | `0 1 * * *` |",
-		"| Timezone | UTC |",
-		"| Active | ✅ |",
-		"| Next Run | 8 Mar 2026 01:00 UTC |",
-		"| Owner | admin |",
-		"| Last Pipeline |",
-		"#99 (success)",
-		"| Created | 1 Jan 2026 00:00 UTC |",
-		"| Updated | 7 Mar 2026 12:00 UTC |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(out, want) {
-				t.Errorf("markdown missing %q:\n%s", want, out)
-			}
-		})
+	want := "## Pipeline Schedule #1\n\n" +
+		"- **Description**: Nightly\n" +
+		"- **Ref**: main\n" +
+		"- **Cron**: `0 1 * * *`\n" +
+		"- **Timezone**: UTC\n" +
+		"- **Active**: ✅\n" +
+		"- **Next Run**: 8 Mar 2026 01:00 UTC\n" +
+		"- **Owner**: [@admin](https://gitlab.example.com/admin)\n" +
+		"- **Last Pipeline**: #99 (success)\n" +
+		"- **Variables**: DEPLOY_TOKEN (env_var), CONFIG (file)\n" +
+		"- **Inputs**: environment\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Updated**: 7 Mar 2026 12:00 UTC\n" +
+		scheduleCardHints
+	if out != want {
+		t.Errorf("FormatOutputMarkdown(all fields)\n got %q\nwant %q", out, want)
+	}
+	if strings.Contains(out, "s3cret") {
+		t.Errorf("a schedule variable's value reached the Markdown:\n%s", out)
 	}
 }
+
+// scheduleCardHints is the guidance section a schedule card closes with.
+const scheduleCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'pipeline.schedule_update' to change this schedule\n" +
+	"- Use action 'pipeline.schedule_run' to trigger it now\n" +
+	"- Use action 'pipeline.schedule_delete' to remove it\n"
 
 // ---------------------------------------------------------------------------
 // FormatOutputMarkdown
@@ -1559,7 +1569,9 @@ func TestFormatOutputMarkdown_ZeroID(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies FormatOutputMarkdown when minimal fields.
+// TestFormatOutputMarkdown_MinimalFields checks that a schedule GitLab said
+// little about renders only the rows it answered: no label stands without a
+// value.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:          5,
@@ -1568,22 +1580,14 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 		Cron:        "0 9 * * 1",
 		Active:      false,
 	})
-
-	if !strings.Contains(md, "## Pipeline Schedule #5") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	for _, absent := range []string{
-		"| Timezone |",
-		"| Next Run |",
-		"| Owner |",
-		"| Created |",
-		"| Updated |",
-	} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-			}
-		})
+	want := "## Pipeline Schedule #5\n\n" +
+		"- **Description**: Weekly\n" +
+		"- **Ref**: develop\n" +
+		"- **Cron**: `0 9 * * 1`\n" +
+		"- **Active**: ❌\n" +
+		scheduleCardHints
+	if md != want {
+		t.Errorf("FormatOutputMarkdown(minimal)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -1600,35 +1604,28 @@ func TestFormatListMarkdown_WithSchedules(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
-
-	for _, want := range []string{
-		"## Pipeline Schedules (2)",
-		"| ID |",
-		"| --- |",
-		"| 1 |",
-		"| 2 |",
-		"Nightly",
-		"Weekly",
-		"admin",
-		"user1",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	// The table carries no link, so the footer carries no instruction to keep
+	// links the reader cannot see.
+	want := "## Pipeline Schedules (2)\n\n" +
+		"| ID | Description | Ref | Cron | Active | Owner |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | Nightly | main | `0 1 * * *` | ✅ | @admin |\n" +
+		"| 2 | Weekly | develop | `0 9 * * 1` | ❌ | @user1 |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'pipeline.schedule_get' to see one schedule in full\n" +
+		"- Use action 'pipeline.schedule_create' to add a schedule\n"
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("FormatListMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty checks that an empty page is the one sentence
+// and nothing else.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No pipeline schedules found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+	const want = "No pipeline schedules found.\n"
+	if got := FormatListMarkdown(ListOutput{}); got != want {
+		t.Errorf("FormatListMarkdown(empty)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1636,32 +1633,35 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatVariableMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatVariableMarkdown_WithType verifies FormatVariableMarkdown when with type.
+// variableCardHints is the guidance section a schedule variable closes with.
+const variableCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'pipeline.schedule_edit_variable' to change this variable\n" +
+	"- Use action 'pipeline.schedule_delete_variable' to remove it\n"
+
+// TestFormatVariableMarkdown_WithType checks the whole card of one schedule
+// variable.
 func TestFormatVariableMarkdown_WithType(t *testing.T) {
 	md := FormatVariableMarkdown(VariableOutput{Key: "MY_VAR", Value: "hello", VariableType: "env_var"})
-
-	for _, want := range []string{
-		"## Pipeline Schedule Variable",
-		"**Key**: MY_VAR",
-		"**Value**: hello",
-		"**Type**: env_var",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Pipeline Schedule Variable\n\n" +
+		"- **Key**: MY_VAR\n" +
+		"- **Value**: hello\n" +
+		"- **Type**: env_var\n" +
+		variableCardHints
+	if md != want {
+		t.Errorf("FormatVariableMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatVariableMarkdown_WithoutType verifies FormatVariableMarkdown when without type.
+// TestFormatVariableMarkdown_WithoutType checks that a variable GitLab sent no
+// type for shows no type row rather than a label with nothing after it.
 func TestFormatVariableMarkdown_WithoutType(t *testing.T) {
 	md := FormatVariableMarkdown(VariableOutput{Key: "K", Value: "V"})
-	if strings.Contains(md, "**Type**") {
-		t.Error("should not contain Type when empty")
-	}
-	if !strings.Contains(md, "**Key**: K") {
-		t.Errorf("missing key:\n%s", md)
+	want := "## Pipeline Schedule Variable\n\n" +
+		"- **Key**: K\n" +
+		"- **Value**: V\n" +
+		variableCardHints
+	if md != want {
+		t.Errorf("FormatVariableMarkdown(no type)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -1678,34 +1678,29 @@ func TestFormatTriggeredPipelinesMarkdown_WithData(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatTriggeredPipelinesMarkdown(out)
-
-	for _, want := range []string{
-		"## Triggered Pipelines (2)",
-		"| ID |",
-		"| --- |",
-		"| [#100](https://example.com/100) |",
-		"| [#101](https://example.com/101) |",
-		"success",
-		"failed",
-		"schedule",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	// The status carries the glyph every pipeline row in the tree shows, which
+	// this table was the one place not to.
+	want := "## Triggered Pipelines (2)\n\n" +
+		"| ID | IID | Ref | Status | Source |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| [#100](https://example.com/100) | 10 | main | ✅ success | schedule |\n" +
+		"| [#101](https://example.com/101) | 11 | main | ❌ failed | schedule |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- Use action 'pipeline.get' to see one pipeline in full\n" +
+		"- Use action 'pipeline.schedule_list' to see the schedules of this project\n"
+	if got := FormatTriggeredPipelinesMarkdown(out); got != want {
+		t.Errorf("FormatTriggeredPipelinesMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatTriggeredPipelinesMarkdown_Empty verifies FormatTriggeredPipelinesMarkdown when empty.
+// TestFormatTriggeredPipelinesMarkdown_Empty checks that an empty page is the
+// one sentence and nothing else.
 func TestFormatTriggeredPipelinesMarkdown_Empty(t *testing.T) {
-	md := FormatTriggeredPipelinesMarkdown(TriggeredPipelinesListOutput{})
-	if !strings.Contains(md, "No triggered pipelines found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+	const want = "No triggered pipelines found.\n"
+	if got := FormatTriggeredPipelinesMarkdown(TriggeredPipelinesListOutput{}); got != want {
+		t.Errorf("FormatTriggeredPipelinesMarkdown(empty)\n got %q\nwant %q", got, want)
 	}
 }
 

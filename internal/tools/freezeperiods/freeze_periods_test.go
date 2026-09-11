@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const (
@@ -219,11 +220,23 @@ func TestFormatMarkdownString(t *testing.T) {
 		CronTimezone: "UTC",
 		CreatedAt:    "2026-01-01T00:00:00Z",
 	}
-	md := FormatMarkdownString(out)
-	if md == "" {
-		t.Fatal("expected non-empty markdown")
+	want := "## Freeze Period #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Start**: `" + testCronFreezeStart + "`\n" +
+		"- **End**: `0 7 * * 1`\n" +
+		"- **Timezone**: UTC\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		freezeCardHints
+	if md := FormatMarkdownString(out); md != want {
+		t.Errorf("FormatMarkdownString()\n got %q\nwant %q", md, want)
 	}
 }
+
+// freezeCardHints is the guidance section a freeze period card closes with.
+const freezeCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'environment.freeze_update' to change this freeze window\n" +
+	"- Use action 'environment.freeze_delete' to remove it\n" +
+	"- Use action 'environment.freeze_list' to see every freeze window of this project\n"
 
 // TestFormatListMarkdownString_Empty verifies the ListMarkdownString_Empty Markdown formatter for a representative liststring_empty input.
 // The test exercises the GET path of the underlying GitLab API call.
@@ -505,21 +518,36 @@ func TestFormatListMarkdownString_WithItems(t *testing.T) {
 			{ID: 2, FreezeStart: "0 0 * * 6", FreezeEnd: "0 0 * * 1", CronTimezone: "Europe/London"},
 		},
 	}
+	// Freeze periods are a collection of objects sharing columns, so they are a
+	// table: the list items they used to be put four values on one line and
+	// left the pagination footer to land after them.
+	want := "## Freeze Periods (2)\n\n" +
+		"| ID | Start | End | Timezone |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 1 | `0 23 * * 5` | `0 7 * * 1` | UTC |\n" +
+		"| 2 | `0 0 * * 6` | `0 0 * * 1` | Europe/London |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'environment.freeze_get' to see one freeze period in full\n" +
+		"- Use action 'environment.freeze_create' to add a freeze window\n"
+	if md := FormatListMarkdownString(out); md != want {
+		t.Errorf("FormatListMarkdownString()\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatListMarkdownString_CountsTheTotalGitLabReported checks the heading
+// of a page of a longer list: it counts what the response reports in all,
+// where it used to count the rows on the page and read as the whole list.
+func TestFormatListMarkdownString_CountsTheTotalGitLabReported(t *testing.T) {
+	out := ListOutput{
+		FreezePeriods: []Output{{ID: 1, FreezeStart: "0 23 * * 5", FreezeEnd: "0 7 * * 1", CronTimezone: "UTC"}},
+		Pagination:    toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 45, TotalPages: 45},
+	}
 	md := FormatListMarkdownString(out)
-	if md == "" {
-		t.Fatal("expected non-empty Markdown")
+	if !containsStr(md, "## Freeze Periods (45)\n") {
+		t.Errorf("heading does not count the reported total:\n%s", md)
 	}
-	if !containsStr(md, "Freeze Periods (2)") {
-		t.Error("expected header with count")
-	}
-	if !containsStr(md, "ID 1") {
-		t.Error("expected ID 1 in output")
-	}
-	if !containsStr(md, "ID 2") {
-		t.Error("expected ID 2 in output")
-	}
-	if !containsStr(md, "Europe/London") {
-		t.Error("expected timezone in output")
+	if !containsStr(md, "\nPage 1 of 45 | 45 items total | 1 per page\n") {
+		t.Errorf("pagination footer missing or misplaced:\n%s", md)
 	}
 }
 
@@ -561,12 +589,15 @@ func TestFormatMarkdownString_AllFields(t *testing.T) {
 		CronTimezone: "America/New_York",
 		CreatedAt:    "2026-01-01T00:00:00Z",
 	}
-	md := FormatMarkdownString(out)
-	if !containsStr(md, "America/New_York") {
-		t.Error("expected timezone in output")
-	}
-	if !containsStr(md, "1 Jan 2026 00:00 UTC") {
-		t.Error("expected created_at in output")
+	want := "## Freeze Period #5\n\n" +
+		"- **ID**: 5\n" +
+		"- **Start**: `0 23 * * 5`\n" +
+		"- **End**: `0 7 * * 1`\n" +
+		"- **Timezone**: America/New_York\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		freezeCardHints
+	if md := FormatMarkdownString(out); md != want {
+		t.Errorf("FormatMarkdownString(all fields)\n got %q\nwant %q", md, want)
 	}
 }
 

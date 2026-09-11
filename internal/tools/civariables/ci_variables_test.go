@@ -878,22 +878,17 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
-
-	for _, want := range []string{
-		"## CI/CD Variables (2)",
-		"| Key |",
-		"| --- |",
-		"| DB_HOST |",
-		"| API_KEY |",
-		"env_var",
-		testEnvScope,
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## CI/CD Variables (2)\n\n" +
+		"| Key | Type | Protected | Masked | Scope |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| DB_HOST | env_var | " + toolutil.EmojiCross + " | " + toolutil.EmojiCross + " | * |\n" +
+		"| API_KEY | env_var | " + toolutil.EmojiSuccess + " | " + toolutil.EmojiSuccess + " | " + testEnvScope + " |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'get' with a key to see variable details\n" +
+		"- Use action 'create' to add a new CI/CD variable\n"
+	if md := FormatListMarkdown(out); md != want {
+		t.Errorf("FormatListMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -901,12 +896,9 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No CI/CD variables found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| Key |") {
-		t.Error("should not contain table header when empty")
+	const want = "No CI/CD variables found.\n"
+	if md := FormatListMarkdown(ListOutput{}); md != want {
+		t.Errorf("FormatListMarkdown(empty)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -920,10 +912,10 @@ func TestFormatListMarkdown_EscapesTableCells(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
-	// Pipe chars in key/scope should be escaped to not break the table
-	if strings.Contains(md, "| MY|VAR |") {
-		t.Errorf("pipe in key should be escaped:\n%s", md)
+	// A pipe in the key or the scope must not break the row it sits in.
+	const wantRow = "| MY&#124;VAR | env_var | " + toolutil.EmojiCross + " | " + toolutil.EmojiCross + " | scope&#124;test |\n"
+	if md := FormatListMarkdown(out); !strings.Contains(md, wantRow) {
+		t.Errorf("FormatListMarkdown() missing %q:\n%s", wantRow, md)
 	}
 }
 

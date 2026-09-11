@@ -1,54 +1,98 @@
 package resourcegroups
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatListMarkdown renders resource groups as a compact Markdown table.
-func FormatListMarkdown(out ListOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Resource Groups\n\n")
-	if len(out.Groups) == 0 {
-		sb.WriteString("No resource groups found.\n")
-		return sb.String()
-	}
-	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Key", "Process Mode"))
-	for _, g := range out.Groups {
-		//gitlab:allow-unescaped g.ProcessMode: a resource group process mode GitLab picks from a fixed set (unordered, oldest_first, newest_first).
-		fmt.Fprintf(&sb, "| %d | %s | %s |\n", g.ID, toolutil.EscapeMdTableCell(g.Key), g.ProcessMode)
-	}
-	toolutil.WriteHints(&sb, "Use `gitlab_get_resource_group` to view details or edit process mode")
-	return sb.String()
-}
+// Canonical action IDs the hints name. They are the IDs the catalog builds
+// from the group that owns these actions, gitlab_pipeline, so a hint names
+// what every surface resolves.
+const (
+	hintActionResourceGroupGet          = "pipeline.resource_group_get"
+	hintActionResourceGroupEdit         = "pipeline.resource_group_edit"
+	hintActionResourceGroupList         = "pipeline.resource_group_list"
+	hintActionResourceGroupUpcomingJobs = "pipeline.resource_group_upcoming_jobs"
+	hintActionJobGet                    = "job.get"
+	hintActionJobTrace                  = "job.trace"
+)
 
-// FormatGroupMarkdown renders a single resource group summary.
-func FormatGroupMarkdown(g ResourceGroupItem) string {
+// FormatListMarkdown renders a project's resource groups as a Markdown table.
+//
+// The two next steps are named separately: reading one group and changing its
+// process mode are different actions, and one hint offering both named a tool
+// that only reads.
+func FormatListMarkdown(out ListOutput) string {
+	if len(out.Groups) == 0 {
+		return toolutil.EmptyMessage("resource groups")
+	}
 	var b strings.Builder
-	// The key is the resource_group name written in .gitlab-ci.yml.
-	fmt.Fprintf(&b, "## Resource Group\n\n- **ID**: %d\n- **Key**: %s\n- **Process Mode**: %s\n",
-		g.ID, toolutil.EscapeMdTableCell(g.Key), g.ProcessMode)
-	toolutil.WriteHints(&b, "Use `gitlab_list_resource_group_upcoming_jobs` to see upcoming jobs for this group")
+	toolutil.WriteListHeading(&b, "Resource Groups", len(out.Groups), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Key", "Process Mode"))
+	for _, g := range out.Groups {
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(g.ID, 10),
+			toolutil.EscapeMdTableCell(g.Key),
+			toolutil.EscapeMdTableCell(g.ProcessMode),
+		))
+	}
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(hintActionResourceGroupGet, "see one resource group in full"),
+		toolutil.HintAction(hintActionResourceGroupEdit, "change a group's process mode"),
+	)
 	return b.String()
 }
 
-// FormatJobsMarkdown renders upcoming resource-group jobs as a Markdown table.
+// FormatGroupMarkdown renders one resource group as the card of a single
+// object.
+func FormatGroupMarkdown(g ResourceGroupItem) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Resource Group: "+g.Key)
+	c.Int("ID", g.ID)
+	// The key is the resource_group name written in .gitlab-ci.yml.
+	c.Field("Key", g.Key)
+	c.Field("Process Mode", g.ProcessMode)
+	c.End(
+		toolutil.HintAction(hintActionResourceGroupUpcomingJobs, "see the jobs waiting on this group"),
+		toolutil.HintAction(hintActionResourceGroupEdit, "change its process mode"),
+	)
+	return b.String()
+}
+
+// FormatJobsMarkdown renders the jobs waiting on a resource group as a
+// Markdown table.
 func FormatJobsMarkdown(out ListUpcomingJobsOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Upcoming Jobs\n\n")
 	if len(out.Jobs) == 0 {
-		sb.WriteString("No upcoming jobs.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("upcoming jobs")
 	}
-	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Status", "Stage"))
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Upcoming Jobs", len(out.Jobs), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Status", "Stage"))
 	for _, j := range out.Jobs {
-		//gitlab:allow-unescaped j.Status: a job status, GitLab's own build state (created, running, success, failed and the rest).
-		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", j.ID, toolutil.EscapeMdTableCell(j.Name), j.Status, toolutil.EscapeMdTableCell(j.Stage))
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(j.ID, 10),
+			toolutil.EscapeMdTableCell(j.Name),
+			jobStatusCell(j.Status),
+			toolutil.EscapeMdTableCell(j.Stage),
+		))
 	}
-	toolutil.WriteHints(&sb, "Use job tools to view logs or retry specific jobs")
-	return sb.String()
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(hintActionJobGet, "see one of these jobs in full"),
+		toolutil.HintAction(hintActionJobTrace, "read a job's log"),
+		toolutil.HintAction(hintActionResourceGroupList, "see the other resource groups of this project"),
+	)
+	return b.String()
+}
+
+// jobStatusCell renders a job status with the glyph every job row in the tree
+// shows, and nothing when GitLab sent no status.
+func jobStatusCell(status string) string {
+	if strings.TrimSpace(status) == "" {
+		return ""
+	}
+	return toolutil.PipelineStatusEmoji(status) + " " + toolutil.EscapeMdTableCell(status)
 }
 
 func init() {
