@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,383 |
-| Unit test functions                                   | 14,769 |
+| Total test functions                                  | 15,401 |
+| Unit test functions                                   | 14,787 |
 | E2E test functions                                    |    614 |
 | cmd test functions                                    |  3,022 |
 | Test files (internal/)                                |    531 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,157 | 79.0% |
+| `TestFunc_Scenario` (2-part)           | 12,170 | 79.0% |
 | `TestFunc` (no underscore)             |    975 |  6.3% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,251 | 14.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,256 | 14.6% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,494 |        150 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,512 |        150 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            342 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (177) |          8,911 |        365 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            614 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          3,022 |        206 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,383** |    **977** |                                                                                                 |
+| **Total**               |     **15,401** |    **977** |                                                                                                 |
 
 ### Core Packages
 
@@ -68,8 +68,8 @@
 | gatewaycompat |        19 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions. |
 | gitlab        |       109 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                            |
 | graphqlschema |        20 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                   |
-| mcpotel       |        90 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                               |
-| oauth         |        78 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                            |
+| mcpotel       |       106 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                               |
+| oauth         |        80 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                            |
 | progress      |        17 |    83.8% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                      |
 | prompts       |       280 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                         |
 | resources     |       191 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                |
@@ -78,7 +78,7 @@
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        94 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
 | toolutil      |       891 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,494** |          |                                                                                                                                                                                                                                                                    |
+| **Subtotal**  | **2,512** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
