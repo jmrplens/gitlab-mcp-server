@@ -2,179 +2,261 @@ package runners
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown renders a runner output as Markdown.
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionRunnerGet          = "runner.get"
+	actionRunnerJobs         = "runner.jobs"
+	actionRunnerList         = "runner.list"
+	actionRunnerUpdate       = "runner.update"
+	actionRunnerRemove       = "runner.remove"
+	actionRunnerRegister     = "runner.register"
+	actionRunnerVerify       = "runner.verify"
+	actionRunnerListManagers = "runner.list_managers"
+	actionJobGet             = "job.get"
+)
+
+// writeRunnerSummary writes the fields a runner carries wherever it is
+// rendered, so the summary and the detail card cannot drift apart.
+func writeRunnerSummary(c *toolutil.Card, name, description, runnerType, status, jobStatus string, shared, online, paused bool) {
+	c.Field("Name", name)
+	c.Field("Description", description)
+	// A runner type GitLab picks from a fixed set (instance_type, group_type,
+	// project_type) and a status it derives from when the runner last
+	// contacted it (online, offline, stale, never_contacted).
+	c.Field("Type", runnerType)
+	c.Field("Status", status)
+	c.Field("Job Execution Status", jobStatus)
+	c.Bool("Shared", shared)
+	c.Bool("Online", online)
+	// Paused is the one negative-polarity flag here: a tick against "Paused"
+	// reads as a runner in good order, which is the opposite of what it means.
+	c.Warn("Paused", paused)
+}
+
+// FormatOutputMarkdown renders one runner as the card of a single object.
+//
+// A runner GitLab has just created or registered answers with the
+// authentication token it minted, once and nowhere else, so the card shows it
+// as a secret and [toolutil.Card.End] adds the sentence saying it cannot be
+// read back. The table this replaced published every other field and dropped
+// the token on the floor, which made the register action unusable: the value
+// it exists to return was not in its answer.
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Runner #%d\n\n", out.ID)
-	b.WriteString("| Field | Value |\n")
-	b.WriteString(toolutil.TblSep2Col)
-	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
-	//gitlab:allow-unescaped out.RunnerType: a runner type GitLab picks from a fixed set (instance_type, group_type, project_type).
-	//gitlab:allow-unescaped out.Status: a runner status GitLab derives from when the runner last contacted it (online, offline, stale, never_contacted).
-	fmt.Fprintf(&b, "| Type | %s |\n", out.RunnerType)
-	fmt.Fprintf(&b, "| Status | %s |\n", out.Status)
-	fmt.Fprintf(&b, "| Paused | %s |\n", toolutil.BoolEmoji(out.Paused))
-	fmt.Fprintf(&b, "| Shared | %s |\n", toolutil.BoolEmoji(out.IsShared))
-	fmt.Fprintf(&b, "| Online | %s |\n", toolutil.BoolEmoji(out.Online))
-	toolutil.WriteHints(
-		&b,
-		"Use action 'get' for full runner configuration",
-		"Use action 'jobs' to see jobs executed by this runner",
+	c := toolutil.NewCard(&b, fmt.Sprintf("Runner #%d", out.ID))
+	c.Int("ID", out.ID)
+	writeRunnerSummary(c, out.Name, out.Description, out.RunnerType, out.Status, out.JobExecutionStatus,
+		out.IsShared, out.Online, out.Paused)
+	c.Code("IP Address", out.IPAddress)
+	c.Time("Created", out.CreatedAt)
+	if out.CreatedBy != nil {
+		c.Markdown("Created By", toolutil.MdUserLink(out.CreatedBy.Username, out.CreatedBy.WebURL))
+	}
+	c.Secret("Token", out.Token)
+	c.Time("Token Expires", out.TokenExpiresAt)
+	c.End(
+		toolutil.HintAction(actionRunnerGet, "see this runner's full configuration"),
+		toolutil.HintAction(actionRunnerJobs, "list the jobs it has run"),
 	)
 	return b.String()
 }
 
-// FormatDetailsMarkdown renders detailed runner information as Markdown.
+// FormatDetailsMarkdown renders one runner in full: its configuration, then
+// the projects and groups it serves as nested collections.
 func FormatDetailsMarkdown(out DetailsOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Runner #%d: Details\n\n", out.ID)
-	b.WriteString("| Field | Value |\n")
-	b.WriteString(toolutil.TblSep2Col)
-	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
-	//gitlab:allow-unescaped out.RunnerType: a runner type GitLab picks from a fixed set (instance_type, group_type, project_type).
-	//gitlab:allow-unescaped out.Status: a runner status GitLab derives from when the runner last contacted it (online, offline, stale, never_contacted).
-	fmt.Fprintf(&b, "| Type | %s |\n", out.RunnerType)
-	fmt.Fprintf(&b, "| Status | %s |\n", out.Status)
-	fmt.Fprintf(&b, "| Paused | %s |\n", toolutil.BoolEmoji(out.Paused))
-	fmt.Fprintf(&b, "| Shared | %s |\n", toolutil.BoolEmoji(out.IsShared))
-	fmt.Fprintf(&b, "| Online | %s |\n", toolutil.BoolEmoji(out.Online))
-	fmt.Fprintf(&b, "| Locked | %s |\n", toolutil.BoolEmoji(out.Locked))
-	//gitlab:allow-unescaped out.AccessLevel: a runner access level GitLab picks from a fixed set (not_protected, ref_protected), and refuses any other value on register and update.
-	fmt.Fprintf(&b, "| Access Level | %s |\n", out.AccessLevel)
-	fmt.Fprintf(&b, "| Run Untagged | %s |\n", toolutil.BoolEmoji(out.RunUntagged))
-	if len(out.TagList) > 0 {
-		fmt.Fprintf(&b, "| Tags | %s |\n", toolutil.EscapeMdTableCell(strings.Join(out.TagList, ", ")))
-	}
+	c := toolutil.NewCard(&b, fmt.Sprintf("Runner #%d: Details", out.ID))
+	c.Int("ID", out.ID)
+	writeRunnerSummary(c, out.Name, out.Description, out.RunnerType, out.Status, out.JobExecutionStatus,
+		out.IsShared, out.Online, out.Paused)
+	c.Bool("Locked", out.Locked)
+	// A runner access level GitLab picks from a fixed set (not_protected,
+	// ref_protected), and refuses any other value on register and update.
+	c.Field("Access Level", out.AccessLevel)
+	c.Bool("Run Untagged", out.RunUntagged)
+	// A tag is free text the runner's owner typed.
+	c.Field("Tags", strings.Join(out.TagList, ", "))
 	if out.MaximumTimeout > 0 {
-		fmt.Fprintf(&b, "| Max Timeout | %ds |\n", out.MaximumTimeout)
+		c.Field("Max Timeout", fmt.Sprintf("%ds", out.MaximumTimeout))
 	}
-	if out.MaintenanceNote != "" {
-		fmt.Fprintf(&b, "| Maintenance Note | %s |\n", toolutil.EscapeMdTableCell(out.MaintenanceNote))
+	c.Text("Maintenance Note", out.MaintenanceNote)
+	c.Field("Version", out.Version)
+	c.Field("Platform", out.Platform)
+	c.Field("Architecture", out.Architecture)
+	c.Code("Revision", out.Revision)
+	c.Code("IP Address", out.IPAddress)
+	c.Time("Last Contact", out.ContactedAt)
+	c.Time("Created", out.CreatedAt)
+	if out.CreatedBy != nil {
+		c.Markdown("Created By", toolutil.MdUserLink(out.CreatedBy.Username, out.CreatedBy.WebURL))
 	}
-	if out.ContactedAt != "" {
-		fmt.Fprintf(&b, "| Last Contact | %s |\n", toolutil.FormatTime(out.ContactedAt))
-	}
-	if len(out.Projects) > 0 {
-		fmt.Fprintf(&b, "| Projects | %d |\n", len(out.Projects))
-	}
-	if len(out.Groups) > 0 {
-		fmt.Fprintf(&b, "| Groups | %d |\n", len(out.Groups))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'update' to change runner settings",
-		"Use action 'update' with paused=true to pause or resume this runner",
-		"Use action 'jobs' to list jobs for this runner",
+	writeProjects(c, out.Projects)
+	writeGroups(c, out.Groups)
+	c.End(
+		toolutil.HintAction(actionRunnerUpdate, "change this runner's settings, paused state included"),
+		toolutil.HintAction(actionRunnerJobs, "list the jobs it has run"),
+		toolutil.HintAction(actionRunnerListManagers, "see the machines running it"),
 	)
 	return b.String()
 }
 
-// FormatListMarkdown renders a list of runners as Markdown.
+// writeProjects writes the projects a runner is assigned to. The card used to
+// say only how many there were, which answered none of the questions a reader
+// opens a runner's details to ask.
+func writeProjects(c *toolutil.Card, projects []RunnerDetailsProjectOutput) {
+	if len(projects) == 0 {
+		return
+	}
+	t := c.Table(fmt.Sprintf("Projects (%d)", len(projects)), "ID", "Name", "Path")
+	for _, p := range projects {
+		t.Row(
+			strconv.FormatInt(p.ID, 10),
+			toolutil.EscapeMdTableCell(p.Name),
+			toolutil.EscapeMdTableCell(p.PathWithNamespace),
+		)
+	}
+}
+
+// writeGroups writes the groups a runner serves, each linked to its page.
+func writeGroups(c *toolutil.Card, groups []RunnerDetailsGroupOutput) {
+	if len(groups) == 0 {
+		return
+	}
+	t := c.Table(fmt.Sprintf("Groups (%d)", len(groups)), "ID", "Name")
+	for _, g := range groups {
+		t.Row(
+			strconv.FormatInt(g.ID, 10),
+			toolutil.MdTitleLink(g.Name, g.WebURL),
+		)
+	}
+}
+
+// FormatListMarkdown renders a page of runners as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Runners) == 0 {
-		return "No runners found.\n"
+		return toolutil.EmptyMessage("runners")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Runners (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Runners), out.Pagination)
-	b.WriteString("| ID | Name | Type | Status | Paused | Shared |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
+	toolutil.WriteListHeading(&b, "Runners", len(out.Runners), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Type", "Status", "Paused", "Shared"))
 	for _, r := range out.Runners {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %t | %t |\n",
-			//gitlab:allow-unescaped r.RunnerType: the list rows carry the same runner type enum the single-runner table writes.
-			//gitlab:allow-unescaped r.Status: the list rows carry the same status enum the single-runner table writes.
-			r.ID, toolutil.EscapeMdTableCell(r.Name), r.RunnerType, r.Status, r.Paused, r.IsShared)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(r.ID, 10),
+			toolutil.EscapeMdTableCell(r.Name),
+			toolutil.EscapeMdTableCell(r.RunnerType),
+			toolutil.EscapeMdTableCell(r.Status),
+			toolutil.BoolEmoji(r.Paused),
+			toolutil.BoolEmoji(r.IsShared),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use action 'get' with runner_id for full configuration",
-		"Use action 'remove' to unregister a runner",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionRunnerGet, "see one runner's full configuration"),
+		toolutil.HintAction(actionRunnerList, "page through the rest of the runners"),
+		toolutil.HintAction(actionRunnerRemove, "unregister a runner"),
 	)
 	return b.String()
 }
 
-// FormatJobListMarkdown renders a list of runner jobs as Markdown.
+// FormatJobListMarkdown renders the jobs a runner has processed as a Markdown
+// table.
 func FormatJobListMarkdown(out JobListOutput) string {
 	if len(out.Jobs) == 0 {
-		return "No jobs found.\n"
+		return toolutil.EmptyMessage("jobs")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Runner Jobs (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Jobs), out.Pagination)
-	b.WriteString("| ID | Name | Status | Stage | Ref | Duration |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
+	toolutil.WriteListHeading(&b, "Runner Jobs", len(out.Jobs), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Status", "Stage", "Ref", "Duration"))
 	for _, j := range out.Jobs {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %.1fs |\n",
-			//gitlab:allow-unescaped j.Status: a job status, GitLab's own build state (created, running, success, failed and the rest).
-			// The stage name is written in .gitlab-ci.yml, and the jobs package
-			// escapes the same field in both of its tables.
-			j.ID, toolutil.EscapeMdTableCell(j.Name), j.Status, toolutil.EscapeMdTableCell(j.Stage), toolutil.EscapeMdTableCell(j.Ref), j.Duration)
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(strconv.FormatInt(j.ID, 10), j.WebURL),
+			toolutil.EscapeMdTableCell(j.Name),
+			jobStatusCell(j.Status),
+			// The stage name is written in .gitlab-ci.yml.
+			toolutil.EscapeMdTableCell(j.Stage),
+			toolutil.EscapeMdTableCell(j.Ref),
+			fmt.Sprintf("%.1fs", j.Duration),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, "Use gitlab_job action 'get' with job_id for full job details")
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(actionJobGet, "see one job in full, with its log"),
+		toolutil.HintAction(actionRunnerJobs, "page through the rest of this runner's jobs"),
+	)
 	return b.String()
 }
 
-// FormatAuthTokenMarkdown renders an auth token as Markdown.
+// jobStatusCell renders a job status with the glyph every pipeline-shaped
+// status in the tree carries, and nothing when GitLab sent none.
+func jobStatusCell(status string) string {
+	if strings.TrimSpace(status) == "" {
+		return ""
+	}
+	// A job status, GitLab's own build state (created, running, success,
+	// failed and the rest).
+	return toolutil.PipelineStatusEmoji(status) + " " + toolutil.EscapeMdTableCell(status)
+}
+
+// FormatAuthTokenMarkdown renders the authentication token a runner reset
+// answered with: the secret GitLab shows once, and when it expires.
 func FormatAuthTokenMarkdown(out AuthTokenOutput) string {
 	var b strings.Builder
-	b.WriteString("## Runner Authentication Token\n\n")
-	if out.Token != "" {
-		//gitlab:allow-unescaped out.Token: a token GitLab minted, a fixed prefix and URL-safe characters, inside a code span so the reader can copy it back verbatim.
-		fmt.Fprintf(&b, "- **Token**: `%s`\n", out.Token)
-	}
-	if out.ExpiresAt != "" {
-		fmt.Fprintf(&b, "- **Expires At**: %s\n", toolutil.FormatTime(out.ExpiresAt))
-	}
-	toolutil.WriteHints(&b, "Use action 'register' with this token to register a new runner")
+	c := toolutil.NewCard(&b, "Runner Authentication Token")
+	c.Secret("Token", out.Token)
+	c.Time("Expires At", out.ExpiresAt)
+	c.End(
+		toolutil.HintAction(actionRunnerVerify, "check the new token authenticates"),
+		toolutil.HintAction(actionRunnerGet, "read the runner back"),
+	)
 	return b.String()
 }
 
-// FormatRegTokenMarkdown renders a registration token as Markdown.
-func FormatRegTokenMarkdown(out AuthTokenOutput) string {
+// FormatRegTokenMarkdown renders a registration token reset. It is a formatter
+// of its own because the two tokens are different secrets used in different
+// places: a registration token registers new runners, an authentication token
+// is what one runner authenticates with.
+func FormatRegTokenMarkdown(out RegTokenOutput) string {
 	var b strings.Builder
-	b.WriteString("## Runner Registration Token\n\n")
-	if out.Token != "" {
-		//gitlab:allow-unescaped out.Token: a token GitLab minted, a fixed prefix and URL-safe characters, inside a code span so the reader can copy it back verbatim.
-		fmt.Fprintf(&b, "- **Token**: `%s`\n", out.Token)
-	}
-	if out.ExpiresAt != "" {
-		fmt.Fprintf(&b, "- **Expires At**: %s\n", toolutil.FormatTime(out.ExpiresAt))
-	}
-	toolutil.WriteHints(&b, "Use action 'register' with this token to register a new runner")
+	c := toolutil.NewCard(&b, "Runner Registration Token")
+	c.Secret("Token", out.Token)
+	c.Time("Expires At", out.ExpiresAt)
+	c.Note("Every runner registered with the previous token keeps working; the old token registers no new ones.")
+	c.End(toolutil.HintAction(actionRunnerRegister, "register a new runner with this token"))
 	return b.String()
 }
 
-// FormatManagerListMarkdown renders a list of runner managers as Markdown.
+// FormatManagerListMarkdown renders the managers of one runner as a Markdown
+// table.
 func FormatManagerListMarkdown(out ManagerListOutput) string {
 	if len(out.Managers) == 0 {
-		return "No runner managers found.\n"
+		return toolutil.EmptyMessage("runner managers")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Runner Managers (%d)\n\n", len(out.Managers))
-	b.WriteString("| ID | System ID | Version | Platform | Arch | Status | Job Status | IP |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- |\n")
+	toolutil.WriteListHeading(&b, "Runner Managers", len(out.Managers), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "System ID", "Version", "Platform", "Arch", "Status", "Job Status", "IP", "Last Contact"))
 	for _, m := range out.Managers {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s | %s | %s |\n",
-			// The version, platform and architecture come out of the info
-			// payload the runner process posts, which GitLab length-checks and
-			// nothing else, and this server's own runner.register writes them.
-			//gitlab:allow-unescaped m.Status: a manager status GitLab derives from when the manager last contacted it (online, offline, stale, never_contacted).
-			//gitlab:allow-unescaped m.JobExecutionStatus: a job execution status GitLab derives from the manager's running builds (active, idle).
-			//gitlab:allow-unescaped m.IPAddress: GitLab fills this from the address the manager connected from, never from the info payload beside it.
-			m.ID, toolutil.EscapeMdTableCell(m.SystemID), toolutil.EscapeMdTableCell(m.Version),
-			toolutil.EscapeMdTableCell(m.Platform), toolutil.EscapeMdTableCell(m.Architecture), m.Status,
-			m.JobExecutionStatus, m.IPAddress)
+		// The version, platform and architecture come out of the info payload
+		// the runner process posts, which GitLab length-checks and nothing
+		// else, and this server's own runner.register writes them.
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(m.ID, 10),
+			toolutil.EscapeMdTableCell(m.SystemID),
+			toolutil.EscapeMdTableCell(m.Version),
+			toolutil.EscapeMdTableCell(m.Platform),
+			toolutil.EscapeMdTableCell(m.Architecture),
+			toolutil.EscapeMdTableCell(m.Status),
+			toolutil.EscapeMdTableCell(m.JobExecutionStatus),
+			toolutil.EscapeMdTableCell(m.IPAddress),
+			toolutil.FormatTime(m.ContactedAt),
+		))
 	}
-	toolutil.WriteHints(&b, "Use action 'get' with runner_id for full runner information")
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(actionRunnerGet, "see the runner these managers belong to"),
+	)
 	return b.String()
 }
 

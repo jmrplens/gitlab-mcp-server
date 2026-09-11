@@ -1765,9 +1765,43 @@ func TestResetProjectRegToken_CancelledContext(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
+// The guidance sections the runner renderings close with.
+const (
+	summaryHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'runner.get' to see this runner's full configuration\n" +
+		"- Use action 'runner.jobs' to list the jobs it has run\n"
+	secretSummaryHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Store the token securely. It cannot be retrieved later\n" +
+		"- Use action 'runner.get' to see this runner's full configuration\n" +
+		"- Use action 'runner.jobs' to list the jobs it has run\n"
+	detailHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'runner.update' to change this runner's settings, paused state included\n" +
+		"- Use action 'runner.jobs' to list the jobs it has run\n" +
+		"- Use action 'runner.list_managers' to see the machines running it\n"
+	listHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'runner.get' to see one runner's full configuration\n" +
+		"- Use action 'runner.list' to page through the rest of the runners\n" +
+		"- Use action 'runner.remove' to unregister a runner\n"
+	jobListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'job.get' to see one job in full, with its log\n" +
+		"- Use action 'runner.jobs' to page through the rest of this runner's jobs\n"
+	authTokenHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Store the token securely. It cannot be retrieved later\n" +
+		"- Use action 'runner.verify' to check the new token authenticates\n" +
+		"- Use action 'runner.get' to read the runner back\n"
+	regTokenHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Store the token securely. It cannot be retrieved later\n" +
+		"- Use action 'runner.register' to register a new runner with this token\n"
+	managerHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'runner.get' to see the runner these managers belong to\n"
+)
+
+// TestFormatOutputMarkdown pins the whole card of a runner: the flags as
+// glyphs, the paused condition marked rather than ticked, and no token row for
+// a runner GitLab answered without one.
 func TestFormatOutputMarkdown(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:          5,
 		Name:        "my-runner",
 		Description: "test runner",
@@ -1778,21 +1812,58 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		Online:      true,
 	})
 
-	for _, want := range []string{
-		"## Runner #5",
-		"| Name | my-runner |",
-		"| Description | test runner |",
-		"| Type | project_type |",
-		"| Status | online |",
-		"| Paused | ❌ |",
-		"| Shared | ✅ |",
-		"| Online | ✅ |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Runner #5\n\n" +
+		"- **ID**: 5\n" +
+		"- **Name**: my-runner\n" +
+		"- **Description**: test runner\n" +
+		"- **Type**: project_type\n" +
+		"- **Status**: online\n" +
+		"- **Shared**: ✅\n" +
+		"- **Online**: ✅\n" +
+		summaryHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatOutputMarkdown_RegisteredRunner pins what the table this card
+// replaced dropped: the authentication token GitLab mints once when a runner
+// is created or registered, with the sentence saying it cannot be read back,
+// and the fields the captured response adds beside it.
+func TestFormatOutputMarkdown_RegisteredRunner(t *testing.T) {
+	got := FormatOutputMarkdown(Output{
+		ID:                 7,
+		Name:               "new-runner",
+		RunnerType:         "instance_type",
+		Status:             "never_contacted",
+		JobExecutionStatus: "idle",
+		Paused:             true,
+		IPAddress:          "10.0.0.1",
+		CreatedAt:          "2026-01-15T10:00:00Z",
+		CreatedBy:          &toolutil.UserBasicOutput{Username: "dana", WebURL: "https://gitlab.example.com/dana"},
+		Token:              "glrt-a_b_c",
+		TokenExpiresAt:     "2026-12-31T23:59:59Z",
+	})
+
+	want := "## Runner #7\n\n" +
+		"- **ID**: 7\n" +
+		"- **Name**: new-runner\n" +
+		"- **Type**: instance_type\n" +
+		"- **Status**: never_contacted\n" +
+		"- **Job Execution Status**: idle\n" +
+		"- **Shared**: ❌\n" +
+		"- **Online**: ❌\n" +
+		"- ⚠️ **Paused**\n" +
+		"- **IP Address**: `10.0.0.1`\n" +
+		"- **Created**: 15 Jan 2026 10:00 UTC\n" +
+		"- **Created By**: [@dana](https://gitlab.example.com/dana)\n" +
+		"- **Token**: `glrt-a_b_c`\n" +
+		"- **Token Expires**: 31 Dec 2026 23:59 UTC\n" +
+		secretSummaryHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1800,9 +1871,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 // FormatDetailsMarkdown — all optional fields present and absent
 // ---------------------------------------------------------------------------.
 
-// TestFormatDetailsMarkdown_Full verifies FormatDetailsMarkdown when full.
+// TestFormatDetailsMarkdown_Full pins the whole detail card, the projects and
+// groups a runner serves included: the card used to say only how many there
+// were, which answered none of the questions its details are opened for.
 func TestFormatDetailsMarkdown_Full(t *testing.T) {
-	md := FormatDetailsMarkdown(DetailsOutput{
+	got := FormatDetailsMarkdown(DetailsOutput{
 		ID:              10,
 		Name:            "detail-runner",
 		Description:     "detailed",
@@ -1818,58 +1891,70 @@ func TestFormatDetailsMarkdown_Full(t *testing.T) {
 		MaximumTimeout:  7200,
 		MaintenanceNote: "under repair",
 		ContactedAt:     "2026-01-15T10:00:00Z",
-		Projects:        []RunnerDetailsProjectOutput{{ID: 1}, {ID: 2}},
-		Groups:          []RunnerDetailsGroupOutput{{ID: 5}},
+		Version:         "16.0.0",
+		Platform:        "linux",
+		Architecture:    "amd64",
+		Revision:        "abc123",
+		IPAddress:       "10.0.0.1",
+		Projects: []RunnerDetailsProjectOutput{
+			{ID: 1, Name: "web", PathWithNamespace: "acme/web"},
+			{ID: 2, Name: "api", PathWithNamespace: "acme/api"},
+		},
+		Groups: []RunnerDetailsGroupOutput{{ID: 5, Name: "acme", WebURL: "https://gitlab.example.com/acme"}},
 	})
 
-	for _, want := range []string{
-		"## Runner #10: Details",
-		"| Name | detail-runner |",
-		"| Description | detailed |",
-		"| Type | group_type |",
-		"| Status | offline |",
-		"| Paused | ✅ |",
-		"| Shared | ❌ |",
-		"| Online | ❌ |",
-		"| Locked | ✅ |",
-		"| Access Level | ref_protected |",
-		"| Run Untagged | ❌ |",
-		"| Tags | docker, linux |",
-		"| Max Timeout | 7200s |",
-		"| Maintenance Note | under repair |",
-		"| Last Contact | 15 Jan 2026 10:00 UTC |",
-		"| Projects | 2 |",
-		"| Groups | 1 |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Runner #10: Details\n\n" +
+		"- **ID**: 10\n" +
+		"- **Name**: detail-runner\n" +
+		"- **Description**: detailed\n" +
+		"- **Type**: group_type\n" +
+		"- **Status**: offline\n" +
+		"- **Shared**: ❌\n" +
+		"- **Online**: ❌\n" +
+		"- ⚠️ **Paused**\n" +
+		"- **Locked**: ✅\n" +
+		"- **Access Level**: ref_protected\n" +
+		"- **Run Untagged**: ❌\n" +
+		"- **Tags**: docker, linux\n" +
+		"- **Max Timeout**: 7200s\n" +
+		"- **Maintenance Note**: under repair\n" +
+		"- **Version**: 16.0.0\n" +
+		"- **Platform**: linux\n" +
+		"- **Architecture**: amd64\n" +
+		"- **Revision**: `abc123`\n" +
+		"- **IP Address**: `10.0.0.1`\n" +
+		"- **Last Contact**: 15 Jan 2026 10:00 UTC\n" +
+		"\n### Projects (2)\n\n" +
+		"| ID | Name | Path |\n| --- | --- | --- |\n" +
+		"| 1 | web | acme/web |\n" +
+		"| 2 | api | acme/api |\n" +
+		"\n### Groups (1)\n\n" +
+		"| ID | Name |\n| --- | --- |\n" +
+		"| 5 | [acme](https://gitlab.example.com/acme) |\n" +
+		detailHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatDetailsMarkdown_Minimal verifies FormatDetailsMarkdown when minimal.
+// TestFormatDetailsMarkdown_Minimal pins the whole card of a runner GitLab
+// answered with nothing optional: no label with an empty value under it, and
+// no heading for a collection it sent none of.
 func TestFormatDetailsMarkdown_Minimal(t *testing.T) {
-	md := FormatDetailsMarkdown(DetailsOutput{
-		ID:   1,
-		Name: "min",
-	})
+	got := FormatDetailsMarkdown(DetailsOutput{ID: 1, Name: "min"})
 
-	if !strings.Contains(md, "## Runner #1: Details") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	for _, absent := range []string{
-		"| Tags |",
-		"| Max Timeout |",
-		"| Maintenance Note |",
-		"| Last Contact |",
-	} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-			}
-		})
+	want := "## Runner #1: Details\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: min\n" +
+		"- **Shared**: ❌\n" +
+		"- **Online**: ❌\n" +
+		"- **Locked**: ❌\n" +
+		"- **Run Untagged**: ❌\n" +
+		detailHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1877,9 +1962,11 @@ func TestFormatDetailsMarkdown_Minimal(t *testing.T) {
 // FormatListMarkdown — with data and empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
+// TestFormatListMarkdown_WithData pins the whole listing: the heading counting
+// what GitLab reported, the flags as glyphs rather than as "true", the
+// pagination line and one guidance section.
 func TestFormatListMarkdown_WithData(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Runners: []Output{
 			{ID: 1, Name: "r1", RunnerType: "instance_type", Status: "online", Paused: false, IsShared: true},
 			{ID: 2, Name: "r2", RunnerType: "project_type", Status: "offline", Paused: true, IsShared: false},
@@ -1887,33 +1974,44 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	})
 
-	for _, want := range []string{
-		"## Runners (2)",
-		"| ID |",
-		"| --- |",
-		"| 1 |",
-		"| 2 |",
-		"r1",
-		"r2",
-		"instance_type",
-		"project_type",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Runners (2)\n\n" +
+		"| ID | Name | Type | Status | Paused | Shared |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | r1 | instance_type | online | ❌ | ✅ |\n" +
+		"| 2 | r2 | project_type | offline | ✅ | ❌ |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
-func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No runners found") {
-		t.Errorf("expected empty message:\n%s", md)
+// TestFormatListMarkdown_KeysetPage pins the heading of a page GitLab sent no
+// total for: it counts the rows shown rather than claiming a total of zero
+// above them.
+func TestFormatListMarkdown_KeysetPage(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Runners:    []Output{{ID: 1, Name: "r1", RunnerType: "instance_type", Status: "online"}},
+		Pagination: toolutil.PaginationOutput{HasMore: true},
+	})
+
+	want := "## Runners (1 shown, more available)\n\n" +
+		"| ID | Name | Type | Status | Paused | Shared |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | r1 | instance_type | online | ❌ | ❌ |\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+}
+
+// TestFormatListMarkdown_Empty pins that a listing with no runners renders the
+// one sentence and nothing else.
+func TestFormatListMarkdown_Empty(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{})
+
+	if want := "No runners found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1921,44 +2019,37 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatJobListMarkdown — with data and empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatJobListMarkdown_WithData verifies FormatJobListMarkdown when with data.
+// TestFormatJobListMarkdown_WithData pins the whole listing of a runner's
+// jobs: each ID linked to the job's page, the status with its glyph, and one
+// guidance section.
 func TestFormatJobListMarkdown_WithData(t *testing.T) {
-	md := FormatJobListMarkdown(JobListOutput{
+	got := FormatJobListMarkdown(JobListOutput{
 		Jobs: []jobs.Output{
-			{ID: 100, Name: "build", Status: "success", Stage: "build", Ref: "main", Duration: 12.5},
+			{ID: 100, Name: "build", Status: "success", Stage: "build", Ref: "main", Duration: 12.5, WebURL: "https://gitlab.example.com/acme/web/-/jobs/100"},
 			{ID: 101, Name: "test", Status: "running", Stage: "test", Ref: "develop", Duration: 0.0},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	})
 
-	for _, want := range []string{
-		"## Runner Jobs (2)",
-		"| ID |",
-		"| --- |",
-		"| 100 |",
-		"| 101 |",
-		"build",
-		"test",
-		"success",
-		"running",
-		"12.5s",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Runner Jobs (2)\n\n" +
+		"| ID | Name | Status | Stage | Ref | Duration |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| [100](https://gitlab.example.com/acme/web/-/jobs/100) | build | ✅ success | build | main | 12.5s |\n" +
+		"| 101 | test | \U0001F535 running | test | develop | 0.0s |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		jobListHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatJobListMarkdown_Empty verifies FormatJobListMarkdown when empty.
+// TestFormatJobListMarkdown_Empty pins that a runner that has run nothing
+// renders the one sentence and nothing else.
 func TestFormatJobListMarkdown_Empty(t *testing.T) {
-	md := FormatJobListMarkdown(JobListOutput{})
-	if !strings.Contains(md, "No jobs found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+	got := FormatJobListMarkdown(JobListOutput{})
+
+	if want := "No jobs found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1966,106 +2057,135 @@ func TestFormatJobListMarkdown_Empty(t *testing.T) {
 // FormatAuthTokenMarkdown — with and without ExpiresAt
 // ---------------------------------------------------------------------------.
 
-// TestFormatAuthTokenMarkdown_Full verifies FormatAuthTokenMarkdown when full.
+// TestFormatAuthTokenMarkdown_Full pins the whole card of an authentication
+// token reset: the secret in a code span, when it expires, and the sentence
+// saying it cannot be read back.
 func TestFormatAuthTokenMarkdown_Full(t *testing.T) {
-	md := FormatAuthTokenMarkdown(AuthTokenOutput{
+	got := FormatAuthTokenMarkdown(AuthTokenOutput{
 		Token:     "glrt-abc123",
 		ExpiresAt: "2026-12-31T23:59:59Z",
 	})
 
-	for _, want := range []string{
-		"## Runner Authentication Token",
-		"**Token**: `glrt-abc123`",
-		"**Expires At**: 31 Dec 2026 23:59 UTC",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Runner Authentication Token\n\n" +
+		"- **Token**: `glrt-abc123`\n" +
+		"- **Expires At**: 31 Dec 2026 23:59 UTC\n" +
+		authTokenHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatAuthTokenMarkdown_NoExpiry verifies FormatAuthTokenMarkdown when no expiry.
+// TestFormatAuthTokenMarkdown_NoExpiry pins the card of a token GitLab set no
+// expiry on: no label with nothing after it.
 func TestFormatAuthTokenMarkdown_NoExpiry(t *testing.T) {
-	md := FormatAuthTokenMarkdown(AuthTokenOutput{Token: "tok"})
-	if strings.Contains(md, "Expires At") {
-		t.Errorf("should not contain Expires At when empty:\n%s", md)
+	got := FormatAuthTokenMarkdown(AuthTokenOutput{Token: "tok"})
+
+	want := "## Runner Authentication Token\n\n" +
+		"- **Token**: `tok`\n" +
+		authTokenHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatAuthTokenMarkdown_TokenShapes_AreCodeSpannedAndGuarded verifies
-// that a runner authentication token is written inside a code span and that an
-// empty one writes no token line at all.
+// TestFormatAuthTokenMarkdown_TokenShapes_AreCodeSpannedAndGuarded pins that a
+// runner authentication token is written inside a code span and that an empty
+// one writes no token line, and no store-it hint, at all.
 //
 // It matters for two reasons. A token written as bare Markdown is read as
 // Markdown, so an underscore pair in it is eaten as emphasis and what the
 // reader copies back is not what GitLab minted. And a card that announces a
 // **Token** with nothing after it tells a reader a credential was issued when
-// none was, which is how the shared form at accesstokens/markdown.go already
-// reads.
+// none was.
 func TestFormatAuthTokenMarkdown_TokenShapes_AreCodeSpannedAndGuarded(t *testing.T) {
 	t.Run("token is inside a code span", func(t *testing.T) {
-		md := FormatAuthTokenMarkdown(AuthTokenOutput{Token: "glrt-a_b_c"})
-		if !strings.Contains(md, "- **Token**: `glrt-a_b_c`\n") {
-			t.Errorf("token not written inside a code span:\n%s", md)
+		want := "## Runner Authentication Token\n\n" +
+			"- **Token**: `glrt-a_b_c`\n" +
+			authTokenHints
+		if got := FormatAuthTokenMarkdown(AuthTokenOutput{Token: "glrt-a_b_c"}); got != want {
+			t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 	t.Run("empty token writes no line", func(t *testing.T) {
-		md := FormatAuthTokenMarkdown(AuthTokenOutput{ExpiresAt: "2026-12-31T23:59:59Z"})
-		if strings.Contains(md, "**Token**") {
-			t.Errorf("empty token still announced:\n%s", md)
+		want := "## Runner Authentication Token\n\n" +
+			"- **Expires At**: 31 Dec 2026 23:59 UTC\n" +
+			"\n---\n\U0001F4A1 **Next steps:**\n" +
+			"- Use action 'runner.verify' to check the new token authenticates\n" +
+			"- Use action 'runner.get' to read the runner back\n"
+		if got := FormatAuthTokenMarkdown(AuthTokenOutput{ExpiresAt: "2026-12-31T23:59:59Z"}); got != want {
+			t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 }
 
-// TestFormatRegTokenMarkdown_TokenShapes_AreCodeSpannedAndGuarded verifies the
-// same two properties for the registration token card, which is a second copy
-// of the same renderer and carried the same two defects.
+// TestFormatRegTokenMarkdown_TokenShapes_AreCodeSpannedAndGuarded pins the same
+// two properties for the registration token card, which is a renderer of its
+// own since the split: while the two shared an output type the registry served
+// one formatter for both, and every registration reset rendered under the
+// authentication token's heading.
 func TestFormatRegTokenMarkdown_TokenShapes_AreCodeSpannedAndGuarded(t *testing.T) {
 	t.Run("token is inside a code span", func(t *testing.T) {
-		md := FormatRegTokenMarkdown(AuthTokenOutput{Token: "reg-a_b_c"})
-		if !strings.Contains(md, "- **Token**: `reg-a_b_c`\n") {
-			t.Errorf("token not written inside a code span:\n%s", md)
+		want := "## Runner Registration Token\n\n" +
+			"- **Token**: `reg-a_b_c`\n" +
+			regTokenNote +
+			regTokenHints
+		if got := FormatRegTokenMarkdown(RegTokenOutput{Token: "reg-a_b_c"}); got != want {
+			t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 	t.Run("empty token writes no line", func(t *testing.T) {
-		md := FormatRegTokenMarkdown(AuthTokenOutput{ExpiresAt: "2026-06-01T00:00:00Z"})
-		if strings.Contains(md, "**Token**") {
-			t.Errorf("empty token still announced:\n%s", md)
+		want := "## Runner Registration Token\n\n" +
+			"- **Expires At**: 1 Jun 2026 00:00 UTC\n" +
+			regTokenNote +
+			"\n---\n\U0001F4A1 **Next steps:**\n" +
+			"- Use action 'runner.register' to register a new runner with this token\n"
+		if got := FormatRegTokenMarkdown(RegTokenOutput{ExpiresAt: "2026-06-01T00:00:00Z"}); got != want {
+			t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 }
+
+// regTokenNote is the sentence the registration card closes its rows with.
+const regTokenNote = "\nEvery runner registered with the previous token keeps working; the old token registers no new ones.\n"
 
 // ---------------------------------------------------------------------------
 // FormatRegTokenMarkdown — with and without ExpiresAt
 // ---------------------------------------------------------------------------.
 
-// TestFormatRegTokenMarkdown_Full verifies FormatRegTokenMarkdown when full.
+// TestFormatRegTokenMarkdown_Full pins the whole card of a registration token
+// reset: its own heading, the secret, when it expires, and what the reset did
+// to the runners already registered.
 func TestFormatRegTokenMarkdown_Full(t *testing.T) {
-	md := FormatRegTokenMarkdown(AuthTokenOutput{
+	got := FormatRegTokenMarkdown(RegTokenOutput{
 		Token:     "reg-tok-123",
 		ExpiresAt: "2026-06-01T00:00:00Z",
 	})
 
-	for _, want := range []string{
-		"## Runner Registration Token",
-		"**Token**: `reg-tok-123`",
-		"**Expires At**: 1 Jun 2026 00:00 UTC",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Runner Registration Token\n\n" +
+		"- **Token**: `reg-tok-123`\n" +
+		"- **Expires At**: 1 Jun 2026 00:00 UTC\n" +
+		regTokenNote +
+		regTokenHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatRegTokenMarkdown_NoExpiry verifies FormatRegTokenMarkdown when no expiry.
+// TestFormatRegTokenMarkdown_NoExpiry pins the card of a registration token
+// GitLab set no expiry on.
 func TestFormatRegTokenMarkdown_NoExpiry(t *testing.T) {
-	md := FormatRegTokenMarkdown(AuthTokenOutput{Token: "tok"})
-	if strings.Contains(md, "Expires At") {
-		t.Errorf("should not contain Expires At when empty:\n%s", md)
+	got := FormatRegTokenMarkdown(RegTokenOutput{Token: "tok"})
+
+	want := "## Runner Registration Token\n\n" +
+		"- **Token**: `tok`\n" +
+		regTokenNote +
+		regTokenHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -2215,29 +2335,36 @@ func TestListManagers_APIError(t *testing.T) {
 	}
 }
 
-// TestFormatManagerListMarkdown_WithManagers verifies markdown output for
-// a non-empty list of runner managers.
+// TestFormatManagerListMarkdown_WithManagers pins the whole listing of a
+// runner's managers, the last-contact column included: a manager list is read
+// to find out which machine has gone quiet.
 func TestFormatManagerListMarkdown_WithManagers(t *testing.T) {
-	out := ManagerListOutput{
-		Managers: []ManagerOutput{
-			{ID: 10, SystemID: "sys-01", Version: "16.0", Platform: "linux", Architecture: "amd64", Status: "online", IPAddress: "10.0.0.1"},
-		},
-	}
-	md := FormatManagerListMarkdown(out)
-	if !strings.Contains(md, "sys-01") {
-		t.Error("expected sys-01 in markdown output")
-	}
-	if !strings.Contains(md, "Runner Managers") {
-		t.Error("expected header in markdown output")
+	got := FormatManagerListMarkdown(ManagerListOutput{
+		Managers: []ManagerOutput{{
+			ID: 10, SystemID: "sys-01", Version: "16.0", Platform: "linux", Architecture: "amd64",
+			Status: "online", JobExecutionStatus: "idle", IPAddress: "10.0.0.1",
+			ContactedAt: "2026-01-15T10:00:00Z",
+		}},
+	})
+
+	want := "## Runner Managers (1)\n\n" +
+		"| ID | System ID | Version | Platform | Arch | Status | Job Status | IP | Last Contact |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| 10 | sys-01 | 16.0 | linux | amd64 | online | idle | 10.0.0.1 | 15 Jan 2026 10:00 UTC |\n" +
+		managerHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatManagerListMarkdown_Empty verifies markdown output for
-// an empty managers list.
+// TestFormatManagerListMarkdown_Empty pins that a runner with no manager
+// renders the one sentence and nothing else.
 func TestFormatManagerListMarkdown_Empty(t *testing.T) {
-	md := FormatManagerListMarkdown(ManagerListOutput{})
-	if !strings.Contains(md, "No runner managers found") {
-		t.Error("expected empty message")
+	got := FormatManagerListMarkdown(ManagerListOutput{})
+
+	if want := "No runner managers found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

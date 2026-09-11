@@ -4,7 +4,6 @@ package groupprotectedbranches
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -710,113 +709,143 @@ func assertInt64Pointer(t *testing.T, name string, got *int64, want int64) {
 	}
 }
 
-// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatOutputMarkdown(t *testing.T) {
-	t.Run("renders branch with access levels", func(t *testing.T) {
-		out := Output{
-			ID:   1,
-			Name: "main",
-			PushAccessLevels: []AccessLevelOutput{
-				{ID: 10, AccessLevel: 40, AccessLevelDescription: "Maintainers"},
-			},
-			MergeAccessLevels: []AccessLevelOutput{
-				{ID: 11, AccessLevel: 30, AccessLevelDescription: "Developers + Maintainers"},
-			},
-			UnprotectAccessLevels:     []AccessLevelOutput{},
-			AllowForcePush:            false,
-			CodeOwnerApprovalRequired: true,
-		}
-		md := FormatOutputMarkdown(out)
+// cardHints is the guidance section every protected-branch card closes with.
+const cardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'group.protected_branch_update' to add or remove an allowed user, group or role\n" +
+	"- Use action 'group.protected_branch_unprotect' to remove this protection from every subgroup project\n"
 
-		checks := []string{
-			"## Protected Branch: main",
-			"**Allow Force Push**: false",
-			"**Code Owner Approval Required**: true",
-			"### Push Access Levels",
-			"| 10 | 40 | Maintainers |",
-			"### Merge Access Levels",
-			"| 11 | 30 | Developers + Maintainers |",
-			"gitlab_group_protected_branch_update",
-			"gitlab_group_protected_branch_unprotect",
-		}
-		for _, want := range checks {
-			t.Run(want, func(t *testing.T) {
-				if !strings.Contains(md, want) {
-					t.Errorf("FormatOutputMarkdown missing %q", want)
-				}
-			})
-		}
-		if strings.Contains(md, "### Unprotect Access Levels") {
-			t.Error("FormatOutputMarkdown should not render empty Unprotect Access Levels section")
-		}
+// listHints is the guidance section the listing closes with. The table carries
+// no link, so the preserve-links instruction is not written.
+const listHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'group.protected_branch_get' to see one branch's access levels in full\n" +
+	"- Use action 'group.protected_branch_protect' to protect another branch or wildcard\n" +
+	"- Use action 'group.protected_branch_list' to page through the rest of the group's protected branches\n"
+
+const accessHeader = "| ID | Level | Grantee | Description |\n| --- | --- | --- | --- |\n"
+
+// TestFormatOutputMarkdown_WithAccessLevels pins the whole card of a protected
+// branch: the flags as glyphs, each set of access levels as its own table, and
+// no heading for a set GitLab sent empty.
+func TestFormatOutputMarkdown_WithAccessLevels(t *testing.T) {
+	got := FormatOutputMarkdown(Output{
+		ID:   1,
+		Name: "main",
+		PushAccessLevels: []AccessLevelOutput{
+			{ID: 10, AccessLevel: 40, AccessLevelDescription: "Maintainers"},
+		},
+		MergeAccessLevels: []AccessLevelOutput{
+			{ID: 11, AccessLevel: 30, AccessLevelDescription: "Developers + Maintainers"},
+		},
+		UnprotectAccessLevels:     []AccessLevelOutput{},
+		AllowForcePush:            false,
+		CodeOwnerApprovalRequired: true,
 	})
 
-	t.Run("renders branch without access levels", func(t *testing.T) {
-		out := Output{
-			ID:                        2,
-			Name:                      "release/*",
-			PushAccessLevels:          []AccessLevelOutput{},
-			MergeAccessLevels:         []AccessLevelOutput{},
-			UnprotectAccessLevels:     []AccessLevelOutput{},
-			AllowForcePush:            true,
-			CodeOwnerApprovalRequired: false,
-		}
-		md := FormatOutputMarkdown(out)
+	want := "## Protected Branch: main\n\n" +
+		"- **ID**: 1\n" +
+		"- **Allow Force Push**: ❌\n" +
+		"- **Code Owner Approval Required**: ✅\n" +
+		"\n### Push Access Levels\n\n" +
+		accessHeader +
+		"| 10 | Maintainer |  | Maintainers |\n" +
+		"\n### Merge Access Levels\n\n" +
+		accessHeader +
+		"| 11 | Developer |  | Developers + Maintainers |\n" +
+		cardHints
 
-		if !strings.Contains(md, "## Protected Branch: release/*") {
-			t.Error("missing heading")
-		}
-		if !strings.Contains(md, "**Allow Force Push**: true") {
-			t.Error("missing force push")
-		}
-		for _, heading := range []string{"### Push Access Levels", "### Merge Access Levels", "### Unprotect Access Levels"} {
-			t.Run(heading, func(t *testing.T) {
-				if strings.Contains(md, heading) {
-					t.Errorf("should not render empty section %q", heading)
-				}
-			})
-		}
-	})
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
 }
 
-// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown(t *testing.T) {
-	t.Run("renders table with branches", func(t *testing.T) {
-		out := ListOutput{
-			Branches: []Output{
-				{ID: 1, Name: "main", AllowForcePush: false, CodeOwnerApprovalRequired: true},
-				{ID: 2, Name: "release/*", AllowForcePush: true, CodeOwnerApprovalRequired: false},
-			},
-			Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 20, TotalItems: 2, TotalPages: 1},
-		}
-		md := FormatListMarkdown(out)
-
-		checks := []string{
-			"| ID | Name | Force Push | Code Owner |",
-			"| 1 | main | false | true |",
-			"| 2 | release/* | true | false |",
-			"gitlab_group_protected_branch_get",
-			"gitlab_group_protected_branch_protect",
-		}
-		for _, want := range checks {
-			t.Run(want, func(t *testing.T) {
-				if !strings.Contains(md, want) {
-					t.Errorf("FormatListMarkdown missing %q", want)
-				}
-			})
-		}
+// TestFormatOutputMarkdown_GranularRules pins what the grantee column was added
+// for: a rule naming a user, a group or a deploy key says so, and its Level
+// reads "-" rather than the role number GitLab echoes beside it, which is not
+// what the rule grants.
+func TestFormatOutputMarkdown_GranularRules(t *testing.T) {
+	got := FormatOutputMarkdown(Output{
+		ID:   7,
+		Name: "release/*",
+		PushAccessLevels: []AccessLevelOutput{
+			{ID: 20, AccessLevel: 40, AccessLevelDescription: "Sam Bauch", UserID: 123},
+			{ID: 21, AccessLevel: 40, AccessLevelDescription: "Release managers", GroupID: 55},
+			{ID: 22, AccessLevel: 40, AccessLevelDescription: "deploy-bot", DeployKeyID: 9},
+			{ID: 23, AccessLevel: 0, AccessLevelDescription: "No one"},
+		},
+		AllowForcePush: true,
 	})
 
-	t.Run("renders empty message when no branches", func(t *testing.T) {
-		out := ListOutput{Branches: []Output{}}
-		md := FormatListMarkdown(out)
-		want := "No group protected branches found."
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatListMarkdown = %q, want to contain %q", md, want)
-		}
+	want := "## Protected Branch: release/*\n\n" +
+		"- **ID**: 7\n" +
+		"- **Allow Force Push**: ✅\n" +
+		"- **Code Owner Approval Required**: ❌\n" +
+		"\n### Push Access Levels\n\n" +
+		accessHeader +
+		"| 20 | - | user #123 | Sam Bauch |\n" +
+		"| 21 | - | group #55 | Release managers |\n" +
+		"| 22 | - | deploy key #9 | deploy-bot |\n" +
+		"| 23 | No access |  | No one |\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatOutputMarkdown_NoAccessLevels pins the card of a branch with no
+// rules at all: three fields and no empty section under them.
+func TestFormatOutputMarkdown_NoAccessLevels(t *testing.T) {
+	got := FormatOutputMarkdown(Output{
+		ID:                        2,
+		Name:                      "release/*",
+		PushAccessLevels:          []AccessLevelOutput{},
+		MergeAccessLevels:         []AccessLevelOutput{},
+		UnprotectAccessLevels:     []AccessLevelOutput{},
+		AllowForcePush:            true,
+		CodeOwnerApprovalRequired: false,
 	})
+
+	want := "## Protected Branch: release/*\n\n" +
+		"- **ID**: 2\n" +
+		"- **Allow Force Push**: ✅\n" +
+		"- **Code Owner Approval Required**: ❌\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_WithBranches pins the whole listing: the heading
+// counting what GitLab reported, the table opening a block of its own rather
+// than continuing a hint bullet, and one guidance section at the end.
+func TestFormatListMarkdown_WithBranches(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Branches: []Output{
+			{ID: 1, Name: "main", AllowForcePush: false, CodeOwnerApprovalRequired: true},
+			{ID: 2, Name: "release/*", AllowForcePush: true, CodeOwnerApprovalRequired: false},
+		},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 20, TotalItems: 2, TotalPages: 1},
+	})
+
+	want := "## Group Protected Branches (2)\n\n" +
+		"| ID | Name | Force Push | Code Owner |\n| --- | --- | --- | --- |\n" +
+		"| 1 | main | ❌ | ✅ |\n" +
+		"| 2 | release/* | ✅ | ❌ |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_Empty pins that a group with no protected branches
+// renders the one sentence and nothing else.
+func TestFormatListMarkdown_Empty(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{Branches: []Output{}})
+
+	if want := "No group protected branches found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
 }

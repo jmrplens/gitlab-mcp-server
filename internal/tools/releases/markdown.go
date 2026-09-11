@@ -1,12 +1,25 @@
 package releases
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+// The canonical catalog IDs the hints name that the specs do not already
+// spell. The asset-link actions are projected under the release domain, so the
+// ID every surface resolves is "release.link_list" and not the
+// "release_link.list" the cross-link constant in action_specs.go spells.
+const (
+	hintActionReleaseLinkList   = "release.link_list"
+	actionReleaseCreate         = "release.create"
+	actionReleaseUpdate         = "release.update"
+	actionReleaseLinkCreate     = "release.link_create"
+	actionReleaseLinkCreateBulk = "release.link_create_batch"
+	actionPackagePublishAndLink = "package.publish_and_link"
+	actionTagList               = "tag.list"
 )
 
 type releaseNotFoundOutput struct {
@@ -22,17 +35,27 @@ func formatReleaseNotFound(out releaseNotFoundOutput) *mcp.CallToolResult {
 	)
 }
 
-// releaseWebURL derives the release page URL from the _links.edit_url field by
-// trimming the trailing "/edit" segment, or returns "" when no links exist.
+// releaseWebURL derives the release page URL from the _links object, preferring
+// the self link GitLab sends for the page itself and falling back to the
+// edit_url with its trailing "/edit" segment trimmed. Returns "" when no links
+// are present.
 func releaseWebURL(r Output) string {
-	if r.Links == nil || r.Links.EditURL == "" {
+	if r.Links == nil {
+		return ""
+	}
+	if r.Links.Self != "" {
+		return r.Links.Self
+	}
+	if r.Links.EditURL == "" {
 		return ""
 	}
 	return strings.TrimSuffix(r.Links.EditURL, "/edit")
 }
 
 // milestoneTitles extracts the milestone titles from the nested milestone
-// objects for compact Markdown rendering.
+// objects, each escaped on its own: joining them first and escaping the join
+// let a title carrying a pipe split the row it landed in, since the escaper
+// cannot tell the separator this function wrote from one a title holds.
 func milestoneTitles(ms []*toolutil.MilestoneOutput) []string {
 	if len(ms) == 0 {
 		return nil
@@ -40,84 +63,107 @@ func milestoneTitles(ms []*toolutil.MilestoneOutput) []string {
 	titles := make([]string, 0, len(ms))
 	for _, m := range ms {
 		if m != nil && m.Title != "" {
-			titles = append(titles, m.Title)
+			titles = append(titles, toolutil.EscapeMdTableCell(m.Title))
 		}
 	}
 	return titles
 }
 
-// FormatMarkdown renders a single release as a Markdown summary.
+// releaseHeading names the release the way a reader asked for it: its title
+// when GitLab has one, and the tag it was cut from otherwise.
+func releaseHeading(r Output) string {
+	if strings.TrimSpace(r.Name) != "" {
+		return "Release: " + r.Name
+	}
+	return "Release: " + r.TagName
+}
+
+// releasedCell renders the date a release went out, falling back to when it was
+// created, and marks a release GitLab flagged as upcoming with the calendar
+// glyph: without it a date in the future read as one already past.
+func releasedCell(released, created string, upcoming bool) string {
+	if released == "" {
+		released = created
+	}
+	cell := toolutil.FormatTime(released)
+	if upcoming && cell != "" {
+		return toolutil.EmojiCalendar + " " + cell
+	}
+	return cell
+}
+
+// commitSHA is the commit a release points at, in the short form GitLab sends
+// beside the full one and in the full form when it sent no short one.
+func commitSHA(c toolutil.CommitOutput) string {
+	if c.ShortID != "" {
+		return c.ShortID
+	}
+	return c.ID
+}
+
+// FormatMarkdown renders one release as the card of a single object: its own
+// fields, then its notes as quoted prose under their label.
 func FormatMarkdown(r Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Release: %s\n\n", toolutil.EscapeMdHeading(r.Name))
+	c := toolutil.NewCard(&b, releaseHeading(r))
 	// A tag name is a git ref, and check-ref-format permits '|', '<' and '>'.
-	fmt.Fprintf(&b, "- **Tag**: %s\n", toolutil.EscapeMdTableCell(r.TagName))
-	if r.Author != nil && r.Author.Username != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdAuthorAt, toolutil.EscapeMdTableCell(r.Author.Username))
+	c.Field("Tag", r.TagName)
+	if r.Author != nil {
+		c.Markdown("Author", toolutil.MdUserLink(r.Author.Username, r.Author.WebURL))
 	}
-	if webURL := releaseWebURL(r); webURL != "" {
-		toolutil.WriteMdURL(&b, webURL)
+	c.Time("Created", r.CreatedAt)
+	c.Markdown("Released", releasedCell(r.ReleasedAt, "", r.UpcomingRelease))
+	c.Flag(toolutil.EmojiCalendar, "Upcoming release", r.UpcomingRelease)
+	if r.Commit != nil {
+		// A commit SHA, hexadecimal by construction, shown the short way GitLab
+		// shows it when it sent one and in full when it did not.
+		c.Code("Commit", commitSHA(*r.Commit))
+		c.Field("Commit Title", r.Commit.Title)
 	}
-	fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(r.CreatedAt))
-	if r.ReleasedAt != "" {
-		fmt.Fprintf(&b, "- **Released**: %s\n", toolutil.FormatTime(r.ReleasedAt))
+	// A milestone title is free text, escaped one title at a time.
+	c.Markdown("Milestones", strings.Join(milestoneTitles(r.Milestones), ", "))
+	if r.Assets != nil {
+		c.Count("Assets", r.Assets.Count)
 	}
-	if r.Commit != nil && r.Commit.ID != "" {
-		//gitlab:allow-unescaped r.Commit.ID: a commit SHA, hexadecimal by construction.
-		fmt.Fprintf(&b, "- **Commit**: %s\n", r.Commit.ID)
-	}
-	if r.UpcomingRelease {
-		b.WriteString("- " + toolutil.EmojiCalendar + " **Upcoming release**\n")
-	}
-	if titles := milestoneTitles(r.Milestones); len(titles) > 0 {
-		fmt.Fprintf(&b, "- **Milestones**: %s\n", toolutil.EscapeMdTableCell(strings.Join(titles, ", ")))
-	}
-	if r.Description != "" {
-		fmt.Fprintf(&b, "\n### Description\n\n%s\n", toolutil.WrapGFMBody(r.Description))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use gitlab_release action 'link_list' to see release assets",
-		"Use gitlab_release action 'link_create' to add a single asset link",
-		"Use gitlab_release action 'link_create_batch' to add multiple asset links in one call",
-		"Use gitlab_package action 'publish_and_link' to upload and link binaries to this release",
-		"Use gitlab_release action 'update' to edit the release description",
+	c.URL(releaseWebURL(r))
+	c.Text("Description", r.Description)
+	c.End(
+		toolutil.HintAction(hintActionReleaseLinkList, "see the assets linked to this release"),
+		toolutil.HintAction(actionReleaseLinkCreate, "add a single asset link"),
+		toolutil.HintAction(actionReleaseLinkCreateBulk, "add several asset links in one call"),
+		toolutil.HintAction(actionPackagePublishAndLink, "upload a binary and link it to this release"),
+		toolutil.HintAction(actionReleaseUpdate, "edit the release notes"),
 	)
 	return b.String()
 }
 
-// FormatListMarkdown renders a list of releases as a Markdown table.
+// FormatListMarkdown renders a page of a project's releases as a Markdown
+// table.
 func FormatListMarkdown(out ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Releases (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Releases), out.Pagination)
 	if len(out.Releases) == 0 {
-		b.WriteString("No releases found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("releases")
 	}
-	b.WriteString("| Tag | Name | Author | Released |\n")
-	b.WriteString(toolutil.TblSep4Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Releases", len(out.Releases), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Tag", "Name", "Author", "Released"))
 	for _, r := range out.Releases {
-		released := r.ReleasedAt
-		if released == "" {
-			released = r.CreatedAt
+		var author string
+		if r.Author != nil {
+			author = toolutil.MdUserLink(r.Author.Username, r.Author.WebURL)
 		}
 		// The cell escaper leaves ']' alone, so a hand-built link's label could
 		// be closed from inside it by a tag holding one.
-		tag := toolutil.MdTitleLink(r.TagName, releaseWebURL(r))
-		var author string
-		if r.Author != nil {
-			author = r.Author.Username
-		}
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", tag, toolutil.EscapeMdTableCell(r.Name), toolutil.EscapeMdTableCell(author), toolutil.FormatTime(released))
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(r.TagName, releaseWebURL(r)),
+			toolutil.EscapeMdTableCell(r.Name),
+			author,
+			releasedCell(r.ReleasedAt, r.CreatedAt, r.UpcomingRelease),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use action 'get' with a tag_name to see full release details",
-		"Use action 'create' to create a new release",
-		"Use gitlab_tag action 'list' to see available tags",
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(actionReleaseGet, "see one release in full, with its notes and assets"),
+		toolutil.HintAction(actionReleaseCreate, "create a new release"),
+		toolutil.HintAction(actionTagList, "see the tags a release can be cut from"),
 	)
 	return b.String()
 }

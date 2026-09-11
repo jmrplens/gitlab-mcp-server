@@ -2,65 +2,80 @@ package runnercontrollerscopes
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatScopesMarkdown renders scopes as Markdown.
+// The canonical catalog IDs the hints name. A scope action is projected under
+// the runner domain, so the ID every surface resolves carries that prefix,
+// which the bare action names in action_specs.go do not.
+const (
+	hintActionScopeList           = "runner." + actionScopeList
+	hintActionScopeAddInstance    = "runner." + actionScopeAddInstance
+	hintActionScopeAddRunner      = "runner." + actionScopeAddRunner
+	hintActionScopeRemoveInstance = "runner." + actionScopeRemoveInstance
+	hintActionScopeRemoveRunner   = "runner." + actionScopeRemoveRunner
+)
+
+// FormatScopesMarkdown renders every scope a runner controller holds: the card
+// of one controller's scoping, with each kind of scope as a nested collection
+// under a heading of its own.
 func FormatScopesMarkdown(out ScopesOutput) string {
 	var b strings.Builder
-	b.WriteString("## Runner Controller Scopes\n\n")
-	fmt.Fprintf(&b, "### Instance-Level Scopes (%d)\n\n", len(out.InstanceLevelScopings))
+	c := toolutil.NewCard(&b, "Runner Controller Scopes")
 	if len(out.InstanceLevelScopings) == 0 {
-		b.WriteString("No instance-level scopes configured.\n")
+		c.Section(fmt.Sprintf("Instance-Level Scopes (%d)", 0)).
+			Note("No instance-level scopes configured.")
 	} else {
-		b.WriteString("| Created At | Updated At |\n")
-		b.WriteString("| --- | --- |\n")
+		t := c.Table(fmt.Sprintf("Instance-Level Scopes (%d)", len(out.InstanceLevelScopings)), "Created", "Updated")
 		for _, is := range out.InstanceLevelScopings {
-			fmt.Fprintf(&b, "| %s | %s |\n", toolutil.FormatTime(is.CreatedAt), toolutil.FormatTime(is.UpdatedAt))
+			t.Row(toolutil.FormatTime(is.CreatedAt), toolutil.FormatTime(is.UpdatedAt))
 		}
-		b.WriteString("\n")
 	}
-	fmt.Fprintf(&b, "### Runner-Level Scopes (%d)\n\n", len(out.RunnerLevelScopings))
 	if len(out.RunnerLevelScopings) == 0 {
-		b.WriteString("No runner-level scopes configured.\n")
+		c.Section(fmt.Sprintf("Runner-Level Scopes (%d)", 0)).
+			Note("No runner-level scopes configured.")
 	} else {
-		b.WriteString("| Runner ID | Created At | Updated At |\n")
-		b.WriteString("| --- | --- | --- |\n")
+		t := c.Table(fmt.Sprintf("Runner-Level Scopes (%d)", len(out.RunnerLevelScopings)), "Runner ID", "Created", "Updated")
 		for _, rs := range out.RunnerLevelScopings {
-			fmt.Fprintf(&b, "| %d | %s | %s |\n", rs.RunnerID, toolutil.FormatTime(rs.CreatedAt), toolutil.FormatTime(rs.UpdatedAt))
+			t.Row(strconv.FormatInt(rs.RunnerID, 10), toolutil.FormatTime(rs.CreatedAt), toolutil.FormatTime(rs.UpdatedAt))
 		}
 	}
-	toolutil.WriteHints(&b, "Use `gitlab_runner_controller_scope_add_instance` to add a new scope")
+	c.End(
+		toolutil.HintAction(hintActionScopeAddInstance, "grant this controller the instance-level scope"),
+		toolutil.HintAction(hintActionScopeAddRunner, "scope this controller to one more runner"),
+	)
 	return b.String()
 }
 
-// FormatInstanceScopeMarkdown renders an instance scope result as Markdown.
+// FormatInstanceScopeMarkdown renders the instance-level scope a controller was
+// granted as the card of one object.
 func FormatInstanceScopeMarkdown(out InstanceScopeOutput) string {
 	var b strings.Builder
-	b.WriteString("## Instance-Level Scope\n\n")
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, "- **Created At**: %s\n", toolutil.FormatTime(out.CreatedAt))
-	}
-	if out.UpdatedAt != "" {
-		fmt.Fprintf(&b, "- **Updated At**: %s\n", toolutil.FormatTime(out.UpdatedAt))
-	}
-	toolutil.WriteHints(&b, "Use scope tools to manage this controller's scopes")
+	c := toolutil.NewCard(&b, "Instance-Level Scope")
+	c.Time("Created", out.CreatedAt)
+	c.Time("Updated", out.UpdatedAt)
+	c.End(
+		toolutil.HintAction(hintActionScopeList, "see every scope this controller holds"),
+		toolutil.HintAction(hintActionScopeRemoveInstance, "revoke the instance-level scope"),
+	)
 	return b.String()
 }
 
-// FormatRunnerScopeMarkdown renders a runner scope result as Markdown.
+// FormatRunnerScopeMarkdown renders the scope tying a controller to one runner
+// as the card of one object.
 func FormatRunnerScopeMarkdown(out RunnerScopeOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Runner Scope (Runner #%d)\n\n", out.RunnerID)
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, "- **Created At**: %s\n", toolutil.FormatTime(out.CreatedAt))
-	}
-	if out.UpdatedAt != "" {
-		fmt.Fprintf(&b, "- **Updated At**: %s\n", toolutil.FormatTime(out.UpdatedAt))
-	}
-	toolutil.WriteHints(&b, "Use scope tools to manage this controller's scopes")
+	c := toolutil.NewCard(&b, fmt.Sprintf("Runner Scope (Runner #%d)", out.RunnerID))
+	c.Int("Runner ID", out.RunnerID)
+	c.Time("Created", out.CreatedAt)
+	c.Time("Updated", out.UpdatedAt)
+	c.End(
+		toolutil.HintAction(hintActionScopeList, "see every scope this controller holds"),
+		toolutil.HintAction(hintActionScopeRemoveRunner, "remove this runner from the controller's scope"),
+	)
 	return b.String()
 }
 

@@ -34,6 +34,15 @@ type Output struct {
 	DirectAssetURL string `json:"direct_asset_url,omitempty"`
 }
 
+// DeletedOutput is the link GitLab removed, carrying exactly the fields
+// [Output] carries and published under the same JSON keys, so the action's
+// schema is unchanged. It exists as a type of its own only so the Markdown
+// registry can render a deletion as a deletion: while the delete action
+// answered with [Output], its result rendered as an ordinary link card, under
+// the link's own heading and offering the reader an update and a delete of
+// something that had just gone.
+type DeletedOutput Output
+
 // DeleteInput defines parameters for deleting a release link.
 type DeleteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
@@ -207,22 +216,22 @@ func releaseLinkType(url, explicit string) gl.LinkTypeValue {
 
 // Delete removes an asset link from a release by its link ID.
 // Returns the deleted link details or an error if the link does not exist.
-func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (Output, error) {
+func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (DeletedOutput, error) {
 	if err := ctx.Err(); err != nil {
-		return Output{}, err
+		return DeletedOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("Delete: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return DeletedOutput{}, errors.New("Delete: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	if input.LinkID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("Delete", "link_id")
+		return DeletedOutput{}, toolutil.ErrRequiredInt64("Delete", "link_id")
 	}
 	l, _, err := client.GL().ReleaseLinks.DeleteReleaseLink(string(input.ProjectID), input.TagName, input.LinkID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("Delete", err, http.StatusNotFound,
+		return DeletedOutput{}, toolutil.WrapErrWithStatusHint("Delete", err, http.StatusNotFound,
 			"verify link_id with gitlab_release_link_list; deleting release links requires Developer role or higher")
 	}
-	return ToOutput(l), nil
+	return DeletedOutput(ToOutput(l)), nil
 }
 
 // Get retrieves a single release asset link by its ID.

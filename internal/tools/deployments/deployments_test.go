@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -1068,38 +1069,111 @@ func TestDeploymentApproveOrReject_CancelledContext(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_AllFields verifies the OutputMarkdown_AllFields Markdown formatter for a representative output_allfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// cardHints is the guidance section a deployment card that needs no approval
+// closes with, and blockedHints the one a deployment waiting on approvals
+// carries instead.
+const (
+	cardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'environment.deployment_merge_requests' to list the merge requests this deployment shipped\n" +
+		"- Use action 'environment.get' to see the environment it deployed to\n"
+	blockedHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'environment.deployment_approve_or_reject' to approve or reject this blocked deployment\n" +
+		"- Use action 'environment.deployment_merge_requests' to list the merge requests this deployment shipped\n" +
+		"- Use action 'environment.get' to see the environment it deployed to\n"
+)
+
+// listHints is the guidance section the listing closes with, the preserve-links
+// instruction first because the ID column links to the pipeline that ran each
+// deployment.
+const listHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- " + toolutil.HintPreserveLinks + "\n" +
+	"- Use action 'environment.deployment_get' to see one deployment, its approvals and its pipeline\n" +
+	"- Use action 'environment.deployment_list' to page through the rest of the project's deployments\n" +
+	"- Use action 'environment.deployment_merge_requests' to list the merge requests a deployment shipped\n"
+
+// TestFormatOutputMarkdown_AllFields pins the whole card of a deployment with
+// everything GitLab sends on an ordinary one: the status with its glyph, the
+// deployer as a profile link, and no approval rows for a deployment that needs
+// none.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:          1,
 		IID:         10,
 		Ref:         "main",
 		SHA:         "abc123",
 		Status:      "success",
-		User:        &UserOutput{Username: "admin"},
+		User:        &UserOutput{Username: "admin", WebURL: "https://gitlab.example.com/admin"},
 		Environment: &EnvironmentOutput{Name: "production"},
 		CreatedAt:   "2026-06-01T00:00:00Z",
 		UpdatedAt:   "2026-06-01T01:00:00Z",
 	})
 
-	for _, want := range []string{
-		"## Deployment #1",
-		"| IID | 10 |",
-		"| Ref | main |",
-		"| SHA | abc123 |",
-		"| Status | success |",
-		"| User | admin |",
-		"| Environment | production |",
-		"| Created | 1 Jun 2026 00:00 UTC |",
-		"| Updated | 1 Jun 2026 01:00 UTC |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Deployment #1\n\n" +
+		"- **IID**: 10\n" +
+		"- **Status**: ✅ success\n" +
+		"- **Ref**: main\n" +
+		"- **SHA**: `abc123`\n" +
+		"- **Environment**: production\n" +
+		"- **Deployed By**: [@admin](https://gitlab.example.com/admin)\n" +
+		"- **Created**: 1 Jun 2026 00:00 UTC\n" +
+		"- **Updated**: 1 Jun 2026 01:00 UTC\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatOutputMarkdown_Blocked pins what the card was missing entirely: a
+// deployment GitLab is holding for approval says how many are outstanding, who
+// has answered so far and which rules it is counted against, and offers the
+// action that unblocks it.
+func TestFormatOutputMarkdown_Blocked(t *testing.T) {
+	approved := time.Date(2026, 6, 2, 9, 30, 0, 0, time.UTC)
+	got := FormatOutputMarkdown(Output{
+		ID:                   4,
+		IID:                  2,
+		Ref:                  "main",
+		SHA:                  "0123456789abcdef",
+		Status:               "blocked",
+		Environment:          &EnvironmentOutput{Name: "production"},
+		PendingApprovalCount: 1,
+		Approvals: []toolutil.DeploymentApprovalOutput{{
+			User:      &toolutil.UserBasicOutput{Username: "dana", WebURL: "https://gitlab.example.com/dana"},
+			Status:    "approved",
+			CreatedAt: &approved,
+			Comment:   "looks good",
+		}},
+		ApprovalSummary: &toolutil.DeploymentApprovalSummaryOutput{Rules: []toolutil.DeploymentApprovalRuleOutput{
+			{
+				ID: 1, AccessLevel: 40, AccessLevelDescription: "Maintainers", RequiredApprovals: 2,
+				DeploymentApprovals: []toolutil.DeploymentApprovalOutput{{Status: "approved"}},
+			},
+			{ID: 2, AccessLevelDescription: "Sam Bauch", UserID: 7, RequiredApprovals: 1},
+		}},
+	})
+
+	want := "## Deployment #4\n\n" +
+		"- **IID**: 2\n" +
+		// PipelineStatusEmoji has no entry for a deployment's own "blocked"
+		// state, the one status a pipeline never has, so it renders the glyph
+		// it gives any value its table does not know.
+		"- **Status**: ❓ blocked\n" +
+		"- **Ref**: main\n" +
+		"- **SHA**: `01234567`\n" +
+		"- **Environment**: production\n" +
+		"- **Pending Approvals**: 1\n" +
+		"\n### Approvals\n\n" +
+		"| User | Status | When | Comment |\n| --- | --- | --- | --- |\n" +
+		"| [@dana](https://gitlab.example.com/dana) | approved | 2 Jun 2026 09:30 UTC | looks good |\n" +
+		"\n### Approval Rules\n\n" +
+		"| ID | Level | Grantee | Description | Required | Approved |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | Maintainer |  | Maintainers | 2 | 1 |\n" +
+		"| 2 | - | user #7 | Sam Bauch | 1 | 0 |\n" +
+		blockedHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1113,11 +1187,11 @@ func TestFormatOutputMarkdown_ZeroID(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies the OutputMarkdown_MinimalFields Markdown formatter for a representative output_minimalfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_MinimalFields pins the whole card of a deployment
+// GitLab answered with nothing optional: no label with an empty value under
+// it, and no approval rows for a deployment that needs none.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:     2,
 		IID:    2,
 		Ref:    "develop",
@@ -1125,28 +1199,22 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 		Status: "running",
 	})
 
-	if !strings.Contains(md, "## Deployment #2") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	for _, absent := range []string{
-		"| User |",
-		"| Environment |",
-		"| Created |",
-		"| Updated |",
-	} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-			}
-		})
+	want := "## Deployment #2\n\n" +
+		"- **IID**: 2\n" +
+		"- **Status**: \U0001F535 running\n" +
+		"- **Ref**: develop\n" +
+		"- **SHA**: `def456`\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_WithPipelineWebURL verifies the OutputMarkdown_WithPipelineWebURL Markdown formatter for a representative output_withpipelineweburl input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_WithPipelineWebURL pins the two rows the backing job
+// adds: the pipeline as a link, and its own status beside the deployment's.
 func TestFormatOutputMarkdown_WithPipelineWebURL(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:     5,
 		IID:    5,
 		Ref:    "main",
@@ -1156,16 +1224,23 @@ func TestFormatOutputMarkdown_WithPipelineWebURL(t *testing.T) {
 			ID: 99,
 			Pipeline: &DeployablePipelineOutput{
 				ID:     123,
+				Status: "success",
 				WebURL: "https://gitlab.example.com/my-org/project/-/pipelines/123",
 			},
 		},
 	})
 
-	if !strings.Contains(md, "| Pipeline |") {
-		t.Errorf("markdown missing Pipeline row:\n%s", md)
-	}
-	if !strings.Contains(md, "https://gitlab.example.com/my-org/project/-/pipelines/123") {
-		t.Errorf("markdown missing pipeline URL:\n%s", md)
+	want := "## Deployment #5\n\n" +
+		"- **IID**: 5\n" +
+		"- **Status**: ✅ success\n" +
+		"- **Ref**: main\n" +
+		"- **SHA**: `abc123`\n" +
+		"- **Pipeline**: [#123](https://gitlab.example.com/my-org/project/-/pipelines/123)\n" +
+		"- **Pipeline Status**: ✅ success\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1173,52 +1248,67 @@ func TestFormatOutputMarkdown_WithPipelineWebURL(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithDeployments verifies the ListMarkdown_WithDeployments Markdown formatter for a representative list_withdeployments input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_WithDeployments pins the whole listing: the heading
+// counting what GitLab reported, each row's ID linked to the pipeline that ran
+// it where there is one, and one guidance section at the end.
 func TestFormatListMarkdown_WithDeployments(t *testing.T) {
-	out := ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Deployments: []Output{
-			{ID: 1, IID: 1, Ref: "main", SHA: "abc", Status: "success", Environment: &EnvironmentOutput{Name: "production"}, User: &UserOutput{Username: "admin"}},
-			{ID: 2, IID: 2, Ref: "develop", SHA: "def", Status: "running", Environment: &EnvironmentOutput{Name: "staging"}, User: &UserOutput{Username: "dev"}},
+			{
+				ID: 1, IID: 1, Ref: "main", SHA: "abc", Status: "success",
+				Environment: &EnvironmentOutput{Name: "production"},
+				User:        &UserOutput{Username: "admin", WebURL: "https://gitlab.example.com/admin"},
+				Deployable: &DeployableOutput{Pipeline: &DeployablePipelineOutput{
+					ID: 123, WebURL: "https://gitlab.example.com/acme/web/-/pipelines/123",
+				}},
+			},
+			{
+				ID: 2, IID: 2, Ref: "develop", SHA: "def", Status: "running",
+				Environment: &EnvironmentOutput{Name: "staging"},
+				User:        &UserOutput{Username: "dev"},
+			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
-	}
-	md := FormatListMarkdown(out)
+	})
 
-	for _, want := range []string{
-		"## Deployments (2)",
-		"| ID |",
-		"| --- |",
-		"| 1 |",
-		"| 2 |",
-		"main",
-		"develop",
-		"success",
-		"running",
-		"production",
-		"staging",
-		"admin",
-		"dev",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Deployments (2)\n\n" +
+		"| ID | IID | Ref | Status | Environment | Deployed By |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| [1](https://gitlab.example.com/acme/web/-/pipelines/123) | 1 | main | ✅ success | production | [@admin](https://gitlab.example.com/admin) |\n" +
+		"| 2 | 2 | develop | \U0001F535 running | staging | @dev |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No deployments found") {
-		t.Errorf("expected empty message:\n%s", md)
+// TestFormatListMarkdown_KeysetPage pins the heading of a page GitLab sent no
+// total for: it counts the rows shown rather than claiming a total of zero
+// above them.
+func TestFormatListMarkdown_KeysetPage(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Deployments: []Output{{ID: 9, IID: 3, Ref: "main", Status: "success"}},
+		Pagination:  toolutil.PaginationOutput{HasMore: true},
+	})
+
+	want := "## Deployments (1 shown, more available)\n\n" +
+		"| ID | IID | Ref | Status | Environment | Deployed By |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| 9 | 3 | main | ✅ success |  |  |\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+}
+
+// TestFormatListMarkdown_Empty pins that a project with no deployments renders
+// the one sentence and nothing else.
+func TestFormatListMarkdown_Empty(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{})
+
+	if want := "No deployments found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1239,40 +1329,43 @@ func TestFormatDeploymentNotFound(t *testing.T) {
 // FormatApproveOrRejectMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatApproveOrRejectMarkdown_Approved verifies the ApproveOrRejectMarkdown_Approved Markdown formatter for a representative approveorreject_approved input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// confirmHints is the guidance section the approve/reject confirmation closes
+// with.
+const confirmHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'environment.deployment_get' to read the deployment back with its approvals\n" +
+	"- Use action 'environment.deployment_list' to see the other deployments to this environment\n"
+
+// TestFormatApproveOrRejectMarkdown_Approved pins the whole confirmation: one
+// line of the server's own sentence, then the guidance section.
 func TestFormatApproveOrRejectMarkdown_Approved(t *testing.T) {
-	md := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{
+	got := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{
 		Message: "Deployment #10 approved successfully",
 	})
-	if !strings.Contains(md, "Deployment #10 approved successfully") {
-		t.Errorf("markdown missing approval message:\n%s", md)
-	}
-	if !strings.Contains(md, "✅") {
-		t.Errorf("markdown missing checkmark:\n%s", md)
+
+	if want := "✅ Deployment #10 approved successfully\n" + confirmHints; got != want {
+		t.Errorf("confirmation mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatApproveOrRejectMarkdown_Rejected verifies the ApproveOrRejectMarkdown_Rejected Markdown formatter for a representative approveorreject_rejected input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatApproveOrRejectMarkdown_Rejected pins the same shape for the other
+// half of the action.
 func TestFormatApproveOrRejectMarkdown_Rejected(t *testing.T) {
-	md := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{
+	got := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{
 		Message: "Deployment #10 rejected successfully",
 	})
-	if !strings.Contains(md, "Deployment #10 rejected successfully") {
-		t.Errorf("markdown missing rejection message:\n%s", md)
+
+	if want := "✅ Deployment #10 rejected successfully\n" + confirmHints; got != want {
+		t.Errorf("confirmation mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatApproveOrRejectMarkdown_EmptyMessage verifies the ApproveOrRejectMarkdown_EmptyMessage Markdown formatter for a representative approveorreject_emptymessage input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatApproveOrRejectMarkdown_EmptyMessage pins that a result carrying no
+// sentence still renders the glyph and the guidance rather than nothing.
 func TestFormatApproveOrRejectMarkdown_EmptyMessage(t *testing.T) {
-	md := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{})
-	if md == "" {
-		t.Error("expected non-empty markdown even for empty message")
+	got := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{})
+
+	if want := "✅ \n" + confirmHints; got != want {
+		t.Errorf("confirmation mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1284,7 +1377,7 @@ func TestFormatApproveOrRejectMarkdown_EmptyMessage(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestToOutput_AllOptionalFields(t *testing.T) {
-	out := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:          100,
 		IID:         50,
 		Ref:         "v2.0.0",
@@ -1296,22 +1389,19 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 		UpdatedAt:   "2026-12-01T12:00:00Z",
 	})
 
-	for _, want := range []string{
-		"## Deployment #100",
-		"| IID | 50 |",
-		"| Ref | v2.0.0 |",
-		"| SHA | deadbeef |",
-		"| Status | failed |",
-		"| User | deployer |",
-		"| Environment | canary |",
-		"| Created | 1 Dec 2026 00:00 UTC |",
-		"| Updated | 1 Dec 2026 12:00 UTC |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(out, want) {
-				t.Errorf("markdown missing %q:\n%s", want, out)
-			}
-		})
+	want := "## Deployment #100\n\n" +
+		"- **IID**: 50\n" +
+		"- **Status**: ❌ failed\n" +
+		"- **Ref**: v2.0.0\n" +
+		"- **SHA**: `deadbeef`\n" +
+		"- **Environment**: canary\n" +
+		"- **Deployed By**: @deployer\n" +
+		"- **Created**: 1 Dec 2026 00:00 UTC\n" +
+		"- **Updated**: 1 Dec 2026 12:00 UTC\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

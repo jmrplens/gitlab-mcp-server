@@ -363,81 +363,132 @@ func TestRemoveRunnerScope_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestFormatScopesMarkdown verifies Markdown for scopes with various combinations.
-func TestFormatScopesMarkdown(t *testing.T) {
-	// Both instance and runner scopes
-	out := ScopesOutput{
+// scopesHints, instanceHints and runnerHints are the guidance sections the
+// three scope renderings close with.
+const (
+	scopesHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'runner.controller_scope_add_instance' to grant this controller the instance-level scope\n" +
+		"- Use action 'runner.controller_scope_add_runner' to scope this controller to one more runner\n"
+	instanceHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'runner.controller_scope_list' to see every scope this controller holds\n" +
+		"- Use action 'runner.controller_scope_remove_instance' to revoke the instance-level scope\n"
+	runnerHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'runner.controller_scope_list' to see every scope this controller holds\n" +
+		"- Use action 'runner.controller_scope_remove_runner' to remove this runner from the controller's scope\n"
+)
+
+// TestFormatScopesMarkdown_BothKinds pins the whole card of a controller that
+// holds both kinds of scope: each collection as a table of its own, under a
+// heading that counts it.
+func TestFormatScopesMarkdown_BothKinds(t *testing.T) {
+	got := FormatScopesMarkdown(ScopesOutput{
 		InstanceLevelScopings: []InstanceScopeItem{
 			{CreatedAt: "2026-01-15T10:00:00Z", UpdatedAt: "2026-01-15T12:00:00Z"},
 		},
 		RunnerLevelScopings: []RunnerScopeItem{
 			{RunnerID: 42, CreatedAt: "2026-01-15T10:00:00Z", UpdatedAt: "2026-01-15T12:00:00Z"},
 		},
-	}
+	})
 
-	md := FormatScopesMarkdown(out)
-	for _, want := range []string{"Instance-Level", "Runner-Level", "42"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q: %s", want, md)
-			}
-		})
-	}
+	want := "## Runner Controller Scopes\n\n" +
+		"### Instance-Level Scopes (1)\n\n" +
+		"| Created | Updated |\n| --- | --- |\n" +
+		"| 15 Jan 2026 10:00 UTC | 15 Jan 2026 12:00 UTC |\n" +
+		"\n### Runner-Level Scopes (1)\n\n" +
+		"| Runner ID | Created | Updated |\n| --- | --- | --- |\n" +
+		"| 42 | 15 Jan 2026 10:00 UTC | 15 Jan 2026 12:00 UTC |\n" +
+		scopesHints
 
-	// Empty instance scopes
-	out.InstanceLevelScopings = nil
-	md = FormatScopesMarkdown(out)
-	if !strings.Contains(md, "No instance-level scopes") {
-		t.Errorf("expected empty instance message: %s", md)
-	}
-
-	// Empty runner scopes
-	out.RunnerLevelScopings = nil
-	out.InstanceLevelScopings = []InstanceScopeItem{{CreatedAt: "2026-01-15T10:00:00Z"}}
-	md = FormatScopesMarkdown(out)
-	if !strings.Contains(md, "No runner-level scopes") {
-		t.Errorf("expected empty runner message: %s", md)
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatInstanceScopeMarkdown verifies instance scope Markdown formatting.
+// TestFormatScopesMarkdown_EmptyKinds pins the card of a controller with no
+// scope of one kind or of either: the section says so in a sentence instead of
+// opening an empty table.
+func TestFormatScopesMarkdown_EmptyKinds(t *testing.T) {
+	noInstance := FormatScopesMarkdown(ScopesOutput{
+		RunnerLevelScopings: []RunnerScopeItem{{RunnerID: 42, CreatedAt: "2026-01-15T10:00:00Z"}},
+	})
+
+	wantNoInstance := "## Runner Controller Scopes\n\n" +
+		"### Instance-Level Scopes (0)\n\n" +
+		"No instance-level scopes configured.\n" +
+		"\n### Runner-Level Scopes (1)\n\n" +
+		"| Runner ID | Created | Updated |\n| --- | --- | --- |\n" +
+		"| 42 | 15 Jan 2026 10:00 UTC |  |\n" +
+		scopesHints
+
+	if noInstance != wantNoInstance {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", noInstance, wantNoInstance)
+	}
+
+	neither := FormatScopesMarkdown(ScopesOutput{})
+
+	wantNeither := "## Runner Controller Scopes\n\n" +
+		"### Instance-Level Scopes (0)\n\n" +
+		"No instance-level scopes configured.\n" +
+		"\n### Runner-Level Scopes (0)\n\n" +
+		"No runner-level scopes configured.\n" +
+		scopesHints
+
+	if neither != wantNeither {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", neither, wantNeither)
+	}
+}
+
+// TestFormatInstanceScopeMarkdown pins the whole card of an instance-level
+// scope, with and without the timestamps GitLab may omit.
 func TestFormatInstanceScopeMarkdown(t *testing.T) {
-	out := InstanceScopeOutput{
+	got := FormatInstanceScopeMarkdown(InstanceScopeOutput{
 		CreatedAt: "2026-01-15T10:00:00Z",
 		UpdatedAt: "2026-01-15T12:00:00Z",
+	})
+
+	want := "## Instance-Level Scope\n\n" +
+		"- **Created**: 15 Jan 2026 10:00 UTC\n" +
+		"- **Updated**: 15 Jan 2026 12:00 UTC\n" +
+		instanceHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 
-	md := FormatInstanceScopeMarkdown(out)
-	if !strings.Contains(md, "Created At") || !strings.Contains(md, "Updated At") {
-		t.Errorf("markdown missing timestamps: %s", md)
-	}
+	bare := FormatInstanceScopeMarkdown(InstanceScopeOutput{})
 
-	// Without timestamps
-	md = FormatInstanceScopeMarkdown(InstanceScopeOutput{})
-	if strings.Contains(md, "Created At") {
-		t.Error("should not contain Created At when empty")
+	if wantBare := "## Instance-Level Scope\n" + instanceHints; bare != wantBare {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", bare, wantBare)
 	}
 }
 
-// TestFormatRunnerScopeMarkdown verifies runner scope Markdown formatting.
+// TestFormatRunnerScopeMarkdown pins the whole card of a runner-level scope,
+// with and without the timestamps GitLab may omit.
 func TestFormatRunnerScopeMarkdown(t *testing.T) {
-	out := RunnerScopeOutput{
+	got := FormatRunnerScopeMarkdown(RunnerScopeOutput{
 		RunnerID:  42,
 		CreatedAt: "2026-01-15T10:00:00Z",
 		UpdatedAt: "2026-01-15T12:00:00Z",
+	})
+
+	want := "## Runner Scope (Runner #42)\n\n" +
+		"- **Runner ID**: 42\n" +
+		"- **Created**: 15 Jan 2026 10:00 UTC\n" +
+		"- **Updated**: 15 Jan 2026 12:00 UTC\n" +
+		runnerHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 
-	md := FormatRunnerScopeMarkdown(out)
-	if !strings.Contains(md, "42") || !strings.Contains(md, "Created At") {
-		t.Errorf("markdown missing data: %s", md)
-	}
+	bare := FormatRunnerScopeMarkdown(RunnerScopeOutput{RunnerID: 42})
 
-	// Without timestamps
-	out.CreatedAt = ""
-	out.UpdatedAt = ""
-	md = FormatRunnerScopeMarkdown(out)
-	if strings.Contains(md, "Created At") {
-		t.Error("should not contain Created At when empty")
+	wantBare := "## Runner Scope (Runner #42)\n\n" +
+		"- **Runner ID**: 42\n" +
+		runnerHints
+
+	if bare != wantBare {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", bare, wantBare)
 	}
 }
 

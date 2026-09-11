@@ -648,34 +648,78 @@ func TestList_EmptyResult(t *testing.T) {
 // FormatMarkdown — all fields, minimal fields, upcoming release
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_AllFields verifies FormatMarkdown when all fields.
+// cardHints is the guidance section every release card closes with.
+const cardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'release.link_list' to see the assets linked to this release\n" +
+	"- Use action 'release.link_create' to add a single asset link\n" +
+	"- Use action 'release.link_create_batch' to add several asset links in one call\n" +
+	"- Use action 'package.publish_and_link' to upload a binary and link it to this release\n" +
+	"- Use action 'release.update' to edit the release notes\n"
+
+// listHints is the guidance section the listing closes with, the preserve-links
+// instruction first because the Tag column carries links.
+const listHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- " + toolutil.HintPreserveLinks + "\n" +
+	"- Use action 'release.get' to see one release in full, with its notes and assets\n" +
+	"- Use action 'release.create' to create a new release\n" +
+	"- Use action 'tag.list' to see the tags a release can be cut from\n"
+
+// TestFormatMarkdown_AllFields pins the whole card of a release with
+// everything GitLab sends: the author as a handle, the commit as a code span,
+// the milestones escaped one title at a time, and the notes as quoted prose
+// under their label, which no heading of the response can be forged from.
 func TestFormatMarkdown_AllFields(t *testing.T) {
-	md := FormatMarkdown(Output{
+	got := FormatMarkdown(Output{
 		TagName:         "v2.0.0",
 		Name:            "Release v2.0.0",
 		Description:     "## Changes\n- Feature X",
-		Author:          &toolutil.AuthorOutput{Username: "admin"},
+		Author:          &toolutil.AuthorOutput{Username: "admin", WebURL: "https://gitlab.example.com/admin"},
 		CreatedAt:       "2026-03-02T10:00:00Z",
 		ReleasedAt:      "2026-03-02T10:00:00Z",
-		Commit:          &toolutil.CommitOutput{ID: "abc123"},
+		Commit:          &toolutil.CommitOutput{ID: "abc123", ShortID: "abc123", Title: "Fix login"},
 		UpcomingRelease: true,
 		Milestones:      []*toolutil.MilestoneOutput{{Title: "m1"}, {Title: "m2"}},
+		Assets:          &toolutil.AssetsOutput{Count: 3},
 	})
-	for _, want := range []string{
-		"## Release: Release v2.0.0",
-		"**Tag**: v2.0.0",
-		"**Author**: @admin",
-		"**Commit**: abc123",
-		"**Upcoming release**",
-		"**Milestones**: m1, m2",
-		"### Description",
-		"Feature X",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+
+	want := "## Release: Release v2.0.0\n\n" +
+		"- **Tag**: v2.0.0\n" +
+		"- **Author**: [@admin](https://gitlab.example.com/admin)\n" +
+		"- **Created**: 2 Mar 2026 10:00 UTC\n" +
+		"- **Released**: \U0001F4C5 2 Mar 2026 10:00 UTC\n" +
+		"- \U0001F4C5 **Upcoming release**\n" +
+		"- **Commit**: `abc123`\n" +
+		"- **Commit Title**: Fix login\n" +
+		"- **Milestones**: m1, m2\n" +
+		"- **Assets**: 3\n" +
+		"- **Description**:\n" +
+		"  > ## Changes\n" +
+		"  > - Feature X\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatMarkdown_MilestoneTitlesAreEscapedOneAtATime pins the defect the
+// join hid: a milestone title carrying a pipe used to be escaped after the
+// join, which cannot tell the separator this formatter wrote from one the
+// title holds.
+func TestFormatMarkdown_MilestoneTitlesAreEscapedOneAtATime(t *testing.T) {
+	got := FormatMarkdown(Output{
+		TagName:    "v3.0.0",
+		Name:       "Escaping",
+		Milestones: []*toolutil.MilestoneOutput{{Title: "a|b"}, {Title: ""}, {Title: "[c](http://attacker.invalid/)"}},
+	})
+
+	want := "## Release: Escaping\n\n" +
+		"- **Tag**: v3.0.0\n" +
+		"- **Milestones**: a&#124;b, &#91;c](http://attacker.invalid/)\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -690,45 +734,59 @@ func TestFormatReleaseNotFound(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_MinimalFields verifies FormatMarkdown when minimal fields.
+// TestFormatMarkdown_MinimalFields pins the whole card of a release GitLab
+// answered with nothing optional: three rows and no label with an empty value
+// under it.
 func TestFormatMarkdown_MinimalFields(t *testing.T) {
-	md := FormatMarkdown(Output{
+	got := FormatMarkdown(Output{
 		TagName:   "v0.1.0",
 		Name:      "Beta",
 		CreatedAt: "2026-01-01T00:00:00Z",
 	})
-	if !strings.Contains(md, "## Release: Beta") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	if !strings.Contains(md, "**Tag**: v0.1.0") {
-		t.Errorf("missing tag:\n%s", md)
-	}
-	for _, absent := range []string{
-		"**Author**",
-		"**Commit**",
-		"**Upcoming release**",
-		"**Milestones**",
-		"### Description",
-		"**Released**",
-	} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-			}
-		})
+
+	want := "## Release: Beta\n\n" +
+		"- **Tag**: v0.1.0\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatMarkdown_WithReleasedAt verifies FormatMarkdown when with released at.
+// TestFormatMarkdown_UntitledRelease pins the heading of a release GitLab has
+// no title for: the tag names it, rather than a heading trailing a colon.
+func TestFormatMarkdown_UntitledRelease(t *testing.T) {
+	got := FormatMarkdown(Output{TagName: "v0.2.0"})
+
+	want := "## Release: v0.2.0\n\n" +
+		"- **Tag**: v0.2.0\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatMarkdown_WithReleasedAt pins the release date of a release already
+// out: the display form, and no calendar marker, which belongs to an upcoming
+// one.
 func TestFormatMarkdown_WithReleasedAt(t *testing.T) {
-	md := FormatMarkdown(Output{
+	got := FormatMarkdown(Output{
 		TagName:    "v1.5.0",
 		Name:       "Patch",
 		CreatedAt:  "2026-02-01T00:00:00Z",
 		ReleasedAt: "2026-02-15T00:00:00Z",
 	})
-	if !strings.Contains(md, "**Released**: 15 Feb 2026 00:00 UTC") {
-		t.Errorf("missing released_at:\n%s", md)
+
+	want := "## Release: Patch\n\n" +
+		"- **Tag**: v1.5.0\n" +
+		"- **Created**: 1 Feb 2026 00:00 UTC\n" +
+		"- **Released**: 15 Feb 2026 00:00 UTC\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -736,60 +794,82 @@ func TestFormatMarkdown_WithReleasedAt(t *testing.T) {
 // FormatListMarkdown — with data, empty, pagination
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
+// TestFormatListMarkdown_WithData pins the whole listing: the heading counting
+// what GitLab reported, the author as a handle, the pagination line and one
+// guidance section.
 func TestFormatListMarkdown_WithData(t *testing.T) {
-	out := ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Releases: []Output{
 			{TagName: "v2.0.0", Name: "Major", Author: &toolutil.AuthorOutput{Username: "admin"}, ReleasedAt: "2026-06-01T10:00:00Z"},
 			{TagName: "v1.0.0", Name: "First", Author: &toolutil.AuthorOutput{Username: "dev"}, CreatedAt: "2026-01-01T10:00:00Z"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
-	}
-	md := FormatListMarkdown(out)
-	for _, want := range []string{
-		"## Releases (2)",
-		"| Tag | Name | Author | Released |",
-		"v2.0.0",
-		"Major",
-		"admin",
-		"v1.0.0",
-		"First",
-		"dev",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	})
+
+	want := "## Releases (2)\n\n" +
+		"| Tag | Name | Author | Released |\n| --- | --- | --- | --- |\n" +
+		"| v2.0.0 | Major | @admin | 1 Jun 2026 10:00 UTC |\n" +
+		"| v1.0.0 | First | @dev | 1 Jan 2026 10:00 UTC |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_UpcomingIsMarked pins what the Released column was
+// missing: a release GitLab flagged as upcoming carries the calendar glyph, so
+// a date in the future no longer reads as one already past.
+func TestFormatListMarkdown_UpcomingIsMarked(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Releases: []Output{
+			{TagName: "v9.0.0", Name: "Planned", ReleasedAt: "2027-01-01T00:00:00Z", UpcomingRelease: true},
+		},
+		Pagination: toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1},
+	})
+
+	want := "## Releases (1)\n\n" +
+		"| Tag | Name | Author | Released |\n| --- | --- | --- | --- |\n" +
+		"| v9.0.0 | Planned |  | \U0001F4C5 1 Jan 2027 00:00 UTC |\n" +
+		"\n1 items total\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_Empty pins that a project with no releases renders the
+// one sentence and nothing else: no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	out := ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Releases:   []Output{},
 		Pagination: toolutil.PaginationOutput{TotalItems: 0},
-	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "No releases found.") {
-		t.Errorf("expected 'No releases found.' in:\n%s", md)
-	}
-	if strings.Contains(md, "| Tag |") {
-		t.Errorf("should not contain table header for empty list:\n%s", md)
+	})
+
+	if want := "No releases found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_FallbackToCreatedAt verifies FormatListMarkdown when fallback to created at.
+// TestFormatListMarkdown_FallbackToCreatedAt pins the Released column of a
+// release GitLab sent no release date for: it falls back to when the release
+// was created rather than leaving the cell empty.
 func TestFormatListMarkdown_FallbackToCreatedAt(t *testing.T) {
-	out := ListOutput{
-		Releases: []Output{
-			{TagName: "v0.1.0", Name: "Alpha", CreatedAt: "2026-01-01T00:00:00Z"},
-		},
+	got := FormatListMarkdown(ListOutput{
+		Releases:   []Output{{TagName: "v0.1.0", Name: "Alpha", CreatedAt: "2026-01-01T00:00:00Z"}},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
-	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "1 Jan 2026 00:00 UTC") {
-		t.Errorf("expected created_at fallback in Released column:\n%s", md)
+	})
+
+	want := "## Releases (1)\n\n" +
+		"| Tag | Name | Author | Released |\n| --- | --- | --- | --- |\n" +
+		"| v0.1.0 | Alpha |  | 1 Jan 2026 00:00 UTC |\n" +
+		"\nPage 1 of 1 | 1 items total | 20 per page\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -880,86 +960,83 @@ func TestToOutput_WebURL_EmptyEditURL(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_WithWebURL verifies that the detail Markdown includes
-// a clickable URL link when a web URL is derivable from _links.edit_url.
+// TestFormatMarkdown_WithWebURL pins the whole card of a release whose page
+// GitLab names through its self link: the card's address is its URL row, and a
+// release whose links carry only the edit form is linked to the page that form
+// edits.
 func TestFormatMarkdown_WithWebURL(t *testing.T) {
-	md := FormatMarkdown(Output{
+	selfCard := FormatMarkdown(Output{
+		TagName:   "v1.0.0",
+		Name:      "Release v1.0.0",
+		CreatedAt: "2026-03-01T10:00:00Z",
+		Links: &toolutil.LinksOutput{
+			Self:    "https://gitlab.example.com/-/releases/v1.0.0",
+			EditURL: "https://gitlab.example.com/-/releases/v1.0.0/edit",
+		},
+	})
+
+	want := "## Release: Release v1.0.0\n\n" +
+		"- **Tag**: v1.0.0\n" +
+		"- **Created**: 1 Mar 2026 10:00 UTC\n" +
+		"- **URL**: [https://gitlab.example.com/-/releases/v1.0.0](https://gitlab.example.com/-/releases/v1.0.0)\n" +
+		cardHints
+
+	if selfCard != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", selfCard, want)
+	}
+
+	editCard := FormatMarkdown(Output{
 		TagName:   "v1.0.0",
 		Name:      "Release v1.0.0",
 		CreatedAt: "2026-03-01T10:00:00Z",
 		Links:     &toolutil.LinksOutput{EditURL: "https://gitlab.example.com/-/releases/v1.0.0/edit"},
 	})
-	want := "[https://gitlab.example.com/-/releases/v1.0.0](https://gitlab.example.com/-/releases/v1.0.0)"
-	if !strings.Contains(md, want) {
-		t.Errorf("FormatMarkdown missing clickable URL link, got:\n%s", md)
+
+	if editCard != want {
+		t.Errorf("edit-url fallback mismatch:\ngot:\n%s\nwant:\n%s", editCard, want)
 	}
 }
 
-// TestFormatMarkdown_WithoutWebURL verifies that no URL line appears when
-// WebURL is empty.
+// TestFormatMarkdown_WithoutWebURL pins that a release GitLab sent no links
+// for carries no URL row at all, rather than a label with nothing after it.
 func TestFormatMarkdown_WithoutWebURL(t *testing.T) {
-	md := FormatMarkdown(Output{
+	got := FormatMarkdown(Output{
 		TagName:   "v0.1.0",
 		Name:      "Alpha",
 		CreatedAt: "2026-01-01T00:00:00Z",
 	})
-	if strings.Contains(md, "**URL**") {
-		t.Errorf("FormatMarkdown should not contain URL when empty, got:\n%s", md)
+
+	want := "## Release: Alpha\n\n" +
+		"- **Tag**: v0.1.0\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatMarkdown_ContainsHints verifies that FormatMarkdown includes
-// next-step hints guiding the user to release link tools (single and batch)
-// and to publish_and_link for uploading binaries.
-func TestFormatMarkdown_ContainsHints(t *testing.T) {
-	md := FormatMarkdown(Output{
-		TagName:   "v1.0.0",
-		Name:      "Hints test",
-		CreatedAt: "2026-01-01T00:00:00Z",
-	})
-	for _, want := range []string{
-		"link_create'",
-		"link_create_batch'",
-		"publish_and_link'",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatMarkdown missing hint containing %q:\n%s", want, md)
-			}
-		})
-	}
-}
-
-// TestFormatListMarkdown_ClickableTagLink verifies that the list table
-// renders tag names as clickable Markdown links when WebURL is present.
+// TestFormatListMarkdown_ClickableTagLink pins that the Tag column links to the
+// release page derived from the edit URL, and renders plain text when GitLab
+// sent no links at all.
 func TestFormatListMarkdown_ClickableTagLink(t *testing.T) {
-	out := ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Releases: []Output{
 			{TagName: "v2.0.0", Name: "Major", Author: &toolutil.AuthorOutput{Username: "admin"}, ReleasedAt: "2026-06-01T10:00:00Z", Links: &toolutil.LinksOutput{EditURL: "https://gitlab.example.com/-/releases/v2.0.0/edit"}},
+			{TagName: "v1.0.0", Name: "First", CreatedAt: "2026-01-01T10:00:00Z"},
 		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
-	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "[v2.0.0](https://gitlab.example.com/-/releases/v2.0.0)") {
-		t.Errorf("FormatListMarkdown missing clickable tag link, got:\n%s", md)
-	}
-}
+		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
+	})
 
-// TestFormatListMarkdown_NoLinkWithoutWebURL verifies that tag names appear
-// as plain text when WebURL is empty.
-func TestFormatListMarkdown_NoLinkWithoutWebURL(t *testing.T) {
-	out := ListOutput{
-		Releases: []Output{
-			{TagName: "v1.0.0", Name: "First", CreatedAt: "2026-01-01T00:00:00Z"},
-		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
-	}
-	md := FormatListMarkdown(out)
-	if strings.Contains(md, "[v1.0.0](") {
-		t.Errorf("FormatListMarkdown should not contain link when WebURL is empty, got:\n%s", md)
-	}
-	if !strings.Contains(md, "v1.0.0") {
-		t.Errorf("FormatListMarkdown should contain tag name as plain text, got:\n%s", md)
+	want := "## Releases (2)\n\n" +
+		"| Tag | Name | Author | Released |\n| --- | --- | --- | --- |\n" +
+		"| [v2.0.0](https://gitlab.example.com/-/releases/v2.0.0) | Major | @admin | 1 Jun 2026 10:00 UTC |\n" +
+		"| v1.0.0 | First |  | 1 Jan 2026 10:00 UTC |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

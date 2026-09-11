@@ -280,17 +280,31 @@ func TestFormatTag_ListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatRelease_Markdown verifies that release fields and description
-// section appear in Markdown output.
+// TestFormatRelease_Markdown verifies the whole card a release renders as.
+// The release notes are a labeled quote under the fields rather than the
+// "### Description" section this used to assert: a one-line body stays on the
+// field's line, and a longer one is quoted under it, which is what the card
+// contract settled on for prose a person typed into GitLab.
 func TestFormatRelease_Markdown(t *testing.T) {
-	r := releases.Output{TagName: "v1.0", Name: "Version 1.0", Description: "Features", CreatedAt: testDate20260101, ReleasedAt: "2026-01-02"}
-	md := releases.FormatMarkdown(r)
+	got := releases.FormatMarkdown(releases.Output{
+		TagName: "v1.0", Name: "Version 1.0", Description: "Features",
+		CreatedAt: testDate20260101, ReleasedAt: "2026-01-02",
+	})
 
-	if !strings.Contains(md, "## Release: Version 1.0") {
-		t.Error(errMissingHeader)
-	}
-	if !strings.Contains(md, mdDescriptionHdr) {
-		t.Error("missing description section")
+	want := "## Release: Version 1.0\n\n" +
+		"- **Tag**: v1.0\n" +
+		"- **Created**: 1 Jan 2026\n" +
+		"- **Released**: 2 Jan 2026\n" +
+		"- **Description**: Features\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'release.link_list' to see the assets linked to this release\n" +
+		"- Use action 'release.link_create' to add a single asset link\n" +
+		"- Use action 'release.link_create_batch' to add several asset links in one call\n" +
+		"- Use action 'package.publish_and_link' to upload a binary and link it to this release\n" +
+		"- Use action 'release.update' to edit the release notes\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -2632,16 +2646,17 @@ func TestMarkdownRegistry_Exceptions_NameACaseEach(t *testing.T) {
 // by the migration. The audit knew of two; the record showed twelve, because
 // the shared note and discussion shapes are registered by every domain that
 // renders them and the first init to run wins for all of them, which is the
-// same defect as the runner token with more surfaces behind it. Eleven are
-// left: the one interface-typed registration, groupimportexport's dispatcher
-// over `any`, went with that package's card migration.
+// same defect as the runner token with more surfaces behind it. Ten are left:
+// the one interface-typed registration, groupimportexport's dispatcher over
+// `any`, went with that package's card migration, and the runner token went
+// with the runners migration, which gave the registration token an output
+// type of its own so the two secrets stopped sharing a formatter.
 func TestMarkdownRegistry_Registrations_HaveNoUndeclaredProblems(t *testing.T) {
 	got := toolutil.MarkdownRegistrationProblems()
 
 	want := []string{
 		"duplicate Markdown formatter for iterationdata.Output: the first registration is kept",
 		"duplicate Markdown formatter for labeldata.Output: the first registration is kept",
-		"duplicate Markdown formatter for runners.AuthTokenOutput: the first registration is kept",
 		"duplicate Markdown formatter for toolutil.DiscussionThreadNoteOutput: the first registration is kept",
 		"duplicate Markdown formatter for toolutil.DiscussionThreadNoteOutput: the first registration is kept",
 		"duplicate Markdown formatter for toolutil.DiscussionThreadNoteOutput: the first registration is kept",

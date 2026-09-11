@@ -773,11 +773,11 @@ func TestEnvironmentStop_ForceFalse(t *testing.T) {
 // toOutput — all optional timestamp fields
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_AllTimestampFields verifies the ToOutput_AllTimestampFields handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestToOutput_AllTimestampFields pins the whole card of an environment whose
+// three timestamps GitLab all sent: each is rendered in the display form and
+// none of them as the wire string.
 func TestToOutput_AllTimestampFields(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:          1,
 		Name:        "production",
 		Slug:        "production",
@@ -790,23 +790,20 @@ func TestToOutput_AllTimestampFields(t *testing.T) {
 		AutoStopAt:  "2026-12-31T23:59:59Z",
 	})
 
-	for _, want := range []string{
-		"## Environment: production",
-		"| ID | 1 |",
-		"| Slug | production |",
-		"| State | available |",
-		"| Tier | production |",
-		"| Description | Main prod environment |",
-		"| URL | https://prod.example.com |",
-		"| Created | 1 Jan 2026 00:00 UTC |",
-		"| Updated | 15 Jun 2026 12:00 UTC |",
-		"| Auto-Stop At | 31 Dec 2026 23:59 UTC |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Environment: production\n\n" +
+		"- **ID**: 1\n" +
+		"- **Slug**: production\n" +
+		"- **State**: available\n" +
+		"- **Tier**: production\n" +
+		"- **Description**: Main prod environment\n" +
+		"- **External URL**: [https://prod.example.com](https://prod.example.com)\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Updated**: 15 Jun 2026 12:00 UTC\n" +
+		"- **Auto-Stop At**: 31 Dec 2026 23:59 UTC\n" +
+		availableHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -837,36 +834,136 @@ func TestFormatEnvironmentNotFound(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies the OutputMarkdown_MinimalFields Markdown formatter for a representative output_minimalfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// stoppedHints and availableHints are the two guidance sections an environment
+// card closes with, chosen by the state the environment is in.
+const (
+	stoppedHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'environment.delete' to delete this stopped environment\n" +
+		"- Use action 'environment.deployment_list' to see the deployments to this environment\n"
+	availableHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'environment.stop' to stop this environment\n" +
+		"- Use action 'environment.deployment_list' to see the deployments to this environment\n"
+)
+
+// listHints is the guidance section the listing closes with, the preserve-links
+// instruction first because the External URL column carries links.
+const listHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- " + toolutil.HintPreserveLinks + "\n" +
+	"- Use action 'environment.get' to see one environment and what is deployed to it\n" +
+	"- Use action 'environment.create' to add a new environment\n" +
+	"- Use action 'environment.list' to page through the rest of the project's environments\n"
+
+// TestFormatOutputMarkdown_MinimalFields pins the whole card of an environment
+// GitLab answered with nothing optional: four rows, no label with an empty
+// value under it, and the hint the state allows.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:    7,
 		Name:  "dev",
 		Slug:  "dev",
 		State: "stopped",
 	})
 
-	if !strings.Contains(md, "## Environment: dev") {
-		t.Errorf("missing header:\n%s", md)
+	want := "## Environment: dev\n\n" +
+		"- **ID**: 7\n" +
+		"- **Slug**: dev\n" +
+		"- **State**: stopped\n" +
+		stoppedHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	if !strings.Contains(md, "| State | stopped |") {
-		t.Errorf("missing state:\n%s", md)
+}
+
+// TestFormatOutputMarkdown_FullCard pins the whole card of an environment with
+// everything GitLab sends: the external URL as a link, the project and the
+// cluster agent as nested objects, and the deployment running on it as a
+// section, which is the question an environment is looked up to answer.
+func TestFormatOutputMarkdown_FullCard(t *testing.T) {
+	got := FormatOutputMarkdown(Output{
+		ID:                  12,
+		Name:                "production",
+		Slug:                "production",
+		State:               "available",
+		Tier:                "production",
+		Description:         "Customer-facing",
+		ExternalURL:         "https://prod.example.com",
+		AutoStopSetting:     "with_action",
+		KubernetesNamespace: "prod",
+		FluxResourcePath:    "kustomization/prod",
+		CreatedAt:           "2026-01-02T03:04:00Z",
+		UpdatedAt:           "2026-02-03T04:05:00Z",
+		AutoStopAt:          "2026-03-04T05:06:00Z",
+		Project: &ProjectOutput{
+			ID:                3,
+			PathWithNamespace: "acme/web",
+			WebURL:            "https://gitlab.example.com/acme/web",
+		},
+		ClusterAgent: &ClusterAgentOutput{ID: 4, Name: "prod-agent"},
+		LastDeployment: &DeploymentOutput{
+			ID:        90,
+			IID:       12,
+			Ref:       "main",
+			SHA:       "0123456789abcdef",
+			Status:    "success",
+			CreatedAt: "2026-03-01T10:00:00Z",
+			User:      &DeploymentUserOutput{Username: "dana", WebURL: "https://gitlab.example.com/dana"},
+			Deployable: &DeployableOutput{
+				Pipeline: &DeployablePipelineOutput{ID: 77, WebURL: "https://gitlab.example.com/acme/web/-/pipelines/77"},
+			},
+		},
+	})
+
+	want := "## Environment: production\n\n" +
+		"- **ID**: 12\n" +
+		"- **Slug**: production\n" +
+		"- **State**: available\n" +
+		"- **Tier**: production\n" +
+		"- **Description**: Customer-facing\n" +
+		"- **External URL**: [https://prod.example.com](https://prod.example.com)\n" +
+		"- **Auto-Stop Setting**: with_action\n" +
+		"- **Kubernetes Namespace**: `prod`\n" +
+		"- **Flux Resource Path**: `kustomization/prod`\n" +
+		"- **Created**: 2 Jan 2026 03:04 UTC\n" +
+		"- **Updated**: 3 Feb 2026 04:05 UTC\n" +
+		"- **Auto-Stop At**: 4 Mar 2026 05:06 UTC\n" +
+		"- **Project**:\n" +
+		"  - **ID**: 3\n" +
+		"  - **Path**: acme/web\n" +
+		"  - **URL**: [https://gitlab.example.com/acme/web](https://gitlab.example.com/acme/web)\n" +
+		"- **Cluster Agent**:\n" +
+		"  - **ID**: 4\n" +
+		"  - **Name**: prod-agent\n" +
+		"\n### Last Deployment\n\n" +
+		"- **ID**: 90\n" +
+		"- **IID**: 12\n" +
+		"- **Status**: ✅ success\n" +
+		"- **Ref**: main\n" +
+		"- **SHA**: `01234567`\n" +
+		"- **Created**: 1 Mar 2026 10:00 UTC\n" +
+		"- **Deployed By**: [@dana](https://gitlab.example.com/dana)\n" +
+		"- **Pipeline**: [#77](https://gitlab.example.com/acme/web/-/pipelines/77)\n" +
+		availableHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	for _, absent := range []string{
-		"| Tier |",
-		"| Description |",
-		"| URL |",
-		"| Created |",
-		"| Updated |",
-		"| Auto-Stop At |",
-	} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-			}
-		})
+}
+
+// TestFormatOutputMarkdown_StoppingOffersNeitherStopNorDelete pins the third
+// state: an environment GitLab is still stopping can be neither stopped again
+// nor deleted, so the card offers only the deployments.
+func TestFormatOutputMarkdown_StoppingOffersNeitherStopNorDelete(t *testing.T) {
+	got := FormatOutputMarkdown(Output{ID: 5, Name: "dev", State: "stopping"})
+
+	want := "## Environment: dev\n\n" +
+		"- **ID**: 5\n" +
+		"- **State**: stopping\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'environment.deployment_list' to see the deployments to this environment\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -874,51 +971,58 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithEnvironments verifies the ListMarkdown_WithEnvironments Markdown formatter for a representative list_withenvironments input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_WithEnvironments pins the whole listing: the heading
+// counting what GitLab reported, the external URL as a link, the pagination
+// line and one guidance section.
 func TestFormatListMarkdown_WithEnvironments(t *testing.T) {
-	out := ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Environments: []Output{
 			{ID: 1, Name: "production", State: "available", Tier: "production", ExternalURL: "https://prod.example.com"},
 			{ID: 2, Name: "staging", State: "available", Tier: "staging", ExternalURL: "https://staging.example.com"},
 			{ID: 3, Name: "dev", State: "stopped", Tier: "development", ExternalURL: ""},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 3, Page: 1, PerPage: 20, TotalPages: 1},
-	}
-	md := FormatListMarkdown(out)
+	})
 
-	for _, want := range []string{
-		"## Environments (3)",
-		"| ID |",
-		"| --- |",
-		"| 1 |",
-		"| 2 |",
-		"| 3 |",
-		"production",
-		"staging",
-		"dev",
-		"available",
-		"stopped",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Environments (3)\n\n" +
+		"| ID | Name | State | Tier | External URL |\n| --- | --- | --- | --- | --- |\n" +
+		"| 1 | production | available | production | [https://prod.example.com](https://prod.example.com) |\n" +
+		"| 2 | staging | available | staging | [https://staging.example.com](https://staging.example.com) |\n" +
+		"| 3 | dev | stopped | development |  |\n" +
+		"\nPage 1 of 1 | 3 items total | 20 per page\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No environments found") {
-		t.Errorf("expected empty message:\n%s", md)
+// TestFormatListMarkdown_KeysetPage pins the heading of a page GitLab sent no
+// total for: it counts the rows shown rather than claiming a total of zero
+// above them.
+func TestFormatListMarkdown_KeysetPage(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Environments: []Output{{ID: 1, Name: "production", State: "available"}},
+		Pagination:   toolutil.PaginationOutput{HasMore: true},
+	})
+
+	want := "## Environments (1 shown, more available)\n\n" +
+		"| ID | Name | State | Tier | External URL |\n| --- | --- | --- | --- | --- |\n" +
+		"| 1 | production | available |  |  |\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+}
+
+// TestFormatListMarkdown_Empty pins that a project with no environments
+// renders the one sentence and nothing else.
+func TestFormatListMarkdown_Empty(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{})
+
+	if want := "No environments found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

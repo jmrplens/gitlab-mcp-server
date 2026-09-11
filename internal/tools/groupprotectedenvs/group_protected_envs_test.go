@@ -586,121 +586,124 @@ func TestUnprotect_ServerErrorUsesGenericMessage(t *testing.T) {
 
 // --- Markdown formatter tests ---
 
-// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatOutputMarkdown(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    Output
-		contains []string
-	}{
-		{
-			name: "renders full environment with access levels and rules",
-			input: Output{
+// cardHints is the guidance section every protected-environment card closes
+// with.
+const cardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'group.protected_env_update' to change the deploy access levels or approval rules\n" +
+	"- Use action 'group.protected_env_unprotect' to remove this protection from the group\n"
+
+// listHints is the guidance section the listing closes with. The table carries
+// no link, so the preserve-links instruction is not written.
+const listHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'group.protected_env_get' to see one environment's rules in full\n" +
+	"- Use action 'group.protected_env_protect' to protect another environment tier\n" +
+	"- Use action 'group.protected_env_list' to page through the rest of the group's protected environments\n"
+
+// TestFormatOutputMarkdown_WithRules pins the whole card of a protected
+// environment that carries both tables: the headline defers to the per-rule
+// counts below it, and each rule says which role it grants and to whom.
+func TestFormatOutputMarkdown_WithRules(t *testing.T) {
+	got := FormatOutputMarkdown(Output{
+		Name:                  "production",
+		RequiredApprovalCount: 2,
+		DeployAccessLevels: []AccessLevelOutput{
+			{ID: 1, AccessLevel: 40, AccessLevelDescription: "Maintainers"},
+			{ID: 2, AccessLevel: 40, AccessLevelDescription: "Release managers", GroupID: 55, GroupInheritanceType: 1},
+		},
+		ApprovalRules: []ApprovalRuleOutput{
+			{ID: 5, AccessLevel: 30, AccessLevelDescription: "Developers", RequiredApprovalCount: 1},
+			{ID: 6, AccessLevelDescription: "Sam Bauch", UserID: 123, RequiredApprovalCount: 1},
+		},
+	})
+
+	want := "## Protected Environment: production\n\n" +
+		"- **Required Approvals**: per approval rule (see below)\n" +
+		"\n### Deploy Access Levels\n\n" +
+		"| ID | Level | Grantee | Description | Inheritance |\n| --- | --- | --- | --- | --- |\n" +
+		"| 1 | Maintainer |  | Maintainers |  |\n" +
+		"| 2 | - | group #55 | Release managers | inherited |\n" +
+		"\n### Approval Rules\n\n" +
+		"| ID | Level | Grantee | Description | Required | Inheritance |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| 5 | Developer |  | Developers | 1 |  |\n" +
+		"| 6 | - | user #123 | Sam Bauch | 1 |  |\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatOutputMarkdown_NoRules pins the card of an environment GitLab sent
+// with no rules at all: the headline count it did send, and no empty table
+// under it.
+func TestFormatOutputMarkdown_NoRules(t *testing.T) {
+	got := FormatOutputMarkdown(Output{Name: "staging", RequiredApprovalCount: 0})
+
+	want := "## Protected Environment: staging\n\n" +
+		"- **Required Approvals**: 0\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatOutputMarkdown_DeployLevelsOnly pins the card of an environment
+// whose only rules are deploy access levels: the headline is the count GitLab
+// sent, since no approval rule overrides it.
+func TestFormatOutputMarkdown_DeployLevelsOnly(t *testing.T) {
+	got := FormatOutputMarkdown(Output{
+		Name:                  "dev",
+		RequiredApprovalCount: 1,
+		DeployAccessLevels:    []AccessLevelOutput{{ID: 3, AccessLevel: 30, AccessLevelDescription: "Developers", GroupID: 7}},
+	})
+
+	want := "## Protected Environment: dev\n\n" +
+		"- **Required Approvals**: 1\n" +
+		"\n### Deploy Access Levels\n\n" +
+		"| ID | Level | Grantee | Description | Inheritance |\n| --- | --- | --- | --- | --- |\n" +
+		"| 3 | - | group #7 | Developers | direct |\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_Empty pins that a group with no protected
+// environments renders the one sentence and nothing else.
+func TestFormatListMarkdown_Empty(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{})
+
+	if want := "No group protected environments found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_WithEnvironments pins the whole listing: the heading
+// falls back to the rows shown when GitLab sent no total, the table opens a
+// block of its own, and one guidance section closes the document.
+func TestFormatListMarkdown_WithEnvironments(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Environments: []Output{
+			{
 				Name:                  "production",
 				RequiredApprovalCount: 2,
-				DeployAccessLevels: []AccessLevelOutput{
-					{ID: 1, AccessLevel: 40, AccessLevelDescription: "Maintainers"},
-				},
-				ApprovalRules: []ApprovalRuleOutput{
-					{ID: 5, AccessLevel: 30, AccessLevelDescription: "Developers", RequiredApprovalCount: 1},
-				},
+				DeployAccessLevels:    []AccessLevelOutput{{ID: 1}},
+				ApprovalRules:         []ApprovalRuleOutput{{ID: 5}},
 			},
-			contains: []string{
-				"## Protected Environment: production",
-				"**Required Approval Count**: 2",
-				"### Deploy Access Levels",
-				"| 1 | 40 | Maintainers |",
-				"### Approval Rules",
-				"| 5 | 30 | Developers | 1 |",
-			},
+			{Name: "staging", RequiredApprovalCount: 0},
 		},
-		{
-			name: "renders environment without access levels or rules",
-			input: Output{
-				Name:                  "staging",
-				RequiredApprovalCount: 0,
-			},
-			contains: []string{
-				"## Protected Environment: staging",
-				"**Required Approval Count**: 0",
-			},
-		},
-	}
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := FormatOutputMarkdown(tt.input)
-			for _, want := range tt.contains {
-				if !strings.Contains(got, want) {
-					t.Errorf("output missing %q\ngot:\n%s", want, got)
-				}
-			}
-		})
-	}
-}
+	want := "## Group Protected Environments (2)\n\n" +
+		"| Name | Required Approvals | Deploy Access Levels | Approval Rules |\n| --- | --- | --- | --- |\n" +
+		"| production | 2 | 1 | 1 |\n" +
+		"| staging | 0 | 0 | 0 |\n" +
+		listHints
 
-// TestFormatOutputMarkdown_NoTables verifies the OutputMarkdown_NoTables Markdown formatter for a representative output_notables input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatOutputMarkdown_NoTables(t *testing.T) {
-	got := FormatOutputMarkdown(Output{Name: "dev", RequiredApprovalCount: 0})
-	if strings.Contains(got, "### Deploy Access Levels") {
-		t.Error("should not contain Deploy Access Levels section for empty list")
-	}
-	if strings.Contains(got, "### Approval Rules") {
-		t.Error("should not contain Approval Rules section for empty list")
-	}
-}
-
-// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    ListOutput
-		contains []string
-	}{
-		{
-			name:     "returns message for empty list",
-			input:    ListOutput{},
-			contains: []string{"No group protected environments found."},
-		},
-		{
-			name: "renders table with environments",
-			input: ListOutput{
-				Environments: []Output{
-					{
-						Name:                  "production",
-						RequiredApprovalCount: 2,
-						DeployAccessLevels:    []AccessLevelOutput{{ID: 1}},
-						ApprovalRules:         []ApprovalRuleOutput{{ID: 5}},
-					},
-					{
-						Name:                  "staging",
-						RequiredApprovalCount: 0,
-					},
-				},
-			},
-			contains: []string{
-				"| Name | Approval Count | Deploy Levels | Rules |",
-				"| production | 2 | 1 | 1 |",
-				"| staging | 0 | 0 | 0 |",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := FormatListMarkdown(tt.input)
-			for _, want := range tt.contains {
-				if !strings.Contains(got, want) {
-					t.Errorf("output missing %q\ngot:\n%s", want, got)
-				}
-			}
-		})
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
