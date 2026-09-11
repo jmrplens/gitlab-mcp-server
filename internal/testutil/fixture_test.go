@@ -214,15 +214,17 @@ func TestFillFixture_Text_ReplacesEverySentinel(t *testing.T) {
 		t.Errorf("the supplied text did not reach every string: %+v", item)
 	}
 	for _, want := range []string{".Title", ".Author.Username", ".Labels0", ".Users1.WebURL", ".MetaKey"} {
-		found := false
-		for _, path := range paths {
-			if path == want {
-				found = true
+		t.Run(want, func(t *testing.T) {
+			found := false
+			for _, path := range paths {
+				if path == want {
+					found = true
+				}
 			}
-		}
-		if !found {
-			t.Errorf("path %q was never asked for; asked: %v", want, paths)
-		}
+			if !found {
+				t.Errorf("path %q was never asked for; asked: %v", want, paths)
+			}
+		})
 	}
 }
 
@@ -295,11 +297,13 @@ func TestOptionalFields_Type_ListsWhatGitLabMayOmit(t *testing.T) {
 		t.Errorf("OptionalFields = %q, want it to open with %q", got, want)
 	}
 	for _, always := range []string{"ID", "Title", "Locked", "When", "Ref", "NextSteps"} {
-		for _, name := range names {
-			if name == always {
-				t.Errorf("%s is listed as optional, and GitLab always sends it", always)
+		t.Run(always, func(t *testing.T) {
+			for _, name := range names {
+				if name == always {
+					t.Errorf("%s is listed as optional, and GitLab always sends it", always)
+				}
 			}
-		}
+		})
 	}
 }
 
