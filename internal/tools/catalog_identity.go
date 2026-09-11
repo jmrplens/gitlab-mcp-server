@@ -52,15 +52,32 @@ func NewCallIdentifier(catalog *actioncatalog.Catalog, surface string) mcpotel.C
 	}
 	origin := catalog.SharedOrigin()
 	if origin == nil {
-		return newCallIdentifier(catalog.Actions(), surface)
+		return newCallIdentifier(identifierActions(catalog, surface), surface)
 	}
 	// The identifier reads names and IDs only, so every server bound to one
 	// shared catalog can use one; built from the origin, whose actions carry
 	// the same names, so the maps hold nothing bound to a credential.
 	key := identifierKey{origin: origin, surface: surface}
 	return sharedIdentifiers.Load(key, func() mcpotel.CallIdentifier {
-		return newCallIdentifier(origin.Actions(), surface)
+		return newCallIdentifier(identifierActions(origin, surface), surface)
 	})
+}
+
+// identifierActions lists a catalog's actions in the order the surface's
+// resolver reads them.
+//
+// Only the individual surface cares. Several actions can declare one
+// individual tool name, registration binds it to the first of them in
+// [individualRegistrationOrder], and the resolver must name that same action.
+// It read them sorted by canonical ID and kept the last, which put every call to
+// gitlab_commit_list under repository.file_history and every call to
+// gitlab_user_current under user.me. The meta and dynamic resolvers key on
+// canonical IDs, which are unique, so they keep the catalog's own order.
+func identifierActions(catalog *actioncatalog.Catalog, surface string) []actioncatalog.Action {
+	if surface == config.ToolSurfaceIndividual {
+		return individualRegistrationOrder(catalog)
+	}
+	return catalog.Actions()
 }
 
 // identifierKey names one shared identifier: the shared catalog it resolves
@@ -102,12 +119,22 @@ func newCallIdentifier(actions []actioncatalog.Action, surface string) mcpotel.C
 // Nothing here decodes arguments, and that is worth stating: this is the
 // surface with roughly a thousand tools, and its tools carry no action field at
 // all, so a decode would be pure waste on every call.
+//
+// The first action to declare a name keeps it, and the name is trimmed, both
+// because that is what registration does with the same field: the actions
+// arrive in registration order, and a name two of them declare belongs to the
+// one whose handler was registered.
 func individualIdentifier(actions []actioncatalog.Action) mcpotel.CallIdentifier {
 	byTool := make(map[string]mcpotel.Identity, len(actions))
 	for _, action := range actions {
-		if name := action.IndividualTool.Name; name != "" {
-			byTool[name] = mcpotel.Identity{ActionID: string(action.ID), Domain: action.Domain}
+		name := strings.TrimSpace(action.IndividualTool.Name)
+		if name == "" {
+			continue
 		}
+		if _, taken := byTool[name]; taken {
+			continue
+		}
+		byTool[name] = mcpotel.Identity{ActionID: string(action.ID), Domain: action.Domain}
 	}
 	return mcpotel.IdentifierFunc(func(toolName string, _ any) (mcpotel.Identity, bool) {
 		identity, ok := byTool[toolName]

@@ -1,10 +1,16 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -443,4 +449,133 @@ func TestNewCallIdentifier_MetaCallWithoutAnAction_StillNamesTheDomain(t *testin
 			}
 		})
 	}
+}
+
+// TestNewCallIdentifier_IndividualNameBelongsToTheRegisteredAction verifies
+// that when two actions declare one individual tool name, the resolver names
+// the action whose projection registration kept.
+//
+// alpha is declared before beta and sorts before it, so registration keeps
+// alpha while a resolver reading the actions by canonical ID and keeping the
+// last would name beta. The two carry different descriptions, which is how the
+// test reads, from the served tool list, which of them registration kept.
+func TestNewCallIdentifier_IndividualNameBelongsToTheRegisteredAction(t *testing.T) {
+	spec := func(actionName, description string) toolutil.ActionSpec {
+		return toolutil.NewActionSpec(actionName, toolutil.RouteAction(nil,
+			func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+				return struct{}{}, nil
+			}), toolutil.ActionSpecOptions{
+			ReadOnly:       true,
+			OwnerPackage:   "tools",
+			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_shared", Title: "Shared", Description: description},
+		})
+	}
+	catalog := testIndividualCatalog(t, spec("alpha", "Alpha."), spec("beta", "Beta."))
+
+	registered := registeredIndividualTools(t, catalog)
+	identity, ok := NewCallIdentifier(catalog, config.ToolSurfaceIndividual).Identify("gitlab_test_shared", nil)
+	if !ok {
+		t.Fatal("gitlab_test_shared resolved to nothing")
+	}
+	action, found := catalog.Action(actioncatalog.ActionID(identity.ActionID))
+	if !found {
+		t.Fatalf("resolved action %q is not in the catalog", identity.ActionID)
+	}
+	if got, want := action.IndividualTool.Description, registered["gitlab_test_shared"].Description; got != want {
+		t.Fatalf("resolved %s (%q), but registration served %q", identity.ActionID, got, want)
+	}
+}
+
+// ambiguousIndividualToolOwners names every individual tool that more than one
+// action declares, with the action registration binds it to. The siblings are
+// deliberate: each is one handler projected under a second meta name, and the
+// individual surface serves it once.
+var ambiguousIndividualToolOwners = map[string]string{
+	// repository.file_history is the same commits.List under a path-scoped name.
+	"gitlab_commit_list": "repository.commit_list",
+	// issue.list_group is the same issues.ListGroup; the group surface owns
+	// the individual tool's description.
+	"gitlab_issue_list_group": "group.issues",
+	// user.me is the same users.Current under a friendlier name.
+	"gitlab_user_current": "user.current",
+}
+
+// TestNewCallIdentifier_AmbiguousIndividualNamesResolveToTheirOwner verifies,
+// on the real catalog and every licensing tier, that each individual tool name
+// several actions declare resolves to the action registration binds it to.
+//
+// The siblings project identical tools, so nothing a client can see tells them
+// apart and the served tool list cannot be the oracle here, as it is for the
+// synthetic catalog above: the owners are declared instead. A name declared
+// twice that is missing from the declaration fails, and so does a declaration
+// no tier needs any more, so a new sibling is a decision rather than a
+// telemetry label chosen by sort order.
+func TestNewCallIdentifier_AmbiguousIndividualNamesResolveToTheirOwner(t *testing.T) {
+	needed := make(map[string]bool)
+	for _, tier := range []edition.Tier{edition.Free, edition.Premium, edition.Ultimate} {
+		t.Run(tier.String(), func(t *testing.T) {
+			for _, name := range checkAmbiguousIndividualOwners(t, tier) {
+				needed[name] = true
+			}
+		})
+	}
+	for name := range ambiguousIndividualToolOwners {
+		if !needed[name] {
+			t.Errorf("ambiguousIndividualToolOwners declares %s, which no tier declares twice any more", name)
+		}
+	}
+}
+
+// checkAmbiguousIndividualOwners resolves every individual tool name the tier's
+// catalog declares more than once, reports each that does not resolve to its
+// declared owner, and returns the names it found declared more than once.
+func checkAmbiguousIndividualOwners(t *testing.T, tier edition.Tier) []string {
+	t.Helper()
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{Tier: tier, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog(%s) error = %v", tier, err)
+	}
+	identifier := NewCallIdentifier(catalog, config.ToolSurfaceIndividual)
+	var ambiguous []string
+	for name, count := range declaredIndividualNames(catalog) {
+		if count < 2 {
+			continue
+		}
+		ambiguous = append(ambiguous, name)
+		owner, known := ambiguousIndividualToolOwners[name]
+		if !known {
+			t.Errorf("%s is declared by %d actions and has no owner in ambiguousIndividualToolOwners", name, count)
+			continue
+		}
+		if identity, ok := identifier.Identify(name, nil); !ok || identity.ActionID != owner {
+			t.Errorf("%s resolved to %q, want %q", name, identity.ActionID, owner)
+		}
+	}
+	return ambiguous
+}
+
+// declaredIndividualNames counts the actions that declare each individual tool
+// name, trimmed as registration trims it.
+func declaredIndividualNames(catalog *actioncatalog.Catalog) map[string]int {
+	declared := make(map[string]int)
+	for _, action := range catalog.Actions() {
+		if name := strings.TrimSpace(action.IndividualTool.Name); name != "" {
+			declared[name]++
+		}
+	}
+	return declared
+}
+
+// registeredIndividualTools registers catalog on a fresh server with the
+// options cmd/server registers the individual surface with, and returns the
+// served tools by name.
+func registeredIndividualTools(t *testing.T, catalog *actioncatalog.Catalog) map[string]*mcp.Tool {
+	t.Helper()
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
+	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true})
+	tools := make(map[string]*mcp.Tool)
+	for _, tool := range listToolsFromServer(t, server) {
+		tools[tool.Name] = tool
+	}
+	return tools
 }
