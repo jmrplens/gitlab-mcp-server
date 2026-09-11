@@ -163,7 +163,10 @@ func HasRegisteredMarkdownFormatter(v any) bool {
 	default:
 		t = reflect.TypeOf(v)
 	}
-	if t == nil || t == reflect.TypeFor[any]() {
+	// No separate nil check on t: a nil reflect.Type converted to any is a nil
+	// interface, so every way one can arrive is already answered by the v == nil
+	// guard above, and reflect.TypeOf never returns nil for a non-nil value.
+	if t == reflect.TypeFor[any]() {
 		return false
 	}
 	for t.Kind() == reflect.Ptr { //nolint:govet // reflect.Ptr reads better than its numeric value (22).

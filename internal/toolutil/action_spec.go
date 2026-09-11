@@ -459,31 +459,28 @@ func FillScopeParameterGuidanceSingle(spec ActionSpec) ActionSpec {
 	changed := false
 
 	// Drop guidance entries that no longer correspond to a schema property
-	// (e.g. after tier pruning removed the parameter).
-	if len(guidance) > 0 {
-		for key := range guidance {
-			if _, ok := props[key]; !ok {
-				delete(guidance, key)
-				changed = true
-			}
+	// (e.g. after tier pruning removed the parameter). Ranging an empty or nil
+	// map visits nothing, so the loop is its own emptiness guard.
+	for key := range guidance {
+		if _, ok := props[key]; !ok {
+			delete(guidance, key)
+			changed = true
 		}
 	}
 
 	// Add guidance for scope-suggestive parameters that lack an entry.
-	if len(props) > 0 {
-		for name := range props {
-			if !isScopeSuggestiveParameterName(name) {
-				continue
-			}
-			if _, ok := guidance[name]; ok {
-				continue
-			}
-			if guidance == nil {
-				guidance = map[string]ParameterGuidance{}
-			}
-			guidance[name] = defaultScopeParameterGuidance(name)
-			changed = true
+	for name := range props {
+		if !isScopeSuggestiveParameterName(name) {
+			continue
 		}
+		if _, ok := guidance[name]; ok {
+			continue
+		}
+		if guidance == nil {
+			guidance = map[string]ParameterGuidance{}
+		}
+		guidance[name] = defaultScopeParameterGuidance(name)
+		changed = true
 	}
 
 	if !changed {
@@ -693,12 +690,17 @@ func normalizeActionSpecNotes(values []string) []string {
 }
 
 func mergeActionSpecNotes(left, right []string) []string {
-	if len(left)+len(right) == 0 {
+	// Concatenated first so that the capacity the map and the slice are built
+	// with is the length of what is about to be walked rather than a sum
+	// computed beside it. A map's size hint absorbs a wrong number silently,
+	// which is a hole nothing downstream can be made to notice.
+	values := slices.Concat(left, right)
+	if len(values) == 0 {
 		return nil
 	}
-	seen := make(map[string]struct{}, len(left)+len(right))
-	out := make([]string, 0, len(left)+len(right))
-	for _, value := range append(append([]string(nil), left...), right...) {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
 		value = strings.TrimSpace(value)
 		if value == "" {
 			continue
@@ -909,8 +911,10 @@ func validateParameterAliasSpecs(actionName string, inputSchema map[string]any, 
 }
 
 func schemaHasPropertyPath(schema map[string]any, target string) bool {
+	// strings.Split always yields at least one element, so an empty target
+	// arrives as a single empty segment rather than as an empty slice.
 	parts := strings.Split(strings.TrimSpace(target), ".")
-	if len(parts) == 0 || parts[0] == "" {
+	if parts[0] == "" {
 		return false
 	}
 	return schemaHasPropertyPathFrom(schema, schema, parts)
@@ -943,15 +947,19 @@ func schemaHasPropertyPathFrom(root, schema map[string]any, parts []string) bool
 }
 
 func resolveSchemaRef(root, schema map[string]any) map[string]any {
-	ref, ok := schema["$ref"].(string)
-	if !ok || !strings.HasPrefix(ref, "#/$defs/") {
+	// A missing or non-string $ref reads as the empty string, which carries no
+	// prefix, so the cut answers both "there is no reference" and "the
+	// reference is not one of ours" on its own.
+	ref, _ := schema["$ref"].(string)
+	name, ok := strings.CutPrefix(ref, "#/$defs/")
+	if !ok {
 		return schema
 	}
 	defs, ok := root["$defs"].(map[string]any)
 	if !ok {
 		return schema
 	}
-	definition, ok := defs[strings.TrimPrefix(ref, "#/$defs/")].(map[string]any)
+	definition, ok := defs[name].(map[string]any)
 	if !ok {
 		return schema
 	}

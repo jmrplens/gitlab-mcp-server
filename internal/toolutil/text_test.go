@@ -368,6 +368,9 @@ func TestImageMIMEType(t *testing.T) {
 		{name: "pdf", filename: "doc.pdf", want: ""},
 		{name: "empty", filename: "", want: ""},
 		{name: "no ext", filename: "README", want: ""},
+		// A dotfile whose whole name is the extension: the dot is at index 0,
+		// which is still a dot, so the extension is the name itself.
+		{name: "name is only the extension", filename: ".png", want: "image/png"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -400,6 +403,9 @@ func TestIsBinaryFile(t *testing.T) {
 		{name: "image png", filename: "logo.png", want: false},
 		{name: "empty", filename: "", want: false},
 		{name: "no ext", filename: "Makefile", want: false},
+		// A dotfile whose whole name is the extension: the dot is at index 0,
+		// which is still a dot, so the extension is the name itself.
+		{name: "name is only the extension", filename: ".pdf", want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -527,6 +533,12 @@ func TestStripControlBytes(t *testing.T) {
 		{name: "null and backspace", in: "a\x00b\x08c", want: "abc"},
 		{name: "delete", in: "a\x7fb", want: "ab"},
 		{name: "c1 control", in: "a\u009bb", want: "ab"},
+		// The ends of the C1 range, and the first rune above it. U+0080 and
+		// U+009F are controls with no rendering; U+00A0 is a non-breaking
+		// space, ordinary text in a GitLab title, and must survive.
+		{name: "c1 range starts at u0080", in: "a\u0080b", want: "ab"},
+		{name: "c1 range ends at u009f", in: "a\u009fb", want: "ab"},
+		{name: "non-breaking space is not a control", in: "a\u00a0b", want: "a\u00a0b"},
 		{name: "multibyte text preserved", in: "café naïve 日本語", want: "café naïve 日本語"},
 	}
 	for _, tt := range tests {

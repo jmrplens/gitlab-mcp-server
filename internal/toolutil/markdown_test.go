@@ -414,6 +414,30 @@ func TestFormatCICDVariableMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatCICDVariableMarkdown_MaskedWithoutHiddenStillHidesTheValue
+// verifies that masking alone withholds the value.
+//
+// Masked and hidden are separate GitLab flags and the common variable carries
+// only the first: hidden implies masked, masked does not imply hidden. A
+// variable that is both, and one that is neither, agree whichever way the two
+// checks are joined, so only this shape says that either flag is enough to
+// withhold the value.
+func TestFormatCICDVariableMarkdown_MaskedWithoutHiddenStillHidesTheValue(t *testing.T) {
+	md := FormatCICDVariableMarkdown(CICDVariableMarkdown{
+		Key:          "DEPLOY_TOKEN",
+		Value:        "glpat-not-for-the-transcript",
+		VariableType: "env_var",
+		Masked:       true,
+	}, CICDVariableMarkdownOptions{Title: "Variable"})
+
+	if !strings.Contains(md, "| Value | [masked] |") {
+		t.Errorf("masked-but-not-hidden variable did not withhold its value:\n%s", md)
+	}
+	if strings.Contains(md, "glpat-not-for-the-transcript") {
+		t.Errorf("masked-but-not-hidden variable leaked its value:\n%s", md)
+	}
+}
+
 // TestCICDVariableMarkdownHelpers verifies shared CI/CD variable constructors
 // and collection wrappers used by project, group, and instance variable tools.
 func TestCICDVariableMarkdownHelpers(t *testing.T) {
@@ -504,6 +528,76 @@ func TestFormatDiscussionListMarkdown(t *testing.T) {
 	empty := FormatDiscussionListMarkdown(nil, DiscussionListMarkdownOptions{EmptyMessage: "No discussions found.\n"})
 	if empty != "No discussions found.\n" {
 		t.Errorf("empty markdown = %q, want no-results message", empty)
+	}
+}
+
+// TestFormatDiscussionListMarkdown_HeadingAndSummaryFollowThePaginationInUse
+// verifies which count the heading carries and when the "Showing N of M" line
+// is written, across the three shapes a caller arrives in.
+//
+// The REST total is the heading only when there is a REST total to use: a
+// GraphQL-paginated call has no total at all (a keyset connection does not
+// count what it has not walked), and a REST call that reported none must fall
+// back to what was rendered rather than announce zero discussions above a list
+// of them. The summary line belongs to the REST shape for the same reason,
+// since the GraphQL half prints its own cursor line at the bottom.
+func TestFormatDiscussionListMarkdown_HeadingAndSummaryFollowThePaginationInUse(t *testing.T) {
+	discussions := []DiscussionMarkdown{
+		NewDiscussionMarkdown("aaa111", []DiscussionNoteMarkdown{
+			NewDiscussionNoteMarkdown(1, "first", "alice", "2026-05-17T12:00:00Z"),
+		}),
+		NewDiscussionMarkdown("bbb222", []DiscussionNoteMarkdown{
+			NewDiscussionNoteMarkdown(2, "second", "bob", "2026-05-17T12:30:00Z"),
+		}),
+	}
+	for _, tc := range []struct {
+		name    string
+		opts    DiscussionListMarkdownOptions
+		want    []string
+		unwants []string
+	}{
+		{
+			name: "rest pagination reports its own total and summary",
+			opts: DiscussionListMarkdownOptions{
+				Title:      "Discussions",
+				Pagination: PaginationOutput{Page: 1, PerPage: 2, TotalItems: 7, TotalPages: 4},
+			},
+			want: []string{"## Discussions (7)", "Showing 2 of 7 results (page 1 of 4)"},
+		},
+		{
+			name: "no rest total keeps the rendered count",
+			opts: DiscussionListMarkdownOptions{
+				Title:      "Discussions",
+				Pagination: PaginationOutput{Page: 1, PerPage: 2, TotalItems: 0, TotalPages: 2},
+			},
+			want:    []string{"## Discussions (2)"},
+			unwants: []string{"## Discussions (0)"},
+		},
+		{
+			name: "graphql pagination keeps the rendered count and writes no summary",
+			opts: DiscussionListMarkdownOptions{
+				Title:             "Discussions",
+				Pagination:        PaginationOutput{Page: 1, PerPage: 2, TotalItems: 99, TotalPages: 50},
+				GraphQLPagination: &GraphQLPaginationOutput{HasNextPage: true, EndCursor: "eyJpZCI6IjIifQ"},
+			},
+			want:    []string{"## Discussions (2)", "next page cursor: `eyJpZCI6IjIifQ`"},
+			unwants: []string{"## Discussions (99)", "Showing 2 of 99 results"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			md := FormatDiscussionListMarkdown(discussions, tc.opts)
+
+			for _, want := range tc.want {
+				if !strings.Contains(md, want) {
+					t.Errorf("markdown missing %q:\n%s", want, md)
+				}
+			}
+			for _, unwanted := range tc.unwants {
+				if strings.Contains(md, unwanted) {
+					t.Errorf("markdown unexpectedly contains %q:\n%s", unwanted, md)
+				}
+			}
+		})
 	}
 }
 
@@ -764,6 +858,63 @@ func TestFormatNoteMarkdown(t *testing.T) {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(md, want) {
 				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
+	}
+}
+
+// TestFormatNoteMarkdown_InternalAndResolvableNeedBothTheFlagAndTheOption
+// verifies that each of those two lines is written only when the note carries
+// the flag and the caller asked for the line.
+//
+// The option is the domain's: an issue note has no resolvable state and a
+// commit note has no internal one, so a package that does not opt in must not
+// see the line even when GitLab sends the field, and a package that does opt in
+// must not see it on a note without the flag. A note with both flags set and a
+// caller asking for both cannot tell those apart from either condition alone.
+func TestFormatNoteMarkdown_InternalAndResolvableNeedBothTheFlagAndTheOption(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		flags    NoteMarkdownFlags
+		opts     NoteMarkdownOptions
+		unwanted string
+	}{
+		{
+			name:     "internal note without the option",
+			flags:    NoteMarkdownFlags{Internal: true},
+			opts:     NoteMarkdownOptions{Title: "Commit Note"},
+			unwanted: "- **Internal note**",
+		},
+		{
+			name:     "option without an internal note",
+			flags:    NoteMarkdownFlags{},
+			opts:     NoteMarkdownOptions{Title: "Issue Note", IncludeInternal: true},
+			unwanted: "- **Internal note**",
+		},
+		{
+			name:     "resolvable note without the option",
+			flags:    NoteMarkdownFlags{Resolvable: true},
+			opts:     NoteMarkdownOptions{Title: "Issue Note"},
+			unwanted: "- **Resolvable**",
+		},
+		{
+			name:     "option without a resolvable note",
+			flags:    NoteMarkdownFlags{},
+			opts:     NoteMarkdownOptions{Title: "MR Note", IncludeResolvable: true},
+			unwanted: "- **Resolvable**",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			md := FormatNoteMarkdown(
+				NewNoteMarkdown(7, "note body", "alice", "2026-05-17T12:00:00Z", tc.flags, ""),
+				tc.opts,
+			)
+
+			if strings.Contains(md, tc.unwanted) {
+				t.Errorf("markdown unexpectedly contains %q:\n%s", tc.unwanted, md)
+			}
+			if !strings.Contains(md, "note body") {
+				t.Errorf("markdown lost the note body:\n%s", md)
 			}
 		})
 	}

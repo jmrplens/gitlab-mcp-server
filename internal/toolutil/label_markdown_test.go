@@ -77,6 +77,48 @@ func TestFormatLabelMarkdown_MinimalUnescaped(t *testing.T) {
 	}
 }
 
+// TestFormatLabelMarkdown_CountersRenderWhenOnlyOneIsSet verifies the counter
+// block appears when any single counter is non-zero rather than only when they
+// all are.
+//
+// The ordinary shape of a label is exactly this: issues open and nothing
+// closed, or merge requests and no issues at all. A label whose counters are
+// all zero and one whose counters are all set both agree whatever the three
+// checks are joined by, so neither says which join the renderer uses.
+func TestFormatLabelMarkdown_CountersRenderWhenOnlyOneIsSet(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		label LabelMarkdown
+		want  []string
+	}{
+		{
+			name:  "open issues only",
+			label: LabelMarkdown{Name: "bug", Color: "#ff0000", OpenIssuesCount: 4},
+			want:  []string{"- **Issues**: 4 open, 0 closed", "- **Open MRs**: 0"},
+		},
+		{
+			name:  "closed issues only",
+			label: LabelMarkdown{Name: "bug", Color: "#ff0000", ClosedIssuesCount: 9},
+			want:  []string{"- **Issues**: 0 open, 9 closed", "- **Open MRs**: 0"},
+		},
+		{
+			name:  "open merge requests only",
+			label: LabelMarkdown{Name: "bug", Color: "#ff0000", OpenMergeRequestsCount: 2},
+			want:  []string{"- **Issues**: 0 open, 0 closed", "- **Open MRs**: 2"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FormatLabelMarkdown(tc.label, LabelMarkdownOptions{DetailTitle: "Label"})
+
+			for _, want := range tc.want {
+				if !strings.Contains(got, want) {
+					t.Errorf("FormatLabelMarkdown() missing %q in:\n%s", want, got)
+				}
+			}
+		})
+	}
+}
+
 // TestFormatLabelListMarkdownFunc_WithLabels verifies list Markdown maps domain
 // labels, renders rows, pagination, escaped table cells, and hints.
 func TestFormatLabelListMarkdownFunc_WithLabels(t *testing.T) {

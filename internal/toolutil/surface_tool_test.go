@@ -168,6 +168,26 @@ func TestSurfaceToolHandler_ErrorAndFormattedResults(t *testing.T) {
 		}
 	})
 
+	// The ordinary path: a formatted result that is not an error and is not
+	// text-only must travel out with the handler's own output as the structured
+	// content, which is what a client reading structuredContent gets and what
+	// the hints are attached to. An error result and a text-only one both
+	// return nil structured content, so neither says that this one does not.
+	t.Run("structured result carries the output", func(t *testing.T) {
+		handler := surfaceToolHandler("gitlab_test_structured", ActionRoute{
+			Handler: func(context.Context, map[string]any) (any, error) { return testOutput{Result: "kept"}, nil },
+		}, func(any) *mcp.CallToolResult { return SuccessResult("formatted") })
+
+		result, structured, err := handler(context.Background(), nil, map[string]any{})
+		if err != nil || result == nil {
+			t.Fatalf("handler() = result:%+v err:%v, want a formatted success", result, err)
+		}
+		out, ok := structured.(testOutput)
+		if !ok || out.Result != "kept" {
+			t.Fatalf("handler() structured = %+v, want the route's own output", structured)
+		}
+	})
+
 	t.Run("text only result", func(t *testing.T) {
 		handler := surfaceToolHandler("gitlab_test_text_only", ActionRoute{
 			Handler: func(context.Context, map[string]any) (any, error) { return surfaceToolTextOnlyOutput{}, nil },

@@ -1016,18 +1016,14 @@ func FormatNoteListMarkdown(notes []NoteMarkdown, pagination PaginationOutput, o
 	return b.String()
 }
 
+// markdownTableLine writes one pipe-table row, cells separated by " | ".
+//
+// strings.Join sizes the result from the cells themselves. The hand-rolled
+// builder this replaced grew by a guess (eight bytes a cell plus four), which
+// no output could tell apart from any other guess: a builder that guesses low
+// simply grows again.
 func markdownTableLine(cells []string) string {
-	var b strings.Builder
-	b.Grow(len(cells)*8 + 4)
-	b.WriteString("| ")
-	for i, cell := range cells {
-		if i > 0 {
-			b.WriteString(" | ")
-		}
-		b.WriteString(cell)
-	}
-	b.WriteString(" |\n")
-	return b.String()
+	return "| " + strings.Join(cells, " | ") + " |\n"
 }
 
 // ToolResultWithMarkdown wraps a Markdown string into a CallToolResult

@@ -91,6 +91,34 @@ func TestResolveProjectWebURLs(t *testing.T) {
 	}
 }
 
+// TestResolveProjectWebURLs_ABodyThatDecodesToNoProjectIsNotDereferenced
+// verifies the second half of the lookup guard: a call that returned no error
+// and no project.
+//
+// client-go decodes a 200 straight into the pointer it hands back, so a body of
+// JSON null leaves that pointer nil while the error stays nil. The failure case
+// beside it (a 404, which returns an error) never produces that pair, so only
+// this shape says the project is not read before it is known to exist. The
+// entry is still recorded with an empty URL, which is what keeps the caller
+// from asking again for a project that answered nothing.
+func TestResolveProjectWebURLs_ABodyThatDecodesToNoProjectIsNotDereferenced(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`null`))
+	}))
+	defer srv.Close()
+
+	client, err := gl.NewClient("test-token", gl.WithBaseURL(srv.URL))
+	if err != nil {
+		t.Fatalf("gl.NewClient: %v", err)
+	}
+
+	urls := ResolveProjectWebURLs(context.Background(), client.Projects, []int64{11})
+	if got, ok := urls[11]; !ok || got != "" {
+		t.Errorf("urls[11] = %q (present=%v), want an empty entry for a project that decoded to nothing", got, ok)
+	}
+}
+
 // TestNewPersonalTokenOutput pins the personal-access-token conversion:
 // identity fields mirror the SDK struct, created/last-used format as RFC3339,
 // expiry as an ISO date, and absent timestamps stay empty.

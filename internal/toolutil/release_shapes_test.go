@@ -45,6 +45,116 @@ func TestNewAssetsOutput(t *testing.T) {
 	}
 }
 
+// TestNewAssetsOutput_AnySingleFieldKeepsTheObject verifies that the assets
+// object is dropped only when every field is zero, so a release whose assets
+// carry one thing still surfaces it.
+//
+// The nil rule is what decides whether GitLab's assets key appears at all, and
+// an object with everything set and one with nothing set agree however its four
+// checks are joined. Each case here sets exactly one field, which is also the
+// only shape that says the arrays stay nil when GitLab sent none: an array
+// built empty and one left nil serialize alike, so the assertion is on the
+// value the converter returns.
+func TestNewAssetsOutput_AnySingleFieldKeepsTheObject(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		assets gl.ReleaseAssets
+		check  func(t *testing.T, got *AssetsOutput)
+	}{
+		{
+			name:   "count alone",
+			assets: gl.ReleaseAssets{Count: 3},
+			check: func(t *testing.T, got *AssetsOutput) {
+				t.Helper()
+				if got.Count != 3 {
+					t.Errorf("count = %d, want 3", got.Count)
+				}
+				if got.Sources != nil || got.Links != nil {
+					t.Errorf("sources %#v and links %#v, want both left nil", got.Sources, got.Links)
+				}
+			},
+		},
+		{
+			name:   "one source alone",
+			assets: gl.ReleaseAssets{Sources: []gl.ReleaseAssetsSource{{Format: "zip", URL: "https://z"}}},
+			check: func(t *testing.T, got *AssetsOutput) {
+				t.Helper()
+				if len(got.Sources) != 1 || got.Sources[0].Format != "zip" {
+					t.Errorf("sources = %#v, want the single zip source", got.Sources)
+				}
+				if got.Links != nil {
+					t.Errorf("links = %#v, want nil", got.Links)
+				}
+			},
+		},
+		{
+			name:   "one link alone",
+			assets: gl.ReleaseAssets{Links: []*gl.ReleaseLink{{ID: 5, Name: "binary", URL: "https://b"}}},
+			check: func(t *testing.T, got *AssetsOutput) {
+				t.Helper()
+				if len(got.Links) != 1 || got.Links[0].ID != 5 {
+					t.Errorf("links = %#v, want the single link", got.Links)
+				}
+				if got.Sources != nil {
+					t.Errorf("sources = %#v, want nil", got.Sources)
+				}
+			},
+		},
+		{
+			name:   "evidence path alone",
+			assets: gl.ReleaseAssets{EvidenceFilePath: "evidence.json"},
+			check: func(t *testing.T, got *AssetsOutput) {
+				t.Helper()
+				if got.EvidenceFilePath != "evidence.json" {
+					t.Errorf("evidence file path = %q, want evidence.json", got.EvidenceFilePath)
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NewAssetsOutput(tc.assets)
+
+			if got == nil {
+				t.Fatalf("NewAssetsOutput(%+v) = nil, want the assets object kept", tc.assets)
+			}
+			tc.check(t, got)
+		})
+	}
+}
+
+// TestNewLinksOutput_AnySingleURLKeepsTheObject verifies that the _links object
+// is dropped only when all seven URLs are empty.
+//
+// GitLab fills these per release and a release with one link is ordinary, so
+// every URL has to be able to hold the object open on its own. A value with all
+// seven set and one with none agree however the seven checks are joined.
+func TestNewLinksOutput_AnySingleURLKeepsTheObject(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		links gl.ReleaseLinks
+		want  LinksOutput
+	}{
+		{name: "self", links: gl.ReleaseLinks{Self: "https://self"}, want: LinksOutput{Self: "https://self"}},
+		{name: "edit", links: gl.ReleaseLinks{EditURL: "https://edit"}, want: LinksOutput{EditURL: "https://edit"}},
+		{name: "opened issues", links: gl.ReleaseLinks{OpenedIssues: "https://o-i"}, want: LinksOutput{OpenedIssuesURL: "https://o-i"}},
+		{name: "opened merge requests", links: gl.ReleaseLinks{OpenedMergeRequest: "https://o-m"}, want: LinksOutput{OpenedMergeRequestsURL: "https://o-m"}},
+		{name: "merged merge requests", links: gl.ReleaseLinks{MergedMergeRequest: "https://m-m"}, want: LinksOutput{MergedMergeRequestsURL: "https://m-m"}},
+		{name: "closed issues", links: gl.ReleaseLinks{ClosedIssueURL: "https://c-i"}, want: LinksOutput{ClosedIssuesURL: "https://c-i"}},
+		{name: "closed merge requests", links: gl.ReleaseLinks{ClosedMergeRequest: "https://c-m"}, want: LinksOutput{ClosedMergeRequestsURL: "https://c-m"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NewLinksOutput(tc.links)
+
+			if got == nil {
+				t.Fatalf("NewLinksOutput(%+v) = nil, want the links object kept", tc.links)
+			}
+			if *got != tc.want {
+				t.Errorf("NewLinksOutput(%+v) = %+v, want %+v", tc.links, *got, tc.want)
+			}
+		})
+	}
+}
+
 // TestNewLinksOutput verifies the converter omits the links object when
 // every URL field is empty and copies only the populated URLs.
 func TestNewLinksOutput(t *testing.T) {

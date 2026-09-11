@@ -540,6 +540,97 @@ func TestForCatalog_IsDerivedOnceAndKept(t *testing.T) {
 	})
 }
 
+// TestRateLimiterScaled_MultipliesBothHalvesAndKeepsTheBucketsApart pins what
+// a scaled bucket is: the same limiter rate and burst multiplied by the factor,
+// in a bucket of its own.
+//
+// Both halves are asserted because the completion bucket is useless if either
+// is wrong: a rate that was divided instead of multiplied refuses ordinary
+// typing, and a burst that was not multiplied leaves the first keystrokes of a
+// session refused. The factor-of-one case is the one that says a copy is
+// returned rather than the receiver, and it is asserted by spending the copy's
+// only token and finding the receiver's still there, since two limiters
+// sharing one bucket is exactly the aliasing this design forbids.
+func TestRateLimiterScaled_MultipliesBothHalvesAndKeepsTheBucketsApart(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a factor multiplies the rate and the burst", func(t *testing.T) {
+		t.Parallel()
+		scaled := NewRateLimiter(2, 3).scaled(completionBurstFactor)
+		if scaled == nil {
+			t.Fatal("scaled() = nil for a configured limiter")
+		}
+		if got, want := float64(scaled.limiter.Limit()), 2.0*completionBurstFactor; got != want {
+			t.Errorf("scaled rps = %g, want %g", got, want)
+		}
+		if got, want := scaled.limiter.Burst(), 3*completionBurstFactor; got != want {
+			t.Errorf("scaled burst = %d, want %d", got, want)
+		}
+	})
+
+	t.Run("a factor of one still yields a bucket of its own", func(t *testing.T) {
+		t.Parallel()
+		limiter := NewRateLimiter(1, 1)
+		scaled := limiter.scaled(1)
+		if scaled == nil {
+			t.Fatal("scaled(1) = nil for a configured limiter")
+		}
+		if !scaled.allow() {
+			t.Fatal("the scaled bucket refused its first request")
+		}
+		if !limiter.allow() {
+			t.Error("spending the scaled bucket's token also spent the receiver's, so the two share one bucket")
+		}
+	})
+}
+
+// TestRateLimiterSlowed_DivisorOfOneKeepsTheRate verifies that the smallest
+// divisor the helper accepts is one, which yields a separate bucket refilling
+// at the receiver's own rate rather than the nil that means "disabled".
+//
+// The bound is "at least one", not "more than one": a divisor of one is a
+// listing bucket that is merely separate, and answering nil there would disable
+// the listing limit altogether while looking like a deliberate configuration.
+func TestRateLimiterSlowed_DivisorOfOneKeepsTheRate(t *testing.T) {
+	t.Parallel()
+
+	limiter := NewRateLimiter(4, 6)
+	slowed := limiter.slowed(1)
+	if slowed == nil {
+		t.Fatal("slowed(1) = nil, want a bucket refilling at the receiver's own rate")
+	}
+	if got, want := float64(slowed.limiter.Limit()), 4.0; got != want {
+		t.Errorf("slowed rps = %g, want %g", got, want)
+	}
+	if got, want := slowed.limiter.Burst(), 6; got != want {
+		t.Errorf("slowed burst = %d, want %d", got, want)
+	}
+}
+
+// TestRateLimitedError_CarriesTheNumberThatMirrors429 pins the JSON-RPC code a
+// refused resource or prompt request travels out with.
+//
+// It is spelled as a literal here on purpose. Every other assertion in this
+// file compares the code on the wire against the constant, which says the two
+// agree and nothing about what the number is; a client telling "come back
+// later" from a real failure matches the number, and mirroring HTTP 429 is the
+// whole reason it reads -42900 rather than an arbitrary negative.
+func TestRateLimitedError_CarriesTheNumberThatMirrors429(t *testing.T) {
+	t.Parallel()
+
+	var rpcErr *jsonrpc.Error
+	err := rateLimitedError(methodResourcesRead)
+	if !errors.As(err, &rpcErr) {
+		t.Fatalf("rateLimitedError() = %T %v, want a JSON-RPC error", err, err)
+	}
+	if rpcErr.Code != -42900 {
+		t.Errorf("refusal code = %d, want -42900, the code that mirrors HTTP 429", rpcErr.Code)
+	}
+	if !strings.HasPrefix(rpcErr.Message, RateLimitRefusalPrefix) || !strings.Contains(rpcErr.Message, methodResourcesRead) {
+		t.Errorf("refusal message = %q, want the refusal prefix and the method", rpcErr.Message)
+	}
+}
+
 // TestExtractToolName verifies the middleware helper handles nil requests,
 // raw call params, typed call params, and whitespace-only names.
 func TestExtractToolName(t *testing.T) {
@@ -592,6 +683,10 @@ func TestValidateRateLimit(t *testing.T) {
 		{"disabled", 0, 0, false},
 		{"valid", 10, 5, false},
 		{"valid_default_burst", 1, 40, false},
+		// The smallest burst the limiter can work with is accepted: the bound
+		// is "at least one token", not "more than one". The end-to-end HTTP
+		// suite runs a server with --rate-limit-burst=1.
+		{"smallest_usable_burst", 1, 1, false},
 		{"negative_rps", -1, 1, true},
 		{"zero_burst_with_rps", 1, 0, true},
 		{"negative_burst_with_rps", 1, -5, true},
@@ -996,6 +1091,45 @@ func TestJSONDepthScanner_ScansAcrossChunkBoundaries(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestJSONDepthScanner_NilAndAlreadyExceededScansAnswerWithoutReading
+// verifies the two states in which Scan reads no bytes at all: a nil scanner,
+// and one that has already tripped.
+//
+// A nil scanner is how a caller that never built one still calls through
+// (Exceeded is documented nil-safe too), so it must answer false rather than
+// dereference. Once the limit is passed the verdict is final: the chunks that
+// follow are the rest of a body already being refused, and continuing to count
+// them would let the closing brackets of a deep value bring the depth back
+// under the limit and unsay the refusal.
+func TestJSONDepthScanner_NilAndAlreadyExceededScansAnswerWithoutReading(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a nil scanner reads nothing and trips nothing", func(t *testing.T) {
+		t.Parallel()
+		var scanner *JSONDepthScanner
+		if scanner.Scan([]byte(`[[[[[[[[[[`)) {
+			t.Error("(*JSONDepthScanner)(nil).Scan() = true, want false")
+		}
+		if scanner.Exceeded() {
+			t.Error("(*JSONDepthScanner)(nil).Exceeded() = true, want false")
+		}
+	})
+
+	t.Run("a scanner that has tripped stays tripped", func(t *testing.T) {
+		t.Parallel()
+		scanner := NewJSONDepthScanner(2)
+		if !scanner.Scan([]byte(`[[[`)) {
+			t.Fatal("Scan() = false on the chunk that passes the limit, want true")
+		}
+		if !scanner.Scan([]byte(`]]]`)) {
+			t.Error("Scan() = false on the chunk after the limit was passed, want true: the closing brackets unsaid the refusal")
+		}
+		if !scanner.Exceeded() {
+			t.Error("Exceeded() = false after the limit was passed, want true")
+		}
+	})
 }
 
 // TestAttachArgumentLimits_RefusesOverNestedArguments verifies that a

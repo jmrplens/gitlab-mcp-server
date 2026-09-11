@@ -52,6 +52,79 @@ func TestListRegisteredTools_DefaultClientName(t *testing.T) {
 	}
 }
 
+// TestListRegisteredTools_ClientNameReachesTheServer verifies which name the
+// ephemeral client introduces itself with: the caller's when it gave one, and
+// the built-in default when it did not.
+//
+// The name is not decoration. It is the clientInfo the server records for the
+// session, which is what a log line, a compatibility profile and a telemetry
+// attribute read to tell this internal listing apart from a real client's, so
+// asserting only that the listing succeeded would leave the fallback free to
+// introduce every caller under the caller's own empty name. The observation is
+// made from inside a receiving middleware, which runs while the tools/list call
+// the function itself issues is in flight.
+func TestListRegisteredTools_ClientNameReachesTheServer(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		asked    string
+		wantName string
+	}{
+		{name: "caller names the client", asked: "audit-tool", wantName: "audit-tool"},
+		{name: "empty name falls back to the default", asked: "", wantName: "tool-list-client"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			observed := make(chan string, 4)
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+			recordListingClientName(server, observed)
+			server.AddTool(&mcp.Tool{Name: "gitlab_x", InputSchema: &map[string]any{"type": "object"}}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				return &mcp.CallToolResult{}, nil
+			})
+
+			if _, err := ListRegisteredTools(t.Context(), server, tc.asked); err != nil {
+				t.Fatalf("ListRegisteredTools(%q) error = %v", tc.asked, err)
+			}
+			select {
+			case got := <-observed:
+				if got != tc.wantName {
+					t.Errorf("client name seen by the server = %q, want %q", got, tc.wantName)
+				}
+			default:
+				t.Fatal("the server never saw a tools/list at all")
+			}
+		})
+	}
+}
+
+// recordListingClientName sends the clientInfo name of every tools/list the
+// server answers to names, so a test can assert what the session introduced
+// itself as. A listing whose session carries no client info sends the empty
+// string rather than nothing, which keeps a missing name distinguishable from
+// a listing that never arrived.
+func recordListingClientName(server *mcp.Server, names chan<- string) {
+	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			if method == "tools/list" {
+				names <- initializedClientName(req)
+			}
+			return next(ctx, method, req)
+		}
+	})
+}
+
+// initializedClientName reads the client name recorded for the session a
+// request arrived on, or "" when there is none.
+func initializedClientName(req mcp.Request) string {
+	session, ok := req.GetSession().(*mcp.ServerSession)
+	if !ok {
+		return ""
+	}
+	params := session.InitializeParams()
+	if params == nil || params.ClientInfo == nil {
+		return ""
+	}
+	return params.ClientInfo.Name
+}
+
 // TestListRegisteredTools_NilServerAndCancelledContext verifies the nil-server
 // guard, the default client-name fallback on the happy path, and the connect
 // error branch under an already-cancelled context.

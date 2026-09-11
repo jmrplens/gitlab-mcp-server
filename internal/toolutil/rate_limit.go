@@ -528,7 +528,10 @@ func AttachArgumentLimits(server *mcp.Server, maxDepth int) {
 	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			if method == methodToolsCall {
-				if raw, ok := req.GetParams().(*mcp.CallToolParamsRaw); ok && raw != nil &&
+				// A failed assertion yields a nil pointer, so the nil check
+				// answers both halves; asking for ok as well added an operand
+				// that agrees with it on every request the SDK can deliver.
+				if raw, _ := req.GetParams().(*mcp.CallToolParamsRaw); raw != nil &&
 					ExceedsJSONDepth(raw.Arguments, maxDepth) {
 					mcpotel.RecordRefusal(ctx, RefusalInvalidParams)
 					slog.WarnContext(ctx, "tool call refused: arguments nest too deeply",
