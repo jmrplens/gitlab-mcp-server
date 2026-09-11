@@ -17,6 +17,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncompat"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -796,6 +797,13 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 		toolutil.LogToolRefusal(ctx, req, executeCallName(id), toolutil.RefusalUnknownAction)
 		return toolutil.ErrorResult(r.unknownActionMessage("gitlab_execute_action", input.Action)), nil, nil
 	}
+	// Recorded as soon as the action is known, so a call this surface refuses
+	// before the meta handler runs is still named. A destructive action sent
+	// without its confirmation is one; when the caller spelled it with a
+	// compatibility alias, which the argument-based identifier does not know,
+	// the span would otherwise carry no action at all. The meta handler
+	// overwrites this with the final route when it runs.
+	mcpotel.RecordDispatch(ctx, entry.Tool, entry.Action)
 
 	params := maps.Clone(input.Params)
 	if params == nil {

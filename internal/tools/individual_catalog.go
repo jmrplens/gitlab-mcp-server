@@ -267,8 +267,9 @@ func actionSpecFromCatalogAction(action actioncatalog.Action) toolutil.ActionSpe
 func individualCatalogHandler(toolName string, action actioncatalog.Action, formatResult toolutil.FormatResultFunc, opts IndividualCatalogRegisterOptions) mcp.ToolHandlerFor[map[string]any, any] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input map[string]any) (*mcp.CallToolResult, any, error) {
 		if opts.SafeMode && !individualCatalogActionReadOnly(action) {
+			// safeModeHandler records the safe_mode refusal itself, as it must
+			// for the tools the server wraps after registration.
 			result, err := safeModeHandler(toolName)(ctx, req)
-			toolutil.LogToolRefusal(ctx, req, toolName, toolutil.RefusalSafeMode)
 			return result, nil, err
 		}
 		if action.Route.Destructive {

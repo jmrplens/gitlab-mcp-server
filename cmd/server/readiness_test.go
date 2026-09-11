@@ -325,6 +325,56 @@ func TestDeferredCallIdentifier_Identify_AnswersNothingUntilRegistrationSetsIt(t
 	}
 }
 
+// dispatchResolver answers a dispatched route the way the catalog identifier
+// does, and predicts nothing.
+type dispatchResolver struct{}
+
+func (dispatchResolver) Identify(string, any) (mcpotel.Identity, bool) {
+	return mcpotel.Identity{}, false
+}
+
+func (dispatchResolver) IdentifyDispatch(tool, action string) (mcpotel.Identity, bool) {
+	if tool == "gitlab_environment" && action == "protected_get" {
+		return mcpotel.Identity{ActionID: "environment.protected_get", Domain: "environment"}, true
+	}
+	return mcpotel.Identity{}, false
+}
+
+// TestDeferredCallIdentifier_IdentifyDispatch_DelegatesToWhatRegistrationSet
+// verifies that the placeholder the middleware holds passes a dispatched route
+// through to the identifier registration built.
+//
+// The middleware type-asserts its identifier for IdentifyDispatch, and the
+// binary hands it this wrapper rather than the catalog identifier, so a wrapper
+// that only forwarded Identify silently dropped every dispatched route: the
+// identifier's own tests passed while the running server kept the prediction.
+func TestDeferredCallIdentifier_IdentifyDispatch_DelegatesToWhatRegistrationSet(t *testing.T) {
+	tests := map[string]struct {
+		held       mcpotel.CallIdentifier
+		set        bool
+		wantAction string
+	}{
+		"before registration":                     {},
+		"registration with no catalog":            {set: true},
+		"an identifier that resolves no dispatch": {set: true, held: mcpotel.IdentifierFunc(func(string, any) (mcpotel.Identity, bool) { return mcpotel.Identity{}, false })},
+		"an identifier that resolves dispatches":  {set: true, held: dispatchResolver{}, wantAction: "environment.protected_get"},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			identifier := &deferredCallIdentifier{}
+			if tt.set {
+				identifier.set(tt.held)
+			}
+			var _ mcpotel.DispatchIdentifier = identifier
+
+			identity, ok := identifier.IdentifyDispatch("gitlab_environment", "protected_get")
+			if ok != (tt.wantAction != "") || identity.ActionID != tt.wantAction {
+				t.Errorf("IdentifyDispatch() = %+v, %v, want action %q", identity, ok, tt.wantAction)
+			}
+		})
+	}
+}
+
 // TestDeferredIdentity_Middleware_OverlaysTheCallerOnceStartupResolvesIt
 // verifies the replacement for a context value that used to be set before the
 // transport was connected.

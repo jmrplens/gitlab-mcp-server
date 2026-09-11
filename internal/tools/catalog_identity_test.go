@@ -518,23 +518,36 @@ func TestNewCallIdentifier_TelemetryNamesTheRouteTheDispatcherRan(t *testing.T) 
 	metaHandler := toolutil.MakeMetaHandler("gitlab_environment", catalog.ActionMaps()["gitlab_environment"], markdownForResult)
 	registry := dynamic.NewRegistryFromCatalog(catalog)
 
+	memberParams := map[string]any{"project_id": "1", "user_id": 5}
 	tests := map[string]struct {
-		surface string
-		tool    string
-		action  string
-		run     func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error)
+		surface    string
+		tool       string
+		action     string
+		params     map[string]any
+		wantAction string
+		run        func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error)
 	}{
 		"meta": {
-			surface: config.ToolSurfaceMeta, tool: "gitlab_environment", action: "get",
+			surface: config.ToolSurfaceMeta, tool: "gitlab_environment", action: "get", params: params, wantAction: "environment.protected_get",
 			run: func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				result, _, runErr := metaHandler(ctx, req, MetaToolInput{Action: "get", Params: params})
 				return result, runErr
 			},
 		},
 		"dynamic": {
-			surface: config.ToolSurfaceDynamic, tool: dynamic.ExecuteActionToolName, action: "environment.get",
+			surface: config.ToolSurfaceDynamic, tool: dynamic.ExecuteActionToolName, action: "environment.get", params: params, wantAction: "environment.protected_get",
 			run: func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				result, _, runErr := registry.Execute(ctx, req, dynamic.ExecuteInput{Action: "environment.get", Params: params})
+				return result, runErr
+			},
+		},
+		// A compatibility alias the argument-based identifier does not know,
+		// for a destructive action sent without confirm: gitlab_execute_action
+		// refuses it before any meta handler runs.
+		"dynamic refusal of a compatibility alias": {
+			surface: config.ToolSurfaceDynamic, tool: dynamic.ExecuteActionToolName, action: "project.member_remove", params: memberParams, wantAction: "project.member_delete",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				result, _, runErr := registry.Execute(ctx, req, dynamic.ExecuteInput{Action: "project.member_remove", Params: memberParams})
 				return result, runErr
 			},
 		},
@@ -547,7 +560,7 @@ func TestNewCallIdentifier_TelemetryNamesTheRouteTheDispatcherRan(t *testing.T) 
 					return tc.run(ctx, req.(*mcp.CallToolRequest))
 				},
 			)
-			arguments, marshalErr := json.Marshal(map[string]any{"action": tc.action, "params": params})
+			arguments, marshalErr := json.Marshal(map[string]any{"action": tc.action, "params": tc.params})
 			if marshalErr != nil {
 				t.Fatalf("json.Marshal() error = %v", marshalErr)
 			}
@@ -567,8 +580,8 @@ func TestNewCallIdentifier_TelemetryNamesTheRouteTheDispatcherRan(t *testing.T) 
 			if len(server) != 1 {
 				t.Fatalf("recorded %d server spans, want 1", len(server))
 			}
-			if got := spanString(server[0], mcpotel.AttrActionID); got != "environment.protected_get" {
-				t.Errorf("span action = %q, want environment.protected_get, the route that ran", got)
+			if got := spanString(server[0], mcpotel.AttrActionID); got != tc.wantAction {
+				t.Errorf("span action = %q, want %s, the route the dispatcher chose", got, tc.wantAction)
 			}
 		})
 	}
