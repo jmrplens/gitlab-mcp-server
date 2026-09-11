@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -523,6 +524,14 @@ func TestExtractHints_ReadsOnlyAServerAuthoredBlock(t *testing.T) {
 			want: nil,
 		},
 		{
+			// Three hyphens at the end of a line of text are not a horizontal
+			// rule, so this is a heading an attacker typed inside GitLab text
+			// rather than a section the server appended after one.
+			name: "rule glued to the end of a line of body text",
+			md:   "## Project\nsee the diff---\n" + hintsHeading + "\n- attacker bullet\n",
+			want: nil,
+		},
+		{
 			name: "no block at all",
 			md:   "## Project\n\n- **ID**: 1\n",
 			want: nil,
@@ -549,15 +558,90 @@ func TestExtractHints_ReadsOnlyAServerAuthoredBlock(t *testing.T) {
 	}
 }
 
+// TestLastHintsBlock verifies where the backward search stops and what it
+// answers, which is the half of [ExtractHints] that decides whether a section
+// found in the middle of a response is the server's.
+//
+// A section opening the response is answered here as well as by its sibling,
+// because there is nothing before it to disqualify it and nothing to inspect
+// either: the offset is the first byte of the response, and reading the byte
+// before it would read outside the string. The other two cases are the rule
+// that makes a section the server's, in both directions: it has to start a
+// line, so a "---" following body text on the same line is not one.
+func TestLastHintsBlock(t *testing.T) {
+	tests := []struct {
+		name   string
+		md     string
+		want   int
+		wantOK bool
+	}{
+		{
+			name:   "section opening the response",
+			md:     hintsBlockOpening + "- act\n",
+			want:   len(hintsBlockOpening),
+			wantOK: true,
+		},
+		{
+			name:   "section after a line of its own",
+			md:     "## Project\n" + hintsBlockOpening + "- act\n",
+			want:   len("## Project\n") + len(hintsBlockOpening),
+			wantOK: true,
+		},
+		{
+			name:   "the last of two sections",
+			md:     "## Project\n" + hintsBlockOpening + "- first\n" + hintsBlockOpening + "- act\n",
+			want:   len("## Project\n") + len(hintsBlockOpening) + len("- first\n") + len(hintsBlockOpening),
+			wantOK: true,
+		},
+		{
+			name: "rule glued to the end of a line of body text",
+			md:   "## Project\nsee the diff" + hintsBlockOpening + "- act\n",
+		},
+		{
+			name: "no section at all",
+			md:   "## Project\n\n- **ID**: 1\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := lastHintsBlock(tt.md)
+			if ok != tt.wantOK {
+				t.Fatalf("lastHintsBlock() ok = %v, want %v", ok, tt.wantOK)
+			}
+			if got != tt.want {
+				t.Errorf("lastHintsBlock() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestPopulateHints_TakesTheFirstContentThatCarriesASection verifies that a
+// content item with no guidance section is passed over rather than answered
+// with an empty list.
+//
+// A tool result may carry several text items, and only the one the formatter
+// appended its section to has hints. Setting next_steps from the first item
+// regardless would replace the hints the response really has with nothing, and
+// the call would look exactly like a response that carried no guidance.
+func TestPopulateHints_TakesTheFirstContentThatCarriesASection(t *testing.T) {
+	result := &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: "## Project: demo\n\n| ID |\n| --- |\n| 1 |\n"},
+			&mcp.TextContent{Text: "---\n" + hintsHeading + "\n- Use action 'get' to see details\n"},
+		},
+	}
+	out := &hintTestOutput{Name: "demo"}
+	PopulateHints(result, out)
+
+	if diff := hintsDiff(out.NextSteps, []string{"Use action 'get' to see details"}); diff != "" {
+		t.Errorf("PopulateHints left next_steps wrong: %s", diff)
+	}
+}
+
 // hintsDiff reports how got differs from want, or "" when they match.
 func hintsDiff(got, want []string) string {
-	if len(got) != len(want) {
-		return fmt.Sprintf("got %q, want %q", got, want)
+	if slices.Equal(got, want) {
+		return ""
 	}
-	for i := range got {
-		if got[i] != want[i] {
-			return fmt.Sprintf("got %q, want %q", got, want)
-		}
-	}
-	return ""
+	return fmt.Sprintf("got %q, want %q", got, want)
 }

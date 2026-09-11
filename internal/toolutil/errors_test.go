@@ -566,6 +566,29 @@ func TestExtractGitLabMessage(t *testing.T) {
 			},
 			want: "{error: [title is too long (maximum is 255 characters)]}",
 		},
+		{
+			// The status code and nothing else: the one shape the equality test
+			// catches on its own, since there is no trailing space for the
+			// prefix test below it to match.
+			name: "message that is only the status code",
+			err: &gl.ErrorResponse{
+				Response: &http.Response{StatusCode: http.StatusMethodNotAllowed},
+				Message:  "405",
+			},
+			want: "",
+		},
+		{
+			// A status echo that also carries GitLab's own field errors is kept
+			// whole. The bracket test is what tells the two apart: without it
+			// the wrapped-status filter would drop the validation detail along
+			// with the echo, and the model would be told only "conflict".
+			name: "status echo carrying field errors is kept",
+			err: &gl.ErrorResponse{
+				Response: &http.Response{StatusCode: http.StatusConflict},
+				Message:  `{message: 409 Conflict [{"base":["another open merge request already exists"]}]}`,
+			},
+			want: `{message: 409 Conflict [{"base":["another open merge request already exists"]}]}`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1649,6 +1672,14 @@ func TestExtractGitLabMessage_BoundsAndFlattensTheMessage(t *testing.T) {
 			message: "{error: " + strings.Repeat("a", 400) + "}",
 			want:    "{error: " + strings.Repeat("a", 292) + "...",
 		},
+		{
+			// Exactly at the cap, which is the length the cut must not fire on:
+			// a message trimmed here would end in an ellipsis promising more
+			// text that was never there.
+			name:    "message at the cap is kept whole",
+			message: "{error: " + strings.Repeat("a", 291) + "}",
+			want:    "{error: " + strings.Repeat("a", 291) + "}",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1945,6 +1976,287 @@ func TestUnattributedRequestErrorFor_BlamesTheWiringOnlyForALiveRequest(t *testi
 
 			if got.Error() != tt.want.Error() {
 				t.Errorf("UnattributedRequestErrorFor = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// The one request every error below says it failed on, and the line client-go
+// renders for it. Spelled once so the expected text of each case is the
+// composition around it rather than another copy of it.
+const (
+	projectPath        = "/api/v4/projects/1"
+	projectRequestLine = "GET https://gitlab.example.com" + projectPath
+	// The body an interloper answers with, and the message client-go flattens
+	// out of it. The "upstream" key is what says GitLab did not compose it.
+	gatewayBody    = `{"error":"upstream timeout","upstream":"gitlab-web-03.internal:8181"}`
+	gatewayMessage = "{error: upstream timeout, upstream: gitlab-web-03.internal:8181}"
+)
+
+// projectGetRequest is the request client-go records on the response error.
+func projectGetRequest() *http.Request {
+	return &http.Request{
+		Method: http.MethodGet,
+		URL:    &url.URL{Scheme: "https", Host: "gitlab.example.com", Path: projectPath},
+	}
+}
+
+// TestNewDetailedError_KeepsBothTheRenderingAndGitLabsOwnMessage pins what the
+// Details line of a Markdown error result is made of.
+//
+// There are two shapes and they are composed differently. When the rendering
+// produced something, GitLab's own message is appended to it in parentheses;
+// when it produced nothing, the message becomes the whole of it. The second
+// shape is not hypothetical: client-go's Error() dereferences the request
+// without checking it, so a response error carrying a response and no request
+// panics, the panic is recovered here, and the message is all that is left to
+// tell anyone.
+func TestNewDetailedError_KeepsBothTheRenderingAndGitLabsOwnMessage(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "the rendering and the message",
+			err: &gl.ErrorResponse{
+				StatusCode: http.StatusNotFound,
+				Response:   &http.Response{StatusCode: http.StatusNotFound, Request: projectGetRequest()},
+				Message:    "{message: Project Not Found}",
+			},
+			want: projectRequestLine + ": 404 {message: Project Not Found} ({message: Project Not Found})",
+		},
+		{
+			name: "the message alone, because the rendering panicked",
+			err: &gl.ErrorResponse{
+				StatusCode: http.StatusNotFound,
+				Response:   &http.Response{StatusCode: http.StatusNotFound},
+				Message:    "Project Not Found",
+			},
+			want: "Project Not Found",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			de := NewDetailedError("projects", "get", tt.err)
+			if de.Details != tt.want {
+				t.Errorf("NewDetailedError().Details = %q, want %q", de.Details, tt.want)
+			}
+		})
+	}
+}
+
+// TestSanitizeError_RendersWhatTheResponseCarried pins the rendering that
+// replaces client-go's own, whole.
+//
+// The status is the response's rather than the field beside it, because the
+// response is what answered; a rendering that reads the field instead reports
+// the zero value of a struct nobody filled. The other two cases are the shapes
+// with no request line to name: a message that survives bounding is kept beside
+// the status, and one that may not be reflected at all leaves the status alone
+// to speak.
+func TestSanitizeError_RendersWhatTheResponseCarried(t *testing.T) {
+	tests := []struct {
+		name string
+		err  *gl.ErrorResponse
+		want string
+	}{
+		{
+			name: "the status is the one the response carried",
+			err: &gl.ErrorResponse{
+				// StatusCode deliberately unset: client-go fills both, and the
+				// two can only be told apart when they disagree.
+				Response: &http.Response{StatusCode: http.StatusNotFound, Request: projectGetRequest()},
+				Message:  "{message: Project Not Found}",
+			},
+			want: projectRequestLine + ": 404 {message: Project Not Found}",
+		},
+		{
+			name: "no request line, with a message",
+			err: &gl.ErrorResponse{
+				StatusCode: http.StatusNotFound,
+				Message:    strings.Repeat("a", 400),
+			},
+			want: "404 " + strings.Repeat("a", 300) + "...",
+		},
+		{
+			name: "no request line and a message that may not be reflected",
+			err: &gl.ErrorResponse{
+				StatusCode: http.StatusBadGateway,
+				Body:       []byte(gatewayBody),
+				Message:    gatewayMessage,
+			},
+			want: "HTTP 502",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := SanitizeError(tt.err).Error(); got != tt.want {
+				t.Errorf("SanitizeError() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSanitizeError_CollapsesTheTextOnlyWhenTheMessageWouldSurvive pins which
+// of the two repairs a wrapped response error gets.
+//
+// Swapping the response's rendering inside the text is the ordinary one, and it
+// keeps the handler's own context, which is the useful half of the message. The
+// whole text is replaced only when a copy of the message that may not be
+// reflected is still in it afterwards, which is what happens when a wrapper
+// interpolated the message beside the error rather than only wrapping it. Both
+// halves matter: collapsing the ordinary case throws away the context for
+// nothing, and not collapsing the other leaves the upstream's own words in the
+// text a model reads.
+func TestSanitizeError_CollapsesTheTextOnlyWhenTheMessageWouldSurvive(t *testing.T) {
+	reflectable := &gl.ErrorResponse{
+		Response: &http.Response{StatusCode: http.StatusNotFound, Request: projectGetRequest()},
+		Message:  "{message: Project Not Found}",
+	}
+	notGitLabs := &gl.ErrorResponse{
+		StatusCode: http.StatusBadGateway,
+		Response:   &http.Response{StatusCode: http.StatusBadGateway, Request: projectGetRequest()},
+		Body:       []byte(gatewayBody),
+		Message:    gatewayMessage,
+	}
+	tooLong := &gl.ErrorResponse{
+		StatusCode: http.StatusNotFound,
+		Response:   &http.Response{StatusCode: http.StatusNotFound, Request: projectGetRequest()},
+		Message:    strings.Repeat("a", 400),
+	}
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "a message that may be reflected keeps the handler's context",
+			err:  fmt.Errorf("reading .gitmodules from project 1: %w", reflectable),
+			want: "reading .gitmodules from project 1: " + projectRequestLine + ": 404 {message: Project Not Found}",
+		},
+		{
+			name: "a message GitLab did not compose takes the whole text with it",
+			err:  fmt.Errorf("reading the project (%s): %w", notGitLabs.Message, notGitLabs),
+			want: projectRequestLine + ": 502",
+		},
+		{
+			name: "a message past the cap takes the whole text with it",
+			err:  fmt.Errorf("reading the project (%s): %w", tooLong.Message, tooLong),
+			want: projectRequestLine + ": 404 " + strings.Repeat("a", 300) + "...",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SanitizeError(tt.err).Error()
+			if got != tt.want {
+				t.Errorf("SanitizeError() = %q, want %q", got, tt.want)
+			}
+			if strings.Contains(got, "gitlab-web-03.internal") {
+				t.Errorf("SanitizeError() = %q, must not carry the upstream host", got)
+			}
+		})
+	}
+}
+
+// The classifications the compositions below are built around, spelled out
+// rather than read from the table the production code uses, so that a reworded
+// classification has to be rewritten here too.
+const (
+	conflictSemantic   = "conflict: the resource already exists or there is a state conflict"
+	notAllowedSemantic = "method not allowed: the action cannot be performed on this resource in its current state"
+)
+
+// mergeRequestError builds the response error a merge request call produces,
+// with the request line client-go renders for it.
+func mergeRequestError(status int, method, path, message string) *gl.ErrorResponse {
+	return &gl.ErrorResponse{
+		StatusCode: status,
+		Response: &http.Response{
+			StatusCode: status,
+			Request: &http.Request{
+				Method: method,
+				URL:    &url.URL{Scheme: "https", Host: "gitlab.example.com", Path: path},
+			},
+		},
+		Message: message,
+	}
+}
+
+// TestWrapErrWithMessage_ComposesTheWholeLine pins the composition rather than
+// its parts.
+//
+// GitLab's own message is parenthesised between the classification and the
+// cause when there is one, and the parentheses go away entirely when there is
+// not. A substring assertion cannot see the second half: an empty pair of
+// parentheses reads to a model as a detail the server tried and failed to
+// supply, and every test that looks only for the operation name and the
+// classification passes with one there.
+func TestWrapErrWithMessage_ComposesTheWholeLine(t *testing.T) {
+	const conflictPath = "/api/v4/projects/1/merge_requests"
+	const mergePath = "/api/v4/projects/1/merge_requests/1/merge"
+	const conflictMessage = "{message: another open merge request already exists}"
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "with a message of GitLab's own",
+			err:  mergeRequestError(http.StatusConflict, http.MethodPost, conflictPath, conflictMessage),
+			want: "mrCreate: " + conflictSemantic + " (" + conflictMessage + "): " +
+				"POST https://gitlab.example.com" + conflictPath + ": 409 " + conflictMessage,
+		},
+		{
+			name: "with a message that only repeats the status",
+			err:  mergeRequestError(http.StatusMethodNotAllowed, http.MethodPut, mergePath, "405 Method Not Allowed"),
+			want: "mrCreate: " + notAllowedSemantic + ": " +
+				"PUT https://gitlab.example.com" + mergePath + ": 405 405 Method Not Allowed",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := WrapErrWithMessage("mrCreate", tt.err).Error(); got != tt.want {
+				t.Errorf("WrapErrWithMessage() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestWrapErrWithHint_ComposesTheWholeLine pins the hinted composition for the
+// same reason its unhinted sibling does: the parentheses around GitLab's
+// message appear only when there is a message, and the suggestion always
+// follows the classification and precedes the cause.
+func TestWrapErrWithHint_ComposesTheWholeLine(t *testing.T) {
+	const branchPath = "/api/v4/projects/1/repository/branches/main"
+	const mergePath = "/api/v4/projects/1/merge_requests/1/merge"
+	const protectedMessage = "{message: Cannot delete: protected branch}"
+	const hint = "use gitlab_branch_unprotect first, then retry deletion"
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "with a message of GitLab's own",
+			err:  mergeRequestError(http.StatusConflict, http.MethodDelete, branchPath, protectedMessage),
+			want: "branchDelete: " + conflictSemantic + " (" + protectedMessage + "). Suggestion: " + hint + ": " +
+				"DELETE https://gitlab.example.com" + branchPath + ": 409 " + protectedMessage,
+		},
+		{
+			name: "with a message that only repeats the status",
+			err:  mergeRequestError(http.StatusMethodNotAllowed, http.MethodPut, mergePath, "405 Method Not Allowed"),
+			want: "branchDelete: " + notAllowedSemantic + ". Suggestion: " + hint + ": " +
+				"PUT https://gitlab.example.com" + mergePath + ": 405 405 Method Not Allowed",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := WrapErrWithHint("branchDelete", tt.err, hint).Error(); got != tt.want {
+				t.Errorf("WrapErrWithHint() = %q, want %q", got, tt.want)
 			}
 		})
 	}
