@@ -444,3 +444,72 @@ func TestMetaActionSchema_KeepsRoutesOverOneSharedSchemaApart(t *testing.T) {
 		t.Fatal("two routes spelling one guidance derived two schemas, want the guidance named by its content")
 	}
 }
+
+// TestMetaActionSchema_GuidanceEncodesOnlyTheFacetsSet verifies each guidance
+// facet is published when the domain filled it and omitted when it did not.
+// The model reads x_parameter_guidance as a set of facts about a parameter, so
+// an empty string emitted as "value_source" or an empty list emitted as
+// "common_confusions" is not harmless padding: it reads as "this parameter has
+// no source" and "these are the confusions", both of which are false.
+func TestMetaActionSchema_GuidanceEncodesOnlyTheFacetsSet(t *testing.T) {
+	route := ActionRoute{
+		ParameterGuidance: map[string]ParameterGuidance{
+			"project_id": {SemanticRole: "scope_owner_project"},
+			"target_project_id": {
+				ValueSource:      "The project being removed from the allowlist.",
+				CommonConfusions: []string{"Not the owning project."},
+				ExampleBinding:   "Remove project 51 from project 1 => target_project_id=51.",
+			},
+		},
+	}
+	guidance, ok := MetaActionSchema(route)["x_parameter_guidance"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema carries no x_parameter_guidance: %#v", MetaActionSchema(route))
+	}
+
+	roleOnly, ok := guidance["project_id"].(map[string]any)
+	if !ok {
+		t.Fatalf("x_parameter_guidance[project_id] = %#v, want a map", guidance["project_id"])
+	}
+	if roleOnly["semantic_role"] != "scope_owner_project" {
+		t.Errorf("project_id.semantic_role = %v, want scope_owner_project", roleOnly["semantic_role"])
+	}
+	for _, facet := range []string{"value_source", "common_confusions", "example_binding"} {
+		t.Run("project_id_omits_"+facet, func(t *testing.T) {
+			if value, has := roleOnly[facet]; has {
+				t.Errorf("project_id.%s = %#v, want the facet omitted", facet, value)
+			}
+		})
+	}
+
+	filled, ok := guidance["target_project_id"].(map[string]any)
+	if !ok {
+		t.Fatalf("x_parameter_guidance[target_project_id] = %#v, want a map", guidance["target_project_id"])
+	}
+	if filled["value_source"] != "The project being removed from the allowlist." {
+		t.Errorf("target_project_id.value_source = %v", filled["value_source"])
+	}
+	if !reflect.DeepEqual(filled["common_confusions"], []string{"Not the owning project."}) {
+		t.Errorf("target_project_id.common_confusions = %#v", filled["common_confusions"])
+	}
+	if filled["example_binding"] != "Remove project 51 from project 1 => target_project_id=51." {
+		t.Errorf("target_project_id.example_binding = %v", filled["example_binding"])
+	}
+	if _, has := filled["semantic_role"]; has {
+		t.Errorf("target_project_id.semantic_role = %v, want the facet omitted", filled["semantic_role"])
+	}
+}
+
+// TestMetaActionSchema_GuidanceWithNothingToSay_OmitsTheExtension verifies a
+// guidance table whose every entry is empty publishes no x_parameter_guidance
+// key at all. A parameter map with nothing in it costs the model tokens to
+// read and tells it nothing, and an entry with no facets is what a domain
+// leaves behind when it registers a parameter name and fills none of the
+// facets in.
+func TestMetaActionSchema_GuidanceWithNothingToSay_OmitsTheExtension(t *testing.T) {
+	route := ActionRoute{ParameterGuidance: map[string]ParameterGuidance{"project_id": {}}}
+	schema := MetaActionSchema(route)
+	if value, has := schema["x_parameter_guidance"]; has {
+		t.Errorf("x_parameter_guidance = %#v, want the extension omitted", value)
+	}
+}

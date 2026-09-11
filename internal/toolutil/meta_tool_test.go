@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"net/http"
 	"reflect"
 	"strings"
@@ -4744,8 +4745,9 @@ func TestValidGitLabRoleAccessLevelDirect(t *testing.T) {
 	}
 }
 
-// TestValidGitLabRoleAccessLevelInt64Direct verifies the int64 variant
-// rejects out-of-int-range and negative values before narrowing.
+// TestValidGitLabRoleAccessLevelInt64Direct verifies the int64 variant accepts
+// the canonical access levels and rejects everything else, out-of-int-range
+// and negative values included.
 func TestValidGitLabRoleAccessLevelInt64Direct(t *testing.T) {
 	accepted := []struct {
 		name  string
@@ -5517,5 +5519,606 @@ func TestMetaParamSchemaMode_ReportsTheSelectedMode(t *testing.T) {
 	defer restore()
 	if got := MetaParamSchemaMode(); got != MetaParamSchemaFull {
 		t.Errorf("MetaParamSchemaMode() = %q, want %q", got, MetaParamSchemaFull)
+	}
+}
+
+// namedEmbedInner is embedded under a JSON name by namedEmbedOuter, so its own
+// fields are never promoted.
+type namedEmbedInner struct {
+	Token string `json:"token" jsonschema:"Inner token,required" tier:"ultimate"`
+}
+
+// namedEmbedOuter embeds a struct under a JSON name instead of promoting it.
+type namedEmbedOuter struct {
+	namedEmbedInner `json:"credentials" tier:"premium"`
+	Name            string `json:"name" jsonschema:"Name,required"`
+}
+
+// TestReflectionHelpers_NamedEmbed_IsAFieldNotAPromotion verifies the four
+// reflection walks treat an embedded struct that carries a JSON name as one
+// field named by that tag, not as a promotion of the fields inside it. That is
+// what encoding/json does, and every one of these walks exists to describe what
+// encoding/json will produce: promoting the inner fields would advertise
+// parameters the wire never carries at that level, mark the outer field's tier
+// with the inner one's, and publish an inner secret or an inner required flag
+// under a name the caller cannot send.
+func TestReflectionHelpers_NamedEmbed_IsAFieldNotAPromotion(t *testing.T) {
+	outer := reflect.TypeFor[namedEmbedOuter]()
+
+	if got := FieldTiers(outer); !reflect.DeepEqual(got, map[string]string{"credentials": "premium"}) {
+		t.Errorf("FieldTiers() = %#v, want the embed's own tier under its JSON name", got)
+	}
+	if got := secretJSONFieldNames(outer); len(got) != 0 {
+		t.Errorf("secretJSONFieldNames() = %#v, want none: the token is one level down", got)
+	}
+	if got := requiredJSONFieldNames(outer); !reflect.DeepEqual(got, []string{"name"}) {
+		t.Errorf("requiredJSONFieldNames() = %#v, want [name]", got)
+	}
+
+	names := jsonFieldNames(outer)
+	types := jsonFieldTypes(outer)
+	for _, want := range []string{"credentials", "name"} {
+		t.Run("accepts_"+want, func(t *testing.T) {
+			if _, ok := names[want]; !ok {
+				t.Errorf("jsonFieldNames() = %#v, want %q", names, want)
+			}
+			if _, ok := types[want]; !ok {
+				t.Errorf("jsonFieldTypes() = %#v, want %q", types, want)
+			}
+		})
+	}
+	if _, ok := names["token"]; ok {
+		t.Errorf("jsonFieldNames() = %#v, want no promoted token", names)
+	}
+	if _, ok := types["token"]; ok {
+		t.Errorf("jsonFieldTypes() = %#v, want no promoted token", types)
+	}
+}
+
+// TestInputSchemaForType_NoRequiredFields_PublishesNoRequiredKey verifies that
+// a type whose fields are all optional publishes no "required" key at all. An
+// empty or null "required" is not the same document: strict JSON Schema
+// validators reject `"required": null`, and the MCP gateways that re-validate a
+// served tool list are exactly the clients this key is written for.
+func TestInputSchemaForType_NoRequiredFields_PublishesNoRequiredKey(t *testing.T) {
+	type optionalOnlyInput struct {
+		Name string `json:"name,omitempty"`
+		Page int    `json:"page,omitempty"`
+	}
+	schema := inputSchemaForType(reflect.TypeFor[optionalOnlyInput]())
+	if schema == nil {
+		t.Fatal("inputSchemaForType() = nil, want a schema")
+	}
+	if value, has := schema["required"]; has {
+		t.Errorf("schema[required] = %#v, want the key absent", value)
+	}
+}
+
+// TestNormalizeParamAliases_AcceptedNameIsNeverRewritten verifies that a
+// parameter the target type accepts is left where the caller put it. The id and
+// iid rewrites exist for a caller that sent a generic name the action does not
+// have; an action that has both `id` and `project_id` means two different
+// things by them, and moving the value would run the call against the wrong
+// object.
+func TestNormalizeParamAliases_AcceptedNameIsNeverRewritten(t *testing.T) {
+	t.Run("id", func(t *testing.T) {
+		type idAndProjectIDInput struct {
+			ID        string `json:"id"`
+			ProjectID string `json:"project_id"`
+		}
+		got := normalizeParamAliases(map[string]any{"id": "7"}, reflect.TypeFor[idAndProjectIDInput]())
+		if !reflect.DeepEqual(got, map[string]any{"id": "7"}) {
+			t.Errorf("normalizeParamAliases() = %#v, want id untouched", got)
+		}
+	})
+	t.Run("iid", func(t *testing.T) {
+		type iidAndMergeRequestIIDInput struct {
+			IID             int `json:"iid"`
+			MergeRequestIID int `json:"merge_request_iid"`
+		}
+		got := normalizeParamAliases(map[string]any{"iid": 3}, reflect.TypeFor[iidAndMergeRequestIIDInput]())
+		if !reflect.DeepEqual(got, map[string]any{"iid": 3}) {
+			t.Errorf("normalizeParamAliases() = %#v, want iid untouched", got)
+		}
+	})
+}
+
+// TestNormalizeIIDAlias_NoIIDSuffixedField_LeavesTheParamAlone verifies a bare
+// iid is only moved onto a field whose name ends in _iid. A merge_request_id is
+// a different identifier than a merge_request_iid (GitLab numbers them
+// separately, per project), so moving an iid onto it silently addresses another
+// object; leaving the param in place produces the unknown-field error the model
+// can act on instead.
+func TestNormalizeIIDAlias_NoIIDSuffixedField_LeavesTheParamAlone(t *testing.T) {
+	type mergeRequestIDOnlyInput struct {
+		MergeRequestID int `json:"merge_request_id"`
+	}
+	got := normalizeParamAliases(map[string]any{"iid": 3}, reflect.TypeFor[mergeRequestIDOnlyInput]())
+	if !reflect.DeepEqual(got, map[string]any{"iid": 3}) {
+		t.Errorf("normalizeParamAliases() = %#v, want the iid left alone", got)
+	}
+}
+
+// TestNormalizeEnvironmentIDAlias_NoEnvironmentIDParam_AddsNothing verifies the
+// environment_id rewrite only fires when the caller actually sent that param.
+// Writing the canonical name unconditionally would put a null `environment`
+// into every call to an action that has one, which GitLab reads as a request to
+// clear the field.
+func TestNormalizeEnvironmentIDAlias_NoEnvironmentIDParam_AddsNothing(t *testing.T) {
+	type environmentOnlyInput struct {
+		Environment string `json:"environment"`
+		Slug        string `json:"slug"`
+	}
+	got := normalizeParamAliases(map[string]any{"slug": "prod"}, reflect.TypeFor[environmentOnlyInput]())
+	if !reflect.DeepEqual(got, map[string]any{"slug": "prod"}) {
+		t.Errorf("normalizeParamAliases() = %#v, want no environment key", got)
+	}
+}
+
+// TestExplainIDParamAlias_SchemaAcceptsID_ExplainsNothing verifies the
+// explanation list stays empty when the schema declares `id` itself. The
+// explanations are shown to the caller as what the server changed about their
+// call, so reporting a rewrite that did not happen is a false statement about
+// the request that was sent.
+func TestExplainIDParamAlias_SchemaAcceptsID_ExplainsNothing(t *testing.T) {
+	schema := map[string]any{
+		"properties": map[string]any{
+			"id":         map[string]any{"type": "string"},
+			"project_id": map[string]any{"type": "string"},
+		},
+	}
+	_, explanations := NormalizeParamAliasesForSchemaWithExplanation(map[string]any{"id": "7"}, schema)
+	if len(explanations) != 0 {
+		t.Errorf("explanations = %#v, want none", explanations)
+	}
+}
+
+// TestNormalizeFilePathAlias_FieldSetGuards verifies the file_path split fires
+// only for a target that has both halves of the split and not the whole path.
+// The split writes two new params: sending `path` to an action that has no
+// path, or splitting for an action that models file_path itself, turns a
+// working call into an unknown-field rejection.
+func TestNormalizeFilePathAlias_FieldSetGuards(t *testing.T) {
+	const filePath = "packages/npm/package.tgz"
+
+	t.Run("filename_without_path_is_left_alone", func(t *testing.T) {
+		type filenameOnlyInput struct {
+			Filename string `json:"filename"`
+		}
+		got := normalizeParamAliases(map[string]any{"file_path": filePath}, reflect.TypeFor[filenameOnlyInput]())
+		if !reflect.DeepEqual(got, map[string]any{"file_path": filePath}) {
+			t.Errorf("normalizeParamAliases() = %#v, want the file_path untouched", got)
+		}
+	})
+	t.Run("path_without_filename_is_left_alone", func(t *testing.T) {
+		type pathOnlyInput struct {
+			Path string `json:"path"`
+		}
+		got := normalizeParamAliases(map[string]any{"file_path": filePath}, reflect.TypeFor[pathOnlyInput]())
+		if !reflect.DeepEqual(got, map[string]any{"file_path": filePath}) {
+			t.Errorf("normalizeParamAliases() = %#v, want the file_path untouched", got)
+		}
+	})
+	t.Run("a_target_that_models_file_path_keeps_it", func(t *testing.T) {
+		type allThreeInput struct {
+			Path     string `json:"path"`
+			Filename string `json:"filename"`
+			FilePath string `json:"file_path"`
+		}
+		got := normalizeParamAliases(map[string]any{"file_path": filePath}, reflect.TypeFor[allThreeInput]())
+		if !reflect.DeepEqual(got, map[string]any{"file_path": filePath}) {
+			t.Errorf("normalizeParamAliases() = %#v, want the file_path untouched", got)
+		}
+	})
+	t.Run("both_halves_and_no_file_path_splits", func(t *testing.T) {
+		got := normalizeParamAliases(map[string]any{"file_path": filePath}, reflect.TypeFor[testPackageFilePathInput]())
+		want := map[string]any{"path": "packages/npm", "filename": "package.tgz"}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("normalizeParamAliases() = %#v, want %#v", got, want)
+		}
+	})
+}
+
+// TestNormalizeBranchAliases_Guards verifies the branch-alias copies fire only
+// for a target that models both branches, and only for an alias carrying a
+// branch name. A target with one branch field would otherwise be sent a
+// target_branch it does not accept, and a blank ref would be copied over as a
+// branch name, which GitLab answers with a 400 instead of the unknown-field
+// diagnostic the model can correct.
+func TestNormalizeBranchAliases_Guards(t *testing.T) {
+	t.Run("one_branch_field_copies_nothing", func(t *testing.T) {
+		type sourceBranchOnlyInput struct {
+			SourceBranch string `json:"source_branch"`
+		}
+		params := map[string]any{"ref": "main", "to": "dev"}
+		got := normalizeParamAliases(params, reflect.TypeFor[sourceBranchOnlyInput]())
+		if !reflect.DeepEqual(got, params) {
+			t.Errorf("normalizeParamAliases() = %#v, want %#v", got, params)
+		}
+	})
+	t.Run("blank_ref_is_not_a_branch_name", func(t *testing.T) {
+		params := map[string]any{"ref": "   "}
+		got := normalizeParamAliases(params, reflect.TypeFor[testAliasInput]())
+		if !reflect.DeepEqual(got, params) {
+			t.Errorf("normalizeParamAliases() = %#v, want the blank ref left alone", got)
+		}
+	})
+	t.Run("named_ref_becomes_the_source_branch", func(t *testing.T) {
+		got := normalizeParamAliases(map[string]any{"ref": "main"}, reflect.TypeFor[testAliasInput]())
+		if !reflect.DeepEqual(got, map[string]any{"source_branch": "main"}) {
+			t.Errorf("normalizeParamAliases() = %#v, want source_branch=main", got)
+		}
+	})
+}
+
+// TestCoerceStructuredValue_RoleNameWithoutAccessLevelField_Unchanged verifies
+// a role name in a list is only wrapped into an access_level object when the
+// element type has that field. Wrapping it otherwise replaces the caller's
+// value with an object the target cannot decode.
+func TestCoerceStructuredValue_RoleNameWithoutAccessLevelField_Unchanged(t *testing.T) {
+	type roleFreeRule struct {
+		Name string `json:"name"`
+	}
+	value := []any{"developer"}
+	coerced, changed := coerceStructuredValue("rules", value, reflect.TypeFor[[]roleFreeRule]())
+	if changed || !reflect.DeepEqual(coerced, value) {
+		t.Errorf("coerceStructuredValue() = (%#v, %v), want the list unchanged", coerced, changed)
+	}
+}
+
+// TestNormalizeStructuredObjectFields_MaintainerDefaultGuards verifies the
+// Maintainer default is added only to an object that models both an approval
+// count and an access level, carries a count, and names no principal. Each of
+// the three conditions is load-bearing: a default written onto an object that
+// has no access_level field, or that already names who approves, or that asks
+// for no approvals at all, invents an approval rule the caller never described.
+func TestNormalizeStructuredObjectFields_MaintainerDefaultGuards(t *testing.T) {
+	t.Run("no_access_level_field", func(t *testing.T) {
+		type countOnlyRule struct {
+			RequiredApprovals int `json:"required_approvals"`
+		}
+		got := normalizeStructuredObjectFields(map[string]any{"required_approvals": 2}, reflect.TypeFor[countOnlyRule]())
+		if value, has := got["access_level"]; has {
+			t.Errorf("access_level = %#v, want none: the rule type has no such field", value)
+		}
+	})
+	t.Run("no_required_approvals_field", func(t *testing.T) {
+		type accessLevelOnlyRule struct {
+			AccessLevel int `json:"access_level"`
+		}
+		got := normalizeStructuredObjectFields(map[string]any{"approval_count": 2}, reflect.TypeFor[accessLevelOnlyRule]())
+		if value, has := got["access_level"]; has {
+			t.Errorf("access_level = %#v, want none: the rule type has no approval count", value)
+		}
+	})
+	t.Run("no_approval_count_in_the_object", func(t *testing.T) {
+		type approvalRule struct {
+			RequiredApprovals int `json:"required_approvals"`
+			AccessLevel       int `json:"access_level"`
+		}
+		got := normalizeStructuredObjectFields(map[string]any{}, reflect.TypeFor[approvalRule]())
+		if value, has := got["access_level"]; has {
+			t.Errorf("access_level = %#v, want none: the object asks for no approvals", value)
+		}
+	})
+	t.Run("principal_already_named", func(t *testing.T) {
+		type approvalRule struct {
+			RequiredApprovals int `json:"required_approvals"`
+			AccessLevel       int `json:"access_level"`
+			UserID            int `json:"user_id"`
+		}
+		value := map[string]any{"required_approvals": 2, "user_id": 7}
+		got := normalizeStructuredObjectFields(value, reflect.TypeFor[approvalRule]())
+		if level, has := got["access_level"]; has {
+			t.Errorf("access_level = %#v, want none: user 7 is who approves", level)
+		}
+	})
+}
+
+// TestIntegerFromString_Int64Bounds verifies the float fallback accepts a value
+// an int64 can hold and refuses one it cannot. The bound is subtle enough to
+// have been wrong: float64 cannot represent math.MaxInt64, and the conversion
+// of that constant rounds *up* to 2^63, so a bound compared with > let 2^63
+// itself through and int64(2^63) wrapped to math.MinInt64. A page size or an id
+// of 2^63 therefore became a large negative number instead of an error.
+func TestIntegerFromString_Int64Bounds(t *testing.T) {
+	if float64(math.MaxInt64) != maxInt64AsFloatExclusive {
+		t.Fatalf("float64(math.MaxInt64) = %v, want it to round up to 2^63 = %v", float64(math.MaxInt64), maxInt64AsFloatExclusive)
+	}
+
+	cases := []struct {
+		name    string
+		text    string
+		want    int64
+		wantErr bool
+	}{
+		{name: "min_int64", text: "-9223372036854775808", want: math.MinInt64},
+		{name: "min_int64_through_the_float_path", text: "-9223372036854775808.0", want: math.MinInt64},
+		{name: "max_int64", text: "9223372036854775807", want: math.MaxInt64},
+		{name: "one_above_max_int64", text: "9223372036854775808", wantErr: true},
+		{name: "max_int64_through_the_float_path_rounds_up", text: "9223372036854775807.0", wantErr: true},
+		{name: "exponent_notation", text: "1e3", want: 1000},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := integerFromString(tc.text)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("integerFromString(%q) = %d, %v, want error %t", tc.text, got, err, tc.wantErr)
+			}
+			if !tc.wantErr && got != tc.want {
+				t.Errorf("integerFromString(%q) = %d, want %d", tc.text, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestNumericIDString_Int64Bounds verifies a float-valued id is rendered only
+// when an int64 can hold it. A JSON number always arrives as a float64, so this
+// is the path an id takes on the wire, and a value at or above 2^63 used to be
+// rendered as math.MinInt64 by an overflowing conversion.
+func TestNumericIDString_Int64Bounds(t *testing.T) {
+	cases := []struct {
+		name  string
+		value float64
+		want  string
+	}{
+		{name: "small_id", value: 42, want: "42"},
+		{name: "min_int64", value: -9223372036854775808, want: "-9223372036854775808"},
+		{name: "two_pow_63", value: 9223372036854775808},
+		{name: "well_above_int64", value: 1e19},
+		{name: "fractional", value: 1.5},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := numericIDString(tc.value)
+			if ok != (tc.want != "") {
+				t.Fatalf("numericIDString(%v) = %q, %v, want ok %t", tc.value, got, ok, tc.want != "")
+			}
+			if got != tc.want {
+				t.Errorf("numericIDString(%v) = %q, want %q", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestUnmarshalParams_UnsignedZero_IsAccepted verifies that "0" decodes into an
+// unsigned field. Zero is the boundary the non-negative check is written
+// around, and it is an ordinary value for an offset or a count, so refusing it
+// would reject a call GitLab accepts.
+func TestUnmarshalParams_UnsignedZero_IsAccepted(t *testing.T) {
+	type unsignedCountInput struct {
+		Count uint64 `json:"count"`
+	}
+	input, err := UnmarshalParams[unsignedCountInput](map[string]any{"count": "0"})
+	if err != nil {
+		t.Fatalf("UnmarshalParams(count=0) error = %v", err)
+	}
+	if input.Count != 0 {
+		t.Errorf("Count = %d, want 0", input.Count)
+	}
+	if _, err = UnmarshalParams[unsignedCountInput](map[string]any{"count": "-1"}); err == nil {
+		t.Error("UnmarshalParams(count=-1) error = nil, want a non-negative rejection")
+	}
+}
+
+// TestUnmarshalParams_NumericStringsInsideASlice verifies the typed numeric
+// coercion reaches slice elements. The fallback retry only rewrites top-level
+// strings, so a list of numeric strings — what a model produces when it quotes
+// every value — decodes only because the typed pass walks into the slice.
+func TestUnmarshalParams_NumericStringsInsideASlice(t *testing.T) {
+	type sliceOfIntsInput struct {
+		IDs []int `json:"ids"`
+	}
+	input, err := UnmarshalParams[sliceOfIntsInput](map[string]any{"ids": []any{"1", "2"}})
+	if err != nil {
+		t.Fatalf("UnmarshalParams(ids) error = %v", err)
+	}
+	if !reflect.DeepEqual(input.IDs, []int{1, 2}) {
+		t.Errorf("IDs = %#v, want [1 2]", input.IDs)
+	}
+}
+
+// TestNormalizeParamAliasesForSchema_StringPropertyKeepsANonIDNumber verifies
+// the numeric-id stringification is applied to identifier parameters only. A
+// number sent for an ordinary string parameter stays a number and is reported
+// by the validator as the type error it is, instead of being silently turned
+// into a title or a description that reads "5".
+func TestNormalizeParamAliasesForSchema_StringPropertyKeepsANonIDNumber(t *testing.T) {
+	schema := map[string]any{
+		"properties": map[string]any{
+			"title":      map[string]any{"type": "string"},
+			"project_id": map[string]any{"type": "string"},
+		},
+	}
+	got := NormalizeParamAliasesForSchema(map[string]any{"title": 5, "project_id": 7}, schema)
+	if got["title"] != 5 {
+		t.Errorf("title = %#v, want the number 5 untouched", got["title"])
+	}
+	if got["project_id"] != "7" {
+		t.Errorf("project_id = %#v, want the string \"7\"", got["project_id"])
+	}
+}
+
+// TestNormalizeParamAliasesForSchema_LabelsArrayIsJoinedOnlyForAStringParam
+// verifies the label list is comma-joined only where the schema declares the
+// parameter as a string. GitLab's older endpoints take labels as CSV and the
+// newer ones as an array; joining the list for an array parameter would send
+// one label whose name contains commas, which GitLab creates rather than
+// rejects.
+func TestNormalizeParamAliasesForSchema_LabelsArrayIsJoinedOnlyForAStringParam(t *testing.T) {
+	arraySchema := map[string]any{
+		"properties": map[string]any{
+			"labels": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+		},
+	}
+	got := NormalizeParamAliasesForSchema(map[string]any{"labels": []any{"bug", "ux"}}, arraySchema)
+	if !reflect.DeepEqual(got["labels"], []any{"bug", "ux"}) {
+		t.Errorf("labels = %#v, want the array untouched", got["labels"])
+	}
+
+	stringSchema := map[string]any{"properties": map[string]any{"labels": map[string]any{"type": "string"}}}
+	got = NormalizeParamAliasesForSchema(map[string]any{"labels": []any{"bug", "ux"}}, stringSchema)
+	if got["labels"] != "bug,ux" {
+		t.Errorf("labels = %#v, want the CSV bug,ux", got["labels"])
+	}
+}
+
+// TestHasUnknownParamNames_SchemaWithoutProperties_ReportsNoUnknowns verifies a
+// schema that lists no properties never calls a param unknown. It is the guard
+// that lets the missing-required diagnostic be emitted: the two are exclusive,
+// and a schema with an empty properties map would otherwise declare every param
+// unknown and suppress the message that names what is missing.
+func TestHasUnknownParamNames_SchemaWithoutProperties_ReportsNoUnknowns(t *testing.T) {
+	params := map[string]any{"project_id": 1}
+	if hasUnknownParamNames(map[string]any{"properties": map[string]any{}}, params) {
+		t.Error("hasUnknownParamNames(empty properties) = true, want false")
+	}
+	if hasUnknownParamNames(map[string]any{}, params) {
+		t.Error("hasUnknownParamNames(no properties key) = true, want false")
+	}
+
+	schema := map[string]any{"properties": map[string]any{"project_id": map[string]any{"type": "integer"}}}
+	if hasUnknownParamNames(schema, params) {
+		t.Error("hasUnknownParamNames(known param) = true, want false")
+	}
+	if !hasUnknownParamNames(schema, map[string]any{"porject_id": 1}) {
+		t.Error("hasUnknownParamNames(misspelled param) = false, want true")
+	}
+}
+
+// TestMetaCallName_NamesTheActionWhenThereIsOne verifies the log and telemetry
+// name of a meta-tool call carries the action, and degrades to the bare tool
+// name when the call named none. The refusal for a missing action is logged
+// through this helper, so dropping the action would make every such record
+// indistinguishable from the others.
+func TestMetaCallName_NamesTheActionWhenThereIsOne(t *testing.T) {
+	if got := metaCallName("gitlab_issue", "list"); got != "gitlab_issue/list" {
+		t.Errorf("metaCallName(list) = %q, want gitlab_issue/list", got)
+	}
+	if got := metaCallName("gitlab_issue", ""); got != "gitlab_issue" {
+		t.Errorf("metaCallName(no action) = %q, want gitlab_issue", got)
+	}
+}
+
+// TestEnrichWithHints_HintsInALaterContentBlock verifies the scan keeps looking
+// past a text block that carries no hints. A formatter that writes a heading
+// block and then the body puts the hints in the second block, and stopping at
+// the first block would drop the next_steps a model reads before the payload.
+func TestEnrichWithHints_HintsInALaterContentBlock(t *testing.T) {
+	callResult := &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: "## Results\n"},
+			&mcp.TextContent{Text: "| id |\n| -- |\n\n---\n💡 **Next steps:**\n- Get details\n"},
+		},
+	}
+	enriched := enrichWithHints(map[string]any{"count": 1}, callResult)
+	raw, ok := enriched.(json.RawMessage)
+	if !ok {
+		t.Fatalf("enrichWithHints() = %T, want json.RawMessage carrying next_steps", enriched)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("unmarshal enriched result: %v", err)
+	}
+	if !reflect.DeepEqual(payload["next_steps"], []any{"Get details"}) {
+		t.Errorf("next_steps = %#v, want [Get details]", payload["next_steps"])
+	}
+	if payload["count"] != float64(1) {
+		t.Errorf("count = %#v, want 1", payload["count"])
+	}
+}
+
+// TestMetaToolDescriptionPrefix_GuidanceWithoutConfusions_OmitsAvoid verifies
+// the "Avoid:" facet is written only when the domain listed confusions. The
+// summary is served in every tools/list response, so an empty "Avoid:" costs
+// tokens on thousands of lines and tells the model a list was provided when
+// none was.
+func TestMetaToolDescriptionPrefix_GuidanceWithoutConfusions_OmitsAvoid(t *testing.T) {
+	routes := ActionMap{
+		"list": Route(nil).WithParameterGuidance(map[string]ParameterGuidance{
+			"project_id": {SemanticRole: "scope_project", ValueSource: "The project to list issues of."},
+		}),
+	}
+	got := MetaToolDescriptionPrefix("gitlab_issue", routes)
+	if !strings.Contains(got, "list.project_id: scope_project. Source: The project to list issues of.") {
+		t.Errorf("prefix missing the guidance line: %q", got)
+	}
+	if strings.Contains(got, "Avoid:") {
+		t.Errorf("prefix carries an empty Avoid facet: %q", got)
+	}
+}
+
+// TestStripMetaToolDescriptionPrefix_HeaderEdgeCases verifies the stripper
+// returns the description untouched for the shapes that are not a generated
+// header, and walks off neither end of the line slice for a header with nothing
+// after it. The function runs over every meta-tool description the docs and the
+// llms files are generated from, so a panic here takes those generators down
+// and a wrong strip silently deletes the first two lines of a hand-written
+// description.
+func TestStripMetaToolDescriptionPrefix_HeaderEdgeCases(t *testing.T) {
+	cases := []struct {
+		name        string
+		description string
+	}{
+		{
+			name:        "usage_example_without_the_schema_hint",
+			description: "Use {\"action\":\"list\",\"params\":{...}}.\nSomething else entirely.\n\nManage GitLab issues.",
+		},
+		{
+			name:        "header_with_no_body",
+			description: "Use {\"action\":\"list\",\"params\":{...}}.\nAction params schema: gitlab://tools/gitlab_issue.<action>.",
+		},
+		{
+			name:        "guidance_heading_with_no_bullets",
+			description: "Use {\"action\":\"list\",\"params\":{...}}.\nAction params schema: gitlab://tools/gitlab_issue.<action>.\nAction guidance:",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := StripMetaToolDescriptionPrefix(tc.description); got != tc.description {
+				t.Errorf("StripMetaToolDescriptionPrefix() = %q, want it unchanged", got)
+			}
+		})
+	}
+}
+
+// TestBuildMetaToolSchema_FullKeepsWhatCompactStrips verifies full mode serves
+// the reflected params schema as it is and compact mode is the one that drops
+// the descriptions. Full mode exists to give the model the whole per-action
+// schema in the tool list; compacting it there would make the two modes the
+// same document at 18.3x the opaque envelope's cost for no gain.
+func TestBuildMetaToolSchema_FullKeepsWhatCompactStrips(t *testing.T) {
+	routes := ActionMap{"get": RouteAction[testRequiredInput, testOutput](nil, nil)}
+
+	describedName := func(t *testing.T, mode string) map[string]any {
+		t.Helper()
+		branches, ok := BuildMetaToolSchema(routes, mode)["oneOf"].([]any)
+		if !ok || len(branches) != 1 {
+			t.Fatalf("%s oneOf = %#v, want one branch", mode, branches)
+		}
+		properties, ok := branches[0].(map[string]any)["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s branch has no properties: %#v", mode, branches[0])
+		}
+		params, ok := properties["params"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s branch has no params schema: %#v", mode, properties)
+		}
+		fields, ok := resolveTopLevelRef(params)["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s params schema has no properties: %#v", mode, params)
+		}
+		name, ok := fields["name"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s params schema has no name property: %#v", mode, fields)
+		}
+		return name
+	}
+
+	if got := describedName(t, MetaParamSchemaFull)["description"]; got != "Resource name" {
+		t.Errorf("full mode name.description = %#v, want the reflected description", got)
+	}
+	if got, has := describedName(t, MetaParamSchemaCompact)["description"]; has {
+		t.Errorf("compact mode name.description = %#v, want it stripped", got)
 	}
 }

@@ -61,3 +61,28 @@ func TestApplyActionMeta_ZeroEntryIsNoOp(t *testing.T) {
 func TestApplyActionMeta_NilOptionsSafe(t *testing.T) {
 	ApplyActionMeta(nil, ActionMetaEntry{Usage: "x"})
 }
+
+// TestApplyActionMeta_EmptyCollections_KeepOptionDefaults verifies that an
+// entry carrying an allocated but empty Related slice or Guidance map is
+// treated as the absent value it is, leaving the option defaults in place.
+// A domain table that builds its rows programmatically produces exactly that
+// shape, and overwriting with it would silently erase the shared defaults the
+// action was registered with: the related-action list would become nil and
+// the parameter guidance would become an empty map.
+func TestApplyActionMeta_EmptyCollections_KeepOptionDefaults(t *testing.T) {
+	options := ActionSpecOptions{
+		RelatedActions:    []string{"default.related"},
+		ParameterGuidance: map[string]ParameterGuidance{"project_id": {SemanticRole: "scope_project"}},
+	}
+	ApplyActionMeta(&options, ActionMetaEntry{
+		Related:  []string{},
+		Guidance: map[string]ParameterGuidance{},
+	})
+
+	if !reflect.DeepEqual(options.RelatedActions, []string{"default.related"}) {
+		t.Errorf("RelatedActions = %#v, want the default list", options.RelatedActions)
+	}
+	if role := options.ParameterGuidance["project_id"].SemanticRole; role != "scope_project" {
+		t.Errorf("ParameterGuidance[project_id].SemanticRole = %q, want scope_project", role)
+	}
+}
