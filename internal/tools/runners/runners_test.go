@@ -1975,7 +1975,7 @@ func TestFormatAuthTokenMarkdown_Full(t *testing.T) {
 
 	for _, want := range []string{
 		"## Runner Authentication Token",
-		"**Token**: glrt-abc123",
+		"**Token**: `glrt-abc123`",
 		"**Expires At**: 31 Dec 2026 23:59 UTC",
 	} {
 		t.Run(want, func(t *testing.T) {
@@ -1994,6 +1994,49 @@ func TestFormatAuthTokenMarkdown_NoExpiry(t *testing.T) {
 	}
 }
 
+// TestFormatAuthTokenMarkdown_TokenShapes_AreCodeSpannedAndGuarded verifies
+// that a runner authentication token is written inside a code span and that an
+// empty one writes no token line at all.
+//
+// It matters for two reasons. A token written as bare Markdown is read as
+// Markdown, so an underscore pair in it is eaten as emphasis and what the
+// reader copies back is not what GitLab minted. And a card that announces a
+// **Token** with nothing after it tells a reader a credential was issued when
+// none was, which is how the shared form at accesstokens/markdown.go already
+// reads.
+func TestFormatAuthTokenMarkdown_TokenShapes_AreCodeSpannedAndGuarded(t *testing.T) {
+	t.Run("token is inside a code span", func(t *testing.T) {
+		md := FormatAuthTokenMarkdown(AuthTokenOutput{Token: "glrt-a_b_c"})
+		if !strings.Contains(md, "- **Token**: `glrt-a_b_c`\n") {
+			t.Errorf("token not written inside a code span:\n%s", md)
+		}
+	})
+	t.Run("empty token writes no line", func(t *testing.T) {
+		md := FormatAuthTokenMarkdown(AuthTokenOutput{ExpiresAt: "2026-12-31T23:59:59Z"})
+		if strings.Contains(md, "**Token**") {
+			t.Errorf("empty token still announced:\n%s", md)
+		}
+	})
+}
+
+// TestFormatRegTokenMarkdown_TokenShapes_AreCodeSpannedAndGuarded verifies the
+// same two properties for the registration token card, which is a second copy
+// of the same renderer and carried the same two defects.
+func TestFormatRegTokenMarkdown_TokenShapes_AreCodeSpannedAndGuarded(t *testing.T) {
+	t.Run("token is inside a code span", func(t *testing.T) {
+		md := FormatRegTokenMarkdown(AuthTokenOutput{Token: "reg-a_b_c"})
+		if !strings.Contains(md, "- **Token**: `reg-a_b_c`\n") {
+			t.Errorf("token not written inside a code span:\n%s", md)
+		}
+	})
+	t.Run("empty token writes no line", func(t *testing.T) {
+		md := FormatRegTokenMarkdown(AuthTokenOutput{ExpiresAt: "2026-06-01T00:00:00Z"})
+		if strings.Contains(md, "**Token**") {
+			t.Errorf("empty token still announced:\n%s", md)
+		}
+	})
+}
+
 // ---------------------------------------------------------------------------
 // FormatRegTokenMarkdown — with and without ExpiresAt
 // ---------------------------------------------------------------------------.
@@ -2007,7 +2050,7 @@ func TestFormatRegTokenMarkdown_Full(t *testing.T) {
 
 	for _, want := range []string{
 		"## Runner Registration Token",
-		"**Token**: reg-tok-123",
+		"**Token**: `reg-tok-123`",
 		"**Expires At**: 1 Jun 2026 00:00 UTC",
 	} {
 		t.Run(want, func(t *testing.T) {

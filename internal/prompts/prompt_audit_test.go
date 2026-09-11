@@ -672,16 +672,37 @@ func TestFormatBytes(t *testing.T) {
 	}
 }
 
-// TestMaskURL verifies MaskURL.
-func TestMaskURL(t *testing.T) {
-	short := "http://example.com"
-	if got := maskURL(short); got != short {
-		t.Errorf("maskURL short = %q, want %q", got, short)
+// TestWriteFullWebhooksSection_URLWithCredentials_RendersOriginOnly verifies
+// that a webhook row names the host it posts to and nothing else: no userinfo,
+// no path, no query.
+//
+// It matters because the row used to be the first thirty characters of the
+// URL, which is long enough to spell a userinfo out in full, and because a
+// hook's path is routinely the secret (a Slack-style endpoint is a public host
+// plus an unguessable path).
+func TestWriteFullWebhooksSection_URLWithCredentials_RendersOriginOnly(t *testing.T) {
+	hooks := []*gl.ProjectHook{
+		{URL: "https://hookuser:hookpass@hooks.example.com/services/T000/B000/SECRETPATHVALUE"},
+		{URL: "https://short.example.com/?token=querysecret"},
 	}
-	long := "https://very-long-webhook-url.example.com/path/to/endpoint"
-	got := maskURL(long)
-	if len(got) > 34 || !strings.HasSuffix(got, "...") {
-		t.Errorf("maskURL long = %q, expected truncated with ...", got)
+
+	var b strings.Builder
+	writeFullWebhooksSection(&b, hooks)
+	got := b.String()
+
+	for _, secret := range []string{"hookpass", "hookuser", "SECRETPATHVALUE", "B000", "querysecret"} {
+		t.Run("withholds "+secret, func(t *testing.T) {
+			if strings.Contains(got, secret) {
+				t.Errorf("webhook section leaked %q:\n%s", secret, got)
+			}
+		})
+	}
+	for _, want := range []string{"https://hooks.example.com/...", "https://short.example.com/..."} {
+		t.Run("renders "+want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("webhook section missing redacted origin %q:\n%s", want, got)
+			}
+		})
 	}
 }
 

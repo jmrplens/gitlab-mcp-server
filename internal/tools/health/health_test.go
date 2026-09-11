@@ -578,12 +578,13 @@ func healthSpecByName(t *testing.T, specs []toolutil.ActionSpec, name string) to
 // Diagnostics never carry the secrets a base URL can hide
 // ---------------------------------------------------------------------------.
 
-// TestPublicBaseURL_URLCarryingSecrets_KeepsOnlySchemeHostAndPath verifies that
-// the reported instance URL is reduced to the parts that identify the instance.
+// TestCheck_URLCarryingSecrets_KeepsOnlySchemeHostAndPath verifies that the
+// reported instance URL is reduced to the parts that identify the instance.
 // GITLAB_URL is validated for scheme and host alone, so userinfo, a query and a
 // fragment are all configurable, and this value ends up in a tool result and in
-// whatever the client logs.
-func TestPublicBaseURL_URLCarryingSecrets_KeepsOnlySchemeHostAndPath(t *testing.T) {
+// whatever the client logs. The rule now lives in toolutil.RedactURL, which
+// this tool and the webhook audit prompt share.
+func TestCheck_URLCarryingSecrets_KeepsOnlySchemeHostAndPath(t *testing.T) {
 	cases := []struct {
 		name string
 		raw  string
@@ -603,8 +604,8 @@ func TestPublicBaseURL_URLCarryingSecrets_KeepsOnlySchemeHostAndPath(t *testing.
 			if err != nil {
 				t.Fatalf("url.Parse(%q): %v", tc.raw, err)
 			}
-			if got := publicBaseURL(parsed); got != tc.want {
-				t.Errorf("publicBaseURL(%q) = %q, want %q", tc.raw, got, tc.want)
+			if got := toolutil.RedactURL(parsed); got != tc.want {
+				t.Errorf("toolutil.RedactURL(%q) = %q, want %q", tc.raw, got, tc.want)
 			}
 		})
 	}

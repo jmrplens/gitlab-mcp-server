@@ -127,8 +127,10 @@ func FormatJobListMarkdown(out JobListOutput) string {
 func FormatAuthTokenMarkdown(out AuthTokenOutput) string {
 	var b strings.Builder
 	b.WriteString("## Runner Authentication Token\n\n")
-	//gitlab:allow-unescaped out.Token: a token GitLab minted, a fixed prefix and URL-safe characters, which the reader has to copy back verbatim.
-	fmt.Fprintf(&b, "- **Token**: %s\n", out.Token)
+	if out.Token != "" {
+		//gitlab:allow-unescaped out.Token: a token GitLab minted, a fixed prefix and URL-safe characters, inside a code span so the reader can copy it back verbatim.
+		fmt.Fprintf(&b, "- **Token**: `%s`\n", out.Token)
+	}
 	if out.ExpiresAt != "" {
 		fmt.Fprintf(&b, "- **Expires At**: %s\n", toolutil.FormatTime(out.ExpiresAt))
 	}
@@ -140,8 +142,10 @@ func FormatAuthTokenMarkdown(out AuthTokenOutput) string {
 func FormatRegTokenMarkdown(out AuthTokenOutput) string {
 	var b strings.Builder
 	b.WriteString("## Runner Registration Token\n\n")
-	//gitlab:allow-unescaped out.Token: a token GitLab minted, a fixed prefix and URL-safe characters, which the reader has to copy back verbatim.
-	fmt.Fprintf(&b, "- **Token**: %s\n", out.Token)
+	if out.Token != "" {
+		//gitlab:allow-unescaped out.Token: a token GitLab minted, a fixed prefix and URL-safe characters, inside a code span so the reader can copy it back verbatim.
+		fmt.Fprintf(&b, "- **Token**: `%s`\n", out.Token)
+	}
 	if out.ExpiresAt != "" {
 		fmt.Fprintf(&b, "- **Expires At**: %s\n", toolutil.FormatTime(out.ExpiresAt))
 	}

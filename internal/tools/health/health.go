@@ -52,22 +52,6 @@ func SetServerInfo(info ServerInfo) {
 	serverInfo = info
 }
 
-// publicBaseURL renders base with the three parts a secret can hide in
-// removed: the userinfo, the query and the fragment. What survives is the
-// scheme, the host and the path, which is what identifies the instance and
-// all this diagnostics field was ever meant to report.
-//
-// GITLAB_URL is validated for scheme and host only, so an operator may
-// configure any of the three (a proxy credential in the userinfo is the
-// realistic one), and this value is handed to whichever MCP client called the
-// tool and copied into whatever it logs. client-go builds its own error text
-// the same way, from scheme, host and path (gitlab.go, ErrorResponse.Error),
-// so this leaves the two agreeing rather than the field being the one place
-// that says more.
-func publicBaseURL(base *url.URL) string {
-	return base.Scheme + "://" + base.Host + base.EscapedPath()
-}
-
 // withoutUserinfo removes user from text, for the error strings that come
 // back from a request made against a base URL carrying one.
 //
@@ -117,8 +101,11 @@ func Check(ctx context.Context, client *gitlabclient.Client, _ Input) (Output, e
 
 	base := client.GL().BaseURL()
 
+	// GITLAB_URL is validated for scheme and host only, so an operator may
+	// configure a userinfo, a query or a fragment, and this value is handed to
+	// whichever MCP client called the tool and copied into whatever it logs.
 	out := Output{
-		GitLabURL:        publicBaseURL(base),
+		GitLabURL:        toolutil.RedactURL(base),
 		MCPServerVersion: serverInfo.Version,
 		Author:           serverInfo.Author,
 		Department:       serverInfo.Department,

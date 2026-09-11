@@ -16,8 +16,8 @@ func FormatOutputMarkdown(out Output) string {
 	fmt.Fprintf(&b, "- **Controller ID**: %d\n", out.RunnerControllerID)
 	toolutil.WriteDescription(&b, out.Description)
 	if out.Token != "" {
-		//gitlab:allow-unescaped out.Token: the secret GitLab minted, which the reader has to copy back verbatim.
-		fmt.Fprintf(&b, "- **Token**: %s\n", out.Token)
+		//gitlab:allow-unescaped out.Token: the secret GitLab minted, inside a code span so the reader can copy it back verbatim.
+		fmt.Fprintf(&b, "- **Token**: `%s`\n", out.Token)
 	}
 	if out.LastUsedAt != "" {
 		fmt.Fprintf(&b, "- **Last Used At**: %s\n", toolutil.FormatTime(out.LastUsedAt))
@@ -25,7 +25,12 @@ func FormatOutputMarkdown(out Output) string {
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, "- **Created At**: %s\n", toolutil.FormatTime(out.CreatedAt))
 	}
-	toolutil.WriteHints(&b, "Store the token value securely. It cannot be retrieved later")
+	// The storage advice belongs to the card that carries a token. A get
+	// answers with the same type and no token, and telling its reader to store
+	// a value the card does not hold sends them looking for one.
+	if out.Token != "" {
+		toolutil.WriteHints(&b, "Store the token value securely. It cannot be retrieved later")
+	}
 	return b.String()
 }
 

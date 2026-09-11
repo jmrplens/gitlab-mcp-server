@@ -28,6 +28,14 @@ type Output struct {
 	UpdatedAt   string      `json:"updated_at,omitempty"`
 	LastUsed    string      `json:"last_used,omitempty"`
 	ExpiresAt   string      `json:"expires_at,omitempty"`
+
+	// minted says this value is the answer to the call that created the token,
+	// which is the one card that prints it in full; every other card prints the
+	// prefix alone. It is unexported so that nothing about the published shape
+	// moves: GitLab returns the token from get and from list too, and the 1:1
+	// policy keeps it on the structured output of all three. What changes is
+	// only how much of it this server writes into the Markdown a model reads.
+	minted bool
 }
 
 // ListOutput represents a paginated list of pipeline triggers.
@@ -210,7 +218,9 @@ func CreateTrigger(ctx context.Context, client *gitlabclient.Client, input Creat
 	if err != nil {
 		return Output{}, toolutil.WrapErr("pipeline_trigger_create", err)
 	}
-	return convertTrigger(t, extra), nil
+	out := convertTrigger(t, extra)
+	out.minted = true
+	return out, nil
 }
 
 // UpdateTrigger updates a pipeline trigger.

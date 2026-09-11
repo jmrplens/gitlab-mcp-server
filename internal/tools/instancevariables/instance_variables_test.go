@@ -259,7 +259,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	if !strings.Contains(md, "secret") {
 		t.Error("expected value in output when not masked")
 	}
-	if !strings.Contains(md, "true") {
+	if !strings.Contains(md, "| Protected | "+toolutil.BoolEmoji(true)+" |") {
 		t.Error("expected Protected=true in output")
 	}
 }
@@ -706,12 +706,12 @@ func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 
 	for _, want := range []string{
 		"## Instance Variable: DB_HOST",
-		"**Type**: env_var",
-		"**Protected**: true",
-		"**Masked**: false",
-		"**Raw**: true",
-		"**Description**: Database host",
-		"**Value**: localhost",
+		"| Type | env_var |",
+		"| Protected | " + toolutil.BoolEmoji(true) + " |",
+		"| Masked | " + toolutil.BoolEmoji(false) + " |",
+		"| Raw | " + toolutil.BoolEmoji(true) + " |",
+		"| Description | Database host |",
+		"| Value | localhost |",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(md, want) {
@@ -731,11 +731,65 @@ func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 		VariableType: "env_var",
 	})
 
-	if strings.Contains(md, "**Description**") {
+	if strings.Contains(md, "| Description |") {
 		t.Error("should not contain Description when empty")
 	}
-	if !strings.Contains(md, "**Value**: val") {
+	if !strings.Contains(md, "| Value | val |") {
 		t.Errorf("expected value in output:\n%s", md)
+	}
+}
+
+// TestFormatOutputMarkdown_HiddenVariable_WithholdsTheValue verifies that an
+// instance variable GitLab marks hidden has its value withheld from the card,
+// and that the flag itself is reported.
+//
+// It matters because hidden is the stronger of GitLab's two secrecy flags: a
+// variable created with masked_and_hidden is never shown again in GitLab's own
+// UI, and the API still answers an administrator's read with the value. The
+// card asked only whether the variable was masked, so a hidden-but-unmasked
+// variable was printed in full, which is the one shape the flag exists for.
+func TestFormatOutputMarkdown_HiddenVariable_WithholdsTheValue(t *testing.T) {
+	cases := []struct {
+		name       string
+		variable   Output
+		wantHidden bool
+	}{
+		{
+			name:       "hidden and not masked",
+			variable:   Output{Key: "DEPLOY_KEY", Value: "s3cret-value", VariableType: "env_var", Hidden: true},
+			wantHidden: true,
+		},
+		{
+			name:       "masked and hidden",
+			variable:   Output{Key: "DEPLOY_KEY", Value: "s3cret-value", VariableType: "env_var", Masked: true, Hidden: true},
+			wantHidden: true,
+		},
+		{
+			name:       "neither is still printed",
+			variable:   Output{Key: "DEPLOY_KEY", Value: "s3cret-value", VariableType: "env_var"},
+			wantHidden: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			md := FormatOutputMarkdown(tc.variable)
+			switch {
+			case tc.wantHidden:
+				if strings.Contains(md, "s3cret-value") {
+					t.Errorf("hidden variable rendered its value:\n%s", md)
+				}
+				if !strings.Contains(md, "| Value | [masked] |") {
+					t.Errorf("hidden variable missing the withheld marker:\n%s", md)
+				}
+				if !strings.Contains(md, "| Hidden |") {
+					t.Errorf("hidden variable does not report the flag:\n%s", md)
+				}
+			default:
+				if !strings.Contains(md, "| Value | s3cret-value |") {
+					t.Errorf("readable variable lost its value:\n%s", md)
+				}
+			}
+		})
 	}
 }
 

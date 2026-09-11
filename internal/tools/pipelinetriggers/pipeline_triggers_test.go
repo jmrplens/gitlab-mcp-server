@@ -177,6 +177,120 @@ func TestCreateTrigger_Success(t *testing.T) {
 	}
 }
 
+// TestCreateTrigger_MintedToken_IsRenderedInFull verifies that the one card
+// that answers the call which mints a trigger token prints that token whole.
+//
+// It matters because the value is unobtainable anywhere else in a usable form
+// once the get and the list cards stop printing it, so masking every card
+// would have left the create action useless.
+func TestCreateTrigger_MintedToken_IsRenderedInFull(t *testing.T) {
+	const token = "glptt-mintedsecret0123456789"
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v4/projects/1/triggers", func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":11,"description":"test trigger","token":"`+token+`"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := CreateTrigger(context.Background(), client, CreateInput{ProjectID: "1", Description: "test trigger"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	md := FormatTriggerMarkdown(out)
+	if !strings.Contains(md, "| Token | `"+token+"` |") {
+		t.Errorf("create card missing the minted token in a code span:\n%s", md)
+	}
+}
+
+// TestGetTrigger_ExistingToken_IsRenderedByPrefixOnly verifies that the card a
+// get answers with prints the token's prefix and never the whole secret.
+//
+// It matters because GitLab returns the token from the get endpoint too, so
+// printing it was this server's own choice, and the value reached the model as
+// a usable credential on every read of a trigger somebody else created.
+func TestGetTrigger_ExistingToken_IsRenderedByPrefixOnly(t *testing.T) {
+	const token = "glptt-storedsecret0123456789"
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/1/triggers/10", func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"description":"deploy","token":"`+token+`"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := GetTrigger(context.Background(), client, GetInput{ProjectID: "1", TriggerID: 10})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Token != token {
+		t.Errorf("structured output = %q, want the token GitLab sent kept for 1:1 parity", out.Token)
+	}
+	md := FormatTriggerMarkdown(out)
+	if strings.Contains(md, token) {
+		t.Errorf("get card rendered the whole token:\n%s", md)
+	}
+	if !strings.Contains(md, "| Token | `glptt-stor...` |") {
+		t.Errorf("get card missing the masked token prefix:\n%s", md)
+	}
+	if !strings.Contains(md, "Only the prefix of the token is shown here") {
+		t.Errorf("get card missing the hint naming where the full value is:\n%s", md)
+	}
+}
+
+// TestFormatListTriggersMarkdown_Tokens_AreRenderedByPrefixOnly verifies that a
+// list of triggers writes no usable credential into its table.
+//
+// It matters because a list answers with every trigger a project has, so the
+// old row printed one live token per line into text a model keeps in context.
+func TestFormatListTriggersMarkdown_Tokens_AreRenderedByPrefixOnly(t *testing.T) {
+	const tokenA = "glptt-aaaasecret0123456789"
+	const tokenB = "glptt-bbbbsecret0123456789"
+	md := FormatListTriggersMarkdown(ListOutput{
+		Triggers: []Output{
+			{ID: 1, Description: "A", Token: tokenA},
+			{ID: 2, Description: "B", Token: tokenB},
+		},
+		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
+	})
+
+	for _, token := range []string{tokenA, tokenB} {
+		t.Run(token, func(t *testing.T) {
+			if strings.Contains(md, token) {
+				t.Errorf("list rendered the whole token %q:\n%s", token, md)
+			}
+		})
+	}
+	for _, want := range []string{"glptt-aaaa...", "glptt-bbbb..."} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("list missing the masked prefix %q:\n%s", want, md)
+			}
+		})
+	}
+}
+
+// TestMaskTriggerToken_TokenShapes_RevealNoMoreThanThePrefix verifies the
+// masking rule itself: GitLab's marker plus four characters, an empty token
+// rendered as nothing, and a token too short to spare four characters
+// withheld whole rather than revealed by the arithmetic.
+func TestMaskTriggerToken_TokenShapes_RevealNoMoreThanThePrefix(t *testing.T) {
+	cases := []struct {
+		name  string
+		token string
+		want  string
+	}{
+		{name: "prefixed token", token: "glptt-abcdef123456", want: "glptt-abcd..."},
+		{name: "unprefixed token", token: "abcdef123456", want: "abcd..."},
+		{name: "exactly the revealed length", token: "glptt-abcd", want: toolutil.RedactedPlaceholder},
+		{name: "shorter than the revealed length", token: "abc", want: toolutil.RedactedPlaceholder},
+		{name: "empty", token: "", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := maskTriggerToken(tc.token); got != tc.want {
+				t.Errorf("maskTriggerToken(%q) = %q, want %q", tc.token, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestCreateTrigger_MissingDescription verifies CreateTrigger when missing description.
 func TestCreateTrigger_MissingDescription(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
@@ -845,7 +959,7 @@ func TestFormatTriggerMarkdown_AllFields(t *testing.T) {
 	md := FormatTriggerMarkdown(Output{
 		ID:          10,
 		Description: "deploy trigger",
-		Token:       "abc123",
+		Token:       "glptt-abc123def456",
 		Owner:       &UserOutput{ID: 1, Name: "Admin"},
 		CreatedAt:   "2026-01-01T00:00:00Z",
 		UpdatedAt:   "2026-06-01T00:00:00Z",
@@ -856,7 +970,7 @@ func TestFormatTriggerMarkdown_AllFields(t *testing.T) {
 		"## Pipeline Trigger",
 		"| ID | 10 |",
 		"deploy trigger",
-		"abc123",
+		"glptt-abc1...",
 		"Admin",
 		"1 Jan 2026 00:00 UTC",
 		"1 Dec 2026 00:00 UTC",
@@ -900,8 +1014,8 @@ func TestFormatTriggerMarkdown_MinimalFields(t *testing.T) {
 func TestFormatListTriggersMarkdown_DetailedContent(t *testing.T) {
 	out := ListOutput{
 		Triggers: []Output{
-			{ID: 1, Description: "Trigger A", Token: "tokA", Owner: &UserOutput{Name: "admin"}, LastUsed: "2026-01-01T00:00:00Z"},
-			{ID: 2, Description: "Trigger B", Token: "tokB", Owner: &UserOutput{Name: "user1"}, LastUsed: ""},
+			{ID: 1, Description: "Trigger A", Token: "glptt-tokAsecretvalue", Owner: &UserOutput{Name: "admin"}, LastUsed: "2026-01-01T00:00:00Z"},
+			{ID: 2, Description: "Trigger B", Token: "glptt-tokBsecretvalue", Owner: &UserOutput{Name: "user1"}, LastUsed: ""},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -914,8 +1028,8 @@ func TestFormatListTriggersMarkdown_DetailedContent(t *testing.T) {
 		"| 2 |",
 		"Trigger A",
 		"Trigger B",
-		"tokA",
-		"tokB",
+		"glptt-tokA...",
+		"glptt-tokB...",
 		"admin",
 		"user1",
 	} {

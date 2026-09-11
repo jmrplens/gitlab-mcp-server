@@ -370,8 +370,10 @@ func FormatUserRunnerMarkdownString(o UserRunnerOutput) string {
 	var b strings.Builder
 	b.WriteString("## User Runner Created\n\n")
 	fmt.Fprintf(&b, toolutil.FmtMdID, o.ID)
-	//gitlab:allow-unescaped o.Token: the runner token GitLab minted, which the reader has to copy back verbatim.
-	fmt.Fprintf(&b, "- **Token**: %s\n", o.Token)
+	if o.Token != "" {
+		//gitlab:allow-unescaped o.Token: the runner token GitLab minted, inside a code span so the reader can copy it back verbatim.
+		fmt.Fprintf(&b, "- **Token**: `%s`\n", o.Token)
+	}
 	if o.TokenExpiresAt != "" {
 		fmt.Fprintf(&b, "- **Token Expires At**: %s\n", toolutil.FormatTime(o.TokenExpiresAt))
 	}
