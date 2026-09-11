@@ -18,12 +18,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,587 |
-| Unit test functions                                   | 14,973 |
+| Total test functions                                  | 15,691 |
+| Unit test functions                                   | 15,077 |
 | E2E test functions                                    |    614 |
-| cmd test functions                                    |  3,024 |
-| Test files (internal/)                                |    533 |
-| Test files (cmd/)                                     |    206 |
+| cmd test functions                                    |  3,044 |
+| Test files (internal/)                                |    537 |
+| Test files (cmd/)                                     |    208 |
 | Test files (test/e2e/)                                |    240 |
 | Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     22 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,325 | 79.1% |
-| `TestFunc` (no underscore)             |    979 |  6.3% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,283 | 14.6% |
+| `TestFunc_Scenario` (2-part)           | 12,326 | 78.6% |
+| `TestFunc` (no underscore)             |    971 |  6.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,394 | 15.3% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,587 |        152 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            360 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          9,002 |        365 | domain-specific GitLab tool handlers                                                            |
+| Core packages           |          2,654 |        156 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Tool sub-packages (177) |          9,013 |        365 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            614 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          3,024 |        206 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,587** |    **979** |                                                                                                 |
+| cmd packages            |          3,044 |        208 | server entry point and developer command utilities                                              |
+| **Total**               |     **15,691** |    **985** |                                                                                                 |
 
 ### Core Packages
 
@@ -76,9 +76,9 @@
 | serverpool    |       122 |   100.0% | Package serverpool manages a pool of credential entries keyed by GitLab token and URL.                                                                                                                                                                             |
 | subscriptions |        99 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
-| testutil      |        94 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
-| toolutil      |       965 |    98.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,587** |          |                                                                                                                                                                                                                                                                    |
+| testutil      |       113 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
+| toolutil      |     1,013 |    98.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
+| **Subtotal**  | **2,654** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -89,7 +89,7 @@
 | dynamic           |   267 |   100.0% |     2 |
 | mergerequests     |   260 |   100.0% |    30 |
 | issues            |   235 |   100.0% |    21 |
-| users             |   220 |    99.2% |    38 |
+| users             |   221 |    99.2% |    38 |
 | jobs              |   152 |   100.0% |    17 |
 | packages          |   148 |    99.0% |     9 |
 | search            |   127 |   100.0% |    10 |
@@ -97,8 +97,8 @@
 | pipelines         |   118 |   100.0% |    12 |
 | commits           |   115 |    99.8% |    13 |
 | resourceevents    |   115 |   100.0% |    17 |
+| runners           |   115 |   100.0% |    19 |
 | awardemoji        |   113 |   100.0% |    24 |
-| runners           |   113 |   100.0% |    19 |
 | snippets          |   107 |    99.6% |    15 |
 | containerregistry |   102 |   100.0% |    16 |
 | accesstokens      |   100 |   100.0% |    18 |
@@ -204,7 +204,7 @@
 | health                  |        20 |          1 |   100.0% |         2 |
 | impersonationtokens     |        43 |          2 |   100.0% |         5 |
 | importservice           |        31 |          1 |   100.0% |         5 |
-| instancevariables       |        42 |          2 |   100.0% |         5 |
+| instancevariables       |        43 |          2 |   100.0% |         5 |
 | integrations            |        88 |          4 |    99.6% |        12 |
 | invites                 |        48 |          1 |   100.0% |         4 |
 | issuediscussions        |        45 |          2 |   100.0% |         6 |
@@ -242,7 +242,7 @@
 | pages                   |        55 |          2 |   100.0% |         9 |
 | pipelines               |       118 |          4 |   100.0% |        12 |
 | pipelineschedules       |        94 |          2 |    99.7% |        11 |
-| pipelinetriggers        |        60 |          2 |   100.0% |         6 |
+| pipelinetriggers        |        64 |          2 |   100.0% |         6 |
 | planlimits              |        13 |          2 |   100.0% |         2 |
 | projectaliases          |        26 |          2 |   100.0% |         4 |
 | projectdiscovery        |        19 |          1 |   100.0% |         1 |
@@ -259,13 +259,13 @@
 | releaselinks            |        60 |          2 |   100.0% |         6 |
 | releases                |        67 |          1 |   100.0% |         6 |
 | repository              |        70 |          1 |   100.0% |         9 |
-| repositorysubmodules    |        54 |          4 |   100.0% |         3 |
+| repositorysubmodules    |        56 |          4 |   100.0% |         3 |
 | resourceevents          |       115 |          3 |   100.0% |        17 |
 | resourcegroups          |        16 |          1 |   100.0% |         4 |
 | runnercontrollers       |        34 |          2 |   100.0% |         5 |
 | runnercontrollerscopes  |        34 |          2 |   100.0% |         5 |
-| runnercontrollertokens  |        41 |          2 |   100.0% |         5 |
-| runners                 |       113 |          2 |   100.0% |        19 |
+| runnercontrollertokens  |        42 |          2 |   100.0% |         5 |
+| runners                 |       115 |          2 |   100.0% |        19 |
 | search                  |       127 |          1 |   100.0% |        10 |
 | securefiles             |        30 |          2 |   100.0% |         4 |
 | securityattributes      |        24 |          1 |   100.0% |         5 |
@@ -288,13 +288,13 @@
 | usagedata               |        31 |          1 |   100.0% |         6 |
 | useremails              |        24 |          2 |   100.0% |         6 |
 | usergpgkeys             |        44 |          2 |   100.0% |         8 |
-| users                   |       220 |          7 |    99.2% |        38 |
+| users                   |       221 |          7 |    99.2% |        38 |
 | vulnerabilities         |        66 |          3 |   100.0% |         8 |
 | waitpoll                |        13 |          1 |    99.2% |         0 |
 | wikis                   |        62 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **9,002** |    **365** |          | **1,187** |
+| **Total**               | **9,013** |    **365** |          | **1,187** |
 
 </details>
 
@@ -329,7 +329,7 @@
 | cmd/audit_metrics                              |    97.6% |
 | cmd/audit_readonly_graphql                     |    98.5% |
 | cmd/audit_supply_chain                         |    98.0% |
-| cmd/audit_surface_quality                      |    94.1% |
+| cmd/audit_surface_quality                      |    94.6% |
 | cmd/audit_test_goroutines                      |    95.3% |
 | cmd/audit_test_names                           |    91.1% |
 | cmd/audit_test_subtests                        |    99.7% |
@@ -390,7 +390,7 @@
 | subscriptions |   100.0% |
 | telemetry     |    93.1% |
 | testutil      |   100.0% |
-| toolutil      |    98.8% |
+| toolutil      |    98.7% |
 
 ### Tool Sub-Packages
 
