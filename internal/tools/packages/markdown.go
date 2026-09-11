@@ -83,6 +83,10 @@ func FormatListMarkdown(out ListOutput) string {
 // writePackageRow writes one package table row, sharing the common
 // ID/name/version/type/status/creator columns between the project and group
 // package list renderers and appending the caller-supplied final column.
+//
+// The final column arrives rendered: it is a link for a pipeline, and the
+// cell escaper turns a finished link back into text, so each summary escapes
+// the GitLab-authored text it holds and this row writes the column as given.
 func writePackageRow(b *strings.Builder, p ListItem, lastColumn string) {
 	fmt.Fprintf(
 		b, "| %d | %s | %s | %s | %s | %s | %s |\n",
@@ -94,7 +98,7 @@ func writePackageRow(b *strings.Builder, p ListItem, lastColumn string) {
 		//gitlab:allow-unescaped p.Status: a GitLab package status enum value (default, hidden, processing, error).
 		p.Status,
 		creatorSummary(p),
-		toolutil.EscapeMdTableCell(lastColumn),
+		lastColumn,
 	)
 }
 
@@ -130,10 +134,14 @@ func pipelineSummary(pkg ListItem) string {
 	return ""
 }
 
+// pipelineItemSummary renders one pipeline as a cell: its id, status and ref,
+// linked to its page when GitLab gave one. The ref is a branch or tag name, so
+// the text is escaped here on the path with no link, and by the link helper on
+// the other.
 func pipelineItemSummary(pipeline PipelineItem) string {
 	summary := strings.TrimSpace(fmt.Sprintf("%d %s %s", pipeline.ID, pipeline.Status, pipeline.Ref))
 	if pipeline.WebURL == "" {
-		return summary
+		return toolutil.EscapeMdTableCell(summary)
 	}
 	return toolutil.MdTitleLink(summary, pipeline.WebURL)
 }
@@ -167,7 +175,7 @@ func FormatGroupListMarkdown(out GroupListOutput) string {
 // row, preferring the human-readable project path over the numeric ID.
 func groupProjectSummary(pkg GroupListItem) string {
 	if pkg.ProjectPath != "" {
-		return pkg.ProjectPath
+		return toolutil.EscapeMdTableCell(pkg.ProjectPath)
 	}
 	if pkg.ProjectID != 0 {
 		return strconv.FormatInt(pkg.ProjectID, 10)

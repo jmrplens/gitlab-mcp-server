@@ -33,6 +33,11 @@ const (
 // StripControlBytes is deliberately absent. It drops the C0 and C1 bytes and
 // leaves both the pipe and the angle bracket, so accepting it as an answer
 // would pass exactly the values this audit exists to find.
+//
+// The two code-span helpers are here although they write no entity: a code
+// span is its own containment, and each sizes its fence past the longest
+// backtick run in the value, so nothing inside can end the span or open a
+// construct of its own.
 var escapers = map[string]bool{
 	"EscapeMdTableCell":       true,
 	"EscapeMdHeading":         true,
@@ -41,6 +46,8 @@ var escapers = map[string]bool{
 	"MdTitleLink":             true,
 	"FormatTarget":            true,
 	"WrapGFMBody":             true,
+	"MdCodeSpan":              true,
+	"MdCodeSpanCell":          true,
 }
 
 // externalSafe names functions outside the audited packages whose result

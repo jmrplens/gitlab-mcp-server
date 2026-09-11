@@ -125,6 +125,80 @@ func TestFormatTimePtr_Valid(t *testing.T) {
 	}
 }
 
+// TestRFC3339_WireFormInUTC verifies that RFC3339 writes the wire form GitLab
+// itself uses: RFC 3339 in UTC, whatever zone the value carries, and nothing
+// for a zero time, which is what a field GitLab did not send decodes to and
+// would otherwise read as the year one.
+func TestRFC3339_WireFormInUTC(t *testing.T) {
+	tests := []struct {
+		name string
+		in   time.Time
+		want string
+	}{
+		{name: "utc", in: time.Date(2026, 3, 20, 15, 45, 0, 0, time.UTC), want: "2026-03-20T15:45:00Z"},
+		{name: "offset is converted", in: time.Date(2026, 3, 20, 10, 45, 0, 0, time.FixedZone("EST", -5*3600)), want: "2026-03-20T15:45:00Z"},
+		{name: "zero time is absent", in: time.Time{}, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := RFC3339(tt.in); got != tt.want {
+				t.Errorf("RFC3339(%v) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRFC3339Ptr_NilIsAbsent verifies that the pointer form writes nothing
+// for nil and the wire form otherwise, and that the deprecated FormatTimePtr
+// is the same function under its old name, so a caller not yet migrated
+// renders what it did.
+func TestRFC3339Ptr_NilIsAbsent(t *testing.T) {
+	ts := time.Date(2026, 3, 20, 15, 45, 0, 0, time.UTC)
+	tests := []struct {
+		name string
+		in   *time.Time
+		want string
+	}{
+		{name: "nil", in: nil, want: ""},
+		{name: "value", in: &ts, want: "2026-03-20T15:45:00Z"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := RFC3339Ptr(tt.in); got != tt.want {
+				t.Errorf("RFC3339Ptr() = %q, want %q", got, tt.want)
+			}
+			if got := FormatTimePtr(tt.in); got != tt.want {
+				t.Errorf("FormatTimePtr() = %q, want %q (the deprecated alias must agree)", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestFormatTimeValue_DisplayForm verifies that a time.Time renders in the
+// same display form FormatTime gives the wire string, in UTC, and that a zero
+// time is absent rather than the year one.
+func TestFormatTimeValue_DisplayForm(t *testing.T) {
+	tests := []struct {
+		name string
+		in   time.Time
+		want string
+	}{
+		{name: "utc", in: time.Date(2026, 3, 20, 15, 45, 0, 0, time.UTC), want: "20 Mar 2026 15:45 UTC"},
+		{name: "offset is converted", in: time.Date(2026, 3, 20, 10, 45, 0, 0, time.FixedZone("EST", -5*3600)), want: "20 Mar 2026 15:45 UTC"},
+		{name: "zero time is absent", in: time.Time{}, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FormatTimeValue(tt.in); got != tt.want {
+				t.Errorf("FormatTimeValue(%v) = %q, want %q", tt.in, got, tt.want)
+			}
+			if wire := RFC3339(tt.in); FormatTime(wire) != tt.want {
+				t.Errorf("FormatTime(RFC3339(%v)) = %q, want %q: the two display paths disagree", tt.in, FormatTime(wire), tt.want)
+			}
+		})
+	}
+}
+
 // TestFormatISOTimePtr_Nil verifies that FormatISOTimePtr returns "" for a nil pointer.
 func TestFormatISOTimePtr_Nil(t *testing.T) {
 	got := FormatISOTimePtr(nil)

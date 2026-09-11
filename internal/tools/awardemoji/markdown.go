@@ -36,19 +36,23 @@ func FormatListMarkdownString(out ListOutput) string {
 		// An emoji name is not held to GitLab's own list: an instance may carry
 		// custom emoji whose name a person chose.
 		fmt.Fprintf(&b, "- :%s: by %s (ID: %d) - %s\n", toolutil.EscapeMdTableCell(e.Name),
-			toolutil.EscapeMdTableCell(awardEmojiUserMarkdown(e)), e.ID, toolutil.FormatTime(e.CreatedAt))
+			awardEmojiUserMarkdown(e), e.ID, toolutil.FormatTime(e.CreatedAt))
 	}
 	b.WriteString(toolutil.FormatPagination(out.Pagination))
 	toolutil.WriteHints(&b, toolutil.HintPreserveLinks, "Use the selected tool surface's matching award emoji actions for this resource; delete actions require explicit confirm=true plus the same resource identifiers and award_id")
 	return b.String()
 }
 
+// awardEmojiUserMarkdown renders the awarding user as a cell: a link to their
+// profile when GitLab gave one, the escaped username otherwise. The result is
+// written as it is, because the cell escaper turns a finished link back into
+// text.
 func awardEmojiUserMarkdown(out Output) string {
 	if out.User == nil {
 		return ""
 	}
 	if out.User.WebURL == "" {
-		return out.User.Username
+		return toolutil.EscapeMdTableCell(out.User.Username)
 	}
 	return toolutil.MdTitleLink(out.User.Username, out.User.WebURL)
 }

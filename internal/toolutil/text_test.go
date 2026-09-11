@@ -213,6 +213,7 @@ func TestEscapeMdHeading(t *testing.T) {
 		{name: "combined hash and newline", input: "## injected\nbreak", want: "injected break"},
 		{name: "only hashes", input: "###", want: ""},
 		{name: "hash space only", input: "# ", want: ""},
+		{name: "link cannot open in a heading", input: "[x](http://attacker.invalid/)", want: "&#91;x](http://attacker.invalid/)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -652,13 +653,15 @@ func isControlRune(r rune) bool {
 // TestEscapeMdTableCell_DropsControlBytes verifies that the shared table-cell
 // escaper strips terminal control sequences as well as pipes and line breaks,
 // so a GitLab-authored value cannot clear a reader's screen or set its title.
+// What survives of the clear-screen sequence is "[2J", and the bracket in it
+// is a bracket like any other, so it is entity-encoded as one.
 func TestEscapeMdTableCell_DropsControlBytes(t *testing.T) {
 	tests := []struct {
 		name string
 		in   string
 		want string
 	}{
-		{name: "clear screen", in: "title\x1b[2J", want: "title[2J"},
+		{name: "clear screen", in: "title\x1b[2J", want: "title&#91;2J"},
 		{name: "set terminal title", in: "\x1b]0;pwned\x07ok", want: "]0;pwnedok"},
 		{name: "bell only", in: "ding\x07", want: "ding"},
 		{name: "pipe still escaped", in: "a|b", want: "a&#124;b"},
@@ -757,6 +760,180 @@ func TestEscapeMdTableCell_RawHTML_IsNeutralized(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := EscapeMdTableCell(tt.in); got != tt.want {
 				t.Errorf("EscapeMdTableCell(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestEscapeMdTableCell_BracketCannotOpenALink verifies that a GitLab-authored
+// value cannot carry a link of its own into a cell or a list value: the
+// opening bracket is entity-encoded, so a title written as a complete Markdown
+// link renders as the text it is. This is the gap that HintPreserveLinks made
+// exploitable, since the model is told to keep every link it is shown. A value
+// with no opening bracket is left alone, "](" included, because without the
+// bracket it is text.
+func TestEscapeMdTableCell_BracketCannotOpenALink(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "complete link", in: "[click](http://attacker.invalid/)", want: "&#91;click](http://attacker.invalid/)"},
+		{name: "image", in: "![beacon](http://attacker.invalid/p.gif)", want: "!&#91;beacon](http://attacker.invalid/p.gif)"},
+		{name: "reference link", in: "[click][ref]", want: "&#91;click]&#91;ref]"},
+		{name: "closing half alone is text", in: "x](http://attacker.invalid/)", want: "x](http://attacker.invalid/)"},
+		{name: "bracketed tag in a title", in: "[WIP] Fix login", want: "&#91;WIP] Fix login"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := EscapeMdTableCell(tt.in); got != tt.want {
+				t.Errorf("EscapeMdTableCell(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestEscapers_AreIdempotent verifies, for each escaper whose output is meant
+// to be escaped again without changing, that a second pass is the identity
+// and that the first pass leaves none of the characters it exists to remove.
+// This is what lets a half-migrated formatter that still escapes by hand pass
+// its value to a Card, which escapes again, and render exactly what it did.
+// EscapeMdLinkLabel is deliberately absent: it backslash-escapes the
+// backslash, so a second pass doubles it, and MdTitleLink applies it exactly
+// once for that reason.
+func TestEscapers_AreIdempotent(t *testing.T) {
+	inputs := []string{
+		"plain",
+		"a|b\r\nc<d [e] `f`",
+		"[click](http://attacker.invalid/) <img src=x> | # heading",
+		"# heading\n## two",
+		"http://h/?a=(1)|2 <x>",
+		"\x1b[2J bell\x07",
+	}
+	escapers := []struct {
+		name      string
+		fn        func(string) string
+		forbidden string
+	}{
+		{name: "EscapeMdTableCell", fn: EscapeMdTableCell, forbidden: "|<[\r\n"},
+		{name: "EscapeMdHeading", fn: EscapeMdHeading, forbidden: "<\r\n"},
+		{name: "EscapeMdLinkDestination", fn: EscapeMdLinkDestination, forbidden: "()<> \"|\r\n"},
+	}
+	for _, e := range escapers {
+		t.Run(e.name, func(t *testing.T) {
+			for _, in := range inputs {
+				once := e.fn(in)
+				if twice := e.fn(once); twice != once {
+					t.Errorf("%s applied twice to %q = %q, want %q unchanged", e.name, in, twice, once)
+				}
+				if strings.ContainsAny(once, e.forbidden) {
+					t.Errorf("%s(%q) = %q, still carries one of %q", e.name, in, once, e.forbidden)
+				}
+			}
+		})
+	}
+}
+
+// TestEscapeMdLinkDestination_PipeCannotSplitTheCell verifies that a URL
+// carrying a pipe is percent-encoded rather than written raw: a destination is
+// not escaped by the cell escaper, so the pipe used to end the cell in the
+// middle of the link and the rest of the row rendered as cells of its own.
+func TestEscapeMdLinkDestination_PipeCannotSplitTheCell(t *testing.T) {
+	const url = "https://gitlab.example.com/search?q=a|b"
+	if got, want := EscapeMdLinkDestination(url), "https://gitlab.example.com/search?q=a%7Cb"; got != want {
+		t.Errorf("EscapeMdLinkDestination(%q) = %q, want %q", url, got, want)
+	}
+	if got := MdTitleLink("results", url); strings.Contains(got, "|") {
+		t.Errorf("MdTitleLink(%q) = %q, still carries a raw pipe", url, got)
+	}
+}
+
+// TestFormatTarget_EscapesTheTitleOnce verifies that a title reaches the link
+// helper raw and is escaped there exactly once: the bracket is the entity the
+// cell escaper writes, the closing bracket the backslash the label escaper
+// writes, and exactly one link destination results. A title that is nothing
+// but control bytes counts as absent, so the type and IID label is used.
+func TestFormatTarget_EscapesTheTitleOnce(t *testing.T) {
+	tests := []struct {
+		name  string
+		title string
+		url   string
+		want  string
+	}{
+		{name: "bracketed title with URL", title: "Fix [x]", url: "https://e/1", want: `[Fix &#91;x\]](https://e/1)`},
+		{name: "bracketed title without URL", title: "Fix [x]", url: "", want: "Fix &#91;x]"},
+		{name: "control-only title falls back to the IID", title: "\x1b", url: "", want: "Issue #42"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatTarget("Issue", 42, tt.title, tt.url)
+			if got != tt.want {
+				t.Errorf("FormatTarget(%q, %q) = %q, want %q", tt.title, tt.url, got, tt.want)
+			}
+			if tt.url != "" {
+				if dest := linkDestinations(got); len(dest) != 1 || dest[0] != tt.url {
+					t.Errorf("FormatTarget(%q, %q) = %q, destinations %v, want exactly [%s]", tt.title, tt.url, got, dest, tt.url)
+				}
+			}
+		})
+	}
+}
+
+// TestMdCodeSpan_ContainsTheValue verifies that a value rendered as a code
+// span is shown exactly as it is, with no entity, and cannot end the span: the
+// fence is one backtick longer than the longest run inside, a value that
+// begins or ends with a backtick is padded so the fence and the value do not
+// run together, line breaks collapse because a span ends with its line, and
+// control bytes are dropped. An empty value renders as nothing rather than as
+// two bare backticks.
+func TestMdCodeSpan_ContainsTheValue(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "empty", in: "", want: ""},
+		{name: "plain", in: "glpat-abc", want: "`glpat-abc`"},
+		{name: "pipe stays a pipe", in: "a|b", want: "`a|b`"},
+		{name: "angle bracket stays", in: "a<b>", want: "`a<b>`"},
+		{name: "bracket stays", in: "[x]", want: "`[x]`"},
+		{name: "one backtick needs a longer fence", in: "a`b", want: "``a`b``"},
+		{name: "a run is exceeded", in: "a```b", want: "````a```b````"},
+		{name: "leading backtick is padded", in: "`a", want: "`` `a ``"},
+		{name: "trailing backtick is padded", in: "a`", want: "`` a` ``"},
+		{name: "only backticks", in: "```", want: "```` ``` ````"},
+		{name: "line breaks collapse", in: "a\r\nb\nc", want: "`a b c`"},
+		{name: "control bytes dropped", in: "a\x1b[2Jb", want: "`a[2Jb`"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MdCodeSpan(tt.in); got != tt.want {
+				t.Errorf("MdCodeSpan(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMdCodeSpanCell_EscapesThePipeWithABackslash verifies the cell variant:
+// the same span, with the pipe backslash-escaped, which is the one escape GFM
+// honors inside a code span in a table cell. Everything else is as MdCodeSpan
+// renders it.
+func TestMdCodeSpanCell_EscapesThePipeWithABackslash(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "empty", in: "", want: ""},
+		{name: "plain", in: "abc", want: "`abc`"},
+		{name: "pipe", in: "a|b", want: "`a\\|b`"},
+		{name: "pipe and backtick", in: "a|`b", want: "``a\\|`b``"},
+		{name: "line break collapses", in: "a\nb", want: "`a b`"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MdCodeSpanCell(tt.in); got != tt.want {
+				t.Errorf("MdCodeSpanCell(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}

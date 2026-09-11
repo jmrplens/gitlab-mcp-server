@@ -732,11 +732,13 @@ func TestAccessLevelDescription_MinimalAccess(t *testing.T) {
 	}
 }
 
-// TestAccessLevelDescription_Unknown verifies AccessLevelDescription when unknown.
+// TestAccessLevelDescription_Unknown verifies that a level the shared table
+// does not name is rendered with its number rather than as "Unknown", so the
+// reader still sees what GitLab sent.
 func TestAccessLevelDescription_Unknown(t *testing.T) {
 	got := AccessLevelDescription(gl.AccessLevelValue(999))
-	if got != "Unknown" {
-		t.Errorf("AccessLevelDescription(999) = %q, want %q", got, "Unknown")
+	if got != "Level 999" {
+		t.Errorf("AccessLevelDescription(999) = %q, want %q", got, "Level 999")
 	}
 }
 

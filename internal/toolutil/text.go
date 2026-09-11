@@ -103,16 +103,33 @@ func isRenderControl(r rune) bool {
 // is escaped again into a visible one, where &lt; passes through untouched and
 // renders as the character it always was.
 //
-// Only '<' is escaped. Everything a renderer obeys instead of reading opens
-// with it (a tag, a comment, an autolink), so that is the whole of the
-// containment, and '>' is left alone because callers compose cells of their
+// The opening square bracket is an entity as well, &#91;, because a value may
+// be a link only when this server wrote the link around it. A title of
+//
+//	[Fix login](http://attacker.invalid/x)
+//
+// passed through here as it was, so a cell or a list value the server meant
+// as text rendered as a working link to a host that is not GitLab, and
+// [HintPreserveLinks] then told the model to keep it clickable. The one
+// consequence worth knowing is that a finished link does not survive this
+// function: a link is built by [MdTitleLink] from its raw halves and is never
+// escaped afterwards, and a cell that holds one is written as it is.
+//
+// Only '<' and '[' are escaped, since everything a renderer obeys instead of
+// reading opens with one of them (a tag, a comment, an autolink, a link, an
+// image). '>' and ']' are left alone because callers compose cells of their
 // own: a merge request's branch cell reads "feature/fix -> develop", and
 // entity-encoding the arrow the server itself wrote damages output that no
 // untrusted text ever touched.
+//
+// The result is idempotent: nothing this function writes is anything it
+// rewrites, so a value escaped twice renders once, which is what lets a caller
+// that still escapes by hand pass its value to a helper that escapes again.
 func EscapeMdTableCell(s string) string {
 	s = StripControlBytes(s)
 	s = strings.ReplaceAll(s, "|", "&#124;")
 	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, "[", "&#91;")
 	s = strings.ReplaceAll(s, "\r\n", " ")
 	s = strings.ReplaceAll(s, "\r", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
@@ -148,7 +165,12 @@ func EscapeMdLinkLabel(s string) string {
 // mdLinkDestEscaper percent-encodes the characters that would end a link
 // destination early or split it in two. Each encoding resolves to the same
 // resource, so the link still works.
-var mdLinkDestEscaper = strings.NewReplacer("(", "%28", ")", "%29", "<", "%3C", ">", "%3E", " ", "%20", `"`, "%22")
+//
+// The pipe and the line endings are encoded for the cell the link sits in
+// rather than for the link: a destination is not escaped by
+// [EscapeMdTableCell], so a URL carrying a pipe used to end the cell in the
+// middle of the link, and one carrying a line break ended the row.
+var mdLinkDestEscaper = strings.NewReplacer("(", "%28", ")", "%29", "<", "%3C", ">", "%3E", " ", "%20", `"`, "%22", "|", "%7C", "\r", "%0D", "\n", "%0A")
 
 // EscapeMdLinkDestination renders url as the destination of a Markdown link.
 func EscapeMdLinkDestination(url string) string {
@@ -193,18 +215,21 @@ func BuildTargetURL(projectWebURL, targetType string, targetIID int64) string {
 // When targetURL is non-empty, the result is a clickable link like
 // [Issue #42](url). When empty, the label is returned as plain text.
 // Returns "" if there is nothing to display.
+//
+// The title reaches [MdTitleLink] raw. It used to be escaped here and again
+// inside the link helper, which was harmless only while the escaper left
+// every character it wrote alone; the rule now is that a link is built from
+// its raw halves once, and escaping a value that is about to be linked is the
+// shape that turns the link back into text.
 func FormatTarget(targetType string, targetIID int64, targetTitle, targetURL string) string {
-	label := EscapeMdTableCell(targetTitle)
-	if label == "" && targetIID != 0 {
+	label := targetTitle
+	if EscapeMdTableCell(label) == "" {
+		if targetIID == 0 {
+			return ""
+		}
 		label = fmt.Sprintf("%s #%d", targetType, targetIID)
 	}
-	if label == "" {
-		return ""
-	}
-	if targetURL != "" {
-		return MdTitleLink(label, targetURL)
-	}
-	return label
+	return MdTitleLink(label, targetURL)
 }
 
 // WrapGFMBody wraps user-generated GFM content in a Markdown blockquote to prevent
@@ -273,14 +298,17 @@ func RichContentHint(features, webURL string) string {
 // characters that could promote/demote the heading level and collapses newlines
 // into spaces so the heading stays on one line.
 //
-// The opening angle bracket is escaped for the reason [EscapeMdTableCell]
-// gives, and in the same entity form: a heading is the other place a formatter
-// puts a GitLab-authored name, all 44 call sites interpolate one value into a
-// heading the server wrote, and the same name should not turn into a live tag
-// in a heading after being neutralized in a cell.
+// The opening angle bracket and the opening square bracket are escaped for
+// the reason [EscapeMdTableCell] gives, and in the same entity form: a heading
+// is the other place a formatter puts a GitLab-authored name, all 44 call
+// sites interpolate one value into a heading the server wrote, and the same
+// name should not turn into a live tag or a live link in a heading after
+// being neutralized in a cell. A heading therefore carries no link: a card's
+// address is its URL row.
 func EscapeMdHeading(s string) string {
 	s = StripControlBytes(s)
 	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, "[", "&#91;")
 	s = strings.ReplaceAll(s, "\r\n", " ")
 	s = strings.ReplaceAll(s, "\r", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
@@ -432,6 +460,55 @@ func EscapeConsentValue(s string) string {
 		return "` `"
 	}
 
+	return backtickSpan(s)
+}
+
+// MdCodeSpan renders a GitLab-authored value as an inline code span, for a
+// value the reader has to copy exactly: a token, a variable key, a path, a
+// SHA, a command.
+//
+// A code span is its own containment, so nothing inside it is Markdown and no
+// entity is written: "&#124;" and "&lt;" render literally inside one, which
+// is what the sites that filled a span with [EscapeMdTableCell] were showing.
+// What a value can still do is end the span with a backtick run of its own,
+// so the fence is one backtick longer than the longest run inside, the rule
+// Markdown itself uses for nesting code. Line breaks collapse to a space,
+// since a span ends with its line, and control bytes are dropped. A value that
+// begins or ends with a backtick is padded with a space on both sides, which
+// CommonMark strips again. An empty value renders as nothing rather than as
+// two bare backticks, which read as a span that never closes.
+func MdCodeSpan(s string) string {
+	s = codeSpanText(s)
+	if s == "" {
+		return ""
+	}
+	return backtickSpan(s)
+}
+
+// MdCodeSpanCell renders a value as [MdCodeSpan] does, for a table cell: the
+// pipe is backslash-escaped, which GFM honors inside a code span in a table
+// and which is the one escape that works there, since the entity a cell would
+// otherwise use renders literally inside the span.
+func MdCodeSpanCell(s string) string {
+	s = codeSpanText(s)
+	if s == "" {
+		return ""
+	}
+	return backtickSpan(strings.ReplaceAll(s, "|", `\|`))
+}
+
+// codeSpanText prepares a value for a code span: control bytes dropped and
+// line breaks collapsed, since a span cannot hold a line ending.
+func codeSpanText(s string) string {
+	s = StripControlBytes(s)
+	s = strings.ReplaceAll(s, "\r\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	return strings.ReplaceAll(s, "\n", " ")
+}
+
+// backtickSpan wraps s in a code span whose fence is longer than any run of
+// backticks inside it.
+func backtickSpan(s string) string {
 	fence := strings.Repeat("`", longestBacktickRun(s)+1)
 	// A value that starts or ends with a backtick needs padding, or the fence
 	// and the value run together and the span does not close where it should.
