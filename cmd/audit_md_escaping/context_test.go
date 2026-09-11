@@ -64,6 +64,8 @@ func TestMdContext_Values_NameTheHelperTheyNeed(t *testing.T) {
 		{name: "link label", ctx: ctxLinkLabel, label: "link-label", wants: "toolutil.MdTitleLink", structural: true},
 		{name: "link destination", ctx: ctxLinkDest, label: "link-destination", wants: "toolutil.MdTitleLink", structural: true},
 		{name: "fence", ctx: ctxFence, label: "fence", wants: "toolutil.MarkdownFencedBlock", structural: true},
+		{name: "card", ctx: ctxCard, label: "card", wants: "toolutil.Card", structural: true},
+		{name: "bool or time", ctx: ctxRaw, label: "bool-time", wants: "toolutil.BoolEmoji or Card.Bool for a flag, toolutil.FormatTime or Card.Time for a timestamp", structural: true},
 		{name: "prose", ctx: ctxProse, label: "prose", wants: "", structural: false},
 		{name: "a value that names nothing", ctx: mdContext(99), label: "prose", wants: "", structural: true},
 	}
@@ -100,15 +102,36 @@ func TestParseContexts_Values_SelectsWhatToJudge(t *testing.T) {
 			value:     allContexts,
 			wantLabel: everything,
 			judges:    []mdContext{ctxCell, ctxHeading, ctxListItem, ctxLinkLabel, ctxLinkDest, ctxFence},
-			refuses:   []mdContext{ctxProse},
+			refuses:   []mdContext{ctxProse, ctxCard, ctxRaw},
 		},
-		{name: "empty means all", value: "   ", wantLabel: everything, judges: []mdContext{ctxCell}},
+		{name: "empty means all", value: "   ", wantLabel: everything, judges: []mdContext{ctxCell}, refuses: []mdContext{ctxCard}},
 		{
 			name:      "a list",
 			value:     " table-cell , heading ,, table-cell ",
 			wantLabel: "table-cell, heading",
 			judges:    []mdContext{ctxCell, ctxHeading},
 			refuses:   []mdContext{ctxListItem, ctxLinkLabel},
+		},
+		{
+			name:      "a staged rule alone",
+			value:     "card",
+			wantLabel: "card",
+			judges:    []mdContext{ctxCard},
+			refuses:   []mdContext{ctxCell, ctxRaw},
+		},
+		{
+			name:      "all beside the staged rules",
+			value:     "all,card,bool-time",
+			wantLabel: everything + ", card, bool-time",
+			judges:    []mdContext{ctxCell, ctxFence, ctxCard, ctxRaw},
+			refuses:   []mdContext{ctxProse},
+		},
+		{
+			name:      "a staged rule named before all, once",
+			value:     "bool-time,all,bool-time",
+			wantLabel: "bool-time, " + everything,
+			judges:    []mdContext{ctxCell, ctxRaw},
+			refuses:   []mdContext{ctxCard},
 		},
 	}
 
@@ -166,16 +189,20 @@ func TestParseContexts_WrongValues_AreRefused(t *testing.T) {
 }
 
 // TestContextNames_Default_ListsEverySelectableContext checks the help text
-// the flag prints, since a wrong value is answered with it.
+// the flag prints, since a wrong value is answered with it: the gating
+// contexts and the staged rules alike, and never prose.
 func TestContextNames_Default_ListsEverySelectableContext(t *testing.T) {
 	names := contextNames()
 
-	for _, ctx := range structuralContexts {
+	for _, ctx := range append(append([]mdContext{}, structuralContexts...), stagedContexts...) {
 		if !strings.Contains(names, ctx.String()) {
 			t.Errorf("contextNames() = %q, missing %s", names, ctx)
 		}
 	}
 	if strings.Contains(names, "prose") {
 		t.Errorf("contextNames() = %q, which offers a context the audit never judges", names)
+	}
+	if want := "bool-time, card, fence, heading, link-destination, link-label, list-item, table-cell"; names != want {
+		t.Errorf("contextNames() = %q, want %q", names, want)
 	}
 }

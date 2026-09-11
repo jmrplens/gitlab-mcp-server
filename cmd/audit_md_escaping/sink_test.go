@@ -85,7 +85,7 @@ func TestSinkOf_Fixture_RefusesWhatCarriesNoTemplate(t *testing.T) {
 				if !ok {
 					return true
 				}
-				if _, isSink := sinkOf(pkg, call, fences); !isSink {
+				if _, isSink := (sinkFile{pkg: pkg, fences: fences, cards: true}).sinkOf(call); !isSink {
 					refused[calleeName(pkg, call)] = true
 				}
 				return true
@@ -142,6 +142,108 @@ func TestSinkOf_CellBuilders_TreatEveryArgumentAsACell(t *testing.T) {
 				return
 			}
 			t.Errorf("%s calls no cell builder", tc.fn)
+		})
+	}
+}
+
+// TestSinkOf_CardWrites_JudgesTheTwoTheCallerRendersFor checks that the two
+// Card writes whose value the caller renders are sinks at the call site, in
+// the construct each writes, and that every other Card method, which escapes
+// what it is given, is not.
+func TestSinkOf_CardWrites_JudgesTheTwoTheCallerRendersFor(t *testing.T) {
+	holes, refused := cardMethodCalls(t)
+
+	cases := []struct {
+		name  string
+		verbs string
+		ctx   mdContext
+	}{
+		{name: "Markdown", verbs: "item", ctx: ctxListItem},
+		// Two cells written one by one, then a slice spread into the row.
+		{name: "Row", verbs: "cell cell cells...", ctx: ctxCell},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var verbs []string
+			for _, h := range holes[tc.name] {
+				verbs = append(verbs, h.verb)
+				if h.ctx != tc.ctx {
+					t.Errorf("%s hole is in %s, want %s", tc.name, h.ctx, tc.ctx)
+				}
+			}
+			if got := strings.Join(verbs, " "); got != tc.verbs {
+				t.Errorf("%s holes are %q, want %q", tc.name, got, tc.verbs)
+			}
+		})
+	}
+	for _, name := range []string{"Int", "Field", "Bool", "Time", "URL", "Table", "End", "Row"} {
+		t.Run(name+" refused", func(t *testing.T) {
+			if !refused[name] {
+				t.Errorf("no call of Card.%s was refused: every other method escapes for itself, and a Row with no cells writes nothing", name)
+			}
+		})
+	}
+}
+
+// cardMethodCalls runs sink recognition over every Card method call of the
+// card-safe fixture, returning the holes of the calls read as sinks by method
+// name, and the methods at least one call of which was refused.
+func cardMethodCalls(t *testing.T) (holes map[string][]sinkHole, refused map[string]bool) {
+	t.Helper()
+	prog := loadFixture(t, cardFixture)
+	fences := collectFences(prog)
+	pkg := fixturePackage(t, prog, "mdcardsafe")
+	holes = map[string][]sinkHole{}
+	refused = map[string]bool{}
+	for _, file := range pkg.Syntax {
+		ast.Inspect(file, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			callee := calleeOf(pkg, call)
+			if callee == nil || callee.Pkg() == nil || callee.Pkg().Path() != toolutilPath || callee.Signature().Recv() == nil {
+				return true
+			}
+			s, isSink := (sinkFile{pkg: pkg, fences: fences, cards: true}).sinkOf(call)
+			if !isSink {
+				refused[callee.Name()] = true
+				return true
+			}
+			holes[callee.Name()] = append(holes[callee.Name()], s.holes...)
+			return true
+		})
+	}
+	return holes, refused
+}
+
+// TestSinkHole_Verbs_SayWhichVerdictsApply checks the two predicates the
+// audit splits a hole by: the boolean verb and the card shape are outside the
+// escaping verdict, and the card shape, a fenced value and a spread slice are
+// outside the raw one.
+func TestSinkHole_Verbs_SayWhichVerdictsApply(t *testing.T) {
+	cases := []struct {
+		name      string
+		hole      sinkHole
+		escapable bool
+		raw       bool
+	}{
+		{name: "a textual verb in a cell", hole: sinkHole{ctx: ctxCell, verb: "%s"}, escapable: true, raw: true},
+		{name: "the boolean verb", hole: sinkHole{ctx: ctxCell, verb: "%t"}, escapable: false, raw: true},
+		{name: "a card row", hole: sinkHole{ctx: ctxCard, verb: "row"}, escapable: false, raw: false},
+		{name: "a value inside a fence", hole: sinkHole{ctx: ctxFence, verb: "%v"}, escapable: true, raw: false},
+		{name: "a slice spread into a row", hole: sinkHole{ctx: ctxCell, verb: "cells..."}, escapable: true, raw: false},
+		{name: "a prose verb", hole: sinkHole{ctx: ctxProse, verb: "%t"}, escapable: false, raw: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.hole.escapable(); got != tc.escapable {
+				t.Errorf("escapable() = %v, want %v", got, tc.escapable)
+			}
+			if got := tc.hole.rawJudged(); got != tc.raw {
+				t.Errorf("rawJudged() = %v, want %v", got, tc.raw)
+			}
 		})
 	}
 }

@@ -342,13 +342,14 @@ func (c *Card) Note(prose string) {
 // End writes the next-step hints through [WriteHints] and is always the last
 // write of a card: a row written after it lands below the guidance section,
 // where [ExtractHints] no longer finds one. A secret the card showed adds its
-// hint ahead of the caller's. It is called once, on the card NewCard started;
-// on a nested card it writes the same section.
+// hint ahead of the caller's, with the label escaped like the row that showed
+// it, since the hint is a list item too. It is called once, on the card
+// NewCard started; on a nested card it writes the same section.
 func (c *Card) End(hints ...string) {
 	root := c.root
 	all := make([]string, 0, len(root.secrets)+len(hints))
 	for _, label := range root.secrets {
-		all = append(all, "Store the "+strings.ToLower(label)+" securely. It cannot be retrieved later")
+		all = append(all, "Store the "+strings.ToLower(EscapeMdTableCell(label))+" securely. It cannot be retrieved later")
 	}
 	all = append(all, hints...)
 	WriteHints(c.b, all...)

@@ -65,7 +65,7 @@ func audit(prog *program, sel selection, root string) Report {
 		run.report.Summary.Sinks++
 		run.auditSink(s)
 	}
-	run.report.StaleDirectives = staleDirectives(run.directives, run.used)
+	run.report.StaleDirectives = staleDirectives(run.directives, run.used, sel.judges(ctxRaw))
 	finish(&run.report)
 	return run.report
 }
@@ -83,31 +83,77 @@ type auditPass struct {
 	report     Report
 }
 
-// auditSink classifies every hole of one sink.
+// auditSink judges every hole of one sink: the card shape, which is a finding
+// as it stands; the escaping verdict, on where the value lands; and the raw
+// verdict, on what the value is. The last two are asked of the same hole
+// independently, so a timestamp excused for escaping is still reported for
+// display, and each is excused by its own directive.
 func (r *auditPass) auditSink(s sink) {
 	for _, h := range s.holes {
-		if !r.sel.judges(h.ctx) {
-			continue
+		judged := false
+		if h.ctx == ctxCard && r.sel.judges(ctxCard) {
+			judged = true
+			r.report.Findings = append(r.report.Findings, newFinding(r.prog, s, h,
+				"a card row written by hand; Card writes the row, escapes the value and keeps the layout", r.root))
 		}
-		r.report.Summary.Holes++
-		got, why := r.classifier.classifyExpr(s.pkg, h.expr, nil, 0)
-		if got == safe {
-			r.report.Summary.Safe++
-			continue
+		if h.escapable() && r.sel.judges(h.ctx) {
+			judged = true
+			r.auditEscaping(s, h)
 		}
-		finding := newFinding(r.prog, s, h, why, r.root)
-		key := directiveKey{pkg: finding.Package, expression: finding.Expression}
-		if _, excused := r.directives[key]; excused {
-			r.used[key] = true
-			r.report.Excused = append(r.report.Excused, finding)
-			continue
+		if h.rawJudged() && r.sel.judges(ctxRaw) {
+			judged = true
+			r.auditRaw(s, h)
 		}
-		if got == unescaped {
-			r.report.Findings = append(r.report.Findings, finding)
-			continue
+		if judged {
+			r.report.Summary.Holes++
 		}
-		r.report.Unresolved = append(r.report.Unresolved, finding)
 	}
+}
+
+// auditEscaping applies the escaping verdict to one hole.
+func (r *auditPass) auditEscaping(s sink, h sinkHole) {
+	got, why := r.classifier.classifyExpr(s.pkg, h.expr, nil, 0)
+	if got == safe {
+		r.report.Summary.Safe++
+		return
+	}
+	finding := newFinding(r.prog, s, h, why, r.root)
+	if r.excused(kindUnescaped, finding) {
+		return
+	}
+	if got == unescaped {
+		r.report.Findings = append(r.report.Findings, finding)
+		return
+	}
+	r.report.Unresolved = append(r.report.Unresolved, finding)
+}
+
+// auditRaw applies the second verdict to one hole. A value that is neither a
+// flag nor an instant is not counted safe here, because the question was not
+// whether it is safe; it is simply not a finding.
+func (r *auditPass) auditRaw(s sink, h sinkHole) {
+	kind, why := r.classifier.rawVerdict(s.pkg, h)
+	if kind == rawNone {
+		return
+	}
+	finding := newFinding(r.prog, s, sinkHole{expr: h.expr, ctx: ctxRaw, verb: h.verb}, why, r.root)
+	finding.Wants = kind.wants()
+	if r.excused(kindRaw, finding) {
+		return
+	}
+	r.report.Findings = append(r.report.Findings, finding)
+}
+
+// excused records a finding a directive of the given kind declares safe, and
+// reports whether it did.
+func (r *auditPass) excused(kind directiveKind, finding Finding) bool {
+	key := directiveKey{pkg: finding.Package, kind: kind, expression: finding.Expression}
+	if _, declared := r.directives[key]; !declared {
+		return false
+	}
+	r.used[key] = true
+	r.report.Excused = append(r.report.Excused, finding)
+	return true
 }
 
 // finish counts and orders what the sweep collected, so two runs over one tree
@@ -135,9 +181,14 @@ func finish(report *Report) {
 //
 // The expression is printed as go/types renders it, on one line, because a
 // finding has to name the value rather than a position: it is what the report
-// groups by, and what an exemption directive is written by copying.
+// groups by, and what an exemption directive is written by copying. A
+// card-shaped line names the line instead, since it has no value of its own.
 func newFinding(prog *program, s sink, h sinkHole, why, root string) Finding {
 	pos := prog.position(h.expr.Pos())
+	expression := h.text
+	if expression == "" {
+		expression = types.ExprString(h.expr)
+	}
 	return Finding{
 		Package:    shortPackage(s.pkg.PkgPath),
 		File:       relativePath(pos.Filename, root),
@@ -145,7 +196,7 @@ func newFinding(prog *program, s sink, h sinkHole, why, root string) Finding {
 		Func:       enclosingFunc(s.pkg, s.call.Pos()),
 		Context:    h.ctx.String(),
 		Verb:       h.verb,
-		Expression: types.ExprString(h.expr),
+		Expression: expression,
 		Wants:      h.ctx.wants(),
 		Reason:     why,
 	}

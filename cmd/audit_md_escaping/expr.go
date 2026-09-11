@@ -4,6 +4,8 @@ import (
 	"go/ast"
 	"go/constant"
 	"go/types"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -71,6 +73,9 @@ func (c *classifier) classifyCall(pkg *packages.Package, call *ast.CallExpr, e *
 	}
 	callee := calleeOf(pkg, call)
 	if callee == nil {
+		if name, isBuiltin := builtinOf(pkg, call); isBuiltin {
+			return c.classifyBuiltin(pkg, name, call, e, depth)
+		}
 		return unresolved, "the call is of a function value rather than of a named function"
 	}
 	if isEscaper(callee) {
@@ -91,6 +96,45 @@ func (c *classifier) classifyCall(pkg *packages.Package, call *ast.CallExpr, e *
 		return unresolved, "the body of " + name + " is outside the audited packages"
 	}
 	return c.classifyReturns(decl, 0, bindParams(pkg, call, callee, e), depth)
+}
+
+// builtinOf names the builtin a call is of, for the calls calleeOf declines
+// because a builtin is not a *types.Func.
+func builtinOf(pkg *packages.Package, call *ast.CallExpr) (string, bool) {
+	ident, ok := ast.Unparen(call.Fun).(*ast.Ident)
+	if !ok {
+		return "", false
+	}
+	builtin, ok := pkg.TypesInfo.Uses[ident].(*types.Builtin)
+	if !ok {
+		return "", false
+	}
+	return builtin.Name(), true
+}
+
+// classifyBuiltin answers for a builtin. An append is made of the slice it
+// extends and the elements it adds, so the question passes to all of them,
+// which is how a row built cell by cell in a loop is judged by its cells; a
+// make or a new holds nothing yet, so a slice allocated and then appended to
+// is judged by what was appended. No other builtin yields text: len, cap, min
+// and max are numbers the type already answers for, and the rest return
+// nothing a formatter prints.
+func (c *classifier) classifyBuiltin(pkg *packages.Package, name string, call *ast.CallExpr, e *env, depth int) (outcome verdict, explanation string) {
+	switch name {
+	case "make", "new":
+		return safe, "an empty value the builtin " + name + " allocates"
+	case "append":
+	default:
+		return unresolved, "the value comes from the builtin " + name + ", which the audit does not follow"
+	}
+	worst, reason := safe, "every value appended is safe"
+	for _, arg := range call.Args {
+		got, why := c.classifyExpr(pkg, arg, e, depth+1)
+		if got > worst {
+			worst, reason = got, why
+		}
+	}
+	return worst, reason
 }
 
 // classifyPassThrough answers for a call whose result is made of the arguments
@@ -216,14 +260,35 @@ func (c *classifier) classifyParam(ref paramRef, depth int) (outcome verdict, ex
 	worst, reason := safe, "every caller of "+ref.fn.Name()+" passes a safe value"
 	for _, site := range sites {
 		if ref.index >= len(site.call.Args) {
+			if passesNothingVariadic(ref, site.call) {
+				continue
+			}
 			return unresolved, "a call of " + ref.fn.Name() + " passes its arguments in a shape the audit does not follow"
 		}
 		got, why := c.classifyExpr(site.pkg, site.call.Args[ref.index], nil, depth+1)
 		if got > worst {
-			worst, reason = got, "from a call site of "+ref.fn.Name()+": "+why
+			worst, reason = got, "from a call site of "+ref.fn.Name()+" ("+c.siteName(site)+"): "+why
 		}
 	}
 	return worst, reason
+}
+
+// siteName names a call site by package, file and line, so a finding reported
+// at a shared helper says which caller made it fail. The package is spelled
+// the way a report spells it, since a hundred and seventy-eight packages have
+// a markdown.go.
+func (c *classifier) siteName(site callSite) string {
+	pos := c.prog.position(site.call.Pos())
+	return shortPackage(site.pkg.PkgPath) + "/" + filepath.Base(pos.Filename) + ":" + strconv.Itoa(pos.Line)
+}
+
+// passesNothingVariadic reports whether a call leaves the variadic parameter
+// ref names empty, which is a call of End() with no hints or of WriteHints
+// with none: it passes an empty slice, which carries nothing to judge, rather
+// than an argument shape the audit cannot read.
+func passesNothingVariadic(ref paramRef, call *ast.CallExpr) bool {
+	sig := ref.fn.Signature()
+	return sig.Variadic() && ref.index == sig.Params().Len()-1 && len(call.Args) == ref.index
 }
 
 // classifyBinary answers for a concatenation by asking the same question of
@@ -349,6 +414,9 @@ func (c *classifier) classifyParamField(ref paramRef, field string, depth int) (
 	worst, reason := safe, "every caller of "+ref.fn.Name()+" passes a safe "+field
 	for _, site := range sites {
 		if ref.index >= len(site.call.Args) {
+			if passesNothingVariadic(ref, site.call) {
+				continue
+			}
 			return unresolved, "a call of " + ref.fn.Name() + " passes its arguments in a shape the audit does not follow"
 		}
 		base := c.resolveBase(site.pkg, site.call.Args[ref.index], nil, depth+1)
@@ -358,7 +426,7 @@ func (c *classifier) classifyParamField(ref paramRef, field string, depth int) (
 		}
 		got, why := c.classifyField(base.pkg, lit, base.env, field, depth+1)
 		if got > worst {
-			worst, reason = got, "from a call site of "+ref.fn.Name()+": "+why
+			worst, reason = got, "from a call site of "+ref.fn.Name()+" ("+c.siteName(site)+"): "+why
 		}
 	}
 	return worst, reason

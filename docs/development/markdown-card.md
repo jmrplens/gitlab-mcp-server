@@ -69,28 +69,28 @@ nesting level (zero for a root card). The label goes through `cardInline`
 (below). The value goes through the helper named for each method. A row whose
 rendered value is blank is not written.
 
-| Method                                   | Value written                                                                                                                          | Absent when                                    |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `Field(label, value string)`             | `cardInline(value)`                                                                                                                    | value blank, or nothing visible survives       |
-| `FieldOr(label, value, absent string)`   | `cardInline(value)`, or `cardInline(absent)` when value is blank                                                                       | both blank                                     |
-| `Int(label string, v int64)`             | `strconv.FormatInt(v, 10)`                                                                                                             | never: zero is an answer (an ID, a sent count) |
-| `Count(label string, v int64)`           | as `Int`                                                                                                                               | `v == 0`: zero means GitLab did not say        |
-| `Bool(label string, v bool)`             | `BoolEmoji(v)`: `✅` or `❌`                                                                                                              | never                                          |
-| `BoolPtr(label string, v *bool)`         | as `Bool`                                                                                                                              | `v == nil`                                     |
-| `Time(label, rfc3339 string)`            | `FormatTime(rfc3339)`: `20 Mar 2026 15:45 UTC`, date-only `21 Mar 2026`, or the escaped input                                          | empty                                          |
-| `Link(label, text, url string)`          | `MdTitleLink(text, url)`: `[text](url)`, or the escaped text when url is empty; a blank text with a url links the url to itself         | text and url both blank                        |
-| `URL(url string)`                        | `Link("URL", url, url)`                                                                                                                | empty                                          |
-| `Code(label, value string)`              | `MdCodeSpan(value)`: a code span whose fence is one backtick longer than the longest run inside, no entities                           | blank                                          |
-| `Secret(label, secret string)`           | as `Code`, and the root card remembers the label so `End` adds `Store the <label, lowercased> securely. It cannot be retrieved later` | blank (and then no hint)                       |
-| `Markdown(label, composed string)`       | `composed`, written as given                                                                                                           | blank                                          |
+| Method                                 | Value written                                                                                                                         | Absent when                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `Field(label, value string)`           | `cardInline(value)`                                                                                                                   | value blank, or nothing visible survives       |
+| `FieldOr(label, value, absent string)` | `cardInline(value)`, or `cardInline(absent)` when value is blank                                                                      | both blank                                     |
+| `Int(label string, v int64)`           | `strconv.FormatInt(v, 10)`                                                                                                            | never: zero is an answer (an ID, a sent count) |
+| `Count(label string, v int64)`         | as `Int`                                                                                                                              | `v == 0`: zero means GitLab did not say        |
+| `Bool(label string, v bool)`           | `BoolEmoji(v)`: `✅` or `❌`                                                                                                            | never                                          |
+| `BoolPtr(label string, v *bool)`       | as `Bool`                                                                                                                             | `v == nil`                                     |
+| `Time(label, rfc3339 string)`          | `FormatTime(rfc3339)`: `20 Mar 2026 15:45 UTC`, date-only `21 Mar 2026`, or the escaped input                                         | empty                                          |
+| `Link(label, text, url string)`        | `MdTitleLink(text, url)`: `[text](url)`, or the escaped text when url is empty; a blank text with a url links the url to itself       | text and url both blank                        |
+| `URL(url string)`                      | `Link("URL", url, url)`                                                                                                               | empty                                          |
+| `Code(label, value string)`            | `MdCodeSpan(value)`: a code span whose fence is one backtick longer than the longest run inside, no entities                          | blank                                          |
+| `Secret(label, secret string)`         | as `Code`, and the root card remembers the label so `End` adds `Store the <label, lowercased> securely. It cannot be retrieved later` | blank (and then no hint)                       |
+| `Markdown(label, composed string)`     | `composed`, written as given                                                                                                          | blank                                          |
 
 Two presence-only rows, `<indent>- <emoji> **<label>**\n`, written only when
 `on` is true:
 
-| Method                                  | Line                                                    |
-| --------------------------------------- | ------------------------------------------------------- |
-| `Flag(emoji, label string, on bool)`    | `- <emoji> **label**`; with an empty emoji, `- **label**` |
-| `Warn(label string, on bool)`           | `Flag(EmojiWarning, label, on)`: `- ⚠️ **label**`        |
+| Method                               | Line                                                      |
+| ------------------------------------ | --------------------------------------------------------- |
+| `Flag(emoji, label string, on bool)` | `- <emoji> **label**`; with an empty emoji, `- **label**` |
+| `Warn(label string, on bool)`        | `Flag(EmojiWarning, label, on)`: `- ⚠️ **label**`         |
 
 `Warn` exists because `BoolEmoji` maps true to a tick, which on "Revoked",
 "Locked", "Expired" or "Has failures" reads as success; a negative-polarity
@@ -233,16 +233,16 @@ its quote, or between table rows.
 
 ## What is escaped, and by what
 
-| Written                         | Helper                                   | What it neutralizes                                                     |
-| ------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------- |
-| Card, Section, Table and Fence headings | `EscapeMdHeading`                | leading `#`, line breaks, `<`, `[`, control bytes                       |
-| Labels, Field, FieldOr, Flag emoji and label, one-line Text, table column names | `cardInline` | `\|`, `<`, `[`, line breaks, control bytes, the guidance heading     |
-| Link text and URL               | `MdTitleLink` (cell escaper, then `EscapeMdLinkLabel` on the label, `EscapeMdLinkDestination` on the URL) | a label closing the link, a destination ending early or splitting the cell |
-| Code, Secret                    | `MdCodeSpan`                             | a backtick run closing the span; line breaks; control bytes. No entities |
-| Multi-line Text                 | `WrapGFMBody`                            | any block structure, by quoting every line; the guidance heading        |
-| Fence body                      | `MarkdownFencedBlock`                    | a backtick run closing the fence; the info string                       |
-| Time                            | `FormatTime`                             | the fallback branch escapes; the two layouts write nothing escapable    |
-| Markdown, Row cells, Note       | nothing                                  | the caller renders these (see "Deliberately not in Card")              |
+| Written                                                                         | Helper                                                                                                    | What it neutralizes                                                        |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Card, Section, Table and Fence headings                                         | `EscapeMdHeading`                                                                                         | leading `#`, line breaks, `<`, `[`, control bytes                          |
+| Labels, Field, FieldOr, Flag emoji and label, one-line Text, table column names | `cardInline`                                                                                              | `\|`, `<`, `[`, line breaks, control bytes, the guidance heading           |
+| Link text and URL                                                               | `MdTitleLink` (cell escaper, then `EscapeMdLinkLabel` on the label, `EscapeMdLinkDestination` on the URL) | a label closing the link, a destination ending early or splitting the cell |
+| Code, Secret                                                                    | `MdCodeSpan`                                                                                              | a backtick run closing the span; line breaks; control bytes. No entities   |
+| Multi-line Text                                                                 | `WrapGFMBody`                                                                                             | any block structure, by quoting every line; the guidance heading           |
+| Fence body                                                                      | `MarkdownFencedBlock`                                                                                     | a backtick run closing the fence; the info string                          |
+| Time                                                                            | `FormatTime`                                                                                              | the fallback branch escapes; the two layouts write nothing escapable       |
+| Markdown, Row cells, Note                                                       | nothing                                                                                                   | the caller renders these (see "Deliberately not in Card")                  |
 
 Every escaper Card uses is idempotent (`TestEscapers_AreIdempotent`), so a
 formatter that still escapes by hand passes its value to a Card and renders
@@ -271,7 +271,16 @@ exactly what it did (`TestCard_EscapingIsIdempotent_APreEscapedValueRendersUncha
 6. The escaping gate (`cmd/audit_md_escaping`) judges `card.go` like any other
    formatter: every `Fprintf` hole in it classifies safe, it adds no finding,
    no unresolved entry and no directive (measured: 2078 to 2085 sinks, 47
-   unresolved before and after, 0 findings, 0 stale).
+   unresolved before and after, 0 findings, 0 stale). Since L1-08 the gate
+   also registers `Card.Markdown` and `CardTable.Row` as call-site sinks (a
+   raw value passed to either is the caller's finding, in the list item or
+   the cell the method writes), holds `internal/toolutil` to no unresolved
+   value at all, and carries the static card rule (`-contexts card`) that
+   lists every hand-written row the migration has to move, with `card.go`
+   itself and the prompts outside its scope; measured on the tree at L1-08,
+   1396 card sites (1323 rows, 73 field-table headers) and 247 flags or
+   timestamps printed without their helper (`-contexts bool-time`), both
+   report-only until a later layer names them beside `all`.
 
 ## Rendered examples
 
@@ -523,5 +532,7 @@ migration to name rather than guessed at here:
   formatter that needs a table per nested object should open a Section.
 - **`Note` for multi-paragraph server prose.** Nothing in the tree writes
   one; if a migration finds it, `Note` gains a paragraph form then.
-- **The static card gate** (`plan.gates[0]`, L1-08) and the runtime scan
-  (L1-09) that turn invariants 1 to 5 into CI failures.
+- **The runtime scan** (L1-09) that turns invariants 1 to 5 into CI failures.
+  The static card gate (`plan.gates[0]`, L1-08) exists and reports; naming it
+  beside `all` in `make check-md-escaping` is the layer that finishes the
+  migration, since every row it lists is a row Card has not written yet.

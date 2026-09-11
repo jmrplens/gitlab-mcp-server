@@ -138,13 +138,13 @@ func FormatRuleMarkdown(r RuleOutput) string {
 	fmt.Fprintf(&b, "| Type | %s |\n", r.RuleType)
 	fmt.Fprintf(&b, "| Approvals Required | %d |\n", r.ApprovalsRequired)
 	if eligible := userNames(r.EligibleApprovers); len(eligible) > 0 {
-		fmt.Fprintf(&b, "| Eligible | %s |\n", strings.Join(eligible, ", "))
+		fmt.Fprintf(&b, "| Eligible | %s |\n", toolutil.EscapeMdTableCell(strings.Join(eligible, ", ")))
 	}
 	if users := userNames(r.Users); len(users) > 0 {
-		fmt.Fprintf(&b, "| Users | %s |\n", strings.Join(users, ", "))
+		fmt.Fprintf(&b, "| Users | %s |\n", toolutil.EscapeMdTableCell(strings.Join(users, ", ")))
 	}
 	if groups := groupNames(r.Groups); len(groups) > 0 {
-		fmt.Fprintf(&b, "| Groups | %s |\n", strings.Join(groups, ", "))
+		fmt.Fprintf(&b, "| Groups | %s |\n", toolutil.EscapeMdTableCell(strings.Join(groups, ", ")))
 	}
 	toolutil.WriteHints(
 		&b,

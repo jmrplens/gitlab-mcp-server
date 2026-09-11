@@ -95,6 +95,7 @@ var wantFindings = []string{
 	"mdcase table-cell pair.Right",
 	"mdcase table-cell repeat(item.Title, depth)",
 	"mdcase table-cell strings.Join([]string{…}, \", \")",
+	"mdcase table-cell strings.Join(rawJoined(item), \", \")",
 	"mdcase table-cell title",
 	"mdexempt table-cell result.Title",
 }
@@ -104,11 +105,11 @@ var wantFindings = []string{
 var wantUnresolved = []string{
 	"mdcase table-cell fmt.Sprintf(dynamicTemplate(), item.Title)",
 	"mdcase table-cell left",
+	"mdcase table-cell min(item.Title, \"z\")",
 	"mdcase table-cell mutableTitle",
 	"mdcase table-cell namedResult(item)",
 	"mdcase table-cell pair.Left",
 	"mdcase table-cell render(item)",
-	"mdcase table-cell rest[0]",
 	"mdcase table-cell right",
 	"mdcase table-cell title",
 	"mdcase table-cell value",

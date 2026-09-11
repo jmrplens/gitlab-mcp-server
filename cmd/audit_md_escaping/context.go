@@ -31,13 +31,35 @@ const (
 	// by the line it sits on, because a fence is opened on one line and closed
 	// on another.
 	ctxFence
+	// ctxCard is a card row a formatter wrote by hand: a "- **Label**:" list
+	// item, a bullet-less "**Label**:" line, a two-cell table row with a
+	// constant label, or the "| Field | Value |" header of a field table. It
+	// is not a place a value lands but a shape the constant text has, and it
+	// is reported as it is, because the fix is the same whatever the value:
+	// toolutil.Card writes the row, escapes the value and keeps the layout.
+	ctxCard
+	// ctxRaw is the second verdict on a hole: not where the value lands but
+	// what it is. A boolean printed as true or false, and a timestamp printed
+	// as Go formats a time.Time or as GitLab sent it, are each a value that
+	// has a display helper, and a formatter that bypasses it renders the same
+	// fact three different ways across the tree.
+	ctxRaw
 )
 
 // structuralContexts are the contexts a value can change the shape of, in the
 // order a report lists them. Prose is absent because a paragraph holds a pipe,
 // an angle bracket and a newline without the document changing shape, and the
 // formatters that render GitLab-authored prose route it through WrapGFMBody.
+//
+// They are what "all" selects and what the gate judges. The two staged
+// contexts below are selectable by name and are deliberately not in this list.
 var structuralContexts = []mdContext{ctxCell, ctxHeading, ctxListItem, ctxLinkLabel, ctxLinkDest, ctxFence}
+
+// stagedContexts are the rules that report and do not yet gate: the card
+// shape and the raw bool or time. Each is asked for by name, so a run that
+// says "all" keeps the exit status it had before the rule existed, and the
+// Makefile stages a rule into the gate by naming it.
+var stagedContexts = []mdContext{ctxCard, ctxRaw}
 
 // contextLabels name each context for the command line and for a report.
 var contextLabels = map[mdContext]string{
@@ -48,6 +70,8 @@ var contextLabels = map[mdContext]string{
 	ctxLinkLabel: "link-label",
 	ctxLinkDest:  "link-destination",
 	ctxFence:     "fence",
+	ctxCard:      "card",
+	ctxRaw:       "bool-time",
 }
 
 // String names the context for a report.
@@ -70,6 +94,10 @@ func (c mdContext) wants() string {
 		return "toolutil.MdTitleLink"
 	case ctxFence:
 		return "toolutil.MarkdownFencedBlock"
+	case ctxCard:
+		return "toolutil.Card"
+	case ctxRaw:
+		return "toolutil.BoolEmoji or Card.Bool for a flag, toolutil.FormatTime or Card.Time for a timestamp"
 	default:
 		return ""
 	}
@@ -82,6 +110,8 @@ func (c mdContext) structural() bool {
 }
 
 // allContexts is the value of -contexts that judges every structural context.
+// It names the gating set and none of the staged rules, so a staged rule
+// joins the gate only when the Makefile names it beside "all".
 const allContexts = "all"
 
 // selection is the set of contexts one run judges. Staging the sweep by
@@ -101,8 +131,11 @@ func (s selection) judges(c mdContext) bool {
 // contextNames lists the accepted -contexts values, for the flag's own help
 // and for the error a wrong one produces.
 func contextNames() string {
-	names := make([]string, 0, len(structuralContexts))
+	names := make([]string, 0, len(structuralContexts)+len(stagedContexts))
 	for _, c := range structuralContexts {
+		names = append(names, c.String())
+	}
+	for _, c := range stagedContexts {
 		names = append(names, c.String())
 	}
 	sort.Strings(names)
@@ -111,44 +144,62 @@ func contextNames() string {
 
 // parseContexts turns the -contexts value into the set of contexts to judge.
 //
+// "all" is accepted alone, as the empty value, and as one entry of the list,
+// which is how a staged rule is added to the gate without spelling the six
+// contexts out: "all,card" judges the gating set and the card shape.
+//
 // An unknown name is an error rather than an empty selection, because a
 // misspelled context would otherwise read as a gate that passed.
 func parseContexts(value string) (selection, error) {
 	value = strings.TrimSpace(value)
-	if value == "" || value == allContexts {
-		chosen := make(map[mdContext]bool, len(structuralContexts))
-		labels := make([]string, 0, len(structuralContexts))
-		for _, c := range structuralContexts {
-			chosen[c] = true
-			labels = append(labels, c.String())
-		}
-		return selection{chosen: chosen, label: strings.Join(labels, ", ")}, nil
+	if value == "" {
+		value = allContexts
 	}
-	chosen := map[mdContext]bool{}
-	var labels []string
+	sel := selection{chosen: map[mdContext]bool{}}
+	// choose adds one context once, keeping the label in the order the
+	// contexts were named.
+	choose := func(c mdContext) {
+		if sel.chosen[c] {
+			return
+		}
+		sel.chosen[c] = true
+		if sel.label != "" {
+			sel.label += ", "
+		}
+		sel.label += c.String()
+	}
 	for name := range strings.SplitSeq(value, ",") {
 		name = strings.TrimSpace(name)
-		if name == "" {
+		switch name {
+		case "":
+			continue
+		case allContexts:
+			for _, c := range structuralContexts {
+				choose(c)
+			}
 			continue
 		}
 		ctx, ok := contextNamed(name)
 		if !ok {
 			return selection{}, fmt.Errorf("unknown Markdown context %q: expected %s, or %s", name, allContexts, contextNames())
 		}
-		if !chosen[ctx] {
-			labels = append(labels, ctx.String())
-		}
-		chosen[ctx] = true
+		choose(ctx)
 	}
-	if len(chosen) == 0 {
+	if len(sel.chosen) == 0 {
 		return selection{}, fmt.Errorf("no Markdown context selected: expected %s, or %s", allContexts, contextNames())
 	}
-	return selection{chosen: chosen, label: strings.Join(labels, ", ")}, nil
+	return sel, nil
 }
 
-// contextNamed resolves a context by the name a report prints for it.
+// contextNamed resolves a context by the name a report prints for it, the
+// staged rules included.
 func contextNamed(name string) (mdContext, bool) {
 	for _, c := range structuralContexts {
+		if c.String() == name {
+			return c, true
+		}
+	}
+	for _, c := range stagedContexts {
 		if c.String() == name {
 			return c, true
 		}
