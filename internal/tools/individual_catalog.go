@@ -71,6 +71,29 @@ func RegisterIndividualCatalogTools(server *mcp.Server, catalog *actioncatalog.C
 	}
 }
 
+// individualRegistrationOrder lists the catalog's actions in the order
+// [RegisterIndividualCatalogTools] visits them: groups by tool name, then each
+// group's actions as declared, leaving out the groups no registration projects.
+//
+// The order decides which action an individual tool name belongs to. A name can
+// be declared by more than one action on purpose: gitlab_issue_list_group is
+// projected from issue.list_group and group.issues, gitlab_commit_list from
+// repository.commit_list and repository.file_history, gitlab_user_current from
+// user.current and user.me. Registration binds the name to the first of them in
+// this order, so a reader that maps a tool name back to an action has to walk
+// the same order and keep the first, or it names an action whose handler never
+// ran under that name.
+func individualRegistrationOrder(catalog *actioncatalog.Catalog) []actioncatalog.Action {
+	projected := IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true}
+	var actions []actioncatalog.Action
+	for _, group := range catalog.Groups() {
+		if individualCatalogGroupEligible(group, projected) {
+			actions = append(actions, group.ActionsInOrder()...)
+		}
+	}
+	return actions
+}
+
 // registerIndividualCatalogGroup projects every action in a single
 // catalog group onto the server. Groups failing the surface or edition
 // gate are silently skipped. The group's [actioncatalog.Group.FormatResult]
