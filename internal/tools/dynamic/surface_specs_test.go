@@ -98,7 +98,7 @@ func TestControllerSurfaceSpecs_SearchTheRegistryTheyWereGiven(t *testing.T) {
 			if !ok {
 				t.Fatalf("find route returned %T, want FindOutput", result)
 			}
-			if found := output.Count > 0; found != tt.wantFound {
+			if (output.Count > 0) != tt.wantFound {
 				t.Errorf("find returned %d results, want found = %v", output.Count, tt.wantFound)
 			}
 		})

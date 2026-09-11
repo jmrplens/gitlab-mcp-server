@@ -85,7 +85,7 @@ func TestSearchIndex_CandidateEntryIndexesNarrowsToTheMatchingPostings(t *testin
 	}
 
 	got := index.candidateEntryIndexes(normalizeSearchTerms("pipeline"))
-	if joined := strings.Join(intsToStrings(got), ","); joined != "1" {
+	if strings.Join(intsToStrings(got), ",") != "1" {
 		t.Errorf("candidateEntryIndexes(pipeline) = %v, want only the indexed posting 1", got)
 	}
 }

@@ -8870,13 +8870,13 @@ func TestScoreSearchCodeIntentValue_VerbAndNounPairings(t *testing.T) {
 		terms []searchTerm
 		want  int
 	}{
-		{name: "grep alone", terms: plainSearchTerms("grep"), want: scoreSearchCodeIntentBoost},
-		{name: "search with code", terms: plainSearchTerms("search", "code"), want: scoreSearchCodeIntentBoost},
-		{name: "search with blob", terms: plainSearchTerms("search", "blob"), want: scoreSearchCodeIntentBoost},
-		{name: "search with blobs", terms: plainSearchTerms("search", "blobs"), want: scoreSearchCodeIntentBoost},
-		{name: "search with source", terms: plainSearchTerms("search", "source"), want: scoreSearchCodeIntentBoost},
-		{name: "search without a code noun", terms: plainSearchTerms("search", "wikis"), want: 0},
-		{name: "code noun without a search verb", terms: plainSearchTerms("code"), want: 0},
+		{name: "grep alone", terms: searchTermsFromWords("grep"), want: scoreSearchCodeIntentBoost},
+		{name: "search with code", terms: searchTermsFromWords("search", "code"), want: scoreSearchCodeIntentBoost},
+		{name: "search with blob", terms: searchTermsFromWords("search", "blob"), want: scoreSearchCodeIntentBoost},
+		{name: "search with blobs", terms: searchTermsFromWords("search", "blobs"), want: scoreSearchCodeIntentBoost},
+		{name: "search with source", terms: searchTermsFromWords("search", "source"), want: scoreSearchCodeIntentBoost},
+		{name: "search without a code noun", terms: searchTermsFromWords("search", "wikis"), want: 0},
+		{name: "code noun without a search verb", terms: searchTermsFromWords("code"), want: 0},
 	}
 
 	for _, tc := range cases {
@@ -8889,7 +8889,7 @@ func TestScoreSearchCodeIntentValue_VerbAndNounPairings(t *testing.T) {
 
 	t.Run("another search action is not promoted", func(t *testing.T) {
 		other := scoringEntry("search.projects", "search", "projects")
-		if got := scoreSearchCodeIntentValue(other, plainSearchTerms("grep")); got != 0 {
+		if got := scoreSearchCodeIntentValue(other, searchTermsFromWords("grep")); got != 0 {
 			t.Fatalf("scoreSearchCodeIntentValue(search.projects) = %d, want 0", got)
 		}
 	})
@@ -8908,15 +8908,15 @@ func TestScoreCurrentUserIntentValue_SelfSignalAndIdentityNoun(t *testing.T) {
 		terms []searchTerm
 		want  int
 	}{
-		{name: "current with user", terms: plainSearchTerms("current", "user"), want: scoreCurrentUserIntentBoost},
-		{name: "authenticated with account", terms: plainSearchTerms("authenticated", "account"), want: scoreCurrentUserIntentBoost},
-		{name: "whoami is both halves at once", terms: plainSearchTerms("whoami"), want: scoreCurrentUserIntentBoost},
-		{name: "current with profile", terms: plainSearchTerms("current", "profile"), want: scoreCurrentUserIntentBoost},
-		{name: "current with identity", terms: plainSearchTerms("current", "identity"), want: scoreCurrentUserIntentBoost},
-		{name: "current with me", terms: plainSearchTerms("current", "me"), want: scoreCurrentUserIntentBoost},
-		{name: "current with myself", terms: plainSearchTerms("current", "myself"), want: scoreCurrentUserIntentBoost},
-		{name: "self signal without an identity noun", terms: plainSearchTerms("current", "pipeline"), want: 0},
-		{name: "identity noun without a self signal", terms: plainSearchTerms("user"), want: 0},
+		{name: "current with user", terms: searchTermsFromWords("current", "user"), want: scoreCurrentUserIntentBoost},
+		{name: "authenticated with account", terms: searchTermsFromWords("authenticated", "account"), want: scoreCurrentUserIntentBoost},
+		{name: "whoami is both halves at once", terms: searchTermsFromWords("whoami"), want: scoreCurrentUserIntentBoost},
+		{name: "current with profile", terms: searchTermsFromWords("current", "profile"), want: scoreCurrentUserIntentBoost},
+		{name: "current with identity", terms: searchTermsFromWords("current", "identity"), want: scoreCurrentUserIntentBoost},
+		{name: "current with me", terms: searchTermsFromWords("current", "me"), want: scoreCurrentUserIntentBoost},
+		{name: "current with myself", terms: searchTermsFromWords("current", "myself"), want: scoreCurrentUserIntentBoost},
+		{name: "self signal without an identity noun", terms: searchTermsFromWords("current", "pipeline"), want: 0},
+		{name: "identity noun without a self signal", terms: searchTermsFromWords("user"), want: 0},
 	}
 
 	for _, tc := range cases {
@@ -8934,8 +8934,8 @@ func TestScoreCurrentUserIntentValue_SelfSignalAndIdentityNoun(t *testing.T) {
 // at once would mean neither action ever passes the filter, which is the state
 // the bypass exists to end.
 func TestQualifiesForExplicitIntentBypass_EitherIntentIsEnough(t *testing.T) {
-	codeTerms := plainSearchTerms("grep")
-	identityTerms := plainSearchTerms("current", "user")
+	codeTerms := searchTermsFromWords("grep")
+	identityTerms := searchTermsFromWords("current", "user")
 
 	t.Run("code intent alone", func(t *testing.T) {
 		if !qualifiesForExplicitIntentBypass(scoringEntry("search.code", "search", "code"), codeTerms) {
@@ -8956,19 +8956,6 @@ func TestQualifiesForExplicitIntentBypass_EitherIntentIsEnough(t *testing.T) {
 	})
 }
 
-// plainSearchTerms builds one search term per word with no synonyms, which is
-// exactly what normalizeSearchTerms produces for a word the synonym tables do
-// not list. The scorers below are read word by word, and a query put through
-// the normalizer carries whatever its synonyms drag in, so a test that needs
-// one word present and a second absent has to say so directly.
-func plainSearchTerms(words ...string) []searchTerm {
-	terms := make([]searchTerm, 0, len(words))
-	for _, word := range words {
-		terms = append(terms, searchTerm{Raw: word, Alternatives: []string{word}})
-	}
-	return terms
-}
-
 // TestScoreServiceAccountIntentValue_EachBonusIsConditional pins the three
 // bonuses stacked on the base service-account score at the value each is worth,
 // and pins that each one needs both of its conditions. A bonus that fired on
@@ -8985,49 +8972,49 @@ func TestScoreServiceAccountIntentValue_EachBonusIsConditional(t *testing.T) {
 		{
 			name:  "base score alone",
 			entry: scoringEntry("group.service_account_create", "group", "service_account_create"),
-			terms: plainSearchTerms("service", "account"),
+			terms: searchTermsFromWords("service", "account"),
 			want:  scoreServiceAccountBoost,
 		},
 		{
 			name:  "token word on an action that is not about a token",
 			entry: scoringEntry("group.service_account_create", "group", "service_account_create"),
-			terms: plainSearchTerms("service", "account", "pat"),
+			terms: searchTermsFromWords("service", "account", "pat"),
 			want:  scoreServiceAccountBoost,
 		},
 		{
 			name:  "pat on the token action",
 			entry: scoringEntry("group.service_account_pat_create", "group", "service_account_pat_create"),
-			terms: plainSearchTerms("service", "account", "pat"),
+			terms: searchTermsFromWords("service", "account", "pat"),
 			want:  2 * scoreServiceAccountBoost,
 		},
 		{
 			name:  "personal access token spelled out",
 			entry: scoringEntry("group.service_account_pat_create", "group", "service_account_pat_create"),
-			terms: plainSearchTerms("service", "account", "personal", "access", "token"),
+			terms: searchTermsFromWords("service", "account", "personal", "access", "token"),
 			want:  2 * scoreServiceAccountBoost,
 		},
 		{
 			name:  "the action verb the query asked for",
 			entry: scoringEntry("group.service_account_list", "group", "service_account_list"),
-			terms: plainSearchTerms("service", "account", "list"),
+			terms: searchTermsFromWords("service", "account", "list"),
 			want:  2 * scoreServiceAccountBoost,
 		},
 		{
 			name:  "a verb the action does not carry",
 			entry: scoringEntry("group.service_account_create", "group", "service_account_create"),
-			terms: plainSearchTerms("service", "account", "list"),
+			terms: searchTermsFromWords("service", "account", "list"),
 			want:  scoreServiceAccountBoost,
 		},
 		{
 			name:  "an action whose suffix names no verb",
 			entry: scoringEntry("group.service_account_unknown", "group", "service_account_unknown"),
-			terms: plainSearchTerms("service", "account", "list"),
+			terms: searchTermsFromWords("service", "account", "list"),
 			want:  scoreServiceAccountBoost,
 		},
 		{
 			name:  "the domain named beside the verb",
 			entry: scoringEntry("group.service_account_list", "group", "service_account_list"),
-			terms: plainSearchTerms("group", "service", "account", "list"),
+			terms: searchTermsFromWords("group", "service", "account", "list"),
 			want:  2*scoreServiceAccountBoost + scoreServiceAccountScope,
 		},
 	}
@@ -9048,7 +9035,7 @@ func TestScoreServiceAccountIntentValue_EachBonusIsConditional(t *testing.T) {
 // in the explanation of every action the query never matched.
 func TestScoreScopeIntent_MatchesTheDomainOrTheScope(t *testing.T) {
 	t.Run("the domain is the scope", func(t *testing.T) {
-		score, reason := scoreScopeIntent(scoringEntry("project.get", "project", "get"), plainSearchTerms("project"))
+		score, reason := scoreScopeIntent(scoringEntry("project.get", "project", "get"), searchTermsFromWords("project"))
 		if score != scoreScopeIntentBoost {
 			t.Fatalf("scoreScopeIntent() = %d, want %d", score, scoreScopeIntentBoost)
 		}
@@ -9060,13 +9047,13 @@ func TestScoreScopeIntent_MatchesTheDomainOrTheScope(t *testing.T) {
 	t.Run("the scope field is the scope", func(t *testing.T) {
 		entry := scoringEntry("epic.list", "epic", "list")
 		entry.Document.Scope = "group"
-		if score := scoreScopeIntentValue(entry, plainSearchTerms("group")); score != scoreScopeIntentBoost {
+		if score := scoreScopeIntentValue(entry, searchTermsFromWords("group")); score != scoreScopeIntentBoost {
 			t.Fatalf("scoreScopeIntentValue() = %d, want %d", score, scoreScopeIntentBoost)
 		}
 	})
 
 	t.Run("group wins when the query names both", func(t *testing.T) {
-		terms := plainSearchTerms("project", "group")
+		terms := searchTermsFromWords("project", "group")
 		if score := scoreScopeIntentValue(scoringEntry("group.get", "group", "get"), terms); score != scoreScopeIntentBoost {
 			t.Fatalf("scoreScopeIntentValue(group.get) = %d, want %d", score, scoreScopeIntentBoost)
 		}
@@ -9076,7 +9063,7 @@ func TestScoreScopeIntent_MatchesTheDomainOrTheScope(t *testing.T) {
 	})
 
 	t.Run("a query naming no scope scores nothing", func(t *testing.T) {
-		score, reason := scoreScopeIntent(scoringEntry("project.get", "project", "get"), plainSearchTerms("issue"))
+		score, reason := scoreScopeIntent(scoringEntry("project.get", "project", "get"), searchTermsFromWords("issue"))
 		if score != 0 || reason != (MatchReason{}) {
 			t.Fatalf("scoreScopeIntent() = %d, %+v; want zero result", score, reason)
 		}
@@ -9098,25 +9085,25 @@ func TestScoreCompareRefsIntentValue_GuardsAreIndependent(t *testing.T) {
 		{
 			name:  "singular ref",
 			entry: scoringEntry("repository.compare", "repository", "compare"),
-			terms: plainSearchTerms("compare", "ref"),
+			terms: searchTermsFromWords("compare", "ref"),
 			want:  scoreCompareRefsIntentBoost,
 		},
 		{
 			name:  "plural refs alone",
 			entry: scoringEntry("repository.compare", "repository", "compare"),
-			terms: plainSearchTerms("compare", "refs"),
+			terms: searchTermsFromWords("compare", "refs"),
 			want:  scoreCompareRefsIntentBoost,
 		},
 		{
 			name:  "the right domain with another action",
 			entry: scoringEntry("repository.diff", "repository", "diff"),
-			terms: plainSearchTerms("compare", "refs"),
+			terms: searchTermsFromWords("compare", "refs"),
 			want:  0,
 		},
 		{
 			name:  "the compare action in another domain",
 			entry: scoringEntry("branch.compare", "branch", "compare"),
-			terms: plainSearchTerms("compare", "refs"),
+			terms: searchTermsFromWords("compare", "refs"),
 			want:  0,
 		},
 	}
@@ -9145,25 +9132,25 @@ func TestScoreReleaseListIntentValue_GuardsAreIndependent(t *testing.T) {
 		{
 			name:  "singular release",
 			entry: scoringEntry("release.list", "release", "list"),
-			terms: plainSearchTerms("list", "release"),
+			terms: searchTermsFromWords("list", "release"),
 			want:  scoreReleaseListIntentBoost,
 		},
 		{
 			name:  "plural releases alone",
 			entry: scoringEntry("release.list", "release", "list"),
-			terms: plainSearchTerms("list", "releases"),
+			terms: searchTermsFromWords("list", "releases"),
 			want:  scoreReleaseListIntentBoost,
 		},
 		{
 			name:  "the release domain with another action",
 			entry: scoringEntry("release.get", "release", "get"),
-			terms: plainSearchTerms("list", "releases"),
+			terms: searchTermsFromWords("list", "releases"),
 			want:  0,
 		},
 		{
 			name:  "no list verb",
 			entry: scoringEntry("release.list", "release", "list"),
-			terms: plainSearchTerms("releases"),
+			terms: searchTermsFromWords("releases"),
 			want:  0,
 		},
 	}
@@ -9192,26 +9179,26 @@ func TestScoreDiscoverProjectIntent_OneTriggerAndOneDisambiguator(t *testing.T) 
 		terms []searchTerm
 		want  int
 	}{
-		{name: "url trigger", entry: resolve, terms: plainSearchTerms("url", "project"), want: scoreDiscoverIntentBoost},
-		{name: "remote trigger", entry: resolve, terms: plainSearchTerms("remote", "project"), want: scoreDiscoverIntentBoost},
-		{name: "origin trigger", entry: resolve, terms: plainSearchTerms("origin", "project"), want: scoreDiscoverIntentBoost},
-		{name: "git trigger", entry: resolve, terms: plainSearchTerms("git", "project"), want: scoreDiscoverIntentBoost},
-		{name: "path disambiguator", entry: resolve, terms: plainSearchTerms("url", "path"), want: scoreDiscoverIntentBoost},
-		{name: "resolve disambiguator", entry: resolve, terms: plainSearchTerms("url", "resolve"), want: scoreDiscoverIntentBoost},
-		{name: "discover disambiguator", entry: resolve, terms: plainSearchTerms("url", "discover"), want: scoreDiscoverIntentBoost},
-		{name: "find disambiguator", entry: resolve, terms: plainSearchTerms("url", "find"), want: scoreDiscoverIntentBoost},
-		{name: "no trigger", entry: resolve, terms: plainSearchTerms("project"), want: 0},
-		{name: "no disambiguator", entry: resolve, terms: plainSearchTerms("url"), want: 0},
+		{name: "url trigger", entry: resolve, terms: searchTermsFromWords("url", "project"), want: scoreDiscoverIntentBoost},
+		{name: "remote trigger", entry: resolve, terms: searchTermsFromWords("remote", "project"), want: scoreDiscoverIntentBoost},
+		{name: "origin trigger", entry: resolve, terms: searchTermsFromWords("origin", "project"), want: scoreDiscoverIntentBoost},
+		{name: "git trigger", entry: resolve, terms: searchTermsFromWords("git", "project"), want: scoreDiscoverIntentBoost},
+		{name: "path disambiguator", entry: resolve, terms: searchTermsFromWords("url", "path"), want: scoreDiscoverIntentBoost},
+		{name: "resolve disambiguator", entry: resolve, terms: searchTermsFromWords("url", "resolve"), want: scoreDiscoverIntentBoost},
+		{name: "discover disambiguator", entry: resolve, terms: searchTermsFromWords("url", "discover"), want: scoreDiscoverIntentBoost},
+		{name: "find disambiguator", entry: resolve, terms: searchTermsFromWords("url", "find"), want: scoreDiscoverIntentBoost},
+		{name: "no trigger", entry: resolve, terms: searchTermsFromWords("project"), want: 0},
+		{name: "no disambiguator", entry: resolve, terms: searchTermsFromWords("url"), want: 0},
 		{
 			name:  "the discover domain with another action",
 			entry: scoringEntry("discover_project.lookup", "discover_project", "lookup"),
-			terms: plainSearchTerms("url", "project"),
+			terms: searchTermsFromWords("url", "project"),
 			want:  0,
 		},
 		{
 			name:  "a resolve action in another domain",
 			entry: scoringEntry("project.resolve", "project", "resolve"),
-			terms: plainSearchTerms("url", "project"),
+			terms: searchTermsFromWords("url", "project"),
 			want:  0,
 		},
 	}
@@ -9225,7 +9212,7 @@ func TestScoreDiscoverProjectIntent_OneTriggerAndOneDisambiguator(t *testing.T) 
 	}
 
 	t.Run("the reason names the action", func(t *testing.T) {
-		score, reason := scoreDiscoverProjectIntent(resolve, plainSearchTerms("remote", "project"))
+		score, reason := scoreDiscoverProjectIntent(resolve, searchTermsFromWords("remote", "project"))
 		if score != scoreDiscoverIntentBoost {
 			t.Fatalf("scoreDiscoverProjectIntent() = %d, want %d", score, scoreDiscoverIntentBoost)
 		}
@@ -9235,7 +9222,7 @@ func TestScoreDiscoverProjectIntent_OneTriggerAndOneDisambiguator(t *testing.T) 
 	})
 
 	t.Run("a query that does not discover carries no reason", func(t *testing.T) {
-		score, reason := scoreDiscoverProjectIntent(resolve, plainSearchTerms("project"))
+		score, reason := scoreDiscoverProjectIntent(resolve, searchTermsFromWords("project"))
 		if score != 0 || reason != (MatchReason{}) {
 			t.Fatalf("scoreDiscoverProjectIntent() = %d, %+v; want zero result", score, reason)
 		}
@@ -9257,17 +9244,17 @@ func TestScoreProjectGetIntentValue_EachDisambiguatorAlone(t *testing.T) {
 		terms []searchTerm
 		want  int
 	}{
-		{name: "get", entry: entry, terms: plainSearchTerms("project", "get"), want: scoreProjectGetIntentBoost},
-		{name: "show", entry: entry, terms: plainSearchTerms("project", "show"), want: scoreProjectGetIntentBoost},
-		{name: "find", entry: entry, terms: plainSearchTerms("project", "find"), want: scoreProjectGetIntentBoost},
-		{name: "path", entry: entry, terms: plainSearchTerms("project", "path"), want: scoreProjectGetIntentBoost},
-		{name: "id", entry: entry, terms: plainSearchTerms("project", "id"), want: scoreProjectGetIntentBoost},
-		{name: "project alone", entry: entry, terms: plainSearchTerms("project"), want: 0},
-		{name: "a disambiguator without the project noun", entry: entry, terms: plainSearchTerms("show"), want: 0},
+		{name: "get", entry: entry, terms: searchTermsFromWords("project", "get"), want: scoreProjectGetIntentBoost},
+		{name: "show", entry: entry, terms: searchTermsFromWords("project", "show"), want: scoreProjectGetIntentBoost},
+		{name: "find", entry: entry, terms: searchTermsFromWords("project", "find"), want: scoreProjectGetIntentBoost},
+		{name: "path", entry: entry, terms: searchTermsFromWords("project", "path"), want: scoreProjectGetIntentBoost},
+		{name: "id", entry: entry, terms: searchTermsFromWords("project", "id"), want: scoreProjectGetIntentBoost},
+		{name: "project alone", entry: entry, terms: searchTermsFromWords("project"), want: 0},
+		{name: "a disambiguator without the project noun", entry: entry, terms: searchTermsFromWords("show"), want: 0},
 		{
 			name:  "the project domain with another action",
 			entry: scoringEntry("project.list", "project", "list"),
-			terms: plainSearchTerms("project", "show"),
+			terms: searchTermsFromWords("project", "show"),
 			want:  0,
 		},
 	}
@@ -9290,7 +9277,7 @@ func TestScoreProjectGetIntentValue_EachDisambiguatorAlone(t *testing.T) {
 func TestScoreSearchProjectsIntentValue_ConcreteNeedleSumsThreeBoosts(t *testing.T) {
 	entry := scoringEntry("search.projects", "search", "projects")
 
-	got := scoreSearchProjectsIntentValue(entry, plainSearchTerms("search", "projects", "platform"))
+	got := scoreSearchProjectsIntentValue(entry, searchTermsFromWords("search", "projects", "platform"))
 	want := scoreSearchProjectsBoost + scoreProjectGetIntentBoost + scoreCompoundTagBoost
 	if got != want {
 		t.Fatalf("scoreSearchProjectsIntentValue(concrete needle) = %d, want %d", got, want)
@@ -9306,14 +9293,14 @@ func TestSearchProjectsQueryHasConcreteNeedle_GenericWordsAlone(t *testing.T) {
 
 	for _, word := range generic {
 		t.Run(word, func(t *testing.T) {
-			if searchProjectsQueryHasConcreteNeedle(plainSearchTerms(word)) {
+			if searchProjectsQueryHasConcreteNeedle(searchTermsFromWords(word)) {
 				t.Fatalf("searchProjectsQueryHasConcreteNeedle(%q) = true, want false", word)
 			}
 		})
 	}
 
 	t.Run("all of them together", func(t *testing.T) {
-		if searchProjectsQueryHasConcreteNeedle(plainSearchTerms(generic...)) {
+		if searchProjectsQueryHasConcreteNeedle(searchTermsFromWords(generic...)) {
 			t.Fatal("searchProjectsQueryHasConcreteNeedle(generic) = true, want false")
 		}
 	})
@@ -9325,7 +9312,7 @@ func TestSearchProjectsQueryHasConcreteNeedle_GenericWordsAlone(t *testing.T) {
 	})
 
 	t.Run("a name among the generic words", func(t *testing.T) {
-		if !searchProjectsQueryHasConcreteNeedle(plainSearchTerms("search", "projects", "platform")) {
+		if !searchProjectsQueryHasConcreteNeedle(searchTermsFromWords("search", "projects", "platform")) {
 			t.Fatal("searchProjectsQueryHasConcreteNeedle(named project) = false, want true")
 		}
 	})
@@ -9344,7 +9331,7 @@ func TestScoreActionSpecificity_PenalizesOnlyUnmatchedMultiWordActions(t *testin
 	singleWord := scoringEntry("project.get", "project", "get")
 
 	t.Run("two of three action words unmatched", func(t *testing.T) {
-		terms := plainSearchTerms("list")
+		terms := searchTermsFromWords("list")
 		want := 2 * scoreUnmatchedActionWord
 		if got := scoreActionSpecificityValue(multiWord, terms); got != want {
 			t.Fatalf("scoreActionSpecificityValue() = %d, want %d", got, want)
@@ -9359,14 +9346,14 @@ func TestScoreActionSpecificity_PenalizesOnlyUnmatchedMultiWordActions(t *testin
 	})
 
 	t.Run("one of three action words unmatched", func(t *testing.T) {
-		terms := plainSearchTerms("service", "account")
+		terms := searchTermsFromWords("service", "account")
 		if got := scoreActionSpecificityValue(multiWord, terms); got != scoreUnmatchedActionWord {
 			t.Fatalf("scoreActionSpecificityValue() = %d, want %d", got, scoreUnmatchedActionWord)
 		}
 	})
 
 	t.Run("every action word matched", func(t *testing.T) {
-		terms := plainSearchTerms("service", "account", "list")
+		terms := searchTermsFromWords("service", "account", "list")
 		if got := scoreActionSpecificityValue(multiWord, terms); got != 0 {
 			t.Fatalf("scoreActionSpecificityValue() = %d, want 0", got)
 		}
@@ -9377,7 +9364,7 @@ func TestScoreActionSpecificity_PenalizesOnlyUnmatchedMultiWordActions(t *testin
 	})
 
 	t.Run("a single-word action is never penalized", func(t *testing.T) {
-		terms := plainSearchTerms("issue")
+		terms := searchTermsFromWords("issue")
 		if got := scoreActionSpecificityValue(singleWord, terms); got != 0 {
 			t.Fatalf("scoreActionSpecificityValue() = %d, want 0", got)
 		}
@@ -9433,13 +9420,13 @@ func TestQueryVerbIntent_HighestPrecedenceWins(t *testing.T) {
 		terms []searchTerm
 		want  verbIntent
 	}{
-		{name: "one read verb", terms: plainSearchTerms("get"), want: verbIntentRead},
-		{name: "one write verb", terms: plainSearchTerms("create"), want: verbIntentWrite},
-		{name: "read then destructive", terms: plainSearchTerms("get", "delete"), want: verbIntentDestructive},
-		{name: "destructive then read", terms: plainSearchTerms("delete", "get"), want: verbIntentDestructive},
-		{name: "destructive outranks diagnostic", terms: plainSearchTerms("log", "delete"), want: verbIntentDestructive},
-		{name: "workflow outranks write", terms: plainSearchTerms("update", "retry"), want: verbIntentWorkflow},
-		{name: "no verb at all", terms: plainSearchTerms("pipeline", "project"), want: ""},
+		{name: "one read verb", terms: searchTermsFromWords("get"), want: verbIntentRead},
+		{name: "one write verb", terms: searchTermsFromWords("create"), want: verbIntentWrite},
+		{name: "read then destructive", terms: searchTermsFromWords("get", "delete"), want: verbIntentDestructive},
+		{name: "destructive then read", terms: searchTermsFromWords("delete", "get"), want: verbIntentDestructive},
+		{name: "destructive outranks diagnostic", terms: searchTermsFromWords("log", "delete"), want: verbIntentDestructive},
+		{name: "workflow outranks write", terms: searchTermsFromWords("update", "retry"), want: verbIntentWorkflow},
+		{name: "no verb at all", terms: searchTermsFromWords("pipeline", "project"), want: ""},
 		{name: "no terms", terms: nil, want: ""},
 	}
 
