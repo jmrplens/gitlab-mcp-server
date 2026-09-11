@@ -587,7 +587,9 @@ func TestFormatIssue_Markdown(t *testing.T) {
 		"Issue #5: Bug report", "opened",
 		"**Labels**: bug, critical", "@dev1",
 		"**Milestone**: v1.0", "**Due Date**: 1 Mar 2026",
-		mdDescriptionHdr, "Something is broken",
+		// The issue card writes the description as a labeled row rather than
+		// under a section heading of its own.
+		"- **Description**: Something is broken",
 	}
 	for _, c := range checks {
 		t.Run(c, func(t *testing.T) {

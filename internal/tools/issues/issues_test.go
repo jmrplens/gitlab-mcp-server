@@ -1514,8 +1514,6 @@ const (
 	testDueDateCov = "2026-06-01"
 	// testCreatedAtCov identifies the test created at cov constant used by this package.
 	testCreatedAtCov = "2026-01-01T00:00:00Z"
-	// testNoIssuesFound identifies the test no issues found constant used by this package.
-	testNoIssuesFound = "No issues found"
 	// testCreatedAfterCov identifies the test created after cov constant used by this package.
 	testCreatedAfterCov = "2026-01-01T00:00:00Z"
 	// testCreatedBeforeCov identifies the test created before cov constant used by this package.
@@ -1526,7 +1524,16 @@ const (
 // Format*Markdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_Populated verifies FormatMarkdown when populated.
+// issueCardHints is the guidance section every issue card closes with, named
+// once so the whole-output expectations below stay readable.
+const issueCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'issue.note_list' to see comments on this issue\n" +
+	"- Use action 'issue.update' to change title, labels, assignees, or milestone\n" +
+	"- Use action 'issue.mrs_related' to find linked MRs\n"
+
+// TestFormatMarkdown_Populated checks the whole card of a populated issue: the
+// heading with the state glyph and the confidential marker, the rows in order,
+// every handle with its "@", and the guidance section naming canonical actions.
 func TestFormatMarkdown_Populated(t *testing.T) {
 	md := FormatMarkdown(Output{
 		IID: 10, Title: "Big Bug", State: "opened",
@@ -1539,37 +1546,63 @@ func TestFormatMarkdown_Populated(t *testing.T) {
 		TaskCompletionStatus: &toolutil.TaskCompletionStatusOutput{CompletedCount: 3, Count: 5},
 		UserNotesCount:       7,
 	})
-	for _, want := range []string{
-		"Big Bug", "opened", "@alice", "@bob", "@carol",
-		"bug", "critical", "v1.0", "1 Jun 2026", "Confidential",
-		"Details here", "https://gitlab.example.com/issue/10",
-		"Tasks", "3/5", "Comments", "7",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatMarkdown missing %q", want)
-			}
-		})
+	want := "## 🟢 Issue #10: Big Bug 🔒\n\n" +
+		"- **State**: 🟢 opened\n" +
+		"- 🔒 **Confidential**\n" +
+		"- **Author**: @alice\n" +
+		"- **Labels**: bug, critical\n" +
+		"- **Assignees**: @bob, @carol\n" +
+		"- **Milestone**: v1.0\n" +
+		"- **Due Date**: 1 Jun 2026\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Tasks**: 3/5 completed\n" +
+		"- **Comments**: 7\n" +
+		"- **URL**: [https://gitlab.example.com/issue/10](https://gitlab.example.com/issue/10)\n" +
+		"- **Description**: Details here\n" +
+		issueCardHints
+	if md != want {
+		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatMarkdown_LinkedMRCount verifies linked merge request counts are rendered.
+// TestFormatMarkdown_LinkedMRCount checks the whole card of an issue whose only
+// extra value is its linked merge request count.
 func TestFormatMarkdown_LinkedMRCount(t *testing.T) {
-	md := FormatMarkdown(Output{IID: 10, Title: "Linked", MergeRequestCount: 2})
-	if !strings.Contains(md, "Linked MRs") || !strings.Contains(md, "2") {
-		t.Fatalf("FormatMarkdown() = %q, want linked MR count", md)
+	want := "## ❓ Issue #10: Linked\n\n" +
+		"- **Linked MRs**: 2\n" +
+		issueCardHints
+	if got := FormatMarkdown(Output{IID: 10, Title: "Linked", MergeRequestCount: 2}); got != want {
+		t.Errorf("FormatMarkdown(linked MRs)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatMarkdown_Empty verifies FormatMarkdown when empty.
+// TestFormatMarkdown_Empty checks that an issue with nothing in it renders the
+// heading and the guidance section alone: an absent value writes nothing, so no
+// label stands with nothing after it and no "@" stands with no handle.
 func TestFormatMarkdown_Empty(t *testing.T) {
-	md := FormatMarkdown(Output{})
-	if md == "" {
-		t.Error("FormatMarkdown returned empty string for zero Output")
+	// The heading keeps the space before the empty title; the trailing space is
+	// trimmed on the way out by NormalizeResultMarkdown, which the registered
+	// result formatter passes through and this raw string does not.
+	want := "## ❓ Issue #0: \n" + issueCardHints
+	if got := FormatMarkdown(Output{}); got != want {
+		t.Errorf("FormatMarkdown(zero)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Populated verifies FormatListMarkdown when populated.
+// issueListHints is the guidance section the project issue list closes with.
+const issueListHints = "\n---\n💡 **Next steps:**\n" +
+	"- " + toolutil.HintPreserveLinks + "\n" +
+	"- Use action 'issue.get' to see one issue's full details and description\n" +
+	"- Use action 'issue.create' to create a new issue\n" +
+	"- Use action 'issue.note_create' to add a comment\n"
+
+// issueListTableHeader is the header every issue table opens with.
+const issueListTableHeader = "| IID | Title | State | Author | Labels |\n" +
+	"| --- | --- | --- | --- | --- |\n"
+
+// TestFormatListMarkdown_Populated checks the whole rendering of a page of
+// issues: the heading counting the total GitLab sent, one row per issue with
+// the state emoji and the handle, and one guidance section.
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Issues: []Output{
@@ -1578,41 +1611,102 @@ func TestFormatListMarkdown_Populated(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	})
-	for _, want := range []string{"Issue1", "Issue2", "alice", "bob", "#1", "#2"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatListMarkdown missing %q", want)
-			}
-		})
+	want := "## Issues (2)\n\n" +
+		issueListTableHeader +
+		"| #1 | Issue1 | 🟢 opened | @alice | bug |\n" +
+		"| #2 | Issue2 | 🔴 closed | @bob |  |\n" +
+		"\n2 items total\n" +
+		issueListHints
+	if md != want {
+		t.Errorf("FormatListMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatListMarkdown_ClickableIssueLinks verifies that issue IIDs appear
-// as clickable Markdown links when WebURL is present.
+// TestFormatListMarkdown_ClickableIssueLinks checks the whole row of an issue
+// carrying a web address and a confidential flag: the reference is linked, and
+// the marker sits on the title, without which a reader cannot tell a restricted
+// issue from an open one.
 func TestFormatListMarkdown_ClickableIssueLinks(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Issues: []Output{
 			{
 				IID: 42, Title: "Bug", State: "opened", Author: &toolutil.IssueUserOutput{Username: "alice"},
-				WebURL: "https://gitlab.example.com/issues/42",
+				WebURL: "https://gitlab.example.com/issues/42", Confidential: true,
 			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
-	if !strings.Contains(md, "[#42](https://gitlab.example.com/issues/42)") {
-		t.Errorf("expected clickable issue link, got:\n%s", md)
+	want := "## Issues (1)\n\n" +
+		issueListTableHeader +
+		"| [#42](https://gitlab.example.com/issues/42) | Bug 🔒 | 🟢 opened | @alice |  |\n" +
+		"\n1 items total\n" +
+		issueListHints
+	if md != want {
+		t.Errorf("FormatListMarkdown(linked)\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_ReferenceLabelsTheLink checks that the link carries
+// the full reference GitLab renders the issue with when the response sent one,
+// which names the project a cross-project result came from.
+func TestFormatListMarkdown_ReferenceLabelsTheLink(t *testing.T) {
+	md := FormatListMarkdown(ListOutput{
+		Issues: []Output{{
+			IID: 7, Title: "Ref", State: "opened", WebURL: "https://gitlab.example.com/issues/7",
+			References: &toolutil.ReferencesOutput{Full: "group/project#7"},
+		}},
+		Pagination: toolutil.PaginationOutput{TotalItems: 1},
+	})
+	if !strings.Contains(md, "| [group/project#7](https://gitlab.example.com/issues/7) | Ref |") {
+		t.Errorf("the row does not label the link with the full reference:\n%s", md)
+	}
+}
+
+// TestFormatListMarkdown_HostileReference_ClosesNoLink checks what a reference
+// carrying the closing half of a link renders as: the bracket is backslash
+// escaped inside the label, so CommonMark reads the label on to the next
+// unescaped bracket and the destination stays the one this row wrote. The
+// runtime gate's line model counts the inner pair as a link of its own and
+// reports it; the escape is what makes it text.
+func TestFormatListMarkdown_HostileReference_ClosesNoLink(t *testing.T) {
+	md := FormatListMarkdown(ListOutput{
+		Issues: []Output{{
+			IID: 42, Title: "Bug", State: "opened", WebURL: "https://gitlab.example.com/issues/42",
+			References: &toolutil.ReferencesOutput{Full: "x](http://attacker.invalid/y)"},
+		}},
+		Pagination: toolutil.PaginationOutput{TotalItems: 1},
+	})
+	want := `| [x\](http://attacker.invalid/y)](https://gitlab.example.com/issues/42) | Bug |`
+	if !strings.Contains(md, want) {
+		t.Errorf("the reference is not escaped inside the link label:\n%s", md)
+	}
+}
+
+// TestFormatListMarkdown_KeysetHeadingCountsWhatIsShown checks the heading of a
+// keyset page, where GitLab sends no total: it counts the rows and says more
+// are available, rather than printing the zero total as the count.
+func TestFormatListMarkdown_KeysetHeadingCountsWhatIsShown(t *testing.T) {
+	md := FormatListMarkdown(ListOutput{
+		Issues:     []Output{{IID: 1, Title: "Issue1", State: "opened"}},
+		Pagination: toolutil.PaginationOutput{PerPage: 20, HasMore: true},
+	})
+	if first, _, _ := strings.Cut(md, "\n"); first != "## Issues (1 shown, more available)" {
+		t.Errorf("heading = %q, want the count shown with more available", first)
+	}
+}
+
+// TestFormatListMarkdown_Empty checks that an empty page is the one sentence
+// and nothing else: no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, testNoIssuesFound) {
-		t.Error("FormatListMarkdown should say no issues found for empty list")
+	want := "No issues found.\n"
+	if got := FormatListMarkdown(ListOutput{}); got != want {
+		t.Errorf("FormatListMarkdown(empty) = %q, want %q", got, want)
 	}
 }
 
-// TestFormatListGroupMarkdown_Populated verifies FormatListGroupMarkdown when populated.
+// TestFormatListGroupMarkdown_Populated checks the whole rendering of a group's
+// issues: the same table as the project listing under the group's heading and
+// hints, since one renderer writes all three issue listings.
 func TestFormatListGroupMarkdown_Populated(t *testing.T) {
 	md := FormatListGroupMarkdown(ListGroupOutput{
 		Issues: []Output{
@@ -1620,17 +1714,21 @@ func TestFormatListGroupMarkdown_Populated(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
-	for _, want := range []string{"GroupIssue", "carol", "#5", "feat", "Group Issues"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatListGroupMarkdown missing %q", want)
-			}
-		})
+	want := "## Group Issues (1)\n\n" +
+		issueListTableHeader +
+		"| #5 | GroupIssue | 🟢 opened | @carol | feat |\n" +
+		"\n1 items total\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'issue.get' to view one issue in full\n" +
+		"- Use action 'issue.create' to open a new issue\n"
+	if md != want {
+		t.Errorf("FormatListGroupMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatListGroupMarkdown_ClickableLinks verifies that group issue list
-// renders IIDs as clickable Markdown links.
+// TestFormatListGroupMarkdown_ClickableLinks verifies that the group issue list
+// renders the reference as a clickable link.
 func TestFormatListGroupMarkdown_ClickableLinks(t *testing.T) {
 	md := FormatListGroupMarkdown(ListGroupOutput{
 		Issues: []Output{
@@ -1641,48 +1739,92 @@ func TestFormatListGroupMarkdown_ClickableLinks(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
-	if !strings.Contains(md, "[#5](https://gitlab.example.com/issues/5)") {
+	if !strings.Contains(md, "| [#5](https://gitlab.example.com/issues/5) |") {
 		t.Errorf("expected clickable issue link in group list, got:\n%s", md)
 	}
 }
 
 // TestFormatListGroupMarkdown_Empty verifies FormatListGroupMarkdown when empty.
 func TestFormatListGroupMarkdown_Empty(t *testing.T) {
-	md := FormatListGroupMarkdown(ListGroupOutput{})
-	if !strings.Contains(md, testNoIssuesFound) {
-		t.Error("FormatListGroupMarkdown should say no issues found for empty list")
+	want := "No issues found.\n"
+	if got := FormatListGroupMarkdown(ListGroupOutput{}); got != want {
+		t.Errorf("FormatListGroupMarkdown(empty) = %q, want %q", got, want)
 	}
 }
 
-// TestFormatListAllMarkdown_Populated verifies FormatListAllMarkdown when populated.
+// TestFormatListAllMarkdown_Populated checks the whole rendering of the global
+// listing: its own heading and hints, which no reader saw while this formatter
+// shared the project listing's registry key.
 func TestFormatListAllMarkdown_Populated(t *testing.T) {
-	md := FormatListAllMarkdown(ListOutput{
+	md := FormatListAllMarkdown(ListAllOutput{
 		Issues: []Output{
 			{IID: 100, Title: "AllIssue", State: "closed", Author: &toolutil.IssueUserOutput{Username: "dave"}, Labels: []string{"doc"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
-	for _, want := range []string{"AllIssue", "dave", "#100", "doc", "All Issues"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatListAllMarkdown missing %q", want)
-			}
-		})
+	want := "## All Issues (1)\n\n" +
+		issueListTableHeader +
+		"| #100 | AllIssue | 🔴 closed | @dave | doc |\n" +
+		"\n1 items total\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'issue.get' to view one issue in full\n" +
+		"- Use action 'issue.update' to change state or labels\n"
+	if md != want {
+		t.Errorf("FormatListAllMarkdown()\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestListAllOutput_CarriesTheHintSetter checks that the type the global
+// listing answers with still takes the next_steps the meta surface sets: it is
+// defined from ListOutput, so it keeps the embedded hints field and the method
+// promoted from it, and a split that lost either would drop the hints from the
+// structured half of every global listing without failing anything else.
+func TestListAllOutput_CarriesTheHintSetter(t *testing.T) {
+	var out ListAllOutput
+	setter, ok := any(&out).(toolutil.HintSetter)
+	if !ok {
+		t.Fatalf("*ListAllOutput does not implement toolutil.HintSetter")
+	}
+	setter.SetNextSteps([]string{"a hint"})
+	if got := out.NextSteps; len(got) != 1 || got[0] != "a hint" {
+		t.Errorf("NextSteps = %v, want the hint that was set", got)
+	}
+}
+
+// TestFormatListAllMarkdown_ReachesTheRegistry checks that the global listing
+// resolves to its own formatter: the two list actions shared one output type
+// until ListAllOutput, so the registry had one key for the two of them and the
+// global listing rendered under the project listing's heading and hints.
+func TestFormatListAllMarkdown_ReachesTheRegistry(t *testing.T) {
+	result := toolutil.MarkdownForResult(ListAllOutput{
+		Issues:     []Output{{IID: 100, Title: "AllIssue", State: "closed"}},
+		Pagination: toolutil.PaginationOutput{TotalItems: 1},
+	})
+	if result == nil {
+		t.Fatal("MarkdownForResult(ListAllOutput) = nil, want the global listing's formatter")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] = %T, want TextContent", result.Content[0])
+	}
+	if first, _, _ := strings.Cut(text.Text, "\n"); first != "## All Issues (1)" {
+		t.Errorf("heading = %q, want the global listing's own heading", first)
 	}
 }
 
 // TestFormatListAllMarkdown_Empty verifies FormatListAllMarkdown when empty.
 func TestFormatListAllMarkdown_Empty(t *testing.T) {
-	md := FormatListAllMarkdown(ListOutput{})
-	if !strings.Contains(md, testNoIssuesFound) {
-		t.Error("FormatListAllMarkdown should say no issues found for empty list")
+	want := "No issues found.\n"
+	if got := FormatListAllMarkdown(ListAllOutput{}); got != want {
+		t.Errorf("FormatListAllMarkdown(empty) = %q, want %q", got, want)
 	}
 }
 
 // TestFormatListAllMarkdown_ClickableLinks verifies that all-issues list
 // renders IIDs as clickable Markdown links.
 func TestFormatListAllMarkdown_ClickableLinks(t *testing.T) {
-	md := FormatListAllMarkdown(ListOutput{
+	md := FormatListAllMarkdown(ListAllOutput{
 		Issues: []Output{
 			{
 				IID: 100, Title: "AllIssue", State: "closed", Author: &toolutil.IssueUserOutput{Username: "dave"},
@@ -1691,36 +1833,47 @@ func TestFormatListAllMarkdown_ClickableLinks(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
-	if !strings.Contains(md, "[#100](https://gitlab.example.com/issues/100)") {
+	if !strings.Contains(md, "| [#100](https://gitlab.example.com/issues/100) |") {
 		t.Errorf("expected clickable issue link in all-issues list, got:\n%s", md)
 	}
 }
 
-// TestFormatTodoMarkdown_Populated verifies FormatTodoMarkdown when populated.
+// TestFormatTodoMarkdown_Populated checks the whole card of a to-do item.
 func TestFormatTodoMarkdown_Populated(t *testing.T) {
 	md := FormatTodoMarkdown(TodoOutput{
 		ID: 1, ActionName: "marked", TargetType: "Issue",
 		TargetTitle: "Bug fix", TargetURL: "https://gitlab.example.com/todo/1",
 		State: "pending", CreatedAt: testCreatedAtCov,
 	})
-	for _, want := range []string{"Todo #1", "marked", "Issue", "Bug fix", "pending", "1 Jan 2026", "https://gitlab.example.com/todo/1"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatTodoMarkdown missing %q", want)
-			}
-		})
+	want := "## Todo #1\n\n" +
+		"- **Action**: marked\n" +
+		"- **Target Type**: Issue\n" +
+		"- **Target**: Bug fix\n" +
+		"- **State**: pending\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **URL**: [https://gitlab.example.com/todo/1](https://gitlab.example.com/todo/1)\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'user.todo_mark_done' to mark this todo as completed\n" +
+		"- Use action 'issue.get' to view the referenced issue\n"
+	if md != want {
+		t.Errorf("FormatTodoMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatTodoMarkdown_Empty verifies FormatTodoMarkdown when empty.
+// TestFormatTodoMarkdown_Empty checks that a to-do with nothing in it renders
+// the heading and the guidance section alone.
 func TestFormatTodoMarkdown_Empty(t *testing.T) {
-	md := FormatTodoMarkdown(TodoOutput{})
-	if md == "" {
-		t.Error("FormatTodoMarkdown returned empty string for zero value")
+	want := "## Todo #0\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'user.todo_mark_done' to mark this todo as completed\n" +
+		"- Use action 'issue.get' to view the referenced issue\n"
+	if got := FormatTodoMarkdown(TodoOutput{}); got != want {
+		t.Errorf("FormatTodoMarkdown(zero)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatTimeStatsMarkdown_Populated verifies FormatTimeStatsMarkdown when populated.
+// TestFormatTimeStatsMarkdown_Populated checks the whole time-tracking card:
+// the two durations GitLab renders and the two counts of seconds behind them.
 func TestFormatTimeStatsMarkdown_Populated(t *testing.T) {
 	md := FormatTimeStatsMarkdown(TimeStatsOutput{
 		HumanTimeEstimate:   "3h",
@@ -1728,24 +1881,33 @@ func TestFormatTimeStatsMarkdown_Populated(t *testing.T) {
 		TimeEstimate:        10800,
 		TotalTimeSpent:      3600,
 	})
-	for _, want := range []string{"Time Tracking", "3h", "1h", "10800", "3600"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatTimeStatsMarkdown missing %q", want)
-			}
-		})
+	want := "## Time Tracking\n\n" +
+		"- **Estimate**: 3h\n" +
+		"- **Spent**: 1h\n" +
+		"- **Estimate (seconds)**: 10800\n" +
+		"- **Spent (seconds)**: 3600\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.update' to adjust time tracking\n"
+	if md != want {
+		t.Errorf("FormatTimeStatsMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatTimeStatsMarkdown_Empty verifies FormatTimeStatsMarkdown when empty.
+// TestFormatTimeStatsMarkdown_Empty checks the card of an issue nobody tracked
+// time on: the two seconds counts are answers at zero and stay, while the two
+// durations GitLab did not render are absent.
 func TestFormatTimeStatsMarkdown_Empty(t *testing.T) {
-	md := FormatTimeStatsMarkdown(TimeStatsOutput{})
-	if !strings.Contains(md, "Time Tracking") {
-		t.Error("FormatTimeStatsMarkdown should contain heading even for zero value")
+	want := "## Time Tracking\n\n" +
+		"- **Estimate (seconds)**: 0\n" +
+		"- **Spent (seconds)**: 0\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.update' to adjust time tracking\n"
+	if got := FormatTimeStatsMarkdown(TimeStatsOutput{}); got != want {
+		t.Errorf("FormatTimeStatsMarkdown(zero)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatParticipantsMarkdown_Populated verifies FormatParticipantsMarkdown when populated.
+// TestFormatParticipantsMarkdown_Populated checks the whole participants table.
 func TestFormatParticipantsMarkdown_Populated(t *testing.T) {
 	md := FormatParticipantsMarkdown(ParticipantsOutput{
 		Participants: []ParticipantOutput{
@@ -1753,37 +1915,64 @@ func TestFormatParticipantsMarkdown_Populated(t *testing.T) {
 			{ID: 2, Username: "bob", Name: "Bob B"},
 		},
 	})
-	for _, want := range []string{"Participants (2)", "alice", "bob", "Alice A", "Bob B"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatParticipantsMarkdown missing %q", want)
-			}
-		})
+	want := "## Participants (2)\n\n" +
+		"| Username | Name |\n" +
+		"| --- | --- |\n" +
+		"| @alice | Alice A |\n" +
+		"| @bob | Bob B |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.get' to view the issue details\n" +
+		"- Use action 'issue.note_create' to notify participants\n"
+	if md != want {
+		t.Errorf("FormatParticipantsMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
 // TestFormatParticipantsMarkdown_Empty verifies FormatParticipantsMarkdown when empty.
 func TestFormatParticipantsMarkdown_Empty(t *testing.T) {
-	md := FormatParticipantsMarkdown(ParticipantsOutput{})
-	if !strings.Contains(md, "No participants found") {
-		t.Error("FormatParticipantsMarkdown should say no participants for empty output")
+	want := "No participants found.\n"
+	if got := FormatParticipantsMarkdown(ParticipantsOutput{}); got != want {
+		t.Errorf("FormatParticipantsMarkdown(empty) = %q, want %q", got, want)
 	}
 }
 
-// TestFormatRelatedMRsMarkdown_Populated verifies FormatRelatedMRsMarkdown when populated.
+// TestFormatRelatedMRsMarkdown_Populated checks the whole table of the merge
+// requests tied to an issue: the reference linked, the state with the merge
+// request emoji, and the branches in the one column that names both.
 func TestFormatRelatedMRsMarkdown_Populated(t *testing.T) {
 	md := FormatRelatedMRsMarkdown(RelatedMRsOutput{
 		MergeRequests: []RelatedMROutput{
-			{IID: 3, Title: "Fix MR", State: "merged", Author: &toolutil.BasicUserOutput{Username: "carol"}, SourceBranch: "fix", TargetBranch: "main"},
+			{
+				IID: 3, Title: "Fix MR", State: "merged", Author: &toolutil.BasicUserOutput{Username: "carol"},
+				SourceBranch: "fix", TargetBranch: "main", WebURL: "https://gitlab.example.com/mr/3",
+			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}, "Related MRs")
-	for _, want := range []string{"Related MRs", "Fix MR", "merged", "@carol", "fix", "main", "!3"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatRelatedMRsMarkdown missing %q", want)
-			}
-		})
+	want := "## Related MRs (1)\n\n" +
+		"| IID | Title | State | Author | Source -> Target |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| [!3](https://gitlab.example.com/mr/3) | Fix MR | 🟣 merged | @carol | fix -> main |\n" +
+		"\n1 items total\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'merge_request.get' to view one merge request in full\n" +
+		"- Use action 'merge_request.changes_get' to see its diff\n"
+	if md != want {
+		t.Errorf("FormatRelatedMRsMarkdown()\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatRelatedMRsMarkdown_HeadingCountsTheTotal checks that the heading
+// counts what the response reports in all rather than the length of the page,
+// which is what a reader deciding whether to page again reads.
+func TestFormatRelatedMRsMarkdown_HeadingCountsTheTotal(t *testing.T) {
+	md := FormatRelatedMRsMarkdown(RelatedMRsOutput{
+		MergeRequests: []RelatedMROutput{{IID: 1, Title: "A", State: "opened"}, {IID: 2, Title: "B", State: "opened"}},
+		Pagination:    toolutil.PaginationOutput{Page: 1, PerPage: 2, TotalItems: 45, TotalPages: 23, HasMore: true},
+	}, "Related MRs")
+	if first, _, _ := strings.Cut(md, "\n"); first != "## Related MRs (45)" {
+		t.Errorf("heading = %q, want the total the response reports", first)
 	}
 }
 
@@ -1806,25 +1995,28 @@ func TestRelatedMRsMarkdownRegistry(t *testing.T) {
 
 // TestFormatRelatedMRsMarkdown_Empty verifies FormatRelatedMRsMarkdown when empty.
 func TestFormatRelatedMRsMarkdown_Empty(t *testing.T) {
-	md := FormatRelatedMRsMarkdown(RelatedMRsOutput{}, "Closing MRs")
-	if !strings.Contains(md, "No merge requests found") {
-		t.Error("FormatRelatedMRsMarkdown should say no MRs found for empty output")
+	want := "No merge requests found.\n"
+	if got := FormatRelatedMRsMarkdown(RelatedMRsOutput{}, "Closing MRs"); got != want {
+		t.Errorf("FormatRelatedMRsMarkdown(empty) = %q, want %q", got, want)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// prefixAt helper
+// handleList helper
 // ---------------------------------------------------------------------------.
 
-// TestPrefixAt verifies PrefixAt.
-func TestPrefixAt(t *testing.T) {
-	result := prefixAt([]string{"alice", "bob"})
-	if len(result) != 2 || result[0] != "@alice" || result[1] != "@bob" {
-		t.Errorf("prefixAt got %v, want [@alice @bob]", result)
+// TestHandleList checks the "@handle" list a card row shows: each name escaped
+// for the line it lands on, and nothing at all for no names, so a card never
+// shows a bare "@".
+func TestHandleList(t *testing.T) {
+	if got := handleList([]string{"alice", "bob"}); got != "@alice, @bob" {
+		t.Errorf("handleList = %q, want %q", got, "@alice, @bob")
 	}
-	empty := prefixAt([]string{})
-	if len(empty) != 0 {
-		t.Errorf("prefixAt empty got %v, want []", empty)
+	if got := handleList([]string{}); got != "" {
+		t.Errorf("handleList(empty) = %q, want the empty string", got)
+	}
+	if got := handleList([]string{"", "a|b"}); got != "@a&#124;b" {
+		t.Errorf("handleList(hostile) = %q, want the blank dropped and the pipe escaped", got)
 	}
 }
 
@@ -2172,21 +2364,28 @@ func TestFormatMarkdown_ObjectDerivedFields(t *testing.T) {
 		ClosedBy:  &toolutil.IssueUserOutput{Username: "obj-closer"},
 		WebURL:    "https://example.com/7",
 	})
-	for _, want := range []string{"obj-author", "@obj-assignee", "@obj-closer"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatMarkdown missing %q in:\n%s", want, md)
-			}
-		})
+	want := "## 🔴 Issue #7: Objects\n\n" +
+		"- **State**: 🔴 closed\n" +
+		"- **Author**: @obj-author\n" +
+		"- **Assignees**: @obj-assignee\n" +
+		"- **Closed By**: @obj-closer\n" +
+		"- **URL**: [https://example.com/7](https://example.com/7)\n" +
+		issueCardHints
+	if md != want {
+		t.Errorf("FormatMarkdown(objects)\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatMarkdown_ClosedNoCloser verifies a closed issue with a nil ClosedBy
-// object renders without a "Closed By" line (closerName nil branch).
+// TestFormatMarkdown_ClosedNoCloser checks the whole card of a closed issue
+// whose closer object the response omitted: no "Closed By" row at all, rather
+// than a label with an empty handle after it.
 func TestFormatMarkdown_ClosedNoCloser(t *testing.T) {
-	md := FormatMarkdown(Output{IID: 8, Title: "Closed", State: "closed", WebURL: "https://example.com/8"})
-	if strings.Contains(md, "Closed By") {
-		t.Errorf("FormatMarkdown should omit Closed By for nil ClosedBy:\n%s", md)
+	want := "## 🔴 Issue #8: Closed\n\n" +
+		"- **State**: 🔴 closed\n" +
+		"- **URL**: [https://example.com/8](https://example.com/8)\n" +
+		issueCardHints
+	if got := FormatMarkdown(Output{IID: 8, Title: "Closed", State: "closed", WebURL: "https://example.com/8"}); got != want {
+		t.Errorf("FormatMarkdown(no closer)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -3668,22 +3867,24 @@ func TestUnsubscribe_APIError(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_EdgeCases covers References, IssueType, ClosedBy fields.
+// TestFormatGetMarkdown_EdgeCases checks the whole card of a closed incident:
+// the full reference, the type row an ordinary issue omits, the closer's handle
+// and the closing time, each on its own row.
 func TestFormatGetMarkdown_EdgeCases(t *testing.T) {
 	out := Output{
 		IID: 1, Title: "Test", State: "closed",
 		References: &toolutil.ReferencesOutput{Full: "test/project#1"}, IssueType: "incident",
 		ClosedBy: &toolutil.IssueUserOutput{Username: "admin"}, ClosedAt: "2025-01-01T00:00:00Z",
 	}
-	md := FormatMarkdown(out)
-	if !strings.Contains(md, "test/project#1") {
-		t.Error("expected references in output")
-	}
-	if !strings.Contains(md, "incident") {
-		t.Error("expected issue type in output")
-	}
-	if !strings.Contains(md, "admin") {
-		t.Error("expected closed-by in output")
+	want := "## 🔴 Issue #1: Test\n\n" +
+		"- **Reference**: test/project#1\n" +
+		"- **State**: 🔴 closed\n" +
+		"- **Type**: incident\n" +
+		"- **Closed By**: @admin\n" +
+		"- **Closed**: 1 Jan 2025 00:00 UTC\n" +
+		issueCardHints
+	if got := FormatMarkdown(out); got != want {
+		t.Errorf("FormatMarkdown(edge cases)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -4481,15 +4682,11 @@ func TestFormatMarkdown_EmptyOptionalValues_OmitsEveryRow(t *testing.T) {
 		Milestone:            &toolutil.MRMilestoneOutput{ID: 1},
 		TaskCompletionStatus: &toolutil.TaskCompletionStatusOutput{},
 	})
-	for _, absent := range []string{"**Reference**", "**Type**", "**Milestone**", "**Tasks**"} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(rendered, absent) {
-				t.Errorf("%s row rendered for an empty value:\n%s", absent, rendered)
-			}
-		})
-	}
-	if !strings.Contains(rendered, "Issue #10") {
-		t.Errorf("rendered markdown does not carry the issue heading:\n%s", rendered)
+	want := "## 🟢 Issue #10: Test issue\n\n" +
+		"- **State**: 🟢 opened\n" +
+		issueCardHints
+	if rendered != want {
+		t.Errorf("FormatMarkdown(empty optional values)\n got %q\nwant %q", rendered, want)
 	}
 }
 

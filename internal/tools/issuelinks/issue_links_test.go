@@ -12,6 +12,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // errExpMissingProjectID identifies the err exp missing project ID constant used by this package.
@@ -607,31 +608,41 @@ func TestIssueLinkIDNegative_Validation(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_Populated covers FormatOutputMarkdown with table-driven subtests for populated.
+// TestFormatOutputMarkdown_Populated checks the whole card of one issue link:
+// the link's own rows, the two issues as nested objects with their titles
+// linked and the confidential marker one of them carries, and the guidance
+// section naming the canonical action.
 func TestFormatOutputMarkdown_Populated(t *testing.T) {
 	out := Output{
-		ID:          42,
-		SourceIssue: &IssueRefOutput{IID: 5, ProjectID: 10},
-		TargetIssue: &IssueRefOutput{IID: 8, ProjectID: 20},
-		LinkType:    "blocks",
+		ID: 42,
+		SourceIssue: &IssueRefOutput{
+			IID: 5, ProjectID: 10, Title: "Source", State: "opened",
+			WebURL: "https://gitlab.example.com/g/p/-/issues/5",
+		},
+		TargetIssue: &IssueRefOutput{
+			IID: 8, ProjectID: 20, Title: "Target", State: "closed",
+			WebURL: "https://gitlab.example.com/g/p/-/issues/8", Confidential: true,
+		},
+		LinkType: "blocks",
 	}
-	md := FormatOutputMarkdown(out)
-
-	checks := []struct {
-		label, want string
-	}{
-		{"header", "## Issue Link"},
-		{"id", "**ID**: 42"},
-		{"link type", "**Link Type**: blocks"},
-		{"source", "**Source Issue**: IID 5 (project 10)"},
-		{"target", "**Target Issue**: IID 8 (project 20)"},
-	}
-	for _, c := range checks {
-		t.Run(c.label, func(t *testing.T) {
-			if !strings.Contains(md, c.want) {
-				t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
-			}
-		})
+	want := "## Issue Link\n\n" +
+		"- **ID**: 42\n" +
+		"- **Link Type**: blocks\n" +
+		"- **Source Issue**:\n" +
+		"  - **IID**: 5\n" +
+		"  - **Project ID**: 10\n" +
+		"  - **Title**: [Source](https://gitlab.example.com/g/p/-/issues/5)\n" +
+		"  - **State**: 🟢 opened\n" +
+		"- **Target Issue**:\n" +
+		"  - **IID**: 8\n" +
+		"  - **Project ID**: 20\n" +
+		"  - **Title**: [Target](https://gitlab.example.com/g/p/-/issues/8)\n" +
+		"  - **State**: 🔴 closed\n" +
+		"  - 🔒 **Confidential**\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.link_list' to see all links for this issue\n"
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("FormatOutputMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -643,15 +654,19 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NilIssueObjects verifies the issueRefLine placeholder
-// is rendered when the source/target issue objects are absent.
+// TestFormatOutputMarkdown_NilIssueObjects checks the whole card of a link
+// whose two issue objects the response omitted: each side says so on its own
+// row rather than opening a nested object with nothing under it.
 func TestFormatOutputMarkdown_NilIssueObjects(t *testing.T) {
-	md := FormatOutputMarkdown(Output{ID: 7, LinkType: "relates_to"})
-	if !strings.Contains(md, "**Source Issue**: (not available)") {
-		t.Errorf("expected source placeholder, got:\n%s", md)
-	}
-	if !strings.Contains(md, "**Target Issue**: (not available)") {
-		t.Errorf("expected target placeholder, got:\n%s", md)
+	want := "## Issue Link\n\n" +
+		"- **ID**: 7\n" +
+		"- **Link Type**: relates_to\n" +
+		"- **Source Issue**: (not available)\n" +
+		"- **Target Issue**: (not available)\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.link_list' to see all links for this issue\n"
+	if got := FormatOutputMarkdown(Output{ID: 7, LinkType: "relates_to"}); got != want {
+		t.Errorf("FormatOutputMarkdown(nil issues)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -659,40 +674,42 @@ func TestFormatOutputMarkdown_NilIssueObjects(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Populated covers FormatListMarkdown with table-driven subtests for populated.
+// TestFormatListMarkdown_Populated checks the whole rendering of the related
+// issues: the heading, the header row, one row per relation with the state
+// emoji and the confidential marker, and the guidance section.
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	out := ListOutput{
 		Relations: []RelationOutput{
-			{ID: 100, IID: 8, Title: "Related issue", State: "opened", LinkType: "relates_to", IssueLinkID: 1},
-			{ID: 200, IID: 9, Title: "Blocking issue", State: "closed", LinkType: "blocks", IssueLinkID: 2},
+			{
+				ID: 100, IID: 8, Title: "Related issue", State: "opened", LinkType: "relates_to",
+				IssueLinkID: 1, WebURL: "https://gitlab.example.com/g/p/-/issues/8",
+				Author: &UserOutput{Username: "alice"},
+			},
+			{
+				ID: 200, IID: 9, Title: "Blocking issue", State: "closed", LinkType: "blocks",
+				IssueLinkID: 2, WebURL: "https://gitlab.example.com/g/p/-/issues/9", Confidential: true,
+			},
 		},
 	}
-	md := FormatListMarkdown(out)
-
-	checks := []struct {
-		label, want string
-	}{
-		{"header", "## Issue Relations (2)"},
-		{"table header", "| ID | IID | Title | State | Link Type | Link ID |"},
-		{"row1 id", "| 100 |"},
-		{"row1 title", "Related issue"},
-		{"row2 id", "| 200 |"},
-		{"row2 link type", "blocks"},
-	}
-	for _, c := range checks {
-		t.Run(c.label, func(t *testing.T) {
-			if !strings.Contains(md, c.want) {
-				t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
-			}
-		})
+	want := "## Issue Relations (2)\n\n" +
+		"| ID | IID | Title | State | Link Type | Link ID | Author |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| 100 | 8 | [Related issue](https://gitlab.example.com/g/p/-/issues/8) | 🟢 opened | relates_to | 1 | @alice |\n" +
+		"| 200 | 9 | [Blocking issue](https://gitlab.example.com/g/p/-/issues/9) 🔒 | 🔴 closed | blocks | 2 |  |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'issue.link_create' to add a new link between issues\n"
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("FormatListMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty checks that an empty list is the one sentence
+// and nothing else: no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No linked issues found") {
-		t.Errorf("expected empty-state message, got:\n%s", md)
+	want := "No linked issues found.\n"
+	if got := FormatListMarkdown(ListOutput{}); got != want {
+		t.Errorf("FormatListMarkdown(empty) = %q, want %q", got, want)
 	}
 }
 

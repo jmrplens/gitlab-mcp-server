@@ -1100,52 +1100,54 @@ func TestNormalizeState(t *testing.T) {
 // Markdown formatters
 // --------------------------------------------------------------------------
 
-// TestFormatListMarkdown uses table-driven subtests to verify that FormatListMarkdown renders a table for populated inputs and an empty-state message otherwise.
+// TestFormatListMarkdown checks the whole rendering of an epic's issues and of
+// an epic with none: the ID column the assign and remove actions take, the
+// linked reference the preserve-links hint is about, the state emoji, and the
+// cursor line separated from the last row by a blank line.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    ListOutput
-		contains []string
-		excludes []string
+		name  string
+		input ListOutput
+		want  string
 	}{
 		{
 			name: "renders issues table with labels",
 			input: ListOutput{
 				Issues: []ChildOutput{
-					{IID: 10, Title: "Fix login bug", State: "opened", Author: "alice", Labels: []string{"bug", "critical"}, CreatedAt: "2026-01-15T10:00:00Z"},
-					{IID: 20, Title: "Add feature", State: "closed", Author: "bob", CreatedAt: "2026-02-01T12:00:00Z"},
+					{
+						ID: "gid://gitlab/Issue/1", IID: 10, Title: "Fix login bug", State: "opened",
+						Author: "alice", Labels: []string{"bug", "critical"}, CreatedAt: "2026-01-15T10:00:00Z",
+						WebURL: "https://gitlab.example.com/g/p/-/issues/10",
+					},
+					{
+						ID: "gid://gitlab/Issue/2", IID: 20, Title: "Add feature", State: "closed",
+						Author: "bob", CreatedAt: "2026-02-01T12:00:00Z",
+					},
 				},
+				Pagination: toolutil.GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cursor1"},
 			},
-			contains: []string{
-				"## Epic Issues (2)",
-				"| IID | Title | State | Author | Labels | Created |",
-				"#10", "Fix login bug", "opened", "alice", "bug, critical",
-				"#20", "Add feature", "closed", "bob",
-			},
+			want: "## Epic Issues (2)\n\n" +
+				"| ID | IID | Title | State | Author | Labels | Created |\n" +
+				"| --- | --- | --- | --- | --- | --- | --- |\n" +
+				"| `gid://gitlab/Issue/1` | [#10](https://gitlab.example.com/g/p/-/issues/10) | Fix login bug | 🟢 opened | @alice | bug, critical | 15 Jan 2026 10:00 UTC |\n" +
+				"| `gid://gitlab/Issue/2` | #20 | Add feature | 🔴 closed | @bob |  | 1 Feb 2026 12:00 UTC |\n" +
+				"\n" + toolutil.FormatGraphQLPagination(toolutil.GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cursor1"}, 2) + "\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- " + toolutil.HintPreserveLinks + "\n" +
+				"- Use action 'group.epic_issue_assign' to add an issue to this epic\n" +
+				"- Use action 'group.epic_issue_remove' to unlink an issue from this epic\n",
 		},
 		{
 			name:  "renders empty list message",
 			input: ListOutput{Issues: nil},
-			contains: []string{
-				"## Epic Issues",
-				"No issues found in this epic",
-			},
-			excludes: []string{"| IID |"},
+			want:  "No issues in this epic found.\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			md := FormatListMarkdown(tt.input)
-			for _, s := range tt.contains {
-				if !strings.Contains(md, s) {
-					t.Errorf("missing %q in:\n%s", s, md)
-				}
-			}
-			for _, s := range tt.excludes {
-				if strings.Contains(md, s) {
-					t.Errorf("unexpected %q in:\n%s", s, md)
-				}
+			if got := FormatListMarkdown(tt.input); got != tt.want {
+				t.Errorf("FormatListMarkdown()\n got %q\nwant %q", got, tt.want)
 			}
 		})
 	}
@@ -1155,39 +1157,46 @@ func TestFormatListMarkdown(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatAssignMarkdown(t *testing.T) {
+	hints := "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'group.epic_issue_list' to view all issues in the epic\n" +
+		"- Use action 'group.epic_issue_remove' to unlink an issue from the epic\n"
 	tests := []struct {
-		name     string
-		out      AssignOutput
-		action   string
-		contains []string
+		name   string
+		out    AssignOutput
+		action string
+		want   string
 	}{
 		{
-			name:     "renders assigned action",
-			out:      AssignOutput{EpicGID: "gid://gitlab/WorkItem/1", ChildGID: "gid://gitlab/WorkItem/10"},
-			action:   "assigned",
-			contains: []string{"## Epic Issue assigned", "gid://gitlab/WorkItem/1", "gid://gitlab/WorkItem/10"},
+			name:   "renders assigned action",
+			out:    AssignOutput{EpicGID: "gid://gitlab/WorkItem/1", ChildGID: "gid://gitlab/WorkItem/10"},
+			action: "assigned",
+			want: "## Epic Issue assigned\n\n" +
+				"- **Epic**: `gid://gitlab/WorkItem/1`\n" +
+				"- **Issue**: `gid://gitlab/WorkItem/10`\n" + hints,
 		},
 		{
-			name:     "renders removed action",
-			out:      AssignOutput{EpicGID: "gid://gitlab/WorkItem/1", ChildGID: "gid://gitlab/WorkItem/10"},
-			action:   "removed",
-			contains: []string{"## Epic Issue removed", "gid://gitlab/WorkItem/1", "gid://gitlab/WorkItem/10"},
+			name:   "renders removed action",
+			out:    AssignOutput{EpicGID: "gid://gitlab/WorkItem/1", ChildGID: "gid://gitlab/WorkItem/10"},
+			action: "removed",
+			want: "## Epic Issue removed\n\n" +
+				"- **Epic**: `gid://gitlab/WorkItem/1`\n" +
+				"- **Issue**: `gid://gitlab/WorkItem/10`\n" + hints,
 		},
 		{
-			name:     "handles empty GIDs",
-			out:      AssignOutput{},
-			action:   "assigned",
-			contains: []string{"## Epic Issue assigned"},
+			// An absent value writes nothing: the heading and the guidance
+			// section stand alone rather than showing a label with an empty
+			// code span after it.
+			name:   "handles empty GIDs",
+			out:    AssignOutput{},
+			action: "assigned",
+			want:   "## Epic Issue assigned\n" + hints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			md := FormatAssignMarkdown(tt.out, tt.action)
-			for _, s := range tt.contains {
-				if !strings.Contains(md, s) {
-					t.Errorf("missing %q in:\n%s", s, md)
-				}
+			if got := FormatAssignMarkdown(tt.out, tt.action); got != tt.want {
+				t.Errorf("FormatAssignMarkdown()\n got %q\nwant %q", got, tt.want)
 			}
 		})
 	}

@@ -757,8 +757,6 @@ const (
 	testLabelUrgent = "urgent"
 	// testWorkItemURL identifies the test work item URL constant used by this package.
 	testWorkItemURL = "https://gitlab.example.com/-/work_items/42"
-	// testSectionDesc identifies the test section desc constant used by this package.
-	testSectionDesc = "### Description"
 	// fmtDescWant identifies the fmt desc want constant used by this package.
 	fmtDescWant = "Description = %q"
 	// testTitleNewItem identifies the test title new item constant used by this package.
@@ -982,7 +980,10 @@ func TestWorkItemToItem_EmptyAssigneesAndLabelsSlices(t *testing.T) {
 // FormatGetMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_FullPopulated verifies FormatGetMarkdown when full populated.
+// TestFormatGetMarkdown_FullPopulated checks the whole card of a populated work
+// item: the rows in order, the handles with their "@", the state with the emoji
+// the shared table gives its REST spelling, the one-line description on the
+// field's own row, and the guidance section naming the canonical action.
 func TestFormatGetMarkdown_FullPopulated(t *testing.T) {
 	out := GetOutput{WorkItem: WorkItemItem{
 		IID:         42,
@@ -995,35 +996,25 @@ func TestFormatGetMarkdown_FullPopulated(t *testing.T) {
 		WebURL:      "https://gitlab.example.com/work_items/42",
 		Description: "A very detailed description.",
 	}}
-	result := FormatGetMarkdown(out)
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := extractText(t, result)
-	expects := []string{
-		"## Work Item #42: Full WI",
-		"**Type**: Task",
-		"**State**: OPEN",
-		"**Author**: alice",
-		"**Assignees**: bob, carol",
-		"**Labels**: bug, urgent",
-		// The URL line is now the shared clickable one, as every other domain
-		// writes it.
-		"**URL**: [https://gitlab.example.com/work_items/42](https://gitlab.example.com/work_items/42)",
-		testSectionDesc,
-		"A very detailed description.",
-	}
-	for _, s := range expects {
-		t.Run(s, func(t *testing.T) {
-			if !strings.Contains(text, s) {
-				t.Errorf("missing %q in output:\n%s", s, text)
-			}
-		})
+	want := "## Work Item #42: Full WI\n\n" +
+		"- **Type**: Task\n" +
+		"- **State**: 🟢 OPEN\n" +
+		"- **Author**: @alice\n" +
+		"- **Assignees**: @bob, @carol\n" +
+		"- **Labels**: bug, urgent\n" +
+		"- **URL**: [https://gitlab.example.com/work_items/42](https://gitlab.example.com/work_items/42)\n" +
+		"- **Description**: A very detailed description.\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.work_item_update' to modify this work item\n"
+	if got := extractText(t, FormatGetMarkdown(out)); got != want {
+		t.Errorf("FormatGetMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatGetMarkdown_Children verifies the Get markdown renders a Children
-// table when the work item has hierarchy children.
+// TestFormatGetMarkdown_Children checks the whole card of a work item whose
+// hierarchy children are a nested collection: the table opens under its own
+// heading after a blank line and its rows carry no sigil, since a child may be
+// an epic or an issue and the query does not say which.
 func TestFormatGetMarkdown_Children(t *testing.T) {
 	out := GetOutput{WorkItem: WorkItemItem{
 		IID:   42,
@@ -1035,129 +1026,112 @@ func TestFormatGetMarkdown_Children(t *testing.T) {
 			{IID: 21, Path: "my-group/child-b"},
 		},
 	}}
-	result := FormatGetMarkdown(out)
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
+	want := "## Work Item #42: Parent WI\n\n" +
+		"- **Type**: Task\n" +
+		"- **State**: 🟢 OPEN\n" +
+		"\n### Children\n\n" +
+		"| IID | Path |\n" +
+		"| --- | --- |\n" +
+		"| 20 | my-group/child-a |\n" +
+		"| 21 | my-group/child-b |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.work_item_update' to modify this work item\n"
+	if got := extractText(t, FormatGetMarkdown(out)); got != want {
+		t.Errorf("FormatGetMarkdown(children)\n got %q\nwant %q", got, want)
 	}
-	text := extractText(t, result)
-	for _, s := range []string{"### Children", "| 20 | my-group/child-a |", "| 21 | my-group/child-b |"} {
-		t.Run(s, func(t *testing.T) {
-			if !strings.Contains(text, s) {
-				t.Errorf("missing %q in output:\n%s", s, text)
+}
+
+// TestFormatGetMarkdown_Empty checks that a work item with nothing in it
+// renders the heading and the guidance section alone: an absent value writes
+// nothing, so no label stands with nothing after it.
+func TestFormatGetMarkdown_Empty(t *testing.T) {
+	// The trailing space of the empty title is trimmed on the way out by
+	// NormalizeResultMarkdown, which every rendered response passes through.
+	want := "## Work Item #0:\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.work_item_update' to modify this work item\n"
+	if got := extractText(t, FormatGetMarkdown(GetOutput{WorkItem: WorkItemItem{}})); got != want {
+		t.Errorf("FormatGetMarkdown(zero)\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestFormatGetMarkdown_OneFieldAtATime checks the whole card of a work item
+// carrying exactly one optional value, one case per value: what is present is
+// on its row and nothing else is written at all.
+func TestFormatGetMarkdown_OneFieldAtATime(t *testing.T) {
+	head := func(title string) string {
+		return "## Work Item #1: " + title + "\n\n- **Type**: Issue\n- **State**: 🟢 OPEN\n"
+	}
+	hints := "\n---\n💡 **Next steps:**\n- Use action 'issue.work_item_update' to modify this work item\n"
+	cases := []struct {
+		name string
+		item WorkItemItem
+		want string
+	}{
+		{
+			name: "author",
+			item: WorkItemItem{IID: 1, Title: "Simple", Type: testTypeIssue, State: testStateOpen, Author: namedUser(testAuthorDev)},
+			want: head("Simple") + "- **Author**: @dev\n" + hints,
+		},
+		{
+			name: "assignees",
+			item: WorkItemItem{IID: 1, Title: "Assigned", Type: testTypeIssue, State: testStateOpen, Assignees: namedUsers(testAuthorAlice)},
+			want: head("Assigned") + "- **Assignees**: @alice\n" + hints,
+		},
+		{
+			name: "labels",
+			item: WorkItemItem{IID: 1, Title: "Labeled", Type: testTypeIssue, State: testStateOpen, Labels: namedLabels("feature")},
+			want: head("Labeled") + "- **Labels**: feature\n" + hints,
+		},
+		{
+			name: "web url",
+			item: WorkItemItem{IID: 1, Title: "URL only", Type: testTypeIssue, State: testStateOpen, WebURL: "https://example.com/wi/1"},
+			want: head("URL only") + "- **URL**: [https://example.com/wi/1](https://example.com/wi/1)\n" + hints,
+		},
+		{
+			name: "description",
+			item: WorkItemItem{IID: 1, Title: "With desc", Type: testTypeIssue, State: testStateOpen, Description: "My description"},
+			want: head("With desc") + "- **Description**: My description\n" + hints,
+		},
+		{
+			name: "status",
+			item: WorkItemItem{IID: 1, Title: "Status item", Type: testTypeIssue, State: testStateOpen, Status: "IN_PROGRESS"},
+			want: head("Status item") + "- **Status**: IN_PROGRESS\n" + hints,
+		},
+		{
+			name: "confidential",
+			item: WorkItemItem{IID: 1, Title: "Secret", Type: testTypeIssue, State: testStateOpen, Confidential: true},
+			want: head("Secret") + "- 🔒 **Confidential**\n" + hints,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := extractText(t, FormatGetMarkdown(GetOutput{WorkItem: tc.item})); got != tc.want {
+				t.Errorf("FormatGetMarkdown(%s)\n got %q\nwant %q", tc.name, got, tc.want)
 			}
 		})
 	}
 }
 
-// TestFormatGetMarkdown_Empty verifies FormatGetMarkdown when empty.
-func TestFormatGetMarkdown_Empty(t *testing.T) {
-	out := GetOutput{WorkItem: WorkItemItem{}}
-	result := FormatGetMarkdown(out)
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := extractText(t, result)
-	// Should NOT contain optional sections
-	if strings.Contains(text, "**Author**") {
-		t.Error("unexpected Author in empty output")
-	}
-	if strings.Contains(text, "**Assignees**") {
-		t.Error("unexpected Assignees in empty output")
-	}
-	if strings.Contains(text, "**Labels**") {
-		t.Error("unexpected Labels in empty output")
-	}
-	if strings.Contains(text, "**URL**") {
-		t.Error("unexpected URL in empty output")
-	}
-	if strings.Contains(text, testSectionDesc) {
-		t.Error("unexpected Description in empty output")
-	}
-}
-
-// TestFormatGetMarkdown_OnlyAuthor verifies FormatGetMarkdown when only author.
-func TestFormatGetMarkdown_OnlyAuthor(t *testing.T) {
-	out := GetOutput{WorkItem: WorkItemItem{
-		IID:    1,
-		Title:  "Simple",
-		Type:   testTypeIssue,
-		State:  testStateClosed,
-		Author: namedUser(testAuthorDev),
-	}}
-	result := FormatGetMarkdown(out)
-	text := extractText(t, result)
-	if !strings.Contains(text, "**Author**: dev") {
-		t.Errorf("missing author in output: %s", text)
-	}
-	if strings.Contains(text, "**Assignees**") {
-		t.Error("unexpected Assignees")
-	}
-}
-
-// TestFormatGetMarkdown_OnlyAssignees verifies FormatGetMarkdown when only assignees.
-func TestFormatGetMarkdown_OnlyAssignees(t *testing.T) {
-	out := GetOutput{WorkItem: WorkItemItem{
-		IID:       1,
-		Title:     "Assigned",
-		Type:      testTypeTask,
-		State:     testStateOpen,
-		Assignees: namedUsers(testAuthorAlice),
-	}}
-	result := FormatGetMarkdown(out)
-	text := extractText(t, result)
-	if !strings.Contains(text, "**Assignees**: alice") {
-		t.Errorf("missing assignees: %s", text)
-	}
-}
-
-// TestFormatGetMarkdown_OnlyLabels verifies FormatGetMarkdown when only labels.
-func TestFormatGetMarkdown_OnlyLabels(t *testing.T) {
-	out := GetOutput{WorkItem: WorkItemItem{
-		IID:    1,
-		Title:  "Labeled",
-		Type:   testTypeIssue,
-		State:  testStateOpen,
-		Labels: namedLabels("feature"),
-	}}
-	result := FormatGetMarkdown(out)
-	text := extractText(t, result)
-	if !strings.Contains(text, "**Labels**: feature") {
-		t.Errorf("missing labels: %s", text)
-	}
-}
-
-// TestFormatGetMarkdown_OnlyWebURL verifies FormatGetMarkdown when only web URL.
-func TestFormatGetMarkdown_OnlyWebURL(t *testing.T) {
-	out := GetOutput{WorkItem: WorkItemItem{
-		IID:    1,
-		Title:  "URL only",
-		Type:   testTypeIssue,
-		State:  testStateOpen,
-		WebURL: "https://example.com/wi/1",
-	}}
-	result := FormatGetMarkdown(out)
-	text := extractText(t, result)
-	if !strings.Contains(text, "**URL**: [https://example.com/wi/1](https://example.com/wi/1)") {
-		t.Errorf("missing URL: %s", text)
-	}
-}
-
-// TestFormatGetMarkdown_OnlyDescription verifies FormatGetMarkdown when only description.
-func TestFormatGetMarkdown_OnlyDescription(t *testing.T) {
-	out := GetOutput{WorkItem: WorkItemItem{
-		IID:         1,
-		Title:       "With desc",
-		Type:        testTypeIssue,
-		State:       testStateOpen,
-		Description: "My description",
-	}}
-	result := FormatGetMarkdown(out)
-	text := extractText(t, result)
-	if !strings.Contains(text, testSectionDesc) {
-		t.Errorf("missing Description heading: %s", text)
-	}
-	if !strings.Contains(text, "My description") {
-		t.Errorf("missing description text: %s", text)
+// TestFormatGetMarkdown_MultiLineDescription checks that a description of more
+// than one line becomes a blockquote indented under its label, so nothing a
+// person typed into GitLab can add a row, a heading or a list item to the card.
+func TestFormatGetMarkdown_MultiLineDescription(t *testing.T) {
+	want := "## Work Item #1: Quoted\n\n" +
+		"- **Type**: Issue\n" +
+		"- **State**: 🟢 OPEN\n" +
+		"- **Description**:\n" +
+		"  > First line\n" +
+		"  >\n" +
+		"  > ## not a heading\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.work_item_update' to modify this work item\n"
+	got := extractText(t, FormatGetMarkdown(GetOutput{WorkItem: WorkItemItem{
+		IID: 1, Title: "Quoted", Type: testTypeIssue, State: testStateOpen,
+		Description: "First line\n\n## not a heading",
+	}}))
+	if got != want {
+		t.Errorf("FormatGetMarkdown(multi-line description)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1165,48 +1139,51 @@ func TestFormatGetMarkdown_OnlyDescription(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_MultipleItems verifies FormatListMarkdown when multiple items.
+// TestFormatListMarkdown_MultipleItems checks the whole list rendering: the
+// heading counting what the page holds, one row per item with the state emoji,
+// the handle with its "@" and the confidential marker, and one guidance
+// section.
 func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 	out := ListOutput{WorkItems: []WorkItemItem{
 		{IID: 1, Type: testTypeIssue, State: testStateOpen, Title: "First", Author: namedUser("dev1")},
-		{IID: 2, Type: testTypeTask, State: testStateClosed, Title: "Second", Author: namedUser("dev2")},
+		{IID: 2, Type: testTypeTask, State: testStateClosed, Title: "Second", Author: namedUser("dev2"), Confidential: true},
 		{IID: 3, Type: "Epic", State: testStateOpen, Title: "Third", Author: namedUser("dev3")},
 	}}
-	result := FormatListMarkdown(out)
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := extractText(t, result)
-	if !strings.Contains(text, "## Work Items (3)") {
-		t.Errorf("missing header with count: %s", text)
-	}
-	if !strings.Contains(text, "| 1 | Issue | OPEN |  | First | dev1 |") {
-		t.Errorf("missing row 1: %s", text)
-	}
-	if !strings.Contains(text, "| 2 | Task | CLOSED |  | Second | dev2 |") {
-		t.Errorf("missing row 2: %s", text)
+	want := "## Work Items (3)\n\n" +
+		"| IID | Type | State | Status | Title | Author |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| #1 | Issue | 🟢 OPEN |  | First | @dev1 |\n" +
+		"| #2 🔒 | Task | 🔴 CLOSED |  | Second | @dev2 |\n" +
+		"| #3 | Epic | 🟢 OPEN |  | Third | @dev3 |\n" +
+		"\n" + toolutil.FormatGraphQLPagination(toolutil.GraphQLPaginationOutput{}, 3) + "\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.work_item_get' to view full details of a specific item\n"
+	if got := extractText(t, FormatListMarkdown(out)); got != want {
+		t.Errorf("FormatListMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_EmptyReturnsMessage verifies FormatListMarkdown returns message for empty.
+// TestFormatListMarkdown_EmptyReturnsMessage checks the whole empty rendering:
+// the one sentence, then the hint that a namespace the token cannot read lists
+// no work items either, which is what GitLab's null namespace looks like here.
 func TestFormatListMarkdown_EmptyReturnsMessage(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{})
-	text := extractText(t, result)
-	if !strings.Contains(text, "No work items found") {
-		t.Errorf("expected 'No work items found', got: %s", text)
+	want := "No work items found.\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- If work items were expected, verify full_path with `gitlab_project_list` or `gitlab_group_list`: a namespace that does not exist, or that the token cannot read, also lists no work items\n"
+	if got := extractText(t, FormatListMarkdown(ListOutput{})); got != want {
+		t.Errorf("FormatListMarkdown(empty)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_SpecialCharsInTitle verifies FormatListMarkdown when special chars in title.
+// TestFormatListMarkdown_SpecialCharsInTitle checks that a pipe in a title
+// stays one cell: the escaped entity is written and the row keeps its columns.
 func TestFormatListMarkdown_SpecialCharsInTitle(t *testing.T) {
 	out := ListOutput{WorkItems: []WorkItemItem{
 		{IID: 1, Type: testTypeIssue, State: testStateOpen, Title: "Has | pipe", Author: namedUser(testAuthorDev)},
 	}}
-	result := FormatListMarkdown(out)
-	text := extractText(t, result)
-	// The title should be escaped for markdown table
-	if !strings.Contains(text, "pipe") {
-		t.Errorf("missing title in output: %s", text)
+	text := extractText(t, FormatListMarkdown(out))
+	if !strings.Contains(text, "| #1 | Issue | 🟢 OPEN |  | Has &#124; pipe | @dev |\n") {
+		t.Errorf("the pipe was not neutralized in the row:\n%s", text)
 	}
 }
 
@@ -2184,23 +2161,9 @@ func TestWorkItemToItem_NoLinkedItems(t *testing.T) {
 // FormatGetMarkdown — Status and LinkedItems rendering
 // ---------------------------------------------------------------------------
 
-// TestFormatGetMarkdown_WithStatus verifies Status is rendered in markdown.
-func TestFormatGetMarkdown_WithStatus(t *testing.T) {
-	out := GetOutput{WorkItem: WorkItemItem{
-		IID:    1,
-		Title:  "Status item",
-		Type:   testTypeIssue,
-		State:  testStateOpen,
-		Status: "IN_PROGRESS",
-	}}
-	result := FormatGetMarkdown(out)
-	text := extractText(t, result)
-	if !strings.Contains(text, "**Status**: IN_PROGRESS") {
-		t.Errorf("missing status in output: %s", text)
-	}
-}
-
-// TestFormatGetMarkdown_WithLinkedItems verifies linked items table is rendered.
+// TestFormatGetMarkdown_WithLinkedItems checks the whole card of a work item
+// with a linked item: the collection is a table under its own heading, after a
+// blank line, and the card's rows stay above it.
 func TestFormatGetMarkdown_WithLinkedItems(t *testing.T) {
 	out := GetOutput{WorkItem: WorkItemItem{
 		IID:   1,
@@ -2211,17 +2174,22 @@ func TestFormatGetMarkdown_WithLinkedItems(t *testing.T) {
 			{IID: 5, LinkType: "blocks", Path: "group/proj"},
 		},
 	}}
-	result := FormatGetMarkdown(out)
-	text := extractText(t, result)
-	if !strings.Contains(text, "### Linked Items") {
-		t.Errorf("missing Linked Items heading: %s", text)
-	}
-	if !strings.Contains(text, "| 5 | blocks | group/proj |") {
-		t.Errorf("missing linked item row: %s", text)
+	want := "## Work Item #1: Linked item\n\n" +
+		"- **Type**: Issue\n" +
+		"- **State**: 🟢 OPEN\n" +
+		"\n### Linked Items\n\n" +
+		"| IID | Link Type | Path |\n" +
+		"| --- | --- | --- |\n" +
+		"| 5 | blocks | group/proj |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.work_item_update' to modify this work item\n"
+	if got := extractText(t, FormatGetMarkdown(out)); got != want {
+		t.Errorf("FormatGetMarkdown(linked items)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatGetMarkdown_NoStatusNoLinkedItems verifies optional sections are omitted.
+// TestFormatGetMarkdown_NoStatusNoLinkedItems checks the whole card of a work
+// item with neither: the two rows it does have, and nothing else.
 func TestFormatGetMarkdown_NoStatusNoLinkedItems(t *testing.T) {
 	out := GetOutput{WorkItem: WorkItemItem{
 		IID:   1,
@@ -2229,13 +2197,13 @@ func TestFormatGetMarkdown_NoStatusNoLinkedItems(t *testing.T) {
 		Type:  testTypeIssue,
 		State: testStateOpen,
 	}}
-	result := FormatGetMarkdown(out)
-	text := extractText(t, result)
-	if strings.Contains(text, "**Status**") {
-		t.Error("unexpected Status in output")
-	}
-	if strings.Contains(text, "### Linked Items") {
-		t.Error("unexpected Linked Items in output")
+	want := "## Work Item #1: Plain\n\n" +
+		"- **Type**: Issue\n" +
+		"- **State**: 🟢 OPEN\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.work_item_update' to modify this work item\n"
+	if got := extractText(t, FormatGetMarkdown(out)); got != want {
+		t.Errorf("FormatGetMarkdown(plain)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -2498,37 +2466,25 @@ func TestFormatWorkItemTypeListMarkdown_WithTypes(t *testing.T) {
 			{ID: "gid://gitlab/WorkItems::Type/7", Name: "Task", Enabled: false},
 		},
 	}
-	result := FormatWorkItemTypeListMarkdown(out)
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := extractText(t, result)
-
-	for _, want := range []string{
-		"## Work Item Types (2)",
-		"| Name | ID | Enabled |",
-		"Issue",
-		"Task",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(text, want) {
-				t.Errorf("markdown missing %q:\n%s", want, text)
-			}
-		})
+	want := "## Work Item Types (2)\n\n" +
+		"| Name | ID | Enabled |\n" +
+		"| --- | --- | --- |\n" +
+		"| Issue | `gid://gitlab/WorkItems::Type/1` | ✅ |\n" +
+		"| Task | `gid://gitlab/WorkItems::Type/7` | ❌ |\n" +
+		"\n" + toolutil.FormatGraphQLPagination(toolutil.GraphQLPaginationOutput{}, 2) + "\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.work_item_create' to create work items of a type, with the work_item_type_id from the ID column\n"
+	if got := extractText(t, FormatWorkItemTypeListMarkdown(out)); got != want {
+		t.Errorf("FormatWorkItemTypeListMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
 // TestFormatWorkItemTypeListMarkdown_Empty verifies that an empty type list
 // returns a result containing a "no work item types" message.
 func TestFormatWorkItemTypeListMarkdown_Empty(t *testing.T) {
-	out := WorkItemTypeListOutput{}
-	result := FormatWorkItemTypeListMarkdown(out)
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := extractText(t, result)
-	if !strings.Contains(text, "No work item types found") {
-		t.Errorf("expected 'No work item types found' message, got:\n%s", text)
+	want := "No work item types found.\n"
+	if got := extractText(t, FormatWorkItemTypeListMarkdown(WorkItemTypeListOutput{})); got != want {
+		t.Errorf("FormatWorkItemTypeListMarkdown(empty) = %q, want %q", got, want)
 	}
 }
 
@@ -2957,11 +2913,27 @@ func TestGet_WidgetFields_RoundTripFromTheFixture(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_WidgetFields verifies the detail view renders the
-// widget values, since a field nothing prints is a field a reader never sees.
+// TestFormatGetMarkdown_WidgetFields checks the whole card of a work item
+// carrying every widget value, since a field nothing prints is a field a reader
+// never sees. The parent is a nested object rather than a reference with a
+// sigil: it may be an epic, which GitLab writes &N, or an issue, which it
+// writes #N, and the query does not say which.
 func TestFormatGetMarkdown_WidgetFields(t *testing.T) {
 	weight := int64(5)
-	text := extractText(t, FormatGetMarkdown(GetOutput{WorkItem: WorkItemItem{
+	want := "## Work Item #42: Widgets\n\n" +
+		"- **Parent**:\n" +
+		"  - **IID**: 3\n" +
+		"  - **Path**: my-group/parent\n" +
+		"- **Milestone ID**: 4\n" +
+		"- **Iteration ID**: 9\n" +
+		"- **Weight**: 5\n" +
+		"- **Health Status**: needsAttention\n" +
+		"- **Start Date**: 5 Jan 2026\n" +
+		"- **Due Date**: 10 Feb 2026\n" +
+		"- **Color**: #ff0000\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.work_item_update' to modify this work item\n"
+	got := extractText(t, FormatGetMarkdown(GetOutput{WorkItem: WorkItemItem{
 		IID:          42,
 		Title:        "Widgets",
 		Parent:       &ChildItem{IID: 3, Path: "my-group/parent"},
@@ -2973,21 +2945,8 @@ func TestFormatGetMarkdown_WidgetFields(t *testing.T) {
 		DueDate:      "2026-02-10",
 		Color:        "#ff0000",
 	}}))
-	for _, want := range []string{
-		"- **Parent**: #3 in my-group/parent",
-		"- **Milestone ID**: 4",
-		"- **Iteration ID**: 9",
-		"- **Weight**: 5",
-		"- **Health Status**: needsAttention",
-		"- **Start Date**: 2026-01-05",
-		"- **Due Date**: 2026-02-10",
-		"- **Color**: #ff0000",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(text, want) {
-				t.Errorf("markdown missing %q:\n%s", want, text)
-			}
-		})
+	if got != want {
+		t.Errorf("FormatGetMarkdown(widgets)\n got %q\nwant %q", got, want)
 	}
 }
 
