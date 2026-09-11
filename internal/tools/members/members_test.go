@@ -376,7 +376,7 @@ func TestMemberGet_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 		t.Fatalf("Get() unexpected error: %v", err)
 	}
 	if !out.Locked || out.PublicEmail != "alice@public.example" || out.MembershipState != "active" ||
-		out.TwoFactorEnabled == nil || !*out.TwoFactorEnabled || out.Override == nil || *out.Override ||
+		out.Override == nil || *out.Override ||
 		out.GroupSAMLIdentity == nil || out.GroupSAMLIdentity.SAMLProviderID != 3 ||
 		out.GroupSCIMIdentity == nil || out.GroupSCIMIdentity.GroupID != 9 {
 		t.Errorf("Get() = %+v, want the captured fields", out)
@@ -400,8 +400,7 @@ func TestProjectMembersList_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtMembersListErr, err)
 	}
-	if len(out.Members) != 2 || !out.Members[0].Locked || out.Members[0].TwoFactorEnabled == nil || !*out.Members[0].TwoFactorEnabled ||
-		out.Members[1].Locked || out.Members[1].TwoFactorEnabled != nil {
+	if len(out.Members) != 2 || !out.Members[0].Locked || out.Members[1].Locked {
 		t.Errorf("List() members = %+v, want each paired with its captured fields", out.Members)
 	}
 }

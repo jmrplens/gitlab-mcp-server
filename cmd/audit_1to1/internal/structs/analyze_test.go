@@ -824,7 +824,14 @@ func TestBuildReport_AuditedPairFloors(t *testing.T) {
 	// the redundant `input × gl.ListOptions` keys those inner literals minted;
 	// each survives as the outer `input × gl.List*Options` pair, whose
 	// flattenFields already audits the embedded ListOptions fields.
-	const minInputPairs, minOutputPairs = 545, 324
+	//
+	// Output floor 324 → 320 with the phantom removal in `events`: GitLab's
+	// Event entity exposes no `data`, so `ProjectEventDataOutput` went with the
+	// field and took the whole tree it was the only reader of with it
+	// (`RepositoryOutput`, `CommitOutput`, `CommitStatsOutput`,
+	// `PipelineInfoOutput`), and their pairings with it. Nothing about
+	// converter detection changed, which is what this floor is watching for.
+	const minInputPairs, minOutputPairs = 545, 320
 	if rep.Summary.InputPairs < minInputPairs {
 		t.Errorf("summary input_pairs = %d, want >= %d (resolver or handler-detection regression)", rep.Summary.InputPairs, minInputPairs)
 	}

@@ -291,23 +291,27 @@ func projectObject(p *gl.Project) *ProjectObject {
 // ---------------------------------------------------------------------------
 // Raw-fetch superset types
 //
-// client-go's gl.Job does not expose the documented top-level `archived` and
-// `source` fields, the `runner_manager` object, or the `runner` extras
-// (ip_address, paused, runner_type, online, status). To keep MCP output 1:1
-// with the official Jobs API (doc/api/jobs.md), the GET-single-job and
+// client-go's gl.Job does not expose the top-level `archived` field, the
+// `runner_manager` object, or the `runner` extras (ip_address, paused,
+// runner_type, online, status), all of which lib/api/entities/ci/job.rb
+// exposes. To keep MCP output 1:1 with the Jobs API, the GET-single-job and
 // list-jobs handlers issue a raw REST request that unmarshals into [jobAPI] —
-// gl.Job embedded for the shared field set, with the SDK-missing documented
-// fields added (and `runner` shadowed by the richer [runnerAPI]).
+// gl.Job embedded for the shared field set, with the entity's missing fields
+// added (and `runner` shadowed by the richer [runnerAPI]).
+//
+// A top-level `source` used to be read here too, on the strength of the
+// response examples in doc/api/jobs.md. No entity in the job chain exposes
+// one: those examples print several keys Grape cannot have produced, so they
+// are a raw model dump rather than a response.
 // ---------------------------------------------------------------------------.
 
 // jobAPI is the raw-fetch superset of a single job. It embeds gl.Job for the
-// fields the SDK already models and adds the documented fields gl.Job omits:
-// top-level archived/source, the runner_manager object, and the full runner
-// object (which shadows the embedded gl.Job.Runner during JSON decoding).
+// fields the SDK already models and adds the exposed fields gl.Job omits:
+// top-level archived, the runner_manager object, and the full runner object
+// (which shadows the embedded gl.Job.Runner during JSON decoding).
 type jobAPI struct {
 	gl.Job
 	Archived      bool              `json:"archived"`
-	Source        string            `json:"source"`
 	Runner        *runnerAPI        `json:"runner"`
 	RunnerManager *runnerManagerAPI `json:"runner_manager"`
 }
@@ -382,13 +386,11 @@ func runnerManagerObject(r *runnerManagerAPI) *RunnerManagerObject {
 }
 
 // toOutputAPI maps a raw-fetch [jobAPI] into the package [Output]. It reuses
-// [ToOutput] for the SDK-modeled fields, then overlays the documented fields
-// only the raw response carries (archived, source, runner_manager, and the
-// runner extras).
+// [ToOutput] for the SDK-modeled fields, then overlays the fields only the raw
+// response carries (archived, runner_manager, and the runner extras).
 func toOutputAPI(j *jobAPI) Output {
 	out := ToOutput(&j.Job)
 	out.Archived = j.Archived
-	out.Source = j.Source
 	out.Runner = runnerAPIObject(j.Runner)
 	out.RunnerManager = runnerManagerObject(j.RunnerManager)
 	return out

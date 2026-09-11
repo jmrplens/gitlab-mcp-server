@@ -118,7 +118,6 @@ type NoteOutput struct {
 // ContributionEventOutput mirrors gitlab.ContributionEvent.
 type ContributionEventOutput struct {
 	ID             int64                            `json:"id"`
-	Title          string                           `json:"title,omitempty"`
 	ProjectID      int64                            `json:"project_id"`
 	ActionName     string                           `json:"action_name"`
 	TargetID       int64                            `json:"target_id,omitempty"`
@@ -213,7 +212,6 @@ func ListCurrentUserContributionEvents(ctx context.Context, client *gitlabclient
 func toContributionEventOutput(e *gl.ContributionEvent, extra toolutil.EventExtra) ContributionEventOutput {
 	o := ContributionEventOutput{
 		ID:             e.ID,
-		Title:          e.Title,
 		ProjectID:      e.ProjectID,
 		ActionName:     e.ActionName,
 		TargetID:       e.TargetID,
@@ -372,81 +370,6 @@ type ListProjectEventsInput struct {
 
 // Output types.
 
-// CommitStatsOutput mirrors gitlab.CommitStats.
-type CommitStatsOutput struct {
-	Additions int64 `json:"additions"`
-	Deletions int64 `json:"deletions"`
-	Total     int64 `json:"total"`
-}
-
-// PipelineInfoOutput mirrors gitlab.PipelineInfo.
-type PipelineInfoOutput struct {
-	ID        int64  `json:"id"`
-	IID       int64  `json:"iid"`
-	ProjectID int64  `json:"project_id"`
-	Status    string `json:"status,omitempty"`
-	Source    string `json:"source,omitempty"`
-	Ref       string `json:"ref,omitempty"`
-	SHA       string `json:"sha,omitempty"`
-	Name      string `json:"name,omitempty"`
-	WebURL    string `json:"web_url,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
-}
-
-// CommitOutput mirrors gitlab.Commit as embedded in project event push data.
-type CommitOutput struct {
-	ID               string              `json:"id"`
-	ShortID          string              `json:"short_id,omitempty"`
-	Title            string              `json:"title,omitempty"`
-	AuthorName       string              `json:"author_name,omitempty"`
-	AuthorEmail      string              `json:"author_email,omitempty"`
-	AuthoredDate     string              `json:"authored_date,omitempty"`
-	CommitterName    string              `json:"committer_name,omitempty"`
-	CommitterEmail   string              `json:"committer_email,omitempty"`
-	CommittedDate    string              `json:"committed_date,omitempty"`
-	CreatedAt        string              `json:"created_at,omitempty"`
-	Message          string              `json:"message,omitempty"`
-	ParentIDs        []string            `json:"parent_ids,omitempty"`
-	Stats            *CommitStatsOutput  `json:"stats,omitempty"`
-	Status           string              `json:"status,omitempty"`
-	LastPipeline     *PipelineInfoOutput `json:"last_pipeline,omitempty"`
-	ProjectID        int64               `json:"project_id,omitempty"`
-	Trailers         map[string]string   `json:"trailers,omitempty"`
-	ExtendedTrailers map[string]string   `json:"extended_trailers,omitempty"`
-	WebURL           string              `json:"web_url,omitempty"`
-}
-
-// RepositoryOutput mirrors gitlab.Repository.
-type RepositoryOutput struct {
-	Name              string `json:"name,omitempty"`
-	Description       string `json:"description,omitempty"`
-	WebURL            string `json:"web_url,omitempty"`
-	AvatarURL         string `json:"avatar_url,omitempty"`
-	GitSSHURL         string `json:"git_ssh_url,omitempty"`
-	GitHTTPURL        string `json:"git_http_url,omitempty"`
-	Namespace         string `json:"namespace,omitempty"`
-	Visibility        string `json:"visibility,omitempty"`
-	PathWithNamespace string `json:"path_with_namespace,omitempty"`
-	DefaultBranch     string `json:"default_branch,omitempty"`
-	Homepage          string `json:"homepage,omitempty"`
-	URL               string `json:"url,omitempty"`
-	SSHURL            string `json:"ssh_url,omitempty"`
-	HTTPURL           string `json:"http_url,omitempty"`
-}
-
-// ProjectEventDataOutput mirrors gitlab.ProjectEventData.
-type ProjectEventDataOutput struct {
-	Before            string            `json:"before,omitempty"`
-	After             string            `json:"after,omitempty"`
-	Ref               string            `json:"ref,omitempty"`
-	UserID            int64             `json:"user_id,omitempty"`
-	UserName          string            `json:"user_name,omitempty"`
-	Repository        *RepositoryOutput `json:"repository,omitempty"`
-	Commits           []CommitOutput    `json:"commits,omitempty"`
-	TotalCommitsCount int64             `json:"total_commits_count"`
-}
-
 // ProjectEventNoteOutput mirrors gitlab.ProjectEventNote.
 type ProjectEventNoteOutput struct {
 	ID           int64             `json:"id"`
@@ -474,7 +397,6 @@ type ProjectEventPushDataOutput struct {
 // ProjectEventOutput mirrors gitlab.ProjectEvent.
 type ProjectEventOutput struct {
 	ID             int64                       `json:"id"`
-	Title          string                      `json:"title,omitempty"`
 	ProjectID      int64                       `json:"project_id"`
 	ActionName     string                      `json:"action_name"`
 	TargetID       int64                       `json:"target_id,omitempty"`
@@ -486,7 +408,6 @@ type ProjectEventOutput struct {
 	CreatedAt      string                      `json:"created_at,omitempty"`
 	Author         *UserOutput                 `json:"author,omitempty"`
 	AuthorUsername string                      `json:"author_username,omitempty"`
-	Data           *ProjectEventDataOutput     `json:"data,omitempty"`
 	Note           *ProjectEventNoteOutput     `json:"note,omitempty"`
 	PushData       *ProjectEventPushDataOutput `json:"push_data,omitempty"`
 	WikiPage       *WikiPageOutput             `json:"wiki_page,omitempty"`
@@ -552,7 +473,6 @@ func ListProjectEvents(ctx context.Context, client *gitlabclient.Client, input L
 func toProjectEventOutput(e *gl.ProjectEvent, extra toolutil.EventExtra) ProjectEventOutput {
 	return ProjectEventOutput{
 		ID:             e.ID,
-		Title:          e.Title,
 		ProjectID:      e.ProjectID,
 		ActionName:     e.ActionName,
 		TargetID:       e.TargetID,
@@ -563,130 +483,12 @@ func toProjectEventOutput(e *gl.ProjectEvent, extra toolutil.EventExtra) Project
 		CreatedAt:      e.CreatedAt,
 		Author:         toBasicUserOutput(e.Author),
 		AuthorUsername: e.AuthorUsername,
-		Data:           toProjectEventDataOutput(e.Data),
 		Note:           toProjectEventNoteOutput(e.Note),
 		PushData:       toProjectPushDataOutput(e.PushData),
 		WikiPage:       toWikiPageOutput(extra.WikiPage),
 		Imported:       extra.Imported,
 		ImportedFrom:   extra.ImportedFrom,
 	}
-}
-
-// toProjectEventDataOutput mirrors a non-empty ProjectEventData.
-func toProjectEventDataOutput(d gl.ProjectEventData) *ProjectEventDataOutput {
-	if d.Before == "" && d.After == "" && d.Ref == "" && d.UserID == 0 && d.UserName == "" &&
-		d.Repository == nil && len(d.Commits) == 0 && d.TotalCommitsCount == 0 {
-		return nil
-	}
-	out := &ProjectEventDataOutput{
-		Before:            d.Before,
-		After:             d.After,
-		Ref:               d.Ref,
-		UserID:            d.UserID,
-		UserName:          d.UserName,
-		Repository:        toRepositoryOutput(d.Repository),
-		TotalCommitsCount: d.TotalCommitsCount,
-	}
-	if len(d.Commits) > 0 {
-		out.Commits = make([]CommitOutput, 0, len(d.Commits))
-		for _, c := range d.Commits {
-			if c == nil {
-				continue
-			}
-			out.Commits = append(out.Commits, toCommitOutput(c))
-		}
-	}
-	return out
-}
-
-// toRepositoryOutput mirrors a gitlab.Repository, returning nil when absent.
-func toRepositoryOutput(r *gl.Repository) *RepositoryOutput {
-	if r == nil {
-		return nil
-	}
-	return &RepositoryOutput{
-		Name:              r.Name,
-		Description:       r.Description,
-		WebURL:            r.WebURL,
-		AvatarURL:         r.AvatarURL,
-		GitSSHURL:         r.GitSSHURL,
-		GitHTTPURL:        r.GitHTTPURL,
-		Namespace:         r.Namespace,
-		Visibility:        string(r.Visibility),
-		PathWithNamespace: r.PathWithNamespace,
-		DefaultBranch:     r.DefaultBranch,
-		Homepage:          r.Homepage,
-		URL:               r.URL,
-		SSHURL:            r.SSHURL,
-		HTTPURL:           r.HTTPURL,
-	}
-}
-
-// toCommitOutput mirrors a gitlab.Commit.
-func toCommitOutput(c *gl.Commit) CommitOutput {
-	out := CommitOutput{
-		ID:               c.ID,
-		ShortID:          c.ShortID,
-		Title:            c.Title,
-		AuthorName:       c.AuthorName,
-		AuthorEmail:      c.AuthorEmail,
-		CommitterName:    c.CommitterName,
-		CommitterEmail:   c.CommitterEmail,
-		Message:          c.Message,
-		ParentIDs:        c.ParentIDs,
-		ProjectID:        c.ProjectID,
-		Trailers:         c.Trailers,
-		ExtendedTrailers: c.ExtendedTrailers,
-		WebURL:           c.WebURL,
-		Stats:            toCommitStatsOutput(c.Stats),
-		LastPipeline:     toPipelineInfoOutput(c.LastPipeline),
-	}
-	if c.AuthoredDate != nil {
-		out.AuthoredDate = c.AuthoredDate.Format(time.RFC3339)
-	}
-	if c.CommittedDate != nil {
-		out.CommittedDate = c.CommittedDate.Format(time.RFC3339)
-	}
-	if c.CreatedAt != nil {
-		out.CreatedAt = c.CreatedAt.Format(time.RFC3339)
-	}
-	if c.Status != nil {
-		out.Status = string(*c.Status)
-	}
-	return out
-}
-
-// toCommitStatsOutput mirrors a gitlab.CommitStats, returning nil when absent.
-func toCommitStatsOutput(s *gl.CommitStats) *CommitStatsOutput {
-	if s == nil {
-		return nil
-	}
-	return &CommitStatsOutput{Additions: s.Additions, Deletions: s.Deletions, Total: s.Total}
-}
-
-// toPipelineInfoOutput mirrors a gitlab.PipelineInfo, returning nil when absent.
-func toPipelineInfoOutput(p *gl.PipelineInfo) *PipelineInfoOutput {
-	if p == nil {
-		return nil
-	}
-	out := &PipelineInfoOutput{
-		ID:        p.ID,
-		IID:       p.IID,
-		ProjectID: p.ProjectID,
-		Status:    p.Status,
-		Source:    p.Source,
-		Ref:       p.Ref,
-		SHA:       p.SHA,
-		Name:      p.Name,
-		WebURL:    p.WebURL,
-	}
-	if p.UpdatedAt != nil {
-		out.UpdatedAt = p.UpdatedAt.Format(time.RFC3339)
-	}
-	if p.CreatedAt != nil {
-		out.CreatedAt = p.CreatedAt.Format(time.RFC3339)
-	}
-	return out
 }
 
 // toProjectEventNoteOutput mirrors a non-empty ProjectEventNote.

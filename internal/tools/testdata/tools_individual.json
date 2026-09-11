@@ -41943,9 +41943,6 @@
         "event_name": {
           "type": "string"
         },
-        "event_type": {
-          "type": "string"
-        },
         "id": {
           "type": "integer"
         },
@@ -41965,7 +41962,6 @@
         "entity_id",
         "entity_type",
         "event_name",
-        "event_type",
         "details",
         "created_at"
       ],
@@ -43461,9 +43457,6 @@
         "event_name": {
           "type": "string"
         },
-        "event_type": {
-          "type": "string"
-        },
         "id": {
           "type": "integer"
         },
@@ -43483,7 +43476,6 @@
         "entity_id",
         "entity_type",
         "event_name",
-        "event_type",
         "details",
         "created_at"
       ],
@@ -45442,9 +45434,6 @@
         "event_name": {
           "type": "string"
         },
-        "event_type": {
-          "type": "string"
-        },
         "id": {
           "type": "integer"
         },
@@ -45464,7 +45453,6 @@
         "entity_id",
         "entity_type",
         "event_name",
-        "event_type",
         "details",
         "created_at"
       ],
@@ -77433,9 +77421,6 @@
           "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
-        "issue_link_id": {
-          "type": "integer"
-        },
         "issue_type": {
           "type": "string"
         },
@@ -78791,9 +78776,6 @@
         "avatar_url": {
           "type": "string"
         },
-        "build_coverage_regex": {
-          "type": "string"
-        },
         "build_git_strategy": {
           "type": "string"
         },
@@ -79234,9 +79216,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -80447,9 +80426,6 @@
         },
         "iid": {
           "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
-          "type": "integer"
-        },
-        "issue_link_id": {
           "type": "integer"
         },
         "issue_type": {
@@ -81747,9 +81723,6 @@
           "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
-        "issue_link_id": {
-          "type": "integer"
-        },
         "issue_type": {
           "type": "string"
         },
@@ -82434,9 +82407,6 @@
         },
         "iid": {
           "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
-          "type": "integer"
-        },
-        "issue_link_id": {
           "type": "integer"
         },
         "issue_type": {
@@ -87480,9 +87450,6 @@
                 "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
-              "issue_link_id": {
-                "type": "integer"
-              },
               "issue_type": {
                 "type": "string"
               },
@@ -88469,9 +88436,6 @@
                 "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
-              "issue_link_id": {
-                "type": "integer"
-              },
               "issue_type": {
                 "type": "string"
               },
@@ -89451,9 +89415,6 @@
               },
               "iid": {
                 "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
-                "type": "integer"
-              },
-              "issue_link_id": {
                 "type": "integer"
               },
               "issue_type": {
@@ -90638,9 +90599,6 @@
         },
         "iid": {
           "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
-          "type": "integer"
-        },
-        "issue_link_id": {
           "type": "integer"
         },
         "issue_type": {
@@ -94813,9 +94771,6 @@
           "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
-        "issue_link_id": {
-          "type": "integer"
-        },
         "issue_type": {
           "type": "string"
         },
@@ -95953,9 +95908,6 @@
           "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
-        "issue_link_id": {
-          "type": "integer"
-        },
         "issue_type": {
           "type": "string"
         },
@@ -96835,9 +96787,6 @@
           "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
-        "issue_link_id": {
-          "type": "integer"
-        },
         "issue_type": {
           "type": "string"
         },
@@ -97635,9 +97584,6 @@
         },
         "iid": {
           "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
-          "type": "integer"
-        },
-        "issue_link_id": {
           "type": "integer"
         },
         "issue_type": {
@@ -98499,9 +98445,6 @@
             "object"
           ]
         },
-        "source": {
-          "type": "string"
-        },
         "stage": {
           "type": "string"
         },
@@ -99225,9 +99168,6 @@
             "object"
           ]
         },
-        "source": {
-          "type": "string"
-        },
         "stage": {
           "type": "string"
         },
@@ -99627,9 +99567,6 @@
             "object"
           ]
         },
-        "source": {
-          "type": "string"
-        },
         "stage": {
           "type": "string"
         },
@@ -100028,9 +99965,6 @@
             "null",
             "object"
           ]
-        },
-        "source": {
-          "type": "string"
         },
         "stage": {
           "type": "string"
@@ -100479,9 +100413,6 @@
                   "null",
                   "object"
                 ]
-              },
-              "source": {
-                "type": "string"
               },
               "stage": {
                 "type": "string"
@@ -101374,9 +101305,6 @@
                   "object"
                 ]
               },
-              "source": {
-                "type": "string"
-              },
               "stage": {
                 "type": "string"
               },
@@ -101890,9 +101818,6 @@
             "object"
           ]
         },
-        "source": {
-          "type": "string"
-        },
         "stage": {
           "type": "string"
         },
@@ -102291,9 +102216,6 @@
             "null",
             "object"
           ]
-        },
-        "source": {
-          "type": "string"
         },
         "stage": {
           "type": "string"
@@ -102771,9 +102693,6 @@
                 "null",
                 "object"
               ]
-            },
-            "source": {
-              "type": "string"
             },
             "stage": {
               "type": "string"
@@ -109956,9 +109875,6 @@
               "event_name": {
                 "type": "string"
               },
-              "event_type": {
-                "type": "string"
-              },
               "id": {
                 "type": "integer"
               },
@@ -109978,7 +109894,6 @@
               "entity_id",
               "entity_type",
               "event_name",
-              "event_type",
               "details",
               "created_at"
             ],
@@ -112907,9 +112822,6 @@
               "event_name": {
                 "type": "string"
               },
-              "event_type": {
-                "type": "string"
-              },
               "id": {
                 "type": "integer"
               },
@@ -112929,7 +112841,6 @@
               "entity_id",
               "entity_type",
               "event_name",
-              "event_type",
               "details",
               "created_at"
             ],
@@ -115297,9 +115208,6 @@
               "event_name": {
                 "type": "string"
               },
-              "event_type": {
-                "type": "string"
-              },
               "id": {
                 "type": "integer"
               },
@@ -115319,7 +115227,6 @@
               "entity_id",
               "entity_type",
               "event_name",
-              "event_type",
               "details",
               "created_at"
             ],
@@ -137310,9 +137217,6 @@
                 "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
-              "issue_link_id": {
-                "type": "integer"
-              },
               "issue_type": {
                 "type": "string"
               },
@@ -145965,9 +145869,6 @@
                 "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
-              "issue_link_id": {
-                "type": "integer"
-              },
               "issue_type": {
                 "type": "string"
               },
@@ -153107,9 +153008,6 @@
             "direct_asset_url": {
               "type": "string"
             },
-            "external": {
-              "type": "boolean"
-            },
             "id": {
               "type": "integer"
             },
@@ -153136,8 +153034,7 @@
             "id",
             "name",
             "url",
-            "link_type",
-            "external"
+            "link_type"
           ],
           "type": "object"
         }
@@ -159169,9 +159066,6 @@
         "created_at": {
           "type": "string"
         },
-        "deleted_at": {
-          "type": "string"
-        },
         "description": {
           "type": "string"
         },
@@ -159342,9 +159236,6 @@
       "additionalProperties": false,
       "properties": {
         "created_at": {
-          "type": "string"
-        },
-        "deleted_at": {
           "type": "string"
         },
         "description": {
@@ -159534,9 +159425,6 @@
             "additionalProperties": false,
             "properties": {
               "created_at": {
-                "type": "string"
-              },
-              "deleted_at": {
                 "type": "string"
               },
               "description": {
@@ -159808,9 +159696,6 @@
             "avatar_url": {
               "type": "string"
             },
-            "created_at": {
-              "type": "string"
-            },
             "id": {
               "type": "integer"
             },
@@ -159891,9 +159776,6 @@
       "additionalProperties": false,
       "properties": {
         "created_at": {
-          "type": "string"
-        },
-        "deleted_at": {
           "type": "string"
         },
         "description": {
@@ -163540,9 +163422,6 @@
         "avatar_url": {
           "type": "string"
         },
-        "build_coverage_regex": {
-          "type": "string"
-        },
         "build_git_strategy": {
           "type": "string"
         },
@@ -163983,9 +163862,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -164437,10 +164313,6 @@
             "boolean"
           ]
         },
-        "build_coverage_regex": {
-          "description": "Regex used to extract test coverage from job logs",
-          "type": "string"
-        },
         "build_git_strategy": {
           "description": "Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).",
           "enum": [
@@ -164737,10 +164609,6 @@
           "description": "Only allow merge when pipeline succeeds",
           "type": "boolean"
         },
-        "operations_access_level": {
-          "description": "Operations access level (disabled, private, enabled)",
-          "type": "string"
-        },
         "package_registry_access_level": {
           "description": "Package registry access level (disabled, private, enabled)",
           "type": "string"
@@ -165035,9 +164903,6 @@
           "type": "boolean"
         },
         "avatar_url": {
-          "type": "string"
-        },
-        "build_coverage_regex": {
           "type": "string"
         },
         "build_git_strategy": {
@@ -165480,9 +165345,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -165934,10 +165796,6 @@
             "boolean"
           ]
         },
-        "build_coverage_regex": {
-          "description": "Regex used to extract test coverage from job logs",
-          "type": "string"
-        },
         "build_git_strategy": {
           "description": "Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).",
           "enum": [
@@ -166233,10 +166091,6 @@
         "only_allow_merge_if_pipeline_succeeds": {
           "description": "Only allow merge when pipeline succeeds",
           "type": "boolean"
-        },
-        "operations_access_level": {
-          "description": "Operations access level (disabled, private, enabled)",
-          "type": "string"
         },
         "package_registry_access_level": {
           "description": "Package registry access level (disabled, private, enabled)",
@@ -166537,9 +166391,6 @@
           "type": "boolean"
         },
         "avatar_url": {
-          "type": "string"
-        },
-        "build_coverage_regex": {
           "type": "string"
         },
         "build_git_strategy": {
@@ -166982,9 +166833,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -167484,9 +167332,6 @@
         "avatar_url": {
           "type": "string"
         },
-        "build_coverage_regex": {
-          "type": "string"
-        },
         "build_git_strategy": {
           "type": "string"
         },
@@ -167927,9 +167772,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -169125,235 +168967,6 @@
               "created_at": {
                 "type": "string"
               },
-              "data": {
-                "additionalProperties": false,
-                "properties": {
-                  "after": {
-                    "type": "string"
-                  },
-                  "before": {
-                    "type": "string"
-                  },
-                  "commits": {
-                    "items": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "author_email": {
-                          "type": "string"
-                        },
-                        "author_name": {
-                          "type": "string"
-                        },
-                        "authored_date": {
-                          "type": "string"
-                        },
-                        "committed_date": {
-                          "type": "string"
-                        },
-                        "committer_email": {
-                          "type": "string"
-                        },
-                        "committer_name": {
-                          "type": "string"
-                        },
-                        "created_at": {
-                          "type": "string"
-                        },
-                        "extended_trailers": {
-                          "additionalProperties": {
-                            "type": "string"
-                          },
-                          "type": "object"
-                        },
-                        "id": {
-                          "type": "string"
-                        },
-                        "last_pipeline": {
-                          "additionalProperties": false,
-                          "properties": {
-                            "created_at": {
-                              "type": "string"
-                            },
-                            "id": {
-                              "type": "integer"
-                            },
-                            "iid": {
-                              "type": "integer"
-                            },
-                            "name": {
-                              "type": "string"
-                            },
-                            "project_id": {
-                              "type": "integer"
-                            },
-                            "ref": {
-                              "type": "string"
-                            },
-                            "sha": {
-                              "type": "string"
-                            },
-                            "source": {
-                              "type": "string"
-                            },
-                            "status": {
-                              "type": "string"
-                            },
-                            "updated_at": {
-                              "type": "string"
-                            },
-                            "web_url": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "id",
-                            "iid",
-                            "project_id"
-                          ],
-                          "type": [
-                            "null",
-                            "object"
-                          ]
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "parent_ids": {
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": [
-                            "null",
-                            "array"
-                          ]
-                        },
-                        "project_id": {
-                          "type": "integer"
-                        },
-                        "short_id": {
-                          "type": "string"
-                        },
-                        "stats": {
-                          "additionalProperties": false,
-                          "properties": {
-                            "additions": {
-                              "type": "integer"
-                            },
-                            "deletions": {
-                              "type": "integer"
-                            },
-                            "total": {
-                              "type": "integer"
-                            }
-                          },
-                          "required": [
-                            "additions",
-                            "deletions",
-                            "total"
-                          ],
-                          "type": [
-                            "null",
-                            "object"
-                          ]
-                        },
-                        "status": {
-                          "type": "string"
-                        },
-                        "title": {
-                          "type": "string"
-                        },
-                        "trailers": {
-                          "additionalProperties": {
-                            "type": "string"
-                          },
-                          "type": "object"
-                        },
-                        "web_url": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "id"
-                      ],
-                      "type": "object"
-                    },
-                    "type": [
-                      "null",
-                      "array"
-                    ]
-                  },
-                  "ref": {
-                    "type": "string"
-                  },
-                  "repository": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "avatar_url": {
-                        "type": "string"
-                      },
-                      "default_branch": {
-                        "type": "string"
-                      },
-                      "description": {
-                        "type": "string"
-                      },
-                      "git_http_url": {
-                        "type": "string"
-                      },
-                      "git_ssh_url": {
-                        "type": "string"
-                      },
-                      "homepage": {
-                        "type": "string"
-                      },
-                      "http_url": {
-                        "type": "string"
-                      },
-                      "name": {
-                        "type": "string"
-                      },
-                      "namespace": {
-                        "type": "string"
-                      },
-                      "path_with_namespace": {
-                        "type": "string"
-                      },
-                      "ssh_url": {
-                        "type": "string"
-                      },
-                      "url": {
-                        "type": "string"
-                      },
-                      "visibility": {
-                        "type": "string"
-                      },
-                      "web_url": {
-                        "type": "string"
-                      }
-                    },
-                    "type": [
-                      "null",
-                      "object"
-                    ]
-                  },
-                  "total_commits_count": {
-                    "type": "integer"
-                  },
-                  "user_id": {
-                    "type": "integer"
-                  },
-                  "user_name": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "total_commits_count"
-                ],
-                "type": [
-                  "null",
-                  "object"
-                ]
-              },
               "id": {
                 "type": "integer"
               },
@@ -169482,9 +169095,6 @@
                 "type": "string"
               },
               "target_url": {
-                "type": "string"
-              },
-              "title": {
                 "type": "string"
               },
               "wiki_page": {
@@ -169719,9 +169329,6 @@
           "type": "boolean"
         },
         "avatar_url": {
-          "type": "string"
-        },
-        "build_coverage_regex": {
           "type": "string"
         },
         "build_git_strategy": {
@@ -170164,9 +169771,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -170682,9 +170286,6 @@
         "avatar_url": {
           "type": "string"
         },
-        "build_coverage_regex": {
-          "type": "string"
-        },
         "build_git_strategy": {
           "type": "string"
         },
@@ -171125,9 +170726,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -173960,9 +173558,6 @@
               "avatar_url": {
                 "type": "string"
               },
-              "build_coverage_regex": {
-                "type": "string"
-              },
               "build_git_strategy": {
                 "type": "string"
               },
@@ -174403,9 +173998,6 @@
               },
               "open_issues_count": {
                 "type": "integer"
-              },
-              "operations_access_level": {
-                "type": "string"
               },
               "owner": {
                 "additionalProperties": false,
@@ -175118,9 +174710,6 @@
               "avatar_url": {
                 "type": "string"
               },
-              "build_coverage_regex": {
-                "type": "string"
-              },
               "build_git_strategy": {
                 "type": "string"
               },
@@ -175561,9 +175150,6 @@
               },
               "open_issues_count": {
                 "type": "integer"
-              },
-              "operations_access_level": {
-                "type": "string"
               },
               "owner": {
                 "additionalProperties": false,
@@ -176945,9 +176531,6 @@
               "avatar_url": {
                 "type": "string"
               },
-              "build_coverage_regex": {
-                "type": "string"
-              },
               "build_git_strategy": {
                 "type": "string"
               },
@@ -177388,9 +176971,6 @@
               },
               "open_issues_count": {
                 "type": "integer"
-              },
-              "operations_access_level": {
-                "type": "string"
               },
               "owner": {
                 "additionalProperties": false,
@@ -178148,9 +177728,6 @@
               "avatar_url": {
                 "type": "string"
               },
-              "build_coverage_regex": {
-                "type": "string"
-              },
               "build_git_strategy": {
                 "type": "string"
               },
@@ -178591,9 +178168,6 @@
               },
               "open_issues_count": {
                 "type": "integer"
-              },
-              "operations_access_level": {
-                "type": "string"
               },
               "owner": {
                 "additionalProperties": false,
@@ -179351,9 +178925,6 @@
               "avatar_url": {
                 "type": "string"
               },
-              "build_coverage_regex": {
-                "type": "string"
-              },
               "build_git_strategy": {
                 "type": "string"
               },
@@ -179794,9 +179365,6 @@
               },
               "open_issues_count": {
                 "type": "integer"
-              },
-              "operations_access_level": {
-                "type": "string"
               },
               "owner": {
                 "additionalProperties": false,
@@ -180643,12 +180211,6 @@
         "state": {
           "type": "string"
         },
-        "two_factor_enabled": {
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
         "username": {
           "type": "string"
         },
@@ -181015,12 +180577,6 @@
         "state": {
           "type": "string"
         },
-        "two_factor_enabled": {
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
         "username": {
           "type": "string"
         },
@@ -181315,12 +180871,6 @@
         "state": {
           "type": "string"
         },
-        "two_factor_enabled": {
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
         "username": {
           "type": "string"
         },
@@ -181614,12 +181164,6 @@
         },
         "state": {
           "type": "string"
-        },
-        "two_factor_enabled": {
-          "type": [
-            "null",
-            "boolean"
-          ]
         },
         "username": {
           "type": "string"
@@ -181962,12 +181506,6 @@
               },
               "state": {
                 "type": "string"
-              },
-              "two_factor_enabled": {
-                "type": [
-                  "null",
-                  "boolean"
-                ]
               },
               "username": {
                 "type": "string"
@@ -182406,9 +181944,6 @@
           "type": "boolean"
         },
         "avatar_url": {
-          "type": "string"
-        },
-        "build_coverage_regex": {
           "type": "string"
         },
         "build_git_strategy": {
@@ -182851,9 +182386,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -185416,9 +184948,6 @@
         "avatar_url": {
           "type": "string"
         },
-        "build_coverage_regex": {
-          "type": "string"
-        },
         "build_git_strategy": {
           "type": "string"
         },
@@ -185859,9 +185388,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -186462,9 +185988,6 @@
         "avatar_url": {
           "type": "string"
         },
-        "build_coverage_regex": {
-          "type": "string"
-        },
         "build_git_strategy": {
           "type": "string"
         },
@@ -186905,9 +186428,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -187402,9 +186922,6 @@
         "avatar_url": {
           "type": "string"
         },
-        "build_coverage_regex": {
-          "type": "string"
-        },
         "build_git_strategy": {
           "type": "string"
         },
@@ -187845,9 +187362,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -188342,9 +187856,6 @@
         "avatar_url": {
           "type": "string"
         },
-        "build_coverage_regex": {
-          "type": "string"
-        },
         "build_git_strategy": {
           "type": "string"
         },
@@ -188785,9 +188296,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -189253,10 +188761,6 @@
             "boolean"
           ]
         },
-        "build_coverage_regex": {
-          "description": "Regex used to extract test coverage from job logs",
-          "type": "string"
-        },
         "build_git_strategy": {
           "description": "Git strategy for CI builds: fetch (reuse existing clone, faster) or clone (fresh clone every time).",
           "enum": [
@@ -189652,10 +189156,6 @@
             "boolean"
           ]
         },
-        "operations_access_level": {
-          "description": "Operations access level (disabled, private, enabled)",
-          "type": "string"
-        },
         "package_registry_access_level": {
           "description": "Package registry access level (disabled, private, enabled)",
           "type": "string"
@@ -189953,9 +189453,6 @@
           "type": "boolean"
         },
         "avatar_url": {
-          "type": "string"
-        },
-        "build_coverage_regex": {
           "type": "string"
         },
         "build_git_strategy": {
@@ -190398,9 +189895,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -190983,9 +190477,6 @@
         "avatar_url": {
           "type": "string"
         },
-        "build_coverage_regex": {
-          "type": "string"
-        },
         "build_git_strategy": {
           "type": "string"
         },
@@ -191426,9 +190917,6 @@
         },
         "open_issues_count": {
           "type": "integer"
-        },
-        "operations_access_level": {
-          "type": "string"
         },
         "owner": {
           "additionalProperties": false,
@@ -197371,9 +196859,6 @@
         "direct_asset_url": {
           "type": "string"
         },
-        "external": {
-          "type": "boolean"
-        },
         "id": {
           "type": "integer"
         },
@@ -197400,8 +196885,7 @@
         "id",
         "name",
         "url",
-        "link_type",
-        "external"
+        "link_type"
       ],
       "type": "object"
     },
@@ -197489,9 +196973,6 @@
               "direct_asset_url": {
                 "type": "string"
               },
-              "external": {
-                "type": "boolean"
-              },
               "id": {
                 "type": "integer"
               },
@@ -197518,8 +196999,7 @@
               "id",
               "name",
               "url",
-              "link_type",
-              "external"
+              "link_type"
             ],
             "type": "object"
           },
@@ -197596,9 +197076,6 @@
         "direct_asset_url": {
           "type": "string"
         },
-        "external": {
-          "type": "boolean"
-        },
         "id": {
           "type": "integer"
         },
@@ -197625,8 +197102,7 @@
         "id",
         "name",
         "url",
-        "link_type",
-        "external"
+        "link_type"
       ],
       "type": "object"
     },
@@ -197669,9 +197145,6 @@
         "direct_asset_url": {
           "type": "string"
         },
-        "external": {
-          "type": "boolean"
-        },
         "id": {
           "type": "integer"
         },
@@ -197698,8 +197171,7 @@
         "id",
         "name",
         "url",
-        "link_type",
-        "external"
+        "link_type"
       ],
       "type": "object"
     },
@@ -197772,9 +197244,6 @@
               "direct_asset_url": {
                 "type": "string"
               },
-              "external": {
-                "type": "boolean"
-              },
               "id": {
                 "type": "integer"
               },
@@ -197801,8 +197270,7 @@
               "id",
               "name",
               "url",
-              "link_type",
-              "external"
+              "link_type"
             ],
             "type": "object"
           },
@@ -197930,9 +197398,6 @@
         "direct_asset_url": {
           "type": "string"
         },
-        "external": {
-          "type": "boolean"
-        },
         "id": {
           "type": "integer"
         },
@@ -197959,8 +197424,7 @@
         "id",
         "name",
         "url",
-        "link_type",
-        "external"
+        "link_type"
       ],
       "type": "object"
     },
@@ -204401,9 +203865,6 @@
                   "object"
                 ]
               },
-              "source": {
-                "type": "string"
-              },
               "stage": {
                 "type": "string"
               },
@@ -207964,9 +207425,6 @@
                 "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
-              "issue_link_id": {
-                "type": "integer"
-              },
               "issue_type": {
                 "type": "string"
               },
@@ -209881,9 +209339,6 @@
               "avatar_url": {
                 "type": "string"
               },
-              "build_coverage_regex": {
-                "type": "string"
-              },
               "build_git_strategy": {
                 "type": "string"
               },
@@ -210324,9 +209779,6 @@
               },
               "open_issues_count": {
                 "type": "integer"
-              },
-              "operations_access_level": {
-                "type": "string"
               },
               "owner": {
                 "additionalProperties": false,
@@ -224240,9 +223692,6 @@
                 "type": "string"
               },
               "target_url": {
-                "type": "string"
-              },
-              "title": {
                 "type": "string"
               },
               "wiki_page": {

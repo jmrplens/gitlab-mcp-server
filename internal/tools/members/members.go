@@ -45,7 +45,6 @@ type Output struct {
 	ExpiresAt         string              `json:"expires_at,omitempty"`
 	Email             string              `json:"email,omitempty"`
 	PublicEmail       string              `json:"public_email,omitempty"`
-	TwoFactorEnabled  *bool               `json:"two_factor_enabled,omitempty"`
 	GroupSAMLIdentity *SAMLIdentityOutput `json:"group_saml_identity,omitempty" tier:"premium"`
 	GroupSCIMIdentity *SCIMIdentityOutput `json:"group_scim_identity,omitempty" tier:"premium"`
 	Override          *bool               `json:"override,omitempty" tier:"premium"`
@@ -117,7 +116,6 @@ func ToOutput(m *gl.ProjectMember, extra toolutil.MemberExtra) Output {
 		WebURL:            m.WebURL,
 		Email:             m.Email,
 		PublicEmail:       extra.PublicEmail,
-		TwoFactorEnabled:  extra.TwoFactorEnabled,
 		CreatedBy:         createdByOutput(m.CreatedBy),
 		GroupSAMLIdentity: extra.GroupSAMLIdentity,
 		GroupSCIMIdentity: extra.GroupSCIMIdentity,

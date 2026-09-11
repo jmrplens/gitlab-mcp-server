@@ -94,7 +94,6 @@ type Output struct {
 	// Additive 1:1 fields surfaced from the SDK Issue (full sub-objects and
 	// scalars not previously exposed).
 	ExternalID           string                               `json:"external_id,omitempty"`
-	IssueLinkID          int64                                `json:"issue_link_id,omitempty"`
 	ServiceDeskReplyTo   string                               `json:"service_desk_reply_to,omitempty"`
 	References           *toolutil.ReferencesOutput           `json:"references,omitempty"`
 	Epic                 *toolutil.EpicOutput                 `json:"epic,omitempty" tier:"premium"`
@@ -286,7 +285,6 @@ func ToOutput(issue *gl.Issue) Output {
 	out.MovedToID = issue.MovedToID
 	out.EpicIssueID = issue.EpicIssueID
 	out.ExternalID = issue.ExternalID
-	out.IssueLinkID = issue.IssueLinkID
 	out.ServiceDeskReplyTo = issue.ServiceDeskReplyTo
 	out.Epic = toolutil.NewEpicOutput(issue.Epic)
 	out.LabelDetails = toolutil.NewLabelDetailsOutputs(issue.LabelDetails)

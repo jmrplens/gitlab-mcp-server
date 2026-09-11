@@ -780,7 +780,6 @@ func TestFormatOutputMarkdown_WithData(t *testing.T) {
 		Name:           "Binary amd64",
 		URL:            "https://example.com/bin/amd64",
 		LinkType:       "package",
-		External:       true,
 		DirectAssetURL: "https://direct.example.com",
 	})
 
@@ -789,7 +788,6 @@ func TestFormatOutputMarkdown_WithData(t *testing.T) {
 		"- **ID**: 10",
 		"- **URL**: [https://example.com/bin/amd64](https://example.com/bin/amd64)",
 		"- **Type**: package",
-		"- **External**: true",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(md, want) {
@@ -810,17 +808,18 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_ExternalFalse verifies FormatOutputMarkdown when external false.
-func TestFormatOutputMarkdown_ExternalFalse(t *testing.T) {
+// TestFormatOutputMarkdown_LinkType verifies FormatOutputMarkdown renders the
+// link type GitLab sends. It used to assert the `external` flag beside it,
+// which no Grape entity has exposed since 16.0.
+func TestFormatOutputMarkdown_LinkType(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:       5,
 		Name:     "Runbook",
 		URL:      "https://example.com/runbook",
 		LinkType: "runbook",
-		External: false,
 	})
-	if !strings.Contains(md, "- **External**: false") {
-		t.Errorf("expected External=false:\n%s", md)
+	if !strings.Contains(md, "- **Type**: runbook") {
+		t.Errorf("expected the runbook link type:\n%s", md)
 	}
 }
 
@@ -985,9 +984,6 @@ func TestToOutput_AllFields(t *testing.T) {
 	}
 	if out.LinkType != "package" {
 		t.Errorf("LinkType = %q, want %q", out.LinkType, "package")
-	}
-	if !out.External {
-		t.Error("expected External=true")
 	}
 	if out.DirectAssetURL != "https://direct.example.com" {
 		t.Errorf("DirectAssetURL = %q, want %q", out.DirectAssetURL, "https://direct.example.com")

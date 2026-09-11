@@ -156,7 +156,6 @@ type CreateInput struct {
 	CICDCatalogEnabled              *bool  `json:"cicd_catalog_enabled,omitempty" jsonschema:"Publish the project as a CI/CD catalog resource"`
 	BuildTimeout                    int64  `json:"build_timeout,omitempty" jsonschema:"Build timeout in seconds"`
 	BuildGitStrategy                string `json:"build_git_strategy,omitempty" jsonschema:"Git strategy for builds (fetch, clone)"`
-	BuildCoverageRegex              string `json:"build_coverage_regex,omitempty" jsonschema:"Regex used to extract test coverage from job logs"`
 	AutoCancelPendingPipelines      string `json:"auto_cancel_pending_pipelines,omitempty" jsonschema:"Auto-cancel pending pipelines (enabled, disabled)"`
 	CIForwardDeploymentEnabled      *bool  `json:"ci_forward_deployment_enabled,omitempty" jsonschema:"Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)"`
 	ResourceGroupDefaultProcessMode string `json:"resource_group_default_process_mode,omitempty" jsonschema:"Default resource group process mode (unordered, oldest_first, newest_first)"`
@@ -188,7 +187,6 @@ type CreateInput struct {
 	RepositoryAccessLevel            string `json:"repository_access_level,omitempty" jsonschema:"Repository access level (disabled, private, enabled)"`
 	ForkingAccessLevel               string `json:"forking_access_level,omitempty" jsonschema:"Forking access level (disabled, private, enabled)"`
 	AnalyticsAccessLevel             string `json:"analytics_access_level,omitempty" jsonschema:"Analytics access level (disabled, private, enabled)"`
-	OperationsAccessLevel            string `json:"operations_access_level,omitempty" jsonschema:"Operations access level (disabled, private, enabled)"`
 	ReleasesAccessLevel              string `json:"releases_access_level,omitempty" jsonschema:"Releases access level (disabled, private, enabled)"`
 	EnvironmentsAccessLevel          string `json:"environments_access_level,omitempty" jsonschema:"Environments access level (disabled, private, enabled)"`
 	FeatureFlagsAccessLevel          string `json:"feature_flags_access_level,omitempty" jsonschema:"Feature flags access level (disabled, private, enabled)"`
@@ -274,7 +272,6 @@ type Output struct {
 	BuildsAccessLevel                string `json:"builds_access_level,omitempty"`
 	SnippetsAccessLevel              string `json:"snippets_access_level,omitempty"`
 	PagesAccessLevel                 string `json:"pages_access_level,omitempty"`
-	OperationsAccessLevel            string `json:"operations_access_level,omitempty"`
 	AnalyticsAccessLevel             string `json:"analytics_access_level,omitempty"`
 	EnvironmentsAccessLevel          string `json:"environments_access_level,omitempty"`
 	FeatureFlagsAccessLevel          string `json:"feature_flags_access_level,omitempty"`
@@ -302,7 +299,6 @@ type Output struct {
 	CIAllowForkPipelinesToRunInParentProject bool     `json:"ci_allow_fork_pipelines_to_run_in_parent_project"`
 	CIRestrictPipelineCancellationRole       string   `json:"ci_restrict_pipeline_cancellation_role,omitempty" tier:"premium"`
 	CIPipelineVariablesMinimumOverrideRole   string   `json:"ci_pipeline_variables_minimum_override_role,omitempty"`
-	BuildCoverageRegex                       string   `json:"build_coverage_regex,omitempty"`
 	BuildGitStrategy                         string   `json:"build_git_strategy,omitempty"`
 	AutoCancelPendingPipelines               string   `json:"auto_cancel_pending_pipelines,omitempty"`
 	AutoDevopsDeployStrategy                 string   `json:"auto_devops_deploy_strategy,omitempty"`
@@ -533,7 +529,6 @@ type UpdateInput struct {
 
 	// CI/CD settings (additive)
 	BuildGitStrategy                       string   `json:"build_git_strategy,omitempty" jsonschema:"Git strategy for builds (fetch, clone)"`
-	BuildCoverageRegex                     string   `json:"build_coverage_regex,omitempty" jsonschema:"Regex used to extract test coverage from job logs"`
 	AutoCancelPendingPipelines             string   `json:"auto_cancel_pending_pipelines,omitempty" jsonschema:"Auto-cancel pending pipelines (enabled, disabled)"`
 	CICDCatalogEnabled                     *bool    `json:"cicd_catalog_enabled,omitempty" jsonschema:"Publish the project as a CI/CD catalog resource"`
 	CIDefaultGitDepth                      int64    `json:"ci_default_git_depth,omitempty" jsonschema:"Default Git clone depth for CI/CD"`
@@ -573,7 +568,6 @@ type UpdateInput struct {
 	RepositoryAccessLevel            string `json:"repository_access_level,omitempty" jsonschema:"Repository access level (disabled, private, enabled)"`
 	ForkingAccessLevel               string `json:"forking_access_level,omitempty" jsonschema:"Forking access level (disabled, private, enabled)"`
 	AnalyticsAccessLevel             string `json:"analytics_access_level,omitempty" jsonschema:"Analytics access level (disabled, private, enabled)"`
-	OperationsAccessLevel            string `json:"operations_access_level,omitempty" jsonschema:"Operations access level (disabled, private, enabled)"`
 	ReleasesAccessLevel              string `json:"releases_access_level,omitempty" jsonschema:"Releases access level (disabled, private, enabled)"`
 	EnvironmentsAccessLevel          string `json:"environments_access_level,omitempty" jsonschema:"Environments access level (disabled, private, enabled)"`
 	FeatureFlagsAccessLevel          string `json:"feature_flags_access_level,omitempty" jsonschema:"Feature flags access level (disabled, private, enabled)"`
@@ -648,7 +642,6 @@ func ToOutput(p *gl.Project) Output {
 		BuildsAccessLevel:                string(p.BuildsAccessLevel),
 		SnippetsAccessLevel:              string(p.SnippetsAccessLevel),
 		PagesAccessLevel:                 string(p.PagesAccessLevel),
-		OperationsAccessLevel:            string(p.OperationsAccessLevel),
 		AnalyticsAccessLevel:             string(p.AnalyticsAccessLevel),
 		EnvironmentsAccessLevel:          string(p.EnvironmentsAccessLevel),
 		FeatureFlagsAccessLevel:          string(p.FeatureFlagsAccessLevel),
@@ -675,7 +668,6 @@ func ToOutput(p *gl.Project) Output {
 		CIAllowForkPipelinesToRunInParentProject: p.CIAllowForkPipelinesToRunInParentProject,
 		CIRestrictPipelineCancellationRole:       string(p.CIRestrictPipelineCancellationRole),
 		CIPipelineVariablesMinimumOverrideRole:   p.CIPipelineVariablesMinimumOverrideRole,
-		BuildCoverageRegex:                       p.BuildCoverageRegex,
 		BuildGitStrategy:                         p.BuildGitStrategy,
 		AutoCancelPendingPipelines:               p.AutoCancelPendingPipelines,
 		AutoDevopsDeployStrategy:                 p.AutoDevopsDeployStrategy,
@@ -877,9 +869,6 @@ func applyCreateBuildOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 	if input.BuildGitStrategy != "" {
 		opts.BuildGitStrategy = new(input.BuildGitStrategy)
 	}
-	if input.BuildCoverageRegex != "" {
-		opts.BuildCoverageRegex = new(input.BuildCoverageRegex)
-	}
 	if input.PackagesEnabled != nil {
 		opts.PackagesEnabled = input.PackagesEnabled //nolint:staticcheck // Preserve backward-compatible input field.
 	}
@@ -1044,7 +1033,6 @@ func applyCreateAccessLevels(opts *gl.CreateProjectOptions, input CreateInput) {
 	opts.RepositoryAccessLevel = accessLevelPtr(input.RepositoryAccessLevel)
 	opts.ForkingAccessLevel = accessLevelPtr(input.ForkingAccessLevel)
 	opts.AnalyticsAccessLevel = accessLevelPtr(input.AnalyticsAccessLevel)
-	opts.OperationsAccessLevel = accessLevelPtr(input.OperationsAccessLevel)
 	opts.ReleasesAccessLevel = accessLevelPtr(input.ReleasesAccessLevel)
 	opts.EnvironmentsAccessLevel = accessLevelPtr(input.EnvironmentsAccessLevel)
 	opts.FeatureFlagsAccessLevel = accessLevelPtr(input.FeatureFlagsAccessLevel)
@@ -1433,9 +1421,6 @@ func applyUpdatePipelineOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.BuildGitStrategy != "" {
 		opts.BuildGitStrategy = new(input.BuildGitStrategy)
 	}
-	if input.BuildCoverageRegex != "" {
-		opts.BuildCoverageRegex = new(input.BuildCoverageRegex)
-	}
 	if input.AutoCancelPendingPipelines != "" {
 		opts.AutoCancelPendingPipelines = new(input.AutoCancelPendingPipelines)
 	}
@@ -1549,7 +1534,6 @@ func applyUpdateAccessLevelOpts(opts *gl.EditProjectOptions, input UpdateInput) 
 	setAccessLevel(&opts.RepositoryAccessLevel, input.RepositoryAccessLevel)
 	setAccessLevel(&opts.ForkingAccessLevel, input.ForkingAccessLevel)
 	setAccessLevel(&opts.AnalyticsAccessLevel, input.AnalyticsAccessLevel)
-	setAccessLevel(&opts.OperationsAccessLevel, input.OperationsAccessLevel)
 	setAccessLevel(&opts.ReleasesAccessLevel, input.ReleasesAccessLevel)
 	setAccessLevel(&opts.EnvironmentsAccessLevel, input.EnvironmentsAccessLevel)
 	setAccessLevel(&opts.FeatureFlagsAccessLevel, input.FeatureFlagsAccessLevel)

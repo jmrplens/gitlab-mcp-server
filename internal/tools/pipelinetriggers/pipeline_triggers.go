@@ -26,7 +26,6 @@ type Output struct {
 	Owner       *UserOutput `json:"owner,omitempty"`
 	CreatedAt   string      `json:"created_at,omitempty"`
 	UpdatedAt   string      `json:"updated_at,omitempty"`
-	DeletedAt   string      `json:"deleted_at,omitempty"`
 	LastUsed    string      `json:"last_used,omitempty"`
 	ExpiresAt   string      `json:"expires_at,omitempty"`
 }
@@ -329,7 +328,6 @@ func convertTrigger(t *gl.PipelineTrigger, extra toolutil.PipelineTriggerExtra) 
 		Owner:       userOutput(t.Owner),
 		CreatedAt:   toolutil.FormatTimePtr(t.CreatedAt),
 		UpdatedAt:   toolutil.FormatTimePtr(t.UpdatedAt),
-		DeletedAt:   toolutil.FormatTimePtr(t.DeletedAt),
 		LastUsed:    toolutil.FormatTimePtr(t.LastUsed),
 		ExpiresAt:   toolutil.FormatTimePtr(extra.ExpiresAt),
 	}
