@@ -2,10 +2,12 @@
 package dynamic
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"os"
 	"slices"
@@ -1404,6 +1406,81 @@ func assertSearchDocumentSchemaFields(t *testing.T, document searchDocument) {
 	}
 }
 
+// TestInferCapability_GroupsEveryDomainUnderOneCapability verifies the
+// capability a search document carries for each family of domains, including
+// the ones reached by prefix or by the action name rather than by an exact
+// domain match.
+//
+// Capability is a search field: a domain that falls into the wrong one, or into
+// the catch-all when a family exists for it, is ranked against the wrong
+// queries. The prefixed and action-name cases are the ones a new domain lands
+// in, which is why each is named here rather than left to the exact matches.
+func TestInferCapability_GroupsEveryDomainUnderOneCapability(t *testing.T) {
+	cases := []struct {
+		name   string
+		domain string
+		action string
+		want   string
+	}{
+		{name: "merge request domain", domain: "merge_request", action: "list", want: "code_review"},
+		{name: "merge request review domain", domain: "mr_review", action: "changes_get", want: "code_review"},
+		{name: "an mr prefixed domain", domain: "mr_note", action: "list", want: "code_review"},
+		{name: "issue domain", domain: "issue", action: "list", want: "work_item"},
+		{name: "issue named in the action", domain: "epic", action: "issue_list", want: "work_item"},
+		{name: "pipeline domain", domain: "pipeline", action: "list", want: "ci_cd"},
+		{name: "job domain", domain: "job", action: "list", want: "ci_cd"},
+		{name: "a ci prefixed domain", domain: "ci_variable", action: "list", want: "ci_cd"},
+		{name: "repository domain", domain: "repository", action: "tree", want: "source_control"},
+		{name: "branch domain", domain: "branch", action: "list", want: "source_control"},
+		{name: "tag domain", domain: "tag", action: "list", want: "source_control"},
+		{name: "commit domain", domain: "commit", action: "list", want: "source_control"},
+		{name: "release domain", domain: "release", action: "list", want: "delivery"},
+		{name: "package domain", domain: "package", action: "list", want: "delivery"},
+		{name: "project domain", domain: "project", action: "get", want: "collaboration"},
+		{name: "group domain", domain: "group", action: "get", want: "collaboration"},
+		{name: "user domain", domain: "user", action: "current", want: "collaboration"},
+		{name: "a domain with no family is its own capability", domain: "snippet", action: "list", want: "snippet"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := inferCapability(tc.domain, tc.action); got != tc.want {
+				t.Errorf("inferCapability(%q, %q) = %q, want %q", tc.domain, tc.action, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestInferActionScope_PrefersTheSchemaThenTheDomain verifies that an action's
+// scope is read from the params it takes when it takes one that says so, and
+// from its domain otherwise.
+//
+// The schema is the stronger evidence: a group action that takes a project_id
+// really is project-scoped. The domain fallback carries the two spellings of
+// the user domain, since both reach the catalog.
+func TestInferActionScope_PrefersTheSchemaThenTheDomain(t *testing.T) {
+	cases := []struct {
+		name   string
+		domain string
+		schema map[string]any
+		want   string
+	}{
+		{name: "a project_id param", domain: "group", schema: schemaWithProperties("project_id"), want: "project"},
+		{name: "a group_id param", domain: "project", schema: schemaWithProperties("group_id"), want: "group"},
+		{name: "admin domain", domain: "admin", want: "instance"},
+		{name: "server domain", domain: "server", want: "instance"},
+		{name: "user domain", domain: "user", want: "user"},
+		{name: "users domain", domain: "Users ", want: "user"},
+		{name: "any other domain", domain: "snippet", want: "gitlab"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := inferActionScope(tc.domain, tc.schema); got != tc.want {
+				t.Errorf("inferActionScope(%q) = %q, want %q", tc.domain, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestDescribe_CanonicalizesObservedModelAliases verifies aliases observed in
 // model output so dynamic execution remains tolerant of alternate naming.
 func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
@@ -2217,6 +2294,56 @@ func TestExecute_ReportsUnknownAndMissingParamsBeforeDispatch(t *testing.T) {
 	}
 }
 
+// TestExecute_InvalidParamsReportOnlyTheSectionsThatApply verifies that the
+// invalid-params refusal carries the unknown list, the suggestions and the
+// missing list only when each has something to say.
+//
+// The three sections are independent guards over the same message. A missing
+// required param must not be announced under "Unknown params", an unknown one
+// that resembles nothing must not be answered "Did you mean ?", and a call that
+// supplied every required param must not be told something is missing: each of
+// those reads as a different mistake than the one the caller made.
+func TestExecute_InvalidParamsReportOnlyTheSectionsThatApply(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	t.Run("a missing param is not announced as an unknown one", func(t *testing.T) {
+		result, _, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "project.get", Params: map[string]any{}})
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+		if result == nil || !result.IsError {
+			t.Fatalf("Execute() result = %+v, want tool error", result)
+		}
+		text := textContent(result)
+		if !strings.Contains(text, "Missing required params: project_id.") {
+			t.Fatalf("Execute() error text = %q, want the missing param named", text)
+		}
+		if strings.Contains(text, "Unknown params") {
+			t.Fatalf("Execute() error text = %q, want no unknown-params section", text)
+		}
+	})
+
+	t.Run("an unknown param that resembles nothing gets no suggestion", func(t *testing.T) {
+		result, _, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "project.get", Params: map[string]any{"project_id": 123, "zzzzzzzz": true}})
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+		if result == nil || !result.IsError {
+			t.Fatalf("Execute() result = %+v, want tool error", result)
+		}
+		text := textContent(result)
+		if !strings.Contains(text, "Unknown params: zzzzzzzz.") {
+			t.Fatalf("Execute() error text = %q, want the unknown param named", text)
+		}
+		if strings.Contains(text, "Did you mean") {
+			t.Fatalf("Execute() error text = %q, want no suggestion section", text)
+		}
+		if strings.Contains(text, "Missing required params") {
+			t.Fatalf("Execute() error text = %q, want no missing-params section", text)
+		}
+	})
+}
+
 // TestExecute_RejectsUnsupportedPipelineScheduleVariableSecurityFields verifies
 // dynamic execute does not silently drop user-supplied security intent.
 func TestExecute_RejectsUnsupportedPipelineScheduleVariableSecurityFields(t *testing.T) {
@@ -2270,6 +2397,162 @@ func TestExecute_RejectsIssueLifecycleAliasStateConflict(t *testing.T) {
 	}
 }
 
+// TestExecute_IssueLifecycleAliasAcceptsAnAgreeingOrUnreadableStateEvent
+// verifies that the conflict guard refuses a state_event only when this server
+// can read it AND it disagrees with the alias.
+//
+// Either half alone must let the call through: a caller who spells issue.close
+// with state_event=closed has asked for the same thing twice, and a value the
+// alias table does not know is GitLab's to reject rather than ours to
+// reinterpret. Turning the conjunction into a disjunction would refuse both,
+// which is why the two cases are asserted to dispatch rather than error.
+func TestExecute_IssueLifecycleAliasAcceptsAnAgreeingOrUnreadableStateEvent(t *testing.T) {
+	cases := []struct {
+		name       string
+		stateEvent string
+		want       string
+	}{
+		{name: "an agreeing spelling is normalized and dispatched", stateEvent: "closed", want: "close"},
+		{name: "a value this server cannot read is passed through", stateEvent: "archived", want: "archived"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := NewRegistry(testRoutes(t))
+
+			result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "issue.close", Params: map[string]any{"project_id": 123, "issue_iid": 1, "state_event": tc.stateEvent}})
+			if err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Execute() result = %+v, want a dispatched call", result)
+			}
+			data, ok := output.(map[string]any)
+			if !ok {
+				t.Fatalf("Execute() output type = %T, want map[string]any", output)
+			}
+			if data["state_event"] != tc.want {
+				t.Fatalf("Execute() state_event = %v, want %q", data["state_event"], tc.want)
+			}
+		})
+	}
+}
+
+// TestExecute_IssueLifecycleAliasInjectsStateEventOnlyIntoIssueUpdate verifies
+// that the lifecycle alias fills state_event only when the action it resolved
+// to really is issue.update.
+//
+// The alias exists because issue.close is a compatibility spelling of
+// issue.update, so the injected parameter is meaningful only for that handler.
+// A catalog that registers issue.close as an action of its own must be
+// dispatched with the params the caller sent and nothing added.
+func TestExecute_IssueLifecycleAliasInjectsStateEventOnlyIntoIssueUpdate(t *testing.T) {
+	var captured map[string]any
+	registry := NewRegistry(map[string]toolutil.ActionMap{
+		"gitlab_issue": {
+			"close": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					captured = maps.Clone(params)
+					return map[string]any{"closed": true}, nil
+				},
+			},
+		},
+	})
+
+	result, _, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "issue.close", Params: map[string]any{"project_id": 123, "issue_iid": 1}})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Execute() result = %+v, want a dispatched call", result)
+	}
+	if _, injected := captured["state_event"]; injected {
+		t.Fatalf("Execute() dispatched params = %v, want no injected state_event", captured)
+	}
+}
+
+// TestExecute_LogsTheNormalizationCountOnlyWhenThereIsOne verifies the debug
+// record that says how many compatibility normalizations a dispatch applied:
+// it is written when there was at least one, carries their number, and is not
+// written at all for a call that needed none.
+//
+// The count is the sum of the common and action-scoped normalizations, and the
+// record is the only place either is observable. A call whose params were taken
+// verbatim must stay silent, or the line stops meaning anything.
+func TestExecute_LogsTheNormalizationCountOnlyWhenThereIsOne(t *testing.T) {
+	logs := captureDebugSlog(t)
+	registry := NewRegistry(testRoutes(t))
+
+	result, _, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "project.get", Params: map[string]any{"project_id": 123}})
+	if err != nil || result == nil || result.IsError {
+		t.Fatalf("Execute(project.get) result = %+v, err = %v, want a dispatched call", result, err)
+	}
+	if counts := normalizationLogCounts(t, logs); len(counts) != 0 {
+		t.Fatalf("normalization records for a call that needed none = %v, want none", counts)
+	}
+
+	result, _, err = registry.Execute(t.Context(), nil, ExecuteInput{Action: "issue.close", Params: map[string]any{"project_id": 123, "issue_iid": 1}})
+	if err != nil || result == nil || result.IsError {
+		t.Fatalf("Execute(issue.close) result = %+v, err = %v, want a dispatched call", result, err)
+	}
+	counts := normalizationLogCounts(t, logs)
+	if len(counts) != 1 {
+		t.Fatalf("normalization records for the lifecycle alias = %v, want exactly one", counts)
+	}
+	if counts[0] != 1 {
+		t.Fatalf("normalizations = %d, want 1 (the state_event the alias filled in)", counts[0])
+	}
+}
+
+// captureDebugSlog redirects the default logger to a buffer at debug level for
+// the rest of the test, so a record the server writes below the default level
+// can be asserted on.
+func captureDebugSlog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	original := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(original) })
+	return &buf
+}
+
+// normalizationLogCounts returns the normalizations attribute of every param
+// normalization record written to buf so far, in order.
+func normalizationLogCounts(t *testing.T, buf *bytes.Buffer) []int {
+	t.Helper()
+	counts := make([]int, 0)
+	for line := range strings.SplitSeq(strings.TrimSpace(buf.String()), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var record struct {
+			Msg            string `json:"msg"`
+			Normalizations int    `json:"normalizations"`
+		}
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatalf("decode log line %q: %v", line, err)
+		}
+		if record.Msg == "normalized dynamic action params" {
+			counts = append(counts, record.Normalizations)
+		}
+	}
+	return counts
+}
+
+// TestExecuteCallName_FallsBackToTheToolNameForAnEmptyAction verifies how a
+// dynamic dispatch is named in a log record: with the action when there is one,
+// and with the bare tool name when there is not.
+//
+// A refusal is logged before the action is known, so the empty case is real:
+// naming it "gitlab_execute_action/" would read as an action whose ID is blank.
+func TestExecuteCallName_FallsBackToTheToolNameForAnEmptyAction(t *testing.T) {
+	if got := executeCallName(""); got != ExecuteActionToolName {
+		t.Errorf("executeCallName(\"\") = %q, want %q", got, ExecuteActionToolName)
+	}
+	if got := executeCallName("issue.list"); got != ExecuteActionToolName+"/issue.list" {
+		t.Errorf("executeCallName(issue.list) = %q, want the tool name and the action", got)
+	}
+}
+
 // TestMissingDynamicRequiredParams_AcceptsAnyOfAlternatives verifies execute
 // validation accepts either single-file or multi-file snippet creation shapes.
 func TestMissingDynamicRequiredParams_AcceptsAnyOfAlternatives(t *testing.T) {
@@ -2290,6 +2573,54 @@ func TestMissingDynamicRequiredParams_AcceptsAnyOfAlternatives(t *testing.T) {
 	if got := missingDynamicRequiredParams(schema, map[string]any{"project_id": "p", "title": "t", "file_name": "a.md"}); !slices.Equal(got, []string{"content"}) {
 		t.Fatalf("missingDynamicRequiredParams(partial) = %v, want content", got)
 	}
+}
+
+// TestMissingAlternativeRequiredParams_ReportsTheCheapestUnsatisfiedGroup
+// verifies that when no alternative is satisfied the refusal names the one
+// closest to being satisfied, not the first one declared.
+//
+// The caller is being told what to send next, so the shortest list of missing
+// params is the useful answer: reporting "file_name, content" when adding
+// "files" alone would do sends them the long way round.
+func TestMissingAlternativeRequiredParams_ReportsTheCheapestUnsatisfiedGroup(t *testing.T) {
+	schema := map[string]any{"anyOf": []any{
+		map[string]any{"required": []any{"file_name", "content"}},
+		map[string]any{"required": []any{"files"}},
+	}}
+
+	if got := missingAlternativeRequiredParams(schema, map[string]any{"project_id": "p"}); !slices.Equal(got, []string{"files"}) {
+		t.Fatalf("missingAlternativeRequiredParams() = %v, want the single-param alternative", got)
+	}
+}
+
+// TestAlternativeRequiredParamGroups_KeywordAndGroupSelection verifies which
+// alternatives the validator reads out of a schema: an anyOf that declares no
+// alternatives leaves oneOf to answer, and an alternative that requires nothing
+// contributes no group.
+//
+// Both shapes look like "there are alternatives" from the outside and mean the
+// opposite. An empty anyOf that stopped the search would hide a real oneOf, and
+// an empty group would satisfy every call, which turns the whole check off.
+func TestAlternativeRequiredParamGroups_KeywordAndGroupSelection(t *testing.T) {
+	t.Run("an empty anyOf falls back to oneOf", func(t *testing.T) {
+		groups := alternativeRequiredParamGroups(map[string]any{
+			"anyOf": []any{},
+			"oneOf": []any{map[string]any{"required": []any{"files"}}},
+		})
+		if len(groups) != 1 || !slices.Equal(groups[0], []string{"files"}) {
+			t.Fatalf("alternativeRequiredParamGroups() = %v, want the oneOf group", groups)
+		}
+	})
+
+	t.Run("an alternative requiring nothing is skipped", func(t *testing.T) {
+		groups := alternativeRequiredParamGroups(map[string]any{"anyOf": []any{
+			map[string]any{"required": []any{}},
+			map[string]any{"required": []any{"files"}},
+		}})
+		if len(groups) != 1 || !slices.Equal(groups[0], []string{"files"}) {
+			t.Fatalf("alternativeRequiredParamGroups() = %v, want only the group that requires something", groups)
+		}
+	})
 }
 
 // TestExecute_UnknownActionSuggestsCanonicalIDs verifies the Execute_UnknownActionSuggestsCanonicalIDs handler.
@@ -2611,6 +2942,31 @@ func TestAnnotateActionHeader_DegenerateSchemas_ReturnedUnchanged(t *testing.T) 
 	}
 	if got := annotateActionHeader(nilAction); got != nilAction {
 		t.Errorf("annotateActionHeader(schema with nil action) = %v, want the same schema", got)
+	}
+}
+
+// TestAnnotateActionHeader_KeepsAnnotationsTheActionPropertyAlreadyCarries
+// verifies that the x-mcp-header annotation is added to the action property's
+// existing Extra map rather than replacing it.
+//
+// Extra marshals inline, so every keyword in it is published in tools/list.
+// Allocating a fresh map whenever one is already there would silently drop
+// whatever another annotation put on the same property.
+func TestAnnotateActionHeader_KeepsAnnotationsTheActionPropertyAlreadyCarries(t *testing.T) {
+	schema := &jsonschema.Schema{
+		Type: "object",
+		Properties: map[string]*jsonschema.Schema{
+			executeActionActionParam: {Type: "string", Extra: map[string]any{"x-other-keyword": "kept"}},
+		},
+	}
+
+	annotated := annotateActionHeader(schema)
+	extra := annotated.Properties[executeActionActionParam].Extra
+	if extra[xMCPHeaderKeyword] != executeActionHeaderSuffix {
+		t.Errorf("action %s = %v, want %q", xMCPHeaderKeyword, extra[xMCPHeaderKeyword], executeActionHeaderSuffix)
+	}
+	if extra["x-other-keyword"] != "kept" {
+		t.Errorf("action extra = %v, want the pre-existing keyword kept", extra)
 	}
 }
 
@@ -4477,6 +4833,80 @@ func TestRegistry_AllActionsReadOnly(t *testing.T) {
 	})
 }
 
+// TestRegisterCatalogFindExecuteTools_AnnotatesExecuteFromWhatItCanReach
+// verifies that the execute tool's annotations follow the catalog it was
+// registered with: read-only and non-destructive when every action it can
+// dispatch is a read, and the reverse when one of them can mutate.
+//
+// This is what keeps a client that prunes by ReadOnlyHint from dropping the
+// only way to run the reads a narrowed credential is still entitled to, so the
+// annotation has to be derived rather than fixed.
+func TestRegisterCatalogFindExecuteTools_AnnotatesExecuteFromWhatItCanReach(t *testing.T) {
+	cases := []struct {
+		name          string
+		updateIsARead bool
+	}{
+		{name: "every action is a read", updateIsARead: true},
+		{name: "one action can mutate", updateIsARead: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_project"})
+			noopRoute := toolutil.ActionRoute{Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"ok": true}, nil
+			}}
+			group.SetAction(actioncatalog.Action{Name: "get", ReadOnly: true, Route: noopRoute})
+			group.SetAction(actioncatalog.Action{Name: "update", ReadOnly: tc.updateIsARead, Route: noopRoute})
+			catalog := actioncatalog.NewCatalog()
+			if err := catalog.AddGroup(group); err != nil {
+				t.Fatalf("AddGroup() error = %v", err)
+			}
+
+			server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
+			RegisterCatalogFindExecuteTools(server, catalog)
+			executeTool := listedTool(t, listDynamicTools(t, server), executeActionToolName)
+
+			if executeTool.Annotations == nil {
+				t.Fatalf("gitlab_execute_action annotations = nil, want derived annotations")
+			}
+			if executeTool.Annotations.ReadOnlyHint != tc.updateIsARead {
+				t.Errorf("gitlab_execute_action ReadOnlyHint = %t, want %t", executeTool.Annotations.ReadOnlyHint, tc.updateIsARead)
+			}
+			if executeTool.Annotations.DestructiveHint == nil {
+				t.Fatalf("gitlab_execute_action DestructiveHint = nil, want the negation of the read-only hint")
+			}
+			if *executeTool.Annotations.DestructiveHint == tc.updateIsARead {
+				t.Errorf("gitlab_execute_action DestructiveHint = %t, want %t", *executeTool.Annotations.DestructiveHint, !tc.updateIsARead)
+			}
+		})
+	}
+}
+
+// listDynamicTools connects an in-memory client to server and returns what
+// tools/list answers, which is the surface a real client sees.
+func listDynamicTools(t *testing.T, server *mcp.Server) []*mcp.Tool {
+	t.Helper()
+	st, ct := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { serverSession.Close() })
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "dynamic-client", Version: "0"}, nil)
+	session, err := client.Connect(t.Context(), ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools() error = %v", err)
+	}
+	return tools.Tools
+}
+
 func assertDescribeRequiresAction(t *testing.T, registry *Registry) {
 	t.Helper()
 	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{})
@@ -4883,6 +5313,9 @@ func TestDynamicParamValidation_DefensiveBranches(t *testing.T) {
 	if got := unknownDynamicParamNames(map[string]any{"confirm": true}, []string{"project_id"}); len(got) != 0 {
 		t.Fatalf("unknownDynamicParamNames(confirm) = %v, want empty", got)
 	}
+	if got := unknownDynamicParamNames(map[string]any{"project_id": 1}, nil); got != nil {
+		t.Fatalf("unknownDynamicParamNames(no valid params) = %v, want nil", got)
+	}
 	if got := rootRequiredParams(nil); got != nil {
 		t.Fatalf("rootRequiredParams(nil) = %v, want nil", got)
 	}
@@ -4897,6 +5330,23 @@ func TestDynamicParamValidation_DefensiveBranches(t *testing.T) {
 	}
 	if got := closestDynamicParamName("proj", []string{"project_id"}); got != "project_id" {
 		t.Fatalf("closestDynamicParamName() = %q, want project_id", got)
+	}
+}
+
+// TestClosestDynamicParamName_NearestWinsAndAFarNameGetsNoSuggestion verifies
+// which candidate a typo is corrected to: the nearest one, the first of several
+// equally near ones, and none at all when nothing is close.
+//
+// The suggestion is printed as "you meant this", so a wrong one is worse than
+// silence: it sends the caller to a param that has nothing to do with what they
+// typed. The tie case pins the first-wins rule, which is what makes the
+// suggestion stable for a caller who retries the same call.
+func TestClosestDynamicParamName_NearestWinsAndAFarNameGetsNoSuggestion(t *testing.T) {
+	if got := closestDynamicParamName("aaa", []string{"aab", "aac"}); got != "aab" {
+		t.Errorf("closestDynamicParamName(equally near candidates) = %q, want the first of them", got)
+	}
+	if got := closestDynamicParamName("zzzzzzzz", []string{"project_id"}); got != "" {
+		t.Errorf("closestDynamicParamName(nothing close) = %q, want no suggestion", got)
 	}
 }
 
@@ -5101,11 +5551,12 @@ func (value testEnumStringer) String() string { return string(value) }
 // properties, empty descriptions, stringers, numbers, booleans, and strings.
 func TestSchemaSearchTermHelpers_Branches(t *testing.T) {
 	schema := map[string]any{"properties": map[string]any{
-		"plain":      "not-object",
-		"empty_desc": map[string]any{"description": "   "},
+		"plain":        "not-object",
+		"empty_desc":   map[string]any{"description": "   "},
+		"numeric_desc": map[string]any{"description": 42},
 		"state": map[string]any{
 			"description": "Merge request state",
-			"enum":        []any{"opened", testEnumStringer("closed"), 30, true, struct{}{}},
+			"enum":        []any{"opened", testEnumStringer("closed"), 30, int64(64), 1.5, true, struct{}{}},
 		},
 		"kind": map[string]any{"enum": []string{"bug", "feature"}},
 	}}
@@ -5113,7 +5564,7 @@ func TestSchemaSearchTermHelpers_Branches(t *testing.T) {
 		t.Fatalf("schemaPropertyDescriptions() = %v, want merge request state", descriptions)
 	}
 	enums := strings.Join(schemaPropertyEnumValues(schema), ",")
-	for _, want := range []string{"opened", "closed", "30", "true", "bug", "feature"} {
+	for _, want := range []string{"opened", "closed", "30", "64", "1.5", "true", "bug", "feature"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(enums, want) {
 				t.Fatalf("schemaPropertyEnumValues() = %q, missing %q", enums, want)
@@ -5145,6 +5596,28 @@ func TestSuggestSearchTokens_Branches(t *testing.T) {
 	fallbacks := registry.suggestSearchTokens("zzzz", 2)
 	if len(fallbacks) != 2 || fallbacks[0] != "project" || fallbacks[1] != "issue" {
 		t.Fatalf("suggestSearchTokens(fallback) = %v, want first two fallbacks", fallbacks)
+	}
+}
+
+// TestSuggestSearchTokens_OrdersByDistanceBeforeName verifies that the tokens
+// offered after a search that found nothing are ordered by how close they are
+// to the query, and that a token more than two edits away is not offered at all.
+//
+// The candidates are walked in alphabetical order, so ordering by name alone
+// would put a far token above a near one and the first suggestion a model reads
+// would be the worse guess. The cut-off is what keeps the list to tokens the
+// caller plausibly meant; every term of the query gets its own distance, and the
+// nearest of them decides.
+func TestSuggestSearchTokens_OrdersByDistanceBeforeName(t *testing.T) {
+	registry := &Registry{SearchIndex: searchIndex{byToken: map[string][]int{
+		"aabcc":  {0}, // two edits from "abc", and alphabetically first
+		"abcd":   {1}, // one edit from "abc"
+		"zzzzzz": {2}, // further than the cut-off, so never offered
+	}, all: []int{0, 1, 2}}}
+
+	got := registry.suggestSearchTokens("abc abcdd", 2)
+	if !slices.Equal(got, []string{"abcd", "aabcc"}) {
+		t.Fatalf("suggestSearchTokens() = %v, want the nearer token first", got)
 	}
 }
 
@@ -5433,6 +5906,39 @@ func TestAddServiceAccountPATActionTags_TagShapes(t *testing.T) {
 				if !slices.Contains(got, want) {
 					t.Fatalf("addServiceAccountPATActionTags() tags = %v, want %q", got, want)
 				}
+			}
+		})
+	}
+}
+
+// TestAddServiceAccountPATActionTags_StopsAtTheBaseTagsWithoutAVerb verifies
+// that an action with no service_account_pat_ verb suffix, and one whose suffix
+// is empty, both stop after the base tags.
+//
+// The verb is spliced into five phrases, so going on without one publishes tags
+// with a hole in them ("group service account pat ") and phrases that begin
+// with a blank word, which are matched by queries they have nothing to do with.
+func TestAddServiceAccountPATActionTags_StopsAtTheBaseTagsWithoutAVerb(t *testing.T) {
+	base := []string{
+		"group service account personal access token",
+		"group service account personal access tokens",
+		"group service account pat",
+		"group service account token",
+	}
+	cases := []struct {
+		name   string
+		action string
+	}{
+		{name: "no verb suffix at all", action: "service_account_pat"},
+		{name: "an empty verb suffix", action: "service_account_pat_"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			add := func(values ...string) { got = append(got, values...) }
+			addServiceAccountPATActionTags(add, "group", tc.action)
+			if !slices.Equal(got, base) {
+				t.Fatalf("addServiceAccountPATActionTags(%q) tags = %v, want only the base tags %v", tc.action, got, base)
 			}
 		})
 	}
@@ -5990,6 +6496,191 @@ func TestAddProtectionTags_NonGroupProtectedEnv(t *testing.T) {
 			}
 		})
 	}
+}
+
+// actionTaggerCase describes one branch of an action tagger: the identifiers it
+// is handed, whether the tagger should claim them, and tags that must or must
+// not come out of it.
+type actionTaggerCase struct {
+	name    string
+	id      string
+	domain  string
+	action  string
+	matched bool
+	want    []string
+	absent  []string
+}
+
+// runActionTaggerCases drives one tagger over its cases.
+//
+// Each tagger claims an action by returning true, which stops the chain, so
+// what it claims matters as much as what it tags: a tagger that claims an
+// action belonging to a later one silently takes that action's tags away.
+func runActionTaggerCases(t *testing.T, tagger actionTagger, cases []actionTaggerCase) {
+	t.Helper()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			matched := tagger(func(values ...string) { got = append(got, values...) }, tc.id, tc.domain, tc.action)
+			if matched != tc.matched {
+				t.Fatalf("tagger(%q, %q, %q) claimed = %t, want %t (tags %v)", tc.id, tc.domain, tc.action, matched, tc.matched, got)
+			}
+			if !matched && len(got) != 0 {
+				t.Errorf("tags = %v, want none from a tagger that did not claim the action", got)
+			}
+			for _, want := range tc.want {
+				if !slices.Contains(got, want) {
+					t.Errorf("tags = %v, want %q", got, want)
+				}
+			}
+			for _, absent := range tc.absent {
+				if slices.Contains(got, absent) {
+					t.Errorf("tags = %v, want %q absent", got, absent)
+				}
+			}
+		})
+	}
+}
+
+// TestTagAppender_NormalizesValuesAndDropsBlankOnes verifies the collector every
+// tagger writes through: it trims and lowercases each value and keeps nothing
+// that is blank.
+//
+// Tags are matched against a lowercased query, so an untrimmed or capitalized
+// tag matches nothing, and a blank one sits in the index costing a comparison
+// per search while matching nothing either.
+func TestTagAppender_NormalizesValuesAndDropsBlankOnes(t *testing.T) {
+	var tags []string
+	add := tagAppender(&tags)
+
+	add("  Protected Environment ", "", "   ", "MR")
+
+	if !slices.Equal(tags, []string{"protected environment", "mr"}) {
+		t.Fatalf("tagAppender() tags = %v, want the normalized non-blank values", tags)
+	}
+}
+
+// TestAddIDPatternTags_ClaimsOnlyTheIDShapesItRecognizes verifies the tagger
+// keyed on the canonical ID: each pattern claims its own actions, and the
+// scoped ones claim them only in the domain they name.
+//
+// Two of these branches read an ID pattern AND a domain, which is what keeps a
+// group member action out of the project member phrases and a service account
+// action out of both when it belongs to neither scope. Losing either half sends
+// a search for "group membership" to the project action.
+func TestAddIDPatternTags_ClaimsOnlyTheIDShapesItRecognizes(t *testing.T) {
+	runActionTaggerCases(t, addIDPatternTags, []actionTaggerCase{
+		{name: "hook id", id: "project.hook_add", domain: "project", action: "hook_add", matched: true, want: []string{"webhook"}},
+		{name: "deploy key id", id: "project.deploy_key_list", domain: "project", action: "deploy_key_list", matched: true, want: []string{"deploy key"}},
+		{name: "deploy token id", id: "project.deploy_token_list", domain: "project", action: "deploy_token_list", matched: true, want: []string{"deploy token"}},
+		{name: "member id in the project domain", id: "project.member_list", domain: "project", action: "member_list", matched: true, want: []string{"project member"}, absent: []string{"group member"}},
+		{name: "member id in the group domain", id: "group.member_list", domain: "group", action: "member_list", matched: true, want: []string{"group member"}, absent: []string{"project member"}},
+		{name: "member id in an unrelated domain", id: "epic.member_list", domain: "epic", action: "member_list"},
+		{name: "service account pat id", id: "group.service_account_pat_rotate", domain: "group", action: "service_account_pat_rotate", matched: true, want: []string{"group service account pat rotate"}},
+		{name: "service account id in the project domain", id: "project.service_account_list", domain: "project", action: "service_account_list", matched: true, want: []string{"project service account"}},
+		{name: "service account id in the group domain", id: "group.service_account_list", domain: "group", action: "service_account_list", matched: true, want: []string{"group service account"}},
+		{name: "service account id in an unrelated domain", id: "user.service_account_list", domain: "user", action: "service_account_list"},
+		{name: "discover project domain", id: "discover_project.resolve", domain: "discover_project", action: "resolve", matched: true, want: []string{"project discovery"}},
+		{name: "interactive domain with a known flow", id: "interactive.release_create", domain: "interactive", action: "release_create", matched: true, want: []string{"wizard", "guided release creation"}},
+		{name: "interactive domain with an unknown flow", id: "interactive.epic_create", domain: "interactive", action: "epic_create", matched: true, want: []string{"wizard", "epic create"}, absent: []string{"guided release creation"}},
+		{name: "access token id", id: "project.access_token_project_create", domain: "project", action: "access_token_project_create", matched: true, want: []string{"project access token"}},
+		{name: "a project action with no id pattern", id: "project.star", domain: "project", action: "star"},
+		{name: "a group action with no id pattern", id: "group.epic_list", domain: "group", action: "epic_list"},
+	})
+}
+
+// TestAddCoreDomainTags_ClaimsOnlyItsOwnDomains verifies the tagger keyed on the
+// core domains: each domain claims its own actions, and the two branches that
+// also read the action claim only the action they name.
+//
+// Every case that must not be claimed is a real risk here rather than a
+// hypothetical one: this tagger runs second, so an action it claims by mistake
+// never reaches the environment, release, package or protection taggers below
+// it and loses every tag they would have given it.
+func TestAddCoreDomainTags_ClaimsOnlyItsOwnDomains(t *testing.T) {
+	runActionTaggerCases(t, addCoreDomainTags, []actionTaggerCase{
+		{name: "the current user action", id: "user.current", domain: "user", action: "current", matched: true, want: []string{"whoami"}},
+		{name: "a user action that is not current", id: "user.list", domain: "user", action: "list"},
+		{name: "a current action in another domain", id: "project.current", domain: "project", action: "current", matched: true, absent: []string{"whoami"}},
+		{name: "project star", id: "project.star", domain: "project", action: "star", matched: true, want: []string{"star project"}},
+		{name: "project unstar", id: "project.unstar", domain: "project", action: "unstar", matched: true, want: []string{"unstar project"}},
+		{name: "a repository file action", id: "repository.file_get", domain: "repository", action: "file_get", matched: true, want: []string{"repository file"}, absent: []string{"repository tree"}},
+		{name: "the repository tree action", id: "repository.tree", domain: "repository", action: "tree", matched: true, want: []string{"repository tree"}, absent: []string{"repository file"}},
+		{name: "a repository action that is neither", id: "repository.compare", domain: "repository", action: "compare"},
+		{name: "a file action in another domain", id: "snippet.file_get", domain: "snippet", action: "file_get"},
+		{name: "a tree action in another domain", id: "group.tree", domain: "group", action: "tree"},
+		{name: "the projects search action", id: "search.projects", domain: "search", action: "projects", matched: true, want: []string{"search projects"}},
+		{name: "a search action with no phrases of its own", id: "search.blobs", domain: "search", action: "blobs", matched: true, absent: []string{"search projects"}},
+		{name: "the server health check action", id: "server.health_check", domain: "server", action: "health_check", matched: true, want: []string{"health check"}},
+		{name: "the server status action", id: "server.status", domain: "server", action: "status", matched: true, want: []string{"server status"}},
+		{name: "a server action with no phrases of its own", id: "server.version", domain: "server", action: "version", matched: true, absent: []string{"server status", "health check"}},
+		{name: "the ci catalog list action", id: "ci_catalog.list", domain: "ci_catalog", action: "list", matched: true, want: []string{"ci catalog"}},
+		{name: "merge request domain", id: "merge_request.list", domain: "merge_request", action: "list", matched: true, want: []string{"mr", aliasMergeRequest}},
+		{name: "merge request review domain", id: "mr_review.changes_get", domain: "mr_review", action: "changes_get", matched: true, want: []string{"mr changes"}},
+		{name: "ci variable domain", id: "ci_variable.create", domain: "ci_variable", action: "create", matched: true, want: []string{"ci variable", "project ci variable"}},
+		{name: "a domain this tagger does not own", id: "snippet.list", domain: "snippet", action: "list"},
+	})
+}
+
+// TestAddEnvironmentAndCITags_ClaimsOnlyItsOwnDomains verifies the environment,
+// feature flag, job and pipeline branches, including the two that read the
+// action as well as the domain.
+//
+// The pipeline schedule phrases need both halves of the action name: a schedule
+// action that is not about a variable must not be tagged "schedule variable",
+// or every schedule query ranks the variable actions alongside the ones the
+// caller meant.
+func TestAddEnvironmentAndCITags_ClaimsOnlyItsOwnDomains(t *testing.T) {
+	runActionTaggerCases(t, addEnvironmentAndCITags, []actionTaggerCase{
+		{name: "a protected environment action", id: "environment.protected_protect", domain: "environment", action: "protected_protect", matched: true, want: []string{"env", aliasProtectedEnvironment, "protect environment"}},
+		{name: "a protected environment action with no phrases of its own", id: "environment.protected_refresh", domain: "environment", action: "protected_refresh", matched: true, want: []string{aliasProtectedEnvironment}, absent: []string{"unprotect environment"}},
+		{name: "an environment deployment action", id: "environment.deployment_list", domain: "environment", action: "deployment_list", matched: true, want: []string{"environment deployment"}},
+		{name: "a feature flag user list action", id: "feature_flags.ff_user_list_get", domain: "feature_flags", action: "ff_user_list_get", matched: true, want: []string{"feature flag user list"}},
+		{name: "a feature flag action that is not a user list", id: "feature_flags.list", domain: "feature_flags", action: "list"},
+		{name: "a user list action in another domain", id: "project.ff_user_list_get", domain: "project", action: "ff_user_list_get"},
+		{name: "a job action", id: "job.artifacts", domain: "job", action: "artifacts", matched: true, want: []string{"ci job", "whole artifact archive"}},
+		{name: "a pipeline trigger action", id: "pipeline.trigger_create", domain: "pipeline", action: "trigger_create", matched: true, want: []string{"ci pipeline", "pipeline trigger", "pipeline trigger create"}},
+		{name: "a pipeline schedule variable action", id: "pipeline.schedule_create_variable", domain: "pipeline", action: "schedule_create_variable", matched: true, want: []string{"pipeline schedule variable"}},
+		{name: "a pipeline schedule action that is not about a variable", id: "pipeline.schedule_list", domain: "pipeline", action: "schedule_list", matched: true, want: []string{"ci pipeline"}, absent: []string{"pipeline schedule variable"}},
+		{name: "a domain this tagger does not own", id: "snippet.list", domain: "snippet", action: "list"},
+	})
+}
+
+// TestAddAdminReleaseTags_ClaimsOnlyItsOwnDomains verifies the admin, tag,
+// release and repository-compare branches.
+//
+// The compare branch is the one that reads both the domain and the action: the
+// phrases it adds are about comparing two refs of a repository, and a tree or a
+// branch action tagged with them would be offered for "diff between refs".
+func TestAddAdminReleaseTags_ClaimsOnlyItsOwnDomains(t *testing.T) {
+	runActionTaggerCases(t, addAdminReleaseTags, []actionTaggerCase{
+		{name: "the admin settings action", id: "admin.settings_get", domain: "admin", action: "settings_get", matched: true, want: []string{"instance settings"}},
+		{name: "an admin action with no phrases of its own", id: "admin.user_list", domain: "admin", action: "user_list", matched: true, absent: []string{"instance settings"}},
+		{name: "the tag get action", id: "tag.get", domain: "tag", action: "get", matched: true, want: []string{"verify tag"}},
+		{name: "a tag action that is not get", id: "tag.list", domain: "tag", action: "list", matched: true, absent: []string{"verify tag"}},
+		{name: "the release create action", id: "release.create", domain: "release", action: "create", matched: true, want: []string{"create release"}},
+		{name: "the repository compare action", id: "repository.compare", domain: "repository", action: "compare", matched: true, want: []string{"compare refs"}},
+		{name: "a repository action that is not compare", id: "repository.tree", domain: "repository", action: "tree"},
+		{name: "a compare action in another domain", id: "branch.compare", domain: "branch", action: "compare"},
+		{name: "a domain this tagger does not own", id: "snippet.list", domain: "snippet", action: "list"},
+	})
+}
+
+// TestAddProtectionTags_ClaimsOnlyGroupAndProtectionShapes verifies the two
+// group-scoped protection branches and the member role branch.
+//
+// Both group branches read the domain and the ID together. The group phrases
+// say "group" in them, so claiming a project action here would publish tags
+// that name the wrong scope, and claiming a group action that is about neither
+// protection would publish them for an action with no protection at all.
+func TestAddProtectionTags_ClaimsOnlyGroupAndProtectionShapes(t *testing.T) {
+	runActionTaggerCases(t, addProtectionTags, []actionTaggerCase{
+		{name: "a group protected branch action", id: "group.protected_branch_list", domain: "group", action: "protected_branch_list", matched: true, want: []string{"group protected branch", "list group protected branches"}},
+		{name: "a protected branch id in another domain", id: "project.protected_branch_list", domain: "project", action: "protected_branch_list"},
+		{name: "a group protected environment action", id: "group.protected_env_list", domain: "group", action: "protected_env_list", matched: true, want: []string{"group protected environment"}},
+		{name: "a group action about neither protection", id: "group.epic_list", domain: "group", action: "epic_list"},
+		{name: "a member role id", id: "member_role.create", domain: "member_role", action: "create", matched: true, want: []string{"custom role"}},
+	})
 }
 
 // TestServiceAccountQueryVerb_AllVerbs verifies serviceAccountQueryVerb
@@ -6608,6 +7299,28 @@ func TestExecute_WithheldActionNamesTheCauseInsteadOfCallingItUnknown(t *testing
 			t.Errorf("Execute() error text = %q, want the unknown-action message when nothing was withheld", text)
 		}
 	})
+}
+
+// TestWithheldKeySet_NormalizesKeysAndDropsBlankOnes verifies how the withheld
+// list is indexed: each key is lowercased and trimmed, and a key that is blank
+// or only spaces is not indexed at all.
+//
+// The set is looked up with the lowercased action a caller asked for, so an
+// untrimmed key would never be found. A blank one is worse than useless: it
+// would answer a caller who sent an empty action with the withheld explanation
+// instead of the "action is required" refusal.
+func TestWithheldKeySet_NormalizesKeysAndDropsBlankOnes(t *testing.T) {
+	set := withheldKeySet([]string{"  Project.Hook_Add ", "", "   "})
+
+	if _, ok := set["project.hook_add"]; !ok {
+		t.Errorf("withheldKeySet() = %v, want the normalized key indexed", set)
+	}
+	if len(set) != 1 {
+		t.Errorf("withheldKeySet() = %v, want the blank keys dropped", set)
+	}
+	if got := withheldKeySet(nil); got != nil {
+		t.Errorf("withheldKeySet(nil) = %v, want nil", got)
+	}
 }
 
 // TestRegistryShapeFor_SharedCatalogReusesOneShape verifies the split the

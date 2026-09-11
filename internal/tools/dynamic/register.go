@@ -1226,8 +1226,8 @@ func schemaPropertyDescriptions(schema map[string]any) []string {
 		if !ok {
 			continue
 		}
-		description, ok := property["description"].(string)
-		if !ok || strings.TrimSpace(description) == "" {
+		description, _ := property["description"].(string)
+		if strings.TrimSpace(description) == "" { // missing, non-string and blank alike
 			continue
 		}
 		values = append(values, strings.Join(splitSearchFieldWords(description), " "))
@@ -1886,7 +1886,7 @@ func addProtectionTags(add tagCollector, id, domain, action string) bool {
 	case domain == "group" && strings.Contains(id, "protected_branch"):
 		add("group protected branch", "group branch protection", "protected branch rule", "branch pattern")
 		addGroupProtectedBranchActionTags(add, action)
-	case domain == "group" && (strings.Contains(id, "protected_env") || strings.Contains(id, "protected_environment")):
+	case domain == "group" && strings.Contains(id, "protected_env"):
 		add("group protected environment", "group environment protection", "group deployment gate", aliasProtectedEnvironment, aliasEnvironmentProtection)
 		addGroupProtectedEnvironmentActionTags(add, action)
 	case domain == "branch" && (action == "protect" || action == "get_protected" || action == "update_protected" || action == "unprotect"):
