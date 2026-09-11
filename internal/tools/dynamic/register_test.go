@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"maps"
 	"os"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -6248,6 +6249,74 @@ func TestScoreEntryWithExplanation_KeepsTheFirstAlternativeOfATie(t *testing.T) 
 	}
 	if explanation.Reasons[0].Field != searchFieldTag || explanation.Reasons[0].MatchedValue != "mr" {
 		t.Fatalf("first reason = %+v, want the tag matched by the term as typed", explanation.Reasons[0])
+	}
+}
+
+// TestScoreEntryWithExplanation_AZeroScoreCarriesNoExplanation verifies that an
+// entry the adjustments take down to zero is returned as no match at all, with
+// the zero explanation rather than the reasons that cancelled each other.
+//
+// The fixture lands on exactly zero: the canonical id matches outright for 120,
+// and two action words the query never named take 60 each back off. The caller
+// in the search path appends only what scores above zero and throws the
+// explanation away, so nothing there can tell a populated explanation from an
+// empty one; the explain surface calls this function directly, and would report
+// a match with reasons and a total of zero.
+func TestScoreEntryWithExplanation_AZeroScoreCarriesNoExplanation(t *testing.T) {
+	t.Parallel()
+	entry := actionEntry{ID: "widget", Document: searchDocument{
+		CanonicalID: "widget",
+		Domain:      "gadget",
+		DomainWords: []string{"gadget"},
+		Action:      "widget_alpha_beta",
+		ActionWords: []string{"widget", "alpha", "beta"},
+	}}
+	terms := []searchTerm{{Raw: "widget", Alternatives: []string{"widget"}}}
+
+	score, explanation := scoreEntryWithExplanation(entry, terms)
+	if score != 0 {
+		t.Fatalf("scoreEntryWithExplanation() score = %d, want 0 for an entry the adjustments cancel", score)
+	}
+	if !reflect.DeepEqual(explanation, ScoringExplanation{}) {
+		t.Errorf("explanation = %+v, want the zero value: a score of zero is not a match to explain", explanation)
+	}
+}
+
+// TestWordizeSearchDocument_OnlyADocumentWithValuesGetsTheMap verifies the
+// precomputed word forms a search reads, and that a document with nothing to
+// precompute is left with no map at all.
+//
+// Nothing else in the suite looks at WordizedValues: the search recomputes the
+// same word form on the fly when the map is missing, so dropping the precompute
+// changes no answer and only spends the CPU it exists to save. The nil case is
+// the half that says the work was skipped rather than done into an empty map.
+func TestWordizeSearchDocument_OnlyADocumentWithValuesGetsTheMap(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		document searchDocument
+		want     map[string]string
+	}{
+		"a document with values": {
+			document: searchDocument{
+				DomainWords:    []string{"merge_request"},
+				RequiredParams: []string{"project_id"},
+			},
+			want: map[string]string{"merge_request": "merge request", "project_id": "project id"},
+		},
+		"a document with none of the seven fields": {
+			document: searchDocument{CanonicalID: "widget.list", Domain: "widget"},
+			want:     nil,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			document := tt.document
+			wordizeSearchDocument(&document)
+			if !reflect.DeepEqual(document.WordizedValues, tt.want) {
+				t.Errorf("WordizedValues = %#v, want %#v", document.WordizedValues, tt.want)
+			}
+		})
 	}
 }
 
