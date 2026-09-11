@@ -1318,6 +1318,42 @@ func TestMakeMetaHandler_ActionAlias(t *testing.T) {
 	}
 }
 
+// TestMakeMetaHandler_RoutedActionIsNeverRewrittenByAnAlias verifies that an
+// action the tool routes runs its own handler even when the alias table maps
+// its name to another action the tool also routes.
+//
+// "me" is an alias of "current". With both routed, a call naming "me" must run
+// the "me" route; with only "current" routed, the alias still resolves. The
+// first half is the shape that sent gitlab_group/group_board_list to the epic
+// boards on a licensed instance, where both actions exist.
+func TestMakeMetaHandler_RoutedActionIsNeverRewrittenByAnAlias(t *testing.T) {
+	route := func(result string) ActionRoute {
+		return Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return testOutput{Result: result}, nil
+		})
+	}
+	tests := map[string]struct {
+		routes ActionMap
+		want   string
+	}{
+		"both routed, the named one runs": {routes: ActionMap{"me": route("me"), "current": route("current")}, want: "me"},
+		"only the canonical routed":       {routes: ActionMap{"current": route("current")}, want: "current"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			handler := MakeMetaHandler("gitlab_user", tc.routes, nil)
+			_, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "me"})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			out, ok := raw.(testOutput)
+			if !ok || out.Result != tc.want {
+				t.Fatalf("raw = %#v, want the %q route", raw, tc.want)
+			}
+		})
+	}
+}
+
 // TestMakeMetaHandler_EnvironmentGetByNameUsesProtectedGet verifies that a
 // named protected environment fetch is not routed to the numeric environment
 // get action when models send the generic get action.
@@ -1399,7 +1435,6 @@ func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
 		"merge_request.spent_time_reset":     {},
 		"issue.note_create":                  {},
 		"interactive.issue_create":           {},
-		"epic_board_list":                    {},
 		"epic_discussion_update_note":        {},
 		"epic_discussion_delete_note":        {},
 	}
@@ -1466,7 +1501,6 @@ func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
 		"issue_note.list":                            "issue.note_list",
 		"issue_note.update":                          "issue.note_update",
 		"gitlab_interactive_issue.create":            "interactive.issue_create",
-		"group_board_list":                           "epic_board_list",
 		"epic_discussion_note_update":                "epic_discussion_update_note",
 		"epic_discussion_note_delete":                "epic_discussion_delete_note",
 	}

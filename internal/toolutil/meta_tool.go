@@ -186,7 +186,6 @@ var commonActionAliases = map[string]string{
 	"project_member.get":                         "project.member_get",
 	"project_member.remove":                      actionProjectMemberDelete,
 	"project_member.update":                      actionProjectMemberEdit,
-	"external_status_check.list_project_checks":  actionExternalStatusCheckListProject,
 	"feature_flag_user_list.create":              "feature_flags.ff_user_list_create",
 	"feature_flag_user_list.delete":              "feature_flags.ff_user_list_delete",
 	"feature_flag_user_list.get":                 "feature_flags.ff_user_list_get",
@@ -231,7 +230,6 @@ var commonActionAliases = map[string]string{
 	"issue_note.list":                            "issue.note_list",
 	"issue_note.update":                          "issue.note_update",
 	"gitlab_interactive_issue.create":            "interactive.issue_create",
-	"group_board_list":                           "epic_board_list",
 	"epic_discussion_note_update":                "epic_discussion_update_note",
 	"epic_discussion_note_delete":                "epic_discussion_delete_note",
 	"variable.create":                            "ci_variable.create",
@@ -240,16 +238,36 @@ var commonActionAliases = map[string]string{
 
 // NormalizeActionAlias returns the canonical action name for common shortened
 // action spellings when the canonical action exists on the target meta-tool.
+//
+// An action the tool routes is returned as it is. An alias is another spelling
+// of one action, and a name the tool already routes is an action of its own:
+// rewriting it runs a different handler than the one the caller named. That is
+// what group_board_list did on a licensed instance, where epic_board_list also
+// exists on gitlab_group and the alias turned a request for the group's issue
+// boards into its epic boards.
 func NormalizeActionAlias(action string, routes ActionMap) string {
 	if action == "" {
 		return action
 	}
-	if canonical, ok := commonActionAliases[action]; ok {
+	if _, routed := routes[action]; routed {
+		return action
+	}
+	if canonical, ok := ActionAliasTarget(action); ok {
 		if _, exists := routes[canonical]; exists {
 			return canonical
 		}
 	}
 	return action
+}
+
+// ActionAliasTarget reports the action a common alias spelling stands for,
+// whatever tool it is sent to. [NormalizeActionAlias] decides whether a call
+// is rewritten; this is only the table's lookup, and it is exported so a test
+// holding the whole catalog can prove that no alias is the name of an action
+// of its own.
+func ActionAliasTarget(action string) (string, bool) {
+	canonical, ok := commonActionAliases[action]
+	return canonical, ok
 }
 
 // NormalizeActionAliasForParams returns the canonical action name for aliases

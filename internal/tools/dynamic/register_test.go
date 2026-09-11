@@ -1446,7 +1446,6 @@ func TestDescribe_CanonicalizesObservedModelAliases(t *testing.T) {
 		"project.member_remove":                     "project.member_delete",
 		"project_member.remove":                     "project.member_delete",
 		"webhook.add":                               "project.hook_add",
-		"group.ldap_link_delete":                    "group.ldap_link_delete_for_provider",
 		"release.create_link":                       "release.link_create",
 		"package.list_project":                      "package.list",
 	}

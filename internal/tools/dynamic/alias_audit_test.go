@@ -18,6 +18,7 @@ func TestAuditActionAliases_ReportsGovernanceFindings(t *testing.T) {
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_project"})
 	route := toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil })
 	group.SetAction(actioncatalog.Action{Name: "get", Route: route})
+	group.SetAction(actioncatalog.Action{Name: "list", Route: route})
 	if err := catalog.AddGroup(group); err != nil {
 		t.Fatalf("AddGroup() error = %v", err)
 	}
@@ -26,6 +27,7 @@ func TestAuditActionAliases_ReportsGovernanceFindings(t *testing.T) {
 		{Alias: "project.lookup", Canonical: "project.get"},
 		{Alias: "project.lookup", Canonical: "project.get"},
 		{Alias: "project.get", Canonical: "project.get"},
+		{Alias: "project.list", Canonical: "project.get"},
 		{Alias: "project.missing", Canonical: "project.missing"},
 		{Alias: "project.compat", Canonical: "project.get", Source: aliasSourceDeprecated},
 		{Alias: "project.ambiguous", Canonical: "project.get"},
@@ -35,6 +37,7 @@ func TestAuditActionAliases_ReportsGovernanceFindings(t *testing.T) {
 	findings := auditActionAliases(catalog, aliases)
 	wantProblems := []string{
 		"alias_equals_canonical",
+		"alias_names_another_action",
 		"ambiguous_compatibility_alias",
 		"duplicate_alias",
 		"non_canonical_target",
