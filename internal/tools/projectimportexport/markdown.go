@@ -9,76 +9,69 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatScheduleExportMarkdown coordinates format schedule export markdown for the projectimportexport package.
+// FormatScheduleExportMarkdown renders the one sentence a scheduled export
+// answers with. The sentence is this package's own literal; the cell escaper
+// is idempotent over it and is what keeps the line one line whatever a later
+// GitLab-authored message holds.
 func FormatScheduleExportMarkdown(out ScheduleExportOutput) *mcp.CallToolResult {
 	if out.Message == "" {
 		return nil
 	}
-	return toolutil.ToolResultWithMarkdown(out.Message)
+	return toolutil.ToolResultWithMarkdown(toolutil.EscapeMdTableCell(out.Message) + "\n")
 }
 
-// FormatExportStatusMarkdown coordinates format export status markdown for the projectimportexport package.
+// FormatExportStatusMarkdown renders an export's status as a card: the
+// project's identity, the status GitLab reports and the two addresses the
+// archive is reachable at when the export has finished.
 func FormatExportStatusMarkdown(out ExportStatusOutput) *mcp.CallToolResult {
 	if out.ID == 0 {
 		return nil
 	}
-	rows := []statusRow{{"Status", out.ExportStatus}}
-	appendNonEmptyStatusRow(&rows, "Message", out.Message)
-	if out.APIURL != "" {
-		appendNonEmptyStatusRow(&rows, "API URL", out.APIURL)
-	}
-	if out.WebURL != "" {
-		appendNonEmptyStatusRow(&rows, "Web URL", out.WebURL)
-	}
-	return projectImportExportStatusResult("Export Status", out.Name, out.ID, out.PathWithNamespace, rows,
-		"Use `gitlab_download_project_export` when the export status is 'finished'")
+	var b strings.Builder
+	c := statusCard(&b, "Export Status", out.Name, out.ID, out.PathWithNamespace)
+	c.Field("Status", out.ExportStatus)
+	c.Field("Message", out.Message)
+	c.Link("API URL", "", out.APIURL)
+	c.Link("Web URL", "", out.WebURL)
+	c.End(toolutil.HintAction(actionExportDownload, "download the archive once the export status is 'finished'"))
+	return toolutil.ToolResultWithMarkdown(b.String())
 }
 
-type statusRow struct {
-	Field string
-	Value string
-}
-
-func appendNonEmptyStatusRow(rows *[]statusRow, field, value string) {
-	if value != "" {
-		*rows = append(*rows, statusRow{Field: field, Value: value})
+// FormatImportStatusMarkdown renders an import's status as a card, with
+// GitLab's own failure text when the import failed.
+func FormatImportStatusMarkdown(out ImportStatusOutput) *mcp.CallToolResult {
+	if out.ID == 0 {
+		return nil
 	}
+	var b strings.Builder
+	c := statusCard(&b, "Import Status", out.Name, out.ID, out.PathWithNamespace)
+	c.Field("Status", out.ImportStatus)
+	c.Field("Type", out.ImportType)
+	c.Code("Correlation ID", out.CorrelationID)
+	c.Text("Error", out.ImportError)
+	c.End("Monitor import progress by checking status periodically")
+	return toolutil.ToolResultWithMarkdown(b.String())
 }
 
-func projectImportExportStatusResult(title, name string, id int64, path string, rows []statusRow, hint string) *mcp.CallToolResult {
-	var sb strings.Builder
-	// The title is a literal at every call site; the project's name and path
+// statusCard opens the card both status answers share: the title names which
+// of the two it is, and the project's name, id and path identify what the
+// status is about.
+func statusCard(b *strings.Builder, title, name string, id int64, path string) *toolutil.Card {
+	// The title is a literal at both call sites; the project's name and path
 	// are what whoever created it chose.
-	fmt.Fprintf(&sb, "## %s: %s\n\n", title, toolutil.EscapeMdHeading(name))
-	sb.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| ID | %d |\n", id)
-	fmt.Fprintf(&sb, "| Path | %s |\n", toolutil.EscapeMdTableCell(path))
-	for _, row := range rows {
-		fmt.Fprintf(&sb, "| %s | %s |\n", row.Field, row.Value)
-	}
-	toolutil.WriteHints(&sb, hint)
-	return toolutil.ToolResultWithMarkdown(sb.String())
+	c := toolutil.NewCard(b, title+": "+name)
+	c.Int("ID", id)
+	c.Field("Path", path)
+	return c
 }
 
-// FormatExportDownloadMarkdown coordinates format export download markdown for the projectimportexport package.
+// FormatExportDownloadMarkdown renders the one line a downloaded archive
+// answers with: the size, and where the bytes are.
 func FormatExportDownloadMarkdown(out ExportDownloadOutput) *mcp.CallToolResult {
 	if out.SizeBytes == 0 {
 		return nil
 	}
 	return toolutil.ToolResultWithMarkdown(fmt.Sprintf("Export archive downloaded: %d bytes (base64-encoded in content_base64 field)", out.SizeBytes))
-}
-
-// FormatImportStatusMarkdown coordinates format import status markdown for the projectimportexport package.
-func FormatImportStatusMarkdown(out ImportStatusOutput) *mcp.CallToolResult {
-	if out.ID == 0 {
-		return nil
-	}
-	rows := []statusRow{{"Status", out.ImportStatus}}
-	appendNonEmptyStatusRow(&rows, "Type", out.ImportType)
-	appendNonEmptyStatusRow(&rows, "Correlation ID", out.CorrelationID)
-	appendNonEmptyStatusRow(&rows, "Error", out.ImportError)
-	return projectImportExportStatusResult("Import Status", out.Name, out.ID, out.PathWithNamespace, rows,
-		"Monitor import progress by checking status periodically")
 }
 
 func init() {

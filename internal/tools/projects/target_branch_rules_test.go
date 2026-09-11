@@ -253,38 +253,48 @@ func TestFormatListTargetBranchRulesMarkdown_WithRules(t *testing.T) {
 		},
 	}
 	md := FormatListTargetBranchRulesMarkdown(out)
-	for _, want := range []string{"Target Branch Rules (2)", "release/*", "production", "hotfix/*", "target_branch_rule_create"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Target Branch Rules (2)\n\n" +
+		"| ID | Source Pattern | Target Branch | Created |\n| --- | --- | --- | --- |\n" +
+		"| 7 | `release/*` | `production` | 1 Feb 2026 09:30 UTC |\n" +
+		"| 8 | `hotfix/*` | `main` | - |\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use action 'project.target_branch_rule_create' to add a rule\n" +
+		"- Use action 'project.target_branch_rule_delete' with a rule_id to remove a rule\n"
+	if md != want {
+		t.Errorf("FormatListTargetBranchRulesMarkdown()\n got: %q\nwant: %q", md, want)
 	}
 }
 
 // TestFormatListTargetBranchRulesMarkdown_Empty verifies the empty branch.
 func TestFormatListTargetBranchRulesMarkdown_Empty(t *testing.T) {
 	md := FormatListTargetBranchRulesMarkdown(ListTargetBranchRulesOutput{})
-	if !strings.Contains(md, "No target branch rules found.") {
-		t.Errorf("markdown = %q, want empty notice", md)
+	if want := "No target branch rules found.\n"; md != want {
+		t.Errorf("FormatListTargetBranchRulesMarkdown()\n got: %q\nwant: %q", md, want)
 	}
 }
 
-// TestFormatTargetBranchRuleMarkdown verifies single-rule rendering, including
-// the created-at line.
+// TestFormatTargetBranchRuleMarkdown verifies the whole card of one rule, and
+// that a rule GitLab sent no creation time for writes no Created row.
 func TestFormatTargetBranchRuleMarkdown(t *testing.T) {
+	const hint = "---\n💡 **Next steps:**\n" +
+		"- Use action 'project.target_branch_rule_list' to see all rules for the project\n"
 	md := FormatTargetBranchRuleMarkdown(TargetBranchRuleOutput{ID: 7, Name: "release/*", TargetBranch: "production", CreatedAt: "2026-02-01T09:30:00Z"})
-	for _, want := range []string{"Target Branch Rule: release/*", "production", "target_branch_rule_list"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Target Branch Rule: release/*\n\n" +
+		"- **ID**: 7\n" +
+		"- **Source Pattern**: `release/*`\n" +
+		"- **Target Branch**: `production`\n" +
+		"- **Created**: 1 Feb 2026 09:30 UTC\n\n" + hint
+	if md != want {
+		t.Errorf("FormatTargetBranchRuleMarkdown()\n got: %q\nwant: %q", md, want)
 	}
-	// A rule without CreatedAt should still render.
+
 	mdNoCreated := FormatTargetBranchRuleMarkdown(TargetBranchRuleOutput{ID: 8, Name: "x", TargetBranch: "main"})
-	if !strings.Contains(mdNoCreated, "main") {
-		t.Errorf("markdown without created_at missing target branch:\n%s", mdNoCreated)
+	wantNoCreated := "## Target Branch Rule: x\n\n" +
+		"- **ID**: 8\n" +
+		"- **Source Pattern**: `x`\n" +
+		"- **Target Branch**: `main`\n\n" + hint
+	if mdNoCreated != wantNoCreated {
+		t.Errorf("FormatTargetBranchRuleMarkdown() without created_at\n got: %q\nwant: %q", mdNoCreated, wantNoCreated)
 	}
 }
 

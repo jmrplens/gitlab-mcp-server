@@ -1,8 +1,6 @@
 package projects
 
 import (
-	"time"
-
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -18,15 +16,6 @@ import (
 // shared_with_groups, license, container_expiration_policy, custom_attributes,
 // and the approval-rule eligible_approvers / users / groups / protected_branches
 // object arrays.
-
-// formatISODatePtr renders an optional ISO date (gl.ISOTime) as YYYY-MM-DD, or
-// "" when nil.
-func formatISODatePtr(t *gl.ISOTime) string {
-	if t == nil {
-		return ""
-	}
-	return time.Time(*t).Format("2006-01-02")
-}
 
 // NamespaceOutput mirrors gl.ProjectNamespace, the namespace object embedded in
 // project payloads on the namespace key.
@@ -212,7 +201,7 @@ func sharedWithGroupsOutput(groups []gl.ProjectSharedWithGroup) []SharedWithGrou
 		out = append(out, SharedWithGroupOutput{
 			GroupID: g.GroupID, GroupName: g.GroupName,
 			GroupFullPath: g.GroupFullPath, GroupAccessLevel: g.GroupAccessLevel,
-			ExpiresAt: formatISODatePtr(g.ExpiresAt),
+			ExpiresAt: toolutil.FormatISOTimePtr(g.ExpiresAt),
 		})
 	}
 	return out

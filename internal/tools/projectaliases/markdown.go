@@ -1,45 +1,53 @@
 package projectaliases
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown formats a single project alias as Markdown.
+// FormatOutputMarkdown renders one project alias as a card. The alias name is a
+// path segment the caller has to copy exactly, so it is a code span: a span is
+// its own containment, where a cell escaper's entities would have rendered
+// literally inside one.
 func FormatOutputMarkdown(out Output) string {
-	var sb strings.Builder
+	var b strings.Builder
 	// An alias name is the string the caller of the create action supplied.
-	fmt.Fprintf(&sb, "## Project Alias: %s\n\n", toolutil.EscapeMdHeading(out.Name))
-	fmt.Fprintf(&sb, "| Field | Value |\n")
-	fmt.Fprintf(&sb, "|-------|-------|\n")
-	fmt.Fprintf(&sb, "| ID | %d |\n", out.ID)
-	fmt.Fprintf(&sb, "| Name | `%s` |\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&sb, "| Project ID | %d |\n", out.ProjectID)
-	toolutil.WriteHints(
-		&sb,
-		"Use `gitlab_delete_project_alias` to remove this alias",
-		"Use `gitlab_list_project_aliases` to view all aliases",
+	c := toolutil.NewCard(&b, "Project Alias: "+out.Name)
+	c.Int("ID", out.ID)
+	c.Code("Name", out.Name)
+	c.Int("Project ID", out.ProjectID)
+	c.End(
+		toolutil.HintAction("project_alias.delete", "remove this alias"),
+		toolutil.HintAction("project_alias.list", "view all aliases"),
 	)
-	return sb.String()
+	return b.String()
 }
 
-// FormatListMarkdown formats a list of project aliases as a Markdown table.
+// FormatListMarkdown renders the project aliases as a table. The rows carry no
+// link, so the footer drops the instruction to preserve links, and the hints
+// follow the table rather than opening the response above it, where the table
+// header lazily continued the last hint's list item and no table rendered at
+// all.
 func FormatListMarkdown(out ListOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Project Aliases (%d)\n\n", len(out.Aliases))
 	if len(out.Aliases) == 0 {
-		sb.WriteString("No project aliases found.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("project aliases")
 	}
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	fmt.Fprintf(&sb, "| ID | Name | Project ID |\n")
-	fmt.Fprintf(&sb, "|----|------|------------|\n")
+	var b strings.Builder
+	var pagination toolutil.PaginationOutput
+	toolutil.WriteListHeading(&b, "Project Aliases", len(out.Aliases), pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Project ID"))
 	for _, a := range out.Aliases {
-		fmt.Fprintf(&sb, "| %d | `%s` | %d |\n", a.ID, toolutil.EscapeMdTableCell(a.Name), a.ProjectID)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(a.ID, 10),
+			toolutil.MdCodeSpanCell(a.Name),
+			strconv.FormatInt(a.ProjectID, 10),
+		))
 	}
-	return sb.String()
+	toolutil.WriteListFooter(&b, pagination, false,
+		toolutil.HintAction("project_alias.get", "see one alias"))
+	return b.String()
 }
 
 func init() {

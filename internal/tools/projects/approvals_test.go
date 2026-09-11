@@ -5,7 +5,6 @@ package projects
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -433,29 +432,45 @@ func TestDeleteApprovalRule_APIError(t *testing.T) {
 	}
 }
 
-// TestFormatApprovalConfigMarkdown_NonEmpty verifies FormatApprovalConfigMarkdown produces non-empty markdown containing the approvals count.
+// TestFormatApprovalConfigMarkdown_NonEmpty verifies the whole approval
+// configuration card, every setting a flag rendered as its glyph.
 func TestFormatApprovalConfigMarkdown_NonEmpty(t *testing.T) {
 	md := FormatApprovalConfigMarkdown(ApprovalConfigOutput{
 		ApprovalsBeforeMerge: 2, ResetApprovalsOnPush: true,
 	})
-	if md == "" {
-		t.Fatal(errExpectedNonEmptyMD)
-	}
-	if !strings.Contains(md, "2") {
-		t.Error("markdown missing approvals count")
+	want := "## Approval Configuration\n\n" +
+		"- **Approvals before merge**: 2\n" +
+		"- **Reset approvals on push**: ✅\n" +
+		"- **Disable overriding approvers per MR**: ❌\n" +
+		"- **Author self-approval**: ❌\n" +
+		"- **Disable committers approval**: ❌\n" +
+		"- **Require reauthentication to approve**: ❌\n" +
+		"- **Selective code owner removals**: ❌\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use action 'project.approval_config_change' to modify these settings\n" +
+		"- Use action 'project.approval_rule_list' to see the approval rules\n"
+	if md != want {
+		t.Errorf("FormatApprovalConfigMarkdown()\n got: %q\nwant: %q", md, want)
 	}
 }
 
-// TestFormatApprovalRuleMarkdown_NonEmpty verifies FormatApprovalRuleMarkdown produces non-empty markdown containing the rule name.
+// TestFormatApprovalRuleMarkdown_NonEmpty verifies the whole approval rule
+// card: the rule GitLab sent no type, users or groups for writes none of those
+// rows.
 func TestFormatApprovalRuleMarkdown_NonEmpty(t *testing.T) {
 	md := FormatApprovalRuleMarkdown(ApprovalRuleOutput{
 		ID: 10, Name: "Security Review", ApprovalsRequired: 2,
 	})
-	if md == "" {
-		t.Fatal(errExpectedNonEmptyMD)
-	}
-	if !strings.Contains(md, "Security Review") {
-		t.Error("markdown missing rule name")
+	want := "## Approval Rule: Security Review\n\n" +
+		"- **ID**: 10\n" +
+		"- **Approvals Required**: 2\n" +
+		"- **Applies to all protected branches**: ❌\n" +
+		"- **Contains hidden groups**: ❌\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use action 'project.approval_rule_update' to modify this rule\n" +
+		"- Use action 'project.approval_rule_delete' to remove it\n"
+	if md != want {
+		t.Errorf("FormatApprovalRuleMarkdown()\n got: %q\nwant: %q", md, want)
 	}
 }
 
@@ -515,17 +530,23 @@ func listRuleThreshold(ctx context.Context, t *testing.T, body string) (*int64, 
 	return out.Rules[0].CoverageMinimumThreshold, nil
 }
 
-// TestFormatListApprovalRulesMarkdown_NonEmpty verifies FormatListApprovalRulesMarkdown produces non-empty markdown containing each rule's name.
+// TestFormatListApprovalRulesMarkdown_NonEmpty verifies the whole rule table,
+// with the dash a cell whose value GitLab did not send renders as, and a footer
+// that no longer names links the table has none of.
 func TestFormatListApprovalRulesMarkdown_NonEmpty(t *testing.T) {
 	md := FormatListApprovalRulesMarkdown(ListApprovalRulesOutput{
 		Rules: []ApprovalRuleOutput{
 			{ID: 10, Name: "Rule A", ApprovalsRequired: 1},
 		},
 	})
-	if md == "" {
-		t.Fatal(errExpectedNonEmptyMD)
-	}
-	if !strings.Contains(md, "Rule A") {
-		t.Error("markdown missing rule name")
+	want := "## Approval Rules (1)\n\n" +
+		"| ID | Name | Type | Approvals | All Protected | Users | Groups |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| 10 | Rule A | - | 1 | ❌ | - | - |\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use action 'project.approval_rule_get' to see one rule in full\n" +
+		"- Use action 'project.approval_rule_create' to add a new rule\n"
+	if md != want {
+		t.Errorf("FormatListApprovalRulesMarkdown()\n got: %q\nwant: %q", md, want)
 	}
 }

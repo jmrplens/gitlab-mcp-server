@@ -2665,11 +2665,6 @@ func TriggerTestHook(ctx context.Context, client *gitlabclient.Client, input Tri
 	return TriggerTestHookOutput{Message: fmt.Sprintf("Test event '%s' triggered for hook %d", input.Event, input.HookID)}, nil
 }
 
-// boolIcon formats project boolean settings consistently in Markdown output.
-func boolIcon(v bool) string {
-	return toolutil.BoolEmoji(v)
-}
-
 // userNames extracts usernames from approval-rule user objects for compact
 // Markdown rendering, skipping nil entries.
 func userNames(users []*toolutil.BasicUserOutput) []string {
@@ -2977,22 +2972,6 @@ type ShareProjectOutput struct {
 	AccessRole  string `json:"access_role,omitempty"`
 }
 
-// accessLevelName returns the human-readable name for a GitLab access level.
-func accessLevelName(level int) string {
-	names := map[int]string{
-		10: "Guest",
-		20: "Reporter",
-		25: "Security Manager",
-		30: "Developer",
-		40: "Maintainer",
-		50: "Owner",
-	}
-	if name, ok := names[level]; ok {
-		return name
-	}
-	return fmt.Sprintf("Level %d", level)
-}
-
 // ShareProjectWithGroup shares a project with the given group.
 func ShareProjectWithGroup(ctx context.Context, client *gitlabclient.Client, input ShareProjectInput) (ShareProjectOutput, error) {
 	if input.ProjectID == "" {
@@ -3020,7 +2999,7 @@ func ShareProjectWithGroup(ctx context.Context, client *gitlabclient.Client, inp
 		return ShareProjectOutput{}, toolutil.WrapErrWithStatusHint("projectShareWithGroup", err, http.StatusNotFound,
 			"verify project_id and group_id with gitlab_project_get and gitlab_group_get")
 	}
-	roleName := accessLevelName(input.GroupAccess)
+	roleName := toolutil.AccessLevelDescription(gl.AccessLevelValue(input.GroupAccess))
 	return ShareProjectOutput{
 		Message:     fmt.Sprintf("Project %s shared with group %d as %s", input.ProjectID, input.GroupID, roleName),
 		GroupID:     input.GroupID,

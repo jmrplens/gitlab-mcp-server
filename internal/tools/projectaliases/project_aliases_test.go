@@ -5,7 +5,6 @@ package projectaliases
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -297,8 +296,8 @@ func TestDelete_ContextCancelled(t *testing.T) {
 
 // --- Markdown Formatters ---
 
-// TestFormatOutputMarkdown verifies that FormatOutputMarkdown produces a
-// Markdown table with the alias details and hint lines.
+// TestFormatOutputMarkdown verifies the whole alias card: the heading, one list
+// row per field with the name as a code span, and the hints last.
 func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{
 		ID:        7,
@@ -308,25 +307,60 @@ func TestFormatOutputMarkdown(t *testing.T) {
 
 	md := FormatOutputMarkdown(out)
 
-	checks := []string{
-		"## Project Alias: my-alias",
-		"| ID | 7 |",
-		"| Name | `my-alias` |",
-		"| Project ID | 42 |",
-		"gitlab_delete_project_alias",
-		"gitlab_list_project_aliases",
-	}
-	for _, want := range checks {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatOutputMarkdown missing %q in:\n%s", want, md)
-			}
-		})
+	want := "## Project Alias: my-alias\n\n" +
+		"- **ID**: 7\n" +
+		"- **Name**: `my-alias`\n" +
+		"- **Project ID**: 42\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use action 'project_alias.delete' to remove this alias\n" +
+		"- Use action 'project_alias.list' to view all aliases\n"
+	if md != want {
+		t.Errorf("FormatOutputMarkdown()\n got: %q\nwant: %q", md, want)
 	}
 }
 
-// TestFormatListMarkdown_WithAliases verifies that FormatListMarkdown produces
-// a Markdown table with rows for each alias.
+// TestFormatOutputMarkdown_NameHoldingAPipe verifies that a name carrying the
+// cell separator stays inside its code span: a span escapes the pipe with a
+// backslash, which is the one escape GFM honors there, and writes no entity,
+// since an entity renders literally inside a span.
+func TestFormatOutputMarkdown_NameHoldingAPipe(t *testing.T) {
+	md := FormatOutputMarkdown(Output{ID: 7, ProjectID: 42, Name: "a|b"})
+
+	want := "## Project Alias: a|b\n\n" +
+		"- **ID**: 7\n" +
+		"- **Name**: `a|b`\n" +
+		"- **Project ID**: 42\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use action 'project_alias.delete' to remove this alias\n" +
+		"- Use action 'project_alias.list' to view all aliases\n"
+	if md != want {
+		t.Errorf("FormatOutputMarkdown()\n got: %q\nwant: %q", md, want)
+	}
+}
+
+// TestFormatOutputMarkdown_NameHoldingATag verifies where the containment of a
+// hostile name is: the heading escapes the angle bracket, and the row shows the
+// value inside a code span, which a client renders as the text it is. The span
+// is why the value carries no entity there — an entity renders literally inside
+// one, which is what the row used to show.
+func TestFormatOutputMarkdown_NameHoldingATag(t *testing.T) {
+	md := FormatOutputMarkdown(Output{ID: 7, ProjectID: 42, Name: `<a href="http://attacker.invalid">x</a>`})
+
+	want := "## Project Alias: &lt;a href=\"http://attacker.invalid\">x&lt;/a>\n\n" +
+		"- **ID**: 7\n" +
+		"- **Name**: `<a href=\"http://attacker.invalid\">x</a>`\n" +
+		"- **Project ID**: 42\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use action 'project_alias.delete' to remove this alias\n" +
+		"- Use action 'project_alias.list' to view all aliases\n"
+	if md != want {
+		t.Errorf("FormatOutputMarkdown()\n got: %q\nwant: %q", md, want)
+	}
+}
+
+// TestFormatListMarkdown_WithAliases verifies the whole list: the heading
+// counting what the response can vouch for, the table, and the hints after it
+// rather than above the header, where they used to leave the table unrendered.
 func TestFormatListMarkdown_WithAliases(t *testing.T) {
 	out := ListOutput{
 		Aliases: []Output{
@@ -337,45 +371,33 @@ func TestFormatListMarkdown_WithAliases(t *testing.T) {
 
 	md := FormatListMarkdown(out)
 
-	checks := []string{
-		"## Project Aliases (2)",
-		"| 1 | `alpha` | 100 |",
-		"| 2 | `beta` | 200 |",
-	}
-	for _, want := range checks {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatListMarkdown missing %q in:\n%s", want, md)
-			}
-		})
-	}
-	if strings.Contains(md, "No project aliases found") {
-		t.Error("non-empty list should not contain empty message")
+	want := "## Project Aliases (2)\n\n" +
+		"| ID | Name | Project ID |\n| --- | --- | --- |\n" +
+		"| 1 | `alpha` | 100 |\n" +
+		"| 2 | `beta` | 200 |\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use action 'project_alias.get' to see one alias\n"
+	if md != want {
+		t.Errorf("FormatListMarkdown()\n got: %q\nwant: %q", md, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies that FormatListMarkdown shows a
-// "no aliases" message when the list is empty.
+// TestFormatListMarkdown_Empty verifies that an empty list is the one sentence
+// and nothing else: a heading counting zero above it said the same thing twice.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Aliases: []Output{}})
 
-	if !strings.Contains(md, "## Project Aliases (0)") {
-		t.Errorf("expected heading with count 0 in:\n%s", md)
-	}
-	if !strings.Contains(md, "No project aliases found") {
-		t.Errorf("expected empty message in:\n%s", md)
+	if want := "No project aliases found.\n"; md != want {
+		t.Errorf("FormatListMarkdown()\n got: %q\nwant: %q", md, want)
 	}
 }
 
 // TestFormatListMarkdown_NilAliases verifies that FormatListMarkdown handles
-// a nil Aliases slice without panicking.
+// a nil Aliases slice the same way as an empty one.
 func TestFormatListMarkdown_NilAliases(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 
-	if !strings.Contains(md, "## Project Aliases (0)") {
-		t.Errorf("expected heading with count 0 in:\n%s", md)
-	}
-	if !strings.Contains(md, "No project aliases found") {
-		t.Errorf("expected empty message in:\n%s", md)
+	if want := "No project aliases found.\n"; md != want {
+		t.Errorf("FormatListMarkdown()\n got: %q\nwant: %q", md, want)
 	}
 }

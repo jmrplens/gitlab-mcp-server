@@ -5,7 +5,6 @@ package projectstatistics
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -41,19 +40,33 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown verifies FormatMarkdown.
+// TestFormatMarkdown verifies the whole card: the total as the object's field
+// and the days as the nested collection under their own heading.
 func TestFormatMarkdown(t *testing.T) {
 	md := FormatMarkdown(GetOutput{TotalFetches: 42, Days: []DayStat{{Date: "2026-01-01", Count: 5}}})
-	if !strings.Contains(md, "42") || !strings.Contains(md, "1 Jan 2026") {
-		t.Error("missing content")
+	want := "## Project Statistics (Last 30 Days)\n\n" +
+		"- **Total Fetches**: 42\n\n" +
+		"### Daily Fetches\n\n" +
+		"| Date | Count |\n| --- | --- |\n" +
+		"| 1 Jan 2026 | 5 |\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use fetcher counts to track project activity trends\n"
+	if md != want {
+		t.Errorf("FormatMarkdown()\n got: %q\nwant: %q", md, want)
 	}
 }
 
-// TestFormatMarkdown_Empty verifies the formatter handles empty days.
+// TestFormatMarkdown_Empty verifies that a statistics answer with no days
+// renders the total alone: zero is an answer GitLab gave, and the collection
+// heading is not written for a collection with nothing in it.
 func TestFormatMarkdown_Empty(t *testing.T) {
 	md := FormatMarkdown(GetOutput{TotalFetches: 0})
-	if !strings.Contains(md, "0") {
-		t.Error("expected zero total fetches")
+	want := "## Project Statistics (Last 30 Days)\n\n" +
+		"- **Total Fetches**: 0\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use fetcher counts to track project activity trends\n"
+	if md != want {
+		t.Errorf("FormatMarkdown()\n got: %q\nwant: %q", md, want)
 	}
 }
 
