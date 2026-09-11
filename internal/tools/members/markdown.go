@@ -10,34 +10,38 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// accessLevel renders a membership's numeric access level as the name GitLab
+// gives it with the number beside it, "Maintainer (40)". The number stays
+// because it is what every write endpoint takes, and the name because a
+// reader cannot be expected to know that 40 is a maintainer.
+func accessLevel(level int) string {
+	return fmt.Sprintf("%s (%d)", toolutil.AccessLevelDescription(gl.AccessLevelValue(level)), level)
+}
+
 // FormatListMarkdownString renders a ListOutput as a Markdown table string.
 func FormatListMarkdownString(v ListOutput) string {
-	var b strings.Builder
 	if len(v.Members) == 0 {
-		b.WriteString("No members found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("members")
 	}
-	b.WriteString("| Username | Name | Access Level | State |\n")
-	b.WriteString("| --- | --- | --- | --- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Project Members", len(v.Members), v.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Username", "Name", "Access Level", "State", "Membership", "Expires"))
+	linked := false
 	for _, m := range v.Members {
-		// MdTitleLink escapes the label itself, so the raw username goes in:
-		// passing the already-escaped copy would escape it twice.
-		username := toolutil.MdTitleLink(m.Username, m.WebURL)
-		//gitlab:allow-unescaped m.State: a user state from GitLab's own closed set (active, blocked, deactivated, banned), never text anybody types.
-		fmt.Fprintf(
-			&b, "| %s | %s | %s | %s |\n",
-			username,
+		linked = linked || m.WebURL != ""
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdUserLink(m.Username, m.WebURL),
 			toolutil.EscapeMdTableCell(m.Name),
-			toolutil.EscapeMdTableCell(toolutil.AccessLevelDescription(gl.AccessLevelValue(m.AccessLevel))),
-			m.State,
-		)
+			accessLevel(m.AccessLevel),
+			toolutil.EscapeMdTableCell(m.State),
+			toolutil.EscapeMdTableCell(m.MembershipState),
+			toolutil.FormatTime(m.ExpiresAt),
+		))
 	}
-	toolutil.WritePagination(&b, v.Pagination)
-	toolutil.WriteHints(
-		&b,
+	toolutil.WriteListFooter(&b, v.Pagination, linked,
 		toolutil.HintPreserveLinks,
-		"Use action 'get' with user_id to see member details",
-		"Use action 'add' to add a new project member",
+		toolutil.HintAction("project.member_get", "see one member's details"),
+		toolutil.HintAction("project.member_add", "add a member to this project"),
 	)
 	return b.String()
 }
@@ -50,38 +54,32 @@ func FormatListMarkdown(v ListOutput) *mcp.CallToolResult {
 // FormatMarkdown renders a single member Output as Markdown.
 func FormatMarkdown(v Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Member: %s\n\n", toolutil.EscapeMdHeading(v.Username))
-	fmt.Fprintf(&b, toolutil.FmtMdID, v.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(v.Name))
-	fmt.Fprintf(&b, toolutil.FmtMdUsername, toolutil.EscapeMdTableCell(v.Username))
-	//gitlab:allow-unescaped v.State: a user state from GitLab's own closed set (active, blocked, deactivated, banned), never text anybody types.
-	fmt.Fprintf(&b, toolutil.FmtMdState, v.State)
-	fmt.Fprintf(&b, "- **Access Level**: %s (%d)\n", toolutil.AccessLevelDescription(gl.AccessLevelValue(v.AccessLevel)), v.AccessLevel)
-	if v.WebURL != "" {
-		toolutil.WriteMdURL(&b, v.WebURL)
-	}
-	if v.Email != "" {
-		// GitLab validates an address with a regexp that forbids only '@' and
-		// whitespace, so '|' and '<' both pass.
-		fmt.Fprintf(&b, toolutil.FmtMdEmail, toolutil.EscapeMdTableCell(v.Email))
-	}
+	c := toolutil.NewCard(&b, "Member: "+v.Username)
+	c.Int("ID", v.ID)
+	c.Field("Name", v.Name)
+	c.Field("Username", v.Username)
+	c.Field("State", v.State)
+	// membership_state is what an Enterprise instance answers with beside the
+	// account state: a member awaiting approval is active as a user and not
+	// yet a member, and the card said only the first half.
+	c.Field("Membership State", v.MembershipState)
+	c.Warn("Locked", v.Locked)
+	c.Field("Access Level", accessLevel(v.AccessLevel))
+	c.URL(v.WebURL)
+	c.Field("Email", v.Email)
 	if v.MemberRole != nil {
-		fmt.Fprintf(&b, "- **Member Role**: %s (%d)\n", toolutil.EscapeMdTableCell(v.MemberRole.Name), v.MemberRole.ID)
+		c.Field("Member Role", fmt.Sprintf("%s (%d)", v.MemberRole.Name, v.MemberRole.ID))
 	}
 	if v.CreatedBy != nil {
-		fmt.Fprintf(&b, "- **Created By**: %s (@%s)\n",
-			toolutil.EscapeMdTableCell(v.CreatedBy.Name), toolutil.EscapeMdTableCell(v.CreatedBy.Username))
+		author := c.Sub("Created By")
+		author.Field("Name", v.CreatedBy.Name)
+		author.Markdown("Username", toolutil.MdUserLink(v.CreatedBy.Username, v.CreatedBy.WebURL))
 	}
-	if v.ExpiresAt != "" {
-		fmt.Fprintf(&b, "- **Expires At**: %s\n", toolutil.FormatTime(v.ExpiresAt))
-	}
-	if v.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(v.CreatedAt))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'update' to change this member's access level",
-		"Use action 'member_delete' to remove this member from the project",
+	c.Time("Expires At", v.ExpiresAt)
+	c.Time("Created", v.CreatedAt)
+	c.End(
+		toolutil.HintAction("project.member_edit", "change this member's access level"),
+		toolutil.HintAction("project.member_delete", "remove this member from the project"),
 	)
 	return b.String()
 }

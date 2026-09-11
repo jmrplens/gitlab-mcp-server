@@ -1,7 +1,7 @@
 package groupserviceaccounts
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -17,84 +17,115 @@ func init() {
 // FormatMarkdownString renders a service account as Markdown.
 func FormatMarkdownString(o Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Service Account: %s\n\n", toolutil.EscapeMdHeading(o.Username))
-	fmt.Fprintf(&b, toolutil.FmtMdID, o.ID)
-	fmt.Fprintf(&b, "- **Name**: %s\n", toolutil.EscapeMdTableCell(o.Name))
-	fmt.Fprintf(&b, "- **Username**: %s\n", toolutil.EscapeMdTableCell(o.Username))
-	fmt.Fprintf(&b, toolutil.FmtMdEmail, toolutil.EscapeMdTableCell(o.Email))
+	c := toolutil.NewCard(&b, "Service Account: "+o.Username)
+	c.Int("ID", o.ID)
+	c.Field("Name", o.Name)
+	c.Field("Username", o.Username)
+	c.Field("Email", o.Email)
+	c.Field("Public Email", o.PublicEmail)
+	c.Field("Unconfirmed Email", o.UnconfirmedEmail)
+	c.End(
+		toolutil.HintAction("group.service_account_update", "change this account's name or username"),
+		toolutil.HintAction("group.service_account_pat_create", "create a token for it"),
+	)
 	return b.String()
 }
 
 // FormatListMarkdownString renders a paginated list of service accounts.
 func FormatListMarkdownString(o ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Group Service Accounts (%d)\n\n", len(o.Accounts))
-	toolutil.WriteListSummary(&b, len(o.Accounts), o.Pagination)
 	if len(o.Accounts) == 0 {
-		b.WriteString("No service accounts found.\n")
-	} else {
-		toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
-		b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "Email"))
-		for _, a := range o.Accounts {
-			fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
-				a.ID,
-				toolutil.EscapeMdTableCell(a.Username),
-				toolutil.EscapeMdTableCell(a.Name),
-				toolutil.EscapeMdTableCell(a.Email))
-		}
+		return toolutil.EmptyMessage("service accounts")
 	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Group Service Accounts", len(o.Accounts), o.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "Email"))
+	for _, a := range o.Accounts {
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(a.ID, 10),
+			toolutil.EscapeMdTableCell(a.Username),
+			toolutil.EscapeMdTableCell(a.Name),
+			toolutil.EscapeMdTableCell(a.Email),
+		))
+	}
+	toolutil.WriteListFooter(&b, o.Pagination, false,
+		toolutil.HintAction("group.service_account_pat_list", "list one account's tokens"),
+	)
 	return b.String()
 }
 
 // FormatPATMarkdownString renders a service account PAT as Markdown.
 func FormatPATMarkdownString(o PATOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Personal Access Token: %s\n\n", toolutil.EscapeMdHeading(o.Name))
-	fmt.Fprintf(&b, toolutil.FmtMdID, o.ID)
-	fmt.Fprintf(&b, "- **Active**: %s\n", toolutil.BoolEmoji(o.Active))
-	fmt.Fprintf(&b, "- **Revoked**: %s\n", toolutil.BoolEmoji(o.Revoked))
-	//gitlab:allow-unescaped strings.Join(o.Scopes, ", "): token scopes, which GitLab refuses to store outside its own fixed set.
-	fmt.Fprintf(&b, "- **Scopes**: %s\n", strings.Join(o.Scopes, ", "))
-	fmt.Fprintf(&b, "- **User ID**: %d\n", o.UserID)
-	if o.CreatedAt != "" {
-		//gitlab:allow-unescaped o.CreatedAt: a timestamp toPATOutput formatted itself, with time.Time.Format.
-		fmt.Fprintf(&b, "- **Created**: %s\n", o.CreatedAt)
-	}
-	if o.LastUsedAt != "" {
-		//gitlab:allow-unescaped o.LastUsedAt: a timestamp toPATOutput formatted itself, with time.Time.Format.
-		fmt.Fprintf(&b, "- **Last Used**: %s\n", o.LastUsedAt)
-	}
-	if o.ExpiresAt != "" {
-		//gitlab:allow-unescaped o.ExpiresAt: a date toPATOutput formatted itself, on the ISO date layout.
-		fmt.Fprintf(&b, "- **Expires**: %s\n", o.ExpiresAt)
-	}
-	if o.Token != "" {
-		//gitlab:allow-unescaped o.Token: the secret GitLab generated, which the reader has to copy back verbatim.
-		fmt.Fprintf(&b, "- **Token**: `%s`\n", o.Token)
-	}
+	c := toolutil.NewCard(&b, "Personal Access Token: "+o.Name)
+	c.Int("ID", o.ID)
+	c.Bool("Active", o.Active)
+	c.Warn("Revoked", o.Revoked)
+	// Token scopes are one of GitLab's own fixed set: the instance refuses a
+	// request naming anything else.
+	c.Field("Scopes", strings.Join(o.Scopes, ", "))
+	c.Bool("Granular", o.Granular)
+	c.Int("User ID", o.UserID)
+	c.Time("Created", o.CreatedAt)
+	c.Time("Last Used", o.LastUsedAt)
+	c.Time("Expires", o.ExpiresAt)
+	c.Secret("Token", o.Token)
+	writeGranularScopes(c, o.GranularScopes)
+	c.End(
+		toolutil.HintAction("group.service_account_pat_rotate", "rotate this token"),
+		toolutil.HintAction("group.service_account_pat_revoke", "revoke it"),
+	)
 	return b.String()
+}
+
+// writeGranularScopes writes a granular token's scopes as a nested collection
+// of the card. A granular token carries its permissions here and nowhere else,
+// so a card that printed only the flat scopes said nothing about what it can
+// actually reach.
+func writeGranularScopes(c *toolutil.Card, scopes []toolutil.TokenGranularScopeOutput) {
+	if len(scopes) == 0 {
+		return
+	}
+	t := c.Table("Granular Scopes", "Access", "Permissions", "Project", "Group")
+	for _, scope := range scopes {
+		t.Row(
+			toolutil.EscapeMdTableCell(scope.Access),
+			toolutil.EscapeMdTableCell(strings.Join(scope.Permissions, ", ")),
+			scopeNamespace(scope.ProjectID),
+			scopeNamespace(scope.GroupID),
+		)
+	}
+}
+
+// scopeNamespace renders the project or group a granular scope is bound to.
+// Exactly one of the two is set on any scope, so the other is a dash rather
+// than a zero that reads as an identifier.
+func scopeNamespace(id int64) string {
+	if id == 0 {
+		return "-"
+	}
+	return strconv.FormatInt(id, 10)
 }
 
 // FormatListPATMarkdownString renders a paginated list of PATs.
 func FormatListPATMarkdownString(o ListPATOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Service Account Tokens (%d)\n\n", len(o.Tokens))
-	toolutil.WriteListSummary(&b, len(o.Tokens), o.Pagination)
 	if len(o.Tokens) == 0 {
-		b.WriteString("No tokens found.\n")
-	} else {
-		toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
-		b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Active", "Revoked", "Scopes", "Expires"))
-		for _, t := range o.Tokens {
-			fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s |\n",
-				t.ID,
-				toolutil.EscapeMdTableCell(t.Name),
-				toolutil.BoolEmoji(t.Active),
-				toolutil.BoolEmoji(t.Revoked),
-				strings.Join(t.Scopes, ", "),
-				//gitlab:allow-unescaped t.ExpiresAt: a date toPATOutput formatted itself, on the ISO date layout.
-				t.ExpiresAt)
-		}
+		return toolutil.EmptyMessage("tokens")
 	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Service Account Tokens", len(o.Tokens), o.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Active", "Revoked", "Scopes", "Expires"))
+	for _, t := range o.Tokens {
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(t.ID, 10),
+			toolutil.EscapeMdTableCell(t.Name),
+			toolutil.BoolEmoji(t.Active),
+			toolutil.BoolEmoji(t.Revoked),
+			toolutil.EscapeMdTableCell(strings.Join(t.Scopes, ", ")),
+			toolutil.FormatTime(t.ExpiresAt),
+		))
+	}
+	toolutil.WriteListFooter(&b, o.Pagination, false,
+		toolutil.HintAction("group.service_account_pat_revoke", "revoke one of these tokens"),
+	)
 	return b.String()
 }

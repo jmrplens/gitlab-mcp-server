@@ -3,7 +3,6 @@ package groupserviceaccounts
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -11,6 +10,15 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// The Markdown for every type here lives in markdown.go, which is where the
+// registry reads it from, and nothing in this file renders any. A second,
+// unregistered copy of the four formatters used to sit at the end of it:
+// nothing called that copy, no registration named it, and it had drifted —
+// one card printed its flags as true and false while the registered one
+// printed the emoji, and its list wrote the guidance section above the table.
+// It was removed with the migration to [toolutil.Card] rather than migrated
+// twice.
 
 // Output represents a group service account.
 type Output struct {
@@ -91,12 +99,12 @@ func toPATOutput(pat *gl.PersonalAccessToken, extra toolutil.TokenExtra) PATOutp
 		Active:         pat.Active,
 		Token:          pat.Token,
 	}
-	if pat.CreatedAt != nil {
-		out.CreatedAt = pat.CreatedAt.Format("2006-01-02T15:04:05Z")
-	}
-	if pat.LastUsedAt != nil {
-		out.LastUsedAt = pat.LastUsedAt.Format("2006-01-02T15:04:05Z")
-	}
+	// RFC3339Ptr converts to UTC before it formats. The layout this used to
+	// write ended in a literal 'Z' whatever zone the instant was in, so a
+	// timestamp client-go parsed with an offset was published as a UTC one it
+	// is not, and FormatTime then displayed the wrong hour.
+	out.CreatedAt = toolutil.RFC3339Ptr(pat.CreatedAt)
+	out.LastUsedAt = toolutil.RFC3339Ptr(pat.LastUsedAt)
 	if pat.ExpiresAt != nil {
 		out.ExpiresAt = time.Time(*pat.ExpiresAt).Format(toolutil.DateFormatISO)
 	}
@@ -448,93 +456,4 @@ func RotatePAT(ctx context.Context, client *gitlabclient.Client, input RotatePAT
 		return PATOutput{}, fmt.Errorf("rotate service account PAT: %w", err)
 	}
 	return capturedPATOutput("rotate service account PAT", pat, captured)
-}
-
-// FormatOutputMarkdown renders a single service account as Markdown.
-func FormatOutputMarkdown(out Output) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Service Account: %s\n\n", toolutil.EscapeMdHeading(out.Username))
-	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&b, toolutil.FmtMdUsername, toolutil.EscapeMdTableCell(out.Username))
-	fmt.Fprintf(&b, toolutil.FmtMdEmail, toolutil.EscapeMdTableCell(out.Email))
-	toolutil.WriteHints(
-		&b,
-		"Use gitlab_group_service_account_update to modify this account",
-		"Use gitlab_group_service_account_pat_create to create a token",
-	)
-	return b.String()
-}
-
-// FormatListMarkdown renders a paginated list of service accounts as Markdown.
-func FormatListMarkdown(out ListOutput) string {
-	if len(out.Accounts) == 0 {
-		return "No group service accounts found.\n"
-	}
-	var b strings.Builder
-	toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
-	toolutil.WriteListSummary(&b, len(out.Accounts), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Username", "Email"))
-	for _, a := range out.Accounts {
-		fmt.Fprintf(
-			&b, "| %d | %s | %s | %s |\n",
-			a.ID,
-			toolutil.EscapeMdTableCell(a.Name),
-			toolutil.EscapeMdTableCell(a.Username),
-			toolutil.EscapeMdTableCell(a.Email),
-		)
-	}
-	return b.String()
-}
-
-// FormatPATOutputMarkdown renders a single PAT as Markdown.
-func FormatPATOutputMarkdown(out PATOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## PAT: %s\n\n", toolutil.EscapeMdHeading(out.Name))
-	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&b, "- **Active**: %t\n", out.Active)
-	fmt.Fprintf(&b, "- **Revoked**: %t\n", out.Revoked)
-	//gitlab:allow-unescaped strings.Join(out.Scopes, ", "): token scopes, which GitLab refuses to store outside its own fixed set.
-	fmt.Fprintf(&b, "- **Scopes**: %s\n", strings.Join(out.Scopes, ", "))
-	if out.CreatedAt != "" {
-		//gitlab:allow-unescaped out.CreatedAt: a timestamp toPATOutput formatted itself, with time.Time.Format.
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, out.CreatedAt)
-	}
-	if out.ExpiresAt != "" {
-		//gitlab:allow-unescaped out.ExpiresAt: a date toPATOutput formatted itself, on the ISO date layout.
-		fmt.Fprintf(&b, "- **Expires**: %s\n", out.ExpiresAt)
-	}
-	if out.Token != "" {
-		//gitlab:allow-unescaped out.Token: the secret GitLab generated, which the reader has to copy back verbatim.
-		fmt.Fprintf(&b, "- **Token**: `%s`\n", out.Token)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use gitlab_group_service_account_pat_revoke to revoke this token",
-	)
-	return b.String()
-}
-
-// FormatListPATMarkdown renders a paginated list of PATs as Markdown.
-func FormatListPATMarkdown(out ListPATOutput) string {
-	if len(out.Tokens) == 0 {
-		return "No personal access tokens found.\n"
-	}
-	var b strings.Builder
-	toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
-	toolutil.WriteListSummary(&b, len(out.Tokens), out.Pagination)
-	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Active", "Revoked", "Scopes"))
-	for _, t := range out.Tokens {
-		fmt.Fprintf(
-			&b, "| %d | %s | %t | %t | %s |\n",
-			t.ID,
-			toolutil.EscapeMdTableCell(t.Name),
-			t.Active,
-			t.Revoked,
-			//gitlab:allow-unescaped strings.Join(t.Scopes, ", "): token scopes, which GitLab refuses to store outside its own fixed set.
-			strings.Join(t.Scopes, ", "),
-		)
-	}
-	return b.String()
 }

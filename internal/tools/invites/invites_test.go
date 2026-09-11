@@ -231,9 +231,24 @@ func TestGroupInvites_BadRequest(t *testing.T) {
 	}
 }
 
-// TestFormatListPendingMarkdownString_WithInvitations verifies the ListPendingMarkdownString_WithInvitations Markdown formatter for a representative listpendingstring_withinvitations input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// pendingListHeader is the header and delimiter of the pending-invitations
+// table.
+const pendingListHeader = "| Email | Access Level | User | Invited By | Created | Expires |\n" +
+	"| --- | --- | --- | --- | --- | --- |\n"
+
+// pendingListHints is the guidance section a page of pending invitations ends
+// with.
+const pendingListHints = "\n---\n💡 **Next steps:**\n" +
+	"- Manage pending invitations by approving, revoking, or resending them\n"
+
+// inviteResultHints is the guidance section an invitation result ends with.
+const inviteResultHints = "\n---\n💡 **Next steps:**\n" +
+	"- Check invitation status or resend if the invite was not received\n"
+
+// TestFormatListPendingMarkdownString_WithInvitations verifies the whole table
+// a page of pending invitations renders: one row per invitation, the access
+// level named as well as numbered, and an empty cell where GitLab sent
+// nothing.
 func TestFormatListPendingMarkdownString_WithInvitations(t *testing.T) {
 	out := ListPendingInvitationsOutput{
 		Invitations: []PendingInviteOutput{
@@ -241,15 +256,12 @@ func TestFormatListPendingMarkdownString_WithInvitations(t *testing.T) {
 			{InviteEmail: "bob@example.com", AccessLevel: 40},
 		},
 	}
-	md := FormatListPendingMarkdownString(out)
-	if md == "" {
-		t.Fatal("expected non-empty markdown")
-	}
-	if !containsStr(md, "alice@example.com") {
-		t.Errorf("markdown missing email: %s", md)
-	}
-	if !containsStr(md, "Expires:") {
-		t.Errorf("markdown missing expiry: %s", md)
+	want := "## Pending Invitations (2)\n\n" + pendingListHeader +
+		"| alice@example.com | Developer (30) | alice |  |  | 31 Dec 2026 00:00 UTC |\n" +
+		"| bob@example.com | Maintainer (40) |  |  |  |  |\n" +
+		pendingListHints
+	if got := FormatListPendingMarkdownString(out); got != want {
+		t.Errorf("FormatListPendingMarkdownString =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -264,28 +276,44 @@ func TestFormatListPendingMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatInviteResultMarkdownString verifies the InviteResultMarkdownString Markdown formatter for a representative inviteresultstring input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatInviteResultMarkdownString verifies the whole card an invitation
+// result renders: the status as a list item, GitLab's per-address messages as
+// a collection under a heading of their own, and the guidance last.
 func TestFormatInviteResultMarkdownString(t *testing.T) {
 	out := InviteResultOutput{Status: "success", Message: map[string]string{"alice@example.com": "Invite sent"}}
-	md := FormatInviteResultMarkdownString(out)
-	if !containsStr(md, "success") {
-		t.Errorf("markdown missing status: %s", md)
-	}
-	if !containsStr(md, "alice@example.com") {
-		t.Errorf("markdown missing message key: %s", md)
+	want := "## Invitation Result\n\n" +
+		"- **Status**: success\n" +
+		"\n### Messages\n\n" +
+		"| Invitee | Message |\n| --- | --- |\n" +
+		"| alice@example.com | Invite sent |\n" +
+		inviteResultHints
+	if got := FormatInviteResultMarkdownString(out); got != want {
+		t.Errorf("FormatInviteResultMarkdownString =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// containsStr reports whether contains str.
-func containsStr(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
+// TestFormatInviteResultMarkdownString_MessagesAreOrdered verifies that the
+// keyed messages render in key order. Go randomizes map iteration, so the
+// unordered rendering this replaced answered two identical calls with two
+// different documents.
+func TestFormatInviteResultMarkdownString_MessagesAreOrdered(t *testing.T) {
+	out := InviteResultOutput{
+		Status:  "success",
+		Message: map[string]string{"carol@example.com": "third", "alice@example.com": "first", "bob@example.com": "second"},
+	}
+	want := "## Invitation Result\n\n" +
+		"- **Status**: success\n" +
+		"\n### Messages\n\n" +
+		"| Invitee | Message |\n| --- | --- |\n" +
+		"| alice@example.com | first |\n" +
+		"| bob@example.com | second |\n" +
+		"| carol@example.com | third |\n" +
+		inviteResultHints
+	for range 8 {
+		if got := FormatInviteResultMarkdownString(out); got != want {
+			t.Fatalf("FormatInviteResultMarkdownString =\n%q\nwant\n%q", got, want)
 		}
 	}
-	return false
 }
 
 // ---------- Tests consolidated from coverage_test.go ----------.
@@ -600,12 +628,9 @@ func TestToInviteResultOutput_WithMessages(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatInviteResultMarkdownString_EmptyMessages(t *testing.T) {
 	out := InviteResultOutput{Status: "success", Message: map[string]string{}}
-	md := FormatInviteResultMarkdownString(out)
-	if !strings.Contains(md, "success") {
-		t.Errorf("markdown missing status: %s", md)
-	}
-	if strings.Contains(md, "Messages") {
-		t.Errorf("markdown should not contain Messages section for empty map: %s", md)
+	want := "## Invitation Result\n\n- **Status**: success\n" + inviteResultHints
+	if got := FormatInviteResultMarkdownString(out); got != want {
+		t.Errorf("FormatInviteResultMarkdownString =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -633,8 +658,11 @@ func TestFormatListPendingMarkdown_ReturnsCallToolResult(t *testing.T) {
 	if !ok {
 		t.Fatal("expected TextContent")
 	}
-	if !strings.Contains(tc.Text, "test@example.com") {
-		t.Errorf("expected text to contain email, got: %s", tc.Text)
+	want := "## Pending Invitations (1)\n\n" + pendingListHeader +
+		"| test@example.com | Developer (30) |  |  |  |  |\n" +
+		pendingListHints
+	if tc.Text != want {
+		t.Errorf("CallToolResult text =\n%q\nwant\n%q", tc.Text, want)
 	}
 }
 
@@ -996,9 +1024,14 @@ func TestProjectInvites_QueuedUsers_RoundTrip(t *testing.T) {
 	if out.QueuedUsers["username_1"] != "Request queued for administrator approval." {
 		t.Errorf("QueuedUsers = %v, want the queued username and its reason", out.QueuedUsers)
 	}
-	md := FormatInviteResultMarkdownString(out)
-	if !strings.Contains(md, "username_1") || !strings.Contains(md, "Queued for administrator approval") {
-		t.Errorf("markdown does not report the queued user:\n%s", md)
+	want := "## Invitation Result\n\n" +
+		"- **Status**: success\n" +
+		"\n### Queued for Administrator Approval\n\n" +
+		"| User | Message |\n| --- | --- |\n" +
+		"| username_1 | Request queued for administrator approval. |\n" +
+		inviteResultHints
+	if got := FormatInviteResultMarkdownString(out); got != want {
+		t.Errorf("FormatInviteResultMarkdownString =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -1249,44 +1282,49 @@ func TestInvites_OptionalParametersReachTheRequestOnlyWhenGiven(t *testing.T) {
 // list carries the user name and the expiry when the invitation has them and
 // neither when it does not, which is both sides of the two guards there.
 func TestFormatListPendingMarkdownString_OptionalColumns(t *testing.T) {
-	withBoth := FormatListPendingMarkdownString(ListPendingInvitationsOutput{
-		Invitations: []PendingInviteOutput{{
-			InviteEmail: "alice@example.com", AccessLevel: 30,
-			UserName: "alice", ExpiresAt: "2027-01-31T00:00:00Z",
-		}},
-	})
-	for _, want := range []string{", User: alice", ", Expires: 31 Jan 2027"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(withBoth, want) {
-				t.Errorf("markdown missing %q:\n%s", want, withBoth)
-			}
+	t.Run("with both", func(t *testing.T) {
+		got := FormatListPendingMarkdownString(ListPendingInvitationsOutput{
+			Invitations: []PendingInviteOutput{{
+				InviteEmail: "alice@example.com", AccessLevel: 30,
+				UserName: "alice", ExpiresAt: "2027-01-31T00:00:00Z",
+			}},
 		})
-	}
-	withNeither := FormatListPendingMarkdownString(ListPendingInvitationsOutput{
-		Invitations: []PendingInviteOutput{{InviteEmail: "alice@example.com", AccessLevel: 30}},
+		want := "## Pending Invitations (1)\n\n" + pendingListHeader +
+			"| alice@example.com | Developer (30) | alice |  |  | 31 Jan 2027 00:00 UTC |\n" +
+			pendingListHints
+		if got != want {
+			t.Errorf("FormatListPendingMarkdownString =\n%q\nwant\n%q", got, want)
+		}
 	})
-	for _, absent := range []string{"User:", "Expires:"} {
-		t.Run("without "+absent, func(t *testing.T) {
-			if strings.Contains(withNeither, absent) {
-				t.Errorf("markdown carries %q for an invitation without it:\n%s", absent, withNeither)
-			}
+	t.Run("with neither", func(t *testing.T) {
+		got := FormatListPendingMarkdownString(ListPendingInvitationsOutput{
+			Invitations: []PendingInviteOutput{{InviteEmail: "alice@example.com", AccessLevel: 30}},
 		})
-	}
+		want := "## Pending Invitations (1)\n\n" + pendingListHeader +
+			"| alice@example.com | Developer (30) |  |  |  |  |\n" +
+			pendingListHints
+		if got != want {
+			t.Errorf("FormatListPendingMarkdownString =\n%q\nwant\n%q", got, want)
+		}
+	})
 }
 
 // TestPendingInvitations_MarkdownLeavesTheTokenOut verifies the rendered table
 // never carries the token: it is a live credential, and a Markdown answer is
 // pasted into a conversation. The JSON keeps it for a caller that needs it.
 func TestPendingInvitations_MarkdownLeavesTheTokenOut(t *testing.T) {
-	md := FormatListPendingMarkdownString(ListPendingInvitationsOutput{
+	got := FormatListPendingMarkdownString(ListPendingInvitationsOutput{
 		Invitations: []PendingInviteOutput{{
 			InviteEmail: "alice@example.com", InviteToken: "tok-alice", AccessLevel: 30,
 		}},
 	})
-	if strings.Contains(md, "tok-alice") {
-		t.Errorf("markdown carries the invitation token:\n%s", md)
+	want := "## Pending Invitations (1)\n\n" + pendingListHeader +
+		"| alice@example.com | Developer (30) |  |  |  |  |\n" +
+		pendingListHints
+	if got != want {
+		t.Errorf("FormatListPendingMarkdownString =\n%q\nwant\n%q", got, want)
 	}
-	if !strings.Contains(md, "alice@example.com") {
-		t.Errorf("markdown dropped the invitation itself:\n%s", md)
+	if strings.Contains(got, "tok-alice") {
+		t.Errorf("markdown carries the invitation token:\n%s", got)
 	}
 }

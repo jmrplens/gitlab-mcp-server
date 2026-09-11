@@ -1,35 +1,42 @@
 // markdown_test.go contains unit tests for the Markdown formatting functions
-// in the memberroles package. It covers FormatOutputMarkdown (single role
-// rendering with and without permissions, empty role), FormatListMarkdown
-// (empty list, single role, multiple roles, zero GroupID), and the
-// writePermRow helper via integration through FormatOutputMarkdown.
+// in the memberroles package. Each case compares the whole document the
+// formatter renders: a card for one role with its permissions as a nested
+// collection, and a table for a list of them.
 package memberroles
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestFormatOutputMarkdown validates that FormatOutputMarkdown renders a single
-// member role with description, group ID, base access level, and a permissions
-// table. Each subtest covers a specific rendering scenario.
+// roleCardHints is the guidance section every member-role card ends with.
+const roleCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'member_role.list_group' to view every custom role of a group\n" +
+	"- Use action 'member_role.list_instance' to view every custom role of the instance\n"
+
+// roleListHints is the guidance section a list of member roles ends with.
+const roleListHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'member_role.create_group' to define a new custom role in a group\n" +
+	"- Use action 'member_role.create_instance' to define a new custom role on the instance\n"
+
+// TestFormatOutputMarkdown validates the whole card FormatOutputMarkdown
+// renders for a member role: the base access level named as well as numbered,
+// the permissions the role carries as a table of their own, and nothing at all
+// for a role GitLab never sent.
 func TestFormatOutputMarkdown(t *testing.T) {
 	trueVal := true
 	falseVal := false
 
 	tests := []struct {
-		name       string
-		input      Output
-		wantEmpty  bool
-		contains   []string
-		notContain []string
+		name  string
+		input Output
+		want  string
 	}{
 		{
-			name:      "returns empty string for zero-ID role",
-			input:     Output{},
-			wantEmpty: true,
+			name:  "returns empty string for zero-ID role",
+			input: Output{},
+			want:  "",
 		},
 		{
 			name: "renders role with description and group ID",
@@ -40,14 +47,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				GroupID:         100,
 				BaseAccessLevel: 30,
 			},
-			contains: []string{
-				"## Member Role #42: custom-dev",
-				"**Description**: Custom developer role",
-				"**Group ID**: 100",
-				"**Base Access Level**: 30",
-				"### Permissions",
-				"| Permission | Granted |",
-			},
+			want: "## Member Role #42: custom-dev\n\n" +
+				"- **Description**: Custom developer role\n" +
+				"- **Group ID**: 100\n" +
+				"- **Base Access Level**: Developer (30)\n" +
+				roleCardHints,
 		},
 		{
 			name: "renders role without description and without group ID",
@@ -56,69 +60,32 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				Name:            "reader",
 				BaseAccessLevel: 10,
 			},
-			contains: []string{
-				"## Member Role #7: reader",
-				"**Base Access Level**: 10",
-			},
-			notContain: []string{
-				"**Description**",
-				"**Group ID**",
-			},
+			want: "## Member Role #7: reader\n\n" +
+				"- **Base Access Level**: Guest (10)\n" +
+				roleCardHints,
 		},
 		{
-			name: "renders granted permissions with checkmarks",
+			name: "renders the permissions the role carries",
 			input: Output{
 				ID:              1,
-				Name:            "all-perms",
+				Name:            "two-perms",
 				BaseAccessLevel: 30,
 				Permissions: Permissions{
-					AdminCICDVariables:         &trueVal,
-					AdminComplianceFramework:   &trueVal,
-					AdminGroupMembers:          &trueVal,
-					AdminMergeRequests:         &trueVal,
-					AdminPushRules:             &trueVal,
-					AdminTerraformState:        &trueVal,
-					AdminVulnerability:         &trueVal,
-					AdminWebHook:               &trueVal,
-					ArchiveProject:             &trueVal,
-					ManageDeployTokens:         &trueVal,
-					ManageGroupAccessTokens:    &trueVal,
-					ManageMergeRequestSettings: &trueVal,
-					ManageProjectAccessTokens:  &trueVal,
-					ManageSecurityPolicyLink:   &trueVal,
-					ReadCode:                   &trueVal,
-					ReadRunners:                &trueVal,
-					ReadDependency:             &trueVal,
-					ReadVulnerability:          &trueVal,
-					RemoveGroup:                &trueVal,
-					RemoveProject:              &trueVal,
+					AdminCICDVariables: &trueVal,
+					ReadCode:           &trueVal,
+					ReadRunners:        &falseVal,
 				},
 			},
-			contains: []string{
-				"| Admin CI/CD Variables | \u2713 |",
-				"| Admin Compliance Framework | \u2713 |",
-				"| Admin Group Members | \u2713 |",
-				"| Admin Merge Requests | \u2713 |",
-				"| Admin Push Rules | \u2713 |",
-				"| Admin Terraform State | \u2713 |",
-				"| Admin Vulnerability | \u2713 |",
-				"| Admin Webhooks | \u2713 |",
-				"| Archive Project | \u2713 |",
-				"| Manage Deploy Tokens | \u2713 |",
-				"| Manage Group Access Tokens | \u2713 |",
-				"| Manage MR Settings | \u2713 |",
-				"| Manage Project Access Tokens | \u2713 |",
-				"| Manage Security Policy Link | \u2713 |",
-				"| Read Code | \u2713 |",
-				"| Read Runners | \u2713 |",
-				"| Read Dependency | \u2713 |",
-				"| Read Vulnerability | \u2713 |",
-				"| Remove Group | \u2713 |",
-				"| Remove Project | \u2713 |",
-			},
+			want: "## Member Role #1: two-perms\n\n" +
+				"- **Base Access Level**: Developer (30)\n" +
+				"\n### Permissions\n\n" +
+				"| Permission | Granted |\n| --- | --- |\n" +
+				"| Admin CI/CD Variables | " + toolutil.BoolEmoji(true) + " |\n" +
+				"| Read Code | " + toolutil.BoolEmoji(true) + " |\n" +
+				roleCardHints,
 		},
 		{
-			name: "omits false permissions from table rows",
+			name: "writes no permissions table when the role carries none",
 			input: Output{
 				ID:              2,
 				Name:            "no-perms",
@@ -128,77 +95,36 @@ func TestFormatOutputMarkdown(t *testing.T) {
 					ReadRunners: &falseVal,
 				},
 			},
-			contains: []string{
-				"### Permissions",
-				"| Permission | Granted |",
-			},
-			notContain: []string{
-				"| Read Code | \u2713 |",
-				"| Read Runners | \u2713 |",
-			},
-		},
-		{
-			name: "includes hints section",
-			input: Output{
-				ID:              3,
-				Name:            "hinted",
-				BaseAccessLevel: 20,
-			},
-			contains: []string{
-				"gitlab_list_instance_member_roles",
-				"gitlab_list_group_member_roles",
-			},
+			want: "## Member Role #2: no-perms\n\n" +
+				"- **Base Access Level**: Guest (10)\n" +
+				roleCardHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatOutputMarkdown(tt.input)
-
-			if tt.wantEmpty {
-				if got != "" {
-					t.Fatalf("expected empty string, got %q", got)
-				}
-				return
-			}
-
-			if got == "" {
-				t.Fatal("expected non-empty markdown, got empty string")
-			}
-
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("output missing expected substring %q", s)
-				}
-			}
-			for _, s := range tt.notContain {
-				if strings.Contains(got, s) {
-					t.Errorf("output should not contain %q", s)
-				}
+			if got := FormatOutputMarkdown(tt.input); got != tt.want {
+				t.Errorf("FormatOutputMarkdown =\n%q\nwant\n%q", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestFormatListMarkdown validates that FormatListMarkdown renders a table of
-// member roles with ID, name, base level, and group ID columns. Covers empty
-// list, single role, multiple roles, and roles without a group ID.
+// TestFormatListMarkdown validates the whole table FormatListMarkdown renders:
+// the heading counting the roles, one row each with the base level named, a
+// dash where an instance role has no group, and the guidance last.
 func TestFormatListMarkdown(t *testing.T) {
+	const header = "| ID | Name | Base Level | Group ID |\n| --- | --- | --- | --- |\n"
+
 	tests := []struct {
-		name       string
-		input      ListOutput
-		contains   []string
-		notContain []string
+		name  string
+		input ListOutput
+		want  string
 	}{
 		{
 			name:  "returns message for empty list",
 			input: ListOutput{},
-			contains: []string{
-				"No member roles found.",
-			},
-			notContain: []string{
-				"| ID |",
-			},
+			want:  "No member roles found.\n",
 		},
 		{
 			name: "renders single role with group ID",
@@ -207,11 +133,9 @@ func TestFormatListMarkdown(t *testing.T) {
 					{ID: 1, Name: "dev-role", BaseAccessLevel: 30, GroupID: 100},
 				},
 			},
-			contains: []string{
-				"## Member Roles (1)",
-				"| ID | Name | Base Level | Group ID |",
-				"| 1 | dev-role | 30 | 100 |",
-			},
+			want: "## Member Roles (1)\n\n" + header +
+				"| 1 | dev-role | Developer (30) | 100 |\n" +
+				roleListHints,
 		},
 		{
 			name: "renders multiple roles",
@@ -222,12 +146,11 @@ func TestFormatListMarkdown(t *testing.T) {
 					{ID: 3, Name: "admin", BaseAccessLevel: 40, GroupID: 0},
 				},
 			},
-			contains: []string{
-				"## Member Roles (3)",
-				"| 1 | reader | 10 | 50 |",
-				"| 2 | developer | 30 | 50 |",
-				"| 3 | admin | 40 | - |",
-			},
+			want: "## Member Roles (3)\n\n" + header +
+				"| 1 | reader | Guest (10) | 50 |\n" +
+				"| 2 | developer | Developer (30) | 50 |\n" +
+				"| 3 | admin | Maintainer (40) | - |\n" +
+				roleListHints,
 		},
 		{
 			name: "uses dash for zero group ID",
@@ -236,44 +159,16 @@ func TestFormatListMarkdown(t *testing.T) {
 					{ID: 5, Name: "instance-role", BaseAccessLevel: 20, GroupID: 0},
 				},
 			},
-			contains: []string{
-				"| 5 | instance-role | 20 | - |",
-			},
-			notContain: []string{
-				"| 0 |",
-			},
-		},
-		{
-			name: "includes hints section",
-			input: ListOutput{
-				Roles: []Output{
-					{ID: 1, Name: "r", BaseAccessLevel: 10},
-				},
-			},
-			contains: []string{
-				"gitlab_create_instance_member_role",
-				"gitlab_create_group_member_role",
-			},
+			want: "## Member Roles (1)\n\n" + header +
+				"| 5 | instance-role | Reporter (20) | - |\n" +
+				roleListHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatListMarkdown(tt.input)
-
-			if got == "" {
-				t.Fatal("expected non-empty markdown, got empty string")
-			}
-
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("output missing expected substring %q", s)
-				}
-			}
-			for _, s := range tt.notContain {
-				if strings.Contains(got, s) {
-					t.Errorf("output should not contain %q", s)
-				}
+			if got := FormatListMarkdown(tt.input); got != tt.want {
+				t.Errorf("FormatListMarkdown =\n%q\nwant\n%q", got, tt.want)
 			}
 		})
 	}

@@ -799,152 +799,69 @@ func TestToPATOutput_TimeFields(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatOutputMarkdown(t *testing.T) {
-	out := Output{ID: 42, Name: "svc-bot", Username: "svc-bot", Email: "svc@test.com"}
-	md := FormatOutputMarkdown(out)
-	for _, want := range []string{"svc-bot", "42", "svc@test.com", "gitlab_group_service_account_update"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatOutputMarkdown missing %q in:\n%s", want, md)
-			}
-		})
-	}
-}
-
-// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown(t *testing.T) {
-	t.Run("non-empty list", func(t *testing.T) {
-		out := ListOutput{
-			Accounts: []Output{
-				{ID: 1, Name: "a", Username: "a-user", Email: "a@t.com"},
-				{ID: 2, Name: "b", Username: "b-user", Email: "b@t.com"},
-			},
-			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 2},
-		}
-		md := FormatListMarkdown(out)
-		if !strings.Contains(md, "a-user") {
-			t.Errorf("FormatListMarkdown missing first account username:\n%s", md)
-		}
-		if !strings.Contains(md, "b-user") {
-			t.Errorf("FormatListMarkdown missing second account username:\n%s", md)
-		}
-		if !strings.Contains(md, "| ID |") {
-			t.Errorf("FormatListMarkdown missing table header:\n%s", md)
-		}
-	})
-	t.Run("empty list", func(t *testing.T) {
-		md := FormatListMarkdown(ListOutput{})
-		if !strings.Contains(md, "No group service accounts found") {
-			t.Errorf("FormatListMarkdown empty should say no accounts found:\n%s", md)
-		}
-	})
-}
-
-// TestFormatPATOutputMarkdown verifies the PATOutputMarkdown Markdown formatter for a representative patoutput input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatPATOutputMarkdown(t *testing.T) {
-	t.Run("with all fields", func(t *testing.T) {
-		out := PATOutput{
-			ID: 1, Name: "deploy", Active: true, Revoked: false,
-			Scopes: []string{"api", "read_user"}, UserID: 42,
-			CreatedAt: "2026-06-15T10:30:00Z", ExpiresAt: "2026-01-15",
-			Token: "glpat-secret",
-		}
-		md := FormatPATOutputMarkdown(out)
-		for _, want := range []string{"deploy", "api", "glpat-secret", "2026-01-15", "gitlab_group_service_account_pat_revoke"} {
-			t.Run(want, func(t *testing.T) {
-				if !strings.Contains(md, want) {
-					t.Errorf("FormatPATOutputMarkdown missing %q:\n%s", want, md)
-				}
-			})
-		}
-	})
-	t.Run("without optional fields", func(t *testing.T) {
-		out := PATOutput{ID: 2, Name: "min", Scopes: []string{"read_api"}}
-		md := FormatPATOutputMarkdown(out)
-		if !strings.Contains(md, "min") {
-			t.Errorf("FormatPATOutputMarkdown missing name:\n%s", md)
-		}
-		if strings.Contains(md, "Expires") {
-			t.Errorf("FormatPATOutputMarkdown should not contain Expires when empty:\n%s", md)
-		}
-	})
-}
-
-// TestFormatListPATMarkdown verifies the ListPATMarkdown Markdown formatter for a representative listpat input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListPATMarkdown(t *testing.T) {
-	t.Run("non-empty list", func(t *testing.T) {
-		out := ListPATOutput{
-			Tokens: []PATOutput{
-				{ID: 1, Name: "t1", Active: true, Scopes: []string{"api"}},
-				{ID: 2, Name: "t2", Active: false, Revoked: true, Scopes: []string{"read_api"}},
-			},
-			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 2},
-		}
-		md := FormatListPATMarkdown(out)
-		if !strings.Contains(md, "t1") || !strings.Contains(md, "t2") {
-			t.Errorf("FormatListPATMarkdown missing tokens:\n%s", md)
-		}
-		if !strings.Contains(md, "| ID |") {
-			t.Errorf("FormatListPATMarkdown missing table header:\n%s", md)
-		}
-	})
-	t.Run("empty list", func(t *testing.T) {
-		md := FormatListPATMarkdown(ListPATOutput{})
-		if !strings.Contains(md, "No personal access tokens found") {
-			t.Errorf("FormatListPATMarkdown empty should say no tokens found:\n%s", md)
-		}
-	})
-}
-
-// TestFormatMarkdownString verifies the MarkdownString Markdown formatter for a representative string input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString verifies the whole card a service account renders:
+// the H2 the formatter composes, one list item per field GitLab sent, no item
+// for a field it did not, and the guidance section last.
 func TestFormatMarkdownString(t *testing.T) {
-	out := Output{ID: 10, Name: "svc", Username: "svc-user", Email: "svc@e.com"}
-	md := FormatMarkdownString(out)
-	for _, want := range []string{"svc-user", "10", "svc@e.com"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatMarkdownString missing %q:\n%s", want, md)
-			}
-		})
-	}
+	t.Run("every field", func(t *testing.T) {
+		out := Output{ID: 10, Name: "svc", Username: "svc-user", Email: "svc@e.com", PublicEmail: "pub@e.com", UnconfirmedEmail: "new@e.com"}
+		want := "## Service Account: svc-user\n\n" +
+			"- **ID**: 10\n" +
+			"- **Name**: svc\n" +
+			"- **Username**: svc-user\n" +
+			"- **Email**: svc@e.com\n" +
+			"- **Public Email**: pub@e.com\n" +
+			"- **Unconfirmed Email**: new@e.com\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Use action 'group.service_account_update' to change this account's name or username\n" +
+			"- Use action 'group.service_account_pat_create' to create a token for it\n"
+		if got := FormatMarkdownString(out); got != want {
+			t.Errorf("FormatMarkdownString =\n%q\nwant\n%q", got, want)
+		}
+	})
+	t.Run("only what GitLab sent", func(t *testing.T) {
+		out := Output{ID: 10, Username: "svc-user"}
+		want := "## Service Account: svc-user\n\n" +
+			"- **ID**: 10\n" +
+			"- **Username**: svc-user\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Use action 'group.service_account_update' to change this account's name or username\n" +
+			"- Use action 'group.service_account_pat_create' to create a token for it\n"
+		if got := FormatMarkdownString(out); got != want {
+			t.Errorf("FormatMarkdownString =\n%q\nwant\n%q", got, want)
+		}
+	})
 }
 
-// TestFormatListMarkdownString verifies the ListMarkdownString Markdown formatter for a representative liststring input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdownString verifies the whole list a page of service
+// accounts renders: the heading counting what GitLab reported rather than the
+// page length, the table, the pagination footer and the guidance last.
 func TestFormatListMarkdownString(t *testing.T) {
 	t.Run("with accounts", func(t *testing.T) {
 		out := ListOutput{
 			Accounts:   []Output{{ID: 1, Name: "a", Username: "au", Email: "a@t.com"}},
 			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1},
 		}
-		md := FormatListMarkdownString(out)
-		if !strings.Contains(md, "au") {
-			t.Errorf("FormatListMarkdownString missing username:\n%s", md)
+		want := "## Group Service Accounts (1)\n\n" +
+			"| ID | Username | Name | Email |\n| --- | --- | --- | --- |\n" +
+			"| 1 | au | a | a@t.com |\n" +
+			"\nPage 1 of 1 | 1 items total\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Use action 'group.service_account_pat_list' to list one account's tokens\n"
+		if got := FormatListMarkdownString(out); got != want {
+			t.Errorf("FormatListMarkdownString =\n%q\nwant\n%q", got, want)
 		}
 	})
 	t.Run("empty", func(t *testing.T) {
-		md := FormatListMarkdownString(ListOutput{})
-		if !strings.Contains(md, "No service accounts found") {
-			t.Errorf("FormatListMarkdownString empty should say no accounts:\n%s", md)
+		if got, want := FormatListMarkdownString(ListOutput{}), "No service accounts found.\n"; got != want {
+			t.Errorf("FormatListMarkdownString =\n%q\nwant\n%q", got, want)
 		}
 	})
 }
 
-// TestFormatPATMarkdownString verifies the PATMarkdownString Markdown formatter for a representative patstring input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatPATMarkdownString verifies the whole card a service account token
+// renders, including the granular scopes table and the store-it-now hint the
+// secret adds.
 func TestFormatPATMarkdownString(t *testing.T) {
 	t.Run("with all fields", func(t *testing.T) {
 		out := PATOutput{
@@ -952,28 +869,48 @@ func TestFormatPATMarkdownString(t *testing.T) {
 			UserID: 42, CreatedAt: "2026-01-01T00:00:00Z",
 			LastUsedAt: "2026-06-20T08:00:00Z",
 			ExpiresAt:  "2026-12-31", Token: "secret",
+			Granular:       true,
+			GranularScopes: []toolutil.TokenGranularScopeOutput{{Access: "read", Permissions: []string{"read_code"}, ProjectID: 7}},
 		}
-		md := FormatPATMarkdownString(out)
-		for _, want := range []string{"tok", "api", "secret", "2026-12-31", "2026-01-01", "2026-06-20", "Last Used"} {
-			t.Run(want, func(t *testing.T) {
-				if !strings.Contains(md, want) {
-					t.Errorf("FormatPATMarkdownString missing %q:\n%s", want, md)
-				}
-			})
+		want := "## Personal Access Token: tok\n\n" +
+			"- **ID**: 1\n" +
+			"- **Active**: " + toolutil.BoolEmoji(true) + "\n" +
+			"- **Scopes**: api\n" +
+			"- **Granular**: " + toolutil.BoolEmoji(true) + "\n" +
+			"- **User ID**: 42\n" +
+			"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+			"- **Last Used**: 20 Jun 2026 08:00 UTC\n" +
+			"- **Expires**: 31 Dec 2026\n" +
+			"- **Token**: `secret`\n" +
+			"\n### Granular Scopes\n\n" +
+			"| Access | Permissions | Project | Group |\n| --- | --- | --- | --- |\n" +
+			"| read | read_code | 7 | - |\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Store the token securely. It cannot be retrieved later\n" +
+			"- Use action 'group.service_account_pat_rotate' to rotate this token\n" +
+			"- Use action 'group.service_account_pat_revoke' to revoke it\n"
+		if got := FormatPATMarkdownString(out); got != want {
+			t.Errorf("FormatPATMarkdownString =\n%q\nwant\n%q", got, want)
 		}
 	})
-	t.Run("minimal fields", func(t *testing.T) {
-		out := PATOutput{ID: 2, Name: "m", Scopes: []string{"read_api"}}
-		md := FormatPATMarkdownString(out)
-		if !strings.Contains(md, "read_api") {
-			t.Errorf("FormatPATMarkdownString missing scopes:\n%s", md)
+	t.Run("revoked and without optional fields", func(t *testing.T) {
+		out := PATOutput{ID: 2, Name: "m", Revoked: true, Scopes: []string{"read_api"}}
+		want := "## Personal Access Token: m\n\n" +
+			"- **ID**: 2\n" +
+			"- **Active**: " + toolutil.BoolEmoji(false) + "\n" +
+			"- " + toolutil.EmojiWarning + " **Revoked**\n" +
+			"- **Scopes**: read_api\n" +
+			"- **Granular**: " + toolutil.BoolEmoji(false) + "\n" +
+			"- **User ID**: 0\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Use action 'group.service_account_pat_rotate' to rotate this token\n" +
+			"- Use action 'group.service_account_pat_revoke' to revoke it\n"
+		if got := FormatPATMarkdownString(out); got != want {
+			t.Errorf("FormatPATMarkdownString =\n%q\nwant\n%q", got, want)
 		}
 	})
 }
 
-// TestFormatListPATMarkdownString verifies the ListPATMarkdownString Markdown formatter for a representative listpatstring input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
 // TestGroupServiceAccounts_UnreadableCapturedPublicEmail verifies that every
 // service account handler returns an error rather than a half-filled account
 // when GitLab sends public_email as something that is not a string. The SDK
@@ -1009,21 +946,28 @@ func TestGroupServiceAccounts_UnreadableCapturedPublicEmail(t *testing.T) {
 	}
 }
 
+// TestFormatListPATMarkdownString verifies the whole list a page of service
+// account tokens renders: every flag through the emoji and the expiry through
+// the display layout rather than as GitLab spelled it.
 func TestFormatListPATMarkdownString(t *testing.T) {
 	t.Run("with tokens", func(t *testing.T) {
 		out := ListPATOutput{
 			Tokens:     []PATOutput{{ID: 1, Name: "t", Active: true, Scopes: []string{"api"}, ExpiresAt: "2026-01-01"}},
 			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1},
 		}
-		md := FormatListPATMarkdownString(out)
-		if !strings.Contains(md, "2026-01-01") {
-			t.Errorf("FormatListPATMarkdownString missing expires:\n%s", md)
+		want := "## Service Account Tokens (1)\n\n" +
+			"| ID | Name | Active | Revoked | Scopes | Expires |\n| --- | --- | --- | --- | --- | --- |\n" +
+			"| 1 | t | " + toolutil.BoolEmoji(true) + " | " + toolutil.BoolEmoji(false) + " | api | 1 Jan 2026 |\n" +
+			"\nPage 1 of 1 | 1 items total\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Use action 'group.service_account_pat_revoke' to revoke one of these tokens\n"
+		if got := FormatListPATMarkdownString(out); got != want {
+			t.Errorf("FormatListPATMarkdownString =\n%q\nwant\n%q", got, want)
 		}
 	})
 	t.Run("empty", func(t *testing.T) {
-		md := FormatListPATMarkdownString(ListPATOutput{})
-		if !strings.Contains(md, "No tokens found") {
-			t.Errorf("FormatListPATMarkdownString empty should say no tokens:\n%s", md)
+		if got, want := FormatListPATMarkdownString(ListPATOutput{}), "No tokens found.\n"; got != want {
+			t.Errorf("FormatListPATMarkdownString =\n%q\nwant\n%q", got, want)
 		}
 	})
 }

@@ -13,6 +13,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Test endpoint paths and format strings for project member operation tests.
@@ -155,11 +156,11 @@ func TestAccessLevelDescription_Mapping(t *testing.T) {
 		accessLevel int
 		want        string
 	}{
-		{"Guest", `[{"id":1,"username":"u","name":"n","state":"active","access_level":10,"web_url":"u"}]`, 10, "Guest"},
-		{"Reporter", `[{"id":1,"username":"u","name":"n","state":"active","access_level":20,"web_url":"u"}]`, 20, "Reporter"},
-		{"Developer", `[{"id":1,"username":"u","name":"n","state":"active","access_level":30,"web_url":"u"}]`, 30, "Developer"},
-		{"Maintainer", `[{"id":1,"username":"u","name":"n","state":"active","access_level":40,"web_url":"u"}]`, 40, "Maintainer"},
-		{"Owner", `[{"id":1,"username":"u","name":"n","state":"active","access_level":50,"web_url":"u"}]`, 50, "Owner"},
+		{"Guest", `[{"id":1,"username":"u","name":"n","state":"active","access_level":10,"web_url":"u"}]`, 10, "Guest (10)"},
+		{"Reporter", `[{"id":1,"username":"u","name":"n","state":"active","access_level":20,"web_url":"u"}]`, 20, "Reporter (20)"},
+		{"Developer", `[{"id":1,"username":"u","name":"n","state":"active","access_level":30,"web_url":"u"}]`, 30, "Developer (30)"},
+		{"Maintainer", `[{"id":1,"username":"u","name":"n","state":"active","access_level":40,"web_url":"u"}]`, 40, "Maintainer (40)"},
+		{"Owner", `[{"id":1,"username":"u","name":"n","state":"active","access_level":50,"web_url":"u"}]`, 50, "Owner (50)"},
 	}
 
 	for _, tc := range tests {
@@ -175,9 +176,16 @@ func TestAccessLevelDescription_Mapping(t *testing.T) {
 			if out.Members[0].AccessLevel != tc.accessLevel {
 				t.Errorf("AccessLevel = %d, want %d", out.Members[0].AccessLevel, tc.accessLevel)
 			}
-			md := FormatMarkdown(out.Members[0])
-			if !strings.Contains(md, tc.want) {
-				t.Errorf("FormatMarkdown access level label = %q, want it to contain %q", md, tc.want)
+			want := "## Member: u\n\n" +
+				"- **ID**: 1\n" +
+				"- **Name**: n\n" +
+				"- **Username**: u\n" +
+				"- **State**: active\n" +
+				"- **Access Level**: " + tc.want + "\n" +
+				"- **URL**: [u](u)\n" +
+				memberCardHints
+			if got := FormatMarkdown(out.Members[0]); got != want {
+				t.Errorf("FormatMarkdown =\n%q\nwant\n%q", got, want)
 			}
 		})
 	}
@@ -980,51 +988,66 @@ func TestToOutput_WithExpiresAt(t *testing.T) {
 // FormatMarkdown — all optional fields populated
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_AllOptionalFields covers FormatMarkdown with table-driven subtests for all optional fields.
+// memberCardHints is the guidance section every project-member card ends
+// with.
+const memberCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'project.member_edit' to change this member's access level\n" +
+	"- Use action 'project.member_delete' to remove this member from the project\n"
+
+// memberListHints is the guidance section a page of project members ends with
+// when no row carried a profile link.
+const memberListHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'project.member_get' to see one member's details\n" +
+	"- Use action 'project.member_add' to add a member to this project\n"
+
+// memberListHeader is the header and delimiter of the members table.
+const memberListHeader = "| Username | Name | Access Level | State | Membership | Expires |\n" +
+	"| --- | --- | --- | --- | --- | --- |\n"
+
+// TestFormatMarkdown_AllOptionalFields verifies the whole card a member
+// GitLab answered in full renders: every field as one list item, the creator
+// as a nested sub-list, the lock marked with the warning sign, and the
+// guidance last.
 func TestFormatMarkdown_AllOptionalFields(t *testing.T) {
 	out := Output{
-		ID:          10,
-		Username:    "alice",
-		Name:        "Alice Smith",
-		State:       "active",
-		AccessLevel: 40,
-		WebURL:      "https://gitlab.example.com/alice",
-		Email:       "alice@example.com",
-		MemberRole:  &MemberRoleOutput{ID: 3, Name: "Security Lead"},
-		CreatedBy:   &CreatedByOutput{ID: 99, Username: "admin", Name: "Admin User"},
-		ExpiresAt:   "2026-06-30",
-		CreatedAt:   "2026-01-15T10:00:00Z",
+		ID:              10,
+		Username:        "alice",
+		Name:            "Alice Smith",
+		State:           "active",
+		MembershipState: "awaiting",
+		Locked:          true,
+		AccessLevel:     40,
+		WebURL:          "https://gitlab.example.com/alice",
+		Email:           "alice@example.com",
+		MemberRole:      &MemberRoleOutput{ID: 3, Name: "Security Lead"},
+		CreatedBy:       &CreatedByOutput{ID: 99, Username: "admin", Name: "Admin User"},
+		ExpiresAt:       "2026-06-30",
+		CreatedAt:       "2026-01-15T10:00:00Z",
 	}
-
-	md := FormatMarkdown(out)
-
-	checks := []struct {
-		name string
-		want string
-	}{
-		{"header", "## Member: alice"},
-		{"id", "- **ID**: 10"},
-		{"name", "- **Name**: Alice Smith"},
-		{"username", "- **Username**: alice"},
-		{"state", "- **State**: active"},
-		{"access_level", "- **Access Level**: Maintainer (40)"},
-		{"web_url", "- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)"},
-		{"email", "- **Email**: alice@example.com"},
-		{"member_role", "- **Member Role**: Security Lead (3)"},
-		{"created_by", "- **Created By**: Admin User (@admin)"},
-		{"expires_at", "- **Expires At**: 30 Jun 2026"},
-		{"created_at", "- **Created**: 15 Jan 2026 10:00 UTC"},
-	}
-	for _, tc := range checks {
-		t.Run(tc.name, func(t *testing.T) {
-			if !strings.Contains(md, tc.want) {
-				t.Errorf("FormatMarkdown missing %q in:\n%s", tc.want, md)
-			}
-		})
+	want := "## Member: alice\n\n" +
+		"- **ID**: 10\n" +
+		"- **Name**: Alice Smith\n" +
+		"- **Username**: alice\n" +
+		"- **State**: active\n" +
+		"- **Membership State**: awaiting\n" +
+		"- " + toolutil.EmojiWarning + " **Locked**\n" +
+		"- **Access Level**: Maintainer (40)\n" +
+		"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n" +
+		"- **Email**: alice@example.com\n" +
+		"- **Member Role**: Security Lead (3)\n" +
+		"- **Created By**:\n" +
+		"  - **Name**: Admin User\n" +
+		"  - **Username**: @admin\n" +
+		"- **Expires At**: 30 Jun 2026\n" +
+		"- **Created**: 15 Jan 2026 10:00 UTC\n" +
+		memberCardHints
+	if got := FormatMarkdown(out); got != want {
+		t.Errorf("FormatMarkdown =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatMarkdown_NoOptionalFields verifies FormatMarkdown when no optional fields.
+// TestFormatMarkdown_NoOptionalFields verifies that a member GitLab sent no
+// optional field for renders no label with nothing after it.
 func TestFormatMarkdown_NoOptionalFields(t *testing.T) {
 	out := Output{
 		ID:          10,
@@ -1034,23 +1057,16 @@ func TestFormatMarkdown_NoOptionalFields(t *testing.T) {
 		AccessLevel: 30,
 		WebURL:      "https://gitlab.example.com/alice",
 	}
-
-	md := FormatMarkdown(out)
-
-	if strings.Contains(md, "**Email**") {
-		t.Error("FormatMarkdown should not contain Email when empty")
-	}
-	if strings.Contains(md, "**Member Role**") {
-		t.Error("FormatMarkdown should not contain Member Role when empty")
-	}
-	if strings.Contains(md, "**Created By**") {
-		t.Error("FormatMarkdown should not contain Created By when empty")
-	}
-	if strings.Contains(md, "**Expires At**") {
-		t.Error("FormatMarkdown should not contain Expires At when empty")
-	}
-	if strings.Contains(md, "**Created**") {
-		t.Error("FormatMarkdown should not contain Created when empty")
+	want := "## Member: alice\n\n" +
+		"- **ID**: 10\n" +
+		"- **Name**: Alice\n" +
+		"- **Username**: alice\n" +
+		"- **State**: active\n" +
+		"- **Access Level**: Developer (30)\n" +
+		"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n" +
+		memberCardHints
+	if got := FormatMarkdown(out); got != want {
+		t.Errorf("FormatMarkdown =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -1066,7 +1082,8 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithMembers verifies FormatListMarkdownString when with members.
+// TestFormatListMarkdownString_WithMembers verifies the whole table a page of
+// members renders, access levels named as well as numbered.
 func TestFormatListMarkdownString_WithMembers(t *testing.T) {
 	lo := ListOutput{
 		Members: []Output{
@@ -1074,74 +1091,94 @@ func TestFormatListMarkdownString_WithMembers(t *testing.T) {
 			{Username: "bob", Name: "Bob", AccessLevel: 40, State: "active"},
 		},
 	}
-	got := FormatListMarkdownString(lo)
-	if !strings.Contains(got, "| alice |") {
-		t.Error("FormatListMarkdownString missing alice row")
-	}
-	if !strings.Contains(got, "| bob |") {
-		t.Error("FormatListMarkdownString missing bob row")
-	}
-	if !strings.Contains(got, "| Username |") {
-		t.Error("FormatListMarkdownString missing header row")
+	want := "## Project Members (2)\n\n" + memberListHeader +
+		"| @alice | Alice | Developer (30) | active |  |  |\n" +
+		"| @bob | Bob | Maintainer (40) | active |  |  |\n" +
+		memberListHints
+	if got := FormatListMarkdownString(lo); got != want {
+		t.Errorf("FormatListMarkdownString =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatListMarkdownString_ClickableUsernameLinks verifies that list table
-// renders usernames as clickable Markdown links when WebURL is present.
+// TestFormatListMarkdownString_ClickableUsernameLinks verifies that a page
+// whose members carry a profile URL links each handle and leads its guidance
+// with the instruction to keep those links.
 func TestFormatListMarkdownString_ClickableUsernameLinks(t *testing.T) {
 	lo := ListOutput{
 		Members: []Output{
 			{
 				Username: "alice", Name: "Alice", AccessLevel: 30,
 				State: "active", WebURL: "https://gitlab.example.com/alice",
+				MembershipState: "active", ExpiresAt: "2026-06-30",
 			},
 		},
 	}
-	got := FormatListMarkdownString(lo)
-	if !strings.Contains(got, "[alice](https://gitlab.example.com/alice)") {
-		t.Errorf("expected clickable username link, got:\n%s", got)
+	want := "## Project Members (1)\n\n" + memberListHeader +
+		"| [@alice](https://gitlab.example.com/alice) | Alice | Developer (30) | active | active | 30 Jun 2026 |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'project.member_get' to see one member's details\n" +
+		"- Use action 'project.member_add' to add a member to this project\n"
+	if got := FormatListMarkdownString(lo); got != want {
+		t.Errorf("FormatListMarkdownString =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatListMarkdownString_NoLinkWithoutWebURL verifies that usernames
-// appear as plain text when WebURL is empty.
+// TestFormatListMarkdownString_NoLinkWithoutWebURL verifies that a page whose
+// members carry no profile URL names each handle in plain text and drops the
+// instruction to preserve links, which would be about links the page has not
+// got.
 func TestFormatListMarkdownString_NoLinkWithoutWebURL(t *testing.T) {
 	lo := ListOutput{
 		Members: []Output{
 			{Username: "bob", Name: "Bob", AccessLevel: 40, State: "active"},
 		},
 	}
-	got := FormatListMarkdownString(lo)
-	if strings.Contains(got, "[bob](") {
-		t.Errorf("should not contain link when WebURL is empty, got:\n%s", got)
-	}
-	if !strings.Contains(got, "bob") {
-		t.Errorf("should contain username as plain text, got:\n%s", got)
+	want := "## Project Members (1)\n\n" + memberListHeader +
+		"| @bob | Bob | Maintainer (40) | active |  |  |\n" +
+		memberListHints
+	if got := FormatListMarkdownString(lo); got != want {
+		t.Errorf("FormatListMarkdownString =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatMarkdown_ClickableURL verifies that the detail Markdown renders
-// the WebURL as a clickable link in the new format.
+// TestFormatMarkdown_ClickableURL verifies that the card renders the member's
+// address as a link to itself.
 func TestFormatMarkdown_ClickableURL(t *testing.T) {
-	md := FormatMarkdown(Output{
+	want := "## Member: alice\n\n" +
+		"- **ID**: 10\n" +
+		"- **Name**: Alice\n" +
+		"- **Username**: alice\n" +
+		"- **State**: active\n" +
+		"- **Access Level**: Maintainer (40)\n" +
+		"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n" +
+		memberCardHints
+	got := FormatMarkdown(Output{
 		ID: 10, Username: "alice", Name: "Alice", State: "active",
 		AccessLevel: 40,
 		WebURL:      "https://gitlab.example.com/alice",
 	})
-	if !strings.Contains(md, "[https://gitlab.example.com/alice](https://gitlab.example.com/alice)") {
-		t.Errorf("expected clickable URL in detail, got:\n%s", md)
+	if got != want {
+		t.Errorf("FormatMarkdown =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatMarkdown_NoURLWhenEmpty verifies that no URL line appears when
-// WebURL is empty.
+// TestFormatMarkdown_NoURLWhenEmpty verifies that a member with no address
+// renders no URL row at all rather than a label with nothing after it.
 func TestFormatMarkdown_NoURLWhenEmpty(t *testing.T) {
-	md := FormatMarkdown(Output{
+	want := "## Member: alice\n\n" +
+		"- **ID**: 10\n" +
+		"- **Name**: Alice\n" +
+		"- **Username**: alice\n" +
+		"- **State**: active\n" +
+		"- **Access Level**: Developer (30)\n" +
+		memberCardHints
+	got := FormatMarkdown(Output{
 		ID: 10, Username: "alice", Name: "Alice", State: "active",
 		AccessLevel: 30,
 	})
-	if strings.Contains(md, "**URL**") {
-		t.Errorf("should not contain URL when empty, got:\n%s", md)
+	if got != want {
+		t.Errorf("FormatMarkdown =\n%q\nwant\n%q", got, want)
 	}
 }
 

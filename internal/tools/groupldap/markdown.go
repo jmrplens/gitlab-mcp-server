@@ -2,52 +2,78 @@ package groupldap
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// accessLevel renders an LDAP link's numeric group access as the name GitLab
+// gives it with the number beside it, "Developer (30)": the link exists for
+// the role it grants, and the bare integer named it in a spelling only the API
+// uses.
+func accessLevel(level int) string {
+	return fmt.Sprintf("%s (%d)", toolutil.AccessLevelDescription(gl.AccessLevelValue(level)), level)
+}
+
+// linkHeading names the link in the card's heading. A link is defined either
+// by a common name or by a filter, never by both, so a filter-based link has
+// an empty CN and used to be headed "LDAP Link: " with nothing after the
+// colon.
+func linkHeading(out Output) string {
+	switch {
+	case out.CN != "":
+		return "LDAP Link: " + out.CN
+	case out.Filter != "":
+		return "LDAP Link: " + out.Filter
+	default:
+		return "LDAP Link"
+	}
+}
+
 // FormatOutputMarkdown renders a single group LDAP link as Markdown.
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## LDAP Link: %s\n\n", toolutil.EscapeMdHeading(out.CN))
 	// The common name, the LDAP filter and the provider label are all typed by
 	// the administrator who configured the link, and a filter is an expression
 	// whose own syntax uses parentheses and vertical bars.
-	fmt.Fprintf(&b, "- **CN**: %s\n", toolutil.EscapeMdTableCell(out.CN))
-	if out.Filter != "" {
-		fmt.Fprintf(&b, "- **Filter**: %s\n", toolutil.EscapeMdTableCell(out.Filter))
-	}
-	fmt.Fprintf(&b, "- **Access Level**: %d\n", out.GroupAccess)
-	fmt.Fprintf(&b, "- **Provider**: %s\n", toolutil.EscapeMdTableCell(out.Provider))
-	if out.MemberRoleID != 0 {
-		fmt.Fprintf(&b, "- **Member Role ID**: %d\n", out.MemberRoleID)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use gitlab_group_ldap_link_delete to remove this link",
-	)
+	c := toolutil.NewCard(&b, linkHeading(out))
+	c.Field("CN", out.CN)
+	c.Field("Filter", out.Filter)
+	c.Field("Access Level", accessLevel(out.GroupAccess))
+	c.Field("Provider", out.Provider)
+	c.Count("Member Role ID", out.MemberRoleID)
+	c.End(toolutil.HintAction("group.ldap_link_delete", "remove this link"))
 	return b.String()
 }
 
 // FormatListMarkdown renders a list of group LDAP links as Markdown.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Links) == 0 {
-		return "No LDAP group links found.\n"
+		return toolutil.EmptyMessage("LDAP group links")
 	}
 	var b strings.Builder
-	toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
-	fmt.Fprintf(&b, "**%d LDAP link(s)**\n\n", len(out.Links))
-	b.WriteString("| CN | Filter | Access | Provider |\n| --- | --- | --- | --- |\n")
+	toolutil.WriteListHeading(&b, "LDAP Group Links", len(out.Links), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("CN", "Filter", "Access Level", "Provider", "Member Role ID"))
 	for _, l := range out.Links {
-		fmt.Fprintf(
-			&b, "| %s | %s | %d | %s |\n",
+		role := "-"
+		if l.MemberRoleID != 0 {
+			role = strconv.FormatInt(l.MemberRoleID, 10)
+		}
+		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(l.CN),
 			toolutil.EscapeMdTableCell(l.Filter),
-			l.GroupAccess,
+			accessLevel(l.GroupAccess),
 			toolutil.EscapeMdTableCell(l.Provider),
-		)
+			role,
+		))
 	}
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction("group.ldap_link_add", "add another LDAP group link"),
+		toolutil.HintAction("group.ldap_sync", "trigger an LDAP sync for this group"),
+	)
 	return b.String()
 }
 

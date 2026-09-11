@@ -502,9 +502,16 @@ func TestFormatMember_ListMarkdown(t *testing.T) {
 			},
 			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 		}
-		md := members.FormatListMarkdownString(out)
-		if !strings.Contains(md, "| dev1 | Developer One | Developer | active |") {
-			t.Error("missing member row")
+		want := "## Project Members (1)\n\n" +
+			"| Username | Name | Access Level | State | Membership | Expires |\n" +
+			"| --- | --- | --- | --- | --- | --- |\n" +
+			"| @dev1 | Developer One | Developer (30) | active |  |  |\n" +
+			"\nPage 1 of 1 | 1 items total | 20 per page\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Use action 'project.member_get' to see one member's details\n" +
+			"- Use action 'project.member_add' to add a member to this project\n"
+		if got := members.FormatListMarkdownString(out); got != want {
+			t.Errorf("FormatListMarkdownString =\n%q\nwant\n%q", got, want)
 		}
 	})
 

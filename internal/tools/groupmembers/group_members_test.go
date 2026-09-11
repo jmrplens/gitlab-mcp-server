@@ -443,32 +443,48 @@ func TestUnshareGroup_MissingShareGroupID(t *testing.T) {
 // Markdown formatters
 // ----------------------------------------------.
 
-// TestFormatMemberMarkdown verifies the MemberMarkdown Markdown formatter for a representative member input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMemberMarkdown verifies the whole card a group member renders:
+// the access level named as well as numbered, the custom role beside it, and
+// no row for a field GitLab did not send.
 func TestFormatMemberMarkdown(t *testing.T) {
-	md := FormatMemberMarkdown(Output{
+	got := FormatMemberMarkdown(Output{
 		ID: 10, Username: "dev", Name: "Developer", AccessLevel: 30,
 		MemberRole: &MemberRoleOutput{ID: 7, Name: "Custom Role"},
 	})
-	if md == "" {
-		t.Error("expected non-empty markdown")
-	}
-	if !strings.Contains(md, "Developer") {
-		t.Errorf("markdown should contain derived access level label, got:\n%s", md)
-	}
-	if !strings.Contains(md, "Custom Role") {
-		t.Errorf("markdown should contain member role name, got:\n%s", md)
+	want := "## Group Member\n\n" +
+		"- **ID**: 10\n" +
+		"- **Username**: dev\n" +
+		"- **Name**: Developer\n" +
+		"- **Access Level**: Developer (30)\n" +
+		"- **Member Role**: Custom Role\n" +
+		memberHints
+	if got != want {
+		t.Errorf("FormatMemberMarkdown =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatShareMarkdown verifies the ShareMarkdown Markdown formatter for a representative share input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// memberHints is the guidance section every group-member card ends with when
+// it carries no link.
+const memberHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'group.group_member_edit' to change this member's access level\n" +
+	"- Use action 'group.group_member_remove' to remove this member\n"
+
+// shareHints is the guidance section every group-share card ends with when it
+// carries no link.
+const shareHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'group.members' to see all members in the group\n" +
+	"- Use action 'group.group_member_unshare' to revoke this share\n"
+
+// TestFormatShareMarkdown verifies the whole card a group share renders.
 func TestFormatShareMarkdown(t *testing.T) {
-	md := FormatShareMarkdown(ShareOutput{ID: 5, Name: "MyGroup", Path: "mygroup"})
-	if md == "" {
-		t.Error("expected non-empty markdown")
+	got := FormatShareMarkdown(ShareOutput{ID: 5, Name: "MyGroup", Path: "mygroup"})
+	want := "## Group Shared\n\n" +
+		"- **ID**: 5\n" +
+		"- **Name**: MyGroup\n" +
+		"- **Path**: mygroup\n" +
+		shareHints
+	if got != want {
+		t.Errorf("FormatShareMarkdown =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -1086,78 +1102,73 @@ func TestConvertMember_MinimalFields(t *testing.T) {
 // FormatMemberMarkdown — detailed checks
 // ---------------------------------------------------------------------------.
 
-// TestFormatMemberMarkdown_WithAllFields verifies the MemberMarkdown_WithAllFields Markdown formatter for a representative member_withallfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMemberMarkdown_WithAllFields verifies the whole card of a member
+// GitLab answered in full: the membership state beside the account state, the
+// lock marked with the warning sign rather than a tick, and the guidance
+// leading with the instruction to keep the link the card carries.
 func TestFormatMemberMarkdown_WithAllFields(t *testing.T) {
-	md := FormatMemberMarkdown(Output{
-		ID:          10,
-		Username:    "dev",
-		Name:        "Developer",
-		State:       "active",
-		AccessLevel: 30,
-		MemberRole:  &MemberRoleOutput{ID: 7, Name: "Custom Role"},
-		ExpiresAt:   "2026-12-31",
-		WebURL:      "https://gl/dev",
+	got := FormatMemberMarkdown(Output{
+		ID:              10,
+		Username:        "dev",
+		Name:            "Developer",
+		State:           "active",
+		MembershipState: "awaiting",
+		Locked:          true,
+		AccessLevel:     30,
+		MemberRole:      &MemberRoleOutput{ID: 7, Name: "Custom Role"},
+		ExpiresAt:       "2026-12-31",
+		WebURL:          "https://gl/dev",
 	})
-
-	for _, want := range []string{
-		"## Group Member",
-		"| ID | 10 |",
-		"| Username | dev |",
-		"| Name | Developer |",
-		"| State | active |",
-		"| Access Level | Developer (30) |",
-		"| Member Role | Custom Role |",
-		"| Expires | 31 Dec 2026 |",
-		"| URL | [dev](https://gl/dev) |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Group Member\n\n" +
+		"- **ID**: 10\n" +
+		"- **Username**: dev\n" +
+		"- **Name**: Developer\n" +
+		"- **State**: active\n" +
+		"- **Membership State**: awaiting\n" +
+		"- " + toolutil.EmojiWarning + " **Locked**\n" +
+		"- **Access Level**: Developer (30)\n" +
+		"- **Member Role**: Custom Role\n" +
+		"- **Expires**: 31 Dec 2026\n" +
+		"- **URL**: [https://gl/dev](https://gl/dev)\n" +
+		memberHints
+	if got != want {
+		t.Errorf("FormatMemberMarkdown =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatMemberMarkdown_Empty verifies the MemberMarkdown_Empty Markdown formatter for a representative member_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMemberMarkdown_Empty verifies that a member GitLab sent nothing
+// about renders its heading, the two fields whose zero is an answer, and no
+// label with nothing after it.
 func TestFormatMemberMarkdown_Empty(t *testing.T) {
-	md := FormatMemberMarkdown(Output{})
-	if !strings.Contains(md, "## Group Member") {
-		t.Errorf("expected header in markdown:\n%s", md)
-	}
-	if strings.Contains(md, "| Expires") {
-		t.Errorf("should not contain Expires for empty output:\n%s", md)
-	}
-	if strings.Contains(md, "| URL") {
-		t.Errorf("should not contain URL for empty output:\n%s", md)
+	got := FormatMemberMarkdown(Output{})
+	want := "## Group Member\n\n" +
+		"- **ID**: 0\n" +
+		"- **Access Level**: No access (0)\n" +
+		memberHints
+	if got != want {
+		t.Errorf("FormatMemberMarkdown =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatMemberMarkdown_NoOptionalFields verifies the MemberMarkdown_NoOptionalFields Markdown formatter for a representative member_nooptionalfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMemberMarkdown_NoOptionalFields verifies the whole card of a
+// member with no custom role, no expiry and no profile URL.
 func TestFormatMemberMarkdown_NoOptionalFields(t *testing.T) {
-	md := FormatMemberMarkdown(Output{
+	got := FormatMemberMarkdown(Output{
 		ID:          5,
 		Username:    "user",
 		Name:        "User",
 		State:       "active",
 		AccessLevel: 20,
 	})
-	if !strings.Contains(md, "| Access Level | Reporter (20) |") {
-		t.Errorf("expected derived Reporter access level:\n%s", md)
-	}
-	if strings.Contains(md, "| Member Role") {
-		t.Errorf("should not contain Member Role when nil:\n%s", md)
-	}
-	if strings.Contains(md, "| Expires") {
-		t.Errorf("should not contain Expires:\n%s", md)
-	}
-	if strings.Contains(md, "| URL") {
-		t.Errorf("should not contain URL:\n%s", md)
+	want := "## Group Member\n\n" +
+		"- **ID**: 5\n" +
+		"- **Username**: user\n" +
+		"- **Name**: User\n" +
+		"- **State**: active\n" +
+		"- **Access Level**: Reporter (20)\n" +
+		memberHints
+	if got != want {
+		t.Errorf("FormatMemberMarkdown =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -1165,56 +1176,54 @@ func TestFormatMemberMarkdown_NoOptionalFields(t *testing.T) {
 // FormatShareMarkdown — detailed checks
 // ---------------------------------------------------------------------------.
 
-// TestFormatShareMarkdown_WithAllFields verifies the ShareMarkdown_WithAllFields Markdown formatter for a representative share_withallfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatShareMarkdown_WithAllFields verifies the whole card a share
+// renders when GitLab answered with a description and a URL.
 func TestFormatShareMarkdown_WithAllFields(t *testing.T) {
-	md := FormatShareMarkdown(ShareOutput{
-		ID:     5,
-		Name:   "Shared Group",
-		Path:   "shared-group",
-		WebURL: "https://gl/groups/shared-group",
+	got := FormatShareMarkdown(ShareOutput{
+		ID:          5,
+		Name:        "Shared Group",
+		Path:        "shared-group",
+		Description: "The group we share with",
+		WebURL:      "https://gl/groups/shared-group",
 	})
-
-	for _, want := range []string{
-		"## Group Shared",
-		"| ID | 5 |",
-		"| Name | Shared Group |",
-		"| Path | shared-group |",
-		"| URL | [Shared Group](https://gl/groups/shared-group) |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Group Shared\n\n" +
+		"- **ID**: 5\n" +
+		"- **Name**: Shared Group\n" +
+		"- **Path**: shared-group\n" +
+		"- **Description**: The group we share with\n" +
+		"- **URL**: [https://gl/groups/shared-group](https://gl/groups/shared-group)\n" +
+		shareHints
+	if got != want {
+		t.Errorf("FormatShareMarkdown =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatShareMarkdown_Empty verifies the ShareMarkdown_Empty Markdown formatter for a representative share_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatShareMarkdown_Empty verifies the card a share GitLab sent nothing
+// about renders: its heading, the identifier whose zero is an answer, and no
+// URL row.
 func TestFormatShareMarkdown_Empty(t *testing.T) {
-	md := FormatShareMarkdown(ShareOutput{})
-	if !strings.Contains(md, "## Group Shared") {
-		t.Errorf("expected header in markdown:\n%s", md)
-	}
-	if strings.Contains(md, "| URL") {
-		t.Errorf("should not contain URL for empty output:\n%s", md)
+	got := FormatShareMarkdown(ShareOutput{})
+	want := "## Group Shared\n\n- **ID**: 0\n" + shareHints
+	if got != want {
+		t.Errorf("FormatShareMarkdown =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatShareMarkdown_NoWebURL verifies the ShareMarkdown_NoWebURL Markdown formatter for a representative share_noweburl input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatShareMarkdown_NoWebURL verifies that a share with no URL renders
+// neither the URL row nor the instruction to preserve links.
 func TestFormatShareMarkdown_NoWebURL(t *testing.T) {
-	md := FormatShareMarkdown(ShareOutput{
+	got := FormatShareMarkdown(ShareOutput{
 		ID:   5,
 		Name: "NoURL",
 		Path: "nourl",
 	})
-	if strings.Contains(md, "| URL") {
-		t.Errorf("should not contain URL:\n%s", md)
+	want := "## Group Shared\n\n" +
+		"- **ID**: 5\n" +
+		"- **Name**: NoURL\n" +
+		"- **Path**: nourl\n" +
+		shareHints
+	if got != want {
+		t.Errorf("FormatShareMarkdown =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -1805,25 +1814,34 @@ func TestApplyGroupMemberMeta_KeepsWhatAnEntryDoesNotCarry(t *testing.T) {
 // no access level and no expiry renders those cells empty instead of panicking
 // or printing a nil.
 func TestBillableMarkdown_OptionalCellsFallBackToPlainText(t *testing.T) {
-	members := FormatBillableMembersMarkdown(BillableMembersOutput{
-		Members: []BillableMemberOutput{{ID: 10, Username: "dev", Name: "Developer", State: "active"}},
+	t.Run("member with no web URL", func(t *testing.T) {
+		got := FormatBillableMembersMarkdown(BillableMembersOutput{
+			Members: []BillableMemberOutput{{ID: 10, Username: "dev", Name: "Developer", State: "active"}},
+		})
+		want := "## Billable Group Members (1)\n\n" +
+			"| Username | Name | State | Membership Type | Locked | Removable | Last Activity |\n" +
+			"| --- | --- | --- | --- | --- | --- | --- |\n" +
+			"| @dev | Developer | active |  | " + toolutil.BoolEmoji(false) + " | " + toolutil.BoolEmoji(false) + " |  |\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Use action 'group.group_billable_member_memberships_list' to see why a member is billable\n" +
+			"- Use action 'group.group_billable_member_remove' to remove a removable billable member\n"
+		if got != want {
+			t.Errorf("FormatBillableMembersMarkdown =\n%q\nwant\n%q", got, want)
+		}
 	})
-	if strings.Contains(members, "[dev](") {
-		t.Errorf("member with no web_url was linked:\n%s", members)
-	}
-	if !strings.Contains(members, "| dev |") {
-		t.Errorf("member with no web_url lost its username:\n%s", members)
-	}
-
-	memberships := FormatBillableMembershipsMarkdown(BillableMembershipsOutput{
-		Memberships: []BillableMembershipOutput{{ID: 1, SourceID: 2, SourceFullName: "group/project"}},
+	t.Run("membership with no source URL", func(t *testing.T) {
+		got := FormatBillableMembershipsMarkdown(BillableMembershipsOutput{
+			Memberships: []BillableMembershipOutput{{ID: 1, SourceID: 2, SourceFullName: "group/project"}},
+		})
+		want := "## Billable Member Memberships (1)\n\n" +
+			"| Source | Access Level | Expires |\n| --- | --- | --- |\n" +
+			"| group/project |  |  |\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Use action 'group.members' to inspect the source group's membership\n"
+		if got != want {
+			t.Errorf("FormatBillableMembershipsMarkdown =\n%q\nwant\n%q", got, want)
+		}
 	})
-	if strings.Contains(memberships, "[group/project](") {
-		t.Errorf("membership with no source URL was linked:\n%s", memberships)
-	}
-	if !strings.Contains(memberships, "| group/project |  |  |") {
-		t.Errorf("membership with no access level or expiry did not render empty cells:\n%s", memberships)
-	}
 }
 
 // ----------------------------------------------

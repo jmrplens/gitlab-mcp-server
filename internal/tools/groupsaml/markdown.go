@@ -2,77 +2,80 @@ package groupsaml
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// accessLevel renders a SAML link's numeric access level as the name GitLab
+// gives it with the number beside it, "Developer (30)": the link's whole
+// purpose is the role it grants, and the bare integer named it in a spelling
+// only the API uses.
+func accessLevel(level int) string {
+	return fmt.Sprintf("%s (%d)", toolutil.AccessLevelDescription(gl.AccessLevelValue(level)), level)
+}
+
 // FormatOutputMarkdown renders a single group SAML link as Markdown.
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## SAML Link: %s\n\n", toolutil.EscapeMdHeading(out.Name))
 	// The SAML group name and the provider label are typed by the
 	// administrator who configured the link.
-	fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&b, "- **Access Level**: %d\n", out.AccessLevel)
-	if out.MemberRoleID != 0 {
-		fmt.Fprintf(&b, "- **Member Role ID**: %d\n", out.MemberRoleID)
-	}
-	if out.Provider != "" {
-		fmt.Fprintf(&b, "- **Provider**: %s\n", toolutil.EscapeMdTableCell(out.Provider))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use gitlab_group_saml_link_delete to remove this link",
-	)
+	c := toolutil.NewCard(&b, "SAML Link: "+out.Name)
+	c.Field("Name", out.Name)
+	c.Field("Access Level", accessLevel(out.AccessLevel))
+	c.Count("Member Role ID", out.MemberRoleID)
+	c.Field("Provider", out.Provider)
+	c.End(toolutil.HintAction("group.saml_link_delete", "remove this link"))
 	return b.String()
 }
 
 // FormatListMarkdown renders a list of group SAML links as Markdown.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Links) == 0 {
-		return "No SAML group links found.\n"
+		return toolutil.EmptyMessage("SAML group links")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "**%d SAML link(s)**\n\n", len(out.Links))
-	b.WriteString("| Name | Access Level | Provider |\n| --- | --- | --- |\n")
+	toolutil.WriteListHeading(&b, "SAML Group Links", len(out.Links), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("Name", "Access Level", "Provider"))
 	for _, l := range out.Links {
-		fmt.Fprintf(
-			&b, "| %s | %d | %s |\n",
+		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(l.Name),
-			l.AccessLevel,
+			accessLevel(l.AccessLevel),
 			toolutil.EscapeMdTableCell(l.Provider),
-		)
+		))
 	}
-	toolutil.WriteHints(
-		&b,
-		"These map SAML group names to access levels; use action 'saml_users_list' to list the users provisioned via SAML SSO",
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		"These map SAML group names to access levels",
+		toolutil.HintAction("group.saml_users_list", "list the users provisioned through SAML SSO"),
 	)
 	return b.String()
 }
 
 // FormatSAMLUsersListMarkdown renders the SAML-provisioned users of a group as Markdown.
 func FormatSAMLUsersListMarkdown(out SAMLUsersListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## SAML Users (%d)\n\n", len(out.Users))
-	toolutil.WriteListSummary(&b, len(out.Users), out.Pagination)
 	if len(out.Users) == 0 {
-		b.WriteString("No SAML users found.\n")
-		toolutil.WritePagination(&b, out.Pagination)
-		return b.String()
+		return toolutil.EmptyMessage("SAML users")
 	}
-	b.WriteString("| ID | Username | Name | State |\n| --- | --- | --- | --- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "SAML Users", len(out.Users), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "State"))
+	linked := false
 	for _, u := range out.Users {
-		username := toolutil.MdTitleLink(u.Username, u.WebURL)
-		//gitlab:allow-unescaped u.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned).
-		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
-			u.ID, username, toolutil.EscapeMdTableCell(u.Name), u.State)
+		linked = linked || u.WebURL != ""
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(u.ID, 10),
+			toolutil.MdUserLink(u.Username, u.WebURL),
+			toolutil.EscapeMdTableCell(u.Name),
+			toolutil.EscapeMdTableCell(u.State),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
+	toolutil.WriteListFooter(&b, out.Pagination, linked,
 		toolutil.HintPreserveLinks,
-		"These are users provisioned through SAML SSO; use action 'saml_link_list' to see the SAML group-to-access-level link mappings",
+		"These are users provisioned through SAML SSO",
+		toolutil.HintAction("group.saml_link_list", "see the SAML group-to-access-level link mappings"),
 	)
 	return b.String()
 }
