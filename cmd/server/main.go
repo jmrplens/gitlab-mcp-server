@@ -2739,7 +2739,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	// the enumerating document needs: it registers no catalog and opens no
 	// session. A failure can only be a marshaling bug, and the route answers
 	// 503 rather than serving a card this process could not render.
-	discoveryCardJSON, discoveryCardErr := buildDiscoveryCard(cfg)
+	discoveryCardJSON, discoveryCardErr := buildDiscoveryCardFn(cfg)
 	if discoveryCardErr != nil {
 		slog.WarnContext(ctx, "failed to build the server card, "+serverCardPath+" returns 503", "error", discoveryCardErr)
 	}
@@ -4037,6 +4037,17 @@ func serverCardTelemetry() map[string]any {
 // shutdown-during-build path deterministically instead of racing a sleep
 // against the real build.
 var buildServerCardFn = buildServerCard //nolint:gochecknoglobals // test seam
+
+// buildDiscoveryCardFn is the SEP-2127 card builder serveHTTPOn uses; a
+// variable for the reason its sibling above is one, and a sharper one.
+//
+// [buildDiscoveryCard] marshals identity constants, this binary's version and
+// the deployment's own flags, so the only error it can return is a marshaling
+// failure that no input to this process produces. The route it feeds still has
+// to answer something when a card cannot be rendered, and this is the only way
+// to drive that answer and see that it is a 503 rather than a card-shaped
+// nothing.
+var buildDiscoveryCardFn = buildDiscoveryCard //nolint:gochecknoglobals // test seam
 
 // writeCardUnavailable answers a card request that could not be served.
 //

@@ -5728,6 +5728,173 @@ func TestServeHTTP_ServerCardEndpoint_ReturnsToolList(t *testing.T) {
 	}
 }
 
+// TestServeHTTP_DiscoveryCard_IsServedFromTheReservedPath drives the route
+// mounted at /server-card against a listening server, which nothing else here
+// did: the other card tests fetch the .well-known document, and the validator
+// tests call the writer directly, so the handler that chooses between the card
+// and a 503 was never run at all.
+//
+// What it pins is the distinction the two routes exist for. /server-card
+// answers the SEP-2127 document: identity and connection metadata, under that
+// extension's own media type, with no primitives, because the extension omits
+// them on purpose. A regression that pointed this route back at the
+// enumerating document would show up here as a "tools" key and the wrong
+// Content-Type, which is exactly what the split was made to prevent.
+func TestServeHTTP_DiscoveryCard_IsServedFromTheReservedPath(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		ToolSurface:    config.ToolSurfaceDynamic,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
+	}()
+	waitForHTTPServerReady(t, addr, errCh)
+
+	body, status, header := getDiscoveryCard(t, addr)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", status, body)
+	}
+	if got := header.Get(hdrContentType); got != mimeServerCard {
+		t.Errorf("Content-Type = %q, want %q", got, mimeServerCard)
+	}
+	if got, want := header.Get(hdrETag), entityTagFor(body); got != want {
+		t.Errorf("ETag = %q, want %q, the validator over the bytes that were served", got, want)
+	}
+
+	var card map[string]any
+	if unmarshalErr := json.Unmarshal(body, &card); unmarshalErr != nil {
+		t.Fatalf("invalid JSON: %v\nbody: %s", unmarshalErr, body)
+	}
+	if got := card["$schema"]; got != discoveryCardSchema {
+		t.Errorf("$schema = %v, want %q", got, discoveryCardSchema)
+	}
+	if got := card["name"]; got != discoveryCardName {
+		t.Errorf("name = %v, want %q", got, discoveryCardName)
+	}
+	if _, listed := card["tools"]; listed {
+		t.Error("the card at " + serverCardPath + " lists tools; that extension omits primitives, " +
+			"and the enumerating document is the one at the .well-known path")
+	}
+
+	cancel()
+	select {
+	case serveErr := <-errCh:
+		if serveErr != nil {
+			t.Fatalf("serveHTTPOn() = %v, want a clean stop", serveErr)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("serveHTTPOn did not shut down in time")
+	}
+}
+
+// TestServeHTTP_DiscoveryCardCannotBeRendered_AnswersUnavailable covers the
+// other half of that handler, the deployment whose card could not be rendered.
+//
+// buildDiscoveryCard marshals identity constants, this binary's version and
+// the deployment's own flags, so no configuration reaches the failure and the
+// builder is replaced through the package seam instead. The behavior being
+// pinned is that the failure is silent in neither direction: startup names the
+// route it has just disabled, and that route answers 503 with a JSON body
+// rather than 200 and a card-shaped nothing, which is what a scanner would
+// otherwise record as this server's identity.
+func TestServeHTTP_DiscoveryCardCannotBeRendered_AnswersUnavailable(t *testing.T) {
+	logged := captureLogMessages(t)
+
+	originalBuild := buildDiscoveryCardFn
+	buildDiscoveryCardFn = func(*config.Config) ([]byte, error) {
+		return nil, errors.New("forced card failure")
+	}
+	t.Cleanup(func() { buildDiscoveryCardFn = originalBuild })
+
+	mockGL := newMockGitLabServer(t)
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		ToolSurface:    config.ToolSurfaceDynamic,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
+	}()
+	waitForHTTPServerReady(t, addr, errCh)
+
+	body, status, header := getDiscoveryCard(t, addr)
+	if status != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d: %s", status, http.StatusServiceUnavailable, body)
+	}
+	if got := header.Get(hdrContentType); got != mimeJSON {
+		t.Errorf("Content-Type = %q, want %q: the body is JSON and the response also carries nosniff", got, mimeJSON)
+	}
+	if !strings.Contains(string(body), "server card unavailable") {
+		t.Errorf("body = %s, want the JSON refusal naming the card as unavailable", body)
+	}
+	if !logged("failed to build the server card, /server-card returns 503") {
+		t.Error("startup logged no warning naming the route the failed build disabled")
+	}
+
+	cancel()
+	select {
+	case serveErr := <-errCh:
+		if serveErr != nil {
+			t.Fatalf("serveHTTPOn() = %v, want a clean stop", serveErr)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("serveHTTPOn did not shut down in time")
+	}
+}
+
+// getDiscoveryCard fetches the SEP-2127 card from a running server, so the two
+// tests above assert on the same fetch.
+//
+// It returns the parts of the answer rather than the [http.Response] itself:
+// the body is read and the response closed here, and handing back a value
+// whose body is already closed would invite a caller to read it again.
+func getDiscoveryCard(t *testing.T, addr string) (body []byte, status int, header http.Header) {
+	t.Helper()
+
+	req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodGet,
+		"http://"+addr+serverCardPath, http.NoBody)
+	if reqErr != nil {
+		t.Fatalf("build the card request: %v", reqErr)
+	}
+	resp, doErr := testHTTPClient.Do(req)
+	if doErr != nil {
+		t.Fatalf("GET %s: %v", serverCardPath, doErr)
+	}
+	defer resp.Body.Close()
+
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		t.Fatalf("read the card body: %v", readErr)
+	}
+	return body, resp.StatusCode, resp.Header
+}
+
 // TestServeHTTP_ServerCardEndpoint_CORSAndCapabilities pins the card
 // behaviors added for the 2026-07-28 conformance pass: cross-origin reads
 // (GET Allow-Origin, OPTIONS preflight with the Allow-Headers echo) and the
