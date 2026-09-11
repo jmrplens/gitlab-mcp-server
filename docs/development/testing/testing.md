@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,371 |
-| Unit test functions                                   | 14,758 |
+| Total test functions                                  | 15,376 |
+| Unit test functions                                   | 14,763 |
 | E2E test functions                                    |    613 |
 | cmd test functions                                    |  3,021 |
 | Test files (internal/)                                |    531 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,146 | 79.0% |
+| `TestFunc_Scenario` (2-part)           | 12,151 | 79.0% |
 | `TestFunc` (no underscore)             |    975 |  6.3% |
 | `TestFunc_Scenario_Expected` (3+ part) |  2,250 | 14.6% |
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,490 |        150 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            336 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Core packages           |          2,491 |        150 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Tools orchestration     |            340 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (177) |          8,911 |        365 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            613 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          3,021 |        206 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,371** |    **977** |                                                                                                 |
+| **Total**               |     **15,376** |    **977** |                                                                                                 |
 
 ### Core Packages
 
@@ -77,8 +77,8 @@
 | subscriptions |        99 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        94 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
-| toolutil      |       890 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,490** |          |                                                                                                                                                                                                                                                                    |
+| toolutil      |       891 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
+| **Subtotal**  | **2,491** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 

@@ -804,6 +804,12 @@
       "package": "internal/tools",
       "kind": "rest",
       "method": "GET",
+      "path": "/groups/:group_id/boards"
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
       "path": "/user"
     },
     {
