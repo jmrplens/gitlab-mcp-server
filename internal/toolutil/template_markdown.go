@@ -1,20 +1,20 @@
 package toolutil
 
 import (
-	"fmt"
 	"strings"
 )
 
 // TemplateAttributeListMarkdownItem carries common list-row fields for
-// template-style Markdown tables with a third attribute column.
+// template-style Markdown tables, with an optional third attribute column.
 type TemplateAttributeListMarkdownItem struct {
 	Key       string
 	Name      string
 	Attribute string
 }
 
-// TemplateAttributeListMarkdownOptions configures template-style list rendering
-// for tables that include a third attribute column.
+// TemplateAttributeListMarkdownOptions configures template-style list
+// rendering. An empty AttributeHeader renders the two-column Key/Name table
+// the plain template families use; a named one adds the third column.
 type TemplateAttributeListMarkdownOptions struct {
 	Title           string
 	EmptyMessage    string
@@ -23,31 +23,37 @@ type TemplateAttributeListMarkdownOptions struct {
 	Hints           []string
 }
 
-// FormatTemplateAttributeListMarkdown renders a common Key/Name/Attribute
-// template list without changing the JSON schema used by existing template tools.
+// FormatTemplateAttributeListMarkdown renders a template list as a table, in
+// the two-column and the three-column shape alike, so the two families share
+// one heading, one empty form and one footer. Templates carry no link, so
+// the footer carries no instruction to keep them.
 func FormatTemplateAttributeListMarkdown(items []TemplateAttributeListMarkdownItem, opts TemplateAttributeListMarkdownOptions) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, FmtMdH2, opts.Title)
-	WriteListSummary(&b, len(items), opts.Pagination)
 	if len(items) == 0 {
-		b.WriteString(opts.EmptyMessage)
-		b.WriteString("\n")
-		return b.String()
+		return emptyResult(opts.EmptyMessage)
 	}
-	b.WriteString(MarkdownTableHeader("Key", "Name", opts.AttributeHeader))
+	var b strings.Builder
+	WriteListHeading(&b, opts.Title, len(items), opts.Pagination)
+	withAttribute := opts.AttributeHeader != ""
+	if withAttribute {
+		b.WriteString(MarkdownTableHeader("Key", "Name", opts.AttributeHeader))
+	} else {
+		b.WriteString(MarkdownTableHeader("Key", "Name"))
+	}
 	for _, item := range items {
-		b.WriteString(MarkdownTableRow(
-			EscapeMdTableCell(item.Key),
-			EscapeMdTableCell(item.Name),
-			EscapeMdTableCell(item.Attribute),
-		))
+		if withAttribute {
+			b.WriteString(MarkdownTableRow(EscapeMdTableCell(item.Key), EscapeMdTableCell(item.Name), EscapeMdTableCell(item.Attribute)))
+			continue
+		}
+		b.WriteString(MarkdownTableRow(EscapeMdTableCell(item.Key), EscapeMdTableCell(item.Name)))
 	}
-	WritePagination(&b, opts.Pagination)
-	WriteHints(&b, ListHints(opts.Hints...)...)
+	WriteListFooter(&b, opts.Pagination, false, opts.Hints...)
 	return b.String()
 }
 
-// TemplateDetailMarkdown carries common fields for template-style detail pages.
+// TemplateDetailMarkdown carries common fields for template-style detail
+// pages. Every family renders its fields the same way, as card rows: the
+// switch that let the license family write bullet-less label lines is gone,
+// since consecutive lines of that shape rendered as one run-on paragraph.
 type TemplateDetailMarkdown struct {
 	Title          string
 	Key            string
@@ -59,62 +65,32 @@ type TemplateDetailMarkdown struct {
 	Limitations    []string
 	Content        string
 	ContentHeading string
-	PlainFields    bool
 	Hints          []string
 }
 
-// FormatTemplateDetailMarkdown renders a shared template detail layout.
+// FormatTemplateDetailMarkdown renders a template detail page as a card: the
+// identity rows, the description as the card's long text, the three lists
+// joined on their rows, and the content in a fence under its heading when the
+// caller named one. The project-template endpoints also serve issue and
+// merge-request description templates, whose name is a file in
+// .gitlab/issue_templates named by whoever pushed it, so the heading is
+// escaped as every card heading is.
 func FormatTemplateDetailMarkdown(detail TemplateDetailMarkdown) string {
 	var b strings.Builder
-	// The project-template endpoints also serve issue and merge-request
-	// description templates, whose name is a file in .gitlab/issue_templates
-	// named by whoever pushed it.
-	fmt.Fprintf(&b, FmtMdH2, EscapeMdHeading(detail.Title))
-	if detail.Key != "" {
-		fmt.Fprintf(&b, "- **Key**: %s\n", EscapeMdTableCell(detail.Key))
-	}
-	if detail.Nickname != "" {
-		fmt.Fprintf(&b, "- **Nickname**: %s\n", EscapeMdTableCell(detail.Nickname))
-	}
+	c := NewCard(&b, detail.Title)
+	c.Field("Key", detail.Key)
+	c.Field("Nickname", detail.Nickname)
 	if detail.Popular {
-		b.WriteString("- **Popular**: Yes\n")
+		c.Bool("Popular", true)
 	}
-	if detail.Description != "" {
-		writeTemplateDescription(&b, detail.Description, detail.PlainFields)
-	}
-	writeTemplateDetailList(&b, "Permissions", detail.Permissions, detail.PlainFields)
-	writeTemplateDetailList(&b, "Conditions", detail.Conditions, detail.PlainFields)
-	writeTemplateDetailList(&b, "Limitations", detail.Limitations, detail.PlainFields)
-	if detail.Content != "" {
-		if detail.ContentHeading != "" {
-			fmt.Fprintf(&b, "\n### %s\n\n", detail.ContentHeading)
-		} else {
-			b.WriteString("\n")
-		}
-		b.WriteString(MarkdownFencedBlock("", detail.Content))
-	}
-	WriteHints(&b, detail.Hints...)
-	return b.String()
-}
-
-func writeTemplateDescription(b *strings.Builder, description string, plain bool) {
-	if plain {
-		fmt.Fprintf(b, "**Description**: %s\n\n", cardInline(description))
-		return
-	}
-	WriteDescription(b, description)
-}
-
-func writeTemplateDetailList(b *strings.Builder, label string, values []string, plain bool) {
-	if len(values) == 0 {
-		return
-	}
+	c.Text("Description", detail.Description)
 	// The permissions, conditions and limitations arrays come back as the API
-	// sent them, and nothing this server controls constrains their contents.
-	joined := EscapeMdTableCell(strings.Join(values, ", "))
-	if plain {
-		fmt.Fprintf(b, "**%s**: %s\n", label, joined)
-		return
-	}
-	fmt.Fprintf(b, "- **%s**: %s\n", label, joined)
+	// sent them, and nothing this server controls constrains their contents;
+	// the row escapes the joined value.
+	c.Field("Permissions", strings.Join(detail.Permissions, ", "))
+	c.Field("Conditions", strings.Join(detail.Conditions, ", "))
+	c.Field("Limitations", strings.Join(detail.Limitations, ", "))
+	c.Fence(detail.ContentHeading, "", detail.Content)
+	c.End(detail.Hints...)
+	return b.String()
 }

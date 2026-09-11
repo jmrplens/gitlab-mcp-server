@@ -1303,11 +1303,12 @@ func assertNotePosition(t *testing.T, pos *toolutil.NotePositionOutput) {
 	}
 }
 
-// TestNoteAuthorUsername_NilAuthor verifies the nil-guard in noteAuthorUsername
+// TestNoteAuthorUsername_NilAuthor verifies the nil guard the shared
+// AuthorUsername method carries, which this package's formatters rely on,
 // returns an empty string when the author object is absent.
 func TestNoteAuthorUsername_NilAuthor(t *testing.T) {
-	if got := noteAuthorUsername(NoteOutput{ID: 1}); got != "" {
-		t.Errorf("noteAuthorUsername(nil author) = %q, want empty", got)
+	if got := (NoteOutput{ID: 1}).AuthorUsername(); got != "" {
+		t.Errorf("AuthorUsername() with a nil author = %q, want empty", got)
 	}
 }
 

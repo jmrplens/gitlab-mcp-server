@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -20,72 +21,78 @@ type LabelMarkdown struct {
 	Subscribed             bool
 }
 
-// LabelMarkdownOptions controls label detail and list Markdown copy.
+// LabelMarkdownOptions controls label detail and list Markdown copy. The
+// description is rendered one way for every caller, as a card row escaped
+// through the card, so there is no switch for it: the option that let one
+// scope escape and the other not made one entity answer the same question
+// two ways.
 type LabelMarkdownOptions struct {
-	DetailTitle       string
-	ListTitle         string
-	EmptyListText     string
-	DetailHints       []string
-	ListHints         []string
-	EscapeDescription bool
+	DetailTitle   string
+	ListTitle     string
+	EmptyListText string
+	DetailHints   []string
+	ListHints     []string
 }
 
-// FormatLabelMarkdown renders a project or group label as a Markdown summary.
+// FormatLabelMarkdown renders a project or group label as a card: the
+// identity rows, the description as the card's long text, the priority when
+// GitLab sent one, the two flags as glyphs, and the counters when the caller
+// asked GitLab for them.
 func FormatLabelMarkdown(label LabelMarkdown, opts LabelMarkdownOptions) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## %s: %s\n\n", opts.DetailTitle, EscapeMdHeading(label.Name))
-	fmt.Fprintf(&b, FmtMdID, label.ID)
-	// Escaped rather than declared, because this file's own list table escapes
-	// the same field, and one value should not carry two answers.
-	fmt.Fprintf(&b, "- **Color**: %s\n", EscapeMdTableCell(label.Color))
-	if label.Description != "" {
-		if opts.EscapeDescription {
-			fmt.Fprintf(&b, FmtMdDescription, EscapeMdTableCell(label.Description))
-		} else {
-			WriteDescription(&b, label.Description)
-		}
-	}
+	c := NewCard(&b, opts.DetailTitle+": "+label.Name)
+	c.Int("ID", label.ID)
+	c.Field("Color", label.Color)
+	c.Text("Description", label.Description)
 	if label.PrioritySpecified || label.Priority != 0 {
-		fmt.Fprintf(&b, "- **Priority**: %d\n", label.Priority)
+		c.Int("Priority", label.Priority)
 	}
-	fmt.Fprintf(&b, "- **Project label**: %v\n", label.IsProjectLabel)
-	fmt.Fprintf(&b, "- **Subscribed**: %v\n", label.Subscribed)
+	c.Bool("Project label", label.IsProjectLabel)
+	c.Bool("Subscribed", label.Subscribed)
 	if label.OpenIssuesCount > 0 || label.ClosedIssuesCount > 0 || label.OpenMergeRequestsCount > 0 {
-		fmt.Fprintf(&b, "- **Issues**: %d open, %d closed\n", label.OpenIssuesCount, label.ClosedIssuesCount)
-		fmt.Fprintf(&b, "- **Open MRs**: %d\n", label.OpenMergeRequestsCount)
+		c.Field("Issues", fmt.Sprintf("%d open, %d closed", label.OpenIssuesCount, label.ClosedIssuesCount))
+		c.Int("Open MRs", label.OpenMergeRequestsCount)
 	}
-	WriteHints(&b, opts.DetailHints...)
+	c.End(opts.DetailHints...)
 	return b.String()
 }
 
-// FormatLabelListMarkdown renders project or group labels as a paginated table.
-func FormatLabelListMarkdown(labels []LabelMarkdown, pagination PaginationOutput, opts LabelMarkdownOptions) string {
-	var b strings.Builder
-	//gitlab:allow-unescaped opts.ListTitle: the section heading the labels and grouplabels packages supply as a constant, never a value read from GitLab.
-	fmt.Fprintf(&b, "## %s (%d)\n\n", opts.ListTitle, pagination.TotalItems)
-	WriteListSummary(&b, len(labels), pagination)
+// formatLabelListMarkdown renders project or group labels as a paginated
+// table, one row per label with its scope. Labels carry no link, so the
+// footer carries no instruction to keep them, and an empty list is the
+// configured message alone.
+func formatLabelListMarkdown(labels []LabelMarkdown, pagination PaginationOutput, opts LabelMarkdownOptions) string {
 	if len(labels) == 0 {
-		b.WriteString(opts.EmptyListText)
-		b.WriteString("\n")
-		WriteHints(&b, opts.ListHints...)
-		return b.String()
+		return emptyResult(opts.EmptyListText)
 	}
-	b.WriteString("| Name | Color | Open Issues | Closed Issues | Open MRs |\n")
-	b.WriteString("|------|-------|-------------|---------------|----------|\n")
+	var b strings.Builder
+	WriteListHeading(&b, opts.ListTitle, len(labels), pagination)
+	b.WriteString(MarkdownTableHeader("Name", "Color", "Scope", "Open Issues", "Closed Issues", "Open MRs"))
 	for _, label := range labels {
-		fmt.Fprintf(&b, "| %s | %s | %d | %d | %d |\n",
-			EscapeMdTableCell(label.Name), EscapeMdTableCell(label.Color), label.OpenIssuesCount, label.ClosedIssuesCount, label.OpenMergeRequestsCount)
+		b.WriteString(MarkdownTableRow(
+			EscapeMdTableCell(label.Name),
+			EscapeMdTableCell(label.Color),
+			labelScope(label.IsProjectLabel),
+			strconv.FormatInt(label.OpenIssuesCount, 10),
+			strconv.FormatInt(label.ClosedIssuesCount, 10),
+			strconv.FormatInt(label.OpenMergeRequestsCount, 10),
+		))
 	}
-	WritePagination(&b, pagination)
-	WriteHints(&b, opts.ListHints...)
+	WriteListFooter(&b, pagination, false, opts.ListHints...)
 	return b.String()
+}
+
+// labelScope names where a label is defined, which a list mixing a project's
+// own labels with the ones it inherits from its groups otherwise leaves the
+// reader to guess.
+func labelScope(project bool) string {
+	if project {
+		return "project"
+	}
+	return "group"
 }
 
 // FormatLabelListMarkdownFunc renders labels after mapping domain-specific outputs to the shared Markdown view.
 func FormatLabelListMarkdownFunc[T any](labels []T, pagination PaginationOutput, opts LabelMarkdownOptions, convert func(T) LabelMarkdown) string {
-	items := make([]LabelMarkdown, len(labels))
-	for i, label := range labels {
-		items[i] = convert(label)
-	}
-	return FormatLabelListMarkdown(items, pagination, opts)
+	return formatLabelListMarkdown(mapSlice(labels, convert), pagination, opts)
 }

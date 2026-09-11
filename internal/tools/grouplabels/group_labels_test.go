@@ -889,22 +889,22 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 		OpenMergeRequestsCount: 1,
 	})
 
-	for _, want := range []string{
-		"## Group Label: bug",
-		"- **ID**: 1",
-		"- **Color**: #d9534f",
-		"- **Description**: Bug report",
-		"- **Priority**: 2",
-		"- **Project label**: false",
-		"- **Subscribed**: true",
-		"- **Issues**: 5 open, 3 closed",
-		"- **Open MRs**: 1",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Group Label: bug\n\n" +
+		"- **ID**: 1\n" +
+		"- **Color**: #d9534f\n" +
+		"- **Description**: Bug report\n" +
+		"- **Priority**: 2\n" +
+		"- **Project label**: " + toolutil.EmojiCross + "\n" +
+		"- **Subscribed**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Issues**: 5 open, 3 closed\n" +
+		"- **Open MRs**: 1\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- If the workflow asks to fetch/get before update or delete, use the selected tool surface's group-label get action with the same group_id and this label_id next\n" +
+		"- Use the selected tool surface's group-label update action with the same group_id and this label_id to modify this label\n" +
+		"- Use the selected tool surface's group-label delete action with the same group_id, this label_id, and explicit confirm=true to remove this label\n" +
+		"- Use the selected tool surface's group-label subscribe or unsubscribe actions with the same group_id and this label_id to follow or unfollow\n"
+	if md != want {
+		t.Errorf("label card:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -968,20 +968,17 @@ func TestFormatListMarkdownString_WithData(t *testing.T) {
 	}
 	md := FormatListMarkdownString(out)
 
-	for _, want := range []string{
-		"## Group Labels (2)",
-		"| Name |",
-		"|------|",
-		"| bug |",
-		"| feature |",
-		"| #d9534f |",
-		"| #428bca |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Group Labels (2)\n\n" +
+		"| Name | Color | Scope | Open Issues | Closed Issues | Open MRs |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| bug | #d9534f | group | 5 | 2 | 1 |\n" +
+		"| feature | #428bca | group | 3 | 0 | 2 |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use the selected tool surface's group-label get action with the same group_id and label_id for full details before update/delete workflows\n" +
+		"- Use the selected tool surface's group-label create action with group_id to add a new group label\n"
+	if md != want {
+		t.Errorf("label list:\n got %q\nwant %q", md, want)
 	}
 }
 

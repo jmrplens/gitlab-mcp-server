@@ -915,11 +915,19 @@ func NewTemplateRenderer(listTitle, emptyMessage, listHint, detailTitle, languag
 	}
 }
 
-// FormatList renders a GitLab template list with the renderer configuration.
+// FormatList renders a GitLab template list with the renderer configuration,
+// as the two-column form of [FormatTemplateAttributeListMarkdown]: one table
+// renderer serves the families with an attribute column and the ones
+// without, so they cannot disagree on the heading, the empty form or the
+// footer.
 func (r TemplateRenderer) FormatList(templates []TemplateMarkdown, pagination PaginationOutput) string {
-	return FormatTemplateListMarkdown(templates, pagination, TemplateListMarkdownOptions{
+	items := mapSlice(templates, func(t TemplateMarkdown) TemplateAttributeListMarkdownItem {
+		return TemplateAttributeListMarkdownItem{Key: t.Key, Name: t.Name}
+	})
+	return FormatTemplateAttributeListMarkdown(items, TemplateAttributeListMarkdownOptions{
 		Title:        r.ListTitle,
 		EmptyMessage: r.EmptyMessage,
+		Pagination:   pagination,
 		Hints:        []string{r.ListHint},
 	})
 }
@@ -928,30 +936,6 @@ func (r TemplateRenderer) FormatList(templates []TemplateMarkdown, pagination Pa
 // configuration.
 func (r TemplateRenderer) FormatContent(name, content string) string {
 	return FormatTemplateContentMarkdown(r.DetailTitle, name, r.Language, content, r.DetailHint)
-}
-
-// TemplateListMarkdownOptions configures shared template list rendering.
-type TemplateListMarkdownOptions struct {
-	Title        string
-	EmptyMessage string
-	Hints        []string
-}
-
-// FormatTemplateListMarkdown renders GitLab template list entries as a
-// Key/Name table. The table carries no link, so the footer carries no
-// instruction to keep them.
-func FormatTemplateListMarkdown(templates []TemplateMarkdown, pagination PaginationOutput, opts TemplateListMarkdownOptions) string {
-	if len(templates) == 0 {
-		return emptyResult(opts.EmptyMessage)
-	}
-	var b strings.Builder
-	WriteListHeading(&b, opts.Title, len(templates), pagination)
-	b.WriteString(MarkdownTableHeader("Key", "Name"))
-	for _, template := range templates {
-		b.WriteString(MarkdownTableRow(EscapeMdTableCell(template.Key), EscapeMdTableCell(template.Name)))
-	}
-	WriteListFooter(&b, pagination, false, opts.Hints...)
-	return b.String()
 }
 
 // FormatTemplateContentMarkdown renders a GitLab template body as a card

@@ -14,23 +14,14 @@ func firstNoteAuthor(d Output) string {
 	if len(d.Notes) == 0 || d.Notes[0] == nil {
 		return ""
 	}
-	return noteAuthorUsername(*d.Notes[0])
-}
-
-// noteAuthorUsername returns the note author's username, read from the
-// canonical author object (nil-guarded).
-func noteAuthorUsername(n NoteOutput) string {
-	if n.Author != nil {
-		return n.Author.Username
-	}
-	return ""
+	return d.Notes[0].AuthorUsername()
 }
 
 // FormatNoteMarkdownString renders a single commit discussion note as Markdown.
 func FormatNoteMarkdownString(n NoteOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Discussion Note #%d\n\n", n.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdAuthor, toolutil.EscapeMdTableCell(noteAuthorUsername(n)))
+	fmt.Fprintf(&b, toolutil.FmtMdAuthor, toolutil.EscapeMdTableCell(n.AuthorUsername()))
 	if n.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(n.CreatedAt))
 	}
@@ -52,7 +43,7 @@ func FormatMarkdownString(d Output) string {
 	fmt.Fprintf(&b, "- **Notes**: %d\n", len(d.Notes))
 	fmt.Fprintf(&b, "- **Individual Note**: %v\n", d.IndividualNote)
 	for i, n := range d.Notes {
-		fmt.Fprintf(&b, "\n### Note %d (by %s)\n\n%s\n", i+1, toolutil.EscapeMdHeading(noteAuthorUsername(*n)), toolutil.WrapGFMBody(n.Body))
+		fmt.Fprintf(&b, "\n### Note %d (by %s)\n\n%s\n", i+1, toolutil.EscapeMdHeading(n.AuthorUsername()), toolutil.WrapGFMBody(n.Body))
 	}
 	toolutil.WriteHints(
 		&b,

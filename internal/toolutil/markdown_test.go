@@ -946,47 +946,21 @@ func TestFormatNoteMarkdown_MultiLineBody_QuotesUnderTheLabel(t *testing.T) {
 	}
 }
 
-// TestFormatTemplateListMarkdown verifies shared template list rendering byte
-// for byte, and the empty message alone for an empty list.
-func TestFormatTemplateListMarkdown(t *testing.T) {
-	pagination := PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}
-	md := FormatTemplateListMarkdown([]TemplateMarkdown{
-		{Key: "Go|Test", Name: "Go template"},
-	}, pagination, TemplateListMarkdownOptions{
-		Title:        "CI YAML Templates",
-		EmptyMessage: "No templates found.\n",
-		Hints: []string{
-			"Use `gitlab_get_ci_yaml_template` to view a specific template",
-			"Use the key to fetch full template content",
-		},
-	})
-
-	want := "## CI YAML Templates (1)\n\n" +
-		"| Key | Name |\n" +
-		"| --- | --- |\n" +
-		"| Go&#124;Test | Go template |\n" +
-		"\nPage 1 of 1 | 1 items total | 20 per page\n" +
-		hintsSection("Use `gitlab_get_ci_yaml_template` to view a specific template", "Use the key to fetch full template content")
-	if md != want {
-		t.Errorf("template list:\n got %q\nwant %q", md, want)
-	}
-
-	empty := FormatTemplateListMarkdown(nil, pagination, TemplateListMarkdownOptions{Title: "CI YAML Templates", EmptyMessage: "No templates found.\n"})
-	if empty != "No templates found.\n" {
-		t.Errorf("empty template list = %q, want the message alone", empty)
-	}
-}
-
 // TestTemplateMarkdownHelpers verifies the template renderer's two views
 // byte for byte, as the CI YAML, Dockerfile and Gitignore template tools
-// produce them.
+// produce them: the two-column list with an escaped key, the empty message
+// alone, and the content card.
 func TestTemplateMarkdownHelpers(t *testing.T) {
 	renderer := NewTemplateRenderer("Templates", "No templates found.\n", "Open a template", "Template", "yaml", "Copy it")
 
-	list := renderer.FormatList([]TemplateMarkdown{{Key: "Go", Name: "Go template"}}, PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1})
-	wantList := "## Templates (1)\n\n| Key | Name |\n| --- | --- |\n| Go | Go template |\n\nPage 1 of 1 | 1 items total | 20 per page\n" + hintsSection("Open a template")
+	list := renderer.FormatList([]TemplateMarkdown{{Key: "Go|Test", Name: "Go template"}}, PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1})
+	wantList := "## Templates (1)\n\n| Key | Name |\n| --- | --- |\n| Go&#124;Test | Go template |\n\nPage 1 of 1 | 1 items total | 20 per page\n" + hintsSection("Open a template")
 	if list != wantList {
 		t.Errorf("template list:\n got %q\nwant %q", list, wantList)
+	}
+
+	if empty := renderer.FormatList(nil, PaginationOutput{}); empty != "No templates found.\n" {
+		t.Errorf("empty template list = %q, want the message alone", empty)
 	}
 
 	content := renderer.FormatContent("Go", "stages:\n  - test")

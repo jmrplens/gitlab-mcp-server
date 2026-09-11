@@ -72,8 +72,8 @@ func TestList_Success(t *testing.T) {
 	if out.Discussions[0].ID != testDiscussionID {
 		t.Errorf("got ID=%q, want d1", out.Discussions[0].ID)
 	}
-	if noteAuthorUsername(*out.Discussions[0].Notes[0]) != testAuthorAlice {
-		t.Errorf("got author=%q, want alice", noteAuthorUsername(*out.Discussions[0].Notes[0]))
+	if got := out.Discussions[0].Notes[0].AuthorUsername(); got != testAuthorAlice {
+		t.Errorf("got author=%q, want alice", got)
 	}
 }
 
@@ -184,8 +184,8 @@ func TestAddNote_Success(t *testing.T) {
 	if out.ID != 40 {
 		t.Errorf("got ID=%d, want 40", out.ID)
 	}
-	if noteAuthorUsername(out) != "eve" {
-		t.Errorf("got author=%q, want eve", noteAuthorUsername(out))
+	if got := out.AuthorUsername(); got != "eve" {
+		t.Errorf("got author=%q, want eve", got)
 	}
 }
 
