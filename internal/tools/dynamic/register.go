@@ -2324,9 +2324,14 @@ func buildDynamicInputSchema(entry actionEntry) map[string]any {
 		schema["description"] = "This dynamic action has no captured parameter schema. Send an empty params object {} unless the action description says otherwise."
 	}
 	if entry.Destructive {
-		if properties, ok := schema["properties"].(map[string]any); ok {
-			delete(properties, "confirm")
-		}
+		// The assertion is read without its ok: MetaActionSchema puts every
+		// destructive route through enrichDestructiveSchema, which installs a
+		// map[string]any under "properties" when the route's schema carried
+		// none, and CloneSchemaMap above preserves that type. A failed
+		// assertion would leave a nil map here in any case, and deleting from
+		// a nil map is a no-op, so the test decided nothing either way.
+		properties, _ := schema["properties"].(map[string]any)
+		delete(properties, "confirm")
 		removeDynamicRequiredConfirmParam(schema)
 		schema["x_destructive"] = true
 		schema["x_confirmation"] = map[string]any{
@@ -3000,7 +3005,12 @@ func scoreVerbIntentFor(entry actionEntry, intent verbIntent, terms []searchTerm
 		if isWorkflowAction(document.Action) {
 			adjustment = scoreVerbIntentBoost
 		}
-	case verbIntentDiagnostic:
+	// verbIntentDiagnostic needs no case of its own: classifyVerbIntent is the
+	// only thing that makes a verbIntent, it returns one of five values or the
+	// empty one this function already answered above, and the four cases before
+	// this take the other four. A test for the fifth could never be the one
+	// that decides.
+	default:
 		if isDiagnosticAction(document.Action) || isReadAction(document.Action) {
 			adjustment = scoreVerbIntentBoost
 		}
@@ -3151,7 +3161,12 @@ func scoreServiceAccountIntentValue(entry actionEntry, terms []searchTerm) int {
 		return 0
 	}
 	score := scoreServiceAccountBoost
-	if document.Domain != "" && searchTermsContainWord(terms, document.Domain) {
+	// The domain is read without an emptiness test: a catalog action's domain is
+	// the first half of the canonical ID this function has already matched
+	// against, and a search term is a field of the query, which strings.Fields
+	// never returns empty. Neither side of the comparison can be the empty
+	// string, so the test could not decide the boost either way.
+	if searchTermsContainWord(terms, document.Domain) {
 		score += scoreServiceAccountScope
 	}
 	if strings.Contains(document.CanonicalID, "service_account_pat") && (queryHasSearchWords(terms, "personal", "access", "token") || searchTermsContainWord(terms, "pat")) {
@@ -4103,7 +4118,12 @@ func compactFindGuidance(result FindResult) string {
 }
 
 func compactParameterGuidance(guidance map[string]toolutil.ParameterGuidance, limit int, requiredParams ...string) string {
-	if len(guidance) == 0 || limit == 0 {
+	// Every limit that asks for nothing is answered here, the negative ones
+	// included. The one caller passes defaultMaxParamGuidanceItems, so the
+	// truncation below never had a sign to test and a test for it there could
+	// not be decided by any input; reading it here is also what keeps a
+	// negative limit away from the slice bound underneath.
+	if len(guidance) == 0 || limit <= 0 {
 		return ""
 	}
 	required := make(map[string]struct{}, len(requiredParams))
@@ -4128,7 +4148,7 @@ func compactParameterGuidance(guidance map[string]toolutil.ParameterGuidance, li
 		return names[i] < names[j]
 	})
 	truncated := 0
-	if limit > 0 && len(names) > limit {
+	if len(names) > limit {
 		truncated = len(names) - limit
 		names = names[:limit]
 	}

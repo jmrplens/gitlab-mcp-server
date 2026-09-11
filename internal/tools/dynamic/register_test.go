@@ -5838,6 +5838,28 @@ func TestCompatibilityAliasAndDescriptionBranches(t *testing.T) {
 	}
 }
 
+// TestDedupeActionAliases_DropsAnAliasWithNoCanonicalTarget verifies the other
+// half of the emptiness guard over the compatibility alias table: an entry that
+// names an alias but no action is dropped, as one naming an action but no alias
+// already was.
+//
+// The table is hand-written, and the canonical side is the half that rots: an
+// action renamed in its ActionSpec leaves the alias pointing at nothing. Such
+// an entry has to go rather than be indexed, because the registry would
+// otherwise hold an alias resolving to the empty action ID, which no lookup can
+// answer and which the ambiguity table would happily collect duplicates under.
+// The blank spelling is deliberate: what makes the entry empty is the trim this
+// function applies, not the literal in the table.
+func TestDedupeActionAliases_DropsAnAliasWithNoCanonicalTarget(t *testing.T) {
+	aliases := dedupeActionAliases(actionCompatAliases([]actioncompat.ActionAlias{
+		{Alias: "project.lookup", Canonical: "project.get"},
+		{Alias: "project.fetch", Canonical: "   "},
+	}))
+	if len(aliases) != 1 || aliases[0].Alias != "project.lookup" || aliases[0].Canonical != "project.get" {
+		t.Fatalf("dedupeActionAliases() = %+v, want only the alias that names an action", aliases)
+	}
+}
+
 // TestRelatedActionsForEntry_FallsBackToTheMetadataTable verifies where the
 // related actions of a find result come from: the entry when the catalog
 // carries them, and the hand-written table when it does not.
@@ -5892,6 +5914,43 @@ func TestScoredMatchesAndDestructiveFuzzyBranches(t *testing.T) {
 	}
 	if !allowsDestructiveFuzzyMatch(normalizeSearchTerms("delete project"), entry) {
 		t.Fatal("allowsDestructiveFuzzyMatch(delete project) = false, want true")
+	}
+}
+
+// TestHasExactDestructiveVerb_ReadsEachNamedVerbAndNothingElse verifies the
+// first half of the gate a fuzzy match has to pass before it may reach a
+// destructive action: the query spells one of the five verbs exactly.
+//
+// Each verb gets a query of its own because they are read in order and any one
+// of them answers for the whole list. Until this existed, only "delete" and
+// "purge" had ever been the one that answered, so a fuzzy query saying
+// "destroy", "remove" or "revoke" was let through by nothing that had been
+// exercised, and dropping any of those three from the list would have gone
+// unnoticed. The near misses are here for the other direction: the gate reads
+// the raw term, never a stem or a synonym, so a query saying "deletes" or
+// "removal" is not a destructive verb and a fuzzy match on a destructive
+// action stays refused for it.
+func TestHasExactDestructiveVerb_ReadsEachNamedVerbAndNothingElse(t *testing.T) {
+	cases := []struct {
+		name  string
+		query string
+		want  bool
+	}{
+		{name: "delete", query: "delete project", want: true},
+		{name: "destroy", query: "destroy project", want: true},
+		{name: "remove", query: "remove project", want: true},
+		{name: "revoke", query: "revoke personal access token", want: true},
+		{name: "purge", query: "purge project", want: true},
+		{name: "a verb that only looks like one of them", query: "deletes project"},
+		{name: "a noun built from one of them", query: "removal of a project"},
+		{name: "no verb at all", query: "project"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := hasExactDestructiveVerb(normalizeSearchTerms(tc.query)); got != tc.want {
+				t.Errorf("hasExactDestructiveVerb(%q) = %t, want %t", tc.query, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -7483,9 +7542,16 @@ func TestAddAdminReleaseTags_ClaimsOnlyItsOwnDomains(t *testing.T) {
 // reason: branch.list is a branch action about no protection at all, and
 // tagging it "protected branch" would offer it for every query about branch
 // protection.
+//
+// The last case is a group protected branch action the per-action phrase table
+// does not name. The table lists the five actions the catalog carries today, so
+// nothing in it could ever fail to match while that stays true; a sixth action
+// must still receive the domain phrases and none of another action's, which is
+// what would break if the last entry of the table were read as a default.
 func TestAddProtectionTags_ClaimsOnlyGroupAndProtectionShapes(t *testing.T) {
 	runActionTaggerCases(t, addProtectionTags, []actionTaggerCase{
 		{name: "a group protected branch action", id: "group.protected_branch_list", domain: "group", action: "protected_branch_list", matched: true, want: []string{"group protected branch", "list group protected branches"}},
+		{name: "a group protected branch action the phrase table does not name", id: "group.protected_branch_rename", domain: "group", action: "protected_branch_rename", matched: true, want: []string{"group protected branch"}, absent: []string{"unprotect group branch", "remove group protected branch"}},
 		{name: "a protected branch id in another domain", id: "project.protected_branch_list", domain: "project", action: "protected_branch_list"},
 		{name: "a group protected environment action", id: "group.protected_env_list", domain: "group", action: "protected_env_list", matched: true, want: []string{"group protected environment"}},
 		{name: "a group action about neither protection", id: "group.epic_list", domain: "group", action: "epic_list"},
