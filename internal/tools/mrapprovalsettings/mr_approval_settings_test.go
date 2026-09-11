@@ -387,14 +387,43 @@ func TestUpdateProjectSettings(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------
 
-// TestFormatOutputMarkdown validates the markdown table rendering for
-// different scopes and setting combinations.
+// settingsTableHead is the header and delimiter of the approval settings table.
+const settingsTableHead = "| Setting | Value | Locked | Inherited From |\n| --- | --- | --- | --- |\n"
+
+// settingsRows renders the seven rows of a settings table with the value,
+// locked and inherited-from cells each case expects, so the whole-output
+// expectations below name only what differs.
+func settingsRows(rows ...string) string {
+	return strings.Join(rows, "")
+}
+
+// TestFormatOutputMarkdown validates the whole rendering of the approval
+// settings for each scope: the heading the scope names, the seven settings as
+// one table, and the update action the hint points at.
+//
+// The empty scope is its own case because it is the one the registry reaches:
+// both the group and the project route answer with [Output], so the registered
+// formatter cannot know which one it is rendering. It used to interpolate the
+// empty string into both the heading and a tool name, giving
+// "##  MR Approval Settings" and gitlab_update__mr_approval_settings.
 func TestFormatOutputMarkdown(t *testing.T) {
+	groupHint := "\n---\n💡 **Next steps:**\n- Use action 'merge_request.approval_settings_group_update' to change these group settings\n"
+	projectHint := "\n---\n💡 **Next steps:**\n- Use action 'merge_request.approval_settings_project_update' to change these project settings\n"
+	bothHints := "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'merge_request.approval_settings_group_update' to change a group's approval settings\n" +
+		"- Use action 'merge_request.approval_settings_project_update' to change a project's approval settings\n"
+	allOff := settingsRows(
+		"| Allow approver list overrides | ❌ | ❌ | - |\n",
+		"| Retain approvals on push | ❌ | ❌ | - |\n",
+		"| Selective code owner removals | ❌ | ❌ | - |\n",
+		"| Require password to approve | ❌ | ❌ | - |\n",
+		"| Require reauthentication | ❌ | ❌ | - |\n",
+	)
 	tests := []struct {
-		name        string
-		output      Output
-		scope       string
-		wantContain []string
+		name   string
+		output Output
+		scope  string
+		want   string
 	}{
 		{
 			name:  "renders project scope with all fields",
@@ -403,46 +432,39 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				AllowAuthorApproval:    SettingOutput{Value: true, Locked: false},
 				AllowCommitterApproval: SettingOutput{Value: false, Locked: true, InheritedFrom: "group"},
 			},
-			wantContain: []string{
-				"## Project MR Approval Settings",
-				"Allow author approval",
-				"Allow committer approval",
-				"group",
-				"gitlab_update_project_mr_approval_settings",
-			},
+			want: "## Project MR Approval Settings\n\n" + settingsTableHead +
+				"| Allow author approval | ✅ | ❌ | - |\n" +
+				"| Allow committer approval | ❌ | ✅ | group |\n" + allOff + projectHint,
 		},
 		{
-			name:  "renders group scope with hint",
-			scope: "Group",
+			name:   "renders group scope with hint",
+			scope:  "Group",
+			output: Output{RetainApprovalsOnPush: SettingOutput{Value: true, Locked: false}},
+			want: "## Group MR Approval Settings\n\n" + settingsTableHead +
+				"| Allow author approval | ❌ | ❌ | - |\n" +
+				"| Allow committer approval | ❌ | ❌ | - |\n" +
+				"| Allow approver list overrides | ❌ | ❌ | - |\n" +
+				"| Retain approvals on push | ✅ | ❌ | - |\n" +
+				"| Selective code owner removals | ❌ | ❌ | - |\n" +
+				"| Require password to approve | ❌ | ❌ | - |\n" +
+				"| Require reauthentication | ❌ | ❌ | - |\n" + groupHint,
+		},
+		{
+			name:  "renders no scope with a neutral heading and both update actions",
+			scope: "",
 			output: Output{
-				RetainApprovalsOnPush: SettingOutput{Value: true, Locked: false},
+				AllowAuthorApproval: SettingOutput{Value: true},
 			},
-			wantContain: []string{
-				"## Group MR Approval Settings",
-				"Retain approvals on push",
-				"gitlab_update_group_mr_approval_settings",
-			},
-		},
-		{
-			name:   "renders inherited_from dash when empty",
-			scope:  "Project",
-			output: Output{AllowAuthorApproval: SettingOutput{Value: false, Locked: false, InheritedFrom: ""}},
-			wantContain: []string{
-				"| - |",
-			},
+			want: "## MR Approval Settings\n\n" + settingsTableHead +
+				"| Allow author approval | ✅ | ❌ | - |\n" +
+				"| Allow committer approval | ❌ | ❌ | - |\n" + allOff + bothHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			md := FormatOutputMarkdown(tt.output, tt.scope)
-			if md == "" {
-				t.Fatal("expected non-empty markdown")
-			}
-			for _, want := range tt.wantContain {
-				if !strings.Contains(md, want) {
-					t.Errorf("markdown missing %q", want)
-				}
+			if got := FormatOutputMarkdown(tt.output, tt.scope); got != tt.want {
+				t.Errorf("rendered =\n%q\nwant\n%q", got, tt.want)
 			}
 		})
 	}

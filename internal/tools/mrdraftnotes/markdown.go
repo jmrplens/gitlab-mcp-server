@@ -2,80 +2,120 @@ package mrdraftnotes
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown renders a single draft note as Markdown.
+// Canonical action IDs the hints name, the one form every surface resolves: the
+// draft note actions belong to the gitlab_mr_review catalog group, so their IDs
+// carry the mr_review domain. The action_specs.go constants of the same shape
+// spell that domain "mrdraftnotes" and are used for related-action metadata
+// only; a hint naming one would name an action no surface can execute.
+const (
+	hintActionDraftNoteGet        = "mr_review.draft_note_get"
+	hintActionDraftNoteUpdate     = "mr_review.draft_note_update"
+	hintActionDraftNoteDelete     = "mr_review.draft_note_delete"
+	hintActionDraftNotePublish    = "mr_review.draft_note_publish"
+	hintActionDraftNotePublishAll = "mr_review.draft_note_publish_all"
+)
+
+// noteCellRunes is how much of a draft note's body a list row shows.
+const noteCellRunes = 60
+
+// positionText renders where in the diff a draft note is anchored: the file,
+// the line when GitLab gave one, and the kind of position for anything that is
+// not a plain text line.
+//
+// The line is only named when there is one: a note on a file, or on an image,
+// carries no line number and "line 0" read as the top of the file.
+func positionText(p *PositionOutput) string {
+	if p == nil {
+		return ""
+	}
+	path := p.NewPath
+	if path == "" {
+		path = p.OldPath
+	}
+	line := p.NewLine
+	if line == 0 {
+		line = p.OldLine
+	}
+	// A repository path is a committer's choice, and git allows every byte but
+	// NUL and the separator inside a component.
+	text := toolutil.MdCodeSpan(path)
+	if line != 0 {
+		text += " line " + strconv.FormatInt(line, 10)
+	}
+	if p.PositionType != "" && p.PositionType != "text" {
+		text += " (" + toolutil.EscapeMdTableCell(p.PositionType) + ")"
+	}
+	return strings.TrimSpace(text)
+}
+
+// noteCell shortens a draft note's body for a list row, on rune boundaries: the
+// byte slice this replaced cut a multi-byte character in half and put the
+// fragment on the page.
+func noteCell(note string) string {
+	note = strings.ReplaceAll(toolutil.NormalizeText(note), "\n", " ")
+	runes := []rune(note)
+	if len(runes) > noteCellRunes {
+		return string(runes[:noteCellRunes]) + "…"
+	}
+	return note
+}
+
+// FormatOutputMarkdown renders one draft note as the card of one object.
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Draft Note #%d\n\n", out.ID)
-	fmt.Fprintf(&b, "- **Author ID**: %d\n", out.AuthorID)
-	fmt.Fprintf(&b, "- **MR ID**: %d\n", out.MergeRequestID)
-	if out.CommitID != "" {
-		//gitlab:allow-unescaped out.CommitID: a commit SHA, hexadecimal by construction.
-		fmt.Fprintf(&b, "- **Commit**: `%s`\n", out.CommitID)
-	}
-	if out.LineCode != "" {
-		// GitLab builds a line code out of a file-path digest and two line
-		// numbers, but the digest is not verified here, so it is escaped.
-		fmt.Fprintf(&b, "- **Line Code**: `%s`\n", toolutil.EscapeMdTableCell(out.LineCode))
-	}
-	if out.DiscussionID != "" {
-		//gitlab:allow-unescaped out.DiscussionID: a discussion thread id, hexadecimal digits from GitLab's own digest.
-		fmt.Fprintf(&b, "- **Discussion**: %s\n", out.DiscussionID)
-	}
-	fmt.Fprintf(&b, "- **Resolve Discussion**: %v\n", out.ResolveDiscussion)
-	if p := out.Position; p != nil {
-		path := p.NewPath
-		if path == "" {
-			path = p.OldPath
-		}
-		line := p.NewLine
-		if line == 0 {
-			line = p.OldLine
-		}
-		fmt.Fprintf(&b, "- **Position**: `%s` line %d\n", toolutil.EscapeMdTableCell(path), line)
-	}
-	fmt.Fprintf(&b, "\n### Body\n\n%s\n", toolutil.WrapGFMBody(out.Note))
-	toolutil.WriteHints(
-		&b,
-		"Use action 'draft_note_publish' with draft_note_id to publish this note",
-		"Use action 'draft_note_update' to modify before publishing",
-		"Use action 'draft_note_delete' to discard this draft",
+	c := toolutil.NewCard(&b, fmt.Sprintf("Draft Note #%d", out.ID))
+	c.Int("ID", out.ID)
+	c.Int("Author ID", out.AuthorID)
+	// GitLab answers with the merge request's global database ID here, not the
+	// project-scoped IID every draft-note action takes, and the row used to be
+	// labeled "MR ID" as though it were the IID.
+	c.Int("MR global ID (not the IID)", out.MergeRequestID)
+	c.Code("Commit", out.CommitID)
+	// GitLab builds a line code out of a file-path digest and two line numbers,
+	// but the digest is not verified here, so the span is what shows it.
+	c.Code("Line Code", out.LineCode)
+	c.Code("Discussion", out.DiscussionID)
+	c.Bool("Resolves the discussion", out.ResolveDiscussion)
+	c.Markdown("Position", positionText(out.Position))
+	c.Text("Note", out.Note)
+	c.End(
+		toolutil.HintAction(hintActionDraftNotePublish, "publish this draft note"),
+		toolutil.HintAction(hintActionDraftNoteUpdate, "change it before publishing"),
+		toolutil.HintAction(hintActionDraftNoteDelete, "discard it"),
 	)
 	return b.String()
 }
 
-// FormatListMarkdown renders a paginated list of draft notes as a Markdown table.
+// FormatListMarkdown renders a page of draft notes as a Markdown table: a
+// collection of objects that share columns.
 func FormatListMarkdown(out ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Draft Notes (%d)\n\n", len(out.DraftNotes))
-	toolutil.WriteListSummary(&b, len(out.DraftNotes), out.Pagination)
 	if len(out.DraftNotes) == 0 {
-		b.WriteString("No draft notes found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("draft notes")
 	}
-	b.WriteString("| ID | Author ID | Commit | Note (truncated) |\n")
-	b.WriteString("| -- | --------- | ------ | ---------------- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Draft Notes", len(out.DraftNotes), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Author ID", "Commit", "Note"))
 	for _, d := range out.DraftNotes {
-		note := toolutil.NormalizeText(d.Note)
-		if len(note) > 60 {
-			note = note[:57] + "..."
-		}
 		commit := d.CommitID
 		if len(commit) > 8 {
 			commit = commit[:8]
 		}
-		//gitlab:allow-unescaped commit: a commit SHA, hexadecimal by construction, truncated here.
-		fmt.Fprintf(&b, "| %d | %d | %s | %s |\n", d.ID, d.AuthorID, commit, toolutil.EscapeMdTableCell(note))
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(d.ID, 10),
+			strconv.FormatInt(d.AuthorID, 10),
+			toolutil.MdCodeSpanCell(commit),
+			toolutil.EscapeMdTableCell(noteCell(d.Note)),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use action 'draft_note_get' with draft_note_id for full content",
-		"Use action 'draft_note_publish_all' to publish all drafts at once",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(hintActionDraftNoteGet, "read one draft note in full"),
+		toolutil.HintAction(hintActionDraftNotePublishAll, "publish every draft at once"),
 	)
 	return b.String()
 }

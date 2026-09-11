@@ -2,6 +2,7 @@ package mergerequests
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -9,6 +10,28 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+// Canonical action IDs the hints name. A hint names the ID every surface
+// resolves — the dynamic surface executes it, and the meta and individual
+// surfaces resolve it to their own tool names — so a hint written this way is
+// never a name the serving surface does not register, which is what the mix of
+// tool names and bare action words in these hints used to be.
+const (
+	hintActionMRCreate        = "merge_request.create"
+	hintActionMRCommits       = "merge_request.commits"
+	hintActionMRPipelines     = "merge_request.pipelines"
+	hintActionMRRelatedIssues = "merge_request.related_issues"
+	hintActionMRDependencies  = "merge_request.dependencies_list"
+	hintActionMRParticipants  = "merge_request.participants"
+	hintActionChangesGet      = "mr_review.changes_get"
+	hintActionDiscussionList  = "mr_review.discussion_list"
+	hintActionNoteCreate      = "mr_review.note_create"
+	hintActionIssueGet        = "issue.get"
+	hintActionCommitGet       = "commit.get"
+	hintActionPipelineGet     = "pipeline.get"
+	hintActionJobList         = "job.list"
+	hintActionTodoMarkDone    = "user.todo_mark_done"
 )
 
 type mergeRequestNotFoundOutput struct {
@@ -24,56 +47,113 @@ func formatMergeRequestNotFound(out mergeRequestNotFoundOutput) *mcp.CallToolRes
 	)
 }
 
-// FormatMarkdown renders a single merge request as a Markdown summary.
+// FormatMarkdown renders a single merge request as the card of one object: its
+// own fields, the conditions that hold, then the description as quoted prose.
 func FormatMarkdown(mr Output) string {
 	var b strings.Builder
-	titlePrefix := toolutil.MRStateEmoji(mr.State)
-	if mr.Draft {
-		titlePrefix += " " + toolutil.EmojiDraft
-	}
-	fmt.Fprintf(&b, "## %s MR !%d: %s\n\n", titlePrefix, mr.IID, toolutil.EscapeMdHeading(mr.Title))
-	if path := mrProjectPath(mr); path != "" {
-		fmt.Fprintf(&b, "- **Project**: %s\n", toolutil.EscapeMdTableCell(path))
-	}
-	//gitlab:allow-unescaped mr.State: a merge request state, one of GitLab's fixed set (opened, closed, locked, merged).
-	fmt.Fprintf(&b, "- **State**: %s %s\n", toolutil.MRStateEmoji(mr.State), mr.State)
-	if mr.Draft {
-		fmt.Fprintf(&b, "- %s **Draft** merge request\n", toolutil.EmojiDraft)
-	}
+	c := toolutil.NewCard(&b, mergeRequestHeading(mr))
+	c.Field("Project", mrProjectPath(mr))
+	c.Markdown("State", mrStateCell(mr.State))
+	c.Flag(toolutil.EmojiDraft, "Draft merge request", mr.Draft)
 	// A branch name is not an identifier: git check-ref-format forbids a space
 	// and the control bytes and permits '|', '<' and '>', so a pushable branch
-	// can end this row or open a tag in it.
-	fmt.Fprintf(&b, "- **Source**: %s -> **Target**: %s\n",
-		toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch))
-	if mr.DetailedMergeStatus != "" {
-		//gitlab:allow-unescaped mr.DetailedMergeStatus: a merge status GitLab computes from a fixed set (mergeable, ci_must_pass, conflict and the rest).
-		fmt.Fprintf(&b, "- **Merge Status**: %s\n", mr.DetailedMergeStatus)
+	// can end a row or open a tag in it.
+	c.Field("Source", mr.SourceBranch)
+	c.Field("Target", mr.TargetBranch)
+	c.Field("Merge Status", mr.DetailedMergeStatus)
+	c.Warn("Has conflicts", mr.HasConflicts)
+	c.Markdown("Author", toolutil.MdUserHandle(userName(mr.Author)))
+	c.Markdown("Assignees", handleList(userNames(mr.Assignees)))
+	c.Markdown("Reviewers", handleList(userNames(mr.Reviewers)))
+	if mr.Milestone != nil {
+		c.Field("Milestone", mr.Milestone.Title)
 	}
-	writeMergeRequestPeopleAndLabels(&b, mr)
-	writeMergeRequestPipeline(&b, mr)
-	if mr.ChangesCount != "" {
-		//gitlab:allow-unescaped mr.ChangesCount: a changed-file count GitLab renders as a string, "3" or "1000+".
-		fmt.Fprintf(&b, "- **Changes**: %s files\n", mr.ChangesCount)
-	}
-	if mr.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(mr.CreatedAt))
-	}
-	writeMergeRequestTerminalActor(&b, mr)
-	if mr.UserNotesCount > 0 {
-		fmt.Fprintf(&b, "- **Comments**: %d\n", mr.UserNotesCount)
-	}
-	if mr.Description != "" {
-		fmt.Fprintf(&b, "\n### Description\n\n%s%s\n", toolutil.WrapGFMBody(mr.Description), toolutil.RichContentHint(toolutil.DetectRichContent(mr.Description), mr.WebURL))
-	}
-	toolutil.WriteMdURLNewline(&b, mr.WebURL)
-	toolutil.WriteHints(
-		&b,
-		"Use gitlab_mr_review action 'changes_get' to see the diff of this MR",
-		"Use gitlab_mr_review action 'discussion_list' to see review threads",
-		"Use gitlab_merge_request action 'pipelines' to check CI/CD status",
-		"Use gitlab_merge_request action 'approve' or 'merge' to progress the MR",
+	// A label title is free text: GitLab's only rule on one is that it carries
+	// no comma.
+	c.Field("Labels", strings.Join(mr.Labels, ", "))
+	c.Markdown("Pipeline", mrPipelineCell(mr))
+	c.Field("Changes", changesText(mr.ChangesCount))
+	c.Time("Created", mr.CreatedAt)
+	writeTerminalActor(c, mr)
+	c.Count("Comments", mr.UserNotesCount)
+	// The four conditions that decide whether a merge request can be worked on
+	// at all, and none of which the card used to show: a locked discussion
+	// refuses every comment, an auto-merge is already scheduled, a rebase is
+	// running, and a merge error is why the last attempt failed.
+	c.Warn("Discussion locked", mr.DiscussionLocked)
+	c.Flag(toolutil.EmojiRefresh, "Auto-merge set (merges when the pipeline succeeds)", mr.MergeWhenPipelineSucceeds)
+	c.Flag(toolutil.EmojiRefresh, "Rebase in progress", mr.RebaseInProgress)
+	c.Field("Merge Error", mr.MergeError)
+	c.URL(mr.WebURL)
+	c.Text("Description", mr.Description)
+	c.Note(toolutil.RichContentHint(toolutil.DetectRichContent(mr.Description), mr.WebURL))
+	c.End(
+		toolutil.HintAction(hintActionChangesGet, "see the diff of this merge request"),
+		toolutil.HintAction(hintActionDiscussionList, "see its review threads"),
+		toolutil.HintAction(hintActionMRPipelines, "check its CI status"),
+		toolutil.HintAction(actionMRApprove, "approve it"),
+		toolutil.HintAction(actionMRMerge, "merge it"),
 	)
 	return b.String()
+}
+
+// mergeRequestHeading composes the card's heading: the state as a glyph, the
+// draft marker a draft carries, the reference and the title. The whole
+// composition is escaped by the card.
+func mergeRequestHeading(mr Output) string {
+	prefix := toolutil.MRStateEmoji(mr.State)
+	if mr.Draft {
+		prefix += " " + toolutil.EmojiDraft
+	}
+	heading := fmt.Sprintf("%s MR !%d", prefix, mr.IID)
+	if strings.TrimSpace(mr.Title) == "" {
+		return heading
+	}
+	return heading + ": " + mr.Title
+}
+
+// mrStateCell renders a merge request state with its emoji, and nothing when
+// GitLab sent no state.
+func mrStateCell(state string) string {
+	if strings.TrimSpace(state) == "" {
+		return ""
+	}
+	return toolutil.MRStateEmoji(state) + " " + toolutil.EscapeMdTableCell(state)
+}
+
+// changesText renders GitLab's own count of changed files, which it sends as a
+// string because it caps it ("1000+").
+func changesText(count string) string {
+	if strings.TrimSpace(count) == "" {
+		return ""
+	}
+	return count + " files"
+}
+
+// mrPipelineCell renders the merge request's pipeline as its number linked to
+// the pipeline, with the status glyph and word when GitLab sent one.
+func mrPipelineCell(mr Output) string {
+	if mr.Pipeline == nil || mr.Pipeline.ID <= 0 {
+		return ""
+	}
+	cell := toolutil.MdTitleLink(fmt.Sprintf("#%d", mr.Pipeline.ID), mr.Pipeline.WebURL)
+	if mr.Pipeline.Status != "" {
+		cell += " " + toolutil.PipelineStatusEmoji(mr.Pipeline.Status) + " " + toolutil.EscapeMdTableCell(mr.Pipeline.Status)
+	}
+	return cell
+}
+
+// writeTerminalActor writes who ended the merge request and when, for the two
+// states that have an ending.
+func writeTerminalActor(c *toolutil.Card, mr Output) {
+	switch mr.State {
+	case "merged":
+		c.Markdown("Merged By", toolutil.MdUserHandle(userName(mr.MergeUser)))
+		c.Time("Merged", mr.MergedAt)
+	case "closed":
+		c.Markdown("Closed By", toolutil.MdUserHandle(userName(mr.ClosedBy)))
+		c.Time("Closed", mr.ClosedAt)
+	}
 }
 
 // AuthorName returns the username of the merge request author, or "" when the
@@ -124,403 +204,352 @@ func userNames(users []*toolutil.BasicUserOutput) []string {
 	return out
 }
 
-func writeMergeRequestPeopleAndLabels(b *strings.Builder, mr Output) {
-	if mr.HasConflicts {
-		fmt.Fprintf(b, "- %s **Has Conflicts**\n", toolutil.EmojiWarning)
-	}
-	if author := userName(mr.Author); author != "" {
-		fmt.Fprintf(b, toolutil.FmtMdAuthorAt, toolutil.EscapeMdTableCell(author))
-	}
-	if names := userNames(mr.Assignees); len(names) > 0 {
-		fmt.Fprintf(b, "- **Assignees**: %s\n", toolutil.EscapeMdTableCell(strings.Join(prefixAt(names), ", ")))
-	}
-	if names := userNames(mr.Reviewers); len(names) > 0 {
-		fmt.Fprintf(b, "- **Reviewers**: %s\n", toolutil.EscapeMdTableCell(strings.Join(prefixAt(names), ", ")))
-	}
-	if mr.Milestone != nil && mr.Milestone.Title != "" {
-		fmt.Fprintf(b, "- **Milestone**: %s\n", toolutil.EscapeMdTableCell(mr.Milestone.Title))
-	}
-	if len(mr.Labels) > 0 {
-		// A label title is free text: GitLab's only rule on one is that it
-		// carries no comma.
-		fmt.Fprintf(b, "- **Labels**: %s\n", toolutil.EscapeMdTableCell(strings.Join(mr.Labels, ", ")))
-	}
-}
-
-func writeMergeRequestPipeline(b *strings.Builder, mr Output) {
-	if mr.Pipeline == nil || mr.Pipeline.ID <= 0 {
-		return
-	}
-	if mr.Pipeline.WebURL != "" {
-		fmt.Fprintf(b, "- **Pipeline**: %s\n",
-			toolutil.MdTitleLink(fmt.Sprintf("#%d", mr.Pipeline.ID), mr.Pipeline.WebURL))
-		return
-	}
-	fmt.Fprintf(b, "- **Pipeline**: #%d\n", mr.Pipeline.ID)
-}
-
-func writeMergeRequestTerminalActor(b *strings.Builder, mr Output) {
-	if mr.State == "merged" {
-		if name := userName(mr.MergeUser); name != "" {
-			writeMergeRequestActorLine(b, "Merged By", name, mr.MergedAt)
+// handleList renders usernames as the "@handle" list a card row shows, each
+// escaped, and nothing at all when there are none, so a card never shows a
+// bare "@".
+func handleList(names []string) string {
+	handles := make([]string, 0, len(names))
+	for _, name := range names {
+		if handle := toolutil.MdUserHandle(name); handle != "" {
+			handles = append(handles, handle)
 		}
 	}
-	if mr.State == "closed" {
-		if name := userName(mr.ClosedBy); name != "" {
-			writeMergeRequestActorLine(b, "Closed By", name, mr.ClosedAt)
-		}
-	}
+	return strings.Join(handles, ", ")
 }
 
-func writeMergeRequestActorLine(b *strings.Builder, label, user, at string) {
-	fmt.Fprintf(b, "- **%s**: @%s", label, toolutil.EscapeMdTableCell(user))
-	if at != "" {
-		fmt.Fprintf(b, " on %s", toolutil.FormatTime(at))
-	}
-	b.WriteByte('\n')
-}
-
-// prefixAt adds '@' before each username for Markdown @mention formatting.
-func prefixAt(usernames []string) []string {
-	result := make([]string, len(usernames))
-	for i, u := range usernames {
-		result[i] = "@" + u
-	}
-	return result
-}
-
-// FormatListMarkdown renders a list of merge requests as a Markdown table.
+// FormatListMarkdown renders a page of merge requests as a Markdown table: a
+// collection of objects that share columns.
 func FormatListMarkdown(out ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Merge Requests (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.MergeRequests), out.Pagination)
 	if len(out.MergeRequests) == 0 {
-		b.WriteString("No merge requests found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("merge requests")
 	}
-	b.WriteString("| IID | Title | State | Author | Project | Source -> Target |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Merge Requests", len(out.MergeRequests), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Author", "Project", "Source -> Target"))
 	for _, mr := range out.MergeRequests {
-		draftTag := ""
+		title := toolutil.EscapeMdTableCell(mr.Title)
 		if mr.Draft {
-			draftTag = " " + toolutil.EmojiDraft
+			title += " " + toolutil.EmojiDraft
 		}
-		//gitlab:allow-unescaped mr.State: a merge request state, one of GitLab's fixed set (opened, closed, locked, merged).
-		fmt.Fprintf(&b, "| %s | %s%s | %s %s | %s | %s | %s -> %s |\n",
-			toolutil.MdTitleLink(fmt.Sprintf("!%d", mr.IID), mr.WebURL), toolutil.EscapeMdTableCell(mr.Title), draftTag, toolutil.MRStateEmoji(mr.State), mr.State, toolutil.EscapeMdTableCell(userName(mr.Author)), toolutil.EscapeMdTableCell(mrProjectPath(mr)), toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch))
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(fmt.Sprintf("!%d", mr.IID), mr.WebURL),
+			title,
+			mrStateCell(mr.State),
+			toolutil.MdUserHandle(userName(mr.Author)),
+			toolutil.EscapeMdTableCell(mrProjectPath(mr)),
+			toolutil.EscapeMdTableCell(mr.SourceBranch)+" -> "+toolutil.EscapeMdTableCell(mr.TargetBranch),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use action 'get' with a merge_request_iid to see full details",
-		"Use action 'create' to open a new merge request",
-		"Use gitlab_mr_review action 'changes_get' to review MR diffs",
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(actionMRGet, "see one merge request in full"),
+		toolutil.HintAction(hintActionMRCreate, "open a new merge request"),
+		toolutil.HintAction(hintActionChangesGet, "review a merge request's diff"),
 	)
 	return b.String()
 }
 
-// FormatApproveMarkdown renders the MR approval status as Markdown.
+// FormatApproveMarkdown renders the approval state after an approve or
+// unapprove as the card of one object.
 func FormatApproveMarkdown(a ApproveOutput) string {
 	var b strings.Builder
-	b.WriteString("## MR Approval Status\n\n")
-	fmt.Fprintf(&b, "- **Approved**: %v\n", a.Approved)
-	fmt.Fprintf(&b, "- **Approvals Required**: %d\n", a.ApprovalsRequired)
-	fmt.Fprintf(&b, "- **Approved By**: %d\n", a.ApprovedBy)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_mr_merge` to merge this MR",
-		"Use `gitlab_mr_get` to see full MR details",
+	c := toolutil.NewCard(&b, "MR Approval Status")
+	c.Bool("Approved", a.Approved)
+	c.Int("Approvals Required", int64(a.ApprovalsRequired))
+	c.Int("Approvals Given", int64(a.ApprovedBy))
+	c.End(
+		toolutil.HintAction(actionMRMerge, "merge this merge request"),
+		toolutil.HintAction(actionMRGet, "see its full details"),
 	)
 	return b.String()
 }
 
-// FormatCommitsMarkdown renders a paginated list of MR commits as a Markdown table.
+// FormatCommitsMarkdown renders the commits of a merge request as a Markdown
+// table.
 func FormatCommitsMarkdown(out CommitsOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## MR Commits (%d)\n\n", out.Pagination.TotalItems)
 	if len(out.Commits) == 0 {
-		b.WriteString("No commits found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("commits")
 	}
-	b.WriteString("| Short ID | Title | Author | Date |\n")
-	b.WriteString(toolutil.TblSep4Col)
-	for _, c := range out.Commits {
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", toolutil.MdTitleLink(c.ShortID, c.WebURL), toolutil.EscapeMdTableCell(c.Title), toolutil.EscapeMdTableCell(c.AuthorName), toolutil.FormatTime(c.CommittedDate))
-	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_commit_get` to view a specific commit",
-		"Use `gitlab_mr_changes_get` to review the combined diff",
-	)
-	return b.String()
-}
-
-// FormatPipelinesMarkdown renders a list of MR pipelines as a Markdown table.
-func FormatPipelinesMarkdown(out PipelinesOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## MR Pipelines (%d)\n\n", len(out.Pipelines))
-	if len(out.Pipelines) == 0 {
-		b.WriteString("No pipelines found.\n")
-		return b.String()
+	toolutil.WriteListHeading(&b, "MR Commits", len(out.Commits), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Short ID", "Title", "Author", "Date"))
+	for _, commit := range out.Commits {
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(commit.ShortID, commit.WebURL),
+			toolutil.EscapeMdTableCell(commit.Title),
+			toolutil.EscapeMdTableCell(commit.AuthorName),
+			toolutil.FormatTime(commit.CommittedDate),
+		))
 	}
-	b.WriteString("| ID | Status | Source | Ref |\n")
-	b.WriteString(toolutil.TblSep4Col)
-	for _, p := range out.Pipelines {
-		//gitlab:allow-unescaped p.Status: a pipeline status, one of GitLab's fixed set (created, running, success, failed and the rest).
-		fmt.Fprintf(&b, "| %s | %s %s | %s | %s |\n",
-			toolutil.MdTitleLink(fmt.Sprintf("#%d", p.ID), p.WebURL), toolutil.PipelineStatusEmoji(p.Status), p.Status, toolutil.EscapeMdTableCell(p.Source), toolutil.EscapeMdTableCell(p.Ref))
-	}
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_pipeline_get` to view pipeline details",
-		"Use `gitlab_job_list` to see job statuses",
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(hintActionCommitGet, "view one of these commits"),
+		toolutil.HintAction(hintActionChangesGet, "review the combined diff"),
 	)
 	return b.String()
 }
 
-// FormatRebaseMarkdown renders a rebase result as a short Markdown message.
+// FormatPipelinesMarkdown renders the pipelines of a merge request as a
+// Markdown table.
+func FormatPipelinesMarkdown(out PipelinesOutput) string {
+	if len(out.Pipelines) == 0 {
+		return toolutil.EmptyMessage("pipelines")
+	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "MR Pipelines", len(out.Pipelines), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Status", "Source", "Ref"))
+	for _, p := range out.Pipelines {
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", p.ID), p.WebURL),
+			pipelineStatusCell(p.Status),
+			toolutil.EscapeMdTableCell(p.Source),
+			toolutil.EscapeMdTableCell(p.Ref),
+		))
+	}
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
+		toolutil.HintAction(hintActionPipelineGet, "view one pipeline's details"),
+		toolutil.HintAction(hintActionJobList, "see its job statuses"),
+	)
+	return b.String()
+}
+
+// pipelineStatusCell renders a pipeline status with its glyph, and nothing when
+// GitLab sent no status.
+func pipelineStatusCell(status string) string {
+	if strings.TrimSpace(status) == "" {
+		return ""
+	}
+	return toolutil.PipelineStatusEmoji(status) + " " + toolutil.EscapeMdTableCell(status)
+}
+
+// FormatRebaseMarkdown renders the outcome of a rebase.
 func FormatRebaseMarkdown(r RebaseOutput) string {
 	var b strings.Builder
+	heading := toolutil.EmojiSuccess + " Rebase completed"
+	note := "The rebase has finished successfully."
 	if r.RebaseInProgress {
-		b.WriteString("## " + toolutil.EmojiRefresh + " Rebase in progress\n\nThe rebase has been initiated and is currently running.\n")
-	} else {
-		b.WriteString("## " + toolutil.EmojiSuccess + " Rebase completed\n\nThe rebase has finished successfully.\n")
+		heading = toolutil.EmojiRefresh + " Rebase in progress"
+		note = "The rebase has been initiated and is currently running."
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use gitlab_mr_get to check rebase status",
-		"Use action 'merge' once the rebase is complete",
+	c := toolutil.NewCard(&b, heading)
+	c.Bool("Rebase in progress", r.RebaseInProgress)
+	c.Note(note)
+	c.End(
+		toolutil.HintAction(actionMRGet, "check whether the rebase has finished"),
+		toolutil.HintAction(actionMRMerge, "merge once it has"),
 	)
 	return b.String()
 }
 
-// FormatParticipantsMarkdown renders MR participants as a Markdown table.
+// FormatParticipantsMarkdown renders the participants of a merge request as a
+// Markdown table.
 func FormatParticipantsMarkdown(out ParticipantsOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## MR Participants (%d)\n\n", len(out.Participants))
 	if len(out.Participants) == 0 {
-		b.WriteString("No participants found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("participants")
 	}
-	b.WriteString("| ID | Username | Name | State |\n")
-	b.WriteString(toolutil.TblSep4Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "MR Participants", len(out.Participants), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "State"))
 	for _, p := range out.Participants {
-		//gitlab:allow-unescaped p.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned).
-		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
-			p.ID, toolutil.MdTitleLink("@"+p.Username, p.WebURL), toolutil.EscapeMdTableCell(p.Name), p.State)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(p.ID, 10),
+			toolutil.MdUserLink(p.Username, p.WebURL),
+			toolutil.EscapeMdTableCell(p.Name),
+			toolutil.EscapeMdTableCell(p.State),
+		))
 	}
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_mr_get` to view MR details",
-		"Use `gitlab_mr_note_create` to notify participants",
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
+		toolutil.HintAction(actionMRGet, "view the merge request"),
+		toolutil.HintAction(hintActionNoteCreate, "notify these participants"),
 	)
 	return b.String()
 }
 
-// FormatReviewersMarkdown renders MR reviewers as a Markdown table.
+// FormatReviewersMarkdown renders the reviewers of a merge request as a
+// Markdown table.
 func FormatReviewersMarkdown(out ReviewersOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## MR Reviewers (%d)\n\n", len(out.Reviewers))
 	if len(out.Reviewers) == 0 {
-		b.WriteString("No reviewers found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("reviewers")
 	}
-	b.WriteString("| ID | Username | Name | Review State | Assigned At |\n")
-	b.WriteString(toolutil.TblSep5Col)
-	for _, r := range out.Reviewers {
-		//gitlab:allow-unescaped r.Review: a review state, one of GitLab's fixed set (unreviewed, reviewed, requested_changes, approved).
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
-			r.ID, toolutil.MdTitleLink("@"+r.Username, r.WebURL), toolutil.EscapeMdTableCell(r.Name), r.Review, toolutil.FormatTime(r.CreatedAt))
-	}
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_mr_update` to add or change reviewers",
-		"Use `gitlab_mr_approve` to approve the MR",
-	)
-	return b.String()
-}
-
-// FormatIssuesClosedMarkdown renders the issues-closed-on-merge list as a Markdown table.
-func FormatIssuesClosedMarkdown(out IssuesClosedOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Issues Closed on Merge (%d)\n\n", out.Pagination.TotalItems)
-	if len(out.Issues) == 0 {
-		b.WriteString("No issues will be closed on merge.\n")
-		return b.String()
+	toolutil.WriteListHeading(&b, "MR Reviewers", len(out.Reviewers), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "Review State", "Assigned At"))
+	for _, r := range out.Reviewers {
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(r.ID, 10),
+			toolutil.MdUserLink(r.Username, r.WebURL),
+			toolutil.EscapeMdTableCell(r.Name),
+			toolutil.EscapeMdTableCell(r.Review),
+			toolutil.FormatTime(r.CreatedAt),
+		))
 	}
-	b.WriteString("| IID | Title | State | Author | Labels |\n")
-	b.WriteString(toolutil.TblSep5Col)
-	for _, issue := range out.Issues {
-		//gitlab:allow-unescaped issue.State: an issue state, one of GitLab's fixed set (opened, closed).
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n",
-			toolutil.MdTitleLink(fmt.Sprintf("#%d", issue.IID), issue.WebURL), toolutil.EscapeMdTableCell(issue.Title), issue.State, toolutil.EscapeMdTableCell(issues.AuthorName(issue)), toolutil.EscapeMdTableCell(strings.Join(issue.Labels, ", ")))
-	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_issue_get` to view details of an issue",
-		"Use `gitlab_mr_merge` to merge and close these issues",
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
+		toolutil.HintAction(actionMRUpdate, "add or change reviewers"),
+		toolutil.HintAction(actionMRApprove, "approve the merge request"),
 	)
 	return b.String()
 }
 
-// FormatCreatePipelineMarkdown renders a single pipeline (from create-pipeline) as Markdown.
+// FormatIssuesClosedMarkdown renders the issues a merge would close as a
+// Markdown table.
+func FormatIssuesClosedMarkdown(out IssuesClosedOutput) string {
+	if len(out.Issues) == 0 {
+		return toolutil.EmptyMessage("issues that would be closed on merge")
+	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Issues Closed on Merge", len(out.Issues), out.Pagination)
+	writeIssueRows(&b, out.Issues)
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(hintActionIssueGet, "view one of these issues"),
+		toolutil.HintAction(actionMRMerge, "merge and close them"),
+	)
+	return b.String()
+}
+
+// FormatRelatedIssuesMarkdown renders the issues a merge request references as
+// a Markdown table.
+func FormatRelatedIssuesMarkdown(out RelatedIssuesOutput) string {
+	if len(out.Issues) == 0 {
+		return toolutil.EmptyMessage("related issues")
+	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Related Issues", len(out.Issues), out.Pagination)
+	writeIssueRows(&b, out.Issues)
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(hintActionIssueGet, "view one issue's details"),
+		toolutil.HintAction(hintActionMRRelatedIssues, "list them again after the merge request changes"),
+	)
+	return b.String()
+}
+
+// writeIssueRows writes the issue table the two issue listings share: the same
+// columns, the same escaping and the same state glyph, so the two cannot drift.
+func writeIssueRows(b *strings.Builder, list []issues.BasicOutput) {
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Author", "Labels"))
+	for _, issue := range list {
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", issue.IID), issue.WebURL),
+			toolutil.EscapeMdTableCell(issue.Title),
+			issueStateCell(issue.State),
+			toolutil.MdUserHandle(issues.AuthorName(issue)),
+			toolutil.EscapeMdTableCell(strings.Join(issue.Labels, ", ")),
+		))
+	}
+}
+
+// issueStateCell renders an issue state with its emoji, and nothing when GitLab
+// sent no state.
+func issueStateCell(state string) string {
+	if strings.TrimSpace(state) == "" {
+		return ""
+	}
+	return toolutil.IssueStateEmoji(state) + " " + toolutil.EscapeMdTableCell(state)
+}
+
+// FormatCreatePipelineMarkdown renders the pipeline a merge request just
+// created as the card of one object.
 func FormatCreatePipelineMarkdown(p pipelines.Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## %s Pipeline #%d Created\n\n", toolutil.PipelineStatusEmoji(p.Status), p.ID)
-	//gitlab:allow-unescaped p.Status: a pipeline status, one of GitLab's fixed set (created, running, success, failed and the rest).
-	fmt.Fprintf(&b, "- **Status**: %s %s\n", toolutil.PipelineStatusEmoji(p.Status), p.Status)
-	if p.Source != "" {
-		//gitlab:allow-unescaped p.Source: a pipeline source, one of GitLab's fixed set (push, web, schedule, trigger and the rest).
-		fmt.Fprintf(&b, "- **Source**: %s\n", p.Source)
-	}
-	if p.Ref != "" {
-		fmt.Fprintf(&b, "- **Ref**: %s\n", toolutil.EscapeMdTableCell(p.Ref))
-	}
-	if p.SHA != "" {
-		//gitlab:allow-unescaped p.SHA: a commit SHA, hexadecimal digits only.
-		fmt.Fprintf(&b, "- **SHA**: %s\n", p.SHA)
-	}
-	if p.WebURL != "" {
-		toolutil.WriteMdURL(&b, p.WebURL)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_pipeline_get` to check pipeline progress",
-		"Use `gitlab_job_list` to monitor job statuses",
+	c := toolutil.NewCard(&b, fmt.Sprintf("%s Pipeline #%d Created", toolutil.PipelineStatusEmoji(p.Status), p.ID))
+	c.Int("ID", p.ID)
+	c.Markdown("Status", pipelineStatusCell(p.Status))
+	c.Field("Source", p.Source)
+	c.Field("Ref", p.Ref)
+	c.Code("SHA", p.SHA)
+	c.URL(p.WebURL)
+	c.End(
+		toolutil.HintAction(hintActionPipelineGet, "check the pipeline's progress"),
+		toolutil.HintAction(hintActionJobList, "monitor its job statuses"),
 	)
 	return b.String()
 }
 
-// FormatTimeStatsMarkdown renders time tracking statistics as markdown.
+// FormatTimeStatsMarkdown renders a merge request's time tracking as the card
+// of one object: the two durations GitLab renders for a reader and the two
+// counts of seconds they are computed from.
 func FormatTimeStatsMarkdown(ts TimeStatsOutput) string {
 	var b strings.Builder
-	b.WriteString("## Time Tracking Stats\n\n")
-	if ts.HumanTimeEstimate != "" {
-		//gitlab:allow-unescaped ts.HumanTimeEstimate: a duration GitLab renders from a count of seconds, "3d 4h 30m".
-		fmt.Fprintf(&b, "- **Estimate**: %s (%d seconds)\n", ts.HumanTimeEstimate, ts.TimeEstimate)
-	} else {
-		b.WriteString("- **Estimate**: not set\n")
-	}
-	if ts.HumanTotalTimeSpent != "" {
-		//gitlab:allow-unescaped ts.HumanTotalTimeSpent: a duration GitLab renders from a count of seconds, "3d 4h 30m".
-		fmt.Fprintf(&b, "- **Spent**: %s (%d seconds)\n", ts.HumanTotalTimeSpent, ts.TotalTimeSpent)
-	} else {
-		b.WriteString("- **Spent**: none\n")
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_mr_update` to add time tracking notes",
+	c := toolutil.NewCard(&b, "Time Tracking Stats")
+	c.FieldOr("Estimate", ts.HumanTimeEstimate, "not set")
+	c.FieldOr("Spent", ts.HumanTotalTimeSpent, "none")
+	c.Int("Estimate (seconds)", ts.TimeEstimate)
+	c.Int("Spent (seconds)", ts.TotalTimeSpent)
+	c.End(
+		toolutil.HintAction(actionMRTimeEstimateSet, "set the estimate"),
+		toolutil.HintAction(actionMRSpentTimeAdd, "log time spent"),
 	)
 	return b.String()
 }
 
-// FormatRelatedIssuesMarkdown renders related issues as markdown.
-func FormatRelatedIssuesMarkdown(out RelatedIssuesOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Related Issues (%d)\n\n", len(out.Issues))
-	if len(out.Issues) == 0 {
-		b.WriteString("No related issues found.\n")
-		return b.String()
-	}
-	b.WriteString("| IID | Title | State | Author | Labels |\n")
-	b.WriteString(toolutil.TblSep5Col)
-	for _, iss := range out.Issues {
-		//gitlab:allow-unescaped iss.State: an issue state, one of GitLab's fixed set (opened, closed).
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n",
-			toolutil.MdTitleLink(fmt.Sprintf("#%d", iss.IID), iss.WebURL),
-			toolutil.EscapeMdTableCell(iss.Title),
-			iss.State,
-			toolutil.EscapeMdTableCell(issues.AuthorName(iss)),
-			toolutil.EscapeMdTableCell(strings.Join(iss.Labels, ", ")))
-	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_issue_get` to view issue details",
-		"Use `gitlab_issue_note_create` to comment on an issue",
-	)
-	return b.String()
-}
-
-// FormatCreateTodoMarkdown renders a created to-do item as markdown.
+// FormatCreateTodoMarkdown renders the to-do item a merge request just created
+// as the card of one object.
 func FormatCreateTodoMarkdown(t CreateTodoOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Todo Created (#%d)\n\n", t.ID)
-	//gitlab:allow-unescaped t.ActionName: a to-do action, a gl.TodoAction GitLab picks from a fixed set.
-	fmt.Fprintf(&b, "- **Action**: %s\n", t.ActionName)
-	//gitlab:allow-unescaped t.TargetType: a to-do target type, a gl.TodoTargetType GitLab picks from a fixed set.
-	fmt.Fprintf(&b, "- **Type**: %s\n", t.TargetType)
-	if t.TargetTitle != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdTarget, toolutil.EscapeMdTableCell(t.TargetTitle))
-	}
-	if t.TargetURL != "" {
-		toolutil.WriteMdURL(&b, t.TargetURL)
-	}
-	//gitlab:allow-unescaped t.State: a to-do state GitLab picks from a fixed set (pending, done).
-	fmt.Fprintf(&b, toolutil.FmtMdState, t.State)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_mr_get` to view the MR",
-		"Use `gitlab_todo_mark_done` to mark completed",
+	c := toolutil.NewCard(&b, fmt.Sprintf("Todo #%d", t.ID))
+	c.Int("ID", t.ID)
+	c.Field("Action", t.ActionName)
+	c.Field("Target Type", t.TargetType)
+	c.Field("Target", t.TargetTitle)
+	c.Field("Project", t.ProjectName)
+	c.Field("State", t.State)
+	c.Time("Created", t.CreatedAt)
+	c.URL(t.TargetURL)
+	c.End(
+		toolutil.HintAction(actionMRGet, "view the merge request this is about"),
+		toolutil.HintAction(hintActionTodoMarkDone, "mark this todo as completed"),
 	)
 	return b.String()
 }
 
-// FormatDependencyMarkdown renders a single merge request dependency as markdown.
+// FormatDependencyMarkdown renders one merge request dependency as the card of
+// one object, with the merge requests at both ends as nested objects.
 func FormatDependencyMarkdown(d DependencyOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## MR Dependency (#%d)\n\n", d.ID)
-	if bmr := d.BlockingMergeRequest; bmr != nil {
-		fmt.Fprintf(&b, "- **Blocking MR**: !%d (ID: %d)\n", bmr.IID, bmr.ID)
-		fmt.Fprintf(&b, toolutil.FmtMdTitle, toolutil.EscapeMdTableCell(bmr.Title))
-		//gitlab:allow-unescaped bmr.State: a merge request state, one of GitLab's fixed set (opened, closed, locked, merged).
-		fmt.Fprintf(&b, toolutil.FmtMdState, bmr.State)
-		fmt.Fprintf(&b, "- **Source**: %s -> **Target**: %s\n",
-			toolutil.EscapeMdTableCell(bmr.SourceBranch), toolutil.EscapeMdTableCell(bmr.TargetBranch))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_mr_get` to view the blocking MR",
+	c := toolutil.NewCard(&b, fmt.Sprintf("MR Dependency #%d", d.ID))
+	c.Int("ID", d.ID)
+	c.Count("Project ID", d.ProjectID)
+	writeBlockingMR(c, "Blocking MR", d.BlockingMergeRequest)
+	writeBlockingMR(c, "Blocked MR", d.BlockedMergeRequest)
+	c.End(
+		toolutil.HintAction(actionMRGet, "view either merge request in full"),
+		toolutil.HintAction(hintActionMRDependencies, "list every dependency of this merge request"),
 	)
 	return b.String()
 }
 
-// FormatDependenciesMarkdown renders a list of merge request dependencies as markdown.
+// writeBlockingMR writes one end of a dependency as a nested object under its
+// label, or nothing when GitLab did not send it.
+func writeBlockingMR(c *toolutil.Card, label string, mr *BlockingMergeRequestOutput) {
+	if mr == nil {
+		return
+	}
+	sub := c.Sub(label)
+	sub.Markdown("Reference", toolutil.MdTitleLink(fmt.Sprintf("!%d", mr.IID), mr.WebURL))
+	sub.Int("ID", mr.ID)
+	sub.Field("Title", mr.Title)
+	sub.Markdown("State", mrStateCell(mr.State))
+	sub.Field("Source", mr.SourceBranch)
+	sub.Field("Target", mr.TargetBranch)
+}
+
+// FormatDependenciesMarkdown renders the dependencies of a merge request as a
+// Markdown table.
 func FormatDependenciesMarkdown(out DependenciesOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## MR Dependencies (%d)\n\n", len(out.Dependencies))
 	if len(out.Dependencies) == 0 {
-		b.WriteString("No dependencies found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("dependencies")
 	}
-	b.WriteString("| ID | Blocking MR | Title | State |\n")
-	b.WriteString(toolutil.TblSep4Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "MR Dependencies", len(out.Dependencies), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Blocking MR", "Title", "State"))
 	for _, d := range out.Dependencies {
-		var iid int64
-		var title, state string
+		reference, title, state := "", "", ""
 		if bmr := d.BlockingMergeRequest; bmr != nil {
-			iid, title, state = bmr.IID, bmr.Title, bmr.State
+			reference = toolutil.MdTitleLink(fmt.Sprintf("!%d", bmr.IID), bmr.WebURL)
+			title, state = toolutil.EscapeMdTableCell(bmr.Title), mrStateCell(bmr.State)
 		}
-		//gitlab:allow-unescaped state: the blocking merge request's state, read out of bmr.State a few lines above.
-		fmt.Fprintf(&b, "| %d | !%d | %s | %s |\n",
-			d.ID,
-			iid,
-			toolutil.EscapeMdTableCell(title),
-			state)
+		b.WriteString(toolutil.MarkdownTableRow(strconv.FormatInt(d.ID, 10), reference, title, state))
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_mr_get` to view a blocking MR",
-		"Use `gitlab_mr_merge` to resolve blocking dependencies",
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
+		toolutil.HintAction(actionMRGet, "view a blocking merge request"),
+		toolutil.HintAction(actionMRMerge, "merge a blocker to clear the dependency"),
 	)
 	return b.String()
 }

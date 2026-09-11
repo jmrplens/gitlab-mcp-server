@@ -10,8 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -356,42 +354,44 @@ func TestDelete_CancelledContext(t *testing.T) {
 // FormatListMarkdown — content validation
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_ContentValidation verifies FormatListMarkdown when content validation.
+// contextCommitHints is the guidance section a context commit listing closes
+// with.
+const contextCommitHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'commit.get' to read one of these commits in full\n" +
+	"- Use action 'merge_request.context_commits_create' to pin another commit to this review\n" +
+	"- Use action 'merge_request.context_commits_delete' to unpin one of these commits\n"
+
+// TestFormatListMarkdown_ContentValidation verifies the whole rendering of a
+// context commit listing: the SHA as a code span, the pipe in a commit title
+// escaped so it cannot split the row, and the guidance naming canonical action
+// IDs rather than a tool name.
 func TestFormatListMarkdown_ContentValidation(t *testing.T) {
 	out := ListOutput{
 		Commits: []CommitItem{
-			{ID: "abc123", ShortID: "abc1", Title: "First | commit", AuthorName: "Dev"},
+			{ID: "abc123", ShortID: "abc1", Title: "First | commit", AuthorName: "Dev", CreatedAt: "2026-01-15T10:00:00Z"},
 			{ID: "def456", ShortID: "def4", Title: "Second commit", AuthorName: "Dev2"},
 		},
 	}
-	result := FormatListMarkdown(out)
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	want := "## MR Context Commits (2)\n\n" +
+		"| SHA | Title | Author | Created |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| `abc1` | First &#124; commit | Dev | 15 Jan 2026 10:00 UTC |\n" +
+		"| `def4` | Second commit | Dev2 |  |\n" + contextCommitHints
+	if got := FormatListMarkdownString(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
+}
 
-	tc, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected *mcp.TextContent, got %T", result.Content[0])
-	}
-	md := tc.Text
-
-	for _, want := range []string{
-		"## MR Context Commits (2)",
-		"| SHA | Title | Author |",
-		"| abc1 |",
-		"| def4 |",
-		"Dev2",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-
-	// Pipe in title should be escaped
-	if strings.Contains(md, "First | commit") {
-		t.Errorf("pipe in title should be escaped:\n%s", md)
+// TestFormatListMarkdown_FallsBackToTheFullSHA verifies that a commit GitLab
+// sent no abbreviated id for is still identified, by its full one.
+func TestFormatListMarkdown_FallsBackToTheFullSHA(t *testing.T) {
+	out := ListOutput{Commits: []CommitItem{{ID: "abc123def456", Title: "Only a long id", AuthorName: "Dev"}}}
+	want := "## MR Context Commits (1)\n\n" +
+		"| SHA | Title | Author | Created |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| `abc123def456` | Only a long id | Dev |  |\n" + contextCommitHints
+	if got := FormatListMarkdownString(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 

@@ -763,41 +763,70 @@ func TestDeleteNote_APIError(t *testing.T) {
 // FormatNoteMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatNoteMarkdown_Full verifies FormatNoteMarkdown when full.
+// noteHints is the guidance section a discussion note card closes with, and
+// threadHints the one a thread closes with.
+const (
+	noteHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'mr_review.discussion_note_update' to edit this note\n" +
+		"- Use action 'mr_review.discussion_note_delete' to remove this note\n" +
+		"- Use action 'mr_review.discussion_resolve' to resolve or unresolve the thread it belongs to\n"
+	threadHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'mr_review.discussion_reply' to reply to this discussion\n" +
+		"- Use action 'mr_review.discussion_resolve' to resolve or unresolve it\n" +
+		"- Use action 'mr_review.discussion_note_update' to edit one of its notes\n"
+)
+
+// TestFormatNoteMarkdown_Full verifies the whole rendering of one discussion
+// note, through the note card every note tool in the tree shares: the
+// resolution state is a word rather than a bare true, it is shown only for a
+// note that can be resolved, and the resolver is named.
 func TestFormatNoteMarkdown_Full(t *testing.T) {
 	n := NoteOutput{
-		ID:        500,
-		Body:      "Looks good!",
-		Author:    &toolutil.NoteUserOutput{Username: "reviewer"},
-		CreatedAt: "2026-03-02T12:00:00Z",
-		Resolved:  true,
+		ID:         500,
+		Body:       "Looks good!",
+		Author:     &toolutil.NoteUserOutput{Username: "reviewer"},
+		CreatedAt:  "2026-03-02T12:00:00Z",
+		Resolvable: true,
+		Resolved:   true,
+		ResolvedBy: &toolutil.NoteUserOutput{Username: "maintainer"},
 	}
-	md := FormatNoteMarkdown(n)
-
-	for _, want := range []string{
-		"## Discussion Note #500",
-		"reviewer",
-		"2 Mar 2026 12:00 UTC",
-		"**Resolved**: true",
-		"Looks good!",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Discussion Note #500\n\n" +
+		"- **Author**: @reviewer\n" +
+		"- **Created**: 2 Mar 2026 12:00 UTC\n" +
+		"- **Resolvable**: resolved\n" +
+		"- **Resolved By**: @maintainer\n" +
+		"- **Body**: Looks good!\n" + noteHints
+	if got := FormatNoteMarkdown(n); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatNoteMarkdown_Minimal verifies FormatNoteMarkdown when minimal.
+// TestFormatNoteMarkdown_Minimal verifies that a note nothing can resolve shows
+// no resolution row at all: the "**Resolved**: false" this replaced was printed
+// on every note, resolvable or not.
 func TestFormatNoteMarkdown_Minimal(t *testing.T) {
 	n := NoteOutput{ID: 1, Body: "hi", Author: &toolutil.NoteUserOutput{Username: "u"}, CreatedAt: "2026-01-01T00:00:00Z"}
-	md := FormatNoteMarkdown(n)
-	if !strings.Contains(md, "## Discussion Note #1") {
-		t.Errorf("missing header:\n%s", md)
+	want := "## Discussion Note #1\n\n" +
+		"- **Author**: @u\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Body**: hi\n" + noteHints
+	if got := FormatNoteMarkdown(n); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
-	if !strings.Contains(md, "**Resolved**: false") {
-		t.Errorf("should show resolved false:\n%s", md)
+}
+
+// TestFormatNoteMarkdown_ConfidentialIsInternal verifies that a note GitLab
+// marked confidential is shown as internal, which is the same restriction under
+// the other entity's spelling.
+func TestFormatNoteMarkdown_ConfidentialIsInternal(t *testing.T) {
+	n := NoteOutput{ID: 2, Body: "secret", Author: &toolutil.NoteUserOutput{Username: "u"}, CreatedAt: "2026-01-01T00:00:00Z", Confidential: true}
+	want := "## Discussion Note #2\n\n" +
+		"- **Author**: @u\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Internal note**\n" +
+		"- **Body**: secret\n" + noteHints
+	if got := FormatNoteMarkdown(n); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -805,7 +834,13 @@ func TestFormatNoteMarkdown_Minimal(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_Full verifies FormatOutputMarkdown when full.
+// TestFormatOutputMarkdown_Full verifies the whole rendering of a discussion
+// thread through the renderer every discussion family shares: each note is a
+// list item naming its author, time and ID, with the body quoted underneath.
+//
+// A note body is written by anybody who can comment, so it is quoted rather
+// than interpolated: the "### Note N (by author)" heading this replaced put the
+// author in a heading and the body at column zero.
 func TestFormatOutputMarkdown_Full(t *testing.T) {
 	d := Output{
 		ID:             "disc-abc",
@@ -815,37 +850,20 @@ func TestFormatOutputMarkdown_Full(t *testing.T) {
 			{ID: 2, Body: "Reply", Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02T00:00:00Z"},
 		},
 	}
-	md := FormatOutputMarkdown(d)
-
-	for _, want := range []string{
-		"## Discussion disc-abc",
-		"**Notes**: 2",
-		"**Individual Note**: false",
-		"### Note 1 (by alice)",
-		"First",
-		"### Note 2 (by bob)",
-		"Reply",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Discussion disc-abc\n\n" +
+		"- **@alice** (1 Jan 2026 00:00 UTC, note 1):\n  > First\n" +
+		"- **@bob** (2 Jan 2026 00:00 UTC, note 2):\n  > Reply\n" + threadHints
+	if got := FormatOutputMarkdown(d); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_Empty verifies FormatOutputMarkdown when empty.
+// TestFormatOutputMarkdown_Empty verifies that a thread GitLab sent no note for
+// renders its heading and the guidance, and nothing in between.
 func TestFormatOutputMarkdown_Empty(t *testing.T) {
-	d := Output{ID: "empty-disc", IndividualNote: true, Notes: nil}
-	md := FormatOutputMarkdown(d)
-	if !strings.Contains(md, "## Discussion empty-disc") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	if !strings.Contains(md, "**Notes**: 0") {
-		t.Errorf("should show 0 notes:\n%s", md)
-	}
-	if !strings.Contains(md, "**Individual Note**: true") {
-		t.Errorf("should show individual note:\n%s", md)
+	want := "## Discussion empty-disc\n" + threadHints
+	if got := FormatOutputMarkdown(Output{ID: "empty-disc", IndividualNote: true}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -853,46 +871,45 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithDiscussions verifies FormatListMarkdown when with discussions.
+// TestFormatListMarkdown_WithDiscussions verifies the whole rendering of a
+// page of threads, through the same shared renderer a single thread goes
+// through, so a thread reads the same whether it was listed or fetched. The
+// ID/Notes/Individual table this replaced showed the thread ids and none of
+// what anybody said in them.
 func TestFormatListMarkdown_WithDiscussions(t *testing.T) {
 	out := ListOutput{
 		Discussions: []Output{
-			{ID: "d1", IndividualNote: false, Notes: []*NoteOutput{{ID: 1}, {ID: 2}}},
-			{ID: "d2", IndividualNote: true, Notes: []*NoteOutput{{ID: 3}}},
+			{ID: "d1", IndividualNote: false, Notes: []*NoteOutput{
+				{ID: 1, Body: "First", Author: &toolutil.NoteUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z"},
+				{ID: 2, Body: "Reply", Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02T00:00:00Z"},
+			}},
+			{ID: "d2", IndividualNote: true, Notes: []*NoteOutput{
+				{ID: 3, Body: "Standalone", Author: &toolutil.NoteUserOutput{Username: "carol"}, CreatedAt: "2026-01-03T00:00:00Z"},
+			}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 5, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
-	for _, want := range []string{
-		"## MR Discussions (5)",
-		"| ID |",
-		"| d1 |",
-		"| d2 |",
-		"2",
-		"1",
-		"false",
-		"true",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## MR Discussions (5)\n\n" +
+		"### Discussion d1\n" +
+		"- **@alice** (1 Jan 2026 00:00 UTC, note 1):\n  > First\n" +
+		"- **@bob** (2 Jan 2026 00:00 UTC, note 2):\n  > Reply\n\n" +
+		"### Discussion d2\n" +
+		"- **@carol** (3 Jan 2026 00:00 UTC, note 3):\n  > Standalone\n\n" +
+		"Page 1 of 1 | 5 items total | 20 per page\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'mr_review.discussion_get' to read one thread in full\n" +
+		"- Use action 'mr_review.discussion_create' to start a new discussion on this merge request\n"
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies that a merge request with no discussion
+// renders the one-sentence empty message and no heading counting zero.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	out := ListOutput{
-		Discussions: []Output{},
-		Pagination:  toolutil.PaginationOutput{},
-	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "No merge request discussions found.") {
-		t.Errorf("expected 'No merge request discussions found.' in markdown:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+	want := "No merge request discussions found.\n"
+	if got := FormatListMarkdown(ListOutput{Discussions: []Output{}}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 

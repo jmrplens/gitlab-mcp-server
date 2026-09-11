@@ -297,7 +297,9 @@ func TestFormatMR_Markdown(t *testing.T) {
 	checks := []string{
 		"MR !15: Add feature", "opened",
 		"**Source**: feature", "**Target**: main",
-		mdDescriptionHdr, "Adds a feature",
+		// The description is a labeled row now rather than an H3 section:
+		// the card writes prose under its label, quoted when it spans lines.
+		"- **Description**: Adds a feature",
 		"@dev1", "enhancement", "@dev2", "@dev3",
 	}
 	for _, c := range checks {
@@ -318,10 +320,12 @@ func TestFormatMRMarkdownDraft_Conflicts(t *testing.T) {
 		WebURL: "https://gitlab.example.com/mr/99",
 	}
 	md := mergerequests.FormatMarkdown(mr)
-	if !strings.Contains(md, "Draft") {
+	if !strings.Contains(md, "**Draft merge request**") {
 		t.Error("missing draft indicator")
 	}
-	if !strings.Contains(md, "Conflicts") {
+	// A negative-polarity condition is marked with the warning sign rather
+	// than with the tick a true would otherwise take.
+	if !strings.Contains(md, "⚠️ **Has conflicts**") {
 		t.Error("missing conflict indicator")
 	}
 }
@@ -348,7 +352,7 @@ func TestFormatMR_ApproveMarkdown(t *testing.T) {
 	a := mergerequests.ApproveOutput{ApprovalsRequired: 2, ApprovedBy: 1, Approved: false}
 	md := mergerequests.FormatApproveMarkdown(a)
 
-	if !strings.Contains(md, "**Approved**: false") {
+	if !strings.Contains(md, "**Approved**: ❌") {
 		t.Error("missing approved field")
 	}
 	if !strings.Contains(md, "**Approvals Required**: 2") {
@@ -383,21 +387,35 @@ func TestFormatMR_NotesListMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatDiscussion_NoteMarkdown verifies discussion note fields in Markdown.
+// TestFormatDiscussion_NoteMarkdown verifies discussion note fields in
+// Markdown. A note nothing can resolve carries no resolution row at all: the
+// "**Resolved**: false" this replaced was printed on every note, resolvable or
+// not, which told a reader a thread was open that was never a thread.
 func TestFormatDiscussion_NoteMarkdown(t *testing.T) {
-	n := mrdiscussions.NoteOutput{ID: 5, Body: "Needs fix", Author: &toolutil.NoteUserOutput{Username: "reviewer"}, CreatedAt: testDate20260101, Resolved: false}
+	n := mrdiscussions.NoteOutput{ID: 5, Body: "Needs fix", Author: &toolutil.NoteUserOutput{Username: "reviewer"}, CreatedAt: testDate20260101}
 	md := mrdiscussions.FormatNoteMarkdown(n)
 
 	if !strings.Contains(md, "## Discussion Note #5") {
 		t.Error(errMissingHeader)
 	}
-	if !strings.Contains(md, "**Resolved**: false") {
-		t.Error("missing resolved field")
+	if strings.Contains(md, "Resolvable") {
+		t.Errorf("a note that is not resolvable carries a resolution row:\n%s", md)
 	}
+
+	t.Run("resolvable", func(t *testing.T) {
+		n.Resolvable = true
+		resolvable := mrdiscussions.FormatNoteMarkdown(n)
+		if !strings.Contains(resolvable, "**Resolvable**: unresolved") {
+			t.Errorf("missing resolution state:\n%s", resolvable)
+		}
+	})
 }
 
 // TestFormatMR_DiscussionMarkdown verifies that a discussion thread with
-// multiple notes renders each note as a sub-heading.
+// multiple notes renders each note as a list item naming its author and its ID,
+// with the body quoted underneath — the shape every discussion family shares.
+// The "### Note N (by author)" heading this replaced put a name in a heading
+// and the body at column zero, where it could add structure of its own.
 func TestFormatMR_DiscussionMarkdown(t *testing.T) {
 	d := mrdiscussions.Output{
 		ID:             "abc123",
@@ -412,11 +430,11 @@ func TestFormatMR_DiscussionMarkdown(t *testing.T) {
 	if !strings.Contains(md, "## Discussion abc123") {
 		t.Error(errMissingHeader)
 	}
-	if !strings.Contains(md, "### Note 1 (by dev1)") {
-		t.Error("missing first note")
+	if !strings.Contains(md, "- **@dev1** (, note 1):\n  > First note") {
+		t.Errorf("missing first note:\n%s", md)
 	}
-	if !strings.Contains(md, "### Note 2 (by dev2)") {
-		t.Error("missing second note")
+	if !strings.Contains(md, "- **@dev2** (, note 2):\n  > Reply") {
+		t.Errorf("missing second note:\n%s", md)
 	}
 }
 
@@ -445,8 +463,8 @@ func TestFormatMR_ChangesMarkdown(t *testing.T) {
 	}
 	md := mrchanges.FormatOutputMarkdown(out)
 
-	if !strings.Contains(md, "## MR !15 Changes (4 files)") {
-		t.Error(errMissingHeader)
+	if !strings.Contains(md, "## MR !15 Changes\n\n- **Files**: 4\n") {
+		t.Errorf("%s:\n%s", errMissingHeader, md)
 	}
 	if !strings.Contains(md, "| a.go | modified |") {
 		t.Error("missing modified file")
@@ -2468,24 +2486,39 @@ func mdGateLog(t *testing.T, title string, findings []mdGateFinding) {
 // TestMarkdownRegistry_EveryFormatter_KeepsTableBoundaries drives every
 // registered formatter and the renderers outside the registry through the
 // line model and reports what the client would render differently from what
-// the formatter wrote. It reports rather than fails, and asserts the one
-// thing that proves the gate works: the two files the audit proved broken,
-// mergetrains and iterationdata, are among what it reports.
+// the formatter wrote. It reports rather than fails, apart from the two
+// assertions that keep it honest.
+//
+// The first is that it still sees the class it exists for: iterationdata opens
+// a table and writes a list row into it, which ends the table with no body and
+// leaves every later row on the page as literal pipes, and it has not been
+// migrated yet.
+//
+// The second is the other half of the same proof, and is what the fixed
+// formatter is worth: mergetrains was the sibling the audit proved broken, the
+// card migration moved it onto [toolutil.Card], and nothing about it may be
+// reported again. An assertion that it is still broken would have to be
+// deleted by whoever fixed it, which is how a gate stops proving anything.
 func TestMarkdownRegistry_EveryFormatter_KeepsTableBoundaries(t *testing.T) {
 	report := mdGateScan(t)
 
 	mdGateLog(t, "structural scan", report.findings)
 	t.Logf("structural scan: %d case(s), %d render(s), %d silent render(s)", len(report.cases), report.rendered, report.silent)
-	for _, name := range []string{"mergetrains", "iterationdata"} {
-		t.Run(name+" is reported", func(t *testing.T) {
-			for _, f := range report.findings {
-				if f.kase.pkg == name {
-					return
-				}
+	t.Run("iterationdata is reported", func(t *testing.T) {
+		for _, f := range report.findings {
+			if f.kase.pkg == "iterationdata" {
+				return
 			}
-			t.Errorf("the gate reports nothing for %s, whose tables the audit proved broken, so the gate does not see the defect it exists for", name)
-		})
-	}
+		}
+		t.Error("the gate reports nothing for iterationdata, whose tables the audit proved broken, so the gate does not see the defect it exists for")
+	})
+	t.Run("mergetrains keeps its table boundaries", func(t *testing.T) {
+		for _, f := range report.findings {
+			if f.kase.pkg == "mergetrains" {
+				t.Errorf("mergetrains was migrated onto the card and is reported again: %s", f)
+			}
+		}
+	})
 	for _, f := range report.findings {
 		if f.rule == "P0" {
 			t.Errorf("%s", f)

@@ -1,109 +1,161 @@
 package mrapprovals
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// userNames returns the display names of a slice of basic-user outputs,
-// skipping nil entries. Used by the Markdown formatters to render the
-// approver/eligible/user object lists as comma-separated names.
-func userNames(users []*BasicUserOutput) []string {
-	names := make([]string, 0, len(users))
-	for _, u := range users {
-		if u != nil {
-			names = append(names, u.Name)
-		}
+// actionMRMerge is the one canonical action ID these hints name that the
+// action specs beside them do not already declare.
+const actionMRMerge = "merge_request.merge"
+
+// userCell renders one approver: the "@handle" linked to the profile, and the
+// display name when GitLab sent no username. Both halves are escaped, which the
+// comma-joined list of raw names this replaced was not.
+func userCell(u *BasicUserOutput) string {
+	if u == nil {
+		return ""
 	}
-	return names
+	if handle := toolutil.MdUserLink(u.Username, u.WebURL); handle != "" {
+		return handle
+	}
+	return toolutil.MdTitleLink(u.Name, u.WebURL)
 }
 
-// groupNames returns the display names of a slice of group outputs, skipping
-// nil entries.
-func groupNames(groups []*GroupOutput) []string {
-	names := make([]string, 0, len(groups))
+// userList renders a set of approvers as the comma-joined list a row shows, and
+// nothing at all when there are none.
+func userList(users []*BasicUserOutput) string {
+	cells := make([]string, 0, len(users))
+	for _, u := range users {
+		if cell := userCell(u); cell != "" {
+			cells = append(cells, cell)
+		}
+	}
+	return strings.Join(cells, ", ")
+}
+
+// groupPaths renders approval groups by their full path, each escaped.
+func groupPaths(groups []*GroupOutput) string {
+	paths := make([]string, 0, len(groups))
 	for _, g := range groups {
-		if g != nil {
-			names = append(names, g.Name)
-		}
-	}
-	return names
-}
-
-// approverNames returns the display names of merge-request approver users,
-// appending the approval timestamp in parentheses when present. Skips entries
-// with a nil user object.
-func approverNames(users []*MergeRequestApproverUserOutput) []string {
-	names := make([]string, 0, len(users))
-	for _, u := range users {
-		if u == nil || u.User == nil {
+		if g == nil {
 			continue
 		}
-		if u.ApprovedAt != "" {
-			names = append(names, fmt.Sprintf("%s (%s)", u.User.Name, u.ApprovedAt))
-		} else {
-			names = append(names, u.User.Name)
+		path := g.FullPath
+		if path == "" {
+			path = g.Name
+		}
+		if path != "" {
+			paths = append(paths, toolutil.EscapeMdTableCell(path))
 		}
 	}
-	return names
+	return strings.Join(paths, ", ")
 }
 
-// FormatStateMarkdown renders the MR approval state as Markdown.
+// approverList renders the users who approved, each with the moment they
+// approved in the display form every other timestamp takes. The names used to
+// be joined raw, and the timestamp printed as GitLab sent it.
+func approverList(users []*MergeRequestApproverUserOutput) string {
+	cells := make([]string, 0, len(users))
+	for _, u := range users {
+		if u == nil {
+			continue
+		}
+		cell := userCell(u.User)
+		if cell == "" {
+			continue
+		}
+		if at := toolutil.FormatTime(u.ApprovedAt); at != "" {
+			cell += " (" + at + ")"
+		}
+		cells = append(cells, cell)
+	}
+	return strings.Join(cells, ", ")
+}
+
+// FormatStateMarkdown renders the approval state of a merge request: the card
+// of one object, with the rules it is judged by as a nested collection.
 func FormatStateMarkdown(s StateOutput) string {
 	var b strings.Builder
-	overwritten := "No"
-	if s.ApprovalRulesOverwritten {
-		overwritten = "Yes"
-	}
-	fmt.Fprintf(&b, "## MR Approval State\n\n**Rules overwritten**: %s\n\n", overwritten)
+	c := toolutil.NewCard(&b, "MR Approval State")
+	c.Bool("Rules overwritten", s.ApprovalRulesOverwritten)
+	c.Int("Rules", int64(len(s.Rules)))
 	if len(s.Rules) == 0 {
-		b.WriteString("No approval rules configured.\n")
+		c.Note("No approval rules are configured for this merge request.")
+		c.End(
+			toolutil.HintAction(actionApprovalRules, "list the rules configured on this merge request"),
+			toolutil.HintAction(actionApprovalRuleCreate, "add an approval rule"),
+		)
 		return b.String()
 	}
-	b.WriteString("| ID | Name | Type | Required | Approved | Approved By |\n")
-	b.WriteString("| -- | ---- | ---- | -------- | -------- | ----------- |\n")
+	t := c.Table("Rules", "ID", "Name", "Type", "Required", "Approved", "Approved By")
 	for _, r := range s.Rules {
-		approved := toolutil.BoolEmoji(r.Approved)
-		approvedBy := strings.Join(userNames(r.ApprovedBy), ", ")
-		//gitlab:allow-unescaped r.RuleType: an approval rule type GitLab picks from a fixed set (regular, any_approver, code_owner, report_approver).
-		fmt.Fprintf(&b, "| %d | %s | %s | %d | %s | %s |\n", r.ID, toolutil.EscapeMdTableCell(r.Name), r.RuleType, r.ApprovalsRequired, approved, toolutil.EscapeMdTableCell(approvedBy))
+		t.Row(
+			strconv.FormatInt(r.ID, 10),
+			toolutil.EscapeMdTableCell(r.Name),
+			toolutil.EscapeMdTableCell(r.RuleType),
+			strconv.Itoa(r.ApprovalsRequired),
+			toolutil.BoolEmoji(r.Approved),
+			userList(r.ApprovedBy),
+		)
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'approve' to approve this MR",
-		"Use action 'unapprove' to withdraw approval",
+	c.End(
+		toolutil.HintAction(actionMRApprove, "approve this merge request"),
+		toolutil.HintAction(actionMRUnapprove, "withdraw an approval"),
 	)
 	return b.String()
 }
 
-// FormatRulesMarkdown renders a list of MR approval rules as Markdown.
+// anyProfileLink reports whether any eligible approver carries a profile URL,
+// which decides whether the table has a link to preserve. The instruction to
+// keep the links of a table that has none is noise a model has to read past,
+// so it is asked rather than assumed: an instance that hides profile URLs
+// renders these rules as plain names.
+func anyProfileLink(rules []RuleOutput) bool {
+	for _, r := range rules {
+		for _, u := range r.EligibleApprovers {
+			if u != nil && u.WebURL != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// FormatRulesMarkdown renders the approval rules of a merge request as a
+// Markdown table: a collection of objects that share columns.
+//
+// There is no Approved column here: the three approval_rules routes present
+// MergeRequestApprovalRule, which does not expose it. Only the approval_state
+// route does, and [FormatStateMarkdown] renders that one.
 func FormatRulesMarkdown(out RulesOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## MR Approval Rules (%d)\n\n", len(out.Rules))
 	if len(out.Rules) == 0 {
-		b.WriteString("No approval rules configured.\n")
-		return b.String()
+		return toolutil.EmptyMessage("approval rules")
 	}
-	// No Approved column: the three approval_rules routes present
-	// MergeRequestApprovalRule, which does not expose it. Only the
-	// approval_state route does, and FormatStateMarkdown renders that one.
-	b.WriteString("| ID | Name | Type | Required | Eligible |\n")
-	b.WriteString("| -- | ---- | ---- | -------- | -------- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "MR Approval Rules", len(out.Rules), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Type", "Required", "Eligible"))
 	for _, r := range out.Rules {
-		eligible := strings.Join(userNames(r.EligibleApprovers), ", ")
-		fmt.Fprintf(&b, "| %d | %s | %s | %d | %s |\n", r.ID, toolutil.EscapeMdTableCell(r.Name), r.RuleType, r.ApprovalsRequired, toolutil.EscapeMdTableCell(eligible))
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(r.ID, 10),
+			toolutil.EscapeMdTableCell(r.Name),
+			toolutil.EscapeMdTableCell(r.RuleType),
+			strconv.Itoa(r.ApprovalsRequired),
+			userList(r.EligibleApprovers),
+		))
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'approval_rule_create' to add new rules",
-		"Use action 'approval_rule_update' or 'approval_rule_delete' to manage existing rules",
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, anyProfileLink(out.Rules),
+		toolutil.HintAction(actionApprovalRuleCreate, "add a rule"),
+		toolutil.HintAction(actionApprovalRuleUpdate, "change an existing rule"),
+		toolutil.HintAction(actionApprovalRuleDelete, "remove a rule"),
 	)
 	return b.String()
 }
 
-// FormatConfigMarkdown renders a merge request's approvals as Markdown.
+// FormatConfigMarkdown renders a merge request's approvals as the card of one
+// object.
 //
 // The rows it used to print for approvals required, approvals left and whether
 // rules exist are gone with the fields behind them: GitLab answers none of them
@@ -111,45 +163,39 @@ func FormatRulesMarkdown(out RulesOutput) string {
 // those questions is action 'approval_state', which the hints point at.
 func FormatConfigMarkdown(c ConfigOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## MR Approvals\n\n")
-	fmt.Fprintf(&b, "| Field | Value |\n| ----- | ----- |\n")
-	fmt.Fprintf(&b, "| Approved | %v |\n", c.Approved)
-	fmt.Fprintf(&b, "| User Has Approved | %v |\n", c.UserHasApproved)
-	fmt.Fprintf(&b, "| User Can Approve | %v |\n", c.UserCanApprove)
-	if names := approverNames(c.ApprovedBy); len(names) > 0 {
-		fmt.Fprintf(&b, "\n**Approved by**: %s\n", strings.Join(names, ", "))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'approve' or 'unapprove' to change approval status",
-		"Use action 'approval_state' for how many approvals are required and left",
-		"Use action 'approval_rules' to see all configured rules",
+	card := toolutil.NewCard(&b, "MR Approvals")
+	card.Bool("Approved", c.Approved)
+	card.Bool("You have approved", c.UserHasApproved)
+	card.Bool("You can approve", c.UserCanApprove)
+	card.Markdown("Approved By", approverList(c.ApprovedBy))
+	card.End(
+		toolutil.HintAction(actionMRApprove, "approve this merge request"),
+		toolutil.HintAction(actionMRUnapprove, "withdraw your approval"),
+		toolutil.HintAction(actionApprovalState, "see how many approvals are required and left"),
+		toolutil.HintAction(actionApprovalRules, "see every configured rule"),
 	)
 	return b.String()
 }
 
-// FormatRuleMarkdown renders a single MR approval rule as Markdown.
+// FormatRuleMarkdown renders one approval rule as the card of one object.
 func FormatRuleMarkdown(r RuleOutput) string {
 	var b strings.Builder
 	// An approval rule's name is free text a maintainer types.
-	fmt.Fprintf(&b, "## Approval Rule: %s\n\n", toolutil.EscapeMdHeading(r.Name))
-	fmt.Fprintf(&b, "| Field | Value |\n| ----- | ----- |\n")
-	fmt.Fprintf(&b, "| ID | %d |\n", r.ID)
-	fmt.Fprintf(&b, "| Type | %s |\n", r.RuleType)
-	fmt.Fprintf(&b, "| Approvals Required | %d |\n", r.ApprovalsRequired)
-	if eligible := userNames(r.EligibleApprovers); len(eligible) > 0 {
-		fmt.Fprintf(&b, "| Eligible | %s |\n", toolutil.EscapeMdTableCell(strings.Join(eligible, ", ")))
-	}
-	if users := userNames(r.Users); len(users) > 0 {
-		fmt.Fprintf(&b, "| Users | %s |\n", toolutil.EscapeMdTableCell(strings.Join(users, ", ")))
-	}
-	if groups := groupNames(r.Groups); len(groups) > 0 {
-		fmt.Fprintf(&b, "| Groups | %s |\n", toolutil.EscapeMdTableCell(strings.Join(groups, ", ")))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'approval_rule_update' to modify this rule",
-		"Use action 'approval_rule_delete' to remove this rule",
+	c := toolutil.NewCard(&b, "Approval Rule: "+r.Name)
+	c.Int("ID", r.ID)
+	c.Field("Type", r.RuleType)
+	c.Field("Report Type", r.ReportType)
+	c.Field("Section", r.Section)
+	c.Int("Approvals Required", int64(r.ApprovalsRequired))
+	c.Bool("Overridden", r.Overridden)
+	c.Warn("Contains groups you cannot see", r.ContainsHiddenGroups)
+	c.Markdown("Eligible", userList(r.EligibleApprovers))
+	c.Markdown("Users", userList(r.Users))
+	c.Markdown("Groups", groupPaths(r.Groups))
+	c.End(
+		toolutil.HintAction(actionApprovalRuleUpdate, "modify this rule"),
+		toolutil.HintAction(actionApprovalRuleDelete, "remove this rule"),
+		toolutil.HintAction(actionMRMerge, "merge once the rule is satisfied"),
 	)
 	return b.String()
 }

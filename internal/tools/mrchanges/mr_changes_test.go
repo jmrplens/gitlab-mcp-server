@@ -323,7 +323,14 @@ func TestVersionIDRequired_Validation(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_WithChanges verifies FormatOutputMarkdown when with changes.
+// fileTableHead is the header and delimiter of the file table the changes
+// result and the diff version card share.
+const fileTableHead = "| File | Status |\n| --- | --- |\n"
+
+// TestFormatOutputMarkdown_WithChanges verifies the whole rendering of a merge
+// request's changes: the counts, the file table, then each patch as a fenced
+// block under the file it belongs to. The patches used to be dropped entirely,
+// so the result named the files and never showed a line of what changed.
 func TestFormatOutputMarkdown_WithChanges(t *testing.T) {
 	out := Output{
 		MRIID: 42,
@@ -334,33 +341,27 @@ func TestFormatOutputMarkdown_WithChanges(t *testing.T) {
 			{NewPath: "new_name.go", OldPath: "old_name.go", Diff: "rename diff", RenamedFile: true},
 		},
 	}
-	md := FormatOutputMarkdown(out)
-
-	for _, want := range []string{
-		"## MR !42 Changes (4 files)",
-		"| File | Status |",
-		"| main.go | modified |",
-		"| new_file.go | added |",
-		"| removed.go | deleted |",
-		"| new_name.go | renamed from old_name.go |",
-		"diff_versions_list",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-	for _, absent := range []string{"raw_diffs", "truncation"} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("markdown should not contain %q when no files are truncated:\n%s", absent, md)
-			}
-		})
+	want := "## MR !42 Changes\n\n" +
+		"- **Files**: 4\n\n" +
+		"### Files\n\n" + fileTableHead +
+		"| main.go | modified |\n" +
+		"| new_file.go | added |\n" +
+		"| removed.go | deleted |\n" +
+		"| new_name.go | renamed from old_name.go |\n\n" +
+		"### main.go\n\n```diff\nsome diff\n```\n\n" +
+		"### new_file.go\n\n```diff\n+new\n```\n\n" +
+		"### new_name.go\n\n```diff\nrename diff\n```\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'mr_review.diff_versions_list' to list every diff version of this merge request\n"
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_TruncatedFiles verifies hints when GitLab truncates large diffs.
+// TestFormatOutputMarkdown_TruncatedFiles verifies that GitLab's own truncation
+// is counted and pointed at truncated_files, and that a deleted file — which
+// carries no patch because there is nothing left of it — is not counted as
+// truncated.
 func TestFormatOutputMarkdown_TruncatedFiles(t *testing.T) {
 	out := Output{
 		MRIID: 99,
@@ -370,41 +371,31 @@ func TestFormatOutputMarkdown_TruncatedFiles(t *testing.T) {
 			{NewPath: "huge_test.c", OldPath: "huge_test.c", Diff: ""},
 			{NewPath: "removed.go", OldPath: "removed.go", Diff: "", DeletedFile: true},
 		},
+		TruncatedFiles: []string{"big_test.c", "huge_test.c"},
 	}
-	md := FormatOutputMarkdown(out)
-
-	for _, want := range []string{
-		"## MR !99 Changes (4 files)",
-		"diff_versions_list",
-		"diff_version_get",
-		"big_test.c",
-		"huge_test.c",
-		"truncation",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-	if strings.Contains(md, "removed.go") && strings.Contains(md, "truncation") {
-		// Deleted files with empty diff should NOT be in truncation warning
-		if strings.Contains(md, "removed.go, ") || strings.Contains(md, ", removed.go") {
-			t.Errorf("deleted file should not appear in truncation warning:\n%s", md)
-		}
+	want := "## MR !99 Changes\n\n" +
+		"- **Files**: 4\n" +
+		"- **Truncated by GitLab**: 2\n\n" +
+		"### Files\n\n" + fileTableHead +
+		"| small.go | modified |\n" +
+		"| big_test.c | modified |\n" +
+		"| huge_test.c | modified |\n" +
+		"| removed.go | deleted |\n\n" +
+		"### small.go\n\n```diff\nsome diff\n```\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'mr_review.diff_versions_list' to list every diff version of this merge request\n" +
+		"- GitLab truncated 2 file diff(s); truncated_files names them. Use action 'mr_review.diff_version_get' with a version_id for the full patch\n"
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_Empty verifies FormatOutputMarkdown when empty.
+// TestFormatOutputMarkdown_Empty verifies that a merge request with no file
+// change renders the one-sentence empty message and no table header.
 func TestFormatOutputMarkdown_Empty(t *testing.T) {
-	out := Output{MRIID: 7, Changes: nil}
-	md := FormatOutputMarkdown(out)
-
-	if !strings.Contains(md, "No file changes found.") {
-		t.Errorf("expected 'No file changes found.' in markdown:\n%s", md)
-	}
-	if strings.Contains(md, "| File |") {
-		t.Error("should not contain table header when no changes")
+	want := "No file changes found.\n"
+	if got := FormatOutputMarkdown(Output{MRIID: 7}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -421,35 +412,25 @@ func TestFormatDiffVersionsListMarkdown_WithVersions(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatDiffVersionsListMarkdown(out)
-
-	for _, want := range []string{
-		"## MR Diff Versions (2)",
-		"| ID | State | Head SHA | Base SHA | Created |",
-		"| 1 | collected |",
-		"| 2 | overflow |",
-		"abcdef12", // truncated to 8
-		"12345678", // truncated to 8
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-	// Full SHA should not appear (truncated to 8)
-	if strings.Contains(md, "abcdef1234567890") {
-		t.Errorf("head SHA should be truncated to 8 chars:\n%s", md)
+	want := "## MR Diff Versions (2)\n\n" +
+		"| ID | State | Head SHA | Base SHA | Created |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | collected | `abcdef12` | `12345678` | 15 Jan 2026 10:00 UTC |\n" +
+		"| 2 | overflow | `short` | `short2` | 16 Jan 2026 10:00 UTC |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'mr_review.diff_version_get' to read one version's commits and file diffs\n"
+	if got := FormatDiffVersionsListMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatDiffVersionsListMarkdown_Empty verifies FormatDiffVersionsListMarkdown when empty.
+// TestFormatDiffVersionsListMarkdown_Empty verifies that a merge request with
+// no diff version renders the one-sentence empty message.
 func TestFormatDiffVersionsListMarkdown_Empty(t *testing.T) {
-	out := DiffVersionsListOutput{DiffVersions: nil}
-	md := FormatDiffVersionsListMarkdown(out)
-
-	if !strings.Contains(md, "No diff versions found.") {
-		t.Errorf("expected 'No diff versions found.' in markdown:\n%s", md)
+	want := "No diff versions found.\n"
+	if got := FormatDiffVersionsListMarkdown(DiffVersionsListOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -478,38 +459,33 @@ func TestFormatDiffVersionGetMarkdown_Full(t *testing.T) {
 			{NewPath: "renamed.go", OldPath: "original.go", RenamedFile: true},
 		},
 	}
-	md := FormatDiffVersionGetMarkdown(out)
-
-	for _, want := range []string{
-		"## Diff Version 5",
-		"**State**: collected",
-		"**Head SHA**: abc123",
-		"**Base SHA**: def456",
-		"**Start SHA**: ghi789",
-		"**Created**: 16 Jan 2026 10:00 UTC",
-		"**Real Size**: 3",
-		"### Commits (2)",
-		"| shrt123 |",
-		"| anotherh |", // fallback: ID[:8] when ShortID empty
-		"### File Changes (4)",
-		"| main.go | modified |",
-		"| added.go | added |",
-		"| deleted.go | deleted |",
-		"| renamed.go | renamed from original.go |",
-		"diff_versions_list",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-	if strings.Contains(md, "raw_diffs") {
-		t.Errorf("should not reference non-existent raw_diffs action:\n%s", md)
+	want := "## Diff Version 5\n\n" +
+		"- **ID**: 5\n" +
+		"- **State**: collected\n" +
+		"- **Head SHA**: `abc123`\n" +
+		"- **Base SHA**: `def456`\n" +
+		"- **Start SHA**: `ghi789`\n" +
+		"- **Created**: 16 Jan 2026 10:00 UTC\n" +
+		"- **Real Size**: 3\n\n" +
+		"### Commits (2)\n\n" +
+		"| SHA | Author | Title |\n| --- | --- | --- |\n" +
+		"| `shrt123` | Dev | Fix bug |\n" +
+		"| `anotherh` | Dev2 | Second commit |\n\n" +
+		"### File Changes (4)\n\n" + fileTableHead +
+		"| main.go | modified |\n" +
+		"| added.go | added |\n" +
+		"| deleted.go | deleted |\n" +
+		"| renamed.go | renamed from original.go |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'mr_review.diff_versions_list' to list every diff version of this merge request\n"
+	if got := FormatDiffVersionGetMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatDiffVersionGetMarkdown_Minimal verifies FormatDiffVersionGetMarkdown when minimal.
+// TestFormatDiffVersionGetMarkdown_Minimal verifies that a diff version GitLab
+// sent nothing optional for shows no label with nothing after it and opens no
+// empty section.
 func TestFormatDiffVersionGetMarkdown_Minimal(t *testing.T) {
 	out := DiffVersionOutput{
 		ID:            1,
@@ -517,23 +493,15 @@ func TestFormatDiffVersionGetMarkdown_Minimal(t *testing.T) {
 		HeadCommitSHA: "abc",
 		BaseCommitSHA: "def",
 	}
-	md := FormatDiffVersionGetMarkdown(out)
-
-	if !strings.Contains(md, "## Diff Version 1") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	// No CreatedAt, RealSize, Commits, Diffs → those sections absent
-	if strings.Contains(md, "**Created**") {
-		t.Errorf("should not contain Created when empty:\n%s", md)
-	}
-	if strings.Contains(md, "**Real Size**") {
-		t.Errorf("should not contain Real Size when empty:\n%s", md)
-	}
-	if strings.Contains(md, "### Commits") {
-		t.Errorf("should not contain Commits section when empty:\n%s", md)
-	}
-	if strings.Contains(md, "### File Changes") {
-		t.Errorf("should not contain File Changes section when empty:\n%s", md)
+	want := "## Diff Version 1\n\n" +
+		"- **ID**: 1\n" +
+		"- **State**: empty\n" +
+		"- **Head SHA**: `abc`\n" +
+		"- **Base SHA**: `def`\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'mr_review.diff_versions_list' to list every diff version of this merge request\n"
+	if got := FormatDiffVersionGetMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -605,46 +573,36 @@ func TestRawDiffs_CancelledContext(t *testing.T) {
 // FormatRawDiffsMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatRawDiffsMarkdown_WithDiff verifies FormatRawDiffsMarkdown when with diff.
+// rawDiffsHints is the guidance section the raw diff card closes with.
+const rawDiffsHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'mr_review.changes_get' to see the file-by-file change summary\n"
+
+// TestFormatRawDiffsMarkdown_WithDiff verifies the whole rendering of a raw
+// patch: the heading, then the patch inside one fenced block.
 func TestFormatRawDiffsMarkdown_WithDiff(t *testing.T) {
-	out := RawDiffsOutput{MRIID: 3, RawDiff: "diff --git a/f.go b/f.go\n--- a/f.go\n+++ b/f.go\n@@ -1 +1 @@\n-old\n+new\n"}
-	md := FormatRawDiffsMarkdown(out)
-
-	for _, want := range []string{
-		"## MR !3 Raw Diffs",
-		"```diff",
-		"diff --git",
-		"```",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	const diff = "diff --git a/f.go b/f.go\n--- a/f.go\n+++ b/f.go\n@@ -1 +1 @@\n-old\n+new\n"
+	want := "## MR !3 Raw Diffs\n\n```diff\n" + diff + "```\n" + rawDiffsHints
+	if got := FormatRawDiffsMarkdown(RawDiffsOutput{MRIID: 3, RawDiff: diff}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatRawDiffsMarkdown_Empty verifies FormatRawDiffsMarkdown when empty.
+// TestFormatRawDiffsMarkdown_Empty verifies that a merge request with no patch
+// renders the one-sentence empty message and opens no fence.
 func TestFormatRawDiffsMarkdown_Empty(t *testing.T) {
-	out := RawDiffsOutput{MRIID: 4, RawDiff: ""}
-	md := FormatRawDiffsMarkdown(out)
-
-	if !strings.Contains(md, "No diffs found.") {
-		t.Errorf("expected 'No diffs found.' in markdown:\n%s", md)
-	}
-	if strings.Contains(md, "```diff") {
-		t.Error("should not contain code fence when no diffs")
+	want := "No diffs found.\n"
+	if got := FormatRawDiffsMarkdown(RawDiffsOutput{MRIID: 4}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatRawDiffsMarkdown_NoTrailingNewline verifies FormatRawDiffsMarkdown when no trailing newline.
+// TestFormatRawDiffsMarkdown_NoTrailingNewline verifies that a patch GitLab
+// sent without a trailing newline still gets one before the closing fence,
+// which is what keeps the fence on a line of its own.
 func TestFormatRawDiffsMarkdown_NoTrailingNewline(t *testing.T) {
-	out := RawDiffsOutput{MRIID: 5, RawDiff: "some diff without trailing newline"}
-	md := FormatRawDiffsMarkdown(out)
-
-	// The formatter should add a newline before the closing fence
-	if !strings.Contains(md, "some diff without trailing newline\n```") {
-		t.Errorf("expected newline insertion before closing fence:\n%s", md)
+	want := "## MR !5 Raw Diffs\n\n```diff\nsome diff without trailing newline\n```\n" + rawDiffsHints
+	if got := FormatRawDiffsMarkdown(RawDiffsOutput{MRIID: 5, RawDiff: "some diff without trailing newline"}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 

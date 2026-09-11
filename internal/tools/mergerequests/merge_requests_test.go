@@ -760,17 +760,24 @@ func TestMRGet_SuccessPipelineFields(t *testing.T) {
 	}
 }
 
-// TestPrefixAt verifies username @mention formatting.
-func TestPrefixAt(t *testing.T) {
-	got := prefixAt([]string{"alice", "bob"})
-	want := []string{"@alice", "@bob"}
-	if len(got) != len(want) {
-		t.Fatalf("prefixAt length = %d, want %d", len(got), len(want))
+// TestHandleList verifies username @mention formatting: every name becomes an
+// escaped handle, a blank one is dropped rather than rendered as a bare "@",
+// and an empty list renders as nothing at all.
+func TestHandleList(t *testing.T) {
+	cases := []struct {
+		name  string
+		names []string
+		want  string
+	}{
+		{name: "two names", names: []string{"alice", "bob"}, want: "@alice, @bob"},
+		{name: "blank dropped", names: []string{"alice", "", "bob"}, want: "@alice, @bob"},
+		{name: "none", names: nil, want: ""},
+		{name: "escaped", names: []string{"a|b"}, want: "@a&#124;b"},
 	}
-	for i, w := range want {
-		t.Run(w, func(t *testing.T) {
-			if got[i] != w {
-				t.Errorf("prefixAt[%d] = %q, want %q", i, got[i], w)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := handleList(tc.names); got != tc.want {
+				t.Errorf("handleList(%v) = %q, want %q", tc.names, got, tc.want)
 			}
 		})
 	}
@@ -1876,9 +1883,28 @@ var testLabels = []string{testLabelBug, "critical"}
 // Format*Markdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_Populated verifies FormatMarkdown when populated.
+// The guidance sections the merge request formatters close with, written once
+// so the whole-output expectations below name them rather than repeating them.
+const (
+	cardHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'mr_review.changes_get' to see the diff of this merge request\n" +
+		"- Use action 'mr_review.discussion_list' to see its review threads\n" +
+		"- Use action 'merge_request.pipelines' to check its CI status\n" +
+		"- Use action 'merge_request.approve' to approve it\n" +
+		"- Use action 'merge_request.merge' to merge it\n"
+	listHints = "\n---\n💡 **Next steps:**\n" + preserveLinksHint +
+		"- Use action 'merge_request.get' to see one merge request in full\n" +
+		"- Use action 'merge_request.create' to open a new merge request\n" +
+		"- Use action 'mr_review.changes_get' to review a merge request's diff\n"
+	preserveLinksHint = "- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n"
+)
+
+// TestFormatMarkdown_Populated verifies the whole rendering of a merge request
+// card, including the four conditions it never used to show: a locked
+// discussion refuses every comment, an auto-merge is already scheduled, a
+// rebase is running, and a merge error is why the last attempt failed.
 func TestFormatMarkdown_Populated(t *testing.T) {
-	md := FormatMarkdown(Output{
+	got := FormatMarkdown(Output{
 		IID: 1, Title: "feat: new login", State: testStateOpened,
 		SourceBranch: testFeatureBranch, TargetBranch: testBranchMain,
 		DetailedMergeStatus: "can_be_merged", Draft: true, HasConflicts: true,
@@ -1887,312 +1913,435 @@ func TestFormatMarkdown_Populated(t *testing.T) {
 		Reviewers: []*toolutil.BasicUserOutput{{Username: "dave"}}, Labels: []string{testLabelBug, "enhancement"},
 		CreatedAt: testCreatedAt, UserNotesCount: 5,
 		Description: "Full description here", WebURL: testMRWebURL,
+		References:                &toolutil.ReferencesOutput{Full: "group/proj!1"},
+		Milestone:                 &toolutil.MRMilestoneOutput{Title: testMilestoneV1},
+		Pipeline:                  &toolutil.PipelineInfoOutput{ID: 9, Status: "running", WebURL: "https://gitlab.example.com/p/9"},
+		ChangesCount:              "3",
+		DiscussionLocked:          true,
+		MergeWhenPipelineSucceeds: true,
+		RebaseInProgress:          true,
+		MergeError:                "Merge conflict",
 	})
-	for _, want := range []string{
-		"feat: new login", testStateOpened, testFeatureBranch, testBranchMain,
-		"Draft", "Has Conflicts", "@alice", "@bob", "@carol", "@dave",
-		testLabelBug, "enhancement", "1 Jan 2026", "Comments", "5",
-		"Full description here", testMRWebURL,
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatMarkdown missing %q", want)
-			}
-		})
+	want := "## 🟢 📝 MR !1: feat: new login\n\n" +
+		"- **Project**: group/proj\n" +
+		"- **State**: 🟢 opened\n" +
+		"- 📝 **Draft merge request**\n" +
+		"- **Source**: feature/login\n" +
+		"- **Target**: main\n" +
+		"- **Merge Status**: can_be_merged\n" +
+		"- ⚠️ **Has conflicts**\n" +
+		"- **Author**: @alice\n" +
+		"- **Assignees**: @bob, @carol\n" +
+		"- **Reviewers**: @dave\n" +
+		"- **Milestone**: v1.0\n" +
+		"- **Labels**: bug, enhancement\n" +
+		"- **Pipeline**: [#9](https://gitlab.example.com/p/9) 🔵 running\n" +
+		"- **Changes**: 3 files\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Comments**: 5\n" +
+		"- ⚠️ **Discussion locked**\n" +
+		"- 🔄 **Auto-merge set (merges when the pipeline succeeds)**\n" +
+		"- 🔄 **Rebase in progress**\n" +
+		"- **Merge Error**: Merge conflict\n" +
+		"- **URL**: [" + testMRWebURL + "](" + testMRWebURL + ")\n" +
+		"- **Description**: Full description here\n" + cardHints
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatMarkdown_Empty verifies FormatMarkdown when empty.
+// TestFormatMarkdown_Empty verifies that a zero merge request shows no label
+// with nothing after it: the heading, and the guidance, and nothing else.
 func TestFormatMarkdown_Empty(t *testing.T) {
-	md := FormatMarkdown(Output{})
-	if md == "" {
-		t.Error("FormatMarkdown returned empty string for zero Output")
+	want := "## ❓ MR !0\n" + cardHints
+	if got := FormatMarkdown(Output{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Populated verifies FormatListMarkdown when populated.
+// TestFormatMarkdown_Merged verifies that a merged merge request names who
+// merged it and when, and a closed one who closed it, which is the one pair of
+// rows the state decides.
+func TestFormatMarkdown_Merged(t *testing.T) {
+	got := FormatMarkdown(Output{
+		IID: 2, Title: "done", State: testStateMerged,
+		MergeUser: &toolutil.BasicUserOutput{Username: testAuthorBob}, MergedAt: "2026-02-03T04:05:06Z",
+	})
+	want := "## 🟣 MR !2: done\n\n" +
+		"- **State**: 🟣 merged\n" +
+		"- **Merged By**: @bob\n" +
+		"- **Merged**: 3 Feb 2026 04:05 UTC\n" + cardHints
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatListMarkdown_Populated verifies the whole rendering of a merge
+// request listing: the IID carries the link, the draft marker rides on the
+// title, and the state carries its glyph.
 func TestFormatListMarkdown_Populated(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		MergeRequests: []Output{
 			{IID: 1, Title: "MR1", State: testStateOpened, Draft: true, Author: &toolutil.BasicUserOutput{Username: testAuthorAlice}, SourceBranch: "a", TargetBranch: "b"},
 			{IID: 2, Title: "MR2", State: testStateMerged, Author: &toolutil.BasicUserOutput{Username: testAuthorBob}, SourceBranch: "c", TargetBranch: "d"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	})
-	for _, want := range []string{"MR1", "MR2", testAuthorAlice, testAuthorBob, "📝"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatListMarkdown missing %q", want)
-			}
-		})
+	want := "## Merge Requests (2)\n\n" +
+		"| IID | Title | State | Author | Project | Source -> Target |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| !1 | MR1 📝 | 🟢 opened | @alice |  | a -> b |\n" +
+		"| !2 | MR2 | 🟣 merged | @bob |  | c -> d |\n" +
+		"\n2 items total\n" + listHints
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies that a project with no merge request
+// renders the one-sentence empty message and no heading counting zero.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No merge requests found") {
-		t.Error("FormatListMarkdown should say no MRs found for empty list")
+	want := "No merge requests found.\n"
+	if got := FormatListMarkdown(ListOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatApproveMarkdown_Populated verifies FormatApproveMarkdown when populated.
+// TestFormatApproveMarkdown_Populated verifies the whole rendering of the
+// approval status: the flag is a glyph rather than the bare "true" the %v this
+// replaced printed.
 func TestFormatApproveMarkdown_Populated(t *testing.T) {
-	md := FormatApproveMarkdown(ApproveOutput{Approved: true, ApprovalsRequired: 2, ApprovedBy: 1})
-	for _, want := range []string{"Approved", "true", "2", "1"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatApproveMarkdown missing %q", want)
-			}
-		})
+	want := "## MR Approval Status\n\n" +
+		"- **Approved**: ✅\n" +
+		"- **Approvals Required**: 2\n" +
+		"- **Approvals Given**: 1\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'merge_request.merge' to merge this merge request\n" +
+		"- Use action 'merge_request.get' to see its full details\n"
+	if got := FormatApproveMarkdown(ApproveOutput{Approved: true, ApprovalsRequired: 2, ApprovedBy: 1}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatApproveMarkdown_Empty verifies FormatApproveMarkdown when empty.
+// TestFormatApproveMarkdown_Empty verifies that an unapproved merge request
+// renders every count, since zero is an answer here rather than an absence.
 func TestFormatApproveMarkdown_Empty(t *testing.T) {
-	md := FormatApproveMarkdown(ApproveOutput{})
-	if md == "" {
-		t.Error("FormatApproveMarkdown returned empty string for zero value")
+	want := "## MR Approval Status\n\n" +
+		"- **Approved**: ❌\n" +
+		"- **Approvals Required**: 0\n" +
+		"- **Approvals Given**: 0\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'merge_request.merge' to merge this merge request\n" +
+		"- Use action 'merge_request.get' to see its full details\n"
+	if got := FormatApproveMarkdown(ApproveOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatCommitsMarkdown_Populated verifies FormatCommitsMarkdown when populated.
+// TestFormatCommitsMarkdown_Populated verifies the whole rendering of the
+// commits of a merge request.
 func TestFormatCommitsMarkdown_Populated(t *testing.T) {
-	md := FormatCommitsMarkdown(CommitsOutput{
+	got := FormatCommitsMarkdown(CommitsOutput{
 		Commits: []commits.Output{
-			{ShortID: "abc1234", Title: "feat: add login", AuthorName: "Alice", CommittedDate: testDate20260101},
+			{ShortID: "abc1234", Title: "feat: add login", AuthorName: "Alice", CommittedDate: testDate20260101, WebURL: "https://gitlab.example.com/c/abc1234"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
-	for _, want := range []string{"abc1234", "feat: add login", "Alice", "1 Jan 2026"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatCommitsMarkdown missing %q", want)
-			}
-		})
+	want := "## MR Commits (1)\n\n" +
+		"| Short ID | Title | Author | Date |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| [abc1234](https://gitlab.example.com/c/abc1234) | feat: add login | Alice | 1 Jan 2026 |\n" +
+		"\n1 items total\n" +
+		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
+		"- Use action 'commit.get' to view one of these commits\n" +
+		"- Use action 'mr_review.changes_get' to review the combined diff\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatCommitsMarkdown_Empty verifies FormatCommitsMarkdown when empty.
+// TestFormatCommitsMarkdown_Empty verifies the empty-commits message.
 func TestFormatCommitsMarkdown_Empty(t *testing.T) {
-	md := FormatCommitsMarkdown(CommitsOutput{})
-	if !strings.Contains(md, "No commits found") {
-		t.Error("FormatCommitsMarkdown should say no commits for empty output")
+	want := "No commits found.\n"
+	if got := FormatCommitsMarkdown(CommitsOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatPipelinesMarkdown_Populated verifies FormatPipelinesMarkdown when populated.
+// TestFormatPipelinesMarkdown_Populated verifies the whole rendering of a merge
+// request's pipelines, each status carrying its glyph.
 func TestFormatPipelinesMarkdown_Populated(t *testing.T) {
-	md := FormatPipelinesMarkdown(PipelinesOutput{
-		Pipelines: []pipelines.Output{
-			{ID: 10, Status: "success", Source: "push", Ref: testBranchMain},
-		},
+	got := FormatPipelinesMarkdown(PipelinesOutput{
+		Pipelines: []pipelines.Output{{ID: 10, Status: "success", Source: "push", Ref: testBranchMain}},
 	})
-	for _, want := range []string{"10", "success", "push", testBranchMain} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatPipelinesMarkdown missing %q", want)
-			}
-		})
+	want := "## MR Pipelines (1)\n\n" +
+		"| ID | Status | Source | Ref |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| #10 | ✅ success | push | main |\n" +
+		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
+		"- Use action 'pipeline.get' to view one pipeline's details\n" +
+		"- Use action 'job.list' to see its job statuses\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatPipelinesMarkdown_Empty verifies FormatPipelinesMarkdown when empty.
+// TestFormatPipelinesMarkdown_Empty verifies the empty-pipelines message.
 func TestFormatPipelinesMarkdown_Empty(t *testing.T) {
-	md := FormatPipelinesMarkdown(PipelinesOutput{})
-	if !strings.Contains(md, "No pipelines found") {
-		t.Error("FormatPipelinesMarkdown should say no pipelines for empty output")
+	want := "No pipelines found.\n"
+	if got := FormatPipelinesMarkdown(PipelinesOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatRebaseMarkdown_InProgress verifies FormatRebaseMarkdown when in progress.
+// rebaseHints is the guidance section a rebase result closes with.
+const rebaseHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'merge_request.get' to check whether the rebase has finished\n" +
+	"- Use action 'merge_request.merge' to merge once it has\n"
+
+// TestFormatRebaseMarkdown_InProgress verifies the whole rendering of a rebase
+// that is still running.
 func TestFormatRebaseMarkdown_InProgress(t *testing.T) {
-	md := FormatRebaseMarkdown(RebaseOutput{RebaseInProgress: true})
-	if !strings.Contains(md, "in progress") {
-		t.Error("FormatRebaseMarkdown should indicate rebase in progress")
+	want := "## 🔄 Rebase in progress\n\n" +
+		"- **Rebase in progress**: ✅\n\n" +
+		"The rebase has been initiated and is currently running.\n" + rebaseHints
+	if got := FormatRebaseMarkdown(RebaseOutput{RebaseInProgress: true}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatRebaseMarkdown_Completed verifies FormatRebaseMarkdown when completed.
+// TestFormatRebaseMarkdown_Completed verifies the whole rendering of a rebase
+// that has finished.
 func TestFormatRebaseMarkdown_Completed(t *testing.T) {
-	md := FormatRebaseMarkdown(RebaseOutput{RebaseInProgress: false})
-	if !strings.Contains(md, "completed") {
-		t.Error("FormatRebaseMarkdown should indicate rebase completed")
+	want := "## ✅ Rebase completed\n\n" +
+		"- **Rebase in progress**: ❌\n\n" +
+		"The rebase has finished successfully.\n" + rebaseHints
+	if got := FormatRebaseMarkdown(RebaseOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatParticipantsMarkdown_Populated verifies FormatParticipantsMarkdown when populated.
+// TestFormatParticipantsMarkdown_Populated verifies the whole rendering of the
+// participants of a merge request, each username an "@handle".
 func TestFormatParticipantsMarkdown_Populated(t *testing.T) {
-	md := FormatParticipantsMarkdown(ParticipantsOutput{
+	got := FormatParticipantsMarkdown(ParticipantsOutput{
 		Participants: []ParticipantOutput{
 			{ID: 1, Username: testAuthorAlice, Name: "Alice A", State: testStateActive},
 			{ID: 2, Username: testAuthorBob, Name: "Bob B", State: testStateActive},
 		},
 	})
-	for _, want := range []string{testAuthorAlice, testAuthorBob, "Alice A", "Bob B", testStateActive, "Participants (2)"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatParticipantsMarkdown missing %q", want)
-			}
-		})
+	want := "## MR Participants (2)\n\n" +
+		"| ID | Username | Name | State |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 1 | @alice | Alice A | active |\n" +
+		"| 2 | @bob | Bob B | active |\n" +
+		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
+		"- Use action 'merge_request.get' to view the merge request\n" +
+		"- Use action 'mr_review.note_create' to notify these participants\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatParticipantsMarkdown_Empty verifies FormatParticipantsMarkdown when empty.
+// TestFormatParticipantsMarkdown_Empty verifies the empty-participants message.
 func TestFormatParticipantsMarkdown_Empty(t *testing.T) {
-	md := FormatParticipantsMarkdown(ParticipantsOutput{})
-	if !strings.Contains(md, "No participants found") {
-		t.Error("FormatParticipantsMarkdown should say no participants for empty output")
+	want := "No participants found.\n"
+	if got := FormatParticipantsMarkdown(ParticipantsOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatReviewersMarkdown_Populated verifies FormatReviewersMarkdown when populated.
+// TestFormatReviewersMarkdown_Populated verifies the whole rendering of the
+// reviewers of a merge request.
 func TestFormatReviewersMarkdown_Populated(t *testing.T) {
-	md := FormatReviewersMarkdown(ReviewersOutput{
+	got := FormatReviewersMarkdown(ReviewersOutput{
 		Reviewers: []ReviewerOutput{
 			{ID: 10, Username: testAuthorCarol, Name: "Carol C", State: testStateActive, Review: "reviewed", CreatedAt: "2026-03-01T10:00:00Z"},
 		},
 	})
-	for _, want := range []string{testAuthorCarol, "Carol C", "reviewed", "1 Mar 2026", "Reviewers (1)"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatReviewersMarkdown missing %q", want)
-			}
-		})
+	want := "## MR Reviewers (1)\n\n" +
+		"| ID | Username | Name | Review State | Assigned At |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 10 | @carol | Carol C | reviewed | 1 Mar 2026 10:00 UTC |\n" +
+		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
+		"- Use action 'merge_request.update' to add or change reviewers\n" +
+		"- Use action 'merge_request.approve' to approve the merge request\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatReviewersMarkdown_Empty verifies FormatReviewersMarkdown when empty.
+// TestFormatReviewersMarkdown_Empty verifies the empty-reviewers message.
 func TestFormatReviewersMarkdown_Empty(t *testing.T) {
-	md := FormatReviewersMarkdown(ReviewersOutput{})
-	if !strings.Contains(md, "No reviewers found") {
-		t.Error("FormatReviewersMarkdown should say no reviewers for empty output")
+	want := "No reviewers found.\n"
+	if got := FormatReviewersMarkdown(ReviewersOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatIssuesClosedMarkdown_Populated verifies FormatIssuesClosedMarkdown when populated.
+// TestFormatIssuesClosedMarkdown_Populated verifies the whole rendering of the
+// issues a merge would close, through the issue table both issue listings share.
 func TestFormatIssuesClosedMarkdown_Populated(t *testing.T) {
-	md := FormatIssuesClosedMarkdown(IssuesClosedOutput{
+	got := FormatIssuesClosedMarkdown(IssuesClosedOutput{
 		Issues: []issues.BasicOutput{
 			{IID: 5, Title: "Bug fix", State: testStateOpened, Author: &toolutil.IssueUserOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
-	for _, want := range []string{"Bug fix", testStateOpened, testAuthorAlice, testLabelBug, "#5"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatIssuesClosedMarkdown missing %q", want)
-			}
-		})
+	want := "## Issues Closed on Merge (1)\n\n" +
+		"| IID | Title | State | Author | Labels |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| #5 | Bug fix | 🟢 opened | @alice | bug |\n" +
+		"\n1 items total\n" +
+		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
+		"- Use action 'issue.get' to view one of these issues\n" +
+		"- Use action 'merge_request.merge' to merge and close them\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatIssuesClosedMarkdown_Empty verifies FormatIssuesClosedMarkdown when empty.
+// TestFormatIssuesClosedMarkdown_Empty verifies the empty message.
 func TestFormatIssuesClosedMarkdown_Empty(t *testing.T) {
-	md := FormatIssuesClosedMarkdown(IssuesClosedOutput{})
-	if !strings.Contains(md, "No issues will be closed") {
-		t.Error("FormatIssuesClosedMarkdown should say no issues for empty output")
+	want := "No issues that would be closed on merge found.\n"
+	if got := FormatIssuesClosedMarkdown(IssuesClosedOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatCreatePipelineMarkdown verifies FormatCreatePipelineMarkdown.
+// createPipelineHints is the guidance section a created pipeline closes with.
+const createPipelineHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'pipeline.get' to check the pipeline's progress\n" +
+	"- Use action 'job.list' to monitor its job statuses\n"
+
+// TestFormatCreatePipelineMarkdown verifies the whole rendering of the pipeline
+// a merge request just created.
 func TestFormatCreatePipelineMarkdown(t *testing.T) {
-	md := FormatCreatePipelineMarkdown(pipelines.Output{
+	got := FormatCreatePipelineMarkdown(pipelines.Output{
 		ID: 500, Status: testStatePending, Source: "merge_request_event", Ref: testFeatureBranch,
 		SHA: testSHAAbc, WebURL: "https://gitlab.example.com/pipelines/500",
 	})
-	for _, want := range []string{"500", testStatePending, "merge_request_event", testFeatureBranch, testSHAAbc, "https://gitlab.example.com/pipelines/500"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatCreatePipelineMarkdown missing %q", want)
-			}
-		})
+	want := "## 🟡 Pipeline #500 Created\n\n" +
+		"- **ID**: 500\n" +
+		"- **Status**: 🟡 pending\n" +
+		"- **Source**: merge_request_event\n" +
+		"- **Ref**: feature/login\n" +
+		"- **SHA**: `abc123`\n" +
+		"- **URL**: [https://gitlab.example.com/pipelines/500](https://gitlab.example.com/pipelines/500)\n" +
+		createPipelineHints
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatCreatePipelineMarkdown_Minimal verifies FormatCreatePipelineMarkdown when minimal.
+// TestFormatCreatePipelineMarkdown_Minimal verifies that a pipeline GitLab sent
+// nothing optional for shows no label with nothing after it.
 func TestFormatCreatePipelineMarkdown_Minimal(t *testing.T) {
-	md := FormatCreatePipelineMarkdown(pipelines.Output{ID: 1, Status: "created"})
-	if md == "" {
-		t.Error("FormatCreatePipelineMarkdown returned empty string")
-	}
-	if !strings.Contains(md, "created") {
-		t.Error("FormatCreatePipelineMarkdown should contain status")
+	want := "## 🆕 Pipeline #1 Created\n\n" +
+		"- **ID**: 1\n" +
+		"- **Status**: 🆕 created\n" + createPipelineHints
+	if got := FormatCreatePipelineMarkdown(pipelines.Output{ID: 1, Status: "created"}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatTimeStatsMarkdown_Populated verifies FormatTimeStatsMarkdown when populated.
+// timeStatsHints is the guidance section the time tracking card closes with.
+const timeStatsHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'merge_request.time_estimate_set' to set the estimate\n" +
+	"- Use action 'merge_request.spent_time_add' to log time spent\n"
+
+// TestFormatTimeStatsMarkdown_Populated verifies the whole rendering of the
+// time tracking card: the two durations GitLab renders for a reader and the two
+// counts of seconds they are computed from.
 func TestFormatTimeStatsMarkdown_Populated(t *testing.T) {
-	md := FormatTimeStatsMarkdown(TimeStatsOutput{
+	got := FormatTimeStatsMarkdown(TimeStatsOutput{
 		HumanTimeEstimate: "3h", HumanTotalTimeSpent: "1h30m",
 		TimeEstimate: 10800, TotalTimeSpent: 5400,
 	})
-	for _, want := range []string{"3h", "10800", "1h30m", "5400"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatTimeStatsMarkdown missing %q", want)
-			}
-		})
+	want := "## Time Tracking Stats\n\n" +
+		"- **Estimate**: 3h\n" +
+		"- **Spent**: 1h30m\n" +
+		"- **Estimate (seconds)**: 10800\n" +
+		"- **Spent (seconds)**: 5400\n" + timeStatsHints
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatTimeStatsMarkdown_Empty verifies FormatTimeStatsMarkdown when empty.
+// TestFormatTimeStatsMarkdown_Empty verifies that a merge request nobody has
+// tracked time on says so in words rather than leaving the rows blank.
 func TestFormatTimeStatsMarkdown_Empty(t *testing.T) {
-	md := FormatTimeStatsMarkdown(TimeStatsOutput{})
-	if !strings.Contains(md, "not set") {
-		t.Error("FormatTimeStatsMarkdown should say 'not set' for empty estimate")
-	}
-	if !strings.Contains(md, "none") {
-		t.Error("FormatTimeStatsMarkdown should say 'none' for empty spent")
+	want := "## Time Tracking Stats\n\n" +
+		"- **Estimate**: not set\n" +
+		"- **Spent**: none\n" +
+		"- **Estimate (seconds)**: 0\n" +
+		"- **Spent (seconds)**: 0\n" + timeStatsHints
+	if got := FormatTimeStatsMarkdown(TimeStatsOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatRelatedIssuesMarkdown_Populated verifies FormatRelatedIssuesMarkdown when populated.
+// TestFormatRelatedIssuesMarkdown_Populated verifies the whole rendering of the
+// issues a merge request references.
 func TestFormatRelatedIssuesMarkdown_Populated(t *testing.T) {
-	md := FormatRelatedIssuesMarkdown(RelatedIssuesOutput{
+	got := FormatRelatedIssuesMarkdown(RelatedIssuesOutput{
 		Issues: []issues.BasicOutput{
 			{IID: 10, Title: "Related bug", State: testStateOpened, Author: &toolutil.IssueUserOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug, "critical"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
-	for _, want := range []string{"Related bug", testStateOpened, testAuthorAlice, testLabelBug, "critical", "#10"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatRelatedIssuesMarkdown missing %q", want)
-			}
-		})
+	want := "## Related Issues (1)\n\n" +
+		"| IID | Title | State | Author | Labels |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| #10 | Related bug | 🟢 opened | @alice | bug, critical |\n" +
+		"\n1 items total\n" +
+		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
+		"- Use action 'issue.get' to view one issue's details\n" +
+		"- Use action 'merge_request.related_issues' to list them again after the merge request changes\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatRelatedIssuesMarkdown_Empty verifies FormatRelatedIssuesMarkdown when empty.
+// TestFormatRelatedIssuesMarkdown_Empty verifies the empty message.
 func TestFormatRelatedIssuesMarkdown_Empty(t *testing.T) {
-	md := FormatRelatedIssuesMarkdown(RelatedIssuesOutput{})
-	if !strings.Contains(md, "No related issues found") {
-		t.Error("FormatRelatedIssuesMarkdown should say no related issues for empty output")
+	want := "No related issues found.\n"
+	if got := FormatRelatedIssuesMarkdown(RelatedIssuesOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatCreateTodoMarkdown_Populated verifies FormatCreateTodoMarkdown when populated.
+// todoHints is the guidance section a created to-do closes with.
+const todoHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'merge_request.get' to view the merge request this is about\n" +
+	"- Use action 'user.todo_mark_done' to mark this todo as completed\n"
+
+// TestFormatCreateTodoMarkdown_Populated verifies the whole rendering of the
+// to-do a merge request just created.
 func TestFormatCreateTodoMarkdown_Populated(t *testing.T) {
-	md := FormatCreateTodoMarkdown(CreateTodoOutput{
+	got := FormatCreateTodoMarkdown(CreateTodoOutput{
 		ID: 42, ActionName: testActionMarked, TargetType: testTargetTypeMR,
 		TargetTitle: testMRTitle, TargetURL: testMRWebURL,
 		State: testStatePending,
 	})
-	for _, want := range []string{"42", testActionMarked, testTargetTypeMR, testMRTitle, testMRWebURL, testStatePending} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatCreateTodoMarkdown missing %q", want)
-			}
-		})
+	want := "## Todo #42\n\n" +
+		"- **ID**: 42\n" +
+		"- **Action**: marked\n" +
+		"- **Target Type**: MergeRequest\n" +
+		"- **Target**: " + testMRTitle + "\n" +
+		"- **State**: pending\n" +
+		"- **URL**: [" + testMRWebURL + "](" + testMRWebURL + ")\n" + todoHints
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatCreateTodoMarkdown_Empty verifies FormatCreateTodoMarkdown when empty.
+// TestFormatCreateTodoMarkdown_Empty verifies that a zero to-do shows only the
+// one field whose zero is an answer.
 func TestFormatCreateTodoMarkdown_Empty(t *testing.T) {
-	md := FormatCreateTodoMarkdown(CreateTodoOutput{})
-	if md == "" {
-		t.Error("FormatCreateTodoMarkdown returned empty string for zero value")
+	want := "## Todo #0\n\n- **ID**: 0\n" + todoHints
+	if got := FormatCreateTodoMarkdown(CreateTodoOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -2250,54 +2399,94 @@ func TestFormatCreateTodoMarkdown_ClickableURL(t *testing.T) {
 	}
 }
 
-// TestFormatDependencyMarkdown_Populated verifies FormatDependencyMarkdown when populated.
+// dependencyHints is the guidance section a dependency card closes with.
+const dependencyHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'merge_request.get' to view either merge request in full\n" +
+	"- Use action 'merge_request.dependencies_list' to list every dependency of this merge request\n"
+
+// TestFormatDependencyMarkdown_Populated verifies the whole rendering of one
+// dependency, with the blocking merge request as a nested object under its
+// label rather than as rows of its own.
 func TestFormatDependencyMarkdown_Populated(t *testing.T) {
-	md := FormatDependencyMarkdown(DependencyOutput{
+	got := FormatDependencyMarkdown(DependencyOutput{
 		ID: 1,
 		BlockingMergeRequest: &BlockingMergeRequestOutput{
 			ID: 100, IID: 10, Title: testBlockerTitle, State: testStateOpened,
 			SourceBranch: testBranchFeatA, TargetBranch: testBranchMain,
+			WebURL: "https://gitlab.example.com/mr/10",
 		},
 	})
-	for _, want := range []string{testBlockerTitle, "!10", testStateOpened, testBranchFeatA, testBranchMain} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatDependencyMarkdown missing %q", want)
-			}
-		})
+	want := "## MR Dependency #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Blocking MR**:\n" +
+		"  - **Reference**: [!10](https://gitlab.example.com/mr/10)\n" +
+		"  - **ID**: 100\n" +
+		"  - **Title**: " + testBlockerTitle + "\n" +
+		"  - **State**: 🟢 opened\n" +
+		"  - **Source**: " + testBranchFeatA + "\n" +
+		"  - **Target**: main\n" + dependencyHints
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatDependencyMarkdown_Empty verifies FormatDependencyMarkdown when empty.
+// TestFormatDependencyMarkdown_Empty verifies that a dependency GitLab sent no
+// merge request for opens no empty nested object.
 func TestFormatDependencyMarkdown_Empty(t *testing.T) {
-	md := FormatDependencyMarkdown(DependencyOutput{})
-	if md == "" {
-		t.Error("FormatDependencyMarkdown returned empty string for zero value")
+	want := "## MR Dependency #0\n\n- **ID**: 0\n" + dependencyHints
+	if got := FormatDependencyMarkdown(DependencyOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatDependenciesMarkdown_Populated verifies FormatDependenciesMarkdown when populated.
+// TestFormatDependencyMarkdown_BlockedEnd verifies that the other end of a
+// dependency — the merge request this one blocks, which client-go does not
+// model and the capture reads (ADR-0021) — is rendered when GitLab sends it.
+func TestFormatDependencyMarkdown_BlockedEnd(t *testing.T) {
+	got := FormatDependencyMarkdown(DependencyOutput{
+		ID: 2, ProjectID: 42,
+		BlockedMergeRequest: &BlockingMergeRequestOutput{ID: 7, IID: 3, Title: "Waits on it", State: testStateOpened},
+	})
+	want := "## MR Dependency #2\n\n" +
+		"- **ID**: 2\n" +
+		"- **Project ID**: 42\n" +
+		"- **Blocked MR**:\n" +
+		"  - **Reference**: !3\n" +
+		"  - **ID**: 7\n" +
+		"  - **Title**: Waits on it\n" +
+		"  - **State**: 🟢 opened\n" + dependencyHints
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatDependenciesMarkdown_Populated verifies the whole rendering of the
+// dependency listing, each blocker linked by its reference.
 func TestFormatDependenciesMarkdown_Populated(t *testing.T) {
-	md := FormatDependenciesMarkdown(DependenciesOutput{
+	got := FormatDependenciesMarkdown(DependenciesOutput{
 		Dependencies: []DependencyOutput{
 			{ID: 1, BlockingMergeRequest: &BlockingMergeRequestOutput{IID: 10, Title: testDepTitleA, State: testStateOpened}},
 			{ID: 2, BlockingMergeRequest: &BlockingMergeRequestOutput{IID: 20, Title: "Dep B", State: testStateMerged}},
 		},
 	})
-	for _, want := range []string{testDepTitleA, "Dep B", "!10", "!20", testStateOpened, testStateMerged, "Dependencies (2)"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatDependenciesMarkdown missing %q", want)
-			}
-		})
+	want := "## MR Dependencies (2)\n\n" +
+		"| ID | Blocking MR | Title | State |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 1 | !10 | Dep A | 🟢 opened |\n" +
+		"| 2 | !20 | Dep B | 🟣 merged |\n" +
+		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
+		"- Use action 'merge_request.get' to view a blocking merge request\n" +
+		"- Use action 'merge_request.merge' to merge a blocker to clear the dependency\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatDependenciesMarkdown_Empty verifies FormatDependenciesMarkdown when empty.
+// TestFormatDependenciesMarkdown_Empty verifies the empty message.
 func TestFormatDependenciesMarkdown_Empty(t *testing.T) {
-	md := FormatDependenciesMarkdown(DependenciesOutput{})
-	if !strings.Contains(md, "No dependencies found") {
-		t.Error("FormatDependenciesMarkdown should say no dependencies for empty output")
+	want := "No dependencies found.\n"
+	if got := FormatDependenciesMarkdown(DependenciesOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
