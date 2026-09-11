@@ -179,7 +179,6 @@ func TestNormalizeActionAlias_UsesCompatibilityPolicy(t *testing.T) {
 		"gitlab_package/publish_directory":      "package.publish_directory",
 		"gitlab_release/create":                 "release.create",
 		"gitlab_release_link/link_create_batch": "release.link_create_batch",
-		"group.group_board_list":                "group.epic_board_list",
 		"group.epic_discussion_note_update":     "group.epic_discussion_update_note",
 		"group.epic_discussion_note_delete":     "group.epic_discussion_delete_note",
 		"service_account.delete":                "group.service_account_delete",

@@ -7,11 +7,13 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -111,6 +113,85 @@ func TestMakeMetaHandler_ValidAction(t *testing.T) {
 	}
 	if result != "42" {
 		t.Errorf("expected 42, got %v", result)
+	}
+}
+
+// TestMetaCatalog_GroupBoardListAsksForTheIssueBoardsOnEveryTier verifies that
+// gitlab_group/group_board_list requests the group's issue boards on every
+// licensing tier.
+//
+// A licensed catalog also routes epic_board_list on gitlab_group, and an alias
+// mapping the first name to the second used to send the call to
+// /groups/:id/epic_boards on Premium and Ultimate. The mock answers any path
+// and records the one asked, so the test fails on the request rather than on a
+// rendering.
+func TestMetaCatalog_GroupBoardListAsksForTheIssueBoardsOnEveryTier(t *testing.T) {
+	for _, tier := range []edition.Tier{edition.Free, edition.Premium, edition.Ultimate} {
+		t.Run(tier.String(), func(t *testing.T) {
+			var asked atomic.Value
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				asked.Store(r.URL.Path)
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+			}))
+			catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Tier: tier})
+			if err != nil {
+				t.Fatalf("BuildActionCatalog(%s) error = %v", tier, err)
+			}
+			handler := toolutil.MakeMetaHandler("gitlab_group", catalog.ActionMaps()["gitlab_group"], markdownForResult)
+
+			result, _, err := handler(context.Background(), nil, MetaToolInput{Action: "group_board_list", Params: map[string]any{"group_id": "7"}})
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			if result != nil && result.IsError {
+				t.Fatalf("group_board_list returned a tool error: %#v", result.Content)
+			}
+			if got, _ := asked.Load().(string); got != "/api/v4/groups/7/boards" {
+				t.Fatalf("group_board_list asked GitLab for %q, want /api/v4/groups/7/boards", got)
+			}
+		})
+	}
+}
+
+// sameHandlerActionAliases lists the aliases of the meta alias table whose name
+// is also an action of its own because both names are registered with one
+// handler, so rewriting one into the other changes nothing a caller can see.
+var sameHandlerActionAliases = map[string]string{
+	// user.me is user.current registered under a friendlier name: both route
+	// to users.Current.
+	"me": "current",
+}
+
+// TestActionAliasTable_SpellsNoActionOfItsOwn verifies that no entry of the
+// meta alias table is the name of a different action, on any licensing tier.
+//
+// An alias is another spelling of one action. A name the catalog routes as an
+// action of its own, or a canonical ID, is not a spelling of anything else:
+// rewriting it runs a handler the caller did not name, which is what
+// group_board_list did on a licensed instance until the dispatcher stopped
+// rewriting routed names. The dispatcher guard keeps the meta surface safe
+// either way; this keeps the table honest for the evaluator, which applies it
+// without knowing the catalog.
+func TestActionAliasTable_SpellsNoActionOfItsOwn(t *testing.T) {
+	for _, tier := range []edition.Tier{edition.Free, edition.Premium, edition.Ultimate} {
+		t.Run(tier.String(), func(t *testing.T) {
+			catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{Tier: tier, IncludeMCP: true})
+			if err != nil {
+				t.Fatalf("BuildActionCatalog(%s) error = %v", tier, err)
+			}
+			names := make(map[string]struct{})
+			for _, action := range catalog.Actions() {
+				names[string(action.ID)] = struct{}{}
+				names[action.Name] = struct{}{}
+			}
+			for name := range names {
+				target, ok := toolutil.ActionAliasTarget(name)
+				if !ok || target == name || sameHandlerActionAliases[name] == target {
+					continue
+				}
+				t.Errorf("alias %q -> %q: %q is an action of its own", name, target, name)
+			}
+		})
 	}
 }
 

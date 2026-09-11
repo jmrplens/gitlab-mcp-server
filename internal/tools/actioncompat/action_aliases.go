@@ -20,7 +20,6 @@ const (
 	actionBranchProtect                  = "branch.protect"
 	actionExternalStatusCheckListProject = "external_status_check.list_project"
 	actionFeatureFlagUserListList        = "feature_flags.ff_user_list_list"
-	actionGroupEpicBoardList             = "group.epic_board_list"
 	actionGroupEpicDiscussionUpdateNote  = "group.epic_discussion_update_note"
 	actionGroupEpicDiscussionDeleteNote  = "group.epic_discussion_delete_note"
 	actionGroupLabelUpdate               = "group.group_label_update"
@@ -104,7 +103,6 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("branch.protected_list", "branch.get_protected"),
 		compatActionAlias("branch.update_protection", "branch.update_protected"),
 		compatActionAlias("enterprise_user.group_list", "enterprise_user.list"),
-		compatActionAlias("external_status_check.list_project_checks", actionExternalStatusCheckListProject),
 		compatActionAlias("feature_flag.list", "feature_flags.feature_flag_list"),
 		compatActionAlias("geo.node_list", "geo.list"),
 		compatActionAlias("gitlab_server.health_check", "server.health_check"),
@@ -119,10 +117,8 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("gitlab_issue.create", "issue.create"),
 		compatActionAlias("gitlab_issue.delete", "issue.delete"),
 		compatActionAlias("group.custom_member_roles_list", "member_role.list_group"),
-		compatActionAlias("group.group_board_list", actionGroupEpicBoardList),
 		compatActionAlias("group.epic_discussion_note_update", actionGroupEpicDiscussionUpdateNote),
 		compatActionAlias("group.epic_discussion_note_delete", actionGroupEpicDiscussionDeleteNote),
-		compatActionAlias("group.ldap_link_delete", "group.ldap_link_delete_for_provider"),
 		compatActionAlias("issue.note.create", "issue.note_create"),
 		compatActionAlias("issue.note.delete", "issue.note_delete"),
 		compatActionAlias("issue.note.get", "issue.note_get"),

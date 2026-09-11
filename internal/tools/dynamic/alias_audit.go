@@ -31,9 +31,10 @@ type CatalogDiscoveryFinding struct {
 }
 
 // AuditDefaultActionAliases returns governance findings for catalog-projected
-// compatibility aliases. It reports duplicate alias/canonical pairs, aliases
-// that map to missing canonical actions when a catalog is provided, and
-// ambiguous aliases that resolve to multiple canonical IDs.
+// compatibility aliases. It reports duplicate alias/canonical pairs, and when a
+// catalog is provided, aliases that map to missing canonical actions and
+// aliases spelled like another action's canonical ID; and ambiguous aliases
+// that resolve to multiple canonical IDs.
 //
 // Severity levels in the returned AliasAuditFinding values are interpreted as
 // follows: "error" for definite violations, "warning" for ambiguous alias
@@ -173,6 +174,13 @@ func detectAliasErrors(aliases []actionAlias, canonicalIDs map[string]struct{}, 
 		if validateCanonicalTarget {
 			if _, ok := canonicalIDs[alias.Canonical]; !ok {
 				findings = append(findings, aliasFinding("error", "non_canonical_target", alias, "alias target is not present in the canonical action catalog"))
+			}
+			// An alias spelled like another action's canonical ID never
+			// reaches its target, since execution resolves the canonical ID
+			// first, and what it does instead is offer that other action's
+			// name as a way to find this one.
+			if _, ok := canonicalIDs[alias.Alias]; ok && alias.Alias != alias.Canonical {
+				findings = append(findings, aliasFinding("error", "alias_names_another_action", alias, "alias is the canonical ID of another action"))
 			}
 		}
 		if !alias.searchable() {
