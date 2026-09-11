@@ -237,8 +237,8 @@ func TestGroupInvites_BadRequest(t *testing.T) {
 func TestFormatListPendingMarkdownString_WithInvitations(t *testing.T) {
 	out := ListPendingInvitationsOutput{
 		Invitations: []PendingInviteOutput{
-			{ID: 1, InviteEmail: "alice@example.com", AccessLevel: 30, UserName: "alice", ExpiresAt: "2026-12-31T00:00:00Z"},
-			{ID: 2, InviteEmail: "bob@example.com", AccessLevel: 40},
+			{InviteEmail: "alice@example.com", AccessLevel: 30, UserName: "alice", ExpiresAt: "2026-12-31T00:00:00Z"},
+			{InviteEmail: "bob@example.com", AccessLevel: 40},
 		},
 	}
 	md := FormatListPendingMarkdownString(out)
@@ -512,8 +512,21 @@ func TestToPendingInviteOutput_WithDates(t *testing.T) {
 		ExpiresAt:     &expires,
 	}
 	out := toPendingInviteOutput(inv, toolutil.InvitationExtra{})
-	if out.ID != 10 {
-		t.Errorf("ID = %d, want 10", out.ID)
+	// The source above carries an ID and the output must not. client-go's
+	// PendingInvite models one; lib/api/entities/invitation.rb exposes exactly
+	// access_level, created_at, expires_at, invite_email, invite_token,
+	// user_name and created_by_name, so no invitation response can hold an id
+	// and the field emitted "id": 0 on every row.
+	//
+	// Asserted on the marshaled form because that is where publishing it
+	// again would show, and because the struct field is gone: a compile error
+	// is what a reader would meet instead of a failing assertion.
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshaling the output: %v", err)
+	}
+	if strings.Contains(string(encoded), `"id"`) {
+		t.Errorf("the invitation output carries an id key: %s", encoded)
 	}
 	if out.CreatedAt == "" {
 		t.Error("expected non-empty CreatedAt")
@@ -543,9 +556,6 @@ func TestToPendingInviteOutput_NilDates(t *testing.T) {
 		AccessLevel: gl.ReporterPermissions,
 	}
 	out := toPendingInviteOutput(inv, toolutil.InvitationExtra{})
-	if out.ID != 20 {
-		t.Errorf("ID = %d, want 20", out.ID)
-	}
 	if out.CreatedAt != "" {
 		t.Errorf("expected empty CreatedAt, got %q", out.CreatedAt)
 	}
@@ -609,7 +619,7 @@ func TestFormatInviteResultMarkdownString_EmptyMessages(t *testing.T) {
 func TestFormatListPendingMarkdown_ReturnsCallToolResult(t *testing.T) {
 	out := ListPendingInvitationsOutput{
 		Invitations: []PendingInviteOutput{
-			{ID: 1, InviteEmail: "test@example.com", AccessLevel: 30},
+			{InviteEmail: "test@example.com", AccessLevel: 30},
 		},
 	}
 	result := FormatListPendingMarkdown(out)
@@ -1241,7 +1251,7 @@ func TestInvites_OptionalParametersReachTheRequestOnlyWhenGiven(t *testing.T) {
 func TestFormatListPendingMarkdownString_OptionalColumns(t *testing.T) {
 	withBoth := FormatListPendingMarkdownString(ListPendingInvitationsOutput{
 		Invitations: []PendingInviteOutput{{
-			ID: 1, InviteEmail: "alice@example.com", AccessLevel: 30,
+			InviteEmail: "alice@example.com", AccessLevel: 30,
 			UserName: "alice", ExpiresAt: "2027-01-31T00:00:00Z",
 		}},
 	})
@@ -1253,7 +1263,7 @@ func TestFormatListPendingMarkdownString_OptionalColumns(t *testing.T) {
 		})
 	}
 	withNeither := FormatListPendingMarkdownString(ListPendingInvitationsOutput{
-		Invitations: []PendingInviteOutput{{ID: 1, InviteEmail: "alice@example.com", AccessLevel: 30}},
+		Invitations: []PendingInviteOutput{{InviteEmail: "alice@example.com", AccessLevel: 30}},
 	})
 	for _, absent := range []string{"User:", "Expires:"} {
 		t.Run("without "+absent, func(t *testing.T) {
@@ -1270,7 +1280,7 @@ func TestFormatListPendingMarkdownString_OptionalColumns(t *testing.T) {
 func TestPendingInvitations_MarkdownLeavesTheTokenOut(t *testing.T) {
 	md := FormatListPendingMarkdownString(ListPendingInvitationsOutput{
 		Invitations: []PendingInviteOutput{{
-			ID: 1, InviteEmail: "alice@example.com", InviteToken: "tok-alice", AccessLevel: 30,
+			InviteEmail: "alice@example.com", InviteToken: "tok-alice", AccessLevel: 30,
 		}},
 	})
 	if strings.Contains(md, "tok-alice") {

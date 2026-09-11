@@ -42102,12 +42102,6 @@
             "deployment_events": {
               "type": "boolean"
             },
-            "group_confidential_mention_events": {
-              "type": "boolean"
-            },
-            "group_mention_events": {
-              "type": "boolean"
-            },
             "id": {
               "type": "integer"
             },
@@ -42204,8 +42198,6 @@
             "confidential_issues_events",
             "confidential_note_events",
             "deployment_events",
-            "group_confidential_mention_events",
-            "group_mention_events",
             "incident_events",
             "issues_events",
             "job_events",
@@ -42535,12 +42527,6 @@
             "deployment_events": {
               "type": "boolean"
             },
-            "group_confidential_mention_events": {
-              "type": "boolean"
-            },
-            "group_mention_events": {
-              "type": "boolean"
-            },
             "id": {
               "type": "integer"
             },
@@ -42597,8 +42583,6 @@
             "confidential_issues_events",
             "confidential_note_events",
             "deployment_events",
-            "group_confidential_mention_events",
-            "group_mention_events",
             "incident_events",
             "issues_events",
             "job_events",
@@ -43563,12 +43547,6 @@
             "deployment_events": {
               "type": "boolean"
             },
-            "group_confidential_mention_events": {
-              "type": "boolean"
-            },
-            "group_mention_events": {
-              "type": "boolean"
-            },
             "id": {
               "type": "integer"
             },
@@ -43625,8 +43603,6 @@
             "confidential_issues_events",
             "confidential_note_events",
             "deployment_events",
-            "group_confidential_mention_events",
-            "group_mention_events",
             "incident_events",
             "issues_events",
             "job_events",
@@ -59142,9 +59118,6 @@
               "expires_at": {
                 "type": "string"
               },
-              "id": {
-                "type": "integer"
-              },
               "invite_email": {
                 "type": "string"
               },
@@ -59156,7 +59129,6 @@
               }
             },
             "required": [
-              "id",
               "invite_email",
               "access_level"
             ],
@@ -78867,9 +78839,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -79633,7 +79602,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",
@@ -91266,47 +91234,6 @@
               "imported_from": {
                 "type": "string"
               },
-              "label_details": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "color": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "description_html": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "text_color": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "name",
-                    "color",
-                    "description",
-                    "description_html",
-                    "text_color"
-                  ],
-                  "type": [
-                    "null",
-                    "object"
-                  ]
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
               "labels": {
                 "items": {
                   "type": "string"
@@ -91668,7 +91595,6 @@
               "closed_by",
               "milestone",
               "labels",
-              "label_details",
               "references",
               "time_stats",
               "task_completion_status",
@@ -92032,47 +91958,6 @@
               "imported_from": {
                 "type": "string"
               },
-              "label_details": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "color": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "description_html": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "text_color": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "name",
-                    "color",
-                    "description",
-                    "description_html",
-                    "text_color"
-                  ],
-                  "type": [
-                    "null",
-                    "object"
-                  ]
-                },
-                "type": [
-                  "null",
-                  "array"
-                ]
-              },
               "labels": {
                 "items": {
                   "type": "string"
@@ -92434,7 +92319,6 @@
               "closed_by",
               "milestone",
               "labels",
-              "label_details",
               "references",
               "time_stats",
               "task_completion_status",
@@ -98144,15 +98028,6 @@
               "issue_id": {
                 "type": "integer"
               },
-              "resource_id": {
-                "type": "integer"
-              },
-              "resource_type": {
-                "type": "string"
-              },
-              "state": {
-                "type": "string"
-              },
               "user": {
                 "additionalProperties": false,
                 "properties": {
@@ -98198,9 +98073,6 @@
             "required": [
               "id",
               "created_at",
-              "resource_type",
-              "resource_id",
-              "state",
               "issue_id",
               "weight"
             ],
@@ -110600,12 +110472,6 @@
               "deployment_events": {
                 "type": "boolean"
               },
-              "group_confidential_mention_events": {
-                "type": "boolean"
-              },
-              "group_mention_events": {
-                "type": "boolean"
-              },
               "id": {
                 "type": "integer"
               },
@@ -110662,8 +110528,6 @@
               "confidential_issues_events",
               "confidential_note_events",
               "deployment_events",
-              "group_confidential_mention_events",
-              "group_mention_events",
               "incident_events",
               "issues_events",
               "job_events",
@@ -113546,12 +113410,6 @@
               "deployment_events": {
                 "type": "boolean"
               },
-              "group_confidential_mention_events": {
-                "type": "boolean"
-              },
-              "group_mention_events": {
-                "type": "boolean"
-              },
               "id": {
                 "type": "integer"
               },
@@ -113608,8 +113466,6 @@
               "confidential_issues_events",
               "confidential_note_events",
               "deployment_events",
-              "group_confidential_mention_events",
-              "group_mention_events",
               "incident_events",
               "issues_events",
               "job_events",
@@ -163732,9 +163588,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -164498,7 +164351,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",
@@ -165233,9 +165085,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -165999,7 +165848,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",
@@ -166739,9 +166587,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -167505,7 +167350,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",
@@ -167688,9 +167532,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -168454,7 +168295,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",
@@ -169929,9 +169769,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -170695,7 +170532,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",
@@ -170894,9 +170730,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -171660,7 +171493,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",
@@ -173646,9 +173478,6 @@
               "expires_at": {
                 "type": "string"
               },
-              "id": {
-                "type": "integer"
-              },
               "invite_email": {
                 "type": "string"
               },
@@ -173660,7 +173489,6 @@
               }
             },
             "required": [
-              "id",
               "invite_email",
               "access_level"
             ],
@@ -174180,9 +174008,6 @@
               "ci_job_token_scope_enabled": {
                 "type": "boolean"
               },
-              "ci_opt_in_jwt": {
-                "type": "boolean"
-              },
               "ci_pipeline_variables_minimum_override_role": {
                 "type": "string"
               },
@@ -174946,7 +174771,6 @@
               "ci_push_repository_for_job_token_allowed",
               "ci_separated_caches",
               "ci_job_token_scope_enabled",
-              "ci_opt_in_jwt",
               "ci_allow_fork_pipelines_to_run_in_parent_project",
               "auto_devops_enabled",
               "keep_latest_artifact",
@@ -175342,9 +175166,6 @@
               "ci_job_token_scope_enabled": {
                 "type": "boolean"
               },
-              "ci_opt_in_jwt": {
-                "type": "boolean"
-              },
               "ci_pipeline_variables_minimum_override_role": {
                 "type": "string"
               },
@@ -176108,7 +175929,6 @@
               "ci_push_repository_for_job_token_allowed",
               "ci_separated_caches",
               "ci_job_token_scope_enabled",
-              "ci_opt_in_jwt",
               "ci_allow_fork_pipelines_to_run_in_parent_project",
               "auto_devops_enabled",
               "keep_latest_artifact",
@@ -177173,9 +176993,6 @@
               "ci_job_token_scope_enabled": {
                 "type": "boolean"
               },
-              "ci_opt_in_jwt": {
-                "type": "boolean"
-              },
               "ci_pipeline_variables_minimum_override_role": {
                 "type": "string"
               },
@@ -177939,7 +177756,6 @@
               "ci_push_repository_for_job_token_allowed",
               "ci_separated_caches",
               "ci_job_token_scope_enabled",
-              "ci_opt_in_jwt",
               "ci_allow_fork_pipelines_to_run_in_parent_project",
               "auto_devops_enabled",
               "keep_latest_artifact",
@@ -178380,9 +178196,6 @@
               "ci_job_token_scope_enabled": {
                 "type": "boolean"
               },
-              "ci_opt_in_jwt": {
-                "type": "boolean"
-              },
               "ci_pipeline_variables_minimum_override_role": {
                 "type": "string"
               },
@@ -179146,7 +178959,6 @@
               "ci_push_repository_for_job_token_allowed",
               "ci_separated_caches",
               "ci_job_token_scope_enabled",
-              "ci_opt_in_jwt",
               "ci_allow_fork_pipelines_to_run_in_parent_project",
               "auto_devops_enabled",
               "keep_latest_artifact",
@@ -179587,9 +179399,6 @@
               "ci_job_token_scope_enabled": {
                 "type": "boolean"
               },
-              "ci_opt_in_jwt": {
-                "type": "boolean"
-              },
               "ci_pipeline_variables_minimum_override_role": {
                 "type": "string"
               },
@@ -180353,7 +180162,6 @@
               "ci_push_repository_for_job_token_allowed",
               "ci_separated_caches",
               "ci_job_token_scope_enabled",
-              "ci_opt_in_jwt",
               "ci_allow_fork_pipelines_to_run_in_parent_project",
               "auto_devops_enabled",
               "keep_latest_artifact",
@@ -182648,9 +182456,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -183414,7 +183219,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",
@@ -185660,9 +185464,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -186426,7 +186227,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",
@@ -186710,9 +186510,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -187476,7 +187273,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",
@@ -187654,9 +187450,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -188420,7 +188213,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",
@@ -188598,9 +188390,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -189364,7 +189153,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",
@@ -190215,9 +190003,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -190981,7 +190766,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",
@@ -191247,9 +191031,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -192013,7 +191794,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",
@@ -210149,9 +209929,6 @@
               "ci_job_token_scope_enabled": {
                 "type": "boolean"
               },
-              "ci_opt_in_jwt": {
-                "type": "boolean"
-              },
               "ci_pipeline_variables_minimum_override_role": {
                 "type": "string"
               },
@@ -210915,7 +210692,6 @@
               "ci_push_repository_for_job_token_allowed",
               "ci_separated_caches",
               "ci_job_token_scope_enabled",
-              "ci_opt_in_jwt",
               "ci_allow_fork_pipelines_to_run_in_parent_project",
               "auto_devops_enabled",
               "keep_latest_artifact",
@@ -211803,12 +211579,6 @@
             "deployment_events": {
               "type": "boolean"
             },
-            "group_confidential_mention_events": {
-              "type": "boolean"
-            },
-            "group_mention_events": {
-              "type": "boolean"
-            },
             "id": {
               "type": "integer"
             },
@@ -211905,8 +211675,6 @@
             "confidential_issues_events",
             "confidential_note_events",
             "deployment_events",
-            "group_confidential_mention_events",
-            "group_mention_events",
             "incident_events",
             "issues_events",
             "job_events",
@@ -212001,12 +211769,6 @@
             "deployment_events": {
               "type": "boolean"
             },
-            "group_confidential_mention_events": {
-              "type": "boolean"
-            },
-            "group_mention_events": {
-              "type": "boolean"
-            },
             "id": {
               "type": "integer"
             },
@@ -212063,8 +211825,6 @@
             "confidential_issues_events",
             "confidential_note_events",
             "deployment_events",
-            "group_confidential_mention_events",
-            "group_mention_events",
             "incident_events",
             "issues_events",
             "job_events",
@@ -212159,12 +211919,6 @@
             "deployment_events": {
               "type": "boolean"
             },
-            "group_confidential_mention_events": {
-              "type": "boolean"
-            },
-            "group_mention_events": {
-              "type": "boolean"
-            },
             "id": {
               "type": "integer"
             },
@@ -212221,8 +211975,6 @@
             "confidential_issues_events",
             "confidential_note_events",
             "deployment_events",
-            "group_confidential_mention_events",
-            "group_mention_events",
             "incident_events",
             "issues_events",
             "job_events",
@@ -212459,12 +212211,6 @@
             "deployment_events": {
               "type": "boolean"
             },
-            "group_confidential_mention_events": {
-              "type": "boolean"
-            },
-            "group_mention_events": {
-              "type": "boolean"
-            },
             "id": {
               "type": "integer"
             },
@@ -212521,8 +212267,6 @@
             "confidential_issues_events",
             "confidential_note_events",
             "deployment_events",
-            "group_confidential_mention_events",
-            "group_mention_events",
             "incident_events",
             "issues_events",
             "job_events",

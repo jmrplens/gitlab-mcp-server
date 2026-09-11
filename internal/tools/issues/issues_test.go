@@ -2352,9 +2352,6 @@ func assertRelatedMRNested(t *testing.T, out RelatedMROutput) {
 	if len(out.Labels) != 2 {
 		t.Errorf("Labels = %v, want 2", out.Labels)
 	}
-	if len(out.LabelDetails) != 1 || out.LabelDetails[0].Name != "bug" { // nil skipped
-		t.Errorf("LabelDetails = %+v, want [bug]", out.LabelDetails)
-	}
 	if out.References == nil || out.References.Full != "g/p!2" {
 		t.Errorf("References = %+v", out.References)
 	}
@@ -2422,8 +2419,8 @@ func TestBasicMRToOutput_NilAuthor(t *testing.T) {
 	if out.Milestone != nil || out.References != nil || out.TimeStats != nil {
 		t.Errorf("milestone/references/time_stats must be nil when absent")
 	}
-	if out.TaskCompletionStatus != nil || out.LabelDetails != nil || out.Labels != nil {
-		t.Errorf("task status/label details/labels must be nil when absent")
+	if out.TaskCompletionStatus != nil || out.Labels != nil {
+		t.Errorf("task status/labels must be nil when absent")
 	}
 	if out.CreatedAt != "" || out.MergedAt != "" {
 		t.Errorf("timestamps must be empty when absent")

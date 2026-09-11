@@ -773,19 +773,19 @@ It runs `--auth-mode=oauth`, so the credential travels as `Authorization: Bearer
 }
 ```
 
-| Property        | Value                                                                                                                                                                                                   |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Transport       | Stateless streamable HTTP (`--stateless`); an authenticated `GET`/`DELETE` answers `405`                                                                                                                |
-| Tool surface    | `dynamic` (`gitlab_find_action`, `gitlab_execute_action`)                                                                                                                                               |
-| Auth mode       | `oauth` — `Authorization: Bearer` per request, never stored server-side                                                                                                                                 |
-| No credential   | Any method answers `401` with `WWW-Authenticate: Bearer … resource_metadata=…`                                                                                                                          |
-| `PRIVATE-TOKEN` | Not accepted — it is the legacy-mode header                                                                                                                                                             |
-| `GITLAB-URL`    | Ignored; this deployment fixes the instance to `https://gitlab.com`                                                                                                                                     |
-| Scopes          | `api` for the full surface; a `read_api` token is admitted and served a read-only one                                                                                                                   |
-| Health          | `GET https://mcp.jmrp.io/gitlab/health` → `200` with `{"status":"ok",…}`                                                                                                                                |
-| Server card     | [`https://mcp.jmrp.io/servers/gitlab/`](https://mcp.jmrp.io/servers/gitlab/) — the catalog and per-client config, unauthenticated                                                                       |
-| MCP server card | `GET https://mcp.jmrp.io/gitlab/server-card` → `200 application/mcp-server-card+json`, unauthenticated: the SEP-2127 card, identity and how to connect, no primitives                                   |
-| MCP catalog     | `GET https://mcp.jmrp.io/gitlab/.well-known/mcp/server-card.json` → `200 application/json`, unauthenticated: the earlier enumerating document, with every tool, prompt and resource                      |
+| Property        | Value                                                                                                                                                                               |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transport       | Stateless streamable HTTP (`--stateless`); an authenticated `GET`/`DELETE` answers `405`                                                                                            |
+| Tool surface    | `dynamic` (`gitlab_find_action`, `gitlab_execute_action`)                                                                                                                           |
+| Auth mode       | `oauth` — `Authorization: Bearer` per request, never stored server-side                                                                                                             |
+| No credential   | Any method answers `401` with `WWW-Authenticate: Bearer … resource_metadata=…`                                                                                                      |
+| `PRIVATE-TOKEN` | Not accepted — it is the legacy-mode header                                                                                                                                         |
+| `GITLAB-URL`    | Ignored; this deployment fixes the instance to `https://gitlab.com`                                                                                                                 |
+| Scopes          | `api` for the full surface; a `read_api` token is admitted and served a read-only one                                                                                               |
+| Health          | `GET https://mcp.jmrp.io/gitlab/health` → `200` with `{"status":"ok",…}`                                                                                                            |
+| Server card     | [`https://mcp.jmrp.io/servers/gitlab/`](https://mcp.jmrp.io/servers/gitlab/) — the catalog and per-client config, unauthenticated                                                   |
+| MCP server card | `GET https://mcp.jmrp.io/gitlab/server-card` → `200 application/mcp-server-card+json`, unauthenticated: the SEP-2127 card, identity and how to connect, no primitives               |
+| MCP catalog     | `GET https://mcp.jmrp.io/gitlab/.well-known/mcp/server-card.json` → `200 application/json`, unauthenticated: the earlier enumerating document, with every tool, prompt and resource |
 
 Because it is multi-tenant, each distinct token+URL pair gets its own pooled MCP server (see [Server Pool](#server-pool)). A `read_api` token is admitted and served a read-only surface rather than refused, so a credential that cannot change anything is a supported way to use it.
 

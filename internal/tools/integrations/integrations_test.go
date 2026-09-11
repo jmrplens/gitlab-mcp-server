@@ -140,11 +140,13 @@ func TestIntegrationToItem_MirrorsAllSDKFields(t *testing.T) {
 		WikiPageEvents: true, CommentOnEventEnabled: true, Inherited: true,
 	}
 	got := integrationToItem(src)
+	// The source above sets group_mention_events and its confidential twin,
+	// and this want deliberately does not: no Grape entity renders either, so
+	// publishing them asserted a false GitLab never sent.
 	want := IntegrationItem{
 		ID: 7, Title: "Jira", Slug: "jira", Active: true,
 		AlertEvents: true, CommitEvents: true, ConfidentialIssuesEvents: true,
 		ConfidentialNoteEvents: true, DeploymentEvents: true,
-		GroupConfidentialMentionEvents: true, GroupMentionEvents: true,
 		IncidentEvents: true, IssuesEvents: true, JobEvents: true,
 		MergeRequestsEvents: true, NoteEvents: true, PipelineEvents: true,
 		PushEvents: true, TagPushEvents: true, VulnerabilityEvents: true,
@@ -226,13 +228,11 @@ func verifyNestedDatadogItem(nestedSrc *gl.GroupDatadogIntegration) func(t *test
 		t.Helper()
 		flags := map[string]bool{
 			"AlertEvents": got.AlertEvents, "CommitEvents": got.CommitEvents,
-			"ConfidentialIssuesEvents":       got.ConfidentialIssuesEvents,
-			"ConfidentialNoteEvents":         got.ConfidentialNoteEvents,
-			"DeploymentEvents":               got.DeploymentEvents,
-			"GroupConfidentialMentionEvents": got.GroupConfidentialMentionEvents,
-			"GroupMentionEvents":             got.GroupMentionEvents,
-			"IncidentEvents":                 got.IncidentEvents,
-			"IssuesEvents":                   got.IssuesEvents, "JobEvents": got.JobEvents,
+			"ConfidentialIssuesEvents": got.ConfidentialIssuesEvents,
+			"ConfidentialNoteEvents":   got.ConfidentialNoteEvents,
+			"DeploymentEvents":         got.DeploymentEvents,
+			"IncidentEvents":           got.IncidentEvents,
+			"IssuesEvents":             got.IssuesEvents, "JobEvents": got.JobEvents,
 			"MergeRequestsEvents": got.MergeRequestsEvents, "NoteEvents": got.NoteEvents,
 			"PipelineEvents": got.PipelineEvents, "PushEvents": got.PushEvents,
 			"TagPushEvents": got.TagPushEvents, "VulnerabilityEvents": got.VulnerabilityEvents,

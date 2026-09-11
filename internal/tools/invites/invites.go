@@ -63,7 +63,6 @@ type GroupInvitesInput struct {
 
 // PendingInviteOutput represents a single pending invitation.
 type PendingInviteOutput struct {
-	ID          int64  `json:"id"`
 	InviteEmail string `json:"invite_email"`
 	// InviteToken is what lib/api/entities/invitation.rb sends beside the
 	// address and client-go's PendingInvite does not model: the token the
@@ -372,7 +371,6 @@ func GroupInvites(ctx context.Context, client *gitlabclient.Client, input GroupI
 // beside it.
 func toPendingInviteOutput(inv *gl.PendingInvite, extra toolutil.InvitationExtra) PendingInviteOutput {
 	out := PendingInviteOutput{
-		ID:            inv.ID,
 		InviteEmail:   inv.InviteEmail,
 		InviteToken:   extra.InviteToken,
 		AccessLevel:   int(inv.AccessLevel),

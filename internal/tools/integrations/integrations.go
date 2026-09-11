@@ -20,31 +20,29 @@ import (
 // client-go and are surfaced unconditionally (no omitempty) so a false value
 // is explicit in the output.
 type IntegrationItem struct {
-	ID                             int64  `json:"id"`
-	Title                          string `json:"title"`
-	Slug                           string `json:"slug"`
-	Active                         bool   `json:"active"`
-	CreatedAt                      string `json:"created_at,omitempty"`
-	UpdatedAt                      string `json:"updated_at,omitempty"`
-	AlertEvents                    bool   `json:"alert_events"`
-	CommitEvents                   bool   `json:"commit_events"`
-	ConfidentialIssuesEvents       bool   `json:"confidential_issues_events"`
-	ConfidentialNoteEvents         bool   `json:"confidential_note_events"`
-	DeploymentEvents               bool   `json:"deployment_events"`
-	GroupConfidentialMentionEvents bool   `json:"group_confidential_mention_events"`
-	GroupMentionEvents             bool   `json:"group_mention_events"`
-	IncidentEvents                 bool   `json:"incident_events"`
-	IssuesEvents                   bool   `json:"issues_events"`
-	JobEvents                      bool   `json:"job_events"`
-	MergeRequestsEvents            bool   `json:"merge_requests_events"`
-	NoteEvents                     bool   `json:"note_events"`
-	PipelineEvents                 bool   `json:"pipeline_events"`
-	PushEvents                     bool   `json:"push_events"`
-	TagPushEvents                  bool   `json:"tag_push_events"`
-	VulnerabilityEvents            bool   `json:"vulnerability_events"`
-	WikiPageEvents                 bool   `json:"wiki_page_events"`
-	CommentOnEventEnabled          bool   `json:"comment_on_event_enabled"`
-	Inherited                      bool   `json:"inherited"`
+	ID                       int64  `json:"id"`
+	Title                    string `json:"title"`
+	Slug                     string `json:"slug"`
+	Active                   bool   `json:"active"`
+	CreatedAt                string `json:"created_at,omitempty"`
+	UpdatedAt                string `json:"updated_at,omitempty"`
+	AlertEvents              bool   `json:"alert_events"`
+	CommitEvents             bool   `json:"commit_events"`
+	ConfidentialIssuesEvents bool   `json:"confidential_issues_events"`
+	ConfidentialNoteEvents   bool   `json:"confidential_note_events"`
+	DeploymentEvents         bool   `json:"deployment_events"`
+	IncidentEvents           bool   `json:"incident_events"`
+	IssuesEvents             bool   `json:"issues_events"`
+	JobEvents                bool   `json:"job_events"`
+	MergeRequestsEvents      bool   `json:"merge_requests_events"`
+	NoteEvents               bool   `json:"note_events"`
+	PipelineEvents           bool   `json:"pipeline_events"`
+	PushEvents               bool   `json:"push_events"`
+	TagPushEvents            bool   `json:"tag_push_events"`
+	VulnerabilityEvents      bool   `json:"vulnerability_events"`
+	WikiPageEvents           bool   `json:"wiki_page_events"`
+	CommentOnEventEnabled    bool   `json:"comment_on_event_enabled"`
+	Inherited                bool   `json:"inherited"`
 }
 
 type integrationGetter func(context.Context, gl.ServicesServiceInterface, string) (*gl.Integration, error)
@@ -246,29 +244,27 @@ func integrationFromService(service any, err error) (*gl.Integration, error) {
 // integrationToItem maps integration to item between API and evaluator models.
 func integrationToItem(s *gl.Integration) IntegrationItem {
 	item := IntegrationItem{
-		ID:                             s.ID,
-		Title:                          s.Title,
-		Slug:                           s.Slug,
-		Active:                         s.Active,
-		AlertEvents:                    s.AlertEvents,
-		CommitEvents:                   s.CommitEvents,
-		ConfidentialIssuesEvents:       s.ConfidentialIssuesEvents,
-		ConfidentialNoteEvents:         s.ConfidentialNoteEvents,
-		DeploymentEvents:               s.DeploymentEvents,
-		GroupConfidentialMentionEvents: s.GroupConfidentialMentionEvents,
-		GroupMentionEvents:             s.GroupMentionEvents,
-		IncidentEvents:                 s.IncidentEvents,
-		IssuesEvents:                   s.IssuesEvents,
-		JobEvents:                      s.JobEvents,
-		MergeRequestsEvents:            s.MergeRequestsEvents,
-		NoteEvents:                     s.NoteEvents,
-		PipelineEvents:                 s.PipelineEvents,
-		PushEvents:                     s.PushEvents,
-		TagPushEvents:                  s.TagPushEvents,
-		VulnerabilityEvents:            s.VulnerabilityEvents,
-		WikiPageEvents:                 s.WikiPageEvents,
-		CommentOnEventEnabled:          s.CommentOnEventEnabled,
-		Inherited:                      s.Inherited,
+		ID:                       s.ID,
+		Title:                    s.Title,
+		Slug:                     s.Slug,
+		Active:                   s.Active,
+		AlertEvents:              s.AlertEvents,
+		CommitEvents:             s.CommitEvents,
+		ConfidentialIssuesEvents: s.ConfidentialIssuesEvents,
+		ConfidentialNoteEvents:   s.ConfidentialNoteEvents,
+		DeploymentEvents:         s.DeploymentEvents,
+		IncidentEvents:           s.IncidentEvents,
+		IssuesEvents:             s.IssuesEvents,
+		JobEvents:                s.JobEvents,
+		MergeRequestsEvents:      s.MergeRequestsEvents,
+		NoteEvents:               s.NoteEvents,
+		PipelineEvents:           s.PipelineEvents,
+		PushEvents:               s.PushEvents,
+		TagPushEvents:            s.TagPushEvents,
+		VulnerabilityEvents:      s.VulnerabilityEvents,
+		WikiPageEvents:           s.WikiPageEvents,
+		CommentOnEventEnabled:    s.CommentOnEventEnabled,
+		Inherited:                s.Inherited,
 	}
 	if s.CreatedAt != nil {
 		item.CreatedAt = s.CreatedAt.String()

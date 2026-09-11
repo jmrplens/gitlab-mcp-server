@@ -3787,9 +3787,6 @@
         "ci_job_token_scope_enabled": {
           "type": "boolean"
         },
-        "ci_opt_in_jwt": {
-          "type": "boolean"
-        },
         "ci_pipeline_variables_minimum_override_role": {
           "type": "string"
         },
@@ -4553,7 +4550,6 @@
         "ci_push_repository_for_job_token_allowed",
         "ci_separated_caches",
         "ci_job_token_scope_enabled",
-        "ci_opt_in_jwt",
         "ci_allow_fork_pipelines_to_run_in_parent_project",
         "auto_devops_enabled",
         "keep_latest_artifact",

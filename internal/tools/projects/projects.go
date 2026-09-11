@@ -299,7 +299,6 @@ type Output struct {
 	CIIDTokenSubClaimComponents              []string `json:"ci_id_token_sub_claim_components,omitempty"`
 	CISeparatedCaches                        bool     `json:"ci_separated_caches"`
 	CIJobTokenScopeEnabled                   bool     `json:"ci_job_token_scope_enabled"`
-	CIOptInJWT                               bool     `json:"ci_opt_in_jwt"`
 	CIAllowForkPipelinesToRunInParentProject bool     `json:"ci_allow_fork_pipelines_to_run_in_parent_project"`
 	CIRestrictPipelineCancellationRole       string   `json:"ci_restrict_pipeline_cancellation_role,omitempty" tier:"premium"`
 	CIPipelineVariablesMinimumOverrideRole   string   `json:"ci_pipeline_variables_minimum_override_role,omitempty"`
@@ -673,7 +672,6 @@ func ToOutput(p *gl.Project) Output {
 		CIIDTokenSubClaimComponents:              p.CIIdTokenSubClaimComponents,
 		CISeparatedCaches:                        p.CISeparatedCaches,
 		CIJobTokenScopeEnabled:                   p.CIJobTokenScopeEnabled,
-		CIOptInJWT:                               p.CIOptInJWT,
 		CIAllowForkPipelinesToRunInParentProject: p.CIAllowForkPipelinesToRunInParentProject,
 		CIRestrictPipelineCancellationRole:       string(p.CIRestrictPipelineCancellationRole),
 		CIPipelineVariablesMinimumOverrideRole:   p.CIPipelineVariablesMinimumOverrideRole,
