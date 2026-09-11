@@ -291,6 +291,47 @@ func TestMiddleware_TheDispatchedActionReplacesThePrediction(t *testing.T) {
 	}
 }
 
+// TestMiddleware_APanickingHandlerStillNamesTheRouteThatRan verifies that a
+// handler which reports its route and then panics leaves the span carrying that
+// route rather than the action predicted from the arguments.
+//
+// The panic skips every statement after the handler call, so the replacement
+// that normally runs there never does, and the deferred End would export the
+// prediction. The dispatcher had already chosen by then, and a panicking call
+// is the one whose trace gets read, so the resolution is deferred beside End.
+func TestMiddleware_APanickingHandlerStillNamesTheRouteThatRan(t *testing.T) {
+	recorder := newRecorder(t)
+
+	identifier := dispatchingIdentifier{
+		predicted:  Identity{ActionID: "environment.get", Domain: "environment"},
+		dispatched: map[string]Identity{"gitlab_environment/protected_get": {ActionID: "environment.protected_get", Domain: "environment"}},
+	}
+	handler := Middleware(Options{Identifier: identifier, Surface: "meta"})(
+		func(ctx context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+			RecordDispatch(ctx, "gitlab_environment", "protected_get")
+			panic("the handler blew up after choosing its route")
+		},
+	)
+
+	func() {
+		defer func() {
+			if recovered := recover(); recovered == nil {
+				t.Error("the middleware swallowed the panic, which would hide the failure from the caller")
+			}
+		}()
+		_, _ = handler(context.Background(), "tools/call",
+			callToolRequest("gitlab_environment", map[string]any{"action": "get"}, nil))
+	}()
+
+	spans := recorder.Ended()
+	if len(spans) != 1 {
+		t.Fatalf("recorded %d spans, want 1: a panicking call must still end its span", len(spans))
+	}
+	if got, _ := attrOf(spans[0], AttrActionID); got.AsString() != "environment.protected_get" {
+		t.Errorf("span action = %q, want the dispatched environment.protected_get", got.AsString())
+	}
+}
+
 // TestMiddleware_ThePredictionStandsWhenNoDispatchResolves verifies that the
 // predicted action is kept whenever the dispatch cannot improve on it: nothing
 // reported, an incomplete report, an identifier that does not resolve

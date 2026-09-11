@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,586 |
-| Unit test functions                                   | 14,972 |
+| Total test functions                                  | 15,587 |
+| Unit test functions                                   | 14,973 |
 | E2E test functions                                    |    614 |
 | cmd test functions                                    |  3,024 |
 | Test files (internal/)                                |    533 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,324 | 79.1% |
+| `TestFunc_Scenario` (2-part)           | 12,325 | 79.1% |
 | `TestFunc` (no underscore)             |    979 |  6.3% |
 | `TestFunc_Scenario_Expected` (3+ part) |  2,283 | 14.6% |
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,586 |        152 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,587 |        152 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            360 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (177) |          9,002 |        365 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            614 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          3,024 |        206 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,586** |    **979** |                                                                                                 |
+| **Total**               |     **15,587** |    **979** |                                                                                                 |
 
 ### Core Packages
 
@@ -68,7 +68,7 @@
 | gatewaycompat |        19 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions. |
 | gitlab        |       109 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                            |
 | graphqlschema |        20 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                   |
-| mcpotel       |       106 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                               |
+| mcpotel       |       107 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                               |
 | oauth         |        80 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                            |
 | progress      |        17 |    83.8% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                      |
 | prompts       |       280 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                         |
@@ -78,7 +78,7 @@
 | telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil      |        94 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
 | toolutil      |       965 |    98.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,586** |          |                                                                                                                                                                                                                                                                    |
+| **Subtotal**  | **2,587** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 

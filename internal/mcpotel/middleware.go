@@ -181,7 +181,18 @@ func Middleware(opts Options) mcp.Middleware {
 			ctx, holder := withCallHolder(ctx)
 			// Deferred so a panic still ends the span, which is what makes the
 			// SDK record the panic as an exception event before re-panicking.
-			defer span.End()
+			// A panic also skips the replacement below, so the span would carry
+			// the predicted action for the one call whose trace is read most:
+			// the dispatcher had already reported its route when the handler
+			// blew up. Resolving it here costs one map lookup on a path that
+			// runs once per panic.
+			dispatchResolved := false
+			defer func() {
+				if !dispatchResolved {
+					call = call.dispatched(holder, identifier, span)
+				}
+				span.End()
+			}()
 
 			// The tracker deliberately outlives this request: it parks a
 			// goroutine on the session, which ends long after the call returns.
@@ -194,6 +205,7 @@ func Middleware(opts Options) mcp.Middleware {
 			// The route dispatch chose replaces the one predicted from the
 			// arguments, on the span and on the metric alike.
 			call = call.dispatched(holder, identifier, span)
+			dispatchResolved = true
 
 			// Before End, not inside it. After End, SetStatus and SetAttributes
 			// are silent no-ops guarded by isRecording, so an outcome recorded
