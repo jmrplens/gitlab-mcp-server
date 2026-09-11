@@ -74,25 +74,34 @@ func TestParseGID_Valid(t *testing.T) {
 // every malformed GID variant. Table-driven subtests cover: empty string,
 // missing "gid://gitlab/" prefix, wrong namespace, missing ID segment,
 // missing type segment, missing slash separator, and non-numeric ID.
-// Each subtest asserts that the returned error is non-nil.
+//
+// Each subtest asserts which refusal it got, not merely that it got one. The
+// three shapes are told apart by the message a model reads: a GID that is not
+// one at all, a GID whose two halves are not both there, and a GID whose id is
+// not a number — and the last one quotes the id, so the quoted span has to be
+// the id itself rather than whatever sits a byte to either side of it.
 func TestParseGID_Invalid(t *testing.T) {
 	tests := []struct {
 		name string
 		gid  string
+		want string
 	}{
-		{"empty", ""},
-		{"no prefix", "Vulnerability/42"},
-		{"wrong prefix", "gid://github/Issue/1"},
-		{"missing id", "gid://gitlab/Vulnerability/"},
-		{"missing type", "gid://gitlab//42"},
-		{"no slash separator", "gid://gitlab/Vulnerability"},
-		{"non-numeric id", "gid://gitlab/Vulnerability/abc"},
+		{"empty", "", `must start with "gid://gitlab/"`},
+		{"no prefix", "Vulnerability/42", `must start with "gid://gitlab/"`},
+		{"wrong prefix", "gid://github/Issue/1", `must start with "gid://gitlab/"`},
+		{"missing id", "gid://gitlab/Vulnerability/", "expected gid://gitlab/Type/ID"},
+		{"missing type", "gid://gitlab//42", "expected gid://gitlab/Type/ID"},
+		{"no slash separator", "gid://gitlab/Vulnerability", "expected gid://gitlab/Type/ID"},
+		{"non-numeric id", "gid://gitlab/Vulnerability/abc", `ID "abc" is not a valid integer`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, _, err := ParseGID(tt.gid)
 			if err == nil {
 				t.Fatalf("expected error for GID %q, got nil", tt.gid)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("ParseGID(%q) error = %v, want it to say %q", tt.gid, err, tt.want)
 			}
 		})
 	}
@@ -535,6 +544,16 @@ func assertVariableMap(t *testing.T, got, want map[string]any) {
 // fragment is covered because its selection set would otherwise be read as the
 // operation's own, which reports an operation as declaring nothing while it
 // visibly declares two variables.
+//
+// The separator is covered in all three spellings GraphQL accepts (a comma and
+// a space, a comma alone, whitespace alone) because the scan resumes from the
+// index the definition before it ended on, and only the two with no space to
+// spare notice a resumption point one byte out. A name that runs to the end of
+// the signature, and a document that ends mid-name, are here because each scan
+// reads one byte past the name it is measuring if its bound is wrong. A
+// directive on a definition is the one place a parenthesis nests inside the
+// signature, so it is the only input that reaches the depth check under the one
+// that closes the block.
 func TestGraphQLDeclarations(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -637,6 +656,31 @@ mutation($input: CreateInput! = {names: ["a"]}) { create(input: $input) { id } }
 query($first: Int, $after: String) { group(after: $after) { ...Names } }`,
 			want: []string{"first", "after"},
 		},
+		{
+			name:     "definitions separated by a comma alone",
+			document: `query($first: Int,$after: String) { group(after: $after) { id } }`,
+			want:     []string{"first", "after"},
+		},
+		{
+			name:     "definitions separated by a space alone",
+			document: `query($first: Int $after: String) { group(after: $after) { id } }`,
+			want:     []string{"first", "after"},
+		},
+		{
+			name:     "untyped variable closes the signature",
+			document: `query($after: String, $first) { group(after: $after) { id } }`,
+			want:     []string{"after", "first"},
+		},
+		{
+			name:     "directive on a variable definition",
+			document: `query($first: Int @dir(reason: "x"), $after: String) { group(after: $after) { id } }`,
+			want:     []string{"first", "after"},
+		},
+		{
+			name:     "a document ending mid-name declares nothing",
+			document: `fragment Severity on Vulnerability`,
+			want:     nil,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -716,6 +760,195 @@ func TestStripGraphQLComments(t *testing.T) {
 			}
 			if len(got) != len(tc.document) {
 				t.Errorf("length changed: got %d, want %d", len(got), len(tc.document))
+			}
+		})
+	}
+}
+
+// TestGraphQLVariableBlock verifies that the signature scan returns exactly the
+// text between the parentheses, and exactly the document around them.
+//
+// Both halves are asserted whole rather than searched, because every way this
+// scan can be off is off by a byte or two: a block that starts a byte early
+// carries the operation name into the definitions, and a body that ends a byte
+// late or begins a byte early splices a name across the seam the definitions
+// left behind. Either produces a declaration map that still looks right for
+// every document in this repository, which is how such a slip would ship.
+func TestGraphQLVariableBlock(t *testing.T) {
+	tests := []struct {
+		name      string
+		document  string
+		wantBlock string
+		wantRest  string
+		wantOK    bool
+	}{
+		{
+			name:      "named operation",
+			document:  `query Q($first: Int) { x }`,
+			wantBlock: `$first: Int`,
+			wantRest:  "query Q\n { x }",
+			wantOK:    true,
+		},
+		{
+			name:      "anonymous operation",
+			document:  `query($first: Int) { x }`,
+			wantBlock: `$first: Int`,
+			wantRest:  "query\n { x }",
+			wantOK:    true,
+		},
+		{
+			name:      "directive nests a parenthesis inside the signature",
+			document:  `query($f: Int @dir(reason: "x")) { y }`,
+			wantBlock: `$f: Int @dir(reason: "x")`,
+			wantRest:  "query\n { y }",
+			wantOK:    true,
+		},
+		{
+			name: "fragment before the operation stays in the body",
+			document: `fragment Page on LabelConnection { nodes { id } }
+query($after: String) { group { labels(after: $after) { ...Page } } }`,
+			wantBlock: `$after: String`,
+			wantRest: `fragment Page on LabelConnection { nodes { id } }
+query
+ { group { labels(after: $after) { ...Page } } }`,
+			wantOK: true,
+		},
+		{
+			name:     "operation with no signature",
+			document: `query { currentUser { id } }`,
+			wantOK:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			block, rest, ok := graphQLVariableBlock(tt.document)
+			if ok != tt.wantOK {
+				t.Fatalf("graphQLVariableBlock() ok = %v, want %v", ok, tt.wantOK)
+			}
+			if block != tt.wantBlock {
+				t.Errorf("graphQLVariableBlock() block = %q, want %q", block, tt.wantBlock)
+			}
+			if rest != tt.wantRest {
+				t.Errorf("graphQLVariableBlock() rest = %q, want %q", rest, tt.wantRest)
+			}
+		})
+	}
+}
+
+// TestReferencesGraphQLVariable verifies that a variable counts as passed to a
+// field only where its whole name appears, wherever in the body that is.
+//
+// The two ends of the body are the cases worth pinning. A reference that opens
+// the body is the first thing the search finds, at offset zero, which a scan
+// that reads "found at the start" as "not found" would report as a variable
+// nobody spends; a reference that closes it has no byte after it to inspect,
+// which is the read the length check exists to prevent. The prefix cases are
+// what the whole-name rule is for: $first must not be answered for by
+// $firstParent, and must still be found when both are there.
+func TestReferencesGraphQLVariable(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{name: "the body begins with the reference", body: "$first: Int", want: true},
+		{name: "the body ends with the reference", body: "query\n { group { labels(first: $first", want: true},
+		{name: "a longer name is not the variable", body: "{ commits(firstParent: $firstParent) }", want: false},
+		{name: "the variable follows a longer name", body: "{ commits(firstParent: $firstParent, first: $first) }", want: true},
+		{name: "no reference at all", body: "query\n { group { labels { nodes { id } } } }", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := referencesGraphQLVariable(tt.body, "first"); got != tt.want {
+				t.Errorf("referencesGraphQLVariable(%q, \"first\") = %v, want %v", tt.body, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestIsGraphQLNameByte verifies that every character a GraphQL name may carry
+// after its first is accepted and every adjacent one is refused.
+//
+// The table names the boundary characters themselves ('0', '9', 'a', 'z', 'A',
+// 'Z' and the underscore) and the codepoints immediately outside each range,
+// because this predicate decides where a name ends: accepting one character too
+// many merges a variable with the punctuation after it, and one too few splits
+// $first9 in two and lets $first answer for it.
+func TestIsGraphQLNameByte(t *testing.T) {
+	tests := []struct {
+		name string
+		c    byte
+		want bool
+	}{
+		{name: "underscore", c: '_', want: true},
+		{name: "first digit", c: '0', want: true},
+		{name: "last digit", c: '9', want: true},
+		{name: "first lowercase letter", c: 'a', want: true},
+		{name: "last lowercase letter", c: 'z', want: true},
+		{name: "first uppercase letter", c: 'A', want: true},
+		{name: "last uppercase letter", c: 'Z', want: true},
+		{name: "below the digits", c: '/', want: false},
+		{name: "above the digits", c: ':', want: false},
+		{name: "below the uppercase letters", c: '@', want: false},
+		{name: "above the uppercase letters", c: '[', want: false},
+		{name: "below the lowercase letters", c: '`', want: false},
+		{name: "above the lowercase letters", c: '{', want: false},
+		{name: "dollar sign", c: '$', want: false},
+		{name: "hyphen", c: '-', want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isGraphQLNameByte(tt.c); got != tt.want {
+				t.Errorf("isGraphQLNameByte(%q) = %v, want %v", tt.c, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestFormatGraphQLPagination_NamesOnlyThePagesThereAre verifies the whole
+// summary line rather than a substring of it.
+//
+// "no more pages" is written only when there is neither a next page nor a
+// previous one, and a substring assertion cannot see it being written beside a
+// cursor: a page that offers a next cursor and also says there are no more
+// pages contradicts itself, and the contradiction is invisible to a test that
+// only looks for the cursor.
+func TestFormatGraphQLPagination_NamesOnlyThePagesThereAre(t *testing.T) {
+	tests := []struct {
+		name  string
+		p     GraphQLPaginationOutput
+		shown int
+		want  string
+	}{
+		{
+			name:  "next page only",
+			p:     GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cur1"},
+			shown: 10,
+			want:  "Showing 10 items | next page cursor: `cur1`",
+		},
+		{
+			name:  "previous page only",
+			p:     GraphQLPaginationOutput{HasPreviousPage: true, StartCursor: "cur0"},
+			shown: 5,
+			want:  "Showing 5 items | prev page cursor: `cur0`",
+		},
+		{
+			name:  "both directions",
+			p:     GraphQLPaginationOutput{HasNextPage: true, HasPreviousPage: true, EndCursor: "e", StartCursor: "s"},
+			shown: 20,
+			want:  "Showing 20 items | next page cursor: `e` | prev page cursor: `s`",
+		},
+		{
+			name:  "neither direction",
+			p:     GraphQLPaginationOutput{},
+			shown: 3,
+			want:  "Showing 3 items | no more pages",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FormatGraphQLPagination(tt.p, tt.shown); got != tt.want {
+				t.Errorf("FormatGraphQLPagination() = %q, want %q", got, tt.want)
 			}
 		})
 	}

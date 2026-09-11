@@ -69,6 +69,64 @@ func TestSearchIndex_DefensiveBranches(t *testing.T) {
 	}
 }
 
+// TestSearchIndex_CandidateEntryIndexesNarrowsToTheMatchingPostings verifies
+// that a term with an index bucket narrows the candidate set to that bucket
+// instead of handing the full catalog back. Both answers rank identically,
+// because the index only decides which entries are scored, so nothing about a
+// search result would notice a narrowing that quietly stopped narrowing: what
+// it costs is a scoring pass over every action on every query.
+func TestSearchIndex_CandidateEntryIndexesNarrowsToTheMatchingPostings(t *testing.T) {
+	index := searchIndex{
+		byToken:  map[string][]int{"pipeline": {1}},
+		byAlias:  map[string][]int{},
+		byDomain: map[string][]int{},
+		byAction: map[string][]int{},
+		all:      []int{0, 1, 2},
+	}
+
+	got := index.candidateEntryIndexes(normalizeSearchTerms("pipeline"))
+	if strings.Join(intsToStrings(got), ",") != "1" {
+		t.Errorf("candidateEntryIndexes(pipeline) = %v, want only the indexed posting 1", got)
+	}
+}
+
+// TestSearchDocumentIndexTokens_ReadsEveryField verifies that the token index
+// carries a word from every searchable field of a document, in field order and
+// without repeats. A field dropped here cannot be searched for at all: the
+// index decides which entries a term even reaches, and the scorers below it
+// never see an entry the index left out.
+func TestSearchDocumentIndexTokens_ReadsEveryField(t *testing.T) {
+	document := searchDocument{
+		Backend:          "backendword",
+		Capability:       "capabilityword",
+		Resource:         "resourceword",
+		Operation:        "operationword",
+		Scope:            "scopeword",
+		CanonicalID:      "canonical.idword",
+		Tool:             "toolword",
+		Domain:           "domainword",
+		Action:           "actionword",
+		FlatText:         "flat textword",
+		IDWords:          []string{"idwordone"},
+		DomainWords:      []string{"domainwordone"},
+		ActionWords:      []string{"actionwordone"},
+		Aliases:          []string{"alias_wordone"},
+		Tags:             []string{"tagword", "backendword"},
+		RequiredParams:   []string{"required_param"},
+		SchemaProperties: []string{"schema_property"},
+	}
+
+	want := []string{
+		"backendword", "capabilityword", "resourceword", "operationword", "scopeword",
+		"canonical", "idword", "toolword", "domainword", "actionword", "flat", "textword",
+		"idwordone", "domainwordone", "actionwordone", "alias", "wordone", "tagword",
+		"required", "param", "schema", "property",
+	}
+	if got := searchDocumentIndexTokens(document); !slices.Equal(got, want) {
+		t.Errorf("searchDocumentIndexTokens() = %v, want %v", got, want)
+	}
+}
+
 func intsToStrings(values []int) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {

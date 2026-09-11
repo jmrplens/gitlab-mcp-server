@@ -189,9 +189,9 @@ func (o outcome) record(span trace.Span) {
 	if o.statusCode != "" {
 		attrs = append(attrs, AttrRPCResponseStatusCode.String(o.statusCode))
 	}
-	if len(attrs) > 0 {
-		span.SetAttributes(attrs...)
-	}
+	// Unconditionally: setting no attributes sets nothing, so a success needs
+	// no branch of its own here.
+	span.SetAttributes(attrs...)
 	if o.failed {
 		span.SetStatus(codes.Error, redactResourceURIs(o.description))
 	}

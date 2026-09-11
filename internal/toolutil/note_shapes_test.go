@@ -50,6 +50,35 @@ func TestNewNoteUserOutputFromResolvedBy(t *testing.T) {
 	}
 }
 
+// TestNewNoteUserOutputFromResolvedBy_HalfAResolverStillSurfaces verifies that
+// only a resolved_by carrying neither an id nor a username is dropped.
+//
+// The key is omitted to say "nobody resolved this note", so dropping a
+// resolver that arrived with one of the two identifying fields would report an
+// unresolved note for a note GitLab says is resolved. A value with both fields
+// set and a value with neither agree whichever way the two checks are joined,
+// so only a half-populated resolver says which join the converter uses.
+func TestNewNoteUserOutputFromResolvedBy_HalfAResolverStillSurfaces(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		resolvedBy gl.NoteResolvedBy
+	}{
+		{name: "id without a username", resolvedBy: gl.NoteResolvedBy{ID: 7}},
+		{name: "username without an id", resolvedBy: gl.NoteResolvedBy{Username: "bob"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NewNoteUserOutputFromResolvedBy(tc.resolvedBy, NoteUserExtra{})
+
+			if got == nil {
+				t.Fatalf("NewNoteUserOutputFromResolvedBy(%+v) = nil, want the resolver surfaced", tc.resolvedBy)
+			}
+			if got.ID != tc.resolvedBy.ID || got.Username != tc.resolvedBy.Username {
+				t.Errorf("resolved-by = %+v, want id %d and username %q", got, tc.resolvedBy.ID, tc.resolvedBy.Username)
+			}
+		})
+	}
+}
+
 // TestNewLinePositionOutput pins the line-position conversion (nil-on-nil).
 func TestNewLinePositionOutput(t *testing.T) {
 	if got := NewLinePositionOutput(nil); got != nil {

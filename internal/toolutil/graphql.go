@@ -667,7 +667,10 @@ func ParseGID(gid string) (typeName string, id int64, err error) {
 	}
 	rest := strings.TrimPrefix(gid, prefix)
 	slash := strings.LastIndex(rest, "/")
-	if slash < 0 || slash == 0 || slash == len(rest)-1 {
+	// One test rather than two: "no separator at all" is -1 and "nothing before
+	// the separator" is 0, so a second comparison against 0 could never change an
+	// answer the first had not already given.
+	if slash <= 0 || slash == len(rest)-1 {
 		return "", 0, fmt.Errorf("invalid GitLab GID format: expected gid://gitlab/Type/ID, got %q", gid)
 	}
 	typeName = rest[:slash]

@@ -480,6 +480,10 @@ func gitLabAuthoredMessage(glErr *gl.ErrorResponse) string {
 // message only repeats the HTTP status text (e.g. "405 Method Not Allowed"), or
 // if it is an unparsed upstream response body rather than a GitLab message.
 //
+// The unparsed-body drop belongs to [boundedGitLabMessage], which every path out
+// of here returns through, so it is not tested a second time on the way in: a
+// copy of that test could only agree with the one below it.
+//
 // What survives is flattened onto one line and truncated to 300 characters.
 // GitLab's messages routinely quote input an attacker chose — a branch name, a
 // path, a title — so the span has to stay a span: with its newlines intact it
@@ -490,7 +494,7 @@ func ExtractGitLabMessage(err error) string {
 		return ""
 	}
 	msg := gitLabAuthoredMessage(glErr)
-	if msg == "" || strings.HasPrefix(strings.TrimSpace(msg), unparsedBodyPrefix) {
+	if msg == "" {
 		return ""
 	}
 	// Filter out messages that are just the HTTP status text — they add no information

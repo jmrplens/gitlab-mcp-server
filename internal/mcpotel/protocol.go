@@ -54,7 +54,9 @@ func protocolVersionFor(req mcp.Request, allowed map[string]struct{}) string {
 		}
 	}
 
-	if session, ok := req.GetSession().(*mcp.ServerSession); ok && session != nil {
+	// A failed assertion yields a nil session, so the one nil check covers both
+	// a request of another kind and one built without a session.
+	if session, _ := req.GetSession().(*mcp.ServerSession); session != nil {
 		if params := session.InitializeParams(); params != nil {
 			if _, admitted := allowed[params.ProtocolVersion]; admitted {
 				return params.ProtocolVersion
@@ -62,7 +64,9 @@ func protocolVersionFor(req mcp.Request, allowed map[string]struct{}) string {
 		}
 	}
 
-	if extra := req.GetExtra(); extra != nil && extra.Header != nil {
+	// A nil Header reads as empty, and empty is the answer when nothing was
+	// found, so a request that carried no headers needs no branch of its own.
+	if extra := req.GetExtra(); extra != nil {
 		version := extra.Header.Get(protocolHeader)
 		if _, admitted := allowed[version]; admitted {
 			return version

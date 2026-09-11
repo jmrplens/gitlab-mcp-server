@@ -132,6 +132,20 @@ func TestEmbedResourceJSON_MarshalsValue(t *testing.T) {
 	}
 }
 
+// TestEmbedResourceJSON_NilResultIsSafe verifies that [EmbedResourceJSON]
+// tolerates a nil result the way [EmbedResource] does. Dispatchers call the
+// embedding helpers unconditionally after formatting, so a handler that
+// produced no result must cost the call its resource block and nothing else;
+// the nil check is the only thing between this call and appending to a result
+// that is not there.
+func TestEmbedResourceJSON_NilResultIsSafe(t *testing.T) {
+	resetEmbedToggle(t)
+	EnableEmbeddedResources(true)
+
+	// Must not panic.
+	EmbedResourceJSON(nil, "gitlab://project/1/issue/2", map[string]any{"iid": 2})
+}
+
 // TestEmbedResourceJSON_DisabledIsNoOp verifies that [EmbedResourceJSON] does
 // not marshal or append content when embedded resources are disabled. This
 // keeps the JSON helper consistent with [EmbedResource].

@@ -104,14 +104,84 @@ var sharedIdentifiers toolutil.OnceMap[identifierKey, mcpotel.CallIdentifier]
 // default rather than inventing a fourth behavior for a value that cannot
 // reach here from configuration.
 func newCallIdentifier(actions []actioncatalog.Action, surface string) mcpotel.CallIdentifier {
+	routes := newMetaRoutes(actions)
+	var identify mcpotel.CallIdentifier
 	switch surface {
 	case config.ToolSurfaceIndividual:
-		return individualIdentifier(actions)
+		identify = individualIdentifier(actions)
 	case config.ToolSurfaceMeta:
-		return metaIdentifier(actions)
+		identify = metaIdentifier(routes)
 	default:
-		return dynamicIdentifier(actions)
+		identify = dynamicIdentifier(actions)
 	}
+	return catalogIdentifier{identify: identify, dispatch: routes}
+}
+
+// catalogIdentifier is the resolver [NewCallIdentifier] returns: the surface's
+// own reading of a call's arguments, and the meta reading of a route a
+// dispatcher reports through [mcpotel.RecordDispatch].
+//
+// Every surface carries the second, not only meta, because the dynamic surface
+// reaches its actions through the meta handlers: gitlab_execute_action resolves
+// issue.get and enters gitlab_issue's handler, which is where every rewrite
+// happens and so where the route that ran is known.
+type catalogIdentifier struct {
+	identify mcpotel.CallIdentifier
+	dispatch metaRoutes
+}
+
+// Identify reads a call the way its surface spells it.
+func (c catalogIdentifier) Identify(toolName string, arguments any) (mcpotel.Identity, bool) {
+	return c.identify.Identify(toolName, arguments)
+}
+
+// IdentifyDispatch names the catalog action a meta handler dispatched.
+func (c catalogIdentifier) IdentifyDispatch(tool, action string) (mcpotel.Identity, bool) {
+	return c.dispatch.identify(tool, action)
+}
+
+// metaRoutes maps a meta tool and one of its action names to the catalog
+// action, which is how both a meta call and a meta handler's dispatch name one.
+//
+// The canonical id is the pair and neither half is enough: gitlab_issue says
+// which domain, "list" says which operation, and only together do they name an
+// action the catalog knows.
+type metaRoutes struct {
+	domains map[string]string
+	byID    map[string]mcpotel.Identity
+}
+
+// newMetaRoutes indexes actions by their meta tool and canonical id.
+func newMetaRoutes(actions []actioncatalog.Action) metaRoutes {
+	routes := metaRoutes{
+		domains: make(map[string]string, len(actions)),
+		byID:    make(map[string]mcpotel.Identity, len(actions)),
+	}
+	for _, action := range actions {
+		if action.ToolName != "" && action.Domain != "" {
+			routes.domains[action.ToolName] = action.Domain
+		}
+		routes.byID[string(action.ID)] = mcpotel.Identity{ActionID: string(action.ID), Domain: action.Domain}
+	}
+	return routes
+}
+
+// identify resolves tool and action. A tool the catalog does not know is a
+// standalone tool such as gitlab_discover_project or an interactive elicitation
+// flow, which belongs to no catalog action. An action the domain does not have,
+// which happens whenever a model invents one, still names the domain.
+func (m metaRoutes) identify(tool, action string) (mcpotel.Identity, bool) {
+	domain, known := m.domains[tool]
+	if !known {
+		return mcpotel.Identity{}, false
+	}
+	if action == "" {
+		return mcpotel.Identity{Domain: domain}, true
+	}
+	if identity, found := m.byID[domain+"."+action]; found {
+		return identity, true
+	}
+	return mcpotel.Identity{Domain: domain}, true
 }
 
 // individualIdentifier resolves a declared tool name to its action.
@@ -142,40 +212,12 @@ func individualIdentifier(actions []actioncatalog.Action) mcpotel.CallIdentifier
 	})
 }
 
-// metaIdentifier resolves a domain tool plus its action argument.
-//
-// The canonical id is the pair and neither half is enough: gitlab_issue says
-// which domain, "list" says which operation, and only together do they name an
-// action the catalog knows.
-func metaIdentifier(actions []actioncatalog.Action) mcpotel.CallIdentifier {
-	domains := make(map[string]string, len(actions))
-	byID := make(map[string]mcpotel.Identity, len(actions))
-	for _, action := range actions {
-		if action.ToolName != "" && action.Domain != "" {
-			domains[action.ToolName] = action.Domain
-		}
-		byID[string(action.ID)] = mcpotel.Identity{ActionID: string(action.ID), Domain: action.Domain}
-	}
-
+// metaIdentifier resolves a domain tool plus its action argument, as the
+// client sent it. The action that ran can differ once dispatch rewrites it,
+// and [catalogIdentifier.IdentifyDispatch] names that one.
+func metaIdentifier(routes metaRoutes) mcpotel.CallIdentifier {
 	return mcpotel.IdentifierFunc(func(toolName string, arguments any) (mcpotel.Identity, bool) {
-		domain, known := domains[toolName]
-		if !known {
-			// A standalone tool: gitlab_discover_project, an interactive
-			// elicitation flow. These belong to no catalog action, and saying
-			// so is the right answer rather than a failure.
-			return mcpotel.Identity{}, false
-		}
-		action := actionArgument(arguments)
-		if action == "" {
-			return mcpotel.Identity{Domain: domain}, true
-		}
-		if identity, found := byID[domain+"."+action]; found {
-			return identity, true
-		}
-		// An action the catalog does not have, which happens whenever a model
-		// invents one. The domain is still true and still worth recording, so
-		// it is returned without an id rather than discarded.
-		return mcpotel.Identity{Domain: domain}, true
+		return routes.identify(toolName, actionArgument(arguments))
 	})
 }
 

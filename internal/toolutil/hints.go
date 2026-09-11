@@ -175,8 +175,8 @@ func ExtractHints(md string) []string {
 		// bullets and ends them.
 		return parseHintBullets(md[start:], false)
 	}
-	start := lastHintsBlock(md)
-	if start < 0 {
+	start, ok := lastHintsBlock(md)
+	if !ok {
 		return nil
 	}
 	return parseHintBullets(md[start:], true)
@@ -223,14 +223,19 @@ func leadingHintsBlock(md string) (int, bool) {
 }
 
 // lastHintsBlock returns the offset just past the opening of the last
-// server-authored guidance section, or -1 when the response carries none. The
+// server-authored guidance section, and whether the response carries one. The
 // rule has to start a line: a "---" in the middle of one is not a rule, and a
 // section the server wrote always follows the line it ended.
-func lastHintsBlock(md string) int {
+//
+// The answer is a pair rather than the -1 offset it used to be, matching
+// [leadingHintsBlock]: "there is none" is not an offset, and a caller reading it
+// as one has to ask whether a position is negative, which no position this
+// function returns ever is.
+func lastHintsBlock(md string) (int, bool) {
 	for i := strings.LastIndex(md, hintsBlockOpening); i >= 0; i = strings.LastIndex(md[:i], hintsBlockOpening) {
 		if i == 0 || md[i-1] == '\n' {
-			return i + len(hintsBlockOpening)
+			return i + len(hintsBlockOpening), true
 		}
 	}
-	return -1
+	return 0, false
 }

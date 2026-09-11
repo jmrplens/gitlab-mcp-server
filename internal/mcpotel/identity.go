@@ -41,6 +41,13 @@ import (
 // later, including updated span name, cannot change their decisions." So the
 // call is identified first and the span started second, rather than starting a
 // span and renaming it once dispatch has worked out what it is.
+//
+// That first identity is a prediction from the arguments, and dispatch can
+// overrule it: an alias or a parameter-dependent rewrite runs a different route
+// than the one named. A dispatcher reports the route it chose through
+// [RecordDispatch], and a [DispatchIdentifier] turns it into the action the
+// span and the metric end with. The sampler still saw the prediction, which is
+// the price of deciding before the span exists.
 type CallIdentifier interface {
 	// Identify maps a tools/call to its canonical catalog action.
 	//
@@ -54,6 +61,21 @@ type CallIdentifier interface {
 	// here before anything rejects it. Neither is worth an error, and both must
 	// leave the attribute unset rather than carry a placeholder.
 	Identify(toolName string, arguments any) (Identity, bool)
+}
+
+// DispatchIdentifier is a [CallIdentifier] that can also name the action a
+// dispatcher reported through [RecordDispatch].
+//
+// A separate interface because the question is different: Identify reads a
+// call's arguments before anything has run, and IdentifyDispatch reads a tool
+// and a route name after dispatch chose them, on any surface, since the dynamic
+// surface reaches its actions through the meta handlers. An identifier that
+// does not implement it leaves the prediction on the span.
+type DispatchIdentifier interface {
+	// IdentifyDispatch maps a tool and the route name its dispatcher chose to
+	// the catalog action. False, or an identity without an action id, leaves
+	// the prediction in place.
+	IdentifyDispatch(tool, action string) (Identity, bool)
 }
 
 // Identity is what a call turned out to be.

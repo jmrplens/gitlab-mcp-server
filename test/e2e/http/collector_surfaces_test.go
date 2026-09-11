@@ -85,6 +85,61 @@ func TestCollectorSurfaces_EachOneRecordsWhatIdentifiesACall(t *testing.T) {
 	}
 }
 
+// TestCollectorSurfaces_TheActionIsTheRouteThatRan verifies that a running
+// binary exports the action its dispatcher chose, not the one predicted from
+// the arguments.
+//
+// gitlab_environment with action get and an environment name where get expects
+// a numeric id runs protected_get, on the meta surface and on the dynamic one,
+// which enters the same meta handler. The prediction the span starts with says
+// environment.get; what reaches the collector has to say
+// environment.protected_get. The arguments go under params, or the call is
+// refused before any handler runs and nothing is dispatched.
+func TestCollectorSurfaces_TheActionIsTheRouteThatRan(t *testing.T) {
+	tests := []struct {
+		surface string
+		body    string
+		headers map[string]string
+	}{
+		{
+			surface: "meta",
+			body:    `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + protocolMeta + `,"name":"gitlab_environment","arguments":{"action":"get","params":{"project_id":"a/b","environment_id":"production"}}}}`,
+			headers: withAction("get"),
+		},
+		{
+			surface: "dynamic",
+			body:    `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + protocolMeta + `,"name":"gitlab_execute_action","arguments":{"action":"environment.get","params":{"project_id":"a/b","environment_id":"production"}}}}`,
+			headers: withAction("environment.get"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.surface, func(t *testing.T) {
+			gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+			c := startCollector(t)
+			env := collectorEnv(c)
+			env["TOOL_SURFACE"] = tc.surface
+			// Protected environments are a licensed feature: on the Free tier
+			// the fake instance is detected as, protected_get does not exist
+			// and get stays get.
+			srv := startServer(t, env, "--gitlab-url="+gitlab.url, "--tier=ultimate")
+
+			srv.do(t, authorizedCall(tc.body, tc.headers))
+
+			c.awaitExport(t, 20*time.Second)
+			time.Sleep(700 * time.Millisecond)
+
+			var payloads strings.Builder
+			for _, e := range c.received() {
+				payloads.Write(e.body)
+			}
+			if !strings.Contains(payloads.String(), "environment.protected_get") {
+				t.Errorf("environment.protected_get never reached the collector on the %s surface; telemetry named the prediction instead of the route that ran", tc.surface)
+			}
+		})
+	}
+}
+
 // TestCollectorSurfaces_IndividualKeepsTheToolNameOnSpans is the half of the
 // cardinality decision this level can actually see.
 //

@@ -121,7 +121,12 @@ func registerIndividualCatalogAction(server *mcp.Server, group actioncatalog.Gro
 		return
 	}
 	tool := mustIndividualToolFromCatalogAction(action, group.Icons, state.opts)
-	if state.opts.ReadOnlyOnly && (tool.Annotations == nil || !tool.Annotations.ReadOnlyHint) {
+	// The annotations are read without a nil check because the tool was built
+	// one line above by the one projection that makes it, and that projection
+	// fills them for every action. A nil check here would guard a value this
+	// function cannot be handed. RemoveNonReadOnlyTools keeps its own, because
+	// the tools it reads come back from a server and were registered by anyone.
+	if state.opts.ReadOnlyOnly && !tool.Annotations.ReadOnlyHint {
 		return
 	}
 	if state.opts.SchemaCacheKey != "" {
@@ -267,8 +272,9 @@ func actionSpecFromCatalogAction(action actioncatalog.Action) toolutil.ActionSpe
 func individualCatalogHandler(toolName string, action actioncatalog.Action, formatResult toolutil.FormatResultFunc, opts IndividualCatalogRegisterOptions) mcp.ToolHandlerFor[map[string]any, any] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input map[string]any) (*mcp.CallToolResult, any, error) {
 		if opts.SafeMode && !individualCatalogActionReadOnly(action) {
+			// safeModeHandler records the safe_mode refusal itself, as it must
+			// for the tools the server wraps after registration.
 			result, err := safeModeHandler(toolName)(ctx, req)
-			toolutil.LogToolRefusal(ctx, req, toolName, toolutil.RefusalSafeMode)
 			return result, nil, err
 		}
 		if action.Route.Destructive {

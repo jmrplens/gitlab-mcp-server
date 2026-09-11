@@ -1,11 +1,13 @@
 package mcpotel
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 )
@@ -103,6 +105,104 @@ func TestStatusDescription_SurvivesAnOrdinaryFailure(t *testing.T) {
 
 	if got := span.Status().Description; got != "internal error" {
 		t.Errorf("status description = %q, want the JSON-RPC message unchanged", got)
+	}
+}
+
+// TestOutcome_MetricAttributes_CarryWhatTheResponseSaidAndNothingElse verifies
+// the outcome's contribution to the duration metric for each kind of ending.
+//
+// A label present with an empty value is a series of its own, so a success
+// must add neither key rather than two empty ones, and a caller fault must add
+// its status code without an error.type it was never given. Getting this wrong
+// in either direction splits one population across series, or merges a failed
+// one into the successes, and neither shows as an error anywhere.
+func TestOutcome_MetricAttributes_CarryWhatTheResponseSaidAndNothingElse(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		outcome outcome
+		want    map[attribute.Key]string
+	}{
+		{name: "a success adds nothing", outcome: classify(&mcp.CallToolResult{}, nil), want: map[attribute.Key]string{}},
+		{
+			name:    "a caller fault adds its code alone",
+			outcome: classify(nil, &jsonrpc.Error{Code: -32601, Message: "no"}),
+			want:    map[attribute.Key]string{AttrRPCResponseStatusCode: "-32601"},
+		},
+		{
+			name:    "a server error adds its code and its classification",
+			outcome: classify(nil, &jsonrpc.Error{Code: -32603, Message: "no"}),
+			want:    map[attribute.Key]string{AttrErrorType: "-32603", AttrRPCResponseStatusCode: "-32603"},
+		},
+		{
+			name:    "a tool error adds its classification alone",
+			outcome: classify(&mcp.CallToolResult{IsError: true}, nil),
+			want:    map[attribute.Key]string{AttrErrorType: ErrorTypeToolError},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := map[attribute.Key]string{}
+			for _, kv := range tt.outcome.metricAttributes() {
+				got[kv.Key] = kv.Value.AsString()
+			}
+			if !maps.Equal(got, tt.want) {
+				t.Errorf("metric attributes = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestOutcome_NameIsUnverified_ForBothAnswersToAnUnknownName verifies the two
+// codes that let the metric bucket a caller-chosen tool or prompt name.
+//
+// The SDK answers a name that resolves to nothing with method-not-found or with
+// invalid-params depending on the method, so either must bucket the name. A
+// server error is not one of them: the handler ran, so the name was real, and
+// bucketing it would hide which tool is failing.
+func TestOutcome_NameIsUnverified_ForBothAnswersToAnUnknownName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "method not found", err: &jsonrpc.Error{Code: -32601, Message: "no"}, want: true},
+		{name: "invalid params", err: &jsonrpc.Error{Code: -32602, Message: "no"}, want: true},
+		{name: "an internal error", err: &jsonrpc.Error{Code: -32603, Message: "no"}, want: false},
+		{name: "a success", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := classify(&mcp.CallToolResult{}, tt.err).nameIsUnverified(); got != tt.want {
+				t.Errorf("nameIsUnverified = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestIsErrorResult_ATypedNilIsNotAFailure verifies that a Result holding a nil
+// *CallToolResult is read as no failure rather than dereferenced.
+//
+// An interface holding a typed nil pointer is not a nil interface, which is the
+// shape that once panicked a hundred times a day in paramsOf. A handler that
+// returns a nil result with no error hands the middleware exactly that, and a
+// classification that read IsError through it would panic on the one path every
+// tool call takes.
+func TestIsErrorResult_ATypedNilIsNotAFailure(t *testing.T) {
+	t.Parallel()
+
+	var nothing *mcp.CallToolResult
+	if isErrorResult(nothing) {
+		t.Error("a nil CallToolResult was classified as a tool error")
 	}
 }
 

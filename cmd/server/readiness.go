@@ -284,6 +284,25 @@ func (d *deferredCallIdentifier) Identify(toolName string, arguments any) (mcpot
 	return (*held).Identify(toolName, arguments)
 }
 
+// IdentifyDispatch implements [mcpotel.DispatchIdentifier] by delegating to the
+// identifier registration built, when that one resolves dispatches.
+//
+// Without it the middleware's type assertion finds only Identify on this
+// wrapper, so the route a dispatcher reports is dropped and every span keeps
+// the action predicted from the arguments; the unit tests of the identifier
+// cannot see that, since they never go through this wrapper.
+func (d *deferredCallIdentifier) IdentifyDispatch(tool, action string) (mcpotel.Identity, bool) {
+	held := d.resolved.Load()
+	if held == nil || *held == nil {
+		return mcpotel.Identity{}, false
+	}
+	resolver, ok := (*held).(mcpotel.DispatchIdentifier)
+	if !ok {
+		return mcpotel.Identity{}, false
+	}
+	return resolver.IdentifyDispatch(tool, action)
+}
+
 // deferredIdentity carries the stdio caller's identity into request contexts
 // once startup has resolved it.
 //

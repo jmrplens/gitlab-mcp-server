@@ -322,9 +322,13 @@ func mergeActionSpecGroup(base, override ActionSpecGroup) ActionSpecGroup {
 	if strings.TrimSpace(override.OwnerPackage) != "" {
 		merged.OwnerPackage = override.OwnerPackage
 	}
-	if override.SurfaceKind != "" {
-		merged.SurfaceKind = override.SurfaceKind
-	}
+	// Unconditional, unlike every other field above: the clone at the top of
+	// this function defaults an empty SurfaceKind to the meta-group kind, so an
+	// override always carries one by the time it is read here and a check for
+	// the empty string could only ever be dead code pretending to be a guard.
+	// The same reasoning removed the second SurfaceKind default in
+	// groupFromActionSpecGroup.
+	merged.SurfaceKind = override.SurfaceKind
 	merged.Actions = mergeActionSpecOverrides(merged.Actions, override.Actions)
 	return merged
 }

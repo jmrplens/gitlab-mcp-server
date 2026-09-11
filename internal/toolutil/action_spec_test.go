@@ -129,6 +129,27 @@ func TestActionSpecStringAndNoteNormalization(t *testing.T) {
 	}
 }
 
+// TestNewActionSpec_ValidationNotesNormalizeFromTheDeclaredListAlone verifies
+// the note path every domain package actually takes: the options carry the
+// notes and there is nothing to merge them with, so the merge runs with an
+// empty left-hand side. Notes are trimmed, blanks dropped and duplicates
+// removed, while the casing survives because a model reads these sentences.
+func TestNewActionSpec_ValidationNotesNormalizeFromTheDeclaredListAlone(t *testing.T) {
+	spec := NewActionSpec("list", ActionRoute{}, ActionSpecOptions{
+		SchemaValidationNotes:  []string{"  Scope is required  ", "", "Scope is required"},
+		RuntimeValidationNotes: []string{"GitLab refuses an unknown state", "The iteration must belong to the group"},
+	})
+
+	if len(spec.SchemaValidationNotes) != 1 || spec.SchemaValidationNotes[0] != "Scope is required" {
+		t.Errorf("SchemaValidationNotes = %#v, want the single trimmed note", spec.SchemaValidationNotes)
+	}
+	if len(spec.RuntimeValidationNotes) != 2 ||
+		spec.RuntimeValidationNotes[0] != "GitLab refuses an unknown state" ||
+		spec.RuntimeValidationNotes[1] != "The iteration must belong to the group" {
+		t.Errorf("RuntimeValidationNotes = %#v, want both notes in order", spec.RuntimeValidationNotes)
+	}
+}
+
 // TestCloneActionSpecs_DefensiveCopiesMetadata verifies CloneActionSpec and
 // CloneActionSpecs preserve normalized metadata without sharing mutable state.
 func TestCloneActionSpecs_DefensiveCopiesMetadata(t *testing.T) {
@@ -812,6 +833,33 @@ func TestActionSpecValidate_RejectsNonNormalizedTags(t *testing.T) {
 	}
 }
 
+// TestActionSpecValidate_RejectsATagWrongOnEitherCount verifies that each half
+// of the tag rule refuses on its own: a tag that is not the lowercase trimmed
+// form of itself, and a tag carrying whitespace.
+//
+// "Needs Cleanup" above is wrong on both counts at once, so it cannot tell the
+// two halves apart. Each case here is wrong on exactly one. Both shapes matter
+// because the dynamic surface matches a tag literally against a normalized
+// query, so either would be a tag no search can reach.
+func TestActionSpecValidate_RejectsATagWrongOnEitherCount(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		tag  string
+	}{
+		{name: "uppercase but no whitespace", tag: "Projects"},
+		{name: "whitespace but already lowercase", tag: "needs cleanup"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := ActionSpec{Name: "list", Tags: []string{tc.tag}}
+
+			err := spec.Validate()
+			if err == nil || !strings.Contains(err.Error(), "non-normalized tag") {
+				t.Fatalf("Validate() with tag %q error = %v, want it rejected as non-normalized", tc.tag, err)
+			}
+		})
+	}
+}
+
 // TestValidateActionSpecAliasesAgainstNames_AliasEqualsCanonical verifies the
 // early-continue branch when an alias matches the spec's own canonical name
 // (after normalization). The function must not flag self-referential aliases,
@@ -990,6 +1038,15 @@ func TestResolveSchemaRef(t *testing.T) {
 			root: map[string]any{},
 			sch:  map[string]any{"$ref": "#/components/schemas/Foo"},
 			want: map[string]any{"$ref": "#/components/schemas/Foo"},
+		},
+		{
+			// A $ref that is not a string reads as the empty string, which
+			// carries no "#/$defs/" prefix, so the resolver hands the schema
+			// back rather than looking a definition up under a key it invented.
+			name: "non-string ref returns schema unchanged",
+			root: map[string]any{"$defs": map[string]any{"Foo": map[string]any{"type": "integer"}}},
+			sch:  map[string]any{"$ref": 42},
+			want: map[string]any{"$ref": 42},
 		},
 		{
 			name: "missing $defs returns schema unchanged",

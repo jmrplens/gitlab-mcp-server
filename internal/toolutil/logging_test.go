@@ -298,6 +298,18 @@ func TestLogToolCallAll_ErrorResultIsNotLoggedAsSuccess(t *testing.T) {
 
 		assertContains(t, buf.String(), `"is_error":false`)
 	})
+
+	t.Run("a typed nil result is not an error result", func(t *testing.T) {
+		// A handler that returns its result as a typed nil pointer satisfies the
+		// type assertion, so the flag has to be read off the value rather than
+		// off the assertion succeeding: reading it off the assertion dereferences
+		// nothing and reports every such call as a failure.
+		buf := captureSlog(t)
+		var missing *mcp.CallToolResult
+		LogToolCallAll(context.Background(), nil, "gitlab_project_get", time.Now(), missing, nil)
+
+		assertContains(t, buf.String(), `"is_error":false`)
+	})
 }
 
 // TestLogToolRefusal_RecordsWhatWasDeclinedAndWhy pins the line the silent

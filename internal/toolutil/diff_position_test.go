@@ -113,6 +113,32 @@ func TestParseDiffLines_SampleDiff(t *testing.T) {
 	}
 }
 
+// TestParseDiffLines_NewFileHunk_KeepsTheAddedLines verifies that a hunk whose
+// old side is empty is parsed rather than skipped. "@@ -0,0 +1,n @@" is what
+// git writes for a file the merge request adds.
+//
+// The guard before the switch exists to drop the metadata that precedes the
+// first hunk header, where neither counter has been set yet. A new file leaves
+// the old counter at zero for the whole hunk, so a guard that asked about
+// either counter instead of both would return no lines at all, and every
+// inline comment on a newly added file would be refused as outside the diff.
+func TestParseDiffLines_NewFileHunk_KeepsTheAddedLines(t *testing.T) {
+	lines := ParseDiffLines("@@ -0,0 +1,2 @@\n+alpha\n+beta\n")
+
+	want := []DiffLine{
+		{NewLine: 1, Type: LineAdded},
+		{NewLine: 2, Type: LineAdded},
+	}
+	if len(lines) != len(want) {
+		t.Fatalf("ParseDiffLines() = %+v (%d lines), want %d", lines, len(lines), len(want))
+	}
+	for i, got := range lines {
+		if got != want[i] {
+			t.Errorf("line[%d] = %+v, want %+v", i, got, want[i])
+		}
+	}
+}
+
 // TestValidateDiffPosition_AddedLine verifies position validation for a line
 // that was added in the diff (new_line set, old_line zero).
 func TestValidateDiffPosition_AddedLine(t *testing.T) {
@@ -190,6 +216,56 @@ func TestValidateDiffPosition_OutsideDiff(t *testing.T) {
 	if got := err.Error(); !contains(got, "outside the diff range") {
 		t.Errorf("error should mention 'outside the diff range', got: %s", got)
 	}
+}
+
+// TestValidateDiffPosition_OutsideDiff_NamesTheValidRanges verifies that the
+// ranges the refusal reports are the ones the diff really covers, on both
+// sides.
+//
+// That message is all the caller has to correct itself with: it is told to
+// move the comment onto a line the diff shows, so a range computed from the
+// wrong lines, left at zero, or collapsed onto a single line sends the next
+// call somewhere that is refused again.
+func TestValidateDiffPosition_OutsideDiff_NamesTheValidRanges(t *testing.T) {
+	// simpleDiff covers new lines 1-6 and old lines 1-5.
+	err := ValidateDiffPosition(ParseDiffLines(simpleDiff), 100, 200)
+	if err == nil {
+		t.Fatal("ValidateDiffPosition() error = nil, want a refusal for a position outside the diff")
+	}
+	msg := err.Error()
+	if !contains(msg, "new_line 100 and old_line 200") {
+		t.Errorf("error = %q, want it to name the position asked for", msg)
+	}
+	if !contains(msg, "valid new_line: 1-6") {
+		t.Errorf("error = %q, want the new-side range 1-6 of the diff", msg)
+	}
+	if !contains(msg, "valid old_line: 1-5") {
+		t.Errorf("error = %q, want the old-side range 1-5 of the diff", msg)
+	}
+}
+
+// TestValidateDiffPosition_BothSet_RequiresAnUnchangedLine verifies every part
+// of the rule GitLab applies to a position that carries both line numbers: it
+// must name a line the diff leaves unchanged, and that line's two numbers must
+// both be the ones asked for.
+//
+// Accepting a position that fails either half is worse than refusing it here:
+// the handler would send it to GitLab, which rejects the note with a message
+// about the diff rather than about the position, and the comment is never
+// published.
+func TestValidateDiffPosition_BothSet_RequiresAnUnchangedLine(t *testing.T) {
+	t.Run("a changed line is refused however its numbers line up", func(t *testing.T) {
+		lines := []DiffLine{{OldLine: 5, NewLine: 5, Type: LineAdded}}
+		if err := ValidateDiffPosition(lines, 5, 5); err == nil {
+			t.Error("ValidateDiffPosition() error = nil, want a refusal: the line both numbers name was added, not left unchanged")
+		}
+	})
+	t.Run("an old_line that matches does not carry a new_line that does not", func(t *testing.T) {
+		// old_line 2 is the removed line of simpleDiff; new_line 99 is in no hunk.
+		if err := ValidateDiffPosition(ParseDiffLines(simpleDiff), 99, 2); err == nil {
+			t.Error("ValidateDiffPosition() error = nil, want a refusal: new_line 99 is outside the diff")
+		}
+	})
 }
 
 // TestValidateDiffPosition_NoLines verifies that validation fails when the
@@ -299,10 +375,17 @@ func TestParseDiffLines_BeforeFirstHunk(t *testing.T) {
 	}
 }
 
-// TestValidateDiffLinePosition_DefaultBranch exercises the unreachable default
-// branch (both line numbers zero) that should never produce a match.
+// TestValidateDiffLinePosition_DefaultBranch exercises the default branch, the
+// one [ValidateDiffPosition] refuses before the loop: neither line number set.
+//
+// The fixture is a context line with both line numbers zero, which is the only
+// one that can tell the default branch from the two single-line branches: a row
+// whose NewLine is 5 matches nothing whatever branch runs, so an earlier version
+// of this test passed even when the wrong branch was taken. A zero-line context
+// row would be claimed by either single-line validator, which is exactly what a
+// widened case expression would do.
 func TestValidateDiffLinePosition_DefaultBranch(t *testing.T) {
-	dl := DiffLine{Type: LineAdded, NewLine: 5}
+	dl := DiffLine{Type: LineContext}
 	matched, err := validateDiffLinePosition(dl, 0, 0)
 	if matched || err != nil {
 		t.Errorf("validateDiffLinePosition(0,0) = (%v, %v), want (false, nil)", matched, err)

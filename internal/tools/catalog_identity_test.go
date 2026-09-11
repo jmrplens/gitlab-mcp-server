@@ -3,16 +3,25 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -396,6 +405,142 @@ func TestNewCallIdentifier_NilCatalogIsUsable(t *testing.T) {
 	}
 }
 
+// TestIdentifierActions_IndividualSurfaceReadsRegistrationOrder covers the one
+// surface whose resolver cannot read the catalog's own order.
+//
+// An individual tool name can be declared by more than one action, registration
+// binds it to the first one it visits, and that walk is group by group in tool
+// name order. The catalog's own action list is sorted by canonical id instead,
+// which is a different order whenever a group's tool name and its domain do not
+// sort alike. Reading the wrong one names an action whose handler never ran
+// under that name, which is how every gitlab_commit_list call was once recorded
+// as repository.file_history.
+func TestIdentifierActions_IndividualSurfaceReadsRegistrationOrder(t *testing.T) {
+	catalog := registrationOrderTestCatalog(t)
+
+	if got := actionIDsInOrder(identifierActions(catalog, config.ToolSurfaceIndividual)); !slices.Equal(got, []string{"zeta.list", "alpha.list"}) {
+		t.Errorf("individual order = %v, want the registration order [zeta.list alpha.list]", got)
+	}
+	for _, surface := range []string{config.ToolSurfaceMeta, config.ToolSurfaceDynamic} {
+		t.Run(surface, func(t *testing.T) {
+			if got := actionIDsInOrder(identifierActions(catalog, surface)); !slices.Equal(got, []string{"alpha.list", "zeta.list"}) {
+				t.Errorf("%s order = %v, want the catalog's own order [alpha.list zeta.list]", surface, got)
+			}
+		})
+	}
+
+	registered := registeredIndividualTools(t, catalog)
+	identity, ok := NewCallIdentifier(catalog, config.ToolSurfaceIndividual).Identify(sharedOrderToolName, nil)
+	if !ok {
+		t.Fatalf("%s resolved to nothing", sharedOrderToolName)
+	}
+	action, found := catalog.Action(actioncatalog.ActionID(identity.ActionID))
+	if !found {
+		t.Fatalf("resolved action %q is not in the catalog", identity.ActionID)
+	}
+	if got, want := action.IndividualTool.Description, registered[sharedOrderToolName].Description; got != want {
+		t.Fatalf("resolved %s (%q), but registration served %q", identity.ActionID, got, want)
+	}
+}
+
+// sharedOrderToolName is the individual tool name both groups of
+// [registrationOrderTestCatalog] declare, so which action owns it is decided by
+// the order alone.
+const sharedOrderToolName = "gitlab_test_order_shared"
+
+// registrationOrderTestCatalog returns two groups whose tool names sort the
+// opposite way to their domains, so the registration walk and the catalog's
+// canonical order disagree about which action is first.
+func registrationOrderTestCatalog(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
+	catalog := actioncatalog.NewCatalog()
+	for _, declared := range []struct {
+		toolName    string
+		domain      string
+		description string
+	}{
+		{toolName: "gitlab_test_order_first", domain: "zeta", description: "Zeta."},
+		{toolName: "gitlab_test_order_second", domain: "alpha", description: "Alpha."},
+	} {
+		spec := toolutil.NewActionSpec("list", toolutil.RouteAction(nil,
+			func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+				return struct{}{}, nil
+			}), toolutil.ActionSpecOptions{
+			ReadOnly:       true,
+			OwnerPackage:   "tools",
+			IndividualTool: toolutil.IndividualToolSpec{Name: sharedOrderToolName, Title: "Shared", Description: declared.description},
+		})
+		group, err := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{
+			ToolName:     declared.toolName,
+			BaseDomain:   declared.domain,
+			Title:        "Order probe",
+			Description:  "Order probe group.",
+			OwnerPackage: "tools",
+			SurfaceKind:  actioncatalog.SurfaceKindMetaGroup,
+		}, []toolutil.ActionSpec{spec})
+		if err != nil {
+			t.Fatalf("GroupFromSpecs(%s) error = %v", declared.toolName, err)
+		}
+		if addErr := catalog.AddGroup(group); addErr != nil {
+			t.Fatalf("AddGroup(%s) error = %v", declared.toolName, addErr)
+		}
+	}
+	return catalog
+}
+
+// actionIDsInOrder lists canonical action ids in the order they were given.
+func actionIDsInOrder(actions []actioncatalog.Action) []string {
+	ids := make([]string, 0, len(actions))
+	for _, action := range actions {
+		ids = append(ids, string(action.ID))
+	}
+	return ids
+}
+
+// TestNewCallIdentifier_ActionMissingEitherName_ClaimsNoTool covers the guard
+// that decides which tool names the meta index answers for.
+//
+// An action indexes its tool name only when it also carries a domain, because
+// the pair is what names a catalog action: an entry with one half missing would
+// make the resolver claim a call it can say nothing about, and a dashboard
+// grouped by domain would gain a row named by the empty string. Every action a
+// catalog builds carries both, so only a hand-built one reaches this, which is
+// why the resolver can be built from a plain slice.
+func TestNewCallIdentifier_ActionMissingEitherName_ClaimsNoTool(t *testing.T) {
+	cases := []struct {
+		name   string
+		action actioncatalog.Action
+		tool   string
+	}{
+		{
+			name:   "an action with a tool name and no domain",
+			action: actioncatalog.Action{ID: "ghost.list", Name: "list", ToolName: "gitlab_ghost"},
+			tool:   "gitlab_ghost",
+		},
+		{
+			name:   "an action with a domain and no tool name",
+			action: actioncatalog.Action{ID: "ghost.list", Name: "list", Domain: "ghost"},
+			tool:   "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			identifier := newCallIdentifier([]actioncatalog.Action{tc.action}, config.ToolSurfaceMeta)
+
+			if identity, ok := identifier.Identify(tc.tool, rawArgs(t, map[string]any{"action": "list"})); ok {
+				t.Errorf("Identify(%q) = %+v, true; want a tool the index cannot name to resolve to nothing", tc.tool, identity)
+			}
+			dispatch, isDispatcher := identifier.(mcpotel.DispatchIdentifier)
+			if !isDispatcher {
+				t.Fatalf("the meta resolver is a %T, which names no dispatched route", identifier)
+			}
+			if identity, ok := dispatch.IdentifyDispatch(tc.tool, "list"); ok {
+				t.Errorf("IdentifyDispatch(%q) = %+v, true; want a tool the index cannot name to resolve to nothing", tc.tool, identity)
+			}
+		})
+	}
+}
+
 // buildTestCatalog returns the real canonical catalog, so these tests fail when
 // the catalog changes shape rather than when a fixture drifts from it.
 func buildTestCatalog(t *testing.T) *actioncatalog.Catalog {
@@ -484,6 +629,124 @@ func TestNewCallIdentifier_IndividualNameBelongsToTheRegisteredAction(t *testing
 	if got, want := action.IndividualTool.Description, registered["gitlab_test_shared"].Description; got != want {
 		t.Fatalf("resolved %s (%q), but registration served %q", identity.ActionID, got, want)
 	}
+}
+
+// TestNewCallIdentifier_TelemetryNamesTheRouteTheDispatcherRan verifies, with
+// the real catalog, the real dispatchers and the real middleware, that a call
+// the dispatcher rewrites is recorded under the action that ran.
+//
+// gitlab_environment with action get and an environment name runs
+// protected_get, on the meta surface and on the dynamic one, which re-enters
+// the same meta handler. The middleware predicts environment.get from the
+// arguments before anything runs; the span has to end up naming
+// environment.protected_get.
+func TestNewCallIdentifier_TelemetryNamesTheRouteTheDispatcherRan(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"name":"production"}`)
+	}))
+	catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Tier: edition.Ultimate})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	// A name where get expects a numeric id is what sends get to
+	// protected_get, and unlike an environment parameter it passes the
+	// dynamic surface's schema check for environment.get.
+	params := map[string]any{"project_id": "1", "environment_id": "production"}
+	metaHandler := toolutil.MakeMetaHandler("gitlab_environment", catalog.ActionMaps()["gitlab_environment"], markdownForResult)
+	registry := dynamic.NewRegistryFromCatalog(catalog)
+
+	memberParams := map[string]any{"project_id": "1", "user_id": 5}
+	tests := map[string]struct {
+		surface    string
+		tool       string
+		action     string
+		params     map[string]any
+		wantAction string
+		run        func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error)
+	}{
+		"meta": {
+			surface: config.ToolSurfaceMeta, tool: "gitlab_environment", action: "get", params: params, wantAction: "environment.protected_get",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				result, _, runErr := metaHandler(ctx, req, MetaToolInput{Action: "get", Params: params})
+				return result, runErr
+			},
+		},
+		"dynamic": {
+			surface: config.ToolSurfaceDynamic, tool: dynamic.ExecuteActionToolName, action: "environment.get", params: params, wantAction: "environment.protected_get",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				result, _, runErr := registry.Execute(ctx, req, dynamic.ExecuteInput{Action: "environment.get", Params: params})
+				return result, runErr
+			},
+		},
+		// A compatibility alias the argument-based identifier does not know,
+		// for a destructive action sent without confirm: gitlab_execute_action
+		// refuses it before any meta handler runs.
+		"dynamic refusal of a compatibility alias": {
+			surface: config.ToolSurfaceDynamic, tool: dynamic.ExecuteActionToolName, action: "project.member_remove", params: memberParams, wantAction: "project.member_delete",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				result, _, runErr := registry.Execute(ctx, req, dynamic.ExecuteInput{Action: "project.member_remove", Params: memberParams})
+				return result, runErr
+			},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			recorder := recordSpans(t)
+			handler := mcpotel.Middleware(mcpotel.Options{Identifier: NewCallIdentifier(catalog, tc.surface), Surface: tc.surface})(
+				func(ctx context.Context, _ string, req mcp.Request) (mcp.Result, error) {
+					return tc.run(ctx, req.(*mcp.CallToolRequest))
+				},
+			)
+			arguments, marshalErr := json.Marshal(map[string]any{"action": tc.action, "params": tc.params})
+			if marshalErr != nil {
+				t.Fatalf("json.Marshal() error = %v", marshalErr)
+			}
+			req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: tc.tool, Arguments: arguments}}
+			if _, callErr := handler(context.Background(), "tools/call", req); callErr != nil {
+				t.Fatalf("tools/call error = %v", callErr)
+			}
+
+			// The GitLab request the route makes records a client span of
+			// its own; the tools/call span is the server one.
+			var server []sdktrace.ReadOnlySpan
+			for _, span := range recorder.Ended() {
+				if span.SpanKind() == trace.SpanKindServer {
+					server = append(server, span)
+				}
+			}
+			if len(server) != 1 {
+				t.Fatalf("recorded %d server spans, want 1", len(server))
+			}
+			if got := spanString(server[0], mcpotel.AttrActionID); got != tc.wantAction {
+				t.Errorf("span action = %q, want %s, the route the dispatcher chose", got, tc.wantAction)
+			}
+		})
+	}
+}
+
+// recordSpans installs a real tracer provider that keeps finished spans in
+// memory for the rest of the test, restoring the global one afterwards.
+func recordSpans(t *testing.T) *tracetest.SpanRecorder {
+	t.Helper()
+	recorder := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	previous := otel.GetTracerProvider()
+	otel.SetTracerProvider(provider)
+	t.Cleanup(func() {
+		_ = provider.Shutdown(context.Background())
+		otel.SetTracerProvider(previous)
+	})
+	return recorder
+}
+
+// spanString reads one string attribute off a recorded span, empty when absent.
+func spanString(span sdktrace.ReadOnlySpan, key attribute.Key) string {
+	for _, kv := range span.Attributes() {
+		if kv.Key == key {
+			return kv.Value.AsString()
+		}
+	}
+	return ""
 }
 
 // ambiguousIndividualToolOwners names every individual tool that more than one

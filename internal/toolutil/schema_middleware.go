@@ -16,8 +16,16 @@ func onFirstToolsList(server *mcp.Server, visit func([]*mcp.Tool)) {
 	if server == nil {
 		return
 	}
+	server.AddReceivingMiddleware(firstToolsListMiddleware(visit))
+}
+
+// firstToolsListMiddleware is the middleware [onFirstToolsList] registers. It is
+// built apart from the registration so that what it does with somebody else's
+// handler (a failed call, a result of another type, a nil one) can be asked of
+// it directly, which is not something a client driving a real server can ask.
+func firstToolsListMiddleware(visit func([]*mcp.Tool)) mcp.Middleware {
 	var once sync.Once
-	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			result, err := next(ctx, method, req)
 			if err != nil || method != "tools/list" {
@@ -28,5 +36,5 @@ func onFirstToolsList(server *mcp.Server, visit func([]*mcp.Tool)) {
 			}
 			return result, nil
 		}
-	})
+	}
 }

@@ -74,7 +74,13 @@ func WrapMutatingToolsForSafeModeExcept(ctx context.Context, server *mcp.Server,
 // serving it, which is what the flag means, and the dynamic surface already
 // answers its destructive guard the same way.
 func safeModeHandler(toolName string) mcp.ToolHandler {
-	return func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Recorded as a refusal, as the dispatcher surfaces record theirs
+		// ([toolutil.SafeModeActionFunc]): without it an intercepted call on
+		// this surface reached the span, the metric and the log as an ordinary
+		// failing call, and a deployment in safe mode could not count what it
+		// intercepted.
+		toolutil.LogToolRefusal(ctx, req, toolName, toolutil.RefusalSafeMode)
 		preview := SafeModePreview{
 			Status: "blocked",
 			Mode:   "safe",
@@ -117,8 +123,9 @@ func RemoveNonReadOnlyTools(ctx context.Context, server *mcp.Server) int {
 			toRemove = append(toRemove, tool.Name)
 		}
 	}
-	if len(toRemove) > 0 {
-		server.RemoveTools(toRemove...)
-	}
+	// Called unconditionally: RemoveTools decides per name, so an empty list
+	// removes nothing and notifies nobody. A guard in front of it could only
+	// ever skip taking the server's lock, which no client can observe.
+	server.RemoveTools(toRemove...)
 	return len(toRemove)
 }

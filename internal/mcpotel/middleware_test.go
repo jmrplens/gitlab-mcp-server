@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -206,6 +208,184 @@ func TestMiddleware_ActionIsRecordedWhereTheToolNameIsNot(t *testing.T) {
 	}
 }
 
+// dispatchingIdentifier predicts from the arguments and resolves a dispatched
+// route from a fixed table, the two answers the catalog identifier gives.
+type dispatchingIdentifier struct {
+	predicted  Identity
+	dispatched map[string]Identity
+}
+
+func (d dispatchingIdentifier) Identify(string, any) (Identity, bool) { return d.predicted, true }
+
+func (d dispatchingIdentifier) IdentifyDispatch(tool, action string) (Identity, bool) {
+	identity, ok := d.dispatched[tool+"/"+action]
+	return identity, ok
+}
+
+// TestMiddleware_TheDispatchedActionReplacesThePrediction verifies that the
+// action a dispatcher reports through RecordDispatch is what the span and the
+// metric name, instead of the one predicted from the arguments.
+//
+// gitlab_environment with action get and an environment name runs
+// protected_get; the prediction reads get from the arguments. A resolution
+// that names no domain keeps the predicted one on both, because a span
+// attribute cannot be removed and the metric must agree with the span.
+//
+// The metric's whole attribute set is compared, not only the two replaced
+// keys: the replacement rebuilds the call's attribute list, and a rebuild that
+// kept the action and lost the method or the tool name would still pass a
+// check of the action alone.
+func TestMiddleware_TheDispatchedActionReplacesThePrediction(t *testing.T) {
+	tests := map[string]struct {
+		resolved   Identity
+		wantDomain string
+	}{
+		"with its domain":    {resolved: Identity{ActionID: "environment.protected_get", Domain: "environments"}, wantDomain: "environments"},
+		"without any domain": {resolved: Identity{ActionID: "environment.protected_get"}, wantDomain: "environment"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			recorder := newRecorder(t)
+			reader, restore := newMetricRecorder(t)
+			defer restore()
+
+			identifier := dispatchingIdentifier{
+				predicted:  Identity{ActionID: "environment.get", Domain: "environment"},
+				dispatched: map[string]Identity{"gitlab_environment/protected_get": tc.resolved},
+			}
+			handler := Middleware(Options{Identifier: identifier, Surface: "meta"})(
+				func(ctx context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+					RecordDispatch(ctx, "gitlab_environment", "protected_get")
+					return &mcp.CallToolResult{}, nil
+				},
+			)
+			_, _ = handler(context.Background(), "tools/call",
+				callToolRequest("gitlab_environment", map[string]any{"action": "get"}, nil))
+
+			spans := recorder.Ended()
+			if len(spans) != 1 {
+				t.Fatalf("recorded %d spans, want 1", len(spans))
+			}
+			if got, _ := attrOf(spans[0], AttrActionID); got.AsString() != "environment.protected_get" {
+				t.Errorf("span action = %q, want the dispatched environment.protected_get", got.AsString())
+			}
+			if got, _ := attrOf(spans[0], AttrDomain); got.AsString() != tc.wantDomain {
+				t.Errorf("span domain = %q, want %q", got.AsString(), tc.wantDomain)
+			}
+			onMetric := map[attribute.Key]string{}
+			for _, kv := range collectedAttributes(t, reader) {
+				onMetric[kv.Key] = kv.Value.AsString()
+			}
+			wantMetric := map[attribute.Key]string{
+				AttrToolSurface:        "meta",
+				AttrMCPMethodName:      "tools/call",
+				AttrGenAIToolName:      "gitlab_environment",
+				AttrGenAIOperationName: "execute_tool",
+				AttrActionID:           "environment.protected_get",
+				AttrDomain:             tc.wantDomain,
+			}
+			if !maps.Equal(onMetric, wantMetric) {
+				t.Errorf("metric attributes = %v, want %v", onMetric, wantMetric)
+			}
+		})
+	}
+}
+
+// TestMiddleware_APanickingHandlerStillNamesTheRouteThatRan verifies that a
+// handler which reports its route and then panics leaves the span carrying that
+// route rather than the action predicted from the arguments.
+//
+// The panic skips every statement after the handler call, so the replacement
+// that normally runs there never does, and the deferred End would export the
+// prediction. The dispatcher had already chosen by then, and a panicking call
+// is the one whose trace gets read, so the resolution is deferred beside End.
+func TestMiddleware_APanickingHandlerStillNamesTheRouteThatRan(t *testing.T) {
+	recorder := newRecorder(t)
+
+	identifier := dispatchingIdentifier{
+		predicted:  Identity{ActionID: "environment.get", Domain: "environment"},
+		dispatched: map[string]Identity{"gitlab_environment/protected_get": {ActionID: "environment.protected_get", Domain: "environment"}},
+	}
+	handler := Middleware(Options{Identifier: identifier, Surface: "meta"})(
+		func(ctx context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+			RecordDispatch(ctx, "gitlab_environment", "protected_get")
+			panic("the handler blew up after choosing its route")
+		},
+	)
+
+	func() {
+		defer func() {
+			if recovered := recover(); recovered == nil {
+				t.Error("the middleware swallowed the panic, which would hide the failure from the caller")
+			}
+		}()
+		_, _ = handler(context.Background(), "tools/call",
+			callToolRequest("gitlab_environment", map[string]any{"action": "get"}, nil))
+	}()
+
+	spans := recorder.Ended()
+	if len(spans) != 1 {
+		t.Fatalf("recorded %d spans, want 1: a panicking call must still end its span", len(spans))
+	}
+	if got, _ := attrOf(spans[0], AttrActionID); got.AsString() != "environment.protected_get" {
+		t.Errorf("span action = %q, want the dispatched environment.protected_get", got.AsString())
+	}
+}
+
+// TestMiddleware_ThePredictionStandsWhenNoDispatchResolves verifies that the
+// predicted action is kept whenever the dispatch cannot improve on it: nothing
+// reported, an incomplete report, an identifier that does not resolve
+// dispatches, and a report the identifier cannot name.
+func TestMiddleware_ThePredictionStandsWhenNoDispatchResolves(t *testing.T) {
+	predicted := Identity{ActionID: "environment.get", Domain: "environment"}
+	resolving := dispatchingIdentifier{predicted: predicted, dispatched: map[string]Identity{
+		"gitlab_environment/protected_get": {ActionID: "environment.protected_get", Domain: "environment"},
+		"gitlab_environment/invented":      {Domain: "environment"},
+	}}
+	predicting := IdentifierFunc(func(string, any) (Identity, bool) { return predicted, true })
+
+	tests := map[string]struct {
+		identifier CallIdentifier
+		tool       string
+		action     string
+	}{
+		"nothing reported":                        {identifier: resolving},
+		"a report without an action":              {identifier: resolving, tool: "gitlab_environment"},
+		"a report without a tool":                 {identifier: resolving, action: "protected_get"},
+		"an identifier that resolves no dispatch": {identifier: predicting, tool: "gitlab_environment", action: "protected_get"},
+		"a route the identifier does not know":    {identifier: resolving, tool: "gitlab_environment", action: "unknown"},
+		"a route that resolves to a domain alone": {identifier: resolving, tool: "gitlab_environment", action: "invented"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			recorder := newRecorder(t)
+			handler := Middleware(Options{Identifier: tc.identifier, Surface: "meta"})(
+				func(ctx context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+					RecordDispatch(ctx, tc.tool, tc.action)
+					return &mcp.CallToolResult{}, nil
+				},
+			)
+			_, _ = handler(context.Background(), "tools/call",
+				callToolRequest("gitlab_environment", map[string]any{"action": "get"}, nil))
+
+			spans := recorder.Ended()
+			if len(spans) != 1 {
+				t.Fatalf("recorded %d spans, want 1", len(spans))
+			}
+			if got, _ := attrOf(spans[0], AttrActionID); got.AsString() != "environment.get" {
+				t.Errorf("span action = %q, want the predicted environment.get", got.AsString())
+			}
+		})
+	}
+}
+
+// TestRecordDispatch_OutsideARequestIsANoOp verifies that a dispatcher called
+// without the middleware in front of it, as every unit test of a handler does,
+// records nothing and does not panic.
+func TestRecordDispatch_OutsideARequestIsANoOp(t *testing.T) {
+	RecordDispatch(context.Background(), "gitlab_environment", "protected_get")
+}
+
 // TestMiddleware_SuccessLeavesTheStatusUnset covers the MUST in this area.
 //
 // "Span Status Code MUST be left unset if the instrumented operation has ended
@@ -400,6 +580,25 @@ func TestMiddleware_PromptAndResourceNaming(t *testing.T) {
 		if kv.Value.AsString() == "gitlab://projects/42/issues" {
 			t.Errorf("the resource URI reached attribute %s; it is Opt-In and declined", kv.Key)
 		}
+	}
+}
+
+// TestMiddleware_AnUnnamedPromptKeepsTheBareMethod verifies that a prompts/get
+// naming no prompt is named by its method alone and carries no prompt name.
+//
+// An empty gen_ai.prompt.name would be a dimension value meaning nothing was
+// looked at, and a span name of "prompts/get " with a trailing space would sort
+// apart from the bare method a backend groups the other malformed calls under.
+func TestMiddleware_AnUnnamedPromptKeepsTheBareMethod(t *testing.T) {
+	span := runOnce(t, Options{}, "prompts/get",
+		&mcp.GetPromptRequest{Params: &mcp.GetPromptParams{}},
+		nil, errInvalidParams)
+
+	if got := span.Name(); got != "prompts/get" {
+		t.Errorf("span name = %q, want the bare method for a prompt with no name", got)
+	}
+	if value, recorded := attrOf(span, AttrGenAIPromptName); recorded {
+		t.Errorf("%s = %q was recorded for a request that named no prompt", AttrGenAIPromptName, value.AsString())
 	}
 }
 
@@ -617,6 +816,44 @@ func TestMiddleware_UnadmittedProtocolVersionIsDropped(t *testing.T) {
 
 	if _, ok := attrOf(span, AttrMCPProtocolVersion); ok {
 		t.Error("an unadmitted version was recorded; a caller can then mint one time series per spelling")
+	}
+}
+
+// TestMiddleware_TheAdmittedVersionIsAMetricDimension verifies that the
+// negotiated revision reaches the duration metric as well as the span, and
+// that a version the allow-list refused adds no dimension there at all.
+//
+// It is the one value a caller supplies that the metric may carry, because the
+// allow-list bounds it, and it is what splits a latency change by the revision
+// a client speaks. An unadmitted request must not carry an empty value either:
+// a label present with nothing in it is a series of its own.
+func TestMiddleware_TheAdmittedVersionIsAMetricDimension(t *testing.T) {
+	tests := []struct {
+		name string
+		sent string
+		want []string
+	}{
+		{name: "an admitted version is carried", sent: "2026-07-28", want: []string{"2026-07-28"}},
+		{name: "an unadmitted version adds no dimension", sent: "1999-01-01-not-a-revision"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reader, restore := newMetricRecorder(t)
+			defer restore()
+
+			handler := Middleware(Options{ProtocolVersions: admitted})(
+				func(context.Context, string, mcp.Request) (mcp.Result, error) {
+					return &mcp.CallToolResult{}, nil
+				},
+			)
+			_, _ = handler(context.Background(), "tools/call",
+				callToolRequest("gitlab_execute_action", nil, map[string]any{metaProtocolVersionKey: tt.sent}))
+
+			if got := dimensionValues(t, reader, string(AttrMCPProtocolVersion)); !slices.Equal(got, tt.want) {
+				t.Errorf("%s on the metric = %q, want %q", AttrMCPProtocolVersion, got, tt.want)
+			}
+		})
 	}
 }
 

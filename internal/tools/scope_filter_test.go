@@ -216,6 +216,68 @@ func TestFilterScopeFilteredCatalog_MissingAdminMode(t *testing.T) {
 	})
 }
 
+// TestFilterScopeFilteredCatalog_LogsOnlyTheGroupsItRemoved covers the one line
+// an operator gets about a credential narrowing their surface.
+//
+// It is how a deployment learns that its token, not its configuration, is why a
+// domain is missing, so it has to appear when a group was removed and say how
+// many; and it must stay silent when the token satisfies every requirement, or
+// an operator reading a startup log sees a narrowing that never happened and
+// goes looking for a scope that is already there.
+func TestFilterScopeFilteredCatalog_LogsOnlyTheGroupsItRemoved(t *testing.T) {
+	catalog := scopeGatedTestCatalog(t)
+
+	t.Run("a removed group is named with the count", func(t *testing.T) {
+		output := captureSlogOutput(t)
+
+		filtered, err := FilterScopeFilteredCatalog(catalog, []string{"read_api"})
+		if err != nil {
+			t.Fatalf("FilterScopeFilteredCatalog() error = %v", err)
+		}
+		if _, found := filtered.Group("gitlab_admin"); found {
+			t.Fatal("gitlab_admin survived a token with no admin_mode, so this case proves nothing")
+		}
+		if !strings.Contains(output.String(), `"removed":1`) || !strings.Contains(output.String(), "gitlab_admin") {
+			t.Errorf("startup log = %s, want the removed group named and counted", output.String())
+		}
+	})
+
+	t.Run("a token that satisfies every requirement is not told otherwise", func(t *testing.T) {
+		output := captureSlogOutput(t)
+
+		if _, err := FilterScopeFilteredCatalog(catalog, []string{"api", "admin_mode"}); err != nil {
+			t.Fatalf("FilterScopeFilteredCatalog() error = %v", err)
+		}
+		if strings.Contains(output.String(), "scope-filtered catalog groups removed") {
+			t.Errorf("startup log = %s, want nothing reported when nothing was removed", output.String())
+		}
+	})
+}
+
+// scopeGatedTestCatalog returns a two-group catalog: one group MetaToolScopes
+// gates on admin_mode and one it does not name at all, so a filtered run
+// removes exactly one of them.
+func scopeGatedTestCatalog(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
+	catalog := actioncatalog.NewCatalog()
+	for _, toolName := range []string{"gitlab_admin", "gitlab_scope_filter_fixture"} {
+		action := actioncatalog.Action{
+			Name:         "list",
+			OwnerPackage: "tools",
+			Route:        toolutil.ActionRoute{InputSchema: map[string]any{"type": "object"}},
+		}
+		options := actioncatalog.GroupOptions{
+			ToolName:     toolName,
+			OwnerPackage: "tools",
+			SurfaceKind:  actioncatalog.SurfaceKindMetaGroup,
+		}
+		if err := catalog.AddAction(toolName, action, options); err != nil {
+			t.Fatalf("AddAction(%s) error = %v", toolName, err)
+		}
+	}
+	return catalog
+}
+
 // TestFilterScopeFilteredCatalog_NilCatalog verifies scope filtering handles a
 // nil source catalog by returning an empty catalog.
 //

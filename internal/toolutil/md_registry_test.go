@@ -453,6 +453,22 @@ func TestHasRegisteredMarkdownFormatter_NilValue_ReturnsFalse(t *testing.T) {
 	}
 }
 
+// TestHasRegisteredMarkdownFormatter_NilReflectType_ReturnsFalse verifies that
+// a nil reflect.Type is answered false rather than panicking on the Kind() call
+// that follows.
+//
+// This is how a spec with no output type arrives: Route.OutputType is a
+// reflect.Type field, and an unset one converted to any is a nil interface, not
+// an interface holding a nil type. The nil-value guard at the top of the
+// function is therefore the one that answers it, and there is no second nil
+// check downstream for it to reach.
+func TestHasRegisteredMarkdownFormatter_NilReflectType_ReturnsFalse(t *testing.T) {
+	var unset reflect.Type
+	if HasRegisteredMarkdownFormatter(unset) {
+		t.Error("HasRegisteredMarkdownFormatter(reflect.Type(nil)) = true, want false")
+	}
+}
+
 // TestHasRegisteredMarkdownFormatter_ReflectType_ReturnsTrue verifies the
 // canonical reflect.Type lookup path: a registered type's reflect.Type must
 // resolve to a formatter. The formatter comes from the package init, which

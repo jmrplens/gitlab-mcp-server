@@ -479,9 +479,11 @@ var userHomeDir = os.UserHomeDir
 // allow-list on a platform where os.UserHomeDir happens to fail.
 func skipHomeAsImplicitRoot(cwd string) bool {
 	home, err := userHomeDir()
-	if err != nil || home == "" {
+	if err != nil {
 		return false
 	}
+	// A home of "" needs no guard of its own: canonicalDirPath refuses an empty
+	// directory, so the next check answers it with the same false.
 	canonicalHome, err := canonicalDirPath(home)
 	if err != nil {
 		return false

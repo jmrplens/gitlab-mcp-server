@@ -156,6 +156,153 @@ func TestAuditCatalogDiscoveryTerms_FlagsDenseActionsWithoutSignals(t *testing.T
 	}
 }
 
+// TestAuditActionAliases_AliasNamesAnotherActionNeedsBothConditions verifies
+// that an alias is reported as naming another action only when it really is
+// another action's canonical ID. An alias nobody can resolve to a catalog
+// action is a different finding, and an alias equal to its own canonical
+// target is the self-alias finding, so widening either half of the test would
+// report one of those twice under the wrong problem.
+func TestAuditActionAliases_AliasNamesAnotherActionNeedsBothConditions(t *testing.T) {
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_project"})
+	route := toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil })
+	group.SetAction(actioncatalog.Action{Name: "get", Route: route})
+	group.SetAction(actioncatalog.Action{Name: "list", Route: route})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+
+	findings := auditActionAliases(catalog, []actionAlias{
+		{Alias: "project.list", Canonical: "project.get"},
+		{Alias: "project.get", Canonical: "project.get"},
+		{Alias: "project.lookup", Canonical: "project.get"},
+	})
+
+	want := []AliasAuditFinding{
+		{Severity: "error", Problem: "alias_equals_canonical", Alias: "project.get", Canonical: "project.get"},
+		{Severity: "error", Problem: "alias_names_another_action", Alias: "project.list", Canonical: "project.get"},
+	}
+	if len(findings) != len(want) {
+		t.Fatalf("auditActionAliases() returned %d findings, want %d: %+v", len(findings), len(want), findings)
+	}
+	for index, expected := range want {
+		t.Run(expected.Problem, func(t *testing.T) {
+			got := findings[index]
+			if got.Severity != expected.Severity || got.Problem != expected.Problem ||
+				got.Alias != expected.Alias || got.Canonical != expected.Canonical {
+				t.Errorf("findings[%d] = %+v, want %+v", index, got, expected)
+			}
+		})
+	}
+}
+
+// TestHasActionDiscoverySignal_EachSignalCountsOnItsOwn verifies that any one
+// searchable signal is enough to keep an action out of the weak-metadata
+// report. The check is a chain of alternatives and each link matters on its
+// own: an action carrying nothing but an enum value is still findable by that
+// value, and demanding a second signal beside it would put every such action
+// on a work list that has nothing to add.
+func TestHasActionDiscoverySignal_EachSignalCountsOnItsOwn(t *testing.T) {
+	const id = "zulu.weak_action"
+
+	tests := []struct {
+		name  string
+		entry actionEntry
+		want  bool
+	}{
+		{name: "nothing beyond the canonical id", entry: actionEntry{ID: id}},
+		{name: "alias", entry: actionEntry{ID: id, Aliases: []string{"zulu list"}}, want: true},
+		{name: "tag", entry: actionEntry{ID: id, Tags: []string{"zulu"}}, want: true},
+		{name: "usage hint", entry: actionEntry{ID: id, Usage: "Use for the zulu resource."}, want: true},
+		{name: "related action", entry: actionEntry{ID: id, RelatedActions: []string{"zulu.other"}}, want: true},
+		{name: "required param", entry: actionEntry{ID: id, RequiredParams: []string{"project_id"}}, want: true},
+		{name: "optional param", entry: actionEntry{ID: id, Document: searchDocument{OptionalParams: []string{"state"}}}, want: true},
+		{name: "schema property", entry: actionEntry{ID: id, Document: searchDocument{SchemaProperties: []string{"state"}}}, want: true},
+		{name: "schema enum", entry: actionEntry{ID: id, Document: searchDocument{SchemaEnums: []string{"opened"}}}, want: true},
+		{name: "schema description term", entry: actionEntry{ID: id, Document: searchDocument{SchemaDescTerms: []string{"milestone"}}}, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasActionDiscoverySignal(tt.entry); got != tt.want {
+				t.Errorf("hasActionDiscoverySignal(%+v) = %v, want %v", tt.entry, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAuditRegistryDiscoveryTerms_OrdersByToolThenID verifies that the report
+// is grouped by the tool a reader would open and ordered by canonical ID
+// inside it, and that a group below the density threshold is left out of it
+// entirely. The fixture separates the two keys on purpose: its domains
+// contradict its tool names, so an order taken from the canonical ID alone
+// would interleave the two groups and scatter the work list a maintainer is
+// meant to walk one tool at a time.
+func TestAuditRegistryDiscoveryTerms_OrdersByToolThenID(t *testing.T) {
+	weakRoute := toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil })
+	catalog := actioncatalog.NewCatalog()
+	// sequential: the two groups one fixture is built from, not cases of their own
+	for _, dense := range []struct {
+		tool         string
+		firstDomain  string
+		secondDomain string
+	}{
+		{tool: "gitlab_alpha", firstDomain: "zulu", secondDomain: "mike"},
+		{tool: "gitlab_zulu", firstDomain: "alpha", secondDomain: "alpha"},
+	} {
+		group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: dense.tool})
+		for index := range 8 {
+			domain := dense.firstDomain
+			if index >= 4 {
+				domain = dense.secondDomain
+			}
+			group.SetAction(actioncatalog.Action{
+				Name:   "weak_action_" + string(rune('a'+index)),
+				Domain: domain,
+				Route:  weakRoute,
+			})
+		}
+		if err := catalog.AddGroup(group); err != nil {
+			t.Fatalf("AddGroup(%s) error = %v", dense.tool, err)
+		}
+	}
+	sparse := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_sparse"})
+	sparse.SetAction(actioncatalog.Action{Name: "weak_action_a", Domain: "sparse", Route: weakRoute})
+	if err := catalog.AddGroup(sparse); err != nil {
+		t.Fatalf("AddGroup(gitlab_sparse) error = %v", err)
+	}
+
+	findings := AuditRegistryDiscoveryTerms(NewRegistryFromCatalog(catalog))
+
+	want := []CatalogDiscoveryFinding{
+		{Tool: "gitlab_alpha", ID: "mike.weak_action_e"},
+		{Tool: "gitlab_alpha", ID: "mike.weak_action_f"},
+		{Tool: "gitlab_alpha", ID: "mike.weak_action_g"},
+		{Tool: "gitlab_alpha", ID: "mike.weak_action_h"},
+		{Tool: "gitlab_alpha", ID: "zulu.weak_action_a"},
+		{Tool: "gitlab_alpha", ID: "zulu.weak_action_b"},
+		{Tool: "gitlab_alpha", ID: "zulu.weak_action_c"},
+		{Tool: "gitlab_alpha", ID: "zulu.weak_action_d"},
+		{Tool: "gitlab_zulu", ID: "alpha.weak_action_a"},
+		{Tool: "gitlab_zulu", ID: "alpha.weak_action_b"},
+		{Tool: "gitlab_zulu", ID: "alpha.weak_action_c"},
+		{Tool: "gitlab_zulu", ID: "alpha.weak_action_d"},
+		{Tool: "gitlab_zulu", ID: "alpha.weak_action_e"},
+		{Tool: "gitlab_zulu", ID: "alpha.weak_action_f"},
+		{Tool: "gitlab_zulu", ID: "alpha.weak_action_g"},
+		{Tool: "gitlab_zulu", ID: "alpha.weak_action_h"},
+	}
+	if len(findings) != len(want) {
+		t.Fatalf("AuditRegistryDiscoveryTerms() returned %d findings, want %d: %+v", len(findings), len(want), findings)
+	}
+	// sequential: the claim is the order of the whole list, one assertion in steps
+	for index, expected := range want {
+		if findings[index].Tool != expected.Tool || findings[index].ID != expected.ID {
+			t.Errorf("findings[%d] = %s/%s, want %s/%s", index, findings[index].Tool, findings[index].ID, expected.Tool, expected.ID)
+		}
+	}
+}
+
 // TestAuditRegistryDiscoveryTerms_SeverityOrderingTieBreaker verifies the
 // AuditRegistryDiscoveryTerms sort handles two findings with the same
 // severity and the same tool — it must fall back to a lexical ID

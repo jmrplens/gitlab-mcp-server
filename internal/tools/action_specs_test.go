@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -172,10 +173,102 @@ func TestActionSpecGroupsByTool_RejectsInvalidSpecs(t *testing.T) {
 	}
 }
 
+// TestActionSpecGroupsByTool_DuplicateActionNames_KeepDeclarationOrder pins the
+// stability of the per-tool sort.
+//
+// A duplicate action name is reported as an error and the specs are returned
+// anyway, so the order decides which of the two a reader working from the
+// returned slice sees first. The sort is stable for exactly that reason: a
+// comparison that answered true for two equal names would reorder them, and the
+// error would then name one spec while the slice handed back the other.
+func TestActionSpecGroupsByTool_DuplicateActionNames_KeepDeclarationOrder(t *testing.T) {
+	groups := []ActionSpecGroup{{ToolName: "gitlab_test", Actions: []toolutil.ActionSpec{
+		toolutil.NewActionSpec("duplicate", testCatalogActionRoute(), toolutil.ActionSpecOptions{Usage: "declared first"}),
+		toolutil.NewActionSpec("duplicate", testCatalogActionRoute(), toolutil.ActionSpecOptions{Usage: "declared second"}),
+		toolutil.NewActionSpec("zeta", testCatalogActionRoute(), toolutil.ActionSpecOptions{Usage: "declared last"}),
+	}}}
+
+	byTool, err := actionSpecGroupsByTool(groups)
+	if err == nil {
+		t.Fatal("actionSpecGroupsByTool() error = nil, want the duplicate action name reported")
+	}
+	specs := byTool["gitlab_test"]
+	if len(specs) != 3 {
+		t.Fatalf("gitlab_test specs = %d, want all three kept for the caller to inspect", len(specs))
+	}
+	got := []string{specs[0].Usage, specs[1].Usage, specs[2].Usage}
+	want := []string{"declared first", "declared second", "declared last"}
+	if !slices.Equal(got, want) {
+		t.Errorf("sorted specs = %v, want %v: two specs of one name must stay in declaration order", got, want)
+	}
+}
+
 // TestSortedActionSpecGroups_EmptyReturnsNil verifies nil inputs are preserved.
 func TestSortedActionSpecGroups_EmptyReturnsNil(t *testing.T) {
 	if got := sortedActionSpecGroups(nil); got != nil {
 		t.Fatalf("sortedActionSpecGroups(nil) = %+v, want nil", got)
+	}
+}
+
+// TestSortedActionSpecGroups_SortsByToolNameAndKeepsDeclarationOrder covers
+// both halves of the sort every collected catalog is assembled through.
+//
+// The order is what makes a catalog deterministic: the groups reach
+// [BuildActionCatalog] in it, and the merge that folds overrides in reads it.
+// Two groups contributing to one tool are ordered by declaration, so a domain
+// that splits its specs across two builders keeps the order it wrote them in;
+// a comparison that answered true for two equal tool names would swap those.
+func TestSortedActionSpecGroups_SortsByToolNameAndKeepsDeclarationOrder(t *testing.T) {
+	groups := []ActionSpecGroup{
+		{ToolName: "gitlab_zeta", Title: "first zeta"},
+		{ToolName: "gitlab_alpha", Title: "alpha"},
+		{ToolName: "gitlab_zeta", Title: "second zeta"},
+	}
+
+	sorted := sortedActionSpecGroups(groups)
+
+	got := []string{sorted[0].Title, sorted[1].Title, sorted[2].Title}
+	want := []string{"alpha", "first zeta", "second zeta"}
+	if !slices.Equal(got, want) {
+		t.Errorf("sorted groups = %v, want %v", got, want)
+	}
+	if groups[0].Title != "first zeta" {
+		t.Errorf("input group 0 = %q, want the caller's slice left untouched", groups[0].Title)
+	}
+}
+
+// TestEnterpriseGroupBuilders_CarryTheirOwnDescription pins the three catalog
+// groups that document their own actions instead of taking the curated
+// snapshot text.
+//
+// The description is what a model reads to decide whether the group can do what
+// it was asked, and these three describe GraphQL-only domains whose parameters
+// appear nowhere else. It is set where the group is built, so a domain that
+// contributed no specs yields no group rather than an assignment guarded
+// against a slice that cannot be empty.
+func TestEnterpriseGroupBuilders_CarryTheirOwnDescription(t *testing.T) {
+	cases := []struct {
+		name       string
+		build      actionSpecGroupBuilder
+		wantPrefix string
+	}{
+		{name: "gitlab_security_attribute", build: buildSecurityAttributeActionSpecs, wantPrefix: "Manage GitLab security attributes via GraphQL"},
+		{name: "gitlab_security_category", build: buildSecurityCategoryActionSpecs, wantPrefix: "Manage GitLab security categories via GraphQL"},
+		{name: "gitlab_security_scan_profile", build: buildSecurityScanProfileActionSpecs, wantPrefix: "Attach, detach, and inspect GitLab security scan profiles"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			groups := tc.build(nil, true)
+			if len(groups) != 1 {
+				t.Fatalf("%s builder returned %d groups, want exactly one", tc.name, len(groups))
+			}
+			if groups[0].ToolName != tc.name {
+				t.Errorf("tool name = %q, want %q", groups[0].ToolName, tc.name)
+			}
+			if !strings.HasPrefix(groups[0].Description, tc.wantPrefix) {
+				t.Errorf("description = %q, want it to start with %q", groups[0].Description, tc.wantPrefix)
+			}
+		})
 	}
 }
 

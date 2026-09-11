@@ -185,16 +185,16 @@ func fuzzyTokenScoreWithReason(raw, alternative string, searchTokens []string) (
 	return score, reason
 }
 
+// fuzzyTokenScoreCore averages the score of every part of alternative that is
+// long enough to compare. It needs no guard for an empty alternative or an
+// empty token list: with no parts the loop leaves eligibleParts at zero, and
+// with no tokens the first eligible part finds no match and returns below, so
+// such a guard would only repeat an answer the loop already gives.
 func fuzzyTokenScoreCore(alternative string, searchTokens []string) (score int, bestMatchedValue string, bestDistance int, ok bool) {
-	parts := splitWordTokens(alternative)
-	if len(parts) == 0 || len(searchTokens) == 0 {
-		return 0, "", 0, false
-	}
-
 	total := 0
 	eligibleParts := 0
-	bestOverallScore := -1
-	for _, part := range parts {
+	bestOverallScore := 0
+	for _, part := range splitWordTokens(alternative) {
 		if len(part) < fuzzyMinTokenLen {
 			continue
 		}
@@ -211,13 +211,18 @@ func fuzzyTokenScoreCore(alternative string, searchTokens []string) (score int, 
 		total += partScore
 	}
 
-	if total == 0 || eligibleParts == 0 {
+	// Only the part count is tested. A matched part scores at least
+	// fuzzyDistanceScore(fuzzyMaxDistance) and an unmatched one returned
+	// above, so a zero total says the same thing as a zero part count.
+	if eligibleParts == 0 {
 		return 0, "", 0, false
 	}
 	return total / eligibleParts, bestMatchedValue, bestDistance, true
 }
 
 func bestFuzzyTokenMatch(part string, searchTokens []string) (score int, matchedValue string, distance int, ok bool) {
+	// splitWordTokens never yields an empty part, so this is never the empty
+	// prefix that every token would share.
 	partPrefix := firstRuneString(part)
 	for _, token := range searchTokens {
 		candidateScore, candidateDistance, matched := scoreFuzzyTokenCandidate(part, partPrefix, token)
@@ -240,7 +245,7 @@ func scoreFuzzyTokenCandidate(part, partPrefix, token string) (score, distance i
 		return 0, 0, false
 	}
 	score = fuzzyDistanceScore(distance)
-	if partPrefix != "" && strings.HasPrefix(token, partPrefix) {
+	if strings.HasPrefix(token, partPrefix) {
 		score += 2
 	}
 	return score, distance, true
@@ -252,14 +257,14 @@ func splitWordTokens(value string) []string {
 	})
 }
 
+// comparableTokenLength reports whether two tokens are close enough in length
+// for an edit distance within fuzzyMaxDistance to be possible. It is the cheap
+// pre-filter for boundedLevenshtein, which converts both strings to runes
+// before making the same length comparison itself.
 func comparableTokenLength(needle, token string) bool {
 	ln := utf8.RuneCountInString(needle)
 	lt := utf8.RuneCountInString(token)
-	diff := ln - lt
-	if diff < 0 {
-		diff = -diff
-	}
-	return diff <= fuzzyMaxDistance
+	return max(ln-lt, lt-ln) <= fuzzyMaxDistance
 }
 
 func firstRuneString(value string) string {

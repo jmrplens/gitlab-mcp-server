@@ -108,6 +108,38 @@ func TestStringOrInt_UnmarshalJSON(t *testing.T) {
 	}
 }
 
+// TestStringOrInt_UnmarshalJSON_NullAndNoBytesLeaveTheValueAlone verifies the
+// two inputs the method answers by doing nothing: a JSON null and an empty
+// slice of bytes.
+//
+// encoding/json's convention for an Unmarshaler is that UnmarshalJSON("null")
+// is a no-op, which is what leaves a field GitLab sent as null holding whatever
+// the caller had already put there instead of clearing it. Unmarshalling null
+// into a zero value cannot show this, since a no-op and an assignment of the
+// empty string leave a zero value looking identical, so each case here starts
+// from a value that was already set.
+func TestStringOrInt_UnmarshalJSON_NullAndNoBytesLeaveTheValueAlone(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data []byte
+	}{
+		{name: "json null", data: []byte("null")},
+		{name: "no bytes at all", data: nil},
+		{name: "empty bytes", data: []byte{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := StringOrInt(testGroupProject)
+
+			if err := got.UnmarshalJSON(tc.data); err != nil {
+				t.Fatalf("UnmarshalJSON(%q) error = %v, want nil", tc.data, err)
+			}
+			if got != StringOrInt(testGroupProject) {
+				t.Errorf("UnmarshalJSON(%q) = %q, want the value untouched", tc.data, got)
+			}
+		})
+	}
+}
+
 // TestStringOrInt_MarshalJSON verifies that [StringOrInt] marshals back to a
 // JSON string value regardless of the original input type.
 func TestStringOrInt_MarshalJSON(t *testing.T) {

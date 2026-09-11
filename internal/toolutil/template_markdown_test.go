@@ -60,6 +60,25 @@ func TestFormatTemplateDetailMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatTemplateDetailMarkdown_KeyLineFollowsTheKey verifies the key line
+// is written exactly when the template has a key, and never as an empty label.
+//
+// The same renderer serves license templates, which have a key, and the issue
+// and merge-request description templates, which have only a name. A "- **Key**"
+// line with nothing after it would read to a model as a template whose key is
+// the empty string rather than one that has none.
+func TestFormatTemplateDetailMarkdown_KeyLineFollowsTheKey(t *testing.T) {
+	withKey := FormatTemplateDetailMarkdown(TemplateDetailMarkdown{Title: "Project Template: MIT", Key: "mit"})
+	if !strings.Contains(withKey, "- **Key**: mit\n") {
+		t.Errorf("a template with a key did not render it:\n%s", withKey)
+	}
+
+	withoutKey := FormatTemplateDetailMarkdown(TemplateDetailMarkdown{Title: "Issue Template: Bug report"})
+	if strings.Contains(withoutKey, "**Key**") {
+		t.Errorf("a template without a key rendered an empty key line:\n%s", withoutKey)
+	}
+}
+
 // TestFormatTemplateDetailMarkdown_PlainFields verifies license-style template
 // detail rendering can preserve unbulleted field labels while sharing the
 // common renderer.

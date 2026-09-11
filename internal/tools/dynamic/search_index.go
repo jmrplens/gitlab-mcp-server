@@ -84,18 +84,12 @@ func appendEntryIndex(entryIndexes []int, entryIndex int) []int {
 	return append(entryIndexes, entryIndex)
 }
 
+// searchDocumentIndexTokens returns every word the token index should carry
+// for document. The accumulator is deliberately unsized: each value splits
+// into an unknown number of words, so any capacity computed from the field
+// counts is a guess, and dedupeStrings allocates the returned slice anyway.
 func searchDocumentIndexTokens(document searchDocument) []string {
-	tokens := make(
-		[]string, 0,
-		10+
-			len(document.IDWords)+
-			len(document.DomainWords)+
-			len(document.ActionWords)+
-			len(document.Aliases)+
-			len(document.Tags)+
-			len(document.RequiredParams)+
-			len(document.SchemaProperties),
-	)
+	var tokens []string
 
 	for _, value := range []string{
 		document.Backend,

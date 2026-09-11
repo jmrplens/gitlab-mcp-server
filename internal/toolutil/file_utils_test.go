@@ -79,6 +79,29 @@ func TestOpenAndValidateFile_TooLarge(t *testing.T) {
 	}
 }
 
+// TestOpenAndValidateFile_ExactlyMaxSize_Accepted verifies that a file of
+// exactly the configured size is opened rather than refused: the limit is a
+// maximum, and both checks that enforce it — the one on the path before the
+// open and the one on the descriptor after it — have to agree about that, or a
+// deployment configured to allow 2 GB refuses the 2 GB upload it was told to
+// allow.
+func TestOpenAndValidateFile_ExactlyMaxSize_Accepted(t *testing.T) {
+	const maxSize = 1024
+	path := filepath.Join(t.TempDir(), "exact.bin")
+	if err := os.WriteFile(path, make([]byte, maxSize), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	f, info, err := OpenAndValidateFile(path, maxSize)
+	if err != nil {
+		t.Fatalf("OpenAndValidateFile() error = %v, want a file of exactly the limit accepted", err)
+	}
+	defer f.Close()
+	if info.Size() != maxSize {
+		t.Errorf("info.Size() = %d, want %d", info.Size(), maxSize)
+	}
+}
+
 // TestOpenAndValidateFile_EmptyPath verifies empty path is rejected.
 func TestOpenAndValidateFile_EmptyPath(t *testing.T) {
 	_, _, err := OpenAndValidateFile("", 1024)
@@ -410,6 +433,144 @@ func TestProgressWriter_ReportsProgress(t *testing.T) {
 		t.Error("written content does not match input")
 	}
 }
+
+// progressReport records one notification a progress wrapper sent, so a test
+// can assert which reads and writes reported and which stayed quiet.
+type progressReport struct {
+	done  int64
+	total int64
+}
+
+// TestProgressReader_ReportsAtTheIntervalAndAtEOF verifies when a
+// [ProgressReader] notifies and when it says nothing: a read that has not
+// advanced a whole interval since the last notification is silent, a read that
+// lands exactly on the interval reports, a small read after one does not report
+// again, and the final read that returns io.EOF flushes the tail.
+//
+// Both halves matter to the client. Without the interval a large upload
+// notifies on every buffer the copy loop fills; without the EOF flush the last
+// notification is the last multiple of the interval, so a transfer that
+// finished is shown stopped short of its total.
+//
+// The sink is replaced rather than driven through a real MCP session because
+// what is under test is the schedule, not the notification plumbing: an
+// inactive tracker drops every update, so the scheduling decisions were
+// invisible through the constructor's own callback.
+func TestProgressReader_ReportsAtTheIntervalAndAtEOF(t *testing.T) {
+	const total = int64(65556) // small enough that the interval is the 64 KB floor
+	const interval = int64(64 * 1024)
+
+	source := bytes.NewReader(bytes.Repeat([]byte("x"), int(total)))
+	pr := NewProgressReader(context.Background(), source, total, progress.Tracker{})
+	var reports []progressReport
+	pr.onProgress = func(read, reportedTotal int64) {
+		reports = append(reports, progressReport{done: read, total: reportedTotal})
+	}
+	if pr.interval != interval {
+		t.Fatalf("interval = %d, want the %d floor", pr.interval, interval)
+	}
+
+	read := func(n int64) {
+		t.Helper()
+		got, err := pr.Read(make([]byte, n))
+		if int64(got) != n || err != nil {
+			t.Fatalf("Read(%d) = %d, %v; want %d, nil", n, got, err, n)
+		}
+	}
+
+	read(100)
+	if len(reports) != 0 {
+		t.Fatalf("reports after 100 bytes = %v, want none before the interval of %d", reports, interval)
+	}
+
+	read(interval - 100)
+	if len(reports) != 1 || reports[0].done != interval || reports[0].total != total {
+		t.Fatalf("reports at exactly the interval = %v, want one {%d %d}", reports, interval, total)
+	}
+
+	read(10)
+	if len(reports) != 1 {
+		t.Fatalf("reports after a further 10 bytes = %v, want still one: the interval runs from the last report", reports)
+	}
+
+	tail, err := io.ReadAll(pr)
+	if err != nil {
+		t.Fatalf("io.ReadAll() error = %v, want nil", err)
+	}
+	if int64(len(tail)) != total-interval-10 {
+		t.Fatalf("tail = %d bytes, want %d", len(tail), total-interval-10)
+	}
+	if len(reports) != 2 || reports[1].done != total {
+		t.Errorf("reports after EOF = %v, want a final flush of %d", reports, total)
+	}
+}
+
+// TestProgressWriter_ReportsAtTheIntervalAndOnFailure verifies the writer's
+// schedule and its failure flush: a write that has not advanced a whole
+// interval is silent, one that lands exactly on the interval reports, a small
+// write after it does not report again, and a write that fails reports what
+// reached the destination before the error.
+//
+// The failure flush is what tells the client where a download stopped; the
+// interval is what keeps a large one from notifying on every chunk.
+func TestProgressWriter_ReportsAtTheIntervalAndOnFailure(t *testing.T) {
+	const total = int64(65556)
+	const interval = int64(64 * 1024)
+
+	var sink bytes.Buffer
+	pw := NewProgressWriter(context.Background(), &sink, total, progress.Tracker{})
+	var reports []progressReport
+	pw.onProgress = func(written, reportedTotal int64) {
+		reports = append(reports, progressReport{done: written, total: reportedTotal})
+	}
+	if pw.interval != interval {
+		t.Fatalf("interval = %d, want the %d floor", pw.interval, interval)
+	}
+
+	write := func(n int64) {
+		t.Helper()
+		got, err := pw.Write(make([]byte, n))
+		if int64(got) != n || err != nil {
+			t.Fatalf("Write(%d) = %d, %v; want %d, nil", n, got, err, n)
+		}
+	}
+
+	write(100)
+	if len(reports) != 0 {
+		t.Fatalf("reports after 100 bytes = %v, want none before the interval of %d", reports, interval)
+	}
+
+	write(interval - 100)
+	if len(reports) != 1 || reports[0].done != interval || reports[0].total != total {
+		t.Fatalf("reports at exactly the interval = %v, want one {%d %d}", reports, interval, total)
+	}
+
+	write(10)
+	if len(reports) != 1 {
+		t.Fatalf("reports after a further 10 bytes = %v, want still one: the interval runs from the last report", reports)
+	}
+
+	t.Run("a failed write reports what reached the destination", func(t *testing.T) {
+		failing := NewProgressWriter(context.Background(), &errWriter{err: errors.New("no space left on device")}, total, progress.Tracker{})
+		var failures []progressReport
+		failing.onProgress = func(written, reportedTotal int64) {
+			failures = append(failures, progressReport{done: written, total: reportedTotal})
+		}
+		if _, err := failing.Write(make([]byte, 10)); err == nil {
+			t.Fatal("Write() error = nil, want the destination's failure")
+		}
+		if len(failures) != 1 {
+			t.Errorf("reports on a failed write = %v, want one flush", failures)
+		}
+	})
+}
+
+// errWriter fails every write, standing in for a destination that runs out of
+// space part-way through a download.
+type errWriter struct{ err error }
+
+// Write reports errWriter's configured failure without consuming p.
+func (w *errWriter) Write([]byte) (int, error) { return 0, w.err }
 
 // TestProgressReportInterval verifies the interval calculation logic.
 func TestProgressReportInterval(t *testing.T) {
@@ -1089,6 +1250,29 @@ func TestSkipHomeAsImplicitRoot_KeepsTheWorkingDirectoryWhenHomeIsUnknown(t *tes
 				t.Error("skipHomeAsImplicitRoot() = true, want the working directory kept")
 			}
 		})
+	}
+}
+
+// TestSkipHomeAsImplicitRoot_ResolvesTheWorkingDirectoryThroughSymlinks
+// verifies that both sides of the comparison are canonical paths.
+//
+// A server started through a symlink to the home directory is still running in
+// the home directory, and keeping it as an implicit allow-list root there is
+// exactly what this check exists to prevent: it would put ~/.ssh, ~/.aws and
+// this server's own ~/.gitlab-mcp-server.env within reach of a caller-supplied
+// file_path.
+func TestSkipHomeAsImplicitRoot_ResolvesTheWorkingDirectoryThroughSymlinks(t *testing.T) {
+	home := t.TempDir()
+	link := filepath.Join(t.TempDir(), "home-link")
+	if err := os.Symlink(home, link); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	original := userHomeDir
+	userHomeDir = func() (string, error) { return home, nil }
+	t.Cleanup(func() { userHomeDir = original })
+
+	if !skipHomeAsImplicitRoot(link) {
+		t.Errorf("skipHomeAsImplicitRoot(%q) = false, want true: it resolves to the home directory %q", link, home)
 	}
 }
 

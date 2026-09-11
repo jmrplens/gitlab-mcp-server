@@ -190,9 +190,17 @@ func TestValidateEmbeddedResource_RefusesDeclarationsThatCannotWork(t *testing.T
 
 // TestResourceParamValue_RendersEachType covers every branch of the parameter
 // renderer: the types that carry an identifier, an integral float that reads as
-// an integer, a fractional and an out-of-range float that keep their decimal
-// form, and the values that are deliberately not identifiers (nil, a blank
-// string, a bool) and so give nothing to substitute.
+// an integer, a fractional float and one past the magnitude an int64 conversion
+// survives that keep their decimal form, and the values that are deliberately
+// not identifiers (nil, a blank string, a bool) and so give nothing to
+// substitute.
+//
+// The magnitude guard is the reason the float branch is not simply a
+// conversion: 1e19 does not fit in an int64, and converting it anyway yields
+// whatever the platform does with an out-of-range conversion, so a URI built
+// from it would name a negative identifier on amd64 and a saturated one on
+// arm64. 1e15 is the boundary itself, and both spellings of it agree there,
+// which is why the case below it pins a value the guard actually decides.
 func TestResourceParamValue_RendersEachType(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -206,7 +214,8 @@ func TestResourceParamValue_RendersEachType(t *testing.T) {
 		{name: "a blank string is not a value", value: "   ", want: "", wantOK: false},
 		{name: "an integral float reads as an integer", value: float64(42), want: "42", wantOK: true},
 		{name: "a fractional float keeps its decimal", value: 3.5, want: "3.5", wantOK: true},
-		{name: "a float too large to be an id keeps its form", value: 1e15, want: "1000000000000000", wantOK: true},
+		{name: "a float at the guard's boundary", value: 1e15, want: "1000000000000000", wantOK: true},
+		{name: "a float past what an int64 holds keeps its decimal form", value: 1e19, want: "10000000000000000000", wantOK: true},
 		{name: "an int", value: 7, want: "7", wantOK: true},
 		{name: "an int64", value: int64(9000000000), want: "9000000000", wantOK: true},
 		{name: "a bool is not a value", value: true, want: "", wantOK: false},

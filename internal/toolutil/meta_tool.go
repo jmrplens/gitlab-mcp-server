@@ -22,14 +22,20 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 )
 
-// maxInt is the maximum int value; used for overflow-safe capacity calculations.
-const maxInt = int(math.MaxInt)
-
 const (
-	minInt64AsFloat                      = -float64(1 << 63)
-	maxInt64AsFloat                      = float64(1<<63 - 1)
+	// minInt64AsFloat is math.MinInt64 exactly, and the bound is inclusive:
+	// -2^63 is a power of two, so a float64 holds it without rounding and the
+	// conversion back to int64 is exact.
+	minInt64AsFloat = -float64(1 << 63)
+	// maxInt64AsFloatExclusive is 2^63, the smallest float64 an int64 cannot
+	// hold. There is no representable float64 between math.MaxInt64 and it:
+	// float64(math.MaxInt64) rounds *up* to 2^63, so a bound written as
+	// float64(1<<63 - 1) and compared with > admits 2^63 itself and the
+	// int64 conversion that follows overflows. Compare with >= instead.
+	maxInt64AsFloatExclusive             = float64(1 << 63)
 	invalidActionParamsError             = "invalid params for this action: %w"
 	actionProjectMemberDelete            = "project.member_delete"
 	actionProjectMemberEdit              = "project.member_edit"
@@ -331,9 +337,13 @@ func cloneRouteStrings(values []string) []string {
 }
 
 func appendNormalizedRouteStrings(existing []string, values ...string) []string {
-	merged := make([]string, 0, len(existing)+len(values))
-	seen := make(map[string]struct{}, len(existing)+len(values))
-	for _, value := range append(cloneRouteStrings(existing), values...) {
+	// slices.Concat allocates a new slice, so the caller's existing slice is
+	// never appended into, and its length is the exact upper bound for the two
+	// collections below.
+	all := slices.Concat(existing, values)
+	merged := make([]string, 0, len(all))
+	seen := make(map[string]struct{}, len(all))
+	for _, value := range all {
 		value = strings.TrimSpace(strings.ToLower(value))
 		if value == "" {
 			continue
@@ -1061,12 +1071,18 @@ func normalizeEncodedPathIdentifiers(out map[string]any, accepts func(string) bo
 	}
 }
 
+// decodeEncodedPathIdentifier reports the percent-decoding of a namespaced
+// path an LLM sent URL-encoded ("group%2Fproject"), and false for anything
+// else. Only a value carrying %2F is decoded, so a successful decode always
+// differs from the input and always carries the "/" the caller is after:
+// '%' is not a hex digit, so no earlier escape can absorb the '%' of a %2F,
+// and PathUnescape either turns it into "/" or fails on the whole value.
 func decodeEncodedPathIdentifier(value string) (string, bool) {
 	if !strings.Contains(strings.ToLower(value), "%2f") {
 		return "", false
 	}
 	decoded, err := url.PathUnescape(value)
-	if err != nil || decoded == value || !strings.Contains(decoded, "/") {
+	if err != nil {
 		return "", false
 	}
 	return decoded, true
@@ -1204,8 +1220,11 @@ func jsonFieldNames(target reflect.Type) map[string]struct{} {
 }
 
 func schemaPropertyNames(schema map[string]any) map[string]struct{} {
-	properties, ok := schema["properties"].(map[string]any)
-	if !ok || len(properties) == 0 {
+	// A schema with no properties map and a schema with an empty one are the
+	// same answer here, and a failed assertion already yields a map of length
+	// zero, so one length test covers both.
+	properties, _ := schema["properties"].(map[string]any)
+	if len(properties) == 0 {
 		return nil
 	}
 	fields := make(map[string]struct{}, len(properties))
@@ -1556,18 +1575,22 @@ func numericRoleAccessLevel(value any) (int, bool) {
 	}
 }
 
+// gitLabRoleAccessLevels are the access levels GitLab accepts on a member, a
+// protected branch or a protected environment. Nothing else is a role.
+var gitLabRoleAccessLevels = [...]int{0, 10, 20, 30, 40, 50, 60}
+
+// validGitLabRoleAccessLevelInt64 matches a JSON-decoded int64 against the
+// access levels. It compares each level widened to int64 and returns the
+// level itself rather than narrowing the argument, so an out-of-int-range
+// value is simply not a role and no range guard has to make a conversion
+// safe.
 func validGitLabRoleAccessLevelInt64(value int64) (int, bool) {
-	// Guard against overflow before narrowing: valid access levels are all small
-	// non-negative integers (0–60), so reject anything outside int range first.
-	if value < 0 || value > math.MaxInt32 {
-		return 0, false
+	for _, level := range gitLabRoleAccessLevels {
+		if int64(level) == value {
+			return level, true
+		}
 	}
-	switch value {
-	case 0, 10, 20, 30, 40, 50, 60:
-		return int(value), true
-	default:
-		return 0, false
-	}
+	return 0, false
 }
 
 func validGitLabRoleAccessLevelFloat64(value float64) (int, bool) {
@@ -1717,7 +1740,7 @@ func numericIDString(value any) (string, bool) {
 }
 
 func integerFloatString(value float64) (string, bool) {
-	if math.Trunc(value) != value || value < minInt64AsFloat || value > maxInt64AsFloat {
+	if math.Trunc(value) != value || value < minInt64AsFloat || value >= maxInt64AsFloatExclusive {
 		return "", false
 	}
 	return strconv.FormatInt(int64(value), 10), true
@@ -1862,8 +1885,8 @@ func isNumericKind(kind reflect.Kind) bool {
 }
 
 func coerceSchemaParamTypes(params, schema map[string]any) map[string]any {
-	properties, hasProperties := schema["properties"].(map[string]any)
-	if !hasProperties || len(properties) == 0 {
+	properties, _ := schema["properties"].(map[string]any)
+	if len(properties) == 0 {
 		return params
 	}
 	var out map[string]any
@@ -1963,7 +1986,7 @@ func integerFromString(text string) (int64, error) {
 		return integer, nil
 	}
 	f, err := strconv.ParseFloat(trimmed, 64)
-	if err != nil || math.Trunc(f) != f || f < minInt64AsFloat || f > maxInt64AsFloat {
+	if err != nil || math.Trunc(f) != f || f < minInt64AsFloat || f >= maxInt64AsFloatExclusive {
 		return 0, fmt.Errorf("invalid integer %q", text)
 	}
 	return int64(f), nil
@@ -1998,8 +2021,8 @@ func stringListToCSV(value any) (string, bool) {
 }
 
 func coerceSingleStringArraysForSchema(params, schema map[string]any) map[string]any {
-	properties, hasProperties := schema["properties"].(map[string]any)
-	if !hasProperties || len(properties) == 0 {
+	properties, _ := schema["properties"].(map[string]any)
+	if len(properties) == 0 {
 		return params
 	}
 	var out map[string]any
@@ -2023,8 +2046,8 @@ func coerceSingleStringArraysForSchema(params, schema map[string]any) map[string
 }
 
 func coerceStringListParamsForSchema(params, schema map[string]any) map[string]any {
-	properties, hasProperties := schema["properties"].(map[string]any)
-	if !hasProperties || len(properties) == 0 {
+	properties, _ := schema["properties"].(map[string]any)
+	if len(properties) == 0 {
 		return params
 	}
 	var out map[string]any
@@ -2454,6 +2477,11 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 			LogToolRefusal(ctx, req, metaCallName(toolName, input.Action), refusal)
 			return validationResult, nil, nil
 		}
+		// input.Action is the route now, after both alias rewrites, and it is
+		// what telemetry should name rather than what the arguments said:
+		// get with an environment name runs protected_get. The dynamic surface
+		// enters this handler too, so this one call covers both surfaces.
+		mcpotel.RecordDispatch(ctx, toolName, input.Action)
 
 		// Confirm destructive actions before execution using route metadata.
 		if route.Destructive {
@@ -2636,26 +2664,13 @@ func enrichWithHints(result any, callResult *mcp.CallToolResult) any {
 		return result
 	}
 	// Build JSON with next_steps as the first field so LLMs see guidance early.
-	overhead := len(`"next_steps":,`)
-	if len(data) > maxInt-overhead {
-		return result
-	}
-	capacity := overhead + len(data)
-	if len(hintsData) > maxInt-capacity {
-		return result
-	}
-	capacity += len(hintsData)
-	buf := make([]byte, 0, capacity)
-	buf = append(buf, '{')
-	buf = append(buf, `"next_steps":`...)
-	buf = append(buf, hintsData...)
+	// slices.Concat sizes the result from the pieces themselves, so there is no
+	// capacity arithmetic to overflow and no guard against one.
+	opening := []byte(`{"next_steps":`)
 	if len(data) > 2 {
-		buf = append(buf, ',')
-		buf = append(buf, data[1:]...)
-	} else {
-		buf = append(buf, '}')
+		return json.RawMessage(slices.Concat(opening, hintsData, []byte(","), data[1:]))
 	}
-	return json.RawMessage(buf)
+	return json.RawMessage(slices.Concat(opening, hintsData, []byte("}")))
 }
 
 // defaultFormatResult serializes the action result as JSON text content.

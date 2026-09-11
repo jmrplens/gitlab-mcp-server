@@ -17,6 +17,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncompat"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -796,6 +797,13 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 		toolutil.LogToolRefusal(ctx, req, executeCallName(id), toolutil.RefusalUnknownAction)
 		return toolutil.ErrorResult(r.unknownActionMessage("gitlab_execute_action", input.Action)), nil, nil
 	}
+	// Recorded as soon as the action is known, so a call this surface refuses
+	// before the meta handler runs is still named. A destructive action sent
+	// without its confirmation is one; when the caller spelled it with a
+	// compatibility alias, which the argument-based identifier does not know,
+	// the span would otherwise carry no action at all. The meta handler
+	// overwrites this with the final route when it runs.
+	mcpotel.RecordDispatch(ctx, entry.Tool, entry.Action)
 
 	params := maps.Clone(input.Params)
 	if params == nil {
@@ -1218,8 +1226,8 @@ func schemaPropertyDescriptions(schema map[string]any) []string {
 		if !ok {
 			continue
 		}
-		description, ok := property["description"].(string)
-		if !ok || strings.TrimSpace(description) == "" {
+		description, _ := property["description"].(string)
+		if strings.TrimSpace(description) == "" { // missing, non-string and blank alike
 			continue
 		}
 		values = append(values, strings.Join(splitSearchFieldWords(description), " "))
@@ -1878,12 +1886,15 @@ func addProtectionTags(add tagCollector, id, domain, action string) bool {
 	case domain == "group" && strings.Contains(id, "protected_branch"):
 		add("group protected branch", "group branch protection", "protected branch rule", "branch pattern")
 		addGroupProtectedBranchActionTags(add, action)
-	case domain == "group" && (strings.Contains(id, "protected_env") || strings.Contains(id, "protected_environment")):
+	case domain == "group" && strings.Contains(id, "protected_env"):
 		add("group protected environment", "group environment protection", "group deployment gate", aliasProtectedEnvironment, aliasEnvironmentProtection)
 		addGroupProtectedEnvironmentActionTags(add, action)
 	case domain == "branch" && (action == "protect" || action == "get_protected" || action == "update_protected" || action == "unprotect"):
 		add("protected branch", "branch protection")
-	case strings.Contains(id, "protected_env") || strings.Contains(id, "protected_environment"):
+	// "protected_environment" needs no case of its own: every ID carrying it
+	// carries "protected_env" as its prefix, so a second test for the longer
+	// spelling can never be the one that decides.
+	case strings.Contains(id, "protected_env"):
 		add(aliasProtectedEnvironment, aliasEnvironmentProtection)
 	case strings.Contains(id, "member_role"):
 		add("custom role", "member role")
@@ -2313,9 +2324,14 @@ func buildDynamicInputSchema(entry actionEntry) map[string]any {
 		schema["description"] = "This dynamic action has no captured parameter schema. Send an empty params object {} unless the action description says otherwise."
 	}
 	if entry.Destructive {
-		if properties, ok := schema["properties"].(map[string]any); ok {
-			delete(properties, "confirm")
-		}
+		// The assertion is read without its ok: MetaActionSchema puts every
+		// destructive route through enrichDestructiveSchema, which installs a
+		// map[string]any under "properties" when the route's schema carried
+		// none, and CloneSchemaMap above preserves that type. A failed
+		// assertion would leave a nil map here in any case, and deleting from
+		// a nil map is a no-op, so the test decided nothing either way.
+		properties, _ := schema["properties"].(map[string]any)
+		delete(properties, "confirm")
 		removeDynamicRequiredConfirmParam(schema)
 		schema["x_destructive"] = true
 		schema["x_confirmation"] = map[string]any{
@@ -2617,14 +2633,9 @@ func (r *Registry) suggestActionIDs(query string, limit int) []string {
 		for _, term := range terms {
 			best := 0
 			for _, alternative := range term.Alternatives {
-				candidate := scoreSearchAlternative(entry, term.Raw, alternative)
-				if candidate > best {
-					best = candidate
-				}
+				best = max(best, scoreSearchAlternative(entry, term.Raw, alternative))
 			}
-			if best > 0 {
-				score += best
-			}
+			score += best
 		}
 		if score > 0 {
 			scored = append(scored, scoredEntry{id: entry.ID, score: score})
@@ -2663,11 +2674,10 @@ func aliasesByCanonical(aliases []actionAlias) map[string][]actionAlias {
 	for _, alias := range dedupeActionAliases(aliases) {
 		grouped[alias.Canonical] = append(grouped[alias.Canonical], alias)
 	}
-	for canonical := range grouped {
-		sort.Slice(grouped[canonical], func(i, j int) bool {
-			return grouped[canonical][i].Alias < grouped[canonical][j].Alias
-		})
-	}
+	// The group is deliberately left in catalog order: both readers of it,
+	// aliasNames and searchableAliasNames, hand what they take to
+	// dedupeSortedStrings, so an order imposed here is sorted again and
+	// decides nothing.
 	return grouped
 }
 
@@ -2795,10 +2805,7 @@ func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	for _, term := range terms {
 		best := 0
 		for _, alternative := range term.Alternatives {
-			candidateScore := scoreSearchAlternative(entry, term.Raw, alternative)
-			if candidateScore > best {
-				best = candidateScore
-			}
+			best = max(best, scoreSearchAlternative(entry, term.Raw, alternative))
 		}
 		if best > 0 {
 			matchedCount++
@@ -2928,7 +2935,10 @@ func minimumMatchedTermCount(entry actionEntry, terms []searchTerm) int {
 	if len(terms) > 2 {
 		minRequired = len(terms) - 1
 	}
-	if len(terms) > 3 && matchedCompoundTagCount(entry, terms) > 0 && minRequired > len(terms)-2 {
+	// minRequired is len(terms)-1 here, since more than three terms is more
+	// than two, so it is always above len(terms)-2 and testing that again
+	// would decide nothing.
+	if len(terms) > 3 && matchedCompoundTagCount(entry, terms) > 0 {
 		minRequired = len(terms) - 2
 	}
 	if minRequired < 1 {
@@ -2995,7 +3005,12 @@ func scoreVerbIntentFor(entry actionEntry, intent verbIntent, terms []searchTerm
 		if isWorkflowAction(document.Action) {
 			adjustment = scoreVerbIntentBoost
 		}
-	case verbIntentDiagnostic:
+	// verbIntentDiagnostic needs no case of its own: classifyVerbIntent is the
+	// only thing that makes a verbIntent, it returns one of five values or the
+	// empty one this function already answered above, and the four cases before
+	// this take the other four. A test for the fifth could never be the one
+	// that decides.
+	default:
 		if isDiagnosticAction(document.Action) || isReadAction(document.Action) {
 			adjustment = scoreVerbIntentBoost
 		}
@@ -3146,7 +3161,12 @@ func scoreServiceAccountIntentValue(entry actionEntry, terms []searchTerm) int {
 		return 0
 	}
 	score := scoreServiceAccountBoost
-	if document.Domain != "" && searchTermsContainWord(terms, document.Domain) {
+	// The domain is read without an emptiness test: a catalog action's domain is
+	// the first half of the canonical ID this function has already matched
+	// against, and a search term is a field of the query, which strings.Fields
+	// never returns empty. Neither side of the comparison can be the empty
+	// string, so the test could not decide the boost either way.
+	if searchTermsContainWord(terms, document.Domain) {
 		score += scoreServiceAccountScope
 	}
 	if strings.Contains(document.CanonicalID, "service_account_pat") && (queryHasSearchWords(terms, "personal", "access", "token") || searchTermsContainWord(terms, "pat")) {
@@ -3473,9 +3493,10 @@ func scoreActionSpecificityValue(entry actionEntry, terms []searchTerm) int {
 		}
 		unmatched++
 	}
-	if unmatched == 0 {
-		return 0
-	}
+	// No early return for unmatched == 0: the product below is already 0, so a
+	// guard here would be a branch no input could distinguish. The sibling
+	// scoreActionSpecificity keeps its guard because there it decides whether a
+	// MatchReason is emitted at all, which is observable.
 	return unmatched * scoreUnmatchedActionWord
 }
 
@@ -4097,7 +4118,12 @@ func compactFindGuidance(result FindResult) string {
 }
 
 func compactParameterGuidance(guidance map[string]toolutil.ParameterGuidance, limit int, requiredParams ...string) string {
-	if len(guidance) == 0 || limit == 0 {
+	// Every limit that asks for nothing is answered here, the negative ones
+	// included. The one caller passes defaultMaxParamGuidanceItems, so the
+	// truncation below never had a sign to test and a test for it there could
+	// not be decided by any input; reading it here is also what keeps a
+	// negative limit away from the slice bound underneath.
+	if len(guidance) == 0 || limit <= 0 {
 		return ""
 	}
 	required := make(map[string]struct{}, len(requiredParams))
@@ -4122,7 +4148,7 @@ func compactParameterGuidance(guidance map[string]toolutil.ParameterGuidance, li
 		return names[i] < names[j]
 	})
 	truncated := 0
-	if limit > 0 && len(names) > limit {
+	if len(names) > limit {
 		truncated = len(names) - limit
 		names = names[:limit]
 	}

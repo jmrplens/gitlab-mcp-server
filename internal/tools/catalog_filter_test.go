@@ -5,12 +5,16 @@
 package tools
 
 import (
+	"bytes"
+	"log/slog"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestFilterActionCatalog_ReportsWhatItWithheldAndWhy pins that narrowing the
@@ -190,6 +194,95 @@ func TestRemovedActionKeys_ReportsWhatAFilterTookAway(t *testing.T) {
 	if got := RemovedActionKeys(actioncatalog.NewCatalog(), nil); got != nil {
 		t.Errorf("RemovedActionKeys(empty, nil) = %v, want nothing claimed", got)
 	}
+	// The populated cases are the ones that can go wrong: a missing "after"
+	// carries no actions, so a diff that ran anyway would report every action
+	// of "before" as withheld and tell the caller the whole catalog was taken
+	// from them.
+	populated := scopeFilterTestCatalog(t)
+	if got := RemovedActionKeys(populated, nil); got != nil {
+		t.Errorf("RemovedActionKeys(populated, nil) = %v, want nothing claimed rather than every action of the catalog", got)
+	}
+	if got := RemovedActionKeys(nil, populated); got != nil {
+		t.Errorf("RemovedActionKeys(nil, populated) = %v, want nothing claimed", got)
+	}
+}
+
+// TestExcludeFromCatalog_LogsExactlyWhatItRemoved covers the count in the one
+// line an operator sees about their own --exclude-tools configuration.
+//
+// The count is the whole point of the line. Removal already worked when it was
+// added; what did not was telling a working exclusion apart from one that
+// matched nothing, because the only figure logged came from the registered-tool
+// filter and the default surface registers two tools, neither of them an
+// exclusion target. A count that is not the difference between the two catalogs
+// puts that back, and a line logged when nothing was removed says an exclusion
+// happened that did not.
+func TestExcludeFromCatalog_LogsExactlyWhatItRemoved(t *testing.T) {
+	catalog := excludeCountingTestCatalog(t)
+
+	t.Run("a matching entry reports the actions it took away", func(t *testing.T) {
+		output := captureSlogOutput(t)
+
+		filtered := ExcludeFromCatalog(catalog, []string{"gitlab_zzz_exclude_first"})
+
+		if got, want := filtered.CountActions(), catalog.CountActions()-1; got != want {
+			t.Fatalf("filtered catalog has %d actions, want %d", got, want)
+		}
+		if !strings.Contains(output.String(), `"excluded":1`) {
+			t.Errorf("startup log = %s, want the one removed action counted as the difference between %d and %d",
+				output.String(), catalog.CountActions(), filtered.CountActions())
+		}
+	})
+
+	t.Run("an entry that matches nothing reports no removal", func(t *testing.T) {
+		output := captureSlogOutput(t)
+
+		ExcludeFromCatalog(catalog, []string{"gitlab_zzz_exclude_absent"})
+
+		if strings.Contains(output.String(), "excluded catalog actions by configuration") {
+			t.Errorf("startup log = %s, want no removal line when the entry named nothing", output.String())
+		}
+	})
+}
+
+// excludeCountingTestCatalog returns a catalog of two one-action groups, so a
+// count of what an exclusion removed differs from the count of what it kept and
+// from their sum.
+func excludeCountingTestCatalog(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
+	catalog := actioncatalog.NewCatalog()
+	for _, toolName := range []string{"gitlab_zzz_exclude_first", "gitlab_zzz_exclude_second"} {
+		action := actioncatalog.Action{
+			Name:         "list",
+			OwnerPackage: "tools",
+			Route:        toolutil.ActionRoute{InputSchema: map[string]any{"type": "object"}},
+		}
+		options := actioncatalog.GroupOptions{
+			ToolName:     toolName,
+			OwnerPackage: "tools",
+			SurfaceKind:  actioncatalog.SurfaceKindMetaGroup,
+		}
+		if err := catalog.AddAction(toolName, action, options); err != nil {
+			t.Fatalf("AddAction(%s) error = %v", toolName, err)
+		}
+	}
+	return catalog
+}
+
+// captureSlogOutput sends the default logger into a buffer for the rest of the
+// test and restores it afterwards.
+//
+// The logger is process-wide, so a test that captures it must not run in
+// parallel with one that logs. Every caller here is sequential, which the Go
+// runner keeps apart from the parallel tests of this package: those are paused
+// until the sequential ones have all run.
+func captureSlogOutput(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buffer bytes.Buffer
+	original := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buffer, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(original) })
+	return &buffer
 }
 
 // TestExcludeFromCatalog_NothingToExclude_ReturnsTheSameCatalog covers the

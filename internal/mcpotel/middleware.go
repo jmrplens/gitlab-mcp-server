@@ -2,6 +2,7 @@ package mcpotel
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -144,16 +145,17 @@ func Middleware(opts Options) mcp.Middleware {
 			version := protocolVersionFor(req, allowed)
 			sessionID := sessionIDOf(req)
 
-			attrs := make([]attribute.KeyValue, 0, len(constant)+len(call.attributes)+len(identityAttrs)+2)
-			attrs = append(attrs, constant...)
-			attrs = append(attrs, call.attributes...)
+			// The two optional attributes are gathered first so the list the
+			// span starts with is sized by the slices it joins, in one
+			// allocation, rather than by a count kept beside them.
+			optional := make([]attribute.KeyValue, 0, 2)
 			if version != "" {
-				attrs = append(attrs, AttrMCPProtocolVersion.String(version))
+				optional = append(optional, AttrMCPProtocolVersion.String(version))
 			}
 			if sessionID != "" {
-				attrs = append(attrs, AttrMCPSessionID.String(sessionID))
+				optional = append(optional, AttrMCPSessionID.String(sessionID))
 			}
-			attrs = append(attrs, identityAttrs...)
+			attrs := slices.Concat(constant, call.attributes, optional, identityAttrs)
 
 			// The context returned by Start is the one passed onward. Passing
 			// the original would compile, run, and silently produce a flat
@@ -164,20 +166,33 @@ func Middleware(opts Options) mcp.Middleware {
 			}
 			// Only when Extract actually changed the parent. With no incoming
 			// context the ambient span is already the parent, and linking a
-			// span to its own parent says nothing.
-			if ambient.IsValid() && parent.IsValid() && !parent.Equal(ambient) {
+			// span to its own parent says nothing. The parent needs no check of
+			// its own: under a valid ambient span it is valid too, because a
+			// propagator that cannot parse what arrived leaves the context as
+			// it was, and bounding a remote context never invalidates it.
+			if ambient.IsValid() && !parent.Equal(ambient) {
 				startOpts = append(startOpts, trace.WithLinks(trace.Link{SpanContext: ambient}))
 			}
 
 			ctx, span := tracer.Start(ctx, call.spanName, startOpts...)
 
-			// The handler reports a refusal through here, since the middleware
-			// cannot tell one from an ordinary failure by looking at the
-			// result.
-			ctx, refusal := withRefusalHolder(ctx)
+			// The handler reports a refusal and the action it dispatched through
+			// here, since the middleware can learn neither from the result.
+			ctx, holder := withCallHolder(ctx)
 			// Deferred so a panic still ends the span, which is what makes the
 			// SDK record the panic as an exception event before re-panicking.
-			defer span.End()
+			// A panic also skips the replacement below, so the span would carry
+			// the predicted action for the one call whose trace is read most:
+			// the dispatcher had already reported its route when the handler
+			// blew up. Resolving it here costs one map lookup on a path that
+			// runs once per panic.
+			dispatchResolved := false
+			defer func() {
+				if !dispatchResolved {
+					call = call.dispatched(holder, identifier, span)
+				}
+				span.End()
+			}()
 
 			// The tracker deliberately outlives this request: it parks a
 			// goroutine on the session, which ends long after the call returns.
@@ -186,6 +201,11 @@ func Middleware(opts Options) mcp.Middleware {
 			started := time.Now()
 			res, err := next(ctx, method, req)
 			result := classify(res, err)
+
+			// The route dispatch chose replaces the one predicted from the
+			// arguments, on the span and on the metric alike.
+			call = call.dispatched(holder, identifier, span)
+			dispatchResolved = true
 
 			// Before End, not inside it. After End, SetStatus and SetAttributes
 			// are silent no-ops guarded by isRecording, so an outcome recorded
@@ -212,8 +232,8 @@ func Middleware(opts Options) mcp.Middleware {
 			// growing with traffic. Counting them is the point of recording
 			// them at all, and a deployment refusing every third call looks
 			// identical to a healthy one without it.
-			if refusal.reason != "" {
-				metricAttrs = append(metricAttrs, AttrRefusalReason.String(refusal.reason))
+			if holder.reason != "" {
+				metricAttrs = append(metricAttrs, AttrRefusalReason.String(holder.reason))
 			}
 			duration.Record(ctx, time.Since(started).Seconds(), metric.WithAttributes(metricAttrs...))
 
@@ -231,6 +251,47 @@ type call struct {
 
 	spanName   string
 	attributes []attribute.KeyValue
+}
+
+// dispatched returns c with the action a dispatcher reported through
+// [RecordDispatch] in place of the one predicted from the arguments, and sets
+// the same attributes on span. It returns c unchanged when nothing was
+// reported, when the identifier does not resolve dispatches, or when it cannot
+// resolve this one, since a prediction is better than no action at all.
+//
+// Only what the resolution names is replaced. A span attribute can be
+// overwritten and never removed, so a resolution without a domain keeps the
+// predicted one on the metric too, and the two agree; a meta tool's routes all
+// share its domain, so that value is right anyway.
+func (c call) dispatched(holder *callHolder, identifier CallIdentifier, span trace.Span) call {
+	if holder.dispatchAction == "" {
+		return c
+	}
+	resolver, ok := identifier.(DispatchIdentifier)
+	if !ok {
+		return c
+	}
+	identity, ok := resolver.IdentifyDispatch(holder.dispatchTool, holder.dispatchAction)
+	if !ok || identity.ActionID == "" {
+		return c
+	}
+	resolved := []attribute.KeyValue{AttrActionID.String(identity.ActionID)}
+	if identity.Domain != "" {
+		resolved = append(resolved, AttrDomain.String(identity.Domain))
+	}
+	// Sized to the prediction: each attribute the resolution names takes the
+	// place of one the prediction named, so the list outgrows it only when
+	// dispatch resolved an action the arguments could not predict.
+	attrs := make([]attribute.KeyValue, 0, len(c.attributes))
+	for _, kv := range c.attributes {
+		if kv.Key != AttrActionID && (kv.Key != AttrDomain || identity.Domain == "") {
+			attrs = append(attrs, kv)
+		}
+	}
+	attrs = append(attrs, resolved...)
+	c.attributes = attrs
+	span.SetAttributes(resolved...)
+	return c
 }
 
 // describe works out the span name and creation-time attributes for a request.
