@@ -444,10 +444,7 @@ func rateLimitedResult(req mcp.Request) *mcp.CallToolResult {
 	if name != "" {
 		msg = RateLimitRefusalPrefix + name + rateLimitRetrySuffix
 	}
-	return &mcp.CallToolResult{
-		IsError: true,
-		Content: []mcp.Content{&mcp.TextContent{Text: msg}},
-	}
+	return ErrorResultAnnotated(msg, ContentMutate)
 }
 
 // extractToolName returns the tool name from a tools/call request when

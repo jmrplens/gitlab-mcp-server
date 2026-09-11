@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -222,50 +223,40 @@ func TestDetailedError_Error(t *testing.T) {
 	}
 }
 
-// TestDetailedError_Markdown verifies the Markdown rendering includes all fields.
+// TestDetailedError_Markdown verifies the error card byte for byte: every
+// field on its own row, the message and the details escaped since they carry
+// GitLab's words, and the request ID as a code span.
 func TestDetailedError_Markdown(t *testing.T) {
 	de := &DetailedError{
 		Domain:       "projects",
 		Action:       "delete",
-		Message:      "access denied",
-		Details:      "403 Forbidden: insufficient permissions",
+		Message:      "access denied <b>",
+		Details:      "403 Forbidden: insufficient | permissions",
 		GitLabStatus: 403,
 		RequestID:    "req-abc-123",
 	}
 	md := de.Markdown()
 
-	checks := []string{
-		"## ❌ Error: projects/delete",
-		"**Message**: access denied",
-		"**HTTP Status**: 403",
-		"**Details**: 403 Forbidden",
-		"**Request ID**: `req-abc-123`",
-	}
-	for _, want := range checks {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("Markdown() missing %q in:\n%s", want, md)
-			}
-		})
+	want := "## ❌ Error: projects/delete\n\n" +
+		"- **Message**: access denied &lt;b>\n" +
+		"- **HTTP Status**: 403 (" + ClassifyHTTPStatus(403) + ")\n" +
+		"- **Details**: 403 Forbidden: insufficient &#124; permissions\n" +
+		"- **Request ID**: `req-abc-123`\n"
+	if md != want {
+		t.Errorf("error card:\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestDetailedError_MarkdownMinimal verifies Markdown with only required fields.
+// TestDetailedError_MarkdownMinimal verifies the card with only the required
+// fields writes no row for the fields the error does not carry.
 func TestDetailedError_MarkdownMinimal(t *testing.T) {
 	de := &DetailedError{
 		Domain:  "repos",
 		Action:  "get",
 		Message: "unexpected error",
 	}
-	md := de.Markdown()
-	if strings.Contains(md, "**HTTP Status**") {
-		t.Error("minimal Markdown should not contain HTTP Status")
-	}
-	if strings.Contains(md, "**Details**") {
-		t.Error("minimal Markdown should not contain Details")
-	}
-	if strings.Contains(md, "**Request ID**") {
-		t.Error("minimal Markdown should not contain Request ID")
+	if md, want := de.Markdown(), "## ❌ Error: repos/get\n\n- **Message**: unexpected error\n"; md != want {
+		t.Errorf("minimal error card:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -303,7 +294,8 @@ func TestNewDetailedError_GenericError(t *testing.T) {
 	}
 }
 
-// TestErrorResultMarkdown verifies the MCP error result construction.
+// TestErrorResultMarkdown verifies the MCP error result construction: the
+// detailed error's card in the one refusal envelope, annotated as a refusal.
 func TestErrorResultMarkdown(t *testing.T) {
 	result := ErrorResultMarkdown("projects", "delete", errors.New("boom"))
 	if result == nil {
@@ -314,6 +306,13 @@ func TestErrorResultMarkdown(t *testing.T) {
 	}
 	if len(result.Content) != 1 {
 		t.Fatalf("expected 1 content, got %d", len(result.Content))
+	}
+	text := result.Content[0].(*mcp.TextContent)
+	if text.Annotations != ContentMutate {
+		t.Errorf("annotations = %+v, want the refusal preset", text.Annotations)
+	}
+	if !strings.HasPrefix(text.Text, "## ❌ Error: projects/delete\n\n- **Message**: ") {
+		t.Errorf("text = %q, want the error card", text.Text)
 	}
 }
 

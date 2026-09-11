@@ -3,48 +3,50 @@
 package toolutil
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestNotFoundResult verifies the structured 404 result contains resource info
-// and all supplied hints.
+// TestNotFoundResult verifies the not-found card byte for byte: the heading
+// naming the resource, the sentence naming the identifier the caller passed,
+// the rule WriteHints emits and the domain hints, in an error result
+// annotated as a detail.
 func TestNotFoundResult(t *testing.T) {
 	result := NotFoundResult("Project", "42", "Use gitlab_project_list to search", "Check permissions")
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	if result == nil || !result.IsError || len(result.Content) != 1 {
+		t.Fatalf("NotFoundResult() = %+v, want one error block", result)
 	}
-	if !result.IsError {
-		t.Error("expected IsError = true")
+	text := result.Content[0].(*mcp.TextContent)
+	want := "## " + EmojiQuestion + " Project Not Found\n\n" +
+		"The project **42** does not exist or is not accessible with your current permissions.\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use gitlab_project_list to search\n" +
+		"- Check permissions\n"
+	if text.Text != want {
+		t.Errorf("not-found card:\n got %q\nwant %q", text.Text, want)
 	}
-	if len(result.Content) == 0 {
-		t.Fatal("expected content")
+	if text.Annotations != ContentDetail {
+		t.Errorf("annotations = %+v, want the detail preset", text.Annotations)
 	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "Project") {
-		t.Errorf("expected resource name in output, got %q", text)
-	}
-	if !strings.Contains(text, "42") {
-		t.Errorf("expected identifier in output, got %q", text)
-	}
-	if !strings.Contains(text, "gitlab_project_list") {
-		t.Errorf("expected hint in output, got %q", text)
+	if hints := ExtractHints(text.Text); len(hints) != 2 {
+		t.Errorf("ExtractHints() = %q, want the two domain hints", hints)
 	}
 }
 
-// TestNotFoundResult_NoHints verifies NotFoundResult works without optional hints.
-func TestNotFoundResult_NoHints(t *testing.T) {
-	result := NotFoundResult("Branch", "main")
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	if !result.IsError {
-		t.Error("expected IsError = true")
+// TestNotFoundResult_NoHints_EscapesTheIdentifier verifies a result without
+// hints ends after the sentence, and that an identifier the caller typed
+// cannot open a link or a tag in it: it is escaped on its way in, with the
+// bracket and the angle bracket written as entities.
+func TestNotFoundResult_NoHints_EscapesTheIdentifier(t *testing.T) {
+	result := NotFoundResult("Branch", "[main](http://attacker.invalid/)<b>")
+	if result == nil || !result.IsError {
+		t.Fatal("expected an error result")
 	}
 	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "Branch") || !strings.Contains(text, "main") {
-		t.Errorf("unexpected text: %q", text)
+	want := "## " + EmojiQuestion + " Branch Not Found\n\n" +
+		"The branch **&#91;main](http://attacker.invalid/)&lt;b>** does not exist or is not accessible with your current permissions.\n"
+	if text != want {
+		t.Errorf("not-found card:\n got %q\nwant %q", text, want)
 	}
 }

@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestNewSafeModePreview_ParamsThatCannotBeEncoded_StillReportTheBlock covers
@@ -47,6 +49,52 @@ func TestNewSafeModePreview_ParamsThatCannotBeEncoded_StillReportTheBlock(t *tes
 				t.Errorf("hint = %q, want it to say how to turn safe mode off", preview.Hint)
 			}
 		})
+	}
+}
+
+// TestFormatSafeModePreviewMarkdown_WholeOutput_AndRoundTrip verifies the
+// preview card byte for byte, the way every refusal is rendered, and that
+// ParseSafeModePreview reads the same preview back out of it, which is what
+// keeps the tests on every surface from parsing the card by hand. A preview
+// with no arguments writes no fence, and the individual surface's result is
+// the card in the refusal envelope.
+func TestFormatSafeModePreviewMarkdown_WholeOutput_AndRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	preview := NewSafeModePreview("issue.create", map[string]any{"project_id": "42", "title": "a|b"})
+	md := FormatSafeModePreviewMarkdown(preview)
+	want := "## " + EmojiStop + " Safe mode blocked issue.create\n\n" +
+		"- **Status**: blocked\n" +
+		"- **Mode**: safe\n" +
+		"- **Tool**: `issue.create`\n" +
+		"\n### Parameters\n\n" +
+		"```json\n{\"project_id\":\"42\",\"title\":\"a|b\"}\n```\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n- " + SafeModeHint + "\n"
+	if md != want {
+		t.Errorf("preview card:\n got %q\nwant %q", md, want)
+	}
+
+	parsed, ok := ParseSafeModePreview(md)
+	if !ok || parsed.Status != "blocked" || parsed.Mode != "safe" || parsed.Tool != "issue.create" || parsed.Hint != SafeModeHint {
+		t.Errorf("ParseSafeModePreview() = %+v, %v; want the preview read back", parsed, ok)
+	}
+	if string(parsed.Params) != `{"project_id":"42","title":"a|b"}` {
+		t.Errorf("parsed params = %s, want the fenced arguments", parsed.Params)
+	}
+
+	bare := FormatSafeModePreviewMarkdown(SafeModePreview{Status: "blocked", Mode: "safe", Tool: "gitlab_issue_create"})
+	wantBare := "## " + EmojiStop + " Safe mode blocked gitlab_issue_create\n\n" +
+		"- **Status**: blocked\n- **Mode**: safe\n- **Tool**: `gitlab_issue_create`\n"
+	if bare != wantBare {
+		t.Errorf("preview card without arguments:\n got %q\nwant %q", bare, wantBare)
+	}
+	if _, isPreview := ParseSafeModePreview("## Issue #1\n\n- **Status**: opened\n"); isPreview {
+		t.Error("ParseSafeModePreview() read an issue card as a preview")
+	}
+
+	result := SafeModePreviewResult(preview)
+	if !result.IsError || result.Content[0].(*mcp.TextContent).Annotations != ContentMutate || result.Content[0].(*mcp.TextContent).Text != md {
+		t.Errorf("SafeModePreviewResult() = %+v, want the card in the refusal envelope", result)
 	}
 }
 

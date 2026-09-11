@@ -122,6 +122,11 @@ func resourceParamValue(value any) (string, bool) {
 // output. It is a no-op without a template, on an error result, when a
 // variable is missing, or when embedding is disabled, so every dispatcher can
 // call it unconditionally after formatting.
+//
+// [FinishToolResult] calls it last, after the hints have been set on the
+// output, so the JSON the block carries and the structured output of the
+// same result are one serialization: an embed run before the hints carried
+// a body that lacked the next_steps the structured output had.
 func EmbedCanonicalResource(result *mcp.CallToolResult, template string, params map[string]any, value any) {
 	if result == nil || result.IsError || template == "" {
 		return

@@ -312,23 +312,21 @@ func (e *DetailedError) Error() string {
 	return base
 }
 
-// Markdown renders the error as a Markdown block suitable for display in MCP
-// tool results. Includes all available context for diagnostics.
+// Markdown renders the error as a card suitable for an MCP tool result, with
+// every field the error carries as a row. The domain and action are the
+// handler's own, compiled in; the message and the details carry GitLab's
+// words, and the card escapes them on their rows, where they used to be
+// written raw on four consecutive bullet-less lines that rendered as one
+// run-on paragraph. The request ID is a code span, so a reader can copy it.
 func (e *DetailedError) Markdown() string {
 	var b strings.Builder
-	//gitlab:allow-unescaped e.Domain: the tool domain the handler named when it built the error, compiled in rather than read from GitLab.
-	//gitlab:allow-unescaped e.Action: the action the handler named when it built the error, compiled in rather than read from GitLab.
-	fmt.Fprintf(&b, "## "+EmojiCross+" Error: %s/%s\n\n", e.Domain, e.Action)
-	fmt.Fprintf(&b, "**Message**: %s\n", e.Message)
+	c := NewCard(&b, EmojiCross+" Error: "+e.Domain+"/"+e.Action)
+	c.Field("Message", e.Message)
 	if e.GitLabStatus > 0 {
-		fmt.Fprintf(&b, "**HTTP Status**: %d (%s)\n", e.GitLabStatus, ClassifyHTTPStatus(e.GitLabStatus))
+		c.Field("HTTP Status", fmt.Sprintf("%d (%s)", e.GitLabStatus, ClassifyHTTPStatus(e.GitLabStatus)))
 	}
-	if e.Details != "" {
-		fmt.Fprintf(&b, "**Details**: %s\n", e.Details)
-	}
-	if e.RequestID != "" {
-		fmt.Fprintf(&b, "**Request ID**: `%s`\n", e.RequestID)
-	}
+	c.Field("Details", e.Details)
+	c.Code("Request ID", e.RequestID)
 	return b.String()
 }
 
@@ -358,10 +356,12 @@ func NewDetailedError(domain, action string, err error) *DetailedError {
 		}
 	}
 
+	// The request ID is stored as GitLab sent it: the JSON field carries the
+	// value, and the card escapes it where it renders.
 	var glErr *gl.ErrorResponse
 	if errors.As(err, &glErr) && glErr.Response != nil {
 		de.GitLabStatus = glErr.Response.StatusCode
-		de.RequestID = EscapeMdTableCell(glErr.Response.Header.Get("X-Request-Id"))
+		de.RequestID = glErr.Response.Header.Get("X-Request-Id")
 	}
 
 	return de
@@ -712,10 +712,12 @@ func describeGitLabResponse(glErr *gl.ErrorResponse) string {
 }
 
 // WrapErrWithMessage works like WrapErr but also includes the specific GitLab
-// error message (from ErrorResponse.Message) when available. This produces
-// richer errors like:
+// error message (from ErrorResponse.Message) when available. The composition
+// is the operation, the classification, GitLab's message in parentheses, and
+// the sanitized cause, which carries the request line, the status and that
+// same message once more:
 //
-//	"fileCreate: bad request (A file with this name already exists): POST .../files: 400"
+//	"fileCreate: bad request: check your input parameters ({message: A file with this name already exists}): POST https://gitlab.example.com/api/v4/projects/1/repository/files/README.md: 400 {message: A file with this name already exists}"
 //
 // Use WrapErrWithMessage for mutating operations where the specific GitLab
 // error detail helps the LLM understand what went wrong. Use WrapErr for
@@ -736,10 +738,10 @@ func WrapErrWithMessage(operation string, err error) error {
 }
 
 // WrapErrWithHint works like WrapErrWithMessage but appends an actionable hint
-// that tells the LLM what to do next. Example:
+// that tells the LLM what to do next, after the classification and GitLab's
+// message and before the cause:
 //
-//	"branchDelete: bad request (Cannot delete: protected branch).
-//	 Suggestion: use gitlab_branch_unprotect first, then retry deletion: <original>"
+//	"branchDelete: conflict: the resource already exists or there is a state conflict ({message: Cannot delete: protected branch}). Suggestion: use gitlab_branch_unprotect first, then retry deletion: DELETE https://gitlab.example.com/api/v4/projects/1/repository/branches/main: 409 {message: Cannot delete: protected branch}"
 //
 // The hint should be a concise suggestion starting with a verb (e.g., "use
 // gitlab_branch_list to verify the branch name").
@@ -788,14 +790,10 @@ func WrapErrWithStatusHint(operation string, err error, code int, hint string) e
 	return WrapErrWithMessage(operation, err)
 }
 
-// ErrorResultMarkdown creates an MCP tool error result with Markdown formatting.
-// The result has IsError = true for MCP clients that distinguish error results.
+// ErrorResultMarkdown creates an MCP tool error result carrying the
+// [DetailedError] card for err, through [ErrorResultAnnotated]: it is the one
+// path a handler has to a rich error result, and it travels in the same
+// envelope as every other refusal.
 func ErrorResultMarkdown(domain, action string, err error) *mcp.CallToolResult {
-	de := NewDetailedError(domain, action, err)
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: de.Markdown()},
-		},
-		IsError: true,
-	}
+	return ErrorResultAnnotated(NewDetailedError(domain, action, err).Markdown(), ContentMutate)
 }

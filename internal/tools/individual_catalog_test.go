@@ -201,8 +201,11 @@ func TestRegisterIndividualCatalogTools_ReadOnlyAndSafeModePolicies(t *testing.T
 		t.Fatalf("safe mode result content = %#v, want blocked preview", result.Content)
 	}
 	text, ok := result.Content[0].(*mcp.TextContent)
-	if !ok || !strings.Contains(text.Text, `"status":"blocked"`) {
+	if !ok {
 		t.Fatalf("safe mode result content = %#v, want blocked preview", result.Content)
+	}
+	if preview, isPreview := toolutil.ParseSafeModePreview(text.Text); !isPreview || preview.Tool != "gitlab_test_write" {
+		t.Fatalf("safe mode result text = %q, want a blocked preview naming gitlab_test_write", text.Text)
 	}
 
 	// The other half of what safe mode means: reads keep working. A mode that
