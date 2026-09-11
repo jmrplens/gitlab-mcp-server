@@ -199,7 +199,7 @@ Un servidor único que es dueño de su nombre de host no tiene ninguno de los do
 :::note[Se requiere un client ID pre-registrado]
 GitLab restringe los clientes OAuth registrados dinámicamente al scope `mcp`, que no concede acceso REST ni GraphQL — aquí fallarían todas las acciones. Crea una Aplicación OAuth de GitLab con los scopes `api` y `read_api` (solo `read_api` si el despliegue usa `--read-only` o `--safe-mode`) y configura su Application ID en cada cliente.
 
-Un despliegue que puede escribir anuncia ambos scopes en `scopes_supported`, y un cliente como Claude Code pide todos los que aparecen ahí. GitLab rechaza una petición de autorización que nombra un scope que la aplicación no tiene con `invalid_scope` ("The requested scope is invalid, unknown, or malformed"). Marcar `read_api` junto a `api` no concede nada más, porque `api` ya lo incluye, y una aplicación existente se puede editar sin que cambie su Application ID.
+Un despliegue que puede escribir anuncia ambos scopes en `scopes_supported`, y un cliente como Claude Code pide todos los que aparecen ahí. GitLab rechaza una petición de autorización que nombra un scope que la aplicación no tiene con `invalid_scope` ("The requested scope is invalid, unknown, or malformed"). Marcar `read_api` junto a `api` no concede nada más, porque `api` ya lo incluye, y una aplicación existente se puede editar sin que cambie su Application ID. Una aplicación con solo uno de los dos marcado funciona si cada cliente fija ese scope (`oauth.scopes` en Claude Code, `scopes` en VS Code); un token `read_api` se admite y recibe la superficie de solo lectura.
 :::
 
 **Configuración del cliente en modo OAuth:**
