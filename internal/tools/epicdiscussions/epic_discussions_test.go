@@ -1052,15 +1052,29 @@ func TestDeleteNote(t *testing.T) {
 // Formatters
 // --------------------------------------------------------------------------
 
-// TestFormatListMarkdownString uses table-driven subtests to verify that FormatListMarkdownString renders a table for populated inputs and an empty-state message otherwise.
+// The guidance sections the three shared renderers end with, so each
+// expectation below can pin the whole rendered document.
+const (
+	listHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use `gitlab_get_epic_discussion` to view full discussion details\n"
+	threadHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use `gitlab_add_epic_discussion_note` to reply to this discussion\n"
+	noteHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use `gitlab_update_epic_discussion_note` to edit this note\n"
+)
+
+// TestFormatListMarkdownString uses table-driven subtests to pin the whole
+// document the shared discussion list renderer writes: a thread per section with
+// its notes quoted under their authors and the cursor line below them, and one
+// sentence for an epic with no discussions.
 func TestFormatListMarkdownString(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   ListOutput
-		wantSub string
+		name  string
+		input ListOutput
+		want  string
 	}{
 		{
-			name: "renders table with discussions",
+			name: "renders the threads with the cursor line",
 			input: ListOutput{
 				Discussions: []Output{
 					{
@@ -1072,61 +1086,89 @@ func TestFormatListMarkdownString(t *testing.T) {
 				},
 				Pagination: toolutil.GraphQLForwardPaginationOutput{},
 			},
-			wantSub: "d1hex",
+			want: "## Epic Discussions (1)\n\n" +
+				"### Discussion d1hex\n" +
+				"- **@alice** (1 Jan 2026 00:00 UTC, note 100):\n" +
+				"  > Hello\n\n" +
+				"Showing 1 items | no more pages\n" +
+				listHintsBlock,
 		},
 		{
-			name:    "renders empty state when no discussions",
-			input:   ListOutput{},
-			wantSub: "No epic discussions",
+			name:  "renders empty state when no discussions",
+			input: ListOutput{},
+			want:  "No epic discussions found.\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			md := FormatListMarkdownString(tt.input)
-			if !strings.Contains(md, tt.wantSub) {
-				t.Errorf("output %q does not contain %q", md, tt.wantSub)
+			if got := FormatListMarkdownString(tt.input); got != tt.want {
+				t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestFormatMarkdownString uses table-driven subtests to verify that FormatMarkdownString renders a discussion with notes and handles an empty discussion.
+// TestFormatMarkdownString uses table-driven subtests to pin the whole card of a
+// thread with notes and of one GitLab answered with none.
 func TestFormatMarkdownString(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   Output
-		wantSub string
+		name  string
+		input Output
+		want  string
 	}{
 		{
-			name:    "renders discussion with notes",
-			input:   Output{ID: "d1hex", Notes: []NoteOutput{{ID: 1, Body: "note body", Author: "bob", CreatedAt: "2026-01-01T00:00:00Z"}}},
-			wantSub: "bob",
+			name:  "renders discussion with notes",
+			input: Output{ID: "d1hex", Notes: []NoteOutput{{ID: 1, Body: "note body", Author: "bob", CreatedAt: "2026-01-01T00:00:00Z"}}},
+			want: "## Discussion d1hex\n\n" +
+				"- **@bob** (1 Jan 2026 00:00 UTC, note 1):\n" +
+				"  > note body\n" +
+				threadHintsBlock,
 		},
 		{
-			name:    "renders empty discussion",
-			input:   Output{ID: "d1hex"},
-			wantSub: "d1hex",
+			name:  "renders empty discussion",
+			input: Output{ID: "d1hex"},
+			want:  "## Discussion d1hex\n" + threadHintsBlock,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			md := FormatMarkdownString(tt.input)
-			if !strings.Contains(md, tt.wantSub) {
-				t.Errorf("output %q does not contain %q", md, tt.wantSub)
+			if got := FormatMarkdownString(tt.input); got != tt.want {
+				t.Errorf("thread card mismatch:\ngot:\n%s\nwant:\n%s", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestFormatNoteMarkdownString verifies the NoteMarkdownString Markdown formatter for a representative notestring input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatNoteMarkdownString pins the whole card of a note somebody wrote.
 func TestFormatNoteMarkdownString(t *testing.T) {
-	md := FormatNoteMarkdownString(NoteOutput{ID: 1, Body: "test note", Author: "carol", CreatedAt: "2026-01-01T00:00:00Z"})
-	if !strings.Contains(md, "carol") {
-		t.Errorf("expected author 'carol' in output, got %q", md)
+	got := FormatNoteMarkdownString(NoteOutput{ID: 1, Body: "test note", Author: "carol", CreatedAt: "2026-01-01T00:00:00Z"})
+
+	want := "## Discussion Note #1\n\n" +
+		"- **Author**: @carol\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Body**: test note\n" +
+		noteHintsBlock
+	if got != want {
+		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatNoteMarkdownString_SystemNote pins the card of a system note: the
+// marker is written, where the view model used to drop the flag and a record
+// GitLab wrote itself read as a comment somebody typed.
+func TestFormatNoteMarkdownString_SystemNote(t *testing.T) {
+	got := FormatNoteMarkdownString(NoteOutput{ID: 2, Body: "changed title", Author: "carol", CreatedAt: "2026-01-01T00:00:00Z", System: true})
+
+	want := "## Discussion Note #2\n\n" +
+		"- **Author**: @carol\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **System note**\n" +
+		"- **Body**: changed title\n" +
+		noteHintsBlock
+	if got != want {
+		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

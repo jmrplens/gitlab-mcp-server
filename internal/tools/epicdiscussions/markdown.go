@@ -25,8 +25,13 @@ func toMarkdownDiscussion(out Output) toolutil.DiscussionMarkdown {
 	return toolutil.NewDiscussionMarkdown(out.ID, toolutil.NoteMarkdowns(out.Notes, toMarkdownNote))
 }
 
+// toMarkdownNote maps an epic discussion note onto the shared note view model,
+// the system flag included: a system note is GitLab's own record of a state
+// change rather than something a person wrote, and a card that does not mark it
+// reads as if somebody had.
 func toMarkdownNote(out NoteOutput) toolutil.DiscussionNoteMarkdown {
-	return toolutil.NewDiscussionNoteMarkdown(out.ID, out.Body, out.Author, out.CreatedAt)
+	return toolutil.NewNoteMarkdown(out.ID, out.Body, out.Author, out.CreatedAt,
+		toolutil.NoteMarkdownFlags{System: out.System}, "")
 }
 
 func init() {

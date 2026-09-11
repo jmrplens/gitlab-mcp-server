@@ -429,95 +429,186 @@ func TestUpdateNote_APIError(t *testing.T) {
 // Formatter Tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdownString_WithData verifies the ListMarkdownString_WithData Markdown formatter for a representative liststring_withdata input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// The three guidance sections the cards and the list of this package end with,
+// so each expectation below can pin the whole rendered document.
+const (
+	listHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use `gitlab_get_commit_discussion` with discussion_id to view full discussion details\n" +
+		"- Use `gitlab_create_commit_discussion` to start a new discussion on this commit\n"
+	threadHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use `gitlab_add_commit_discussion_note` to reply to this discussion\n" +
+		"- Use `gitlab_update_commit_discussion_note` to edit a note\n"
+	noteHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use `gitlab_update_commit_discussion_note` with note_id to edit this note\n" +
+		"- Use `gitlab_add_commit_discussion_note` with discussion_id to reply to this discussion\n"
+)
+
+// TestFormatListMarkdownString_WithData pins the whole list document of a page
+// of discussion threads: the heading counts the total GitLab reported rather
+// than the length of the page, the summary names the page, and the pagination
+// footer opens a block of its own after the last row.
 func TestFormatListMarkdownString_WithData(t *testing.T) {
 	out := ListOutput{
 		Discussions: []Output{
 			{ID: testDiscussionID, Notes: []*NoteOutput{{Author: &toolutil.NoteUserOutput{Username: testAuthorAlice}, CreatedAt: testDate20260101, Body: "comment"}}},
 			{ID: "d2", Notes: []*NoteOutput{{Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-02", Body: "reply"}}},
 		},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 20, TotalItems: 45, TotalPages: 3, NextPage: 2, HasMore: true},
 	}
-	md := FormatListMarkdownString(out)
-	if !strings.Contains(md, "Commit Discussions (2)") {
-		t.Errorf("expected header, got:\n%s", md)
-	}
-	if !strings.Contains(md, testDiscussionID) || !strings.Contains(md, "d2") {
-		t.Error("expected discussion IDs")
-	}
-	if !strings.Contains(md, testAuthorAlice) {
-		t.Error("expected author")
+
+	got := FormatListMarkdownString(out)
+
+	want := "## Commit Discussions (45)\n\n" +
+		"Showing 2 of 45 results (page 1 of 3)\n\n" +
+		"| ID | Author | Notes |\n" +
+		"| --- | --- | --- |\n" +
+		"| d1 | alice | 1 |\n" +
+		"| d2 | bob | 1 |\n\n" +
+		"Page 1 of 3 | 45 items total | 20 per page\n" +
+		listHintsBlock
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the ListMarkdownString_Empty Markdown formatter for a representative liststring_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdownString_Empty pins the whole response of a commit with
+// no discussions: one sentence, with no heading counting zero above it.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
-	out := ListOutput{Discussions: nil}
-	md := FormatListMarkdownString(out)
-	if !strings.Contains(md, "No commit discussions found") {
-		t.Error("expected empty message")
+	got := FormatListMarkdownString(ListOutput{Discussions: nil})
+
+	if want := "No commit discussions found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatMarkdownString_WithNotes verifies the MarkdownString_WithNotes Markdown formatter for a representative string_withnotes input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString_WithNotes pins the whole card of a thread: its own
+// fields first, then one section per note with the body quoted under its label.
 func TestFormatMarkdownString_WithNotes(t *testing.T) {
 	out := Output{
 		ID:    testDiscussionID,
-		Notes: []*NoteOutput{{Author: &toolutil.NoteUserOutput{Username: "dev"}, CreatedAt: testDate20260101, Body: "LGTM"}},
+		Notes: []*NoteOutput{{ID: 7, Author: &toolutil.NoteUserOutput{Username: "dev"}, CreatedAt: testDate20260101, Body: "LGTM"}},
 	}
-	md := FormatMarkdownString(out)
-	if !strings.Contains(md, "Discussion "+testDiscussionID) {
-		t.Error("expected header")
-	}
-	if !strings.Contains(md, "LGTM") {
-		t.Error("expected note body")
+
+	got := FormatMarkdownString(out)
+
+	want := "## Discussion d1\n\n" +
+		"- **Notes**: 1\n" +
+		"- **Individual Note**: ❌\n\n" +
+		"### Note #7\n\n" +
+		"- **Author**: @dev\n" +
+		"- **Created**: 1 Jan 2026\n" +
+		"- **Body**: LGTM\n" +
+		threadHintsBlock
+	if got != want {
+		t.Errorf("thread card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatMarkdownString_Empty verifies the MarkdownString_Empty Markdown formatter for a representative string_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString_Resolvable pins the thread card of a resolvable
+// thread: the resolution state is a row of its own, and a nil note in the slice
+// the SDK may hand back adds no empty section.
+func TestFormatMarkdownString_Resolvable(t *testing.T) {
+	out := Output{
+		ID:             testDiscussionID,
+		IndividualNote: true,
+		Resolvable:     true,
+		Resolved:       true,
+		Notes:          []*NoteOutput{nil},
+	}
+
+	got := FormatMarkdownString(out)
+
+	want := "## Discussion d1\n\n" +
+		"- **Notes**: 1\n" +
+		"- **Individual Note**: ✅\n" +
+		"- **Resolvable**: resolved\n" +
+		threadHintsBlock
+	if got != want {
+		t.Errorf("thread card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatMarkdownString_Empty pins the card of a thread GitLab answered with
+// no notes: the heading and the flag it does carry, and no count of zero.
 func TestFormatMarkdownString_Empty(t *testing.T) {
-	out := Output{ID: testDiscussionID, Notes: nil}
-	md := FormatMarkdownString(out)
-	if !strings.Contains(md, "Discussion "+testDiscussionID) {
-		t.Error("expected header even with no notes")
+	got := FormatMarkdownString(Output{ID: testDiscussionID, Notes: nil})
+
+	want := "## Discussion d1\n\n" +
+		"- **Individual Note**: ❌\n" +
+		threadHintsBlock
+	if got != want {
+		t.Errorf("thread card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatNoteMarkdownString verifies the NoteMarkdownString Markdown formatter for a representative notestring input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatNoteMarkdownString pins the whole card of a note on a line of a
+// diff: the author as a handle, the resolution state a resolvable note carries,
+// the file and line the note hangs on, and the body.
 func TestFormatNoteMarkdownString(t *testing.T) {
-	n := NoteOutput{ID: 10, Author: &toolutil.NoteUserOutput{Username: "dev"}, Body: "Nice!", CreatedAt: testDate20260101}
-	md := FormatNoteMarkdownString(n)
-	if !strings.Contains(md, "Note") {
-		t.Error("expected header")
+	n := NoteOutput{
+		ID:         10,
+		Author:     &toolutil.NoteUserOutput{Username: "dev"},
+		Body:       "Nice!",
+		CreatedAt:  testDate20260101,
+		Resolvable: true,
+		Resolved:   true,
+		ResolvedBy: &toolutil.NoteUserOutput{Username: testAuthorAlice},
+		Position:   &toolutil.NotePositionOutput{NewPath: "internal/app.go", NewLine: 42},
 	}
-	if !strings.Contains(md, "10") {
-		t.Error("expected note ID")
-	}
-	if !strings.Contains(md, "Nice!") {
-		t.Error("expected body")
-	}
-	if !strings.Contains(md, "1 Jan 2026") {
-		t.Error("expected created date")
+
+	got := FormatNoteMarkdownString(n)
+
+	want := "## Discussion Note #10\n\n" +
+		"- **Author**: @dev\n" +
+		"- **Created**: 1 Jan 2026\n" +
+		"- **Resolvable**: resolved\n" +
+		"- **Resolved By**: @alice\n" +
+		"- **Position**: `internal/app.go`:42\n" +
+		"- **Body**: Nice!\n" +
+		noteHintsBlock
+	if got != want {
+		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatNoteMarkdownString_NoDate verifies the NoteMarkdownString_NoDate Markdown formatter for a representative notestring_nodate input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatNoteMarkdownString_SystemNoteOnRemovedLine pins the card of a
+// system note anchored to a removed line: the marker the flag writes, the old
+// path and line, and no resolution state on a note that cannot be resolved.
+func TestFormatNoteMarkdownString_SystemNoteOnRemovedLine(t *testing.T) {
+	n := NoteOutput{
+		ID:       12,
+		Author:   &toolutil.NoteUserOutput{Username: "bot"},
+		Body:     "changed the description",
+		System:   true,
+		Internal: true,
+		Position: &toolutil.NotePositionOutput{OldPath: "internal/old.go", OldLine: 7},
+	}
+
+	got := FormatNoteMarkdownString(n)
+
+	want := "## Discussion Note #12\n\n" +
+		"- **Author**: @bot\n" +
+		"- **System note**\n" +
+		"- **Internal note**\n" +
+		"- **Position**: `internal/old.go`:7\n" +
+		"- **Body**: changed the description\n" +
+		noteHintsBlock
+	if got != want {
+		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatNoteMarkdownString_NoDate pins the card of a note GitLab answered
+// with neither a time nor an author: neither row is written, where a label with
+// nothing after it used to read as a value GitLab sent.
 func TestFormatNoteMarkdownString_NoDate(t *testing.T) {
-	n := NoteOutput{ID: 11, Author: &toolutil.NoteUserOutput{Username: "bot"}, Body: "OK"}
-	md := FormatNoteMarkdownString(n)
-	if strings.Contains(md, "Created") {
-		t.Error("should not show Created when empty")
+	got := FormatNoteMarkdownString(NoteOutput{ID: 11, Body: "OK"})
+
+	want := "## Discussion Note #11\n\n" +
+		"- **Body**: OK\n" +
+		noteHintsBlock
+	if got != want {
+		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

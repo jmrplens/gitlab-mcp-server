@@ -155,51 +155,114 @@ func resourceEventSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[str
 	return byTool
 }
 
-// TestFormatIterationEventsMarkdown_NonEmpty verifies the iteration events formatter.
+// The guidance sections the iteration and weight event results end with, so
+// each expectation below can pin the whole rendered document.
+const (
+	iterationListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use filters to narrow down iteration events by date or action\n"
+	iterationCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use `gitlab_issue_iteration_event_list` to see all iteration changes\n"
+	weightListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use filters to narrow down weight events by date\n"
+)
+
+// TestFormatIterationEventsMarkdown_NonEmpty pins the whole list document of
+// iteration events.
 func TestFormatIterationEventsMarkdown_NonEmpty(t *testing.T) {
-	md := FormatIterationEventsMarkdown(ListIterationEventsOutput{
+	got := FormatIterationEventsMarkdown(ListIterationEventsOutput{
 		Events: []IterationEventOutput{
 			{ID: 1, Action: "add", Iteration: &IterationOutput{ID: 5, Title: "Sprint 1"}, User: &EventUserOutput{Username: "user"}, CreatedAt: "2026-01-01T00:00:00Z"},
 		},
 	})
-	if md == "" || !strings.Contains(md, "Sprint 1") {
-		t.Fatalf("unexpected markdown: %q", md)
+
+	want := "## Iteration Events (1)\n\n" +
+		"| ID | Action | Iteration | User | Date |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | add | Sprint 1 | user | 1 Jan 2026 00:00 UTC |\n" +
+		iterationListHints
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatIterationEventMarkdown_NonEmpty verifies the single iteration event formatter.
+// TestFormatIterationEventMarkdown_NonEmpty pins the whole card of one
+// iteration event.
 func TestFormatIterationEventMarkdown_NonEmpty(t *testing.T) {
-	md := FormatIterationEventMarkdown(IterationEventOutput{
+	got := FormatIterationEventMarkdown(IterationEventOutput{
 		ID: 1, Action: "add", Iteration: &IterationOutput{ID: 5, Title: "Sprint 1"},
 		User: &EventUserOutput{Username: "user"}, ResourceType: "Issue", ResourceID: 10, CreatedAt: "2026-01-01T00:00:00Z",
 	})
-	if md == "" || !strings.Contains(md, "Sprint 1") {
-		t.Fatalf("unexpected markdown: %q", md)
+
+	want := "## Iteration Event #1\n\n" +
+		"- **Action**: add\n" +
+		"- **Iteration**: Sprint 1\n" +
+		"- **Iteration ID**: 5\n" +
+		"- **User**: user\n" +
+		"- **Resource Type**: Issue\n" +
+		"- **Resource ID**: 10\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		iterationCardHints
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatWeightEventsMarkdown_NonEmpty verifies the weight events formatter.
+// TestFormatIterationEventMarkdown_DeletedIteration pins the card of an event
+// whose iteration GitLab no longer sends: neither the title nor the ID is
+// written, where the card used to read "(ID: 0)".
+func TestFormatIterationEventMarkdown_DeletedIteration(t *testing.T) {
+	got := FormatIterationEventMarkdown(IterationEventOutput{ID: 2, Action: "remove", User: &EventUserOutput{Username: "user"}})
+
+	want := "## Iteration Event #2\n\n" +
+		"- **Action**: remove\n" +
+		"- **User**: user\n" +
+		iterationCardHints
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatWeightEventsMarkdown_NonEmpty pins the whole list document of
+// weight events.
+//
+// The column this table used to render came from resource_type and resource_id,
+// which the weight entity does not expose, so every row read as an empty type
+// followed by #0; the issue the entity does name is rendered as the database ID
+// it is, with no "#" in front of it to read as a per-project number.
 func TestFormatWeightEventsMarkdown_NonEmpty(t *testing.T) {
-	md := FormatWeightEventsMarkdown(ListWeightEventsOutput{
+	got := FormatWeightEventsMarkdown(ListWeightEventsOutput{
 		Events: []WeightEventOutput{
 			{ID: 2, Weight: 5, User: &EventUserOutput{Username: "user"}, IssueID: 10, CreatedAt: "2026-01-01T00:00:00Z"},
 		},
 	})
-	if md == "" || !strings.Contains(md, "5") {
-		t.Fatalf("unexpected markdown: %q", md)
+
+	want := "## Weight Events (1)\n\n" +
+		"| ID | Weight | User | Issue ID | Date |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 2 | 5 | user | 10 | 1 Jan 2026 00:00 UTC |\n" +
+		weightListHints
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	// The column this table used to render came from resource_type and
-	// resource_id, which the weight entity does not expose, so every row read
-	// as an empty type followed by #0. Asserting the weight alone would pass a
-	// renderer that still did that, or one that dropped the column.
-	if !strings.Contains(md, "| Issue |") {
-		t.Errorf("the header names no Issue column: %q", md)
+}
+
+// TestFormatWeightEventsMarkdown_Empty pins the whole response of an issue with
+// no weight events.
+func TestFormatWeightEventsMarkdown_Empty(t *testing.T) {
+	got := FormatWeightEventsMarkdown(ListWeightEventsOutput{})
+
+	if want := "No weight events found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%q\nwant:\n%q", got, want)
 	}
-	if !strings.Contains(md, "#10") {
-		t.Errorf("the row does not render the issue the entity names: %q", md)
-	}
-	if strings.Contains(md, "#0") {
-		t.Errorf("the row still renders a zero identifier: %q", md)
+}
+
+// TestFormatIterationEventsMarkdown_Empty pins the whole response of an issue
+// with no iteration events.
+func TestFormatIterationEventsMarkdown_Empty(t *testing.T) {
+	got := FormatIterationEventsMarkdown(ListIterationEventsOutput{})
+
+	if want := "No iteration events found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%q\nwant:\n%q", got, want)
 	}
 }
 

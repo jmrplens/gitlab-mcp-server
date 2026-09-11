@@ -390,9 +390,23 @@ func TestListSnippetAwardEmoji_Success(t *testing.T) {
 
 // Formatter tests.
 
-// TestFormatListMarkdownString_WithEmoji verifies the ListMarkdownString_WithEmoji Markdown formatter for a representative liststring_withemoji input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// The guidance sections an award emoji result ends with, so each expectation
+// below can pin the whole rendered document. Delete award-emoji operations are
+// destructive, so the hint that names the confirmation is part of every one.
+const (
+	cardHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use the selected tool surface's matching award emoji delete action with award_id, the same resource identifiers, and explicit confirm=true\n"
+	linkedListHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- Use the selected tool surface's matching award emoji delete action with award_id, the same resource identifiers, and explicit confirm=true\n"
+	plainListHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use the selected tool surface's matching award emoji delete action with award_id, the same resource identifiers, and explicit confirm=true\n"
+)
+
+// TestFormatListMarkdownString_WithEmoji pins the whole list document: the
+// collection is a table, the awarding user is a link where GitLab gave a profile
+// URL and the bare handle where it did not, and the footer carries the
+// instruction to keep the links because the table has some.
 func TestFormatListMarkdownString_WithEmoji(t *testing.T) {
 	out := ListOutput{
 		AwardEmoji: []Output{
@@ -400,18 +414,41 @@ func TestFormatListMarkdownString_WithEmoji(t *testing.T) {
 			{ID: 11, Name: "heart", User: &UserOutput{ID: 2, Username: "dev"}, CreatedAt: "2026-02-01T00:00:00Z", AwardableID: 1, AwardableType: "Issue"},
 		},
 	}
-	md := FormatListMarkdownString(out)
-	if !contains(md, "Award Emoji (2)") {
-		t.Error("expected header with count 2")
+
+	got := FormatListMarkdownString(out)
+
+	want := "## Award Emoji (2)\n\n" +
+		"| ID | Emoji | User | Awarded |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 10 | :thumbsup: | [@admin](https://gitlab.example.com/admin) | 1 Jan 2026 00:00 UTC |\n" +
+		"| 11 | :heart: | @dev | 1 Feb 2026 00:00 UTC |\n" +
+		linkedListHintsBlock
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	if !contains(md, ":thumbsup:") {
-		t.Error("expected :thumbsup:")
+}
+
+// TestFormatListMarkdownString_Paginated pins the heading and the footer of a
+// page of a larger list: the heading counts the total GitLab reported, and the
+// pagination line opens a block of its own after the last row rather than
+// continuing the table.
+func TestFormatListMarkdownString_Paginated(t *testing.T) {
+	out := ListOutput{
+		AwardEmoji: []Output{{ID: 10, Name: testEmojiThumbsup, User: &UserOutput{ID: 1, Username: "admin"}, CreatedAt: "2026-01-01T00:00:00Z"}},
+		Pagination: toolutil.PaginationOutput{Page: 2, PerPage: 1, TotalItems: 3, TotalPages: 3, NextPage: 3, HasMore: true},
 	}
-	if !contains(md, ":heart:") {
-		t.Error("expected :heart:")
-	}
-	if !contains(md, "[admin](https://gitlab.example.com/admin)") {
-		t.Error("expected linked username when user profile URL is available")
+
+	got := FormatListMarkdownString(out)
+
+	want := "## Award Emoji (3)\n\n" +
+		"Showing 1 of 3 results (page 2 of 3)\n\n" +
+		"| ID | Emoji | User | Awarded |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 10 | :thumbsup: | @admin | 1 Jan 2026 00:00 UTC |\n\n" +
+		"Page 2 of 3 | 3 items total | 1 per page\n" +
+		plainListHintsBlock
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -426,26 +463,33 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString verifies the MarkdownString Markdown formatter for a representative string input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString pins the whole card of one award emoji, the
+// awardable included: an award that does not say what it sits on cannot be
+// found again, and the object is both in the heading and in a row of its own.
 func TestFormatMarkdownString(t *testing.T) {
 	out := Output{
-		ID:        10,
-		Name:      testEmojiThumbsup,
-		User:      &UserOutput{ID: 1, Username: "admin"},
-		CreatedAt: "2026-01-01T00:00:00Z",
+		ID:            10,
+		Name:          testEmojiThumbsup,
+		User:          &UserOutput{ID: 1, Username: "admin", Name: "Admin User", WebURL: "https://gitlab.example.com/admin"},
+		CreatedAt:     "2026-01-01T00:00:00Z",
+		AwardableID:   42,
+		AwardableType: "Issue",
 	}
-	md := FormatMarkdownString(out)
-	if !contains(md, ":thumbsup:") {
-		t.Error("expected :thumbsup: in markdown")
-	}
-	if !contains(md, "admin") {
-		t.Error("expected admin in markdown")
-	}
-	// Delete award-emoji operations are destructive and must require explicit confirmation guidance.
-	if !contains(md, "explicit confirm=true") {
-		t.Error("expected destructive confirmation hint in markdown")
+
+	got := FormatMarkdownString(out)
+
+	want := "## Award Emoji :thumbsup: on Issue 42\n\n" +
+		"- **ID**: 10\n" +
+		"- **Name**: :thumbsup:\n" +
+		"- **Awarded On**: Issue (ID 42)\n" +
+		"- **User**:\n" +
+		"  - **ID**: 1\n" +
+		"  - **Name**: Admin User\n" +
+		"  - **Username**: [@admin](https://gitlab.example.com/admin)\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		cardHintsBlock
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1426,24 +1470,32 @@ func TestFormatListMarkdown_Empty_Cov(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty_Cov verifies the ListMarkdownString_Empty_Cov Markdown formatter for a representative liststring_empty_cov input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdownString_Empty_Cov pins the whole response of a list with
+// nothing in it: one sentence, with no heading counting zero above it.
 func TestFormatListMarkdownString_Empty_Cov(t *testing.T) {
-	md := FormatListMarkdownString(ListOutput{})
-	if !strings.Contains(md, "No award emoji found") {
-		t.Error("expected empty message")
+	got := FormatListMarkdownString(ListOutput{})
+
+	if want := "No award emoji found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatListMarkdownString_WithEmoji_Cov verifies the ListMarkdownString_WithEmoji_Cov Markdown formatter for a representative liststring_withemoji_cov input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdownString_WithEmoji_Cov pins the whole list document of an
+// award GitLab sent no time for: the date cell is empty rather than a zero
+// instant, and the footer carries no instruction to keep links the table has
+// none of.
 func TestFormatListMarkdownString_WithEmoji_Cov(t *testing.T) {
 	out := ListOutput{AwardEmoji: []Output{{ID: 1, Name: "thumbsup", User: &UserOutput{Username: "alice"}}}}
-	md := FormatListMarkdownString(out)
-	if !strings.Contains(md, "thumbsup") || !strings.Contains(md, "alice") {
-		t.Error("expected emoji details")
+
+	got := FormatListMarkdownString(out)
+
+	want := "## Award Emoji (1)\n\n" +
+		"| ID | Emoji | User | Awarded |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 1 | :thumbsup: | @alice |  |\n" +
+		plainListHintsBlock
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1457,23 +1509,39 @@ func TestFormatMarkdown_Wrapper(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_NoCreatedAt verifies the MarkdownString_NoCreatedAt Markdown formatter for a representative string_nocreatedat input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString_NoCreatedAt pins the whole card of an award GitLab
+// sent neither a time nor an awardable for: no row is written for either, where
+// a label with nothing after it used to read as a value GitLab sent.
 func TestFormatMarkdownString_NoCreatedAt(t *testing.T) {
-	md := FormatMarkdownString(Output{Name: "thumbsup", User: &UserOutput{Username: "alice"}})
-	if strings.Contains(md, "Created") {
-		t.Error("should not show Created for empty CreatedAt")
+	got := FormatMarkdownString(Output{Name: "thumbsup", User: &UserOutput{Username: "alice"}})
+
+	want := "## Award Emoji :thumbsup:\n\n" +
+		"- **ID**: 0\n" +
+		"- **Name**: :thumbsup:\n" +
+		"- **User**:\n" +
+		"  - **ID**: 0\n" +
+		"  - **Username**: @alice\n" +
+		cardHintsBlock
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatMarkdownString_WithCreatedAt verifies the MarkdownString_WithCreatedAt Markdown formatter for a representative string_withcreatedat input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString_WithCreatedAt pins the whole card of an award with a
+// time on it, in the display form rather than as GitLab sent it.
 func TestFormatMarkdownString_WithCreatedAt(t *testing.T) {
-	md := FormatMarkdownString(Output{Name: "thumbsup", User: &UserOutput{Username: "alice"}, CreatedAt: "2026-06-01T10:00:00Z"})
-	if !strings.Contains(md, "Created") || !strings.Contains(md, "1 Jun 2026") {
-		t.Error("expected Created date")
+	got := FormatMarkdownString(Output{Name: "thumbsup", User: &UserOutput{Username: "alice"}, CreatedAt: "2026-06-01T10:00:00Z"})
+
+	want := "## Award Emoji :thumbsup:\n\n" +
+		"- **ID**: 0\n" +
+		"- **Name**: :thumbsup:\n" +
+		"- **User**:\n" +
+		"  - **ID**: 0\n" +
+		"  - **Username**: @alice\n" +
+		"- **Created**: 1 Jun 2026 10:00 UTC\n" +
+		cardHintsBlock
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

@@ -564,7 +564,26 @@ func TestList_Empty(t *testing.T) {
 // Formatter coverage
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
+// The three guidance sections this package's shared renderers end with, so each
+// expectation below can pin the whole rendered document.
+//
+// These three formatters are registered for [toolutil.DiscussionThreadOutput]
+// and [toolutil.DiscussionThreadNoteOutput], which every REST discussion domain
+// aliases, and the registry keeps the first registration of a type, so what a
+// snippet discussion actually renders as is the commitdiscussions card. They
+// are tested here for what they write, which is what this package would serve
+// once each domain has a shape of its own.
+const (
+	listHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use `gitlab_get_snippet_discussion` to view full discussion details\n"
+	threadHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use `gitlab_add_snippet_discussion_note` to reply to this discussion\n"
+	noteHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use `gitlab_update_snippet_discussion_note` to edit this note\n"
+)
+
+// TestFormatListMarkdown_WithData pins the whole list document of a page of
+// snippet discussion threads.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
 		Discussions: []Output{
@@ -576,24 +595,30 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 			},
 		},
 	}
-	s := FormatListMarkdownString(out)
-	if !strings.Contains(s, "Snippet Discussions") {
-		t.Error("expected header")
-	}
-	if !strings.Contains(s, "alice") {
-		t.Error("expected author")
+
+	got := FormatListMarkdownString(out)
+
+	want := "## Snippet Discussions (1)\n\n" +
+		"### Discussion d1\n" +
+		"- **@alice** (1 Jan 2026 00:00 UTC, note 1):\n" +
+		"  > note body\n" +
+		listHintsBlock
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty pins the whole response of a snippet with no
+// discussions.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	s := FormatListMarkdownString(ListOutput{})
-	if !strings.Contains(s, "No snippet discussions found") {
-		t.Error("expected empty message")
+	got := FormatListMarkdownString(ListOutput{})
+
+	if want := "No snippet discussions found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatMarkdown_WithNotes verifies FormatMarkdown when with notes.
+// TestFormatMarkdown_WithNotes pins the whole card of a thread with one note.
 func TestFormatMarkdown_WithNotes(t *testing.T) {
 	out := Output{
 		ID: "d1",
@@ -601,40 +626,53 @@ func TestFormatMarkdown_WithNotes(t *testing.T) {
 			{ID: 1, Author: &toolutil.NoteUserOutput{Username: "bob"}, CreatedAt: "2026-01-01T00:00:00Z", Body: "hello"},
 		},
 	}
-	s := FormatMarkdownString(out)
-	if !strings.Contains(s, "Discussion d1") {
-		t.Error("expected discussion ID")
-	}
-	if !strings.Contains(s, "@bob") {
-		t.Error("expected author")
+
+	got := FormatMarkdownString(out)
+
+	want := "## Discussion d1\n\n" +
+		"- **@bob** (1 Jan 2026 00:00 UTC, note 1):\n" +
+		"  > hello\n" +
+		threadHintsBlock
+	if got != want {
+		t.Errorf("thread card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatNoteMarkdown_AllFields verifies FormatNoteMarkdown when all fields.
+// TestFormatNoteMarkdown_AllFields pins the whole note card.
 func TestFormatNoteMarkdown_AllFields(t *testing.T) {
 	out := NoteOutput{
-		ID:        1,
-		Author:    &toolutil.NoteUserOutput{Username: "carol"},
-		Body:      "test body",
-		CreatedAt: "2026-01-01T00:00:00Z",
+		ID:         1,
+		Author:     &toolutil.NoteUserOutput{Username: "carol"},
+		Body:       "test body",
+		CreatedAt:  "2026-01-01T00:00:00Z",
+		Resolvable: true,
 	}
-	s := FormatNoteMarkdownString(out)
-	if !strings.Contains(s, "Note") {
-		t.Error("expected Note header")
-	}
-	if !strings.Contains(s, "@carol") {
-		t.Error("expected author")
-	}
-	if !strings.Contains(s, "Created") {
-		t.Error("expected Created")
+
+	got := FormatNoteMarkdownString(out)
+
+	want := "## Discussion Note #1\n\n" +
+		"- **Author**: @carol\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Resolvable**: unresolved\n" +
+		"- **Body**: test body\n" +
+		noteHintsBlock
+	if got != want {
+		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatNoteMarkdown_NoCreatedAt verifies FormatNoteMarkdown when no created at.
+// TestFormatNoteMarkdown_NoCreatedAt pins the card of a note with no time on
+// it: the row is absent rather than empty, and a note that cannot be resolved
+// shows no resolution state.
 func TestFormatNoteMarkdown_NoCreatedAt(t *testing.T) {
-	s := FormatNoteMarkdownString(NoteOutput{ID: 1, Author: &toolutil.NoteUserOutput{Username: "x"}, Body: "y"})
-	if strings.Contains(s, "Created") {
-		t.Error("should not include Created when empty")
+	got := FormatNoteMarkdownString(NoteOutput{ID: 1, Author: &toolutil.NoteUserOutput{Username: "x"}, Body: "y"})
+
+	want := "## Discussion Note #1\n\n" +
+		"- **Author**: @x\n" +
+		"- **Body**: y\n" +
+		noteHintsBlock
+	if got != want {
+		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
