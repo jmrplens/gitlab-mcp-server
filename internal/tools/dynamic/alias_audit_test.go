@@ -241,6 +241,7 @@ func TestHasActionDiscoverySignal_EachSignalCountsOnItsOwn(t *testing.T) {
 func TestAuditRegistryDiscoveryTerms_OrdersByToolThenID(t *testing.T) {
 	weakRoute := toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil })
 	catalog := actioncatalog.NewCatalog()
+	// sequential: the two groups one fixture is built from, not cases of their own
 	for _, dense := range []struct {
 		tool         string
 		firstDomain  string
@@ -294,6 +295,7 @@ func TestAuditRegistryDiscoveryTerms_OrdersByToolThenID(t *testing.T) {
 	if len(findings) != len(want) {
 		t.Fatalf("AuditRegistryDiscoveryTerms() returned %d findings, want %d: %+v", len(findings), len(want), findings)
 	}
+	// sequential: the claim is the order of the whole list, one assertion in steps
 	for index, expected := range want {
 		if findings[index].Tool != expected.Tool || findings[index].ID != expected.ID {
 			t.Errorf("findings[%d] = %s/%s, want %s/%s", index, findings[index].Tool, findings[index].ID, expected.Tool, expected.ID)

@@ -8365,11 +8365,13 @@ func TestCompactParameterGuidance_OrdersByConfusionCount(t *testing.T) {
 	got := compactParameterGuidance(guidance, 4)
 	previous := -1
 	for _, name := range []string{"`alpha`", "`bravo`", "`delta`", "`echo`"} {
-		index := strings.Index(got, name)
-		if index <= previous {
-			t.Fatalf("compactParameterGuidance() = %q, want alpha, bravo, delta, echo in that order", got)
-		}
-		previous = index
+		t.Run(name, func(t *testing.T) {
+			index := strings.Index(got, name)
+			if index <= previous {
+				t.Fatalf("compactParameterGuidance() = %q, want alpha, bravo, delta, echo in that order", got)
+			}
+			previous = index
+		})
 	}
 }
 
@@ -9456,9 +9458,11 @@ func TestFormatDescribeOutput_OptionalSections(t *testing.T) {
 			"- **Schema URI**: `gitlab://tools/project.create`\n",
 			"```json\n{\"type\":\"object\"}\n```",
 		} {
-			if !strings.Contains(out, want) {
-				t.Fatalf("formatDescribeOutput() = %q, want %q", out, want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(out, want) {
+					t.Fatalf("formatDescribeOutput() = %q, want %q", out, want)
+				}
+			})
 		}
 	})
 
@@ -9470,9 +9474,11 @@ func TestFormatDescribeOutput_OptionalSections(t *testing.T) {
 			SchemaURI: "gitlab://tools/user.current",
 		}}})
 		for _, deny := range []string{"Required params", "Related actions", "Input schema", "```json"} {
-			if strings.Contains(out, deny) {
-				t.Fatalf("formatDescribeOutput() = %q, want no %q section", out, deny)
-			}
+			t.Run(deny, func(t *testing.T) {
+				if strings.Contains(out, deny) {
+					t.Fatalf("formatDescribeOutput() = %q, want no %q section", out, deny)
+				}
+			})
 		}
 	})
 }
