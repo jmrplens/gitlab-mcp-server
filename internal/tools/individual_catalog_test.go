@@ -1266,6 +1266,62 @@ func TestIndividualCatalogHandler_UpstreamResponseBody_IsNotReflected(t *testing
 	}
 }
 
+// pointerHintedOutput is a test-only output type whose formatter is
+// registered by value while its route returns a pointer to it, the shape of a
+// handler that returns *ListOutput and used to have a formatter the coverage
+// test could see and the runtime never called.
+type pointerHintedOutput struct {
+	toolutil.HintableOutput
+	Name string `json:"name"`
+}
+
+func init() {
+	toolutil.RegisterMarkdown(func(o pointerHintedOutput) string {
+		var b strings.Builder
+		c := toolutil.NewCard(&b, "Thing "+o.Name)
+		c.Field("Name", o.Name)
+		c.End("Use action 'thing.get' to read it again")
+		return b.String()
+	})
+}
+
+// TestIndividualCatalogHandler_PointerOutput_IsFormattedAnnotatedAndHinted
+// verifies the individual dispatcher's tail on the case the registry used to
+// miss: a route returning a pointer to a type whose formatter is registered
+// by value is rendered through that formatter, the text block carries the
+// content kind the spec declares, and the hints the card ends with reach the
+// structured output's next_steps, which WithHints with an `any` output used
+// to drop.
+func TestIndividualCatalogHandler_PointerOutput_IsFormattedAnnotatedAndHinted(t *testing.T) {
+	spec := toolutil.NewActionSpec("get", toolutil.RouteFunc(
+		func(context.Context, struct{}) (*pointerHintedOutput, error) {
+			return &pointerHintedOutput{Name: "p"}, nil
+		},
+	), toolutil.ActionSpecOptions{
+		OwnerPackage:   "tools",
+		ContentKind:    toolutil.ActionSpecContentDetail,
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_pointer_get", Title: "Test Pointer Get", Description: "Test pointer get."},
+	})
+	catalog := testIndividualCatalog(t, spec)
+	handler := individualCatalogHandler("gitlab_test_pointer_get", catalog.Actions()[0], markdownForResult, IndividualCatalogRegisterOptions{})
+
+	result, structured, err := handler(context.Background(), nil, map[string]any{})
+	if err != nil || result == nil || result.IsError {
+		t.Fatalf("handler() = result:%+v err:%v, want a formatted success", result, err)
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok || text.Annotations != toolutil.ContentDetail {
+		t.Errorf("first block = %+v, want the card annotated with the detail preset the spec declares", result.Content[0])
+	}
+	if want := "## Thing p\n\n- **Name**: p\n\n---\n\U0001F4A1 **Next steps:**\n- Use action 'thing.get' to read it again\n"; text != nil && text.Text != want {
+		t.Errorf("text:\n got %q\nwant %q", text.Text, want)
+	}
+	out, ok := structured.(*pointerHintedOutput)
+	if !ok || len(out.NextSteps) != 1 || out.NextSteps[0] != "Use action 'thing.get' to read it again" {
+		t.Errorf("structured = %+v, want the pointer with its next_steps set", structured)
+	}
+}
+
 // embeddedIssueURI is what issue.get must embed for project 42, issue 7 on
 // every surface.
 const embeddedIssueURI = "gitlab://project/42/issue/7"

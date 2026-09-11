@@ -200,6 +200,52 @@ func TestSurfaceToolHandler_ErrorAndFormattedResults(t *testing.T) {
 	})
 }
 
+// surfaceToolPointerOutput is a test-only output type whose formatter is
+// registered by value while the route returns a pointer to it, the shape of
+// a handler that returns *ListOutput.
+type surfaceToolPointerOutput struct {
+	HintableOutput
+	Name string `json:"name"`
+}
+
+// TestSurfaceToolHandler_PointerOutput_IsFormattedAnnotatedAndHinted verifies
+// the standalone dispatcher's tail on the case the registry used to miss: a
+// route returning a pointer to a type whose formatter is registered by value
+// is rendered through that formatter, the text block carries the route's
+// content kind, and the hints the card ends with reach the structured
+// output's next_steps.
+func TestSurfaceToolHandler_PointerOutput_IsFormattedAnnotatedAndHinted(t *testing.T) {
+	snapshotMarkdownRegistries(t)
+	snapshotRegistrationProblems(t)
+	RegisterMarkdown(func(o surfaceToolPointerOutput) string {
+		var b strings.Builder
+		c := NewCard(&b, "Thing "+o.Name)
+		c.Field("Name", o.Name)
+		c.End("Use action 'thing.get' to read it again")
+		return b.String()
+	})
+	handler := surfaceToolHandler("gitlab_test_pointer", ActionRoute{
+		Handler:     func(context.Context, map[string]any) (any, error) { return &surfaceToolPointerOutput{Name: "p"}, nil },
+		ContentKind: ActionSpecContentDetail,
+	}, MarkdownForResult)
+
+	result, structured, err := handler(context.Background(), nil, map[string]any{})
+	if err != nil || result == nil || result.IsError {
+		t.Fatalf("handler() = result:%+v err:%v, want a formatted success", result, err)
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok || text.Annotations != ContentDetail {
+		t.Errorf("first block = %+v, want the card annotated with the detail preset", result.Content[0])
+	}
+	if want := "## Thing p\n\n- **Name**: p\n\n---\n\U0001F4A1 **Next steps:**\n- Use action 'thing.get' to read it again\n"; text != nil && text.Text != want {
+		t.Errorf("text:\n got %q\nwant %q", text.Text, want)
+	}
+	out, ok := structured.(*surfaceToolPointerOutput)
+	if !ok || len(out.NextSteps) != 1 || out.NextSteps[0] != "Use action 'thing.get' to read it again" {
+		t.Errorf("structured = %+v, want the pointer with its next_steps set", structured)
+	}
+}
+
 func newSurfaceToolSession(t *testing.T, server *mcp.Server, elicitation func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error)) *mcp.ClientSession {
 	t.Helper()
 	st, ct := mcp.NewInMemoryTransports()

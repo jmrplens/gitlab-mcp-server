@@ -56,15 +56,14 @@ var (
 	}
 )
 
-// Content annotation presets for TextContent responses.
+// Content annotation presets for the content blocks of a tool result.
 // These guide MCP clients on who the content is intended for and its importance.
 var (
-	// ContentBoth marks content for both user display and LLM processing (default).
-	ContentBoth = &mcp.Annotations{
-		Audience: []mcp.Role{"user", "assistant"},
-		Priority: 0.5,
-	}
-	// ContentUser marks content primarily for user display (uploads, visualizations).
+	// ContentUser marks a block for the user's display rather than the
+	// model's reasoning: the image block of an upload or a visualization,
+	// which a text-only model cannot read and a person is shown.
+	// [ToolResultWithImage] and [FinishToolResult] put it on every image
+	// block; the text beside it stays with the assistant.
 	ContentUser = &mcp.Annotations{
 		Audience: []mcp.Role{"user"},
 		Priority: 0.8,

@@ -6,6 +6,8 @@ package toolutil
 
 import (
 	"reflect"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 
@@ -194,6 +196,7 @@ func TestMarkdownForResult_ResultFormatterTakesPriority(t *testing.T) {
 // race detector to surface any unsafe concurrent access.
 func TestRegisterMarkdown_ConcurrentSafety(t *testing.T) {
 	snapshotMarkdownRegistries(t)
+	snapshotRegistrationProblems(t)
 	stringFormatters = sync.Map{}
 	resultFormatters = sync.Map{}
 
@@ -380,12 +383,280 @@ func TestRegisterMarkdown_TypeMismatchReturnsEmpty(t *testing.T) {
 	if !loadOK {
 		t.Fatal("formatter not registered for mdTestOutput")
 	}
-	if fn, assertOK := loaded.(func(any) string); assertOK {
-		if got := fn(mdTestListOutput{}); got != "" {
+	if entry, assertOK := loaded.(stringFormatter); assertOK {
+		if got := entry.fn(mdTestListOutput{}); got != "" {
 			t.Errorf("type-mismatch dispatch = %q, want empty string", got)
 		}
 	} else {
 		t.Fatalf("registered string formatter has unexpected type: %T", loaded)
+	}
+}
+
+// snapshotRegistrationProblems saves the registration record and restores it
+// when the test ends, so a test that registers a duplicate on purpose leaves
+// nothing behind for a test that asserts the record is clean.
+func snapshotRegistrationProblems(t *testing.T) {
+	t.Helper()
+	registrationProblemsMu.Lock()
+	saved := slices.Clone(registrationProblems)
+	registrationProblems = nil
+	registrationProblemsMu.Unlock()
+	t.Cleanup(func() {
+		registrationProblemsMu.Lock()
+		registrationProblems = saved
+		registrationProblemsMu.Unlock()
+	})
+}
+
+// mdPointerOutput is a test-only type registered by value and looked up
+// through a pointer, the shape of a handler that returns *ListOutput.
+type mdPointerOutput struct{ Name string }
+
+// mdHintedOutput is a test-only output type that declares next_steps.
+type mdHintedOutput struct {
+	HintableOutput
+	Name string `json:"name"`
+}
+
+// mdInterfaceOutput is a test-only interface a registration must refuse.
+type mdInterfaceOutput interface{ Render() string }
+
+// TestMarkdownForResult_PointerToRegisteredType_IsDereferenced verifies the
+// runtime lookup answers the same question the coverage predicate answers: a
+// value of a registered type, a pointer to one and a pointer to a pointer all
+// render, and a typed nil pointer renders nil rather than dereferencing.
+// A handler returning a pointer used to have a formatter the coverage test
+// could see and the runtime never called.
+func TestMarkdownForResult_PointerToRegisteredType_IsDereferenced(t *testing.T) {
+	snapshotMarkdownRegistries(t)
+	snapshotRegistrationProblems(t)
+	RegisterMarkdown(func(v mdPointerOutput) string { return "## " + v.Name })
+
+	value := mdPointerOutput{Name: "p"}
+	pointer := &value
+	cases := []struct {
+		name   string
+		result any
+		want   string
+	}{
+		{name: "value", result: value, want: "## p"},
+		{name: "pointer", result: pointer, want: "## p"},
+		{name: "pointer to pointer", result: &pointer, want: "## p"},
+		{name: "typed nil pointer", result: (*mdPointerOutput)(nil), want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := MarkdownForResult(tc.result)
+			if tc.want == "" {
+				if got != nil {
+					t.Errorf("MarkdownForResult(%T) = %+v, want nil", tc.result, got)
+				}
+				return
+			}
+			if got == nil || string(extractText(got)) != tc.want {
+				t.Errorf("MarkdownForResult(%T) = %+v, want text %q", tc.result, got, tc.want)
+			}
+			if !HasRegisteredMarkdownFormatter(tc.result) {
+				t.Errorf("HasRegisteredMarkdownFormatter(%T) = false, disagreeing with the lookup that just rendered it", tc.result)
+			}
+		})
+	}
+}
+
+// TestRegisterMarkdown_Collisions_AreRecordedAndTheFirstIsKept verifies the
+// registration record: a second formatter for one type is refused and the
+// first keeps rendering, a string and a result formatter for one type are
+// recorded, and an interface-typed registration is refused, since it would
+// land under a key no concrete value looks up.
+func TestRegisterMarkdown_Collisions_AreRecordedAndTheFirstIsKept(t *testing.T) {
+	snapshotMarkdownRegistries(t)
+	snapshotRegistrationProblems(t)
+
+	RegisterMarkdown(func(mdPointerOutput) string { return "first" })
+	RegisterMarkdown(func(mdPointerOutput) string { return "second" })
+	RegisterMarkdownResult(func(mdPointerOutput) *mcp.CallToolResult { return nil })
+	RegisterMarkdown(func(mdInterfaceOutput) string { return "interface" })
+
+	want := []string{
+		"Markdown formatter registered for the interface type toolutil.mdInterfaceOutput: nothing looks a formatter up by an interface",
+		"duplicate Markdown formatter for toolutil.mdPointerOutput: the first registration is kept",
+		"toolutil.mdPointerOutput has a string and a result formatter: the result formatter is served",
+	}
+	if got := MarkdownRegistrationProblems(); !slices.Equal(got, want) {
+		t.Errorf("MarkdownRegistrationProblems() = %q, want %q", got, want)
+	}
+	if entry, ok := stringFormatters.Load(reflect.TypeFor[mdPointerOutput]()); !ok || entry.(stringFormatter).fn(mdPointerOutput{}) != "first" {
+		t.Errorf("the first registration did not survive the second")
+	}
+	if _, ok := stringFormatters.Load(reflect.TypeFor[mdInterfaceOutput]()); ok {
+		t.Error("the interface-typed registration was stored")
+	}
+}
+
+// TestRegisterMarkdownAnnotated_Preset_IsCarriedByTheResult verifies that a
+// formatter registered with a content preset renders results carrying it,
+// and that the plain registration renders the assistant default, so the
+// presets are reachable through the registry at all.
+func TestRegisterMarkdownAnnotated_Preset_IsCarriedByTheResult(t *testing.T) {
+	snapshotMarkdownRegistries(t)
+	snapshotRegistrationProblems(t)
+	RegisterMarkdownAnnotated(func(mdPointerOutput) string { return "list" }, ContentList)
+	RegisterMarkdown(func(mdTestOutput) string { return "plain" })
+
+	if got := MarkdownForResult(mdPointerOutput{}).Content[0].(*mcp.TextContent).Annotations; got != ContentList {
+		t.Errorf("annotated registration rendered %+v, want the list preset", got)
+	}
+	if got := MarkdownForResult(mdTestOutput{}).Content[0].(*mcp.TextContent).Annotations; got != ContentAssistant {
+		t.Errorf("plain registration rendered %+v, want the assistant default", got)
+	}
+}
+
+// TestRegisteredMarkdownTypes_Registrations_AreListedSorted verifies the seam
+// the runtime gate drives: every registered type, string and result variants
+// alike, in name order, with the count agreeing.
+func TestRegisteredMarkdownTypes_Registrations_AreListedSorted(t *testing.T) {
+	snapshotMarkdownRegistries(t)
+	snapshotRegistrationProblems(t)
+	stringFormatters = sync.Map{}
+	resultFormatters = sync.Map{}
+	RegisterMarkdown(func(mdTestOutput) string { return "" })
+	RegisterMarkdownResult(func(mdTestResultOutput) *mcp.CallToolResult { return nil })
+	RegisterMarkdown(func(mdPointerOutput) string { return "" })
+
+	got := RegisteredMarkdownTypes()
+	want := []reflect.Type{reflect.TypeFor[mdPointerOutput](), reflect.TypeFor[mdTestOutput](), reflect.TypeFor[mdTestResultOutput]()}
+	if !slices.Equal(got, want) {
+		t.Errorf("RegisteredMarkdownTypes() = %v, want %v", got, want)
+	}
+	if MarkdownFormatterCount() != 3 {
+		t.Errorf("MarkdownFormatterCount() = %d, want 3", MarkdownFormatterCount())
+	}
+}
+
+// TestAnnotationsForContentKind_Kinds_MapToOnePresetEach verifies the one
+// mapping from a declared content kind to the annotation a result carries,
+// with the assistant default for an image action's text, an empty kind and a
+// kind nothing declares.
+func TestAnnotationsForContentKind_Kinds_MapToOnePresetEach(t *testing.T) {
+	cases := []struct {
+		name string
+		kind string
+		want *mcp.Annotations
+	}{
+		{name: "list", kind: ActionSpecContentList, want: ContentList},
+		{name: "detail", kind: ActionSpecContentDetail, want: ContentDetail},
+		{name: "mutate", kind: ActionSpecContentMutate, want: ContentMutate},
+		{name: "assistant", kind: ActionSpecContentAssistant, want: ContentAssistant},
+		{name: "image text", kind: ActionSpecContentImage, want: ContentAssistant},
+		{name: "empty", kind: "", want: ContentAssistant},
+		{name: "unknown", kind: "poster", want: ContentAssistant},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := AnnotationsForContentKind(tc.kind); got != tc.want {
+				t.Errorf("AnnotationsForContentKind(%q) = %+v, want %+v", tc.kind, got, tc.want)
+			}
+		})
+	}
+}
+
+// hintedTextResult is a formatted result whose Markdown ends with one hint.
+func hintedTextResult() *mcp.CallToolResult {
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "## X\n\n---\n💡 **Next steps:**\n- do this\n"}}}
+}
+
+// TestFinishToolResult_Envelope_NilErrorAndImageResults verifies the envelope
+// half of the tail every dispatcher shares: a nil result becomes the JSON
+// rendering, an error result passes through with no structured output, a
+// nil output stays nil, and an image action's text block is for the
+// assistant while its image block is for the user.
+func TestFinishToolResult_Envelope_NilErrorAndImageResults(t *testing.T) {
+	route := ActionRoute{ContentKind: ActionSpecContentDetail}
+
+	t.Run("nil result renders JSON", func(t *testing.T) {
+		got, structured := FinishToolResult(nil, mdHintedOutput{Name: "n"}, route, nil)
+		if got == nil || string(extractText(got)) != `{"name":"n"}` {
+			t.Errorf("FinishToolResult(nil) = %+v, want the JSON rendering", got)
+		}
+		if _, ok := structured.(mdHintedOutput); !ok {
+			t.Errorf("structured output is %T, want the typed value", structured)
+		}
+	})
+	t.Run("error result passes through", func(t *testing.T) {
+		errResult := &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "no"}}}
+		got, structured := FinishToolResult(errResult, mdHintedOutput{}, route, nil)
+		if got != errResult || structured != nil {
+			t.Errorf("FinishToolResult(error) = %+v, %v; want the error result and no structured output", got, structured)
+		}
+	})
+	t.Run("nil output stays nil", func(t *testing.T) {
+		got, structured := FinishToolResult(hintedTextResult(), nil, ActionRoute{}, nil)
+		if structured != nil || got == nil {
+			t.Errorf("FinishToolResult(nil output) = %+v, %v", got, structured)
+		}
+	})
+	t.Run("image block is for the user", func(t *testing.T) {
+		withImage := &mcp.CallToolResult{Content: []mcp.Content{
+			&mcp.TextContent{Text: "meta"},
+			&mcp.ImageContent{Data: []byte{1}, MIMEType: "image/png"},
+		}}
+		got, _ := FinishToolResult(withImage, mdTestOutput{}, ActionRoute{ContentKind: ActionSpecContentImage}, nil)
+		if ann := got.Content[0].(*mcp.TextContent).Annotations; ann != ContentAssistant {
+			t.Errorf("image action's text annotated %+v, want the assistant default", ann)
+		}
+		if ann := got.Content[1].(*mcp.ImageContent).Annotations; ann != ContentUser {
+			t.Errorf("image block annotated %+v, want the user preset", ann)
+		}
+	})
+}
+
+// TestFinishToolResult_Hints_SetOnTheTypedOutput verifies the hints half of
+// the tail: the hints are set on a value type through a copy that leaves the
+// caller's value alone and on a pointer type in place, a type declaring no
+// next_steps is returned as it came, the text block carries the route's
+// content kind, and the embedded resource written last carries the hints.
+func TestFinishToolResult_Hints_SetOnTheTypedOutput(t *testing.T) {
+	route := ActionRoute{ContentKind: ActionSpecContentDetail, EmbeddedResource: "gitlab://things/{id}"}
+
+	t.Run("value type gets its hints through a copy", func(t *testing.T) {
+		in := mdHintedOutput{Name: "v"}
+		got, structured := FinishToolResult(hintedTextResult(), in, route, map[string]any{"id": 7})
+		out, ok := structured.(mdHintedOutput)
+		if !ok || len(out.NextSteps) != 1 || out.NextSteps[0] != "do this" || out.Name != "v" {
+			t.Errorf("structured output = %+v, want the value with its hint set", structured)
+		}
+		if in.NextSteps != nil {
+			t.Error("the caller's value was mutated")
+		}
+		if ann := got.Content[0].(*mcp.TextContent).Annotations; ann != ContentDetail {
+			t.Errorf("text annotated %+v, want the detail preset", ann)
+		}
+		embedded, ok := got.Content[1].(*mcp.EmbeddedResource)
+		if !ok || embedded.Resource.URI != "gitlab://things/7" || !strings.Contains(embedded.Resource.Text, `"next_steps":["do this"]`) {
+			t.Errorf("embedded resource = %+v, want the URI and a body carrying the hints", got.Content[1])
+		}
+	})
+	t.Run("pointer type gets its hints in place", func(t *testing.T) {
+		in := &mdHintedOutput{Name: "p"}
+		_, structured := FinishToolResult(hintedTextResult(), in, ActionRoute{}, nil)
+		if structured != any(in) || len(in.NextSteps) != 1 {
+			t.Errorf("structured output = %+v, want the same pointer with its hint set", structured)
+		}
+	})
+	t.Run("type without next_steps is returned as it came", func(t *testing.T) {
+		in := mdTestOutput{Name: "plain"}
+		_, structured := FinishToolResult(hintedTextResult(), in, ActionRoute{}, nil)
+		if structured != any(in) {
+			t.Errorf("structured output = %#v, want the value unchanged", structured)
+		}
+	})
+}
+
+// TestNormalizeResultMarkdown_Text_DropsTrailingWhitespaceAndControlBytes
+// verifies the one normalization every content block passes through.
+func TestNormalizeResultMarkdown_Text_DropsTrailingWhitespaceAndControlBytes(t *testing.T) {
+	if got, want := NormalizeResultMarkdown("a \t\nb\x1b[2J\t\nc"), "a\nb[2J\nc"; got != want {
+		t.Errorf("NormalizeResultMarkdown() = %q, want %q", got, want)
 	}
 }
 
@@ -560,7 +831,7 @@ func TestWrapMarkdown_CarriesNoControlBytes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := wrapMarkdown(tt.md)
+			result := wrapMarkdown(tt.md, nil)
 			if tt.want == "" {
 				if result != nil {
 					t.Errorf("wrapMarkdown(%q) = %v, want nil", tt.md, result)

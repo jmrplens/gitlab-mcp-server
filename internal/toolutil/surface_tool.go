@@ -75,13 +75,13 @@ func surfaceToolHandler(toolName string, route ActionRoute, formatResult FormatR
 		if err != nil {
 			return nil, nil, err
 		}
-		callResult := formatResult(result)
-		if callResult != nil && callResult.IsError {
+		callResult, structured := FinishToolResult(formatResult(result), result, route, input)
+		if callResult.IsError {
 			return callResult, nil, nil
 		}
 		if _, ok := result.(surfaceToolTextOnlyMarker); ok {
 			return callResult, nil, nil
 		}
-		return WithHints(callResult, result, nil)
+		return callResult, structured, nil
 	}
 }

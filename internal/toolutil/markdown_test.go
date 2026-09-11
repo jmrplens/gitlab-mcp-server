@@ -1301,11 +1301,12 @@ func TestToolResultWithMarkdown(t *testing.T) {
 	})
 }
 
-// TestToolResultAnnotated verifies annotation-aware result creation.
+// TestToolResultAnnotated verifies annotation-aware result creation: the
+// preset given is carried, nil falls back to the assistant default so no
+// block leaves without an annotation, and an empty string yields no result.
 func TestToolResultAnnotated(t *testing.T) {
 	t.Run("with annotations", func(t *testing.T) {
-		ann := ContentBoth
-		result := ToolResultAnnotated("# Hello", ann)
+		result := ToolResultAnnotated("# Hello", ContentDetail)
 		if result == nil {
 			t.Fatal("expected non-nil result")
 		}
@@ -1316,25 +1317,22 @@ func TestToolResultAnnotated(t *testing.T) {
 		if !ok {
 			t.Fatal("expected TextContent")
 		}
-		if tc.Annotations == nil {
-			t.Error("expected annotations to be set")
-		}
-		if tc.Annotations.Priority != 0.5 {
-			t.Errorf("priority = %v, want 0.5", tc.Annotations.Priority)
+		if tc.Annotations != ContentDetail {
+			t.Errorf("annotations = %+v, want the detail preset", tc.Annotations)
 		}
 	})
-	t.Run("nil annotations", func(t *testing.T) {
+	t.Run("nil annotations fall back to the assistant", func(t *testing.T) {
 		result := ToolResultAnnotated("# Hello", nil)
 		if result == nil {
 			t.Fatal("expected non-nil result")
 		}
 		tc := result.Content[0].(*mcp.TextContent)
-		if tc.Annotations != nil {
-			t.Error("expected nil annotations")
+		if tc.Annotations != ContentAssistant {
+			t.Errorf("annotations = %+v, want the assistant default", tc.Annotations)
 		}
 	})
 	t.Run("empty string returns nil", func(t *testing.T) {
-		result := ToolResultAnnotated("", ContentBoth)
+		result := ToolResultAnnotated("", ContentDetail)
 		if result != nil {
 			t.Error("expected nil result for empty string")
 		}
@@ -1370,14 +1368,14 @@ func TestToolResultWithImage_Scenarios_CorrectContent(t *testing.T) {
 			wantAnn:   true,
 		},
 		{
-			name:      "nil annotations",
+			name:      "nil annotations fall back to the assistant",
 			md:        "# Image",
 			ann:       nil,
 			imageData: []byte{0xFF, 0xD8, 0xFF},
 			mimeType:  "image/jpeg",
 			wantText:  "# Image",
 			wantMIME:  "image/jpeg",
-			wantAnn:   false,
+			wantAnn:   true,
 		},
 		{
 			name:      "empty image data",
@@ -1392,7 +1390,7 @@ func TestToolResultWithImage_Scenarios_CorrectContent(t *testing.T) {
 		{
 			name:      "empty markdown text",
 			md:        "",
-			ann:       ContentBoth,
+			ann:       ContentDetail,
 			imageData: []byte{0x47, 0x49, 0x46},
 			mimeType:  "image/gif",
 			wantText:  "",
@@ -1442,6 +1440,9 @@ func assertToolResultImageContent(t *testing.T, content mcp.Content, wantData []
 	imageContent, ok := content.(*mcp.ImageContent)
 	if !ok {
 		t.Fatal("second content item should be ImageContent")
+	}
+	if imageContent.Annotations != ContentUser {
+		t.Errorf("ImageContent.Annotations = %+v, want the user preset", imageContent.Annotations)
 	}
 	if imageContent.MIMEType != wantMIME {
 		t.Errorf("ImageContent.MIMEType = %q, want %q", imageContent.MIMEType, wantMIME)

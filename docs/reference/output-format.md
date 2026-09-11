@@ -91,8 +91,9 @@ Every Markdown response includes [MCP annotations](https://modelcontextprotocol.
 | `ContentDetail`    | `assistant`         | 0.6      | Single-entity details (get, show)    |
 | `ContentMutate`    | `assistant`         | 0.8      | Create, update, delete confirmations |
 | `ContentAssistant` | `assistant`         | 0.7      | General assistant-targeted content   |
-| `ContentUser`      | `user`              | 0.8      | Content for direct user display      |
-| `ContentBoth`      | `user`, `assistant` | 0.5      | Content for both audiences           |
+| `ContentUser`      | `user`              | 0.8      | The image block of an upload or a visualization, shown to the user |
+
+Every dispatcher finishes a result the same way: the text block carries the annotation the action's declared content kind resolves to (`list`, `detail`, `mutate` or the assistant default), an image block carries `ContentUser`, and the next-step hints are set on the typed output when its type declares `next_steps`.
 
 ### What Does `audience: ["assistant"]` Mean?
 

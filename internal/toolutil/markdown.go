@@ -1161,21 +1161,10 @@ func markdownTableLine(cells []string) string {
 // with a single TextContent entry annotated for assistant-only audience.
 // This prevents MCP clients (e.g. VS Code) from displaying raw Markdown
 // inline: the LLM processes it and presents formatted output to the user.
-//
-// Control characters are dropped here as well as in the helpers that build the
-// Markdown, because this is the last point every rendered response passes
-// through and a formatter that writes a GitLab field straight into its builder
-// would otherwise deliver an escape sequence to whatever prints the text. See
-// [StripControlBytes].
+// The text passes through [NormalizeResultMarkdown], as every rendered
+// response does.
 func ToolResultWithMarkdown(md string) *mcp.CallToolResult {
-	if md == "" {
-		return nil
-	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: StripControlBytes(md), Annotations: ContentAssistant},
-		},
-	}
+	return ToolResultAnnotated(md, ContentAssistant)
 }
 
 // ToolResultAnnotated wraps a Markdown string into a CallToolResult with
@@ -1185,24 +1174,32 @@ func ToolResultAnnotated(md string, ann *mcp.Annotations) *mcp.CallToolResult {
 	if md == "" {
 		return nil
 	}
+	if ann == nil {
+		ann = ContentAssistant
+	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: StripControlBytes(md), Annotations: ann},
+			&mcp.TextContent{Text: NormalizeResultMarkdown(md), Annotations: ann},
 		},
 	}
 }
 
 // ToolResultWithImage creates a CallToolResult containing both a text
 // description (metadata) and an ImageContent block with the raw image bytes.
-// Multimodal LLMs can "see" the image; text-only LLMs get the metadata.
+// Multimodal LLMs can "see" the image; text-only LLMs get the metadata. The
+// text block carries ann, or the assistant default, and the image block
+// carries [ContentUser]: the image is for a person's display, the text for
+// the model's reasoning.
 func ToolResultWithImage(md string, ann *mcp.Annotations, imageData []byte, mimeType string) *mcp.CallToolResult {
-	result := &mcp.CallToolResult{
+	if ann == nil {
+		ann = ContentAssistant
+	}
+	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: StripControlBytes(md), Annotations: ann},
-			&mcp.ImageContent{Data: imageData, MIMEType: mimeType},
+			&mcp.TextContent{Text: NormalizeResultMarkdown(md), Annotations: ann},
+			&mcp.ImageContent{Data: imageData, MIMEType: mimeType, Annotations: ContentUser},
 		},
 	}
-	return result
 }
 
 // MRStateEmoji returns the Markdown emoji for a merge request state.
