@@ -429,12 +429,13 @@ func TestGetHook_URLVariables(t *testing.T) {
 	}
 }
 
-// TestFormatHookMarkdown_URLVariablesRedacted verifies group hook markdown shows
-// URL variable names without exposing secret values.
+// TestFormatHookMarkdown_URLVariablesRedacted verifies the whole card of a
+// hook carrying both secrets and both optional status fields: the URL variable
+// is named and its value redacted, and nothing else about the hook is lost.
 //
-// The formatter receives a hook with token metadata and one URL variable. The
-// expected output includes hook details and REDACTED variable display, preserving
-// useful diagnostics without leaking sensitive webhook configuration.
+// The expectation is the whole response rather than a set of substrings: the
+// secret sections are tables, and a table only renders while nothing but rows
+// has been written since its header.
 func TestFormatHookMarkdown_URLVariablesRedacted(t *testing.T) {
 	text := FormatHookMarkdown(HookOutput{
 		ID:                  10,
@@ -450,21 +451,34 @@ func TestFormatHookMarkdown_URLVariablesRedacted(t *testing.T) {
 		URLVariables:        []HookURLVariable{{Key: "token"}},
 	})
 
-	for _, want := range []string{"Deploy hook", "Deploy events", "Alert Status", "Disabled Until", "Created", "URL Variables", "token", "REDACTED"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(text, want) {
-				t.Errorf("FormatHookMarkdown missing %q: %s", want, text)
-			}
-		})
+	want := "## Group Hook: Deploy hook\n\n" +
+		"- **ID**: 10\n" +
+		"- **URL**: [" + testHookURL + "](" + testHookURL + ")\n" +
+		"- **Name**: Deploy hook\n" +
+		"- **Description**: Deploy events\n" +
+		"- **Group ID**: 99\n" +
+		"- **SSL Verification**: ❌\n" +
+		"- **Token Present**: ✅\n" +
+		"- **Signing Token Present**: ✅\n" +
+		"- **Events**: none\n" +
+		"- **Alert Status**: executable\n" +
+		"- **Disabled Until**: 16 Jan 2026 10:00 UTC\n" +
+		"- **Created**: 15 Jan 2026 10:00 UTC\n\n" +
+		"### URL Variables\n\n| Key | Value |\n| --- | --- |\n| token | REDACTED |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'group.hook_edit' to modify this hook\n" +
+		"- Use action 'group.hook_delete' to remove it\n"
+	if text != want {
+		t.Errorf("hook card:\n got %q\nwant %q", text, want)
 	}
 }
 
-// TestEnabledEvents_AllEvents verifies enabledEvents renders every supported
-// group hook event flag.
+// TestEnabledEvents_AllEvents verifies the event list of a hook subscribed to
+// the fifteen flags this formatter has always named, in the order it writes
+// them.
 //
-// The hook output enables legacy and newer event fields, including milestone,
-// feature flag, subgroup, member, and vulnerability events. The expected string
-// contains each event name so markdown summaries do not silently omit flags.
+// The six the markdown audit (issue 697) added are covered in groups_test.go,
+// which asserts the whole list of all twenty-one.
 func TestEnabledEvents_AllEvents(t *testing.T) {
 	text := enabledEvents(HookOutput{
 		PushEvents:          true,
@@ -484,12 +498,10 @@ func TestEnabledEvents_AllEvents(t *testing.T) {
 		VulnerabilityEvents: true,
 	})
 
-	for _, want := range []string{"push", "tag_push", "merge_request", "issues", "note", "job", "pipeline", "wiki", "deployment", "releases", "milestone", "feature_flag", "subgroup", "member", "vulnerability"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(text, want) {
-				t.Errorf("enabledEvents missing %q: %s", want, text)
-			}
-		})
+	want := "push, tag_push, merge_request, issues, note, job, pipeline, wiki, deployment, releases, " +
+		"milestone, feature_flag, subgroup, member, vulnerability"
+	if text != want {
+		t.Errorf("enabledEvents:\n got %q\nwant %q", text, want)
 	}
 }
 

@@ -11,15 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
-
-// errExpNonNilResult identifies the err exp non nil result constant used by this package.
-const errExpNonNilResult = "expected non-nil result"
 
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
@@ -284,45 +278,8 @@ func TestDelete_InvalidTopicID(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
-func TestFormatListMarkdown_Empty(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "No topics") {
-		t.Errorf("expected 'No topics' message, got %q", text)
-	}
-}
-
-// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
-func TestFormatListMarkdown_WithData(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{
-		Topics: []TopicItem{
-			{ID: 1, Name: "go", Title: "Go", TotalProjectsCount: 42},
-		},
-		Pagination: toolutil.PaginationOutput{},
-	})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-}
-
-// TestFormatTopicMarkdown verifies FormatTopicMarkdown.
-func TestFormatTopicMarkdown(t *testing.T) {
-	result := FormatTopicMarkdown(TopicItem{
-		ID: 1, Name: "go", Title: "Go", Description: "The Go language",
-		TotalProjectsCount: 42, AvatarURL: "https://example.com/go.png",
-	})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "go") {
-		t.Errorf("expected topic name in output, got %q", text)
-	}
-}
+// The Markdown formatters are covered whole-output in markdown_test.go,
+// beside the card and the list vocabulary they now write.
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
@@ -474,28 +431,6 @@ func TestDelete_APIError400(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Formatters — additional branches
-// ---------------------------------------------------------------------------.
-
-// TestFormatTopicMarkdown_MinimalFields verifies FormatTopicMarkdown when minimal fields.
-func TestFormatTopicMarkdown_MinimalFields(t *testing.T) {
-	result := FormatTopicMarkdown(TopicItem{ID: 1, Name: "test"})
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if strings.Contains(text, "Title") {
-		t.Error("should not contain Title for empty title")
-	}
-	if strings.Contains(text, "Description") {
-		t.Error("should not contain Description for empty description")
-	}
-	if strings.Contains(text, "Avatar") {
-		t.Error("should not contain Avatar for empty avatar URL")
-	}
-}
-
 // TestTopics_UnreadableCapturedOrganizationID verifies that every topic handler
 // returns an error rather than a half-filled topic when GitLab sends
 // organization_id as something that is not a number. The SDK ignores the key
@@ -531,22 +466,4 @@ func TestTopics_UnreadableCapturedOrganizationID(t *testing.T) {
 			return err
 		}},
 	})
-}
-
-// TestFormatDelegatorMarkdown_GetCreateUpdate verifies the thin
-// get/create/update formatter delegators produce the shared topic Markdown
-// (non-empty result), covering their delegation bodies.
-func TestFormatDelegatorMarkdown_GetCreateUpdate(t *testing.T) {
-	topic := TopicItem{ID: 3, Name: "go", Title: "Go"}
-	for name, result := range map[string]*mcp.CallToolResult{
-		"get":    FormatGetMarkdown(GetOutput{Topic: topic}),
-		"create": FormatCreateMarkdown(CreateOutput{Topic: topic}),
-		"update": FormatUpdateMarkdown(UpdateOutput{Topic: topic}),
-	} {
-		t.Run(name, func(t *testing.T) {
-			if result == nil || len(result.Content) == 0 {
-				t.Errorf("%s delegator returned empty result", name)
-			}
-		})
-	}
 }

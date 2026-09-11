@@ -85,24 +85,7 @@ func groupRelationsSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[st
 	return byTool
 }
 
-// TestFormatListExportStatusMarkdownString verifies the markdown formatter covers
-// the FormatListExportStatusMarkdownString function registered via init().
-func TestFormatListExportStatusMarkdownString(t *testing.T) {
-	t.Run("empty list", func(t *testing.T) {
-		out := FormatListExportStatusMarkdownString(ListExportStatusOutput{})
-		if out == "" {
-			t.Fatal("expected non-empty markdown for empty list")
-		}
-	})
-	t.Run("with statuses", func(t *testing.T) {
-		out := FormatListExportStatusMarkdownString(ListExportStatusOutput{
-			Statuses: []ExportStatusItem{{Relation: "labels", Status: 0, Batched: false, BatchesCount: 0}},
-		})
-		if out == "" {
-			t.Fatal("expected non-empty markdown")
-		}
-	})
-}
+// The formatter itself is covered whole-output in markdown_test.go.
 
 // TestMarkdownInit_Registry verifies the MarkdownInit_Registry handler.
 // The test exercises the GET path of the underlying GitLab API call.

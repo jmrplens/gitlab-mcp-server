@@ -565,8 +565,8 @@ func TestFormatGroup_MemberListMarkdown(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 	}
 	md := groups.FormatMemberListMarkdown(out)
-	if !strings.Contains(md, "| admin | Admin User | Owner | active |") {
-		t.Error("missing group member row")
+	if !strings.Contains(md, "| @admin | Admin User | Owner | active |") {
+		t.Errorf("missing group member row:\n%s", md)
 	}
 }
 
@@ -2517,15 +2517,16 @@ func TestMarkdownRegistry_Exceptions_NameACaseEach(t *testing.T) {
 // registrations the registry refused or could only half honor to the ones
 // the tree has today, a baseline that may only shrink, so a new duplicate or
 // a new interface-typed registration fails while the known ones are retired
-// by the migration. The audit knew of two; the record shows twelve, because
+// by the migration. The audit knew of two; the record showed twelve, because
 // the shared note and discussion shapes are registered by every domain that
 // renders them and the first init to run wins for all of them, which is the
-// same defect as the runner token with more surfaces behind it.
+// same defect as the runner token with more surfaces behind it. Eleven are
+// left: the one interface-typed registration, groupimportexport's dispatcher
+// over `any`, went with that package's card migration.
 func TestMarkdownRegistry_Registrations_HaveNoUndeclaredProblems(t *testing.T) {
 	got := toolutil.MarkdownRegistrationProblems()
 
 	want := []string{
-		"Markdown formatter registered for the interface type interface {}: nothing looks a formatter up by an interface",
 		"duplicate Markdown formatter for iterationdata.Output: the first registration is kept",
 		"duplicate Markdown formatter for labeldata.Output: the first registration is kept",
 		"duplicate Markdown formatter for runners.AuthTokenOutput: the first registration is kept",

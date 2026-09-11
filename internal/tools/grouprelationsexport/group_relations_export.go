@@ -2,9 +2,7 @@ package grouprelationsexport
 
 import (
 	"context"
-	"fmt"
 	"net/http"
-	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -127,31 +125,8 @@ func ListExportStatus(ctx context.Context, client *gitlabclient.Client, input Li
 	}, nil
 }
 
-// Markdown Formatters.
-
-// FormatScheduleExport formats the schedule export result as markdown.
-func FormatScheduleExport() string {
-	return "Group relations export scheduled successfully."
-}
-
-// FormatListExportStatus formats the export status list as markdown.
-func FormatListExportStatus(out *ListExportStatusOutput) string {
-	if len(out.Statuses) == 0 {
-		return "No export statuses found.\n"
-	}
-	var sb strings.Builder
-	sb.WriteString("| Relation | Status | Error | Batched | Batches Count | Updated At |\n")
-	sb.WriteString("|---|---|---|---|---|---|\n")
-	for _, s := range out.Statuses {
-		fmt.Fprintf(&sb, "| %s | %d | %s | %t | %d | %s |\n",
-			toolutil.EscapeMdTableCell(s.Relation),
-			s.Status,
-			toolutil.EscapeMdTableCell(s.Error),
-			s.Batched,
-			s.BatchesCount,
-			toolutil.EscapeMdTableCell(s.UpdatedAt))
-	}
-	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(&sb, "Use the GitLab group relations export download endpoint (`GET /groups/:id/export_relations/download`) to download exported data")
-	return sb.String()
-}
+// The rendering of an export status list lives in markdown.go, which is the
+// formatter the registry serves. The second copy that used to sit here was
+// registered for no type at all: the handler answers with a pointer and the
+// registration named the value, so nothing ever called it, and it printed the
+// status code as a number and the batched flag as "true".

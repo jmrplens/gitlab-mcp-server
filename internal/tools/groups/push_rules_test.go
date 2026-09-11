@@ -283,20 +283,41 @@ func TestDeletePushRuleOutput_Success(t *testing.T) {
 	}
 }
 
-// TestFormatPushRuleMarkdown verifies the Markdown formatter renders regex,
-// flags, and file-size fields.
+// pushRuleHintLines is the guidance section every push-rule card closes with.
+const pushRuleHintLines = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'group.push_rule_edit' to change these settings\n" +
+	"- Use action 'group.push_rule_delete' to remove them\n"
+
+// TestFormatPushRuleMarkdown verifies the whole card a real GitLab payload
+// renders as: every pattern a code span, every flag a glyph, and no table row
+// among them.
 func TestFormatPushRuleMarkdown(t *testing.T) {
 	var r PushRuleOutput
 	if err := json.Unmarshal([]byte(groupPushRuleJSON), &r); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
+
 	md := FormatPushRuleMarkdown(r)
-	for _, want := range []string{"Group Push Rules", "Commit Message Regex", "^JIRA-", "Prevent Secrets", "Max File Size"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+
+	want := "## Group Push Rules\n\n" +
+		"- **ID**: 7\n" +
+		"- **Commit Message Regex**: `^JIRA-`\n" +
+		"- **Commit Message Negative Regex**: `WIP`\n" +
+		"- **Branch Name Regex**: `^(feature|bugfix)/`\n" +
+		"- **Author Email Regex**: `@example.com$`\n" +
+		"- **File Name Regex**: `\\.exe$`\n" +
+		"- **Deny Delete Tag**: ✅\n" +
+		"- **Member Check**: ✅\n" +
+		"- **Prevent Secrets**: ✅\n" +
+		"- **Commit Committer Check**: ✅\n" +
+		"- **Commit Committer Name Check**: ❌\n" +
+		"- **Reject Unsigned Commits**: ✅\n" +
+		"- **Reject Non-DCO Commits**: ❌\n" +
+		"- **Max File Size**: 100 MB\n" +
+		"- **Created**: 15 Jan 2026 10:00 UTC\n" +
+		pushRuleHintLines
+	if md != want {
+		t.Errorf("push rule card:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -561,35 +582,75 @@ func TestApplyEditPushRuleOptions_CarriesEachSettingOnlyWhenGiven(t *testing.T) 
 	}
 }
 
-// TestFormatPushRuleMarkdown_OptionalLinesAppearOnlyWhenSet verifies the
-// rendered rule carries every regex, the file-size cap and the creation date
-// when the rule has them, and none of those lines when it does not, so an
-// unset rule does not read as one that forbids everything.
+// TestFormatPushRuleMarkdown_OptionalLinesAppearOnlyWhenSet verifies the whole
+// rendered rule twice: with every pattern and the creation date GitLab sent,
+// and with none of them, so a rule that configures nothing does not read as
+// one that forbids everything.
+//
+// The file-size row is the exception and is written both times: zero is not an
+// absent limit but the answer "no limit", and the row used to be left out,
+// which said nothing where GitLab said something.
 func TestFormatPushRuleMarkdown_OptionalLinesAppearOnlyWhenSet(t *testing.T) {
 	full := FormatPushRuleMarkdown(PushRuleOutput{
 		ID: 1, CommitMessageRegex: "^JIRA-", CommitMessageNegativeRegex: "WIP",
 		BranchNameRegex: "^feature/", AuthorEmailRegex: "@example.com$", FileNameRegex: `\.exe$`,
-		MaxFileSize: 10, CreatedAt: "2026-06-15T10:30:00Z",
+		MaxFileSize: 10, CreatedAt: "2026-06-15T10:30:00Z", PreventSecrets: true,
 	})
-	for _, want := range []string{
-		"Commit Message Regex", "Commit Message Negative Regex", "Branch Name Regex",
-		"Author Email Regex", "File Name Regex", "Max File Size", "15 Jun 2026",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(full, want) {
-				t.Errorf("markdown missing %q:\n%s", want, full)
-			}
-		})
+
+	wantFull := "## Group Push Rules\n\n" +
+		"- **ID**: 1\n" +
+		"- **Commit Message Regex**: `^JIRA-`\n" +
+		"- **Commit Message Negative Regex**: `WIP`\n" +
+		"- **Branch Name Regex**: `^feature/`\n" +
+		"- **Author Email Regex**: `@example.com$`\n" +
+		"- **File Name Regex**: `\\.exe$`\n" +
+		"- **Deny Delete Tag**: ❌\n" +
+		"- **Member Check**: ❌\n" +
+		"- **Prevent Secrets**: ✅\n" +
+		"- **Commit Committer Check**: ❌\n" +
+		"- **Commit Committer Name Check**: ❌\n" +
+		"- **Reject Unsigned Commits**: ❌\n" +
+		"- **Reject Non-DCO Commits**: ❌\n" +
+		"- **Max File Size**: 10 MB\n" +
+		"- **Created**: 15 Jun 2026 10:30 UTC\n" +
+		pushRuleHintLines
+	if full != wantFull {
+		t.Errorf("configured push rule card:\n got %q\nwant %q", full, wantFull)
 	}
 
 	bare := FormatPushRuleMarkdown(PushRuleOutput{ID: 1})
-	for _, absent := range []string{
-		"Commit Message Regex", "Commit Message Negative Regex", "Branch Name Regex",
-		"Author Email Regex", "File Name Regex", "Max File Size", "Created",
-	} {
-		t.Run("without "+absent, func(t *testing.T) {
-			if strings.Contains(bare, absent) {
-				t.Errorf("markdown carries %q for a rule that has none:\n%s", absent, bare)
+
+	wantBare := "## Group Push Rules\n\n" +
+		"- **ID**: 1\n" +
+		"- **Deny Delete Tag**: ❌\n" +
+		"- **Member Check**: ❌\n" +
+		"- **Prevent Secrets**: ❌\n" +
+		"- **Commit Committer Check**: ❌\n" +
+		"- **Commit Committer Name Check**: ❌\n" +
+		"- **Reject Unsigned Commits**: ❌\n" +
+		"- **Reject Non-DCO Commits**: ❌\n" +
+		"- **Max File Size**: unlimited\n" +
+		pushRuleHintLines
+	if bare != wantBare {
+		t.Errorf("unconfigured push rule card:\n got %q\nwant %q", bare, wantBare)
+	}
+}
+
+// TestFormatPushRuleMarkdown_APatternIsShownAsTheTextItIs verifies a rule
+// carrying the characters a Markdown cell escaper would rewrite reaches the
+// reader as the regular expression a maintainer typed: a code span sized past
+// the backticks inside it, with no entity a reader would copy back into the
+// rule.
+func TestFormatPushRuleMarkdown_APatternIsShownAsTheTextItIs(t *testing.T) {
+	md := FormatPushRuleMarkdown(PushRuleOutput{ID: 1, BranchNameRegex: "^(feat|fix)/<x>`y`"})
+
+	if !strings.Contains(md, "- **Branch Name Regex**: `` ^(feat|fix)/<x>`y` ``\n") {
+		t.Errorf("the pattern was not shown as the text it is:\n%s", md)
+	}
+	for _, entity := range []string{"&#124;", "&lt;"} {
+		t.Run(entity, func(t *testing.T) {
+			if strings.Contains(md, entity) {
+				t.Errorf("the pattern carries the entity %q a reader would copy back:\n%s", entity, md)
 			}
 		})
 	}

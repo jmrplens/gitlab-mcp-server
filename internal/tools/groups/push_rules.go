@@ -3,8 +3,8 @@ package groups
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +12,13 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+// The push-rule actions this card points at, by the canonical catalog ID every
+// surface resolves.
+const (
+	actionGroupPushRuleEdit   = "group.push_rule_edit"
+	actionGroupPushRuleDelete = "group.push_rule_delete"
 )
 
 // PushRuleOutput represents a group's push-rule configuration. It mirrors
@@ -294,28 +301,40 @@ func DeletePushRule(ctx context.Context, client *gitlabclient.Client, input Dele
 // Push rule Markdown formatter
 // ---------------------------------------------------------------------------.
 
-// FormatPushRuleMarkdown renders a group's push-rule configuration as Markdown.
+// FormatPushRuleMarkdown renders a group's push-rule configuration as its card.
 func FormatPushRuleMarkdown(r PushRuleOutput) string {
 	var b strings.Builder
-	b.WriteString("## Group Push Rules\n\n")
-	fmt.Fprintf(&b, toolutil.FmtMdID, r.ID)
-	writePushRuleRegex(&b, r)
-	writePushRuleFlags(&b, r)
-	if r.MaxFileSize > 0 {
-		fmt.Fprintf(&b, "- **Max File Size**: %d MB\n", r.MaxFileSize)
-	}
-	if r.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(r.CreatedAt))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_group_edit_push_rule` to change these settings",
-		"Use `gitlab_group_delete_push_rule` to remove them",
+	c := toolutil.NewCard(&b, "Group Push Rules")
+	c.Int("ID", r.ID)
+	writePushRuleRegex(c, r)
+	writePushRuleFlags(c, r)
+	// The row is written whichever way the setting stands: zero is not an
+	// absent limit but the answer "no limit", and leaving the row out said
+	// nothing where GitLab said something.
+	c.Field("Max File Size", maxFileSizeText(r.MaxFileSize))
+	c.Time("Created", r.CreatedAt)
+	c.End(
+		toolutil.HintAction(actionGroupPushRuleEdit, "change these settings"),
+		toolutil.HintAction(actionGroupPushRuleDelete, "remove them"),
 	)
 	return b.String()
 }
 
-func writePushRuleRegex(b *strings.Builder, r PushRuleOutput) {
+// maxFileSizeText renders the push rule's file-size limit in the unit GitLab
+// takes it in, and spells the zero rather than hiding the row.
+func maxFileSizeText(megabytes int64) string {
+	if megabytes <= 0 {
+		return "unlimited"
+	}
+	return strconv.FormatInt(megabytes, 10) + " MB"
+}
+
+// writePushRuleRegex writes each configured pattern as a code span: a push
+// rule is a regular expression a maintainer types, where '|' is the
+// alternation operator and a backslash is itself, so it is shown as the text
+// it is rather than escaped into entities a reader would copy back into the
+// rule.
+func writePushRuleRegex(c *toolutil.Card, r PushRuleOutput) {
 	regexes := []struct {
 		label string
 		value string
@@ -326,18 +345,14 @@ func writePushRuleRegex(b *strings.Builder, r PushRuleOutput) {
 		{"Author Email Regex", r.AuthorEmailRegex},
 		{"File Name Regex", r.FileNameRegex},
 	}
-	//gitlab:allow-unescaped re.label: the labels are the compiled-in strings of the literal above.
 	for _, re := range regexes {
-		if re.value != "" {
-			// A push rule is a regular expression a maintainer types, where
-			// '|' is the alternation operator, so an ordinary rule ends the
-			// list item on its own.
-			fmt.Fprintf(b, "- **%s**: `%s`\n", re.label, toolutil.EscapeMdTableCell(re.value))
-		}
+		c.Code(re.label, re.value)
 	}
 }
 
-func writePushRuleFlags(b *strings.Builder, r PushRuleOutput) {
+// writePushRuleFlags writes the seven boolean rules, every one of them, since
+// a rule that is off is as much of an answer as one that is on.
+func writePushRuleFlags(c *toolutil.Card, r PushRuleOutput) {
 	flags := []struct {
 		label string
 		value bool
@@ -350,9 +365,8 @@ func writePushRuleFlags(b *strings.Builder, r PushRuleOutput) {
 		{"Reject Unsigned Commits", r.RejectUnsignedCommits},
 		{"Reject Non-DCO Commits", r.RejectNonDCOCommits},
 	}
-	//gitlab:allow-unescaped f.label: the labels are the compiled-in strings of the literal above.
 	for _, f := range flags {
-		fmt.Fprintf(b, "- **%s**: %v\n", f.label, f.value)
+		c.Bool(f.label, f.value)
 	}
 }
 

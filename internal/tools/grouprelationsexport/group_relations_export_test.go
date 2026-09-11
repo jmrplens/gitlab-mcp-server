@@ -78,31 +78,8 @@ func TestListExportStatus_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListExportStatus verifies the ListExportStatus Markdown formatter for a representative listexportstatus input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListExportStatus(t *testing.T) {
-	out := &ListExportStatusOutput{
-		Statuses: []ExportStatusItem{
-			{Relation: "project", Status: 1, Batched: false, BatchesCount: 0},
-		},
-	}
-	md := FormatListExportStatus(out)
-	if !strings.Contains(md, "project") {
-		t.Errorf("expected markdown to contain 'project'")
-	}
-}
-
-// TestFormatListExportStatus_Empty verifies the ListExportStatus_Empty Markdown formatter for a representative listexportstatus_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListExportStatus_Empty(t *testing.T) {
-	out := &ListExportStatusOutput{Statuses: []ExportStatusItem{}}
-	md := FormatListExportStatus(out)
-	if !strings.Contains(md, "No export statuses") {
-		t.Errorf("expected empty message")
-	}
-}
+// The Markdown formatter is covered whole-output in markdown_test.go, beside
+// the list vocabulary it now writes.
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
@@ -337,71 +314,6 @@ func TestListExportStatus_WithErrorField(t *testing.T) {
 		t.Errorf("expected Error='export failed', got %q", out.Statuses[0].Error)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// FormatScheduleExport
-// ---------------------------------------------------------------------------.
-
-// TestFormatScheduleExport_Message verifies the ScheduleExport_Message Markdown formatter for a representative scheduleexport_message input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatScheduleExport_Message(t *testing.T) {
-	md := FormatScheduleExport()
-	if !strings.Contains(md, "scheduled successfully") {
-		t.Errorf("expected success message, got %q", md)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FormatListExportStatus — multiple items, with error field, markdown escaping
-// ---------------------------------------------------------------------------.
-
-// TestFormatListExportStatus_MultipleItems verifies the ListExportStatus_MultipleItems Markdown formatter for a representative listexportstatus_multipleitems input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListExportStatus_MultipleItems(t *testing.T) {
-	out := &ListExportStatusOutput{
-		Statuses: []ExportStatusItem{
-			{Relation: "project", Status: 1, Batched: false, BatchesCount: 0, UpdatedAt: "2026-01-01T00:00:00Z"},
-			{Relation: "milestones", Status: 0, Error: "timeout", Batched: true, BatchesCount: 3, UpdatedAt: "2026-01-02T00:00:00Z"},
-		},
-	}
-	md := FormatListExportStatus(out)
-	for _, want := range []string{
-		"| Relation |",
-		"|---|",
-		"project",
-		"milestones",
-		"timeout",
-		"true",
-		"false",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-}
-
-// TestFormatListExportStatus_WithPipeInRelation verifies the ListExportStatus_WithPipeInRelation Markdown formatter for a representative listexportstatus_withpipeinrelation input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListExportStatus_WithPipeInRelation(t *testing.T) {
-	out := &ListExportStatusOutput{
-		Statuses: []ExportStatusItem{
-			{Relation: "test|pipe", Status: 1, Batched: false, BatchesCount: 0},
-		},
-	}
-	md := FormatListExportStatus(out)
-	// Pipe character should be escaped in markdown table
-	if strings.Contains(md, "| test|pipe |") {
-		t.Errorf("pipe char should be escaped in markdown table:\n%s", md)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
 
 // ---------------------------------------------------------------------------
 // ActionSpecs route execution for both tools

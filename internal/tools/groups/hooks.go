@@ -499,52 +499,43 @@ func DeleteHook(ctx context.Context, client *gitlabclient.Client, input DeleteHo
 // ---------------------------------------------------------------------------.
 
 // enabledEvents returns a comma-separated list of enabled event types.
+//
+// Every flag [HookOutput] carries is named here. Six of them were missing
+// until the markdown audit (issue 697), so a hook subscribed to nothing but
+// confidential notes or project events read as "none" in the card and in the
+// list while the JSON said otherwise.
 func enabledEvents(h HookOutput) string {
-	var events []string
-	if h.PushEvents {
-		events = append(events, "push")
+	flags := []struct {
+		name string
+		on   bool
+	}{
+		{"push", h.PushEvents},
+		{"tag_push", h.TagPushEvents},
+		{"merge_request", h.MergeRequestsEvents},
+		{"issues", h.IssuesEvents},
+		{"note", h.NoteEvents},
+		{"job", h.JobEvents},
+		{"pipeline", h.PipelineEvents},
+		{"wiki", h.WikiPageEvents},
+		{"deployment", h.DeploymentEvents},
+		{"releases", h.ReleasesEvents},
+		{"milestone", h.MilestoneEvents},
+		{"feature_flag", h.FeatureFlagEvents},
+		{"subgroup", h.SubGroupEvents},
+		{"member", h.MemberEvents},
+		{"vulnerability", h.VulnerabilityEvents},
+		{"confidential_issues", h.ConfidentialIssuesEvents},
+		{"confidential_note", h.ConfidentialNoteEvents},
+		{"emoji", h.EmojiEvents},
+		{"resource_access_token", h.ResourceAccessTokenEvents},
+		{"project", h.ProjectEvents},
+		{"repository_update", h.RepositoryUpdateEvents},
 	}
-	if h.TagPushEvents {
-		events = append(events, "tag_push")
-	}
-	if h.MergeRequestsEvents {
-		events = append(events, "merge_request")
-	}
-	if h.IssuesEvents {
-		events = append(events, "issues")
-	}
-	if h.NoteEvents {
-		events = append(events, "note")
-	}
-	if h.JobEvents {
-		events = append(events, "job")
-	}
-	if h.PipelineEvents {
-		events = append(events, "pipeline")
-	}
-	if h.WikiPageEvents {
-		events = append(events, "wiki")
-	}
-	if h.DeploymentEvents {
-		events = append(events, "deployment")
-	}
-	if h.ReleasesEvents {
-		events = append(events, "releases")
-	}
-	if h.MilestoneEvents {
-		events = append(events, "milestone")
-	}
-	if h.FeatureFlagEvents {
-		events = append(events, "feature_flag")
-	}
-	if h.SubGroupEvents {
-		events = append(events, "subgroup")
-	}
-	if h.MemberEvents {
-		events = append(events, "member")
-	}
-	if h.VulnerabilityEvents {
-		events = append(events, "vulnerability")
+	events := make([]string, 0, len(flags))
+	for _, flag := range flags {
+		if flag.on {
+			events = append(events, flag.name)
+		}
 	}
 	if len(events) == 0 {
 		return "none"

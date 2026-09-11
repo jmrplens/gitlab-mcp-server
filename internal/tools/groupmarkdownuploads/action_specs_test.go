@@ -170,25 +170,7 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString verifies the ListMarkdownString Markdown formatter for a representative liststring input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdownString(t *testing.T) {
-	t.Run("empty list", func(t *testing.T) {
-		out := FormatListMarkdownString(ListOutput{})
-		if out == "" {
-			t.Fatal("expected non-empty markdown for empty list")
-		}
-	})
-	t.Run("with uploads", func(t *testing.T) {
-		out := FormatListMarkdownString(ListOutput{
-			Uploads: []UploadItem{{ID: 1, Filename: "test.png", Size: 1024, CreatedAt: "2026-01-01"}},
-		})
-		if out == "" {
-			t.Fatal("expected non-empty markdown")
-		}
-	})
-}
+// The formatter itself is covered whole-output in markdown_test.go.
 
 // TestMarkdownInit_Registry verifies the MarkdownInit_Registry handler.
 // The test exercises the GET path of the underlying GitLab API call.
