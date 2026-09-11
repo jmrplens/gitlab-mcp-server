@@ -34,7 +34,7 @@ func TestIndividual_CustomEmoji(t *testing.T) {
 	emojiURL := e2eFixtureServiceURL("/emoji.png")
 
 	// Create a temporary group for custom emoji.
-	groupOut, groupErr := callToolOn[groups.Output](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
+	groupOut, groupErr := callToolOn[groups.DetailOutput](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
 		Name: groupName,
 		Path: groupName,
 	})

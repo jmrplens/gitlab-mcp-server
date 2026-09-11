@@ -414,10 +414,22 @@ func TestTransferSubGroup_BadRequestHint(t *testing.T) {
 // projects table marks archived projects with "Yes" in the Archived column.
 func TestFormatSharedProjectsListMarkdown_ArchivedRow(t *testing.T) {
 	md := FormatSharedProjectsListMarkdown(SharedProjectsListOutput{Projects: []ProjectItem{
-		{ID: 1, Name: "arch", Archived: true},
+		{ID: 1, Name: "arch", Archived: new(true)},
 	}})
 	if !strings.Contains(md, "| Yes |") {
 		t.Errorf("markdown missing archived Yes cell:\n%s", md)
+	}
+}
+
+// TestFormatSharedProjectsListMarkdown_SimpleRowLeavesArchivedUnanswered
+// verifies a row GitLab rendered as BasicProjectDetails, which carries no
+// archived flag, is not shown as a project that is not archived.
+func TestFormatSharedProjectsListMarkdown_SimpleRowLeavesArchivedUnanswered(t *testing.T) {
+	md := FormatSharedProjectsListMarkdown(SharedProjectsListOutput{Projects: []ProjectItem{
+		{ID: 1, Name: "basic"},
+	}})
+	if strings.Contains(md, "| No |") || strings.Contains(md, "| Yes |") {
+		t.Errorf("a row with no archived flag was given an answer:\n%s", md)
 	}
 }
 

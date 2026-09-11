@@ -996,7 +996,9 @@ merge requests have gone to `gitlab-org/gitlab` from its own
 [!254542](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254542),
 [!254543](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254543),
 [!254547](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254547) and
-[!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552).
+[!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552). The
+first of them, `!254507`, was merged into `master` on 2026-09-10; the other
+eight are open.
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
 response attribute tables as well as the examples, and the other entities
@@ -1587,6 +1589,95 @@ neither acted on:
 want the shapes above rather than the nearest existing struct, and the nested
 `action` is a struct that does not exist upstream yet.
 
+### Group, Project and Issue each model one entity where GitLab renders two
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. Every key is worked around.
+- **Workaround**: yes. All of them are read from the captured response beside
+  the SDK's decode (ADR-0021), through `toolutil.CapturedGroup`,
+  `CapturedProject`, `CapturedIssue` and their list siblings.
+
+**What**: three of the structs this server uses most model fewer keys than the
+Grape entity their routes render, and in each case the gap is bigger than a
+missing field because GitLab renders **two** entities through the one struct:
+a narrow one on the routes that answer with a page, and a wider one that
+inherits it on the routes that answer with a single object.
+
+| Struct    | Narrow entity                             | Wider entity                   | Keys neither models |
+| --------- | ----------------------------------------- | ------------------------------ | ------------------- |
+| `Group`   | `Entities::Group`                         | `Entities::GroupDetail`        | 10 + 8              |
+| `Project` | `Entities::BasicProjectDetails` (24 keys) | `Entities::Project` (159 keys) | 17                  |
+| `Issue`   | `Entities::IssueBasic`                    | `Entities::Issue`              | 3 + 9               |
+
+The project row is the one worth reading twice. `BasicProjectDetails` is not a
+subset a caller opts into: it is what
+[lib/api/search.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/search.rb)'s
+`SCOPE_ENTITY` maps the `projects` scope to, what the job token allowlist
+answers with, and what every route through `present_projects` narrows to when
+the caller passes `simple=true`. One Go struct decodes both, so a client cannot
+tell from the type which of the two it is holding.
+
+**The seventeen on `Project`**: `description_html`, `repository_object_format`,
+`show_diff_preview_in_email`, `warn_about_potentially_unwanted_characters`,
+`secret_push_protection_enabled`, `web_based_commit_signing_enabled`,
+`merge_train_enforcement`, `max_pipelines_per_merge_train`,
+`duo_remote_flows_enabled`, `duo_foundational_flows_enabled`,
+`only_allow_merge_if_all_status_checks_passed`, `duo_sast_fp_detection_enabled`,
+`duo_sast_vr_workflow_enabled`, `duo_secret_detection_fp_enabled`,
+`duo_dependency_bump_breaking_changes_enabled`,
+`security_policy_pipeline_must_succeed` and `spp_repository_pipeline_access`.
+Four are unconditional on the entity; the rest are gated on a licensed feature,
+on the `read_secret_push_protection_info` ability, or on GitLab.com.
+`secret_push_protection_enabled` is not new data: it is the newer spelling of
+`pre_receive_secret_detection_enabled`, which the SDK does model, exposed twice
+from `project.security_setting`.
+
+**The twelve on `Issue`**: `blocking_issues_count`, `start_date` and `type` are
+on `IssueBasic` and therefore on every issue GitLab renders anywhere;
+`epic_iid`, `has_tasks`, `imported`, `imported_from`, `severity` and
+`task_status` are added by `Entities::Issue` and so reach only the issues API's
+own routes. `type` and `issue_type` are the same attribute exposed twice, once
+with `format_with: :upcase`, so a client that derives one from the other is
+guessing at a spelling GitLab owns.
+
+**Three smaller ones in the same batch**, each a single struct and a single
+key, all found the same way:
+
+- `ProjectUser` misses `locked` and `public_email`.
+  `GET /projects/:id/users` presents `Entities::UserBasic`, which sends eight
+  keys unconditionally, and the struct declares six of them.
+- `ProjectApprovalRule` misses `coverage_minimum_threshold`, which
+  [ee/lib/api/entities/project_approval_rule.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/ee/lib/api/entities/project_approval_rule.rb)
+  exposes on a rule whose `report_type` is `code_coverage`.
+- `GroupHook` misses `repository_update_events`, which
+  [lib/api/entities/group_hook.rb](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.1-ee/lib/api/entities/group_hook.rb)
+  sends on every group hook. The SDK already declares that field on
+  `ProjectHook` and on the system hook, so this is the cheapest of the set to
+  land and the hardest to argue with.
+
+**How we found it**: the sent dimension of the 1:1 audit
+(`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), read
+against `docs/development/gitlab-api-live.json`, which is taken from a booted
+GitLab and carries the field list per entity with the condition gating each.
+Every finding here is marked `sdk_models: false`, which is what says the fix is
+upstream rather than local.
+
+**One caution for whoever writes the merge request.** `gen_api_live` captures a
+condition as source text over a line range, and in
+`ee/lib/ee/api/entities/project.rb` the text of each `expose` runs on into the
+next one, so two of the seventeen read as gated by their neighbour's feature.
+`max_pipelines_per_merge_train` gates on `merge_trains` (Premium) and
+`duo_foundational_flows_enabled` on `ai_workflows` (Premium); the record
+resolves both to Ultimate from the next expose's `external_status_checks` and
+`ai_features`. This server's struct tags carry the corrected tiers.
+
+**Effort**: small per struct and mechanical. The partition is the work: a
+struct that keeps serving both entities cannot answer the pointer question,
+which is why this server split each of the three into one output type per
+entity before surfacing anything.
+
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
 ### No keep-alive interval for SSE streams on StreamableHTTPOptions
@@ -1931,8 +2022,10 @@ markdown. We keep emitting both.
 
 ### Three job token scope endpoints declare a response entity they do not send
 
-- **Reported**: no, not yet.
-- **In review**: no.
+- **Reported**: yes.
+- **In review**: yes,
+  [gitlab-org/gitlab!254698](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254698),
+  labelled `workflow::ready for review` and `tw::triaged`.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes, a declaration. The 13 findings this produces against

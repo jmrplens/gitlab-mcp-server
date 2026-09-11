@@ -129,6 +129,10 @@ type ApprovalRuleOutput struct {
 	ProtectedBranches             []*ProtectedBranchRefOutput `json:"protected_branches,omitempty"`
 	ContainsHiddenGroups          bool                        `json:"contains_hidden_groups"`
 	AppliesToAllProtectedBranches bool                        `json:"applies_to_all_protected_branches"`
+	// CoverageMinimumThreshold is exposed only on a rule whose report_type is
+	// code_coverage, and client-go does not model it, so it is read from the
+	// captured answer (ADR-0021) and stays nil on every other rule.
+	CoverageMinimumThreshold *int64 `json:"coverage_minimum_threshold,omitempty" tier:"premium"`
 }
 
 // ListApprovalRulesOutput holds a paginated list of project approval rules.
@@ -138,7 +142,7 @@ type ListApprovalRulesOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-func approvalRuleToOutput(r *gl.ProjectApprovalRule) ApprovalRuleOutput {
+func approvalRuleToOutput(r *gl.ProjectApprovalRule, extra toolutil.ProjectApprovalRuleExtra) ApprovalRuleOutput {
 	return ApprovalRuleOutput{
 		ID:                            r.ID,
 		Name:                          r.Name,
@@ -151,7 +155,18 @@ func approvalRuleToOutput(r *gl.ProjectApprovalRule) ApprovalRuleOutput {
 		ProtectedBranches:             protectedBranchRefsOutput(r.ProtectedBranches),
 		ContainsHiddenGroups:          r.ContainsHiddenGroups,
 		AppliesToAllProtectedBranches: r.AppliesToAllProtectedBranches,
+		CoverageMinimumThreshold:      extra.CoverageMinimumThreshold,
 	}
+}
+
+// approvalRuleOutput finishes a handler that answers with one approval rule,
+// reading the threshold client-go does not model off the captured answer.
+func approvalRuleOutput(op string, r *gl.ProjectApprovalRule, captured *gitlabclient.ResponseCapture) (ApprovalRuleOutput, error) {
+	extra, err := toolutil.CapturedProjectApprovalRule(captured)
+	if err != nil {
+		return ApprovalRuleOutput{}, toolutil.WrapErr(op, err)
+	}
+	return approvalRuleToOutput(r, extra), nil
 }
 
 // ListApprovalRules retrieves all project-level approval rules.
@@ -170,14 +185,19 @@ func ListApprovalRules(ctx context.Context, client *gitlabclient.Client, input L
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	rules, resp, err := client.GL().Projects.GetProjectApprovalRules(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListApprovalRulesOutput{}, toolutil.WrapErrWithStatusHint("projectListApprovalRules", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_list; approval rules require Premium/Ultimate license")
 	}
+	extras, err := toolutil.CapturedProjectApprovalRules(captured, len(rules))
+	if err != nil {
+		return ListApprovalRulesOutput{}, toolutil.WrapErr("projectListApprovalRules", err)
+	}
 	out := make([]ApprovalRuleOutput, len(rules))
 	for i, r := range rules {
-		out[i] = approvalRuleToOutput(r)
+		out[i] = approvalRuleToOutput(r, extras[i])
 	}
 	return ListApprovalRulesOutput{Rules: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -199,12 +219,13 @@ func GetApprovalRule(ctx context.Context, client *gitlabclient.Client, input Get
 	if input.RuleID == 0 {
 		return ApprovalRuleOutput{}, errors.New("projectGetApprovalRule: rule_id is required")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	rule, _, err := client.GL().Projects.GetProjectApprovalRule(string(input.ProjectID), input.RuleID, gl.WithContext(ctx))
 	if err != nil {
 		return ApprovalRuleOutput{}, toolutil.WrapErrWithStatusHint("projectGetApprovalRule", err, http.StatusNotFound,
 			"verify approval_rule_id with gitlab_project_approval_rule_list; rule may have been deleted")
 	}
-	return approvalRuleToOutput(rule), nil
+	return approvalRuleOutput("projectGetApprovalRule", rule, captured)
 }
 
 // CreateApprovalRuleInput defines parameters for creating an approval rule.
@@ -257,12 +278,13 @@ func CreateApprovalRule(ctx context.Context, client *gitlabclient.Client, input 
 	if input.AppliesToAllProtectedBranches != nil {
 		opts.AppliesToAllProtectedBranches = input.AppliesToAllProtectedBranches
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	rule, _, err := client.GL().Projects.CreateProjectApprovalRule(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ApprovalRuleOutput{}, toolutil.WrapErrWithStatusHint("projectCreateApprovalRule", err, http.StatusBadRequest,
 			"requires Maintainer role + Premium/Ultimate; rule_type must be 'regular' or 'any_approver'; user_ids/group_ids must reference existing project members; protected_branch_ids require Premium")
 	}
-	return approvalRuleToOutput(rule), nil
+	return approvalRuleOutput("projectCreateApprovalRule", rule, captured)
 }
 
 // UpdateApprovalRuleInput defines parameters for updating an approval rule.
@@ -311,12 +333,13 @@ func UpdateApprovalRule(ctx context.Context, client *gitlabclient.Client, input 
 	if input.AppliesToAllProtectedBranches != nil {
 		opts.AppliesToAllProtectedBranches = input.AppliesToAllProtectedBranches
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	rule, _, err := client.GL().Projects.UpdateProjectApprovalRule(string(input.ProjectID), input.RuleID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ApprovalRuleOutput{}, toolutil.WrapErrWithStatusHint("projectUpdateApprovalRule", err, http.StatusNotFound,
 			"verify approval_rule_id with gitlab_project_approval_rule_list; requires Maintainer role; cannot change rule_type after creation")
 	}
-	return approvalRuleToOutput(rule), nil
+	return approvalRuleOutput("projectUpdateApprovalRule", rule, captured)
 }
 
 // DeleteApprovalRuleInput defines parameters for deleting an approval rule.

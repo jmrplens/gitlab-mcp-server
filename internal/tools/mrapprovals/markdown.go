@@ -86,12 +86,14 @@ func FormatRulesMarkdown(out RulesOutput) string {
 		b.WriteString("No approval rules configured.\n")
 		return b.String()
 	}
-	b.WriteString("| ID | Name | Type | Required | Approved | Eligible |\n")
-	b.WriteString("| -- | ---- | ---- | -------- | -------- | -------- |\n")
+	// No Approved column: the three approval_rules routes present
+	// MergeRequestApprovalRule, which does not expose it. Only the
+	// approval_state route does, and FormatStateMarkdown renders that one.
+	b.WriteString("| ID | Name | Type | Required | Eligible |\n")
+	b.WriteString("| -- | ---- | ---- | -------- | -------- |\n")
 	for _, r := range out.Rules {
-		approved := toolutil.BoolEmoji(r.Approved)
 		eligible := strings.Join(userNames(r.EligibleApprovers), ", ")
-		fmt.Fprintf(&b, "| %d | %s | %s | %d | %s | %s |\n", r.ID, toolutil.EscapeMdTableCell(r.Name), r.RuleType, r.ApprovalsRequired, approved, toolutil.EscapeMdTableCell(eligible))
+		fmt.Fprintf(&b, "| %d | %s | %s | %d | %s |\n", r.ID, toolutil.EscapeMdTableCell(r.Name), r.RuleType, r.ApprovalsRequired, toolutil.EscapeMdTableCell(eligible))
 	}
 	toolutil.WriteHints(
 		&b,
@@ -129,14 +131,12 @@ func FormatConfigMarkdown(c ConfigOutput) string {
 // FormatRuleMarkdown renders a single MR approval rule as Markdown.
 func FormatRuleMarkdown(r RuleOutput) string {
 	var b strings.Builder
-	approved := toolutil.BoolEmoji(r.Approved)
 	// An approval rule's name is free text a maintainer types.
 	fmt.Fprintf(&b, "## Approval Rule: %s\n\n", toolutil.EscapeMdHeading(r.Name))
 	fmt.Fprintf(&b, "| Field | Value |\n| ----- | ----- |\n")
 	fmt.Fprintf(&b, "| ID | %d |\n", r.ID)
 	fmt.Fprintf(&b, "| Type | %s |\n", r.RuleType)
 	fmt.Fprintf(&b, "| Approvals Required | %d |\n", r.ApprovalsRequired)
-	fmt.Fprintf(&b, "| Approved | %s |\n", approved)
 	if eligible := userNames(r.EligibleApprovers); len(eligible) > 0 {
 		fmt.Fprintf(&b, "| Eligible | %s |\n", strings.Join(eligible, ", "))
 	}

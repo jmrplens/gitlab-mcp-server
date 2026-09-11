@@ -149,7 +149,7 @@ func groupMemberIDs(out groups.MemberListOutput) []int64 {
 
 // sharedWithGroupIDs maps a group to the IDs of the groups it is shared with.
 // A share and an unshare are both observable there.
-func sharedWithGroupIDs(out groups.Output) []int64 {
+func sharedWithGroupIDs(out groups.DetailOutput) []int64 {
 	ids := make([]int64, 0, len(out.SharedWithGroups))
 	for _, s := range out.SharedWithGroups {
 		ids = append(ids, s.GroupID)

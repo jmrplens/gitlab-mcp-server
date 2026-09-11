@@ -31,11 +31,11 @@ import (
 // package and registry listings need a project that lives in a group
 // namespace, which the shared project fixtures (personal namespace) cannot
 // provide.
-func pkgExtrasCreateGroupProject(ctx context.Context, t *testing.T) (groups.Output, projects.Output) {
+func pkgExtrasCreateGroupProject(ctx context.Context, t *testing.T) (groups.DetailOutput, projects.Output) {
 	t.Helper()
 
 	groupName := uniqueName("e2e-pkgx-grp")
-	grp, err := callToolOn[groups.Output](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
+	grp, err := callToolOn[groups.DetailOutput](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
 		Name:       groupName,
 		Path:       groupName,
 		Visibility: "private",

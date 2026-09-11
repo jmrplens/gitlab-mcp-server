@@ -30,31 +30,32 @@ type UploadAvatarInput struct {
 // content_base64 (base64-encoded bytes), exactly one of which must be set, and
 // streams the image to the GitLab Groups UploadAvatar endpoint as a multipart
 // upload. The updated group is returned in the full group output shape.
-func UploadAvatar(ctx context.Context, client *gitlabclient.Client, input UploadAvatarInput) (Output, error) {
+func UploadAvatar(ctx context.Context, client *gitlabclient.Client, input UploadAvatarInput) (DetailOutput, error) {
 	if err := ctx.Err(); err != nil {
-		return Output{}, err
+		return DetailOutput{}, err
 	}
 	if input.GroupID == "" {
-		return Output{}, errors.New("groupUploadAvatar: group_id is required")
+		return DetailOutput{}, errors.New("groupUploadAvatar: group_id is required")
 	}
 	if input.Filename == "" {
-		return Output{}, errors.New("groupUploadAvatar: filename is required")
+		return DetailOutput{}, errors.New("groupUploadAvatar: filename is required")
 	}
 
 	reader, _, cleanup, err := toolutil.OpenFileOrBase64Source("groupUploadAvatar", input.FilePath, input.ContentBase64)
 	if err != nil {
-		return Output{}, err
+		return DetailOutput{}, err
 	}
 	defer cleanup()
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	g, _, err := client.GL().Groups.UploadAvatar(string(input.GroupID), reader, input.Filename, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint("groupUploadAvatar", err,
+			return DetailOutput{}, toolutil.WrapErrWithHint("groupUploadAvatar", err,
 				"avatar must be JPG/PNG/GIF and under 200 KB; verify filename has a valid image extension")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("groupUploadAvatar", err, http.StatusForbidden,
+		return DetailOutput{}, toolutil.WrapErrWithStatusHint("groupUploadAvatar", err, http.StatusForbidden,
 			"updating the group avatar requires Owner role")
 	}
-	return ToOutput(g), nil
+	return groupDetail("UploadAvatar", g, captured)
 }

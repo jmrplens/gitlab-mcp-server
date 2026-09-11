@@ -21,6 +21,14 @@ type sentDeclaration struct {
 	Package string
 	// Entity is the component the findings were read on.
 	Entity string
+	// Type narrows the declaration to one output type of the package. Empty
+	// answers every type, which is what a declaration about the package's
+	// route set wants. It is set where a package publishes one type per GitLab
+	// entity and only one of them is being answered: the type grain holds each
+	// of them against the union of endpoints their shared client-go struct
+	// reaches, so without this a splat over the entity would silence the type
+	// that really does model it.
+	Type string
 	// Field is the json name, or "*" for every field read on the component.
 	Field string
 	// Category says what kind of absence this is.
@@ -69,6 +77,15 @@ const (
 	// nothing calls the method, and this one by showing which routes fill the
 	// type.
 	categorySDKRouteFillsAnotherType = "sdk-route-fills-another-type"
+	// categorySubclassCannotSatisfy is a condition on the class of the object
+	// being presented that the class this entity is ever given cannot satisfy.
+	// It is not an option nobody passes and not a license nobody holds: no
+	// request, no parameter and no license can make it true, because the two
+	// classes are siblings rather than one being the other's ancestor. Kept
+	// apart from the option categories because the evidence is the model
+	// hierarchy rather than a route's parameters, and because no route
+	// declaring something can ever retire it.
+	categorySubclassCannotSatisfy = "entity-condition-the-presented-class-cannot-satisfy"
 )
 
 // The member-family package paths, spelled once because several declarations
@@ -77,7 +94,20 @@ const (
 	accessRequestsPkg = toolsDir + "/accessrequests"
 	groupMembersPkg   = toolsDir + "/groupmembers"
 	groupsPkg         = toolsDir + "/groups"
+	issuesPkg         = toolsDir + "/issues"
+	projectsPkg       = toolsDir + "/projects"
 )
+
+// userBasicEntity is the user object every other user entity inherits, and
+// what GET /projects/:id/users presents directly.
+const userBasicEntity = "API::Entities::UserBasic"
+
+// reasonSystemHookSibling answers organization_id on the project and group
+// hook entities.
+const reasonSystemHookSibling = "lib/api/entities/hook.rb:17 exposes organization_id only when the presented hook is_a?(SystemHook). " +
+	"ProjectHook (app/models/hooks/project_hook.rb:3), GroupHook (ee/app/models/hooks/group_hook.rb:3) and SystemHook " +
+	"(app/models/hooks/system_hook.rb:3) are all siblings under WebHook, so a hook these two entities render is never a " +
+	"SystemHook and no response of theirs can carry the key. Nothing a caller sends can change that."
 
 // The two packages whose Output is one and the same type,
 // toolutil.MergeRequestOutput, reported once under each package that aliases
@@ -321,8 +351,8 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	// named one by one rather than with a splat: every other key of the same
 	// entity on that type is published, and a splat would swallow the next one
 	// GitLab adds.
-	{Package: toolsDir + "/issues", Entity: "API::Entities::MergeRequestBasic", Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
-	{Package: toolsDir + "/issues", Entity: "API::Entities::MergeRequestBasic", Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
+	{Package: issuesPkg, Entity: "API::Entities::MergeRequestBasic", Field: "title_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
+	{Package: issuesPkg, Entity: "API::Entities::MergeRequestBasic", Field: "description_html", Category: categoryOptionNeverPassed, Reason: reasonRenderHTMLNeverPassed},
 
 	// avatar_path on the four types that publish a user. The user entities
 	// inherit it from UserBasic, so it is the same option and the same answer
@@ -353,6 +383,79 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 	{Package: groupSAMLPkg, Entity: userWithAdminEntity, Field: "enterprise_group_associated_at", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
 	{Package: groupSAMLPkg, Entity: userWithAdminEntity, Field: "provisioned_by_group_id", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
 	{Package: groupSAMLPkg, Entity: serviceAccountEntity, Field: "unconfirmed_email", Category: categorySDKRouteFillsAnotherType, Reason: reasonGroupScopedUserRoutes},
+
+	// The same two user keys on the project's user list. GET /projects/:id/users
+	// declares search, skip_users and pagination and neither option, so it is
+	// the member family's answer for the same entity.
+	{Package: projectsPkg, Entity: userBasicEntity, Field: "avatar_path", Category: categoryOptionNeverPassed, Reason: reasonOnlyPathNeverPassed},
+	{Package: projectsPkg, Entity: userBasicEntity, Field: "custom_attributes", Category: categoryOptionNeverPassed, Reason: reasonCustomAttributesNeverPassed},
+
+	// The two packages that publish one output type per GitLab entity, each
+	// answered on the narrower type alone. Both pair with one client-go struct,
+	// so readSDKRoutes unions every endpoint that struct's methods reach in
+	// front of both types, and the wider entity's keys are then held against
+	// the narrower type as well. Named with the type set, so the type that
+	// really does model the wider entity keeps being judged against it.
+	{
+		Package: projectsPkg, Type: "BasicOutput", Entity: "API::Entities::Project", Field: declaredSegment,
+		Category: categoryEntityPublishedElsewhere,
+		Reason: "projects.BasicOutput models API::Entities::BasicProjectDetails, which is what the project search scope " +
+			"(lib/api/search.rb SCOPE_ENTITY) and the job token allowlist answer with, and what any route narrows to under " +
+			"simple=true. projects.Output embeds it and publishes the whole of API::Entities::Project. Both pair with " +
+			"client-go's Project, so every endpoint that struct reaches is unioned in front of both.",
+	},
+	{
+		Package: groupsPkg, Type: "Output", Entity: "API::Entities::GroupDetail", Field: declaredSegment,
+		Category: categoryEntityPublishedElsewhere,
+		Reason: "groups.Output models API::Entities::Group, which is what every route answering with a page of groups " +
+			"renders. groups.DetailOutput embeds it and publishes what GroupDetail adds, on the seven routes that answer " +
+			"with one group. Both pair with client-go's Group, so every endpoint that struct reaches is unioned in front " +
+			"of both.",
+	},
+
+	{
+		Package: projectsPkg, Type: "BasicOutput", Entity: "API::Entities::Projects::WithAccessAndCatalogSetting", Field: declaredSegment,
+		Category: categoryEntityPublishedElsewhere,
+		Reason: "GET /projects/:id answers with Project plus permissions and cicd_catalog_enabled, and projects.Output " +
+			"publishes both. BasicProjectDetails carries neither, which is what BasicOutput models.",
+	},
+
+	// The two entities client-go's Group methods put in front of the group
+	// types, neither of which a group route sends.
+	{
+		Package: groupsPkg, Entity: "API::Entities::BasicProjectDetails", Field: declaredSegment,
+		Category: categoryDocumentedNotSent,
+		Reason: "the only endpoint in the union naming this entity is GET /projects/:id/job_token_scope/groups_allowlist, " +
+			"which presents BasicGroupDetails and whose desc annotation is the project allowlist's, copied; measured against " +
+			"a fixture and recorded in docs/development/upstream-bugs.md under \"Three job token scope endpoints declare a " +
+			"response entity they do not send\". internal/tools/projects publishes BasicProjectDetails, from the routes that " +
+			"really send it.",
+	},
+
+	// EpicIssue on the issue types. The union carries it because client-go's
+	// Issue methods reach the epic's issue list, which is a route of another
+	// package.
+	{
+		Package: issuesPkg, Entity: "API::Entities::EpicIssue", Field: declaredSegment,
+		Category: categorySDKRouteFillsAnotherType,
+		Reason: "GET /groups/:id/epics/:epic_iid/issues is what renders EpicIssue, and internal/tools/epicissues is the " +
+			"package that calls it and publishes it. None of the fifteen issue routes sends the epic-link keys.",
+	},
+
+	// The third case of a desc annotation naming an entity the handler does
+	// not present, after the two already recorded upstream.
+	{
+		Package: issuesPkg, Entity: "API::Entities::MRNote", Field: "note",
+		Category: categoryDocumentedNotSent,
+		Reason: "lib/api/merge_requests.rb:975 declares success Entities::MRNote and line 994 presents Entities::IssueBasic " +
+			"beside Entities::ExternalIssue, so GET /projects/:id/merge_requests/:iid/closes_issues sends issues and never a " +
+			"note. Recorded in docs/development/upstream-bugs.md for the documentation merge request.",
+	},
+
+	// organization_id on the two hook types, which is the one condition here
+	// that no response can ever satisfy.
+	{Package: projectsPkg, Entity: "API::Entities::ProjectHook", Field: "organization_id", Category: categorySubclassCannotSatisfy, Reason: reasonSystemHookSibling},
+	{Package: groupsPkg, Entity: "API::Entities::GroupHook", Field: "organization_id", Category: categorySubclassCannotSatisfy, Reason: reasonSystemHookSibling},
 
 	// subscribed on the related issue, named alone rather than with a splat:
 	// every other key of that entity is published on the same type, and a
@@ -388,12 +491,18 @@ var declaredUnsurfaced = []sentDeclaration{ //nolint:gochecknoglobals // the adj
 func (d sentDeclaration) covers(finding UnsurfacedField) bool {
 	return d.Package == finding.Package &&
 		d.Entity == finding.Entity &&
+		(d.Type == "" || d.Type == finding.Type) &&
 		(d.Field == declaredSegment || d.Field == finding.Field)
 }
 
 // key names one declaration in a report, which is how a stale one is reported.
+// The type is part of the name so that two declarations differing only in it
+// are two names, and a stale one says which type it stopped describing.
 func (d sentDeclaration) key() string {
-	return d.Package + "." + d.Entity + "." + d.Field
+	if d.Type == "" {
+		return d.Package + "." + d.Entity + "." + d.Field
+	}
+	return d.Package + "." + d.Type + "." + d.Entity + "." + d.Field
 }
 
 // classifySentFindings attaches the declaration that accounts for each

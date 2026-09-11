@@ -57,7 +57,7 @@ func formatIssueList(out ListOutput, heading string, hints ...string) string {
 	for _, i := range out.Issues {
 		labels := strings.Join(i.Labels, ", ")
 		//gitlab:allow-unescaped i.State: an issue state, one of GitLab's fixed set (opened, closed).
-		fmt.Fprintf(&b, "| %s | %s | %s %s | %s | %s |\n", toolutil.MdTitleLink(fmt.Sprintf("#%d", i.IID), i.WebURL), toolutil.EscapeMdTableCell(i.Title), toolutil.IssueStateEmoji(i.State), i.State, toolutil.EscapeMdTableCell(AuthorName(i)), toolutil.EscapeMdTableCell(labels))
+		fmt.Fprintf(&b, "| %s | %s | %s %s | %s | %s |\n", toolutil.MdTitleLink(fmt.Sprintf("#%d", i.IID), i.WebURL), toolutil.EscapeMdTableCell(i.Title), toolutil.IssueStateEmoji(i.State), i.State, toolutil.EscapeMdTableCell(AuthorName(i.BasicOutput)), toolutil.EscapeMdTableCell(labels))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b, append([]string{toolutil.HintPreserveLinks}, hints...)...)
@@ -74,9 +74,11 @@ func FormatListAllMarkdown(out ListOutput) string {
 
 // AuthorName returns the issue author's display username for Markdown, read from
 // the full author object. It is exported so sibling packages (e.g.
-// mergerequests) that embed [Output] in their own tables can render the author
-// without reaching into the object.
-func AuthorName(i Output) string {
+// mergerequests, search) that render issue rows of their own can show the
+// author without reaching into the object. It takes [BasicOutput] because the
+// author is what every entity that renders an issue carries, the basic one
+// included.
+func AuthorName(i BasicOutput) string {
 	if i.Author != nil {
 		return i.Author.Username
 	}
@@ -192,7 +194,7 @@ func FormatMarkdown(i Output) string {
 	if i.Confidential {
 		fmt.Fprintf(&b, "- %s **Confidential**\n", toolutil.EmojiConfidential)
 	}
-	fmt.Fprintf(&b, toolutil.FmtMdAuthorAt, toolutil.EscapeMdTableCell(AuthorName(i)))
+	fmt.Fprintf(&b, toolutil.FmtMdAuthorAt, toolutil.EscapeMdTableCell(AuthorName(i.BasicOutput)))
 	if len(i.Labels) > 0 {
 		// A label title is free text: GitLab's only rule on one is that it
 		// carries no comma.
@@ -266,7 +268,7 @@ func FormatListGroupMarkdown(out ListGroupOutput) string {
 	b.WriteString(toolutil.TblSep5Col)
 	for _, i := range out.Issues {
 		labels := strings.Join(i.Labels, ", ")
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", toolutil.MdTitleLink(fmt.Sprintf("#%d", i.IID), i.WebURL), toolutil.EscapeMdTableCell(i.Title), i.State, toolutil.EscapeMdTableCell(AuthorName(i)), toolutil.EscapeMdTableCell(labels))
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", toolutil.MdTitleLink(fmt.Sprintf("#%d", i.IID), i.WebURL), toolutil.EscapeMdTableCell(i.Title), i.State, toolutil.EscapeMdTableCell(AuthorName(i.BasicOutput)), toolutil.EscapeMdTableCell(labels))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(

@@ -215,7 +215,7 @@ func TestResources_ReadAll(t *testing.T) {
 	requireNoError(t, err, "create project snippet")
 
 	groupPath := uniqueName("e2e-res-grp")
-	grp, err := callToolOn[groups.Output](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
+	grp, err := callToolOn[groups.DetailOutput](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
 		Name:       groupPath,
 		Path:       groupPath,
 		Visibility: "public",

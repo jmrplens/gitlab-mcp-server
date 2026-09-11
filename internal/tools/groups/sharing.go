@@ -209,7 +209,7 @@ func ListSharedProjects(ctx context.Context, client *gitlabclient.Client, input 
 		return SharedProjectsListOutput{}, toolutil.WrapErrWithStatusHint("groupListSharedProjects", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get. Shared projects are projects shared *into* this group from elsewhere, not the group's own projects")
 	}
-	return SharedProjectsListOutput{Projects: projectItemsFromGroup(projects), Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return SharedProjectsListOutput{Projects: projectItemsFromGroup(projects, input.Simple != nil && *input.Simple), Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -225,31 +225,32 @@ type TransferSubGroupInput struct {
 
 // TransferSubGroup moves a group under a new parent group, or promotes a
 // subgroup to a top-level group when parent_id is omitted.
-func TransferSubGroup(ctx context.Context, client *gitlabclient.Client, input TransferSubGroupInput) (Output, error) {
+func TransferSubGroup(ctx context.Context, client *gitlabclient.Client, input TransferSubGroupInput) (DetailOutput, error) {
 	if err := ctx.Err(); err != nil {
-		return Output{}, err
+		return DetailOutput{}, err
 	}
 	if input.GroupID == "" {
-		return Output{}, errors.New("groupTransferSubGroup: group_id is required")
+		return DetailOutput{}, errors.New("groupTransferSubGroup: group_id is required")
 	}
 	opts := &gl.TransferSubGroupOptions{}
 	if input.ParentID != nil {
 		opts.GroupID = input.ParentID
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	g, _, err := client.GL().Groups.TransferSubGroup(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("groupTransferSubGroup", err,
+			return DetailOutput{}, toolutil.WrapErrWithHint("groupTransferSubGroup", err,
 				"transferring a group requires Owner role on both the group and the destination parent group; use gitlab_group_transfer_locations to discover valid destinations")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint("groupTransferSubGroup", err,
+			return DetailOutput{}, toolutil.WrapErrWithHint("groupTransferSubGroup", err,
 				"the destination parent is invalid (e.g. it would create a cycle, a path collision, or a visibility mismatch); use gitlab_group_transfer_locations to find valid parents")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("groupTransferSubGroup", err, http.StatusNotFound,
+		return DetailOutput{}, toolutil.WrapErrWithStatusHint("groupTransferSubGroup", err, http.StatusNotFound,
 			"verify group_id (and parent_id) with gitlab_group_get")
 	}
-	return ToOutput(g), nil
+	return groupDetail("TransferSubGroup", g, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -284,10 +285,7 @@ func FormatSharedProjectsListMarkdown(out SharedProjectsListOutput) string {
 	b.WriteString("| ID | Name | Path | Visibility | Archived |\n")
 	b.WriteString("| --- | --- | --- | --- | --- |\n")
 	for _, p := range out.Projects {
-		archived := "No"
-		if p.Archived {
-			archived = "Yes"
-		}
+		archived := archivedCell(p)
 		name := toolutil.EscapeMdTableCell(p.Name)
 		if p.WebURL != "" {
 			name = toolutil.MdTitleLink(name, p.WebURL)

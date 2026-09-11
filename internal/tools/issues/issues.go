@@ -53,7 +53,7 @@ type CreateInput struct {
 }
 
 // Output represents a GitLab issue.
-type Output struct {
+type BasicOutput struct {
 	toolutil.HintableOutput
 	ID int64 `json:"id"`
 	// IID is the issue's own project-scoped internal ID, mirroring the SDK
@@ -83,25 +83,51 @@ type Output struct {
 	ProjectID         int64                     `json:"project_id"`
 	Weight            int64                     `json:"weight,omitempty" tier:"premium"`
 	IssueType         string                    `json:"issue_type,omitempty"`
-	HealthStatus      string                    `json:"health_status,omitempty" tier:"ultimate"`
 	MergeRequestCount int64                     `json:"merge_requests_count,omitempty"`
 	UserNotesCount    int64                     `json:"user_notes_count,omitempty"`
 	Upvotes           int64                     `json:"upvotes,omitempty"`
 	Downvotes         int64                     `json:"downvotes,omitempty"`
-	Subscribed        bool                      `json:"subscribed"`
-	MovedToID         int64                     `json:"moved_to_id,omitempty"`
-	EpicIssueID       int64                     `json:"epic_issue_id,omitempty" tier:"premium"`
 	// Additive 1:1 fields surfaced from the SDK Issue (full sub-objects and
 	// scalars not previously exposed).
 	ExternalID           string                               `json:"external_id,omitempty"`
-	ServiceDeskReplyTo   string                               `json:"service_desk_reply_to,omitempty"`
-	References           *toolutil.ReferencesOutput           `json:"references,omitempty"`
-	Epic                 *toolutil.EpicOutput                 `json:"epic,omitempty" tier:"premium"`
 	LabelDetails         []*toolutil.LabelDetailsOutput       `json:"label_details,omitempty"`
-	Iteration            *toolutil.IterationOutput            `json:"iteration,omitempty" tier:"premium"`
-	Links                *toolutil.IssueLinksOutput           `json:"_links,omitempty"`
 	TimeStats            *TimeStatsOutput                     `json:"time_stats,omitempty"`
 	TaskCompletionStatus *toolutil.TaskCompletionStatusOutput `json:"task_completion_status,omitempty"`
+	// What lib/api/entities/issue_basic.rb sends that client-go's Issue does
+	// not model, read from the captured response (ADR-0021).
+	BlockingIssuesCount *int64 `json:"blocking_issues_count,omitempty" tier:"premium"`
+	StartDate           string `json:"start_date,omitempty"`
+	Type                string `json:"type,omitempty"`
+}
+
+// Output is an issue as the fifteen routes of the issues API render it:
+// API::Entities::Issue, which is the basic entity above plus what only a
+// request through those routes carries.
+//
+// The split is what lets each field sit where GitLab sends it. A search hit
+// renders IssueBasic (lib/api/search.rb keys issues to it) and so does a merge
+// request's closing issue, and those two used to be handed a type declaring an
+// epic, an iteration, a health_status and five more keys their route cannot
+// give them.
+type Output struct {
+	BasicOutput
+	HealthStatus       string                     `json:"health_status,omitempty" tier:"ultimate"`
+	Subscribed         bool                       `json:"subscribed"`
+	MovedToID          int64                      `json:"moved_to_id,omitempty"`
+	EpicIssueID        int64                      `json:"epic_issue_id,omitempty" tier:"premium"`
+	ServiceDeskReplyTo string                     `json:"service_desk_reply_to,omitempty"`
+	References         *toolutil.ReferencesOutput `json:"references,omitempty"`
+	Epic               *toolutil.EpicOutput       `json:"epic,omitempty" tier:"premium"`
+	Iteration          *toolutil.IterationOutput  `json:"iteration,omitempty" tier:"premium"`
+	Links              *toolutil.IssueLinksOutput `json:"_links,omitempty"`
+	// What only lib/api/entities/issue.rb adds, read from the captured
+	// response (ADR-0021).
+	EpicIID      *int64 `json:"epic_iid,omitempty" tier:"premium"`
+	HasTasks     *bool  `json:"has_tasks,omitempty"`
+	Imported     *bool  `json:"imported,omitempty"`
+	ImportedFrom string `json:"imported_from,omitempty"`
+	Severity     string `json:"severity,omitempty"`
+	TaskStatus   string `json:"task_status,omitempty"`
 }
 
 // GetInput defines parameters for retrieving a single issue.
@@ -232,8 +258,8 @@ type ListGroupOutput struct {
 // ToOutput converts a GitLab API [gl.Issue] to the MCP tool output
 // format, extracting author, milestone, assignees, and formatting timestamps
 // as RFC 3339 strings. Nil labels are normalized to an empty slice.
-func ToOutput(issue *gl.Issue) Output {
-	out := Output{
+func ToBasicOutput(issue *gl.Issue, extra toolutil.IssueBasicExtra) BasicOutput {
+	out := BasicOutput{
 		ID:          issue.ID,
 		IID:         issue.IID,
 		Title:       issue.Title,
@@ -271,27 +297,84 @@ func ToOutput(issue *gl.Issue) Output {
 	out.DiscussionLocked = issue.DiscussionLocked
 	out.ProjectID = issue.ProjectID
 	out.Weight = issue.Weight
-	out.HealthStatus = issue.HealthStatus
 	out.MergeRequestCount = issue.MergeRequestCount
 	if issue.IssueType != nil {
 		out.IssueType = *issue.IssueType
 	}
 	out.ClosedBy = toolutil.NewIssueUserOutputFromIssueCloser(issue.ClosedBy)
-	out.References = toolutil.NewReferencesOutput(issue.References)
 	out.UserNotesCount = issue.UserNotesCount
 	out.Upvotes = issue.Upvotes
 	out.Downvotes = issue.Downvotes
+	out.ExternalID = issue.ExternalID
+	out.LabelDetails = toolutil.NewLabelDetailsOutputs(issue.LabelDetails)
+	out.TimeStats = timeStatsPtr(issue.TimeStats)
+	out.TaskCompletionStatus = toolutil.NewTaskCompletionStatusOutput(issue.TaskCompletionStatus)
+	out.BlockingIssuesCount = extra.BlockingIssuesCount
+	out.StartDate = extra.StartDate
+	out.Type = extra.Type
+	return out
+}
+
+// issueOutput finishes a handler that answers with one issue: it reads the
+// fields client-go does not model off the captured answer and pairs them with
+// what the SDK decoded.
+func issueOutput(op string, issue *gl.Issue, captured *gitlabclient.ResponseCapture) (Output, error) {
+	extra, err := toolutil.CapturedIssue(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(op, err)
+	}
+	return ToOutput(issue, extra), nil
+}
+
+// issueListOutput finishes a handler that answers with a page of issues, one
+// extra per issue in order.
+func issueListOutput(op string, issues []*gl.Issue, resp *gl.Response, captured *gitlabclient.ResponseCapture) (ListOutput, error) {
+	extras, err := toolutil.CapturedIssues(captured, len(issues))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr(op, err)
+	}
+	out := make([]Output, len(issues))
+	for i, issue := range issues {
+		out[i] = ToOutput(issue, extras[i])
+	}
+	return ListOutput{Issues: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+}
+
+// ToBasicOutputs converts a page of issues as API::Entities::IssueBasic
+// renders them, one extra per issue in order. It is what a package outside
+// this one calls when its own route presents the basic entity rather than the
+// full issue: the merge request's closed and related issues, and search.
+func ToBasicOutputs(list []*gl.Issue, captured *gitlabclient.ResponseCapture) ([]BasicOutput, error) {
+	extras, err := toolutil.CapturedIssueBasics(captured, len(list))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]BasicOutput, len(list))
+	for i, issue := range list {
+		out[i] = ToBasicOutput(issue, extras[i])
+	}
+	return out, nil
+}
+
+// ToOutput converts an issue as the issues API renders it: everything
+// [ToBasicOutput] carries plus what only API::Entities::Issue adds.
+func ToOutput(issue *gl.Issue, extra toolutil.IssueExtra) Output {
+	out := Output{BasicOutput: ToBasicOutput(issue, extra.IssueBasicExtra)}
+	out.HealthStatus = issue.HealthStatus
+	out.References = toolutil.NewReferencesOutput(issue.References)
 	out.Subscribed = issue.Subscribed
 	out.MovedToID = issue.MovedToID
 	out.EpicIssueID = issue.EpicIssueID
-	out.ExternalID = issue.ExternalID
 	out.ServiceDeskReplyTo = issue.ServiceDeskReplyTo
 	out.Epic = toolutil.NewEpicOutput(issue.Epic)
-	out.LabelDetails = toolutil.NewLabelDetailsOutputs(issue.LabelDetails)
 	out.Iteration = toolutil.NewIterationOutputFromGroupIteration(issue.Iteration)
 	out.Links = toolutil.NewIssueLinksOutput(issue.Links)
-	out.TimeStats = timeStatsPtr(issue.TimeStats)
-	out.TaskCompletionStatus = toolutil.NewTaskCompletionStatusOutput(issue.TaskCompletionStatus)
+	out.EpicIID = extra.EpicIID
+	out.HasTasks = extra.HasTasks
+	out.Imported = extra.Imported
+	out.ImportedFrom = extra.ImportedFrom
+	out.Severity = extra.Severity
+	out.TaskStatus = extra.TaskStatus
 	return out
 }
 
@@ -310,6 +393,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		return Output{}, err
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	issue, _, err := client.GL().Issues.CreateIssue(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
@@ -322,7 +406,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		}
 		return Output{}, toolutil.WrapErrWithMessage("issueCreate", err)
 	}
-	return ToOutput(issue), nil
+	return issueOutput("issueCreate", issue, captured)
 }
 
 // buildCreateOpts maps CreateInput fields to the GitLab API create options.
@@ -398,6 +482,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.IssueIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("issueGet", "issue_iid")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	issue, _, err := client.GL().Issues.GetIssue(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
@@ -406,7 +491,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		}
 		return Output{}, toolutil.WrapErrWithMessage("issueGet", err)
 	}
-	return ToOutput(issue), nil
+	return issueOutput("issueGet", issue, captured)
 }
 
 // optStr returns a pointer to s, or nil when s is empty, so optional string
@@ -497,16 +582,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		UpdatedBefore:       toolutil.ParseOptionalTime(input.UpdatedBefore),
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	issues, resp, err := client.GL().Issues.ListProjectIssues(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("issueList", err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get. Issues must be enabled in project settings")
 	}
-	out := make([]Output, len(issues))
-	for i, issue := range issues {
-		out[i] = ToOutput(issue)
-	}
-	return ListOutput{Issues: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return issueListOutput("issueList", issues, resp, captured)
 }
 
 // buildUpdateOpts maps UpdateInput fields to the GitLab API update
@@ -584,6 +666,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if err != nil {
 		return Output{}, err
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	issue, _, err := client.GL().Issues.UpdateIssue(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
@@ -592,7 +675,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		}
 		return Output{}, toolutil.WrapErrWithMessage("issueUpdate", err)
 	}
-	return ToOutput(issue), nil
+	return issueOutput("issueUpdate", issue, captured)
 }
 
 // Delete permanently removes an issue from a GitLab project.
@@ -673,17 +756,18 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	issues, resp, err := client.GL().Issues.ListGroupIssues(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListGroupOutput{}, toolutil.WrapErrWithStatusHint("issueListGroup", err, http.StatusNotFound,
 			"verify the group exists with gitlab_group_get. Use full_path or numeric ID")
 	}
 
-	out := make([]Output, len(issues))
-	for i, issue := range issues {
-		out[i] = ToOutput(issue)
+	page, err := issueListOutput("issueListGroup", issues, resp, captured)
+	if err != nil {
+		return ListGroupOutput{}, err
 	}
-	return ListGroupOutput{Issues: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return ListGroupOutput{Issues: page.Issues, Pagination: page.Pagination}, nil
 }
 
 // ListAllInput defines parameters for the global ListIssues endpoint (no project scope).
@@ -767,17 +851,14 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	result, resp, err := client.GL().Issues.ListIssues(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("issueListAll", err, http.StatusUnauthorized,
 			"global issue listing requires an authenticated token; results are scoped to issues visible to the calling user (use scope=created_by_me or scope=assigned_to_me to narrow)")
 	}
 
-	out := make([]Output, len(result))
-	for i, issue := range result {
-		out[i] = ToOutput(issue)
-	}
-	return ListOutput{Issues: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return issueListOutput("issueListAll", result, resp, captured)
 }
 
 // GetByIDInput defines parameters for retrieving an issue by its global ID.
@@ -793,12 +874,13 @@ func GetByID(ctx context.Context, client *gitlabclient.Client, input GetByIDInpu
 	if input.IssueID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("issueGetByID", "issue_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	issue, _, err := client.GL().Issues.GetIssueByID(input.IssueID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("issueGetByID", err, http.StatusNotFound,
 			"issue_id is the global database ID, not the project-scoped iid; for iid lookups use gitlab_issue_get with project_id+issue_iid")
 	}
-	return ToOutput(issue), nil
+	return issueOutput("issueGetByID", issue, captured)
 }
 
 // ReorderInput defines parameters for reordering an issue.
@@ -824,6 +906,7 @@ func Reorder(ctx context.Context, client *gitlabclient.Client, input ReorderInpu
 		MoveAfterID:  input.MoveAfterID,
 		MoveBeforeID: input.MoveBeforeID,
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	issue, _, err := client.GL().Issues.ReorderIssue(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
@@ -833,7 +916,7 @@ func Reorder(ctx context.Context, client *gitlabclient.Client, input ReorderInpu
 		return Output{}, toolutil.WrapErrWithStatusHint("issueReorder", err, http.StatusNotFound,
 			hintVerifyIssue)
 	}
-	return ToOutput(issue), nil
+	return issueOutput("issueReorder", issue, captured)
 }
 
 // MoveInput defines parameters for moving an issue to another project.
@@ -860,6 +943,7 @@ func Move(ctx context.Context, client *gitlabclient.Client, input MoveInput) (Ou
 	opts := &gl.MoveIssueOptions{
 		ToProjectID: new(input.ToProjectID),
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	issue, _, err := client.GL().Issues.MoveIssue(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
@@ -868,7 +952,7 @@ func Move(ctx context.Context, client *gitlabclient.Client, input MoveInput) (Ou
 		}
 		return Output{}, toolutil.WrapErrWithMessage("issueMove", err)
 	}
-	return ToOutput(issue), nil
+	return issueOutput("issueMove", issue, captured)
 }
 
 // SubscribeInput defines parameters for subscribing to an issue.
@@ -880,7 +964,7 @@ type SubscribeInput struct {
 // Subscribe subscribes the authenticated user to an issue for notifications.
 func Subscribe(ctx context.Context, client *gitlabclient.Client, input SubscribeInput) (Output, error) {
 	return changeIssueSubscription(ctx, client, input.ProjectID, input.IssueIID, "issueSubscribe",
-		func(projectID string, issueIID int64) (*gl.Issue, *gl.Response, error) {
+		func(ctx context.Context, projectID string, issueIID int64) (*gl.Issue, *gl.Response, error) {
 			return client.GL().Issues.SubscribeToIssue(projectID, issueIID, gl.WithContext(ctx))
 		})
 }
@@ -894,7 +978,7 @@ type UnsubscribeInput struct {
 // Unsubscribe removes the authenticated user's subscription from an issue.
 func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input UnsubscribeInput) (Output, error) {
 	return changeIssueSubscription(ctx, client, input.ProjectID, input.IssueIID, "issueUnsubscribe",
-		func(projectID string, issueIID int64) (*gl.Issue, *gl.Response, error) {
+		func(ctx context.Context, projectID string, issueIID int64) (*gl.Issue, *gl.Response, error) {
 			return client.GL().Issues.UnsubscribeFromIssue(projectID, issueIID, gl.WithContext(ctx))
 		})
 }
@@ -903,7 +987,11 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input Unsubsc
 // and [Unsubscribe]. It calls the provided change function (which performs
 // the subscribe or unsubscribe API call) and falls back to a fresh [Get]
 // when GitLab returns io.EOF or 304 Not Modified (no change occurred).
-func changeIssueSubscription(ctx context.Context, client *gitlabclient.Client, projectID toolutil.StringOrInt, issueIID int64, operation string, change func(string, int64) (*gl.Issue, *gl.Response, error)) (Output, error) {
+func changeIssueSubscription(ctx context.Context, client *gitlabclient.Client, projectID toolutil.StringOrInt, issueIID int64, operation string, change func(context.Context, string, int64) (*gl.Issue, *gl.Response, error)) (Output, error) {
+	// The capture is installed here rather than in the two callers so the
+	// closure they pass runs under it: it is what carries the fields the SDK
+	// does not model.
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
@@ -913,7 +1001,7 @@ func changeIssueSubscription(ctx context.Context, client *gitlabclient.Client, p
 	if issueIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64(operation, "issue_iid")
 	}
-	issue, _, err := change(string(projectID), issueIID)
+	issue, _, err := change(ctx, string(projectID), issueIID)
 	if err != nil {
 		if errors.Is(err, io.EOF) || toolutil.IsHTTPStatus(err, http.StatusNotModified) {
 			return Get(ctx, client, GetInput{ProjectID: projectID, IssueIID: issueIID})
@@ -923,7 +1011,7 @@ func changeIssueSubscription(ctx context.Context, client *gitlabclient.Client, p
 		}
 		return Output{}, toolutil.WrapErrWithMessage(operation, err)
 	}
-	return ToOutput(issue), nil
+	return issueOutput(operation, issue, captured)
 }
 
 // CreateTodoInput defines parameters for creating a to-do for an issue.

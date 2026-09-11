@@ -64,50 +64,87 @@ type Output struct {
 	LFSEnabled            bool   `json:"lfs_enabled"`
 	SharedRunnersSetting  string `json:"shared_runners_setting,omitempty"`
 	// Fields added in client-go v2.41.0.
-	Archived                             bool   `json:"archived"`
-	PreventSharingGroupsOutsideHierarchy bool   `json:"prevent_sharing_groups_outside_hierarchy"`
-	EnabledGitAccessProtocol             string `json:"enabled_git_access_protocol,omitempty"`
-	MathRenderingLimitsEnabled           bool   `json:"math_rendering_limits_enabled"`
-	LockMathRenderingLimitsEnabled       bool   `json:"lock_math_rendering_limits_enabled"`
-	DuoAvailability                      string `json:"duo_availability,omitempty" tier:"premium"`
-	DuoFeaturesEnabled                   bool   `json:"duo_features_enabled" tier:"premium"`
-	LockDuoFeaturesEnabled               bool   `json:"lock_duo_features_enabled" tier:"premium"`
-	ExperimentFeaturesEnabled            bool   `json:"experiment_features_enabled" tier:"premium"`
+	Archived                       bool   `json:"archived"`
+	MathRenderingLimitsEnabled     bool   `json:"math_rendering_limits_enabled"`
+	LockMathRenderingLimitsEnabled bool   `json:"lock_math_rendering_limits_enabled"`
+	DuoAvailability                string `json:"duo_availability,omitempty" tier:"premium"`
+	DuoFeaturesEnabled             bool   `json:"duo_features_enabled" tier:"premium"`
+	LockDuoFeaturesEnabled         bool   `json:"lock_duo_features_enabled" tier:"premium"`
 	// Remaining gl.Group fields (1:1 audit).
-	MembershipLock                            bool                         `json:"membership_lock" tier:"premium"`
-	MaxArtifactsSize                          int64                        `json:"max_artifacts_size,omitempty"`
-	DefaultBranchProtectionDefaults           *BranchProtectionDefaults    `json:"default_branch_protection_defaults,omitempty"`
-	RepositoryStorage                         string                       `json:"repository_storage,omitempty" tier:"premium"`
-	FileTemplateProjectID                     int64                        `json:"file_template_project_id,omitempty" tier:"premium"`
-	Statistics                                *StatisticsOutput            `json:"statistics,omitempty"`
-	RootStorageStatistics                     *RootStorageStatisticsOutput `json:"root_storage_statistics,omitempty"`
-	CustomAttributes                          []CustomAttributeOutput      `json:"custom_attributes,omitempty"`
-	ShareWithGroupLock                        bool                         `json:"share_with_group_lock"`
-	RequireTwoFactorAuth                      bool                         `json:"require_two_factor_authentication"`
-	TwoFactorGracePeriod                      int64                        `json:"two_factor_grace_period,omitempty"`
-	AutoDevopsEnabled                         bool                         `json:"auto_devops_enabled"`
-	EmailsEnabled                             bool                         `json:"emails_enabled"`
-	EmailsDisabled                            bool                         `json:"emails_disabled"`
-	MentionsDisabled                          bool                         `json:"mentions_disabled"`
-	CRMEnabled                                bool                         `json:"crm_enabled" jsonschema:"Whether Customer Relations Management (CRM) is enabled for the group"`
-	RunnersToken                              string                       `json:"runners_token,omitempty"`
-	SharedWithGroups                          []SharedWithGroupOutput      `json:"shared_with_groups,omitempty"`
-	LDAPCN                                    string                       `json:"ldap_cn,omitempty" tier:"premium"`
-	LDAPAccess                                int                          `json:"ldap_access,omitempty" tier:"premium"`
-	LDAPGroupLinks                            []LDAPGroupLinkOutput        `json:"ldap_group_links,omitempty"`
-	SAMLGroupLinks                            []SAMLGroupLinkOutput        `json:"saml_group_links,omitempty"`
-	SharedRunnersMinutesLimit                 int64                        `json:"shared_runners_minutes_limit,omitempty" tier:"premium"`
-	ExtraSharedRunnersMinutesLimit            int64                        `json:"extra_shared_runners_minutes_limit,omitempty" tier:"premium"`
-	PreventForkingOutsideGroup                bool                         `json:"prevent_forking_outside_group" tier:"premium"`
-	IPRestrictionRanges                       string                       `json:"ip_restriction_ranges,omitempty" tier:"premium"`
-	AllowedEmailDomainsList                   string                       `json:"allowed_email_domains_list,omitempty" tier:"premium"`
-	WikiAccessLevel                           string                       `json:"wiki_access_level,omitempty" tier:"premium"`
-	OnlyAllowMergeIfPipelineSucceeds          bool                         `json:"only_allow_merge_if_pipeline_succeeds" tier:"premium"`
-	AllowMergeOnSkippedPipeline               bool                         `json:"allow_merge_on_skipped_pipeline" tier:"premium"`
-	OnlyAllowMergeIfAllDiscussionsAreResolved bool                         `json:"only_allow_merge_if_all_discussions_are_resolved" tier:"premium"`
-	DefaultBranchProtection                   int64                        `json:"default_branch_protection,omitempty"`
-	Projects                                  []ProjectItem                `json:"projects,omitempty"`
-	SharedProjects                            []ProjectItem                `json:"shared_projects,omitempty"`
+	MaxArtifactsSize                int64                        `json:"max_artifacts_size,omitempty"`
+	DefaultBranchProtectionDefaults *BranchProtectionDefaults    `json:"default_branch_protection_defaults,omitempty"`
+	RepositoryStorage               string                       `json:"repository_storage,omitempty" tier:"premium"`
+	FileTemplateProjectID           int64                        `json:"file_template_project_id,omitempty" tier:"premium"`
+	Statistics                      *StatisticsOutput            `json:"statistics,omitempty"`
+	RootStorageStatistics           *RootStorageStatisticsOutput `json:"root_storage_statistics,omitempty"`
+	CustomAttributes                []CustomAttributeOutput      `json:"custom_attributes,omitempty"`
+	ShareWithGroupLock              bool                         `json:"share_with_group_lock"`
+	RequireTwoFactorAuth            bool                         `json:"require_two_factor_authentication"`
+	TwoFactorGracePeriod            int64                        `json:"two_factor_grace_period,omitempty"`
+	AutoDevopsEnabled               bool                         `json:"auto_devops_enabled"`
+	EmailsEnabled                   bool                         `json:"emails_enabled"`
+	EmailsDisabled                  bool                         `json:"emails_disabled"`
+	MentionsDisabled                bool                         `json:"mentions_disabled"`
+	CRMEnabled                      bool                         `json:"crm_enabled" jsonschema:"Whether Customer Relations Management (CRM) is enabled for the group"`
+	LDAPCN                          string                       `json:"ldap_cn,omitempty" tier:"premium"`
+	LDAPAccess                      int                          `json:"ldap_access,omitempty" tier:"premium"`
+	LDAPGroupLinks                  []LDAPGroupLinkOutput        `json:"ldap_group_links,omitempty"`
+	SAMLGroupLinks                  []SAMLGroupLinkOutput        `json:"saml_group_links,omitempty"`
+	WikiAccessLevel                 string                       `json:"wiki_access_level,omitempty" tier:"premium"`
+	DefaultBranchProtection         int64                        `json:"default_branch_protection,omitempty"`
+	// What lib/api/entities/group.rb and its EE prepend send that client-go's
+	// Group does not model, read from the captured response (ADR-0021).
+	ShowDiffPreviewInEmail                 bool                                    `json:"show_diff_preview_in_email"`
+	ResourceAccessTokenNotifyInherited     *bool                                   `json:"resource_access_token_notify_inherited"`
+	LockResourceAccessTokenNotifyInherited bool                                    `json:"lock_resource_access_token_notify_inherited"`
+	DuoCoreFeaturesEnabled                 *bool                                   `json:"duo_core_features_enabled,omitempty" tier:"premium"`
+	AutoDuoCodeReviewEnabled               *bool                                   `json:"auto_duo_code_review_enabled,omitempty" tier:"premium"`
+	BuiltInProjectTemplatesEnabled         *bool                                   `json:"built_in_project_templates_enabled,omitempty" tier:"premium"`
+	LockBuiltInProjectTemplatesEnabled     *bool                                   `json:"lock_built_in_project_templates_enabled,omitempty" tier:"premium"`
+	DuoNamespaceAccessRules                []toolutil.DuoNamespaceAccessRuleOutput `json:"duo_namespace_access_rules,omitempty" tier:"premium"`
+	// GitLab.com only: ee/lib/gitlab/saas.rb gates both on Gitlab.com?, so a
+	// self-managed instance never sends either whatever its license.
+	WebBasedCommitSigningEnabled *bool `json:"web_based_commit_signing_enabled,omitempty" tier:"premium"`
+	AllowPersonalSnippets        *bool `json:"allow_personal_snippets,omitempty" tier:"premium"`
+}
+
+// DetailOutput is a group as every route that answers with one group renders
+// it: API::Entities::GroupDetail, which is the Group entity above plus
+// twenty-four keys a list row never carries.
+//
+// The split is not tidiness. Sixteen of those keys used to sit on [Output], so
+// every row of every group list declared a runners_token, an ip_restriction_ranges
+// and a shared_with_groups it could not be given. What a caller reads to decide
+// what is possible is the output schema, and that schema was promising fields
+// the route it belongs to does not send.
+type DetailOutput struct {
+	Output
+	PreventSharingGroupsOutsideHierarchy      bool                    `json:"prevent_sharing_groups_outside_hierarchy"`
+	EnabledGitAccessProtocol                  string                  `json:"enabled_git_access_protocol,omitempty"`
+	ExperimentFeaturesEnabled                 bool                    `json:"experiment_features_enabled" tier:"premium"`
+	MembershipLock                            bool                    `json:"membership_lock" tier:"premium"`
+	RunnersToken                              string                  `json:"runners_token,omitempty"`
+	SharedWithGroups                          []SharedWithGroupOutput `json:"shared_with_groups,omitempty"`
+	SharedRunnersMinutesLimit                 int64                   `json:"shared_runners_minutes_limit,omitempty" tier:"premium"`
+	ExtraSharedRunnersMinutesLimit            int64                   `json:"extra_shared_runners_minutes_limit,omitempty" tier:"premium"`
+	PreventForkingOutsideGroup                bool                    `json:"prevent_forking_outside_group" tier:"premium"`
+	IPRestrictionRanges                       string                  `json:"ip_restriction_ranges,omitempty" tier:"premium"`
+	AllowedEmailDomainsList                   string                  `json:"allowed_email_domains_list,omitempty" tier:"premium"`
+	OnlyAllowMergeIfPipelineSucceeds          bool                    `json:"only_allow_merge_if_pipeline_succeeds" tier:"premium"`
+	AllowMergeOnSkippedPipeline               bool                    `json:"allow_merge_on_skipped_pipeline" tier:"premium"`
+	OnlyAllowMergeIfAllDiscussionsAreResolved bool                    `json:"only_allow_merge_if_all_discussions_are_resolved" tier:"premium"`
+	Projects                                  []ProjectItem           `json:"projects,omitempty"`
+	SharedProjects                            []ProjectItem           `json:"shared_projects,omitempty"`
+	// What only lib/api/entities/group_detail.rb and its EE prepend add,
+	// read from the captured response (ADR-0021).
+	StepUpAuthRequiredOAuthProvider        string                     `json:"step_up_auth_required_oauth_provider,omitempty"`
+	ServiceAccessTokensExpirationEnforced  *bool                      `json:"service_access_tokens_expiration_enforced,omitempty" tier:"premium"`
+	AISettings                             *toolutil.AISettingsOutput `json:"ai_settings,omitempty" tier:"premium"`
+	UniqueProjectDownloadLimit             *int64                     `json:"unique_project_download_limit,omitempty" tier:"ultimate"`
+	UniqueProjectDownloadLimitIntervalSecs *int64                     `json:"unique_project_download_limit_interval_in_seconds,omitempty" tier:"ultimate"`
+	UniqueProjectDownloadLimitAllowlist    []string                   `json:"unique_project_download_limit_allowlist,omitempty" tier:"ultimate"`
+	UniqueProjectDownloadLimitAlertlist    []int64                    `json:"unique_project_download_limit_alertlist,omitempty" tier:"ultimate"`
+	AutoBanUserOnExcessiveProjectsDownload *bool                      `json:"auto_ban_user_on_excessive_projects_download,omitempty" tier:"ultimate"`
 }
 
 // StatisticsOutput mirrors gl.Statistics (the statistics object, returned when
@@ -313,7 +350,7 @@ type SubgroupsListInput struct {
 
 // ToOutput converts a GitLab API [gl.Group] to the MCP tool output
 // format, extracting identifier, path, visibility, and parent information.
-func ToOutput(g *gl.Group) Output {
+func ToOutput(g *gl.Group, extra toolutil.GroupExtra) Output {
 	out := Output{
 		ID:                    g.ID,
 		Name:                  g.Name,
@@ -340,15 +377,11 @@ func ToOutput(g *gl.Group) Output {
 	out.LFSEnabled = g.LFSEnabled
 	out.SharedRunnersSetting = string(g.SharedRunnersSetting)
 	out.Archived = g.Archived
-	out.PreventSharingGroupsOutsideHierarchy = g.PreventSharingGroupsOutsideHierarchy
-	out.EnabledGitAccessProtocol = string(g.EnabledGitAccessProtocol)
 	out.MathRenderingLimitsEnabled = g.MathRenderingLimitsEnabled
 	out.LockMathRenderingLimitsEnabled = g.LockMathRenderingLimitsEnabled
 	out.DuoAvailability = string(g.DuoAvailability)
 	out.DuoFeaturesEnabled = g.DuoFeaturesEnabled
 	out.LockDuoFeaturesEnabled = g.LockDuoFeaturesEnabled
-	out.ExperimentFeaturesEnabled = g.ExperimentFeaturesEnabled
-	out.MembershipLock = g.MembershipLock
 	out.MaxArtifactsSize = g.MaxArtifactsSize
 	out.RepositoryStorage = g.RepositoryStorage
 	out.FileTemplateProjectID = g.FileTemplateProjectID
@@ -360,28 +393,95 @@ func ToOutput(g *gl.Group) Output {
 	out.EmailsDisabled = g.EmailsDisabled //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
 	out.MentionsDisabled = g.MentionsDisabled
 	out.CRMEnabled = g.CRMEnabled
-	out.RunnersToken = g.RunnersToken
 	out.LDAPCN = g.LDAPCN
 	out.LDAPAccess = int(g.LDAPAccess)
-	out.SharedRunnersMinutesLimit = g.SharedRunnersMinutesLimit
-	out.ExtraSharedRunnersMinutesLimit = g.ExtraSharedRunnersMinutesLimit
-	out.PreventForkingOutsideGroup = g.PreventForkingOutsideGroup
-	out.IPRestrictionRanges = g.IPRestrictionRanges
-	out.AllowedEmailDomainsList = g.AllowedEmailDomainsList
 	out.WikiAccessLevel = string(g.WikiAccessLevel)
-	out.OnlyAllowMergeIfPipelineSucceeds = g.OnlyAllowMergeIfPipelineSucceeds
-	out.AllowMergeOnSkippedPipeline = g.AllowMergeOnSkippedPipeline
-	out.OnlyAllowMergeIfAllDiscussionsAreResolved = g.OnlyAllowMergeIfAllDiscussionsAreResolved
 	out.DefaultBranchProtection = g.DefaultBranchProtection //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
 	out.Statistics = statisticsOutput(g.Statistics)
 	out.RootStorageStatistics = rootStorageStatisticsOutput(g.RootStorageStatistics)
 	out.DefaultBranchProtectionDefaults = branchProtectionDefaultsOutput(g.DefaultBranchProtectionDefaults)
 	out.CustomAttributes = customAttributesOutput(g.CustomAttributes)
-	out.SharedWithGroups = sharedWithGroupsOutput(g.SharedWithGroups)
 	out.LDAPGroupLinks = ldapGroupLinksOutput(g.LDAPGroupLinks)
 	out.SAMLGroupLinks = samlGroupLinksOutput(g.SAMLGroupLinks)
-	out.Projects = projectItemsFromGroup(g.Projects)             //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
-	out.SharedProjects = projectItemsFromGroup(g.SharedProjects) //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
+	out.ShowDiffPreviewInEmail = extra.ShowDiffPreviewInEmail
+	out.ResourceAccessTokenNotifyInherited = extra.ResourceAccessTokenNotifyInherited
+	out.LockResourceAccessTokenNotifyInherited = extra.LockResourceAccessTokenNotifyInherited
+	out.DuoCoreFeaturesEnabled = extra.DuoCoreFeaturesEnabled
+	out.AutoDuoCodeReviewEnabled = extra.AutoDuoCodeReviewEnabled
+	out.BuiltInProjectTemplatesEnabled = extra.BuiltInProjectTemplatesEnabled
+	out.LockBuiltInProjectTemplatesEnabled = extra.LockBuiltInProjectTemplatesEnabled
+	out.DuoNamespaceAccessRules = extra.DuoNamespaceAccessRules
+	out.WebBasedCommitSigningEnabled = extra.WebBasedCommitSigningEnabled
+	out.AllowPersonalSnippets = extra.AllowPersonalSnippets
+	return out
+}
+
+// groupListOutput finishes a handler that answers with a page of groups: it
+// reads the fields client-go does not model off the captured answer and pairs
+// them with what the SDK decoded, one extra per group in order.
+//
+// The five list handlers ended with the same twelve lines once the capture was
+// threaded through them, which dupl reported as three copies of one block.
+// This is that block, named.
+func groupListOutput(op string, groups []*gl.Group, resp *gl.Response, captured *gitlabclient.ResponseCapture) (ListOutput, error) {
+	extras, err := toolutil.CapturedGroups(captured, len(groups))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErr(op, err)
+	}
+	out := ListOutput{
+		Groups:     make([]Output, len(groups)),
+		Pagination: toolutil.PaginationFromResponse(resp),
+	}
+	for i, g := range groups {
+		out.Groups[i] = ToOutput(g, extras[i])
+	}
+	return out, nil
+}
+
+// groupDetail finishes a handler that answers with one group: it reads the
+// detail-only fields off the captured answer and pairs them with what the SDK
+// decoded.
+//
+// It exists as one statement rather than four at each call site because seven
+// handlers end this way, and inlining the error branch pushed Create past the
+// complexity bound for no gain in clarity.
+func groupDetail(op string, g *gl.Group, captured *gitlabclient.ResponseCapture) (DetailOutput, error) {
+	extra, err := toolutil.CapturedGroup(captured)
+	if err != nil {
+		return DetailOutput{}, toolutil.WrapErr(op, err)
+	}
+	return ToDetailOutput(g, extra), nil
+}
+
+// ToDetailOutput converts a group as a route that answers with one group
+// renders it: everything [ToOutput] carries plus what only
+// API::Entities::GroupDetail adds.
+func ToDetailOutput(g *gl.Group, extra toolutil.GroupDetailExtra) DetailOutput {
+	out := DetailOutput{Output: ToOutput(g, extra.GroupExtra)}
+	out.PreventSharingGroupsOutsideHierarchy = g.PreventSharingGroupsOutsideHierarchy
+	out.EnabledGitAccessProtocol = string(g.EnabledGitAccessProtocol)
+	out.ExperimentFeaturesEnabled = g.ExperimentFeaturesEnabled
+	out.MembershipLock = g.MembershipLock
+	out.RunnersToken = g.RunnersToken
+	out.SharedRunnersMinutesLimit = g.SharedRunnersMinutesLimit
+	out.ExtraSharedRunnersMinutesLimit = g.ExtraSharedRunnersMinutesLimit
+	out.PreventForkingOutsideGroup = g.PreventForkingOutsideGroup
+	out.IPRestrictionRanges = g.IPRestrictionRanges
+	out.AllowedEmailDomainsList = g.AllowedEmailDomainsList
+	out.OnlyAllowMergeIfPipelineSucceeds = g.OnlyAllowMergeIfPipelineSucceeds
+	out.AllowMergeOnSkippedPipeline = g.AllowMergeOnSkippedPipeline
+	out.OnlyAllowMergeIfAllDiscussionsAreResolved = g.OnlyAllowMergeIfAllDiscussionsAreResolved
+	out.SharedWithGroups = sharedWithGroupsOutput(g.SharedWithGroups)
+	out.Projects = projectItemsFromGroup(g.Projects, false)             //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
+	out.SharedProjects = projectItemsFromGroup(g.SharedProjects, false) //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
+	out.StepUpAuthRequiredOAuthProvider = extra.StepUpAuthRequiredOAuthProvider
+	out.ServiceAccessTokensExpirationEnforced = extra.ServiceAccessTokensExpirationEnforced
+	out.AISettings = extra.AISettings
+	out.UniqueProjectDownloadLimit = extra.UniqueProjectDownloadLimit
+	out.UniqueProjectDownloadLimitIntervalSecs = extra.UniqueProjectDownloadLimitIntervalSecs
+	out.UniqueProjectDownloadLimitAllowlist = extra.UniqueProjectDownloadLimitAllowlist
+	out.UniqueProjectDownloadLimitAlertlist = extra.UniqueProjectDownloadLimitAlertlist
+	out.AutoBanUserOnExcessiveProjectsDownload = extra.AutoBanUserOnExcessiveProjectsDownload
 	return out
 }
 
@@ -543,9 +643,12 @@ func samlGroupLinksOutput(links []*gl.SAMLGroupLink) []SAMLGroupLinkOutput {
 	return out
 }
 
-// projectItemsFromGroup maps the deprecated embedded gl.Project slices
-// (Group.Projects / Group.SharedProjects) into the local ProjectItem shape.
-func projectItemsFromGroup(projects []*gl.Project) []ProjectItem {
+// projectItemsFromGroup maps a page of gl.Project into the local ProjectItem
+// shape: the deprecated embedded slices (Group.Projects, Group.SharedProjects)
+// and the two group project lists. simple says GitLab rendered
+// BasicProjectDetails, which carries no archived flag, so the item leaves it
+// unset rather than claiming false.
+func projectItemsFromGroup(projects []*gl.Project, simple bool) []ProjectItem {
 	if len(projects) == 0 {
 		return nil
 	}
@@ -559,7 +662,9 @@ func projectItemsFromGroup(projects []*gl.Project) []ProjectItem {
 			Visibility:        string(p.Visibility),
 			WebURL:            p.WebURL,
 			DefaultBranch:     p.DefaultBranch,
-			Archived:          p.Archived,
+		}
+		if !simple {
+			out[i].Archived = new(p.Archived)
 		}
 		if p.CreatedAt != nil {
 			out[i].CreatedAt = p.CreatedAt.Format(time.RFC3339)
@@ -688,30 +793,24 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	opts := listGroupsOptions(input)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	groups, resp, err := client.GL().Groups.ListGroups(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("List", err, http.StatusUnauthorized,
 			"verify GITLAB_TOKEN is valid; non-authenticated requests only return public groups")
 	}
 
-	out := ListOutput{
-		Groups:     make([]Output, len(groups)),
-		Pagination: toolutil.PaginationFromResponse(resp),
-	}
-	for i, g := range groups {
-		out.Groups[i] = ToOutput(g)
-	}
-	return out, nil
+	return groupListOutput("List", groups, resp, captured)
 }
 
 // Get retrieves a single GitLab group by its ID or URL-encoded path.
 // Returns the group details or an error if the group is not found.
-func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
+func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (DetailOutput, error) {
 	if err := ctx.Err(); err != nil {
-		return Output{}, err
+		return DetailOutput{}, err
 	}
 	if input.GroupID == "" {
-		return Output{}, errors.New("Get: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
+		return DetailOutput{}, errors.New("Get: group_id is required. Use gitlab_group_list to find the ID first, then pass it as group_id")
 	}
 
 	opts := &gl.GetGroupOptions{}
@@ -729,12 +828,13 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		opts.WithProjects = input.WithProjects //nolint:staticcheck // SA1019: mirror deprecated SDK option for 1:1 API coverage
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	g, _, err := client.GL().Groups.GetGroup(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("Get", err, http.StatusNotFound,
+		return DetailOutput{}, toolutil.WrapErrWithStatusHint("Get", err, http.StatusNotFound,
 			"verify group_id (numeric ID or full path like 'group/subgroup'); URL-encode '/' as '%2F' when using paths")
 	}
-	return ToOutput(g), nil
+	return groupDetail("Get", g, captured)
 }
 
 // membersListOptions builds the ListAllGroupMembers options from the input,
@@ -810,20 +910,14 @@ func SubgroupsList(ctx context.Context, client *gitlabclient.Client, input Subgr
 
 	opts := subgroupsListOptions(input)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	groups, resp, err := client.GL().Groups.ListDescendantGroups(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("SubgroupsList", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get; subgroup listing returns descendants at all depths")
 	}
 
-	out := ListOutput{
-		Groups:     make([]Output, len(groups)),
-		Pagination: toolutil.PaginationFromResponse(resp),
-	}
-	for i, g := range groups {
-		out.Groups[i] = ToOutput(g)
-	}
-	return out, nil
+	return groupListOutput("SubgroupsList", groups, resp, captured)
 }
 
 // subgroupsListOptions builds the ListDescendantGroups options from the input,
@@ -1096,8 +1190,11 @@ type ProjectItem struct {
 	Visibility        string `json:"visibility"`
 	WebURL            string `json:"web_url"`
 	DefaultBranch     string `json:"default_branch,omitempty"`
-	Archived          bool   `json:"archived"`
-	CreatedAt         string `json:"created_at,omitempty"`
+	// Archived is a pointer because the two group project lists take simple,
+	// which makes GitLab render BasicProjectDetails, and that entity does not
+	// say whether a project is archived: nil there is no answer, not false.
+	Archived  *bool  `json:"archived,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
 }
 
 // ListProjectsOutput holds a paginated list of group projects.
@@ -1112,9 +1209,9 @@ type ListProjectsOutput struct {
 // ---------------------------------------------------------------------------.
 
 // Create creates a new GitLab group.
-func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
+func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (DetailOutput, error) {
 	if input.Name == "" {
-		return Output{}, errors.New("groupCreate: name is required")
+		return DetailOutput{}, errors.New("groupCreate: name is required")
 	}
 
 	opts := &gl.CreateGroupOptions{
@@ -1170,14 +1267,15 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	applyCreateGroupExtras(input, opts)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	g, _, err := client.GL().Groups.CreateGroup(opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("groupCreate", err, "creating groups requires Owner role on the parent namespace")
+			return DetailOutput{}, toolutil.WrapErrWithHint("groupCreate", err, "creating groups requires Owner role on the parent namespace")
 		}
-		return Output{}, toolutil.WrapErrWithMessage("groupCreate", err)
+		return DetailOutput{}, toolutil.WrapErrWithMessage("groupCreate", err)
 	}
-	return ToOutput(g), nil
+	return groupDetail("Create", g, captured)
 }
 
 // applyCreateGroupExtras copies the remaining optional CreateGroup settings
@@ -1216,9 +1314,9 @@ func applyCreateGroupExtras(input CreateInput, opts *gl.CreateGroupOptions) {
 }
 
 // Update modifies an existing GitLab group.
-func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (Output, error) {
+func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (DetailOutput, error) {
 	if input.GroupID == "" {
-		return Output{}, errors.New("groupUpdate: group_id is required")
+		return DetailOutput{}, errors.New("groupUpdate: group_id is required")
 	}
 
 	opts := &gl.UpdateGroupOptions{}
@@ -1255,14 +1353,15 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	applyUpdateGroupPointers(input, opts)
 	applyUpdateGroupEnums(input, opts)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	g, _, err := client.GL().Groups.UpdateGroup(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("groupUpdate", err, "group updates require Owner role on the group")
+			return DetailOutput{}, toolutil.WrapErrWithHint("groupUpdate", err, "group updates require Owner role on the group")
 		}
-		return Output{}, toolutil.WrapErrWithMessage("groupUpdate", err)
+		return DetailOutput{}, toolutil.WrapErrWithMessage("groupUpdate", err)
 	}
-	return ToOutput(g), nil
+	return groupDetail("Update", g, captured)
 }
 
 // applyUpdateGroupPointers copies the pointer-valued UpdateGroup settings
@@ -1363,21 +1462,22 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 }
 
 // Restore restores a group that was marked for deletion.
-func Restore(ctx context.Context, client *gitlabclient.Client, input RestoreInput) (Output, error) {
+func Restore(ctx context.Context, client *gitlabclient.Client, input RestoreInput) (DetailOutput, error) {
 	if input.GroupID == "" {
-		return Output{}, errors.New("groupRestore: group_id is required")
+		return DetailOutput{}, errors.New("groupRestore: group_id is required")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	g, _, err := client.GL().Groups.RestoreGroup(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("groupRestore", err,
+			return DetailOutput{}, toolutil.WrapErrWithHint("groupRestore", err,
 				"restoring groups requires Owner role; the group must be marked for deletion (within retention window) and not yet permanently removed")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("groupRestore", err, http.StatusNotFound,
+		return DetailOutput{}, toolutil.WrapErrWithStatusHint("groupRestore", err, http.StatusNotFound,
 			"the group is not marked for deletion or has already been permanently removed. Only soft-deleted groups can be restored")
 	}
-	return ToOutput(g), nil
+	return groupDetail("Restore", g, captured)
 }
 
 // Archive archives a GitLab group. Requires Owner role or administrator.
@@ -1418,44 +1518,40 @@ func Search(ctx context.Context, client *gitlabclient.Client, input SearchInput)
 		return ListOutput{}, errors.New("groupSearch: query is required")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	groups, _, err := client.GL().Groups.SearchGroup(input.Query, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("groupSearch", err, http.StatusUnauthorized,
 			"search returns groups visible to the authenticated user; pass a non-empty query string")
 	}
 
-	out := ListOutput{
-		Groups: make([]Output, len(groups)),
-	}
-	for i, g := range groups {
-		out.Groups[i] = ToOutput(g)
-	}
-	return out, nil
+	return groupListOutput("groupSearch", groups, nil, captured)
 }
 
 // TransferProject transfers a project into the group namespace.
-func TransferProject(ctx context.Context, client *gitlabclient.Client, input TransferInput) (Output, error) {
+func TransferProject(ctx context.Context, client *gitlabclient.Client, input TransferInput) (DetailOutput, error) {
 	if input.GroupID == "" {
-		return Output{}, errors.New("groupTransferProject: group_id is required")
+		return DetailOutput{}, errors.New("groupTransferProject: group_id is required")
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("groupTransferProject: project_id is required")
+		return DetailOutput{}, errors.New("groupTransferProject: project_id is required")
 	}
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	g, _, err := client.GL().Groups.TransferGroup(string(input.GroupID), string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return Output{}, toolutil.WrapErrWithHint("groupTransferProject", err,
+			return DetailOutput{}, toolutil.WrapErrWithHint("groupTransferProject", err,
 				"transferring projects requires Owner role on both source and target groups")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint("groupTransferProject", err,
+			return DetailOutput{}, toolutil.WrapErrWithHint("groupTransferProject", err,
 				"the project may already belong to this group, or the target group is incompatible (e.g. visibility mismatch, missing CI/CD setup)")
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("groupTransferProject", err, http.StatusNotFound,
+		return DetailOutput{}, toolutil.WrapErrWithStatusHint("groupTransferProject", err, http.StatusNotFound,
 			"verify both group_id and project_id with gitlab_group_get and gitlab_project_get")
 	}
-	return ToOutput(g), nil
+	return groupDetail("TransferProject", g, captured)
 }
 
 // ListProjects retrieves projects belonging to a group.
@@ -1524,7 +1620,7 @@ func ListProjects(ctx context.Context, client *gitlabclient.Client, input ListPr
 			"verify group_id with gitlab_group_get. Use include_subgroups=true to also list projects in descendant groups")
 	}
 
-	return ListProjectsOutput{Projects: projectItemsFromGroup(projects), Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return ListProjectsOutput{Projects: projectItemsFromGroup(projects, input.Simple), Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -1586,20 +1682,14 @@ func SharedWithList(ctx context.Context, client *gitlabclient.Client, input Shar
 
 	opts := sharedWithListOptions(input)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	groups, resp, err := client.GL().Groups.ListGroupsSharedWith(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("SharedWithList", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get; this lists groups shared *with* the target group (group-to-group shares)")
 	}
 
-	out := ListOutput{
-		Groups:     make([]Output, len(groups)),
-		Pagination: toolutil.PaginationFromResponse(resp),
-	}
-	for i, g := range groups {
-		out.Groups[i] = ToOutput(g)
-	}
-	return out, nil
+	return groupListOutput("SharedWithList", groups, resp, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -1657,20 +1747,14 @@ func InvitedList(ctx context.Context, client *gitlabclient.Client, input Invited
 
 	opts := invitedListOptions(input)
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	groups, resp, err := client.GL().Groups.ListInvitedGroups(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("InvitedList", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get; this lists groups invited to the target group")
 	}
 
-	out := ListOutput{
-		Groups:     make([]Output, len(groups)),
-		Pagination: toolutil.PaginationFromResponse(resp),
-	}
-	for i, g := range groups {
-		out.Groups[i] = ToOutput(g)
-	}
-	return out, nil
+	return groupListOutput("InvitedList", groups, resp, captured)
 }
 
 // ---------------------------------------------------------------------------

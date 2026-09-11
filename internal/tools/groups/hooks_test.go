@@ -15,6 +15,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const (
@@ -966,7 +967,7 @@ func TestHookToOutput_NilCustomHeaderElement(t *testing.T) {
 	out := hookToOutput(&gl.GroupHook{
 		ID:            1,
 		CustomHeaders: []*gl.HookCustomHeader{nil, {Key: "X-Real", Value: "secret"}},
-	})
+	}, toolutil.GroupHookExtra{})
 	if len(out.CustomHeaders) != 1 || out.CustomHeaders[0].Key != "X-Real" || out.CustomHeaders[0].Value != "" {
 		t.Errorf("nil custom header not skipped / value not redacted: %+v", out.CustomHeaders)
 	}
@@ -1052,7 +1053,7 @@ func TestHookToOutput_SecretCarryingListsAreEmptyWhenGitLabSendsNone(t *testing.
 		ID:            1,
 		URLVariables:  []gl.HookURLVariable{{Key: "env", Value: "prod"}},
 		CustomHeaders: []*gl.HookCustomHeader{{Key: "X-Env", Value: "prod"}},
-	})
+	}, toolutil.GroupHookExtra{})
 	if len(with.URLVariables) != 1 || with.URLVariables[0].Key != "env" || with.URLVariables[0].Value != "" {
 		t.Errorf("url_variables = %+v, want the key alone", with.URLVariables)
 	}
@@ -1060,7 +1061,7 @@ func TestHookToOutput_SecretCarryingListsAreEmptyWhenGitLabSendsNone(t *testing.
 		t.Errorf("custom_headers = %+v, want the key alone", with.CustomHeaders)
 	}
 
-	without := hookToOutput(&gl.GroupHook{ID: 1})
+	without := hookToOutput(&gl.GroupHook{ID: 1}, toolutil.GroupHookExtra{})
 	if without.URLVariables != nil || without.CustomHeaders != nil {
 		t.Errorf("output = %+v, want neither list", without)
 	}

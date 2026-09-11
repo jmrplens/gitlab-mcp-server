@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -439,18 +440,18 @@ type RightOutput struct {
 //
 // Pagination is set aside because it is framing this server adds, not
 // something GitLab sent, so a list plus its pagination is still a wrapper.
-func TestEnvelopePayload_TellsThePackagingFromTheContent(t *testing.T) {
+func TestEnvelopePayloads_TellsThePackagingFromTheContent(t *testing.T) {
 	t.Parallel()
 	for _, testCase := range []struct {
 		name       string
 		fields     []string
 		fieldTypes map[string]string
-		want       string
+		want       []string
 	}{
 		{
 			name:   "a get envelope",
 			fields: []string{"badge"}, fieldTypes: map[string]string{"badge": "BadgeItem"},
-			want: "BadgeItem",
+			want: []string{"BadgeItem"},
 		},
 		{
 			name:   "a list envelope beside its pagination",
@@ -458,7 +459,7 @@ func TestEnvelopePayload_TellsThePackagingFromTheContent(t *testing.T) {
 			fieldTypes: map[string]string{
 				"badges": "BadgeItem", "pagination": sharedPrefix + "PaginationOutput",
 			},
-			want: "BadgeItem",
+			want: []string{"BadgeItem"},
 		},
 		{
 			name:       "a response carrying a reference among its own fields",
@@ -471,9 +472,12 @@ func TestEnvelopePayload_TellsThePackagingFromTheContent(t *testing.T) {
 			fieldTypes: map[string]string{"badge": "BadgeItem"},
 		},
 		{
-			name:       "two objects, so neither is the payload",
+			// Both come back as candidates; whether they are packaging is
+			// resolveAlternatives' call, which refuses this pair.
+			name:       "two objects are candidates, not yet an answer",
 			fields:     []string{"group", "project"},
 			fieldTypes: map[string]string{"group": "GroupOutput", "project": "ProjectObject"},
+			want:       []string{"GroupOutput", "ProjectObject"},
 		},
 		{
 			name:       "nothing but pagination",
@@ -484,9 +488,58 @@ func TestEnvelopePayload_TellsThePackagingFromTheContent(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			if got := envelopePayload(testCase.fields, testCase.fieldTypes); got != testCase.want {
-				t.Errorf("envelopePayload() = %q, want %q", got, testCase.want)
+			if got := envelopePayloads(testCase.fields, testCase.fieldTypes); !slices.Equal(got, testCase.want) {
+				t.Errorf("envelopePayloads() = %q, want %q", got, testCase.want)
 			}
 		})
+	}
+}
+
+// TestResolveAlternatives_OnlyShapesOfOneEntityAreTheResponse verifies the
+// second half of the envelope rule. A list that keeps two shapes of one
+// entity apart, the narrow one embedded in the wide one, wraps both, and both
+// are judged as responses; a struct carrying two unrelated objects wraps
+// neither, because each is a reference and neither is what the endpoint sent.
+func TestResolveAlternatives_OnlyShapesOfOneEntityAreTheResponse(t *testing.T) {
+	t.Parallel()
+	parsed := parsedPackage{
+		enveloped: map[string]bool{},
+		structs: []declaredStruct{
+			{Name: "BasicOutput", Fields: []string{"id"}},
+			{Name: "Output", Fields: []string{"archived"}, Embeds: []string{"BasicOutput"}},
+			{Name: "GroupOutput", Fields: []string{"id"}},
+			{Name: "ProjectObject", Fields: []string{"id"}},
+			// A chain whose middle link is not a payload: the wide shape
+			// embeds a type that embeds the narrow one.
+			{Name: "DetailOutput", Fields: []string{"runners_token"}, Embeds: []string{"RowOutput"}},
+			{Name: "RowOutput", Fields: []string{"path"}, Embeds: []string{"CoreOutput"}},
+			{Name: "CoreOutput", Fields: []string{"id"}},
+			{Name: "UserOutput", Fields: []string{"id"}},
+		},
+		alternatives: [][]string{
+			{"Output", "BasicOutput"},
+			{"GroupOutput", "ProjectObject"},
+			{"DetailOutput", "CoreOutput"},
+			// A before and an after: one type named twice is two
+			// references, not two shapes.
+			{"UserOutput", "UserOutput"},
+		},
+	}
+	resolveAlternatives(&parsed)
+	for name, want := range map[string]bool{
+		"Output": true, "BasicOutput": true,
+		"GroupOutput": false, "ProjectObject": false,
+		"DetailOutput": true, "CoreOutput": true, "RowOutput": false,
+		"UserOutput": false,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got := parsed.enveloped[name]; got != want {
+				t.Errorf("enveloped[%s] = %v, want %v: shapes of one entity are the response, unrelated objects are references", name, got, want)
+			}
+		})
+	}
+	if oneFamily(nil, func(string, string) bool { return true }) {
+		t.Error("an empty set was reported as one family")
 	}
 }

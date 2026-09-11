@@ -1369,7 +1369,7 @@ func TestFormatIssuesMarkdown_Empty(t *testing.T) {
 // TestFormatIssuesMarkdown_WithResults verifies FormatIssuesMarkdown when with results.
 func TestFormatIssuesMarkdown_WithResults(t *testing.T) {
 	s := FormatIssuesMarkdown(IssuesOutput{
-		Issues:     []issues.Output{{IID: 3, Title: "Fix login", State: "opened", Author: &toolutil.IssueUserOutput{Username: "dev1"}, Labels: []string{"bug", "critical"}}},
+		Issues:     []issues.BasicOutput{{IID: 3, Title: "Fix login", State: "opened", Author: &toolutil.IssueUserOutput{Username: "dev1"}, Labels: []string{"bug", "critical"}}},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
 	})
 	if !strings.Contains(s, "#3") {
@@ -1490,7 +1490,7 @@ func TestFormatProjectsMarkdown_Empty(t *testing.T) {
 // TestFormatProjectsMarkdown_WithResults verifies FormatProjectsMarkdown when with results.
 func TestFormatProjectsMarkdown_WithResults(t *testing.T) {
 	s := FormatProjectsMarkdown(ProjectsOutput{
-		Projects:   []projects.Output{{Name: "my-project", PathWithNamespace: "user/my-project", Visibility: "private", DefaultBranch: "main"}},
+		Projects:   []projects.BasicOutput{{Name: "my-project", PathWithNamespace: "user/my-project", Visibility: "private", DefaultBranch: "main"}},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
 	})
 	if !strings.Contains(s, "user/my-project") {
@@ -2515,5 +2515,27 @@ func TestSearchActionSpecs_MetaTags_ReachTheSpec(t *testing.T) {
 		if !slices.Contains(found.Tags, tag) {
 			t.Errorf("spec tags = %v, want them to carry %q from the metadata table", found.Tags, tag)
 		}
+	}
+}
+
+// TestIssues_ReadsTheBasicIssueKeysOffTheCapture verifies the issue search
+// answers with the basic issue entity, its three keys client-go does not
+// model read from the captured page, and that a page those keys do not decode
+// from is an error rather than rows with the keys dropped.
+func TestIssues_ReadsTheBasicIssueKeysOffTheCapture(t *testing.T) {
+	serve := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	out, err := Issues(context.Background(), serve(`[{"id":1,"iid":3,"title":"t","type":"INCIDENT"}]`), IssuesInput{Query: "t"})
+	if err != nil {
+		t.Fatalf("Issues() error = %v", err)
+	}
+	if len(out.Issues) != 1 || out.Issues[0].Type != "INCIDENT" {
+		t.Errorf("issues = %+v, want the captured type on the row", out.Issues)
+	}
+	if _, err = Issues(context.Background(), serve(`[{"id":1,"iid":3,"type":9}]`), IssuesInput{Query: "t"}); err == nil {
+		t.Error("Issues() succeeded on a page whose type is not a string")
 	}
 }

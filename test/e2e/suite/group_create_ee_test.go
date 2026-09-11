@@ -52,7 +52,7 @@ func TestIndividual_GroupCreateUltimateFields(t *testing.T) {
 		}
 	})
 
-	created, err := callToolOn[groups.Output](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
+	created, err := callToolOn[groups.DetailOutput](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
 		Name:                       path,
 		Path:                       path,
 		Visibility:                 "private",

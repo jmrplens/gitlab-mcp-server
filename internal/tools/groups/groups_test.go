@@ -2650,8 +2650,8 @@ func TestFormatMemberListMarkdown_Empty(t *testing.T) {
 func TestFormatListProjectsMarkdown_WithData(t *testing.T) {
 	out := ListProjectsOutput{
 		Projects: []ProjectItem{
-			{ID: 42, Name: "my-project", PathWithNamespace: "org/infra/my-project", Visibility: "private", Archived: false},
-			{ID: 43, Name: "old-project", PathWithNamespace: "org/infra/old-project", Visibility: "public", Archived: true},
+			{ID: 42, Name: "my-project", PathWithNamespace: "org/infra/my-project", Visibility: "private", Archived: new(false)},
+			{ID: 43, Name: "old-project", PathWithNamespace: "org/infra/old-project", Visibility: "public", Archived: new(true)},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -3179,9 +3179,11 @@ func TestActionSpecs_GroupGetRoute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Route.Handler error: %v", err)
 	}
-	out, ok := result.(Output)
+	// group.get answers with the detail shape: GET /groups/:id renders
+	// API::Entities::GroupDetail, not the Group entity the lists render.
+	out, ok := result.(DetailOutput)
 	if !ok {
-		t.Fatalf("result type = %T, want Output", result)
+		t.Fatalf("result type = %T, want DetailOutput", result)
 	}
 	if out.ID != 10 || out.Name != "G" {
 		t.Fatalf("group output = %#v, want ID 10 name G", out)
@@ -3258,7 +3260,7 @@ func TestToOutput_FullNestedObjects(t *testing.T) {
 
 // assertGroupScalarFields checks the additive scalar gl.Group fields surfaced by
 // ToOutput, comparing each against the fullGroupJSON fixture via a table.
-func assertGroupScalarFields(t *testing.T, out Output) {
+func assertGroupScalarFields(t *testing.T, out DetailOutput) {
 	t.Helper()
 	cases := []struct {
 		name string
@@ -3298,7 +3300,7 @@ func assertGroupScalarFields(t *testing.T, out Output) {
 
 // assertGroupNestedObjects checks the singular nested sub-objects (statistics
 // and default_branch_protection_defaults) surfaced by ToOutput.
-func assertGroupNestedObjects(t *testing.T, out Output) {
+func assertGroupNestedObjects(t *testing.T, out DetailOutput) {
 	t.Helper()
 	if out.Statistics == nil || out.Statistics.CommitCount != 12 || out.Statistics.ContainerRegistrySize != 9 {
 		t.Errorf("Statistics not mapped: %+v", out.Statistics)
@@ -3318,7 +3320,7 @@ func assertGroupNestedObjects(t *testing.T, out Output) {
 
 // assertGroupRootStorageStatistics checks every root_storage_statistics field
 // surfaced by ToOutput against the fullGroupJSON fixture (1:1 SDK mirror).
-func assertGroupRootStorageStatistics(t *testing.T, out Output) {
+func assertGroupRootStorageStatistics(t *testing.T, out DetailOutput) {
 	t.Helper()
 	r := out.RootStorageStatistics
 	if r == nil {
@@ -3353,7 +3355,7 @@ func assertGroupRootStorageStatistics(t *testing.T, out Output) {
 
 // assertGroupNestedLists checks the link/attribute nested-slice sub-objects
 // surfaced by ToOutput (custom attributes, shares, LDAP/SAML links).
-func assertGroupNestedLists(t *testing.T, out Output) {
+func assertGroupNestedLists(t *testing.T, out DetailOutput) {
 	t.Helper()
 	if len(out.CustomAttributes) != 1 || out.CustomAttributes[0].Key != "team" || out.CustomAttributes[0].Value != "platform" {
 		t.Errorf("CustomAttributes not mapped: %+v", out.CustomAttributes)
@@ -3372,7 +3374,7 @@ func assertGroupNestedLists(t *testing.T, out Output) {
 
 // assertGroupEmbeddedProjects checks the deprecated embedded projects and
 // shared_projects slices surfaced by ToOutput.
-func assertGroupEmbeddedProjects(t *testing.T, out Output) {
+func assertGroupEmbeddedProjects(t *testing.T, out DetailOutput) {
 	t.Helper()
 	if len(out.Projects) != 1 || out.Projects[0].ID != 1 || out.Projects[0].CreatedAt == "" {
 		t.Errorf("Projects not mapped: %+v", out.Projects)
@@ -3385,7 +3387,7 @@ func assertGroupEmbeddedProjects(t *testing.T, out Output) {
 // TestToOutput_NilNestedObjects verifies the nested-object converters return nil
 // for absent sub-objects, so omitempty drops them from the output.
 func TestToOutput_NilNestedObjects(t *testing.T) {
-	out := ToOutput(&gl.Group{ID: 1, Name: "x"})
+	out := ToDetailOutput(&gl.Group{ID: 1, Name: "x"}, toolutil.GroupDetailExtra{})
 	if out.Statistics != nil || out.RootStorageStatistics != nil || out.DefaultBranchProtectionDefaults != nil {
 		t.Errorf("expected nil nested objects, got %+v", out)
 	}
@@ -3409,7 +3411,7 @@ func TestToOutput_NilSliceElements(t *testing.T) {
 			AllowedToPush: []*gl.GroupAccessLevel{nil, {AccessLevel: nil}},
 		},
 	}
-	out := ToOutput(g)
+	out := ToDetailOutput(g, toolutil.GroupDetailExtra{})
 	if len(out.CustomAttributes) != 0 || len(out.LDAPGroupLinks) != 0 || len(out.SAMLGroupLinks) != 0 {
 		t.Errorf("nil elements should be skipped: %+v", out)
 	}
@@ -4255,6 +4257,44 @@ func TestUpdate_NewOptions(t *testing.T) {
 		t.Run(field, func(t *testing.T) {
 			if !strings.Contains(body, field) {
 				t.Errorf("expected %s in request body, got: %s", field, body)
+			}
+		})
+	}
+}
+
+// TestGroupHandlers_ACaptureThatDoesNotDecode_IsAnError verifies the group and
+// hook handlers that read keys client-go does not model off the captured
+// answer fail when one of those keys arrives in a shape the extra cannot
+// hold, instead of answering with the SDK's half alone.
+func TestGroupHandlers_ACaptureThatDoesNotDecode_IsAnError(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		body string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"get", `{"id":1,"name":"g","allow_personal_snippets":"sometimes"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{GroupID: "1"})
+			return err
+		}},
+		{"list", `[{"id":1,"name":"g","show_diff_preview_in_email":"sometimes"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{})
+			return err
+		}},
+		{"hook", `{"id":2,"url":"https://hook","repository_update_events":"sometimes"}`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetHook(ctx, c, GetHookInput{GroupID: "1", HookID: 2})
+			return err
+		}},
+		{"hooks", `[{"id":2,"url":"https://hook","repository_update_events":"sometimes"}]`, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListHooks(ctx, c, ListHooksInput{GroupID: "1"})
+			return err
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, testCase.body)
+			}))
+			if err := testCase.call(t.Context(), client); err == nil {
+				t.Error("handler succeeded on a captured answer its extra cannot hold")
 			}
 		})
 	}

@@ -50,7 +50,7 @@ func TestIndividual_Groups(t *testing.T) {
 	})
 
 	t.Run("Create", func(t *testing.T) {
-		out, err := callToolOn[groups.Output](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
+		out, err := callToolOn[groups.DetailOutput](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
 			Name:       groupPath,
 			Path:       groupPath,
 			Visibility: "public",
@@ -74,7 +74,7 @@ func TestIndividual_Groups(t *testing.T) {
 	t.Run("Get", func(t *testing.T) {
 		requireTruef(t, groupID > 0, "groupID not set")
 		gid := strconv.FormatInt(groupID, 10)
-		out, err := callToolOn[groups.Output](ctx, sess.individual, "gitlab_group_get", groups.GetInput{
+		out, err := callToolOn[groups.DetailOutput](ctx, sess.individual, "gitlab_group_get", groups.GetInput{
 			GroupID: toolutil.StringOrInt(gid),
 		})
 		requireNoError(t, err, "group get")
@@ -193,7 +193,7 @@ func TestIndividual_GroupNewV241Fields(t *testing.T) {
 		}
 	})
 
-	created, err := callToolOn[groups.Output](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
+	created, err := callToolOn[groups.DetailOutput](ctx, sess.individual, "gitlab_group_create", groups.CreateInput{
 		Name:                       path,
 		Path:                       path,
 		Visibility:                 "public",
@@ -204,7 +204,7 @@ func TestIndividual_GroupNewV241Fields(t *testing.T) {
 	requireTruef(t, created.ID > 0, "created group ID should be positive")
 	groupID = created.ID
 
-	got, err := callToolOn[groups.Output](ctx, sess.individual, "gitlab_group_get", groups.GetInput{
+	got, err := callToolOn[groups.DetailOutput](ctx, sess.individual, "gitlab_group_get", groups.GetInput{
 		GroupID: toolutil.StringOrInt(strconv.FormatInt(groupID, 10)),
 	})
 	requireNoError(t, err, "group get after create")

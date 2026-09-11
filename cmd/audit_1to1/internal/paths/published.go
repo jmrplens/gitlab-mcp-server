@@ -53,7 +53,7 @@ type publishedType struct {
 	// nothing else beside: `{badge: BadgeItem}`, or a list plus its
 	// pagination. That struct is this server's packaging and this type is
 	// what GitLab answered with, so the type grain judges it against the
-	// endpoint even though it is Inner. See [envelopePayload].
+	// endpoint even though it is Inner. See [envelopePayloads].
 	Payload bool
 }
 
@@ -227,8 +227,12 @@ type parsedPackage struct {
 	nested map[string]bool
 	// enveloped holds every type some struct wraps and carries nothing else
 	// beside, which is this repository's shape for a whole response. See
-	// [envelopePayload].
+	// [envelopePayloads].
 	enveloped map[string]bool
+	// alternatives holds the payloads of every struct that wraps more than
+	// one type, left for [resolveAlternatives] to accept or refuse once every
+	// embed in the package is known.
+	alternatives [][]string
 	// scalars holds every type it declares as something other than a struct.
 	scalars map[string]bool
 	// aliases maps every type it declares as, or from, a shared shape to that
@@ -265,7 +269,89 @@ func parsePackage(dir string) parsedPackage {
 		}
 		parsed.structs = append(parsed.structs, structsIn(file, &parsed)...)
 	}
+	resolveAlternatives(&parsed)
 	return parsed
+}
+
+// resolveAlternatives marks as enveloped the payloads of every struct that
+// wraps more than one type, when those types are distinct shapes of one
+// entity: each embeds, or is embedded by, another of them, directly or
+// through types of the package that are not payloads themselves. That is how
+// a list GitLab answers with one of two entities, chosen by the caller, keeps
+// each in a field of its own (projects.ListOutput holds the full project and,
+// under simple=true, BasicProjectDetails), and both are then responses of the
+// endpoint. Two unrelated objects stay unwrapped, because a response carrying
+// a group and a project carries two references and neither is the response;
+// so do two fields of one type, a before and an after, which are two
+// references to the same kind of object rather than two shapes of it.
+func resolveAlternatives(parsed *parsedPackage) {
+	embeds := map[string]map[string]bool{}
+	for _, declared := range parsed.structs {
+		for _, embedded := range declared.Embeds {
+			if embeds[declared.Name] == nil {
+				embeds[declared.Name] = map[string]bool{}
+			}
+			embeds[declared.Name][embedded] = true
+		}
+	}
+	related := func(a, b string) bool { return embedsTransitively(embeds, a, b) || embedsTransitively(embeds, b, a) }
+	for _, payloads := range parsed.alternatives {
+		if !oneFamily(payloads, related) {
+			continue
+		}
+		for _, payload := range payloads {
+			parsed.enveloped[payload] = true
+		}
+	}
+}
+
+// embedsTransitively reports whether from reaches to by following embeds
+// through any type of the package, so that a chain whose middle link is not a
+// payload still ties its two ends into one family.
+func embedsTransitively(embeds map[string]map[string]bool, from, to string) bool {
+	seen := map[string]bool{from: true}
+	stack := []string{from}
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		for next := range embeds[current] {
+			if next == to {
+				return true
+			}
+			if !seen[next] {
+				seen[next] = true
+				stack = append(stack, next)
+			}
+		}
+	}
+	return false
+}
+
+// oneFamily reports whether the types are distinct and connected under
+// related, so that every one of them reaches every other through a chain of
+// embeds rather than the set being two groups side by side. A type named
+// twice is not a second shape, so a set that repeats one is no family.
+func oneFamily(types []string, related func(a, b string) bool) bool {
+	distinct := map[string]bool{}
+	for _, name := range types {
+		distinct[name] = true
+	}
+	if len(distinct) == 0 || len(distinct) != len(types) {
+		return false
+	}
+	reached := map[string]bool{types[0]: true}
+	queue := []string{types[0]}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		for name := range distinct {
+			if !reached[name] && related(current, name) {
+				reached[name] = true
+				queue = append(queue, name)
+			}
+		}
+	}
+	return len(reached) == len(distinct)
 }
 
 // sharedShapes reads the shapes internal/toolutil declares, each flattened
@@ -432,8 +518,12 @@ func structsIn(file *ast.File, parsed *parsedPackage) []declaredStruct {
 			for _, name := range fieldTypes {
 				parsed.nested[name] = true
 			}
-			if payload := envelopePayload(fields, fieldTypes); payload != "" {
-				parsed.enveloped[payload] = true
+			switch payloads := envelopePayloads(fields, fieldTypes); len(payloads) {
+			case 0:
+			case 1:
+				parsed.enveloped[payloads[0]] = true
+			default:
+				parsed.alternatives = append(parsed.alternatives, payloads)
 			}
 			if len(fields) > 0 || len(embeds) > 0 {
 				found = append(found, declaredStruct{Name: typed.Name.Name, Fields: fields, FieldTypes: fieldTypes, Embeds: embeds})
@@ -500,8 +590,8 @@ var framingShapes = map[string]bool{
 	sharedPrefix + "GraphQLForwardPaginationOutput": true,
 }
 
-// envelopePayload names the type a struct is a thin wrapper around, or "" when
-// the struct carries content of its own beside it.
+// envelopePayloads names the types a struct is a thin wrapper around, or nil
+// when the struct carries content of its own beside them.
 //
 // The convention here is that a handler answers with a one-key envelope:
 // `{badge: BadgeItem}` for a get, `{badges: []BadgeItem, pagination: …}` for a
@@ -514,19 +604,23 @@ var framingShapes = map[string]bool{
 // fields, so it is a project REFERENCE inside a job rather than a project
 // response, and judging it against the endpoints that answer with a whole
 // project reported all eighty-five fields of one as missing from it.
-func envelopePayload(fields []string, fieldTypes map[string]string) string {
-	payload := ""
+//
+// More than one payload comes back as candidates rather than as an answer:
+// whether a struct wrapping two types is packaging depends on how the two are
+// related, which [resolveAlternatives] decides once the whole package is read.
+func envelopePayloads(fields []string, fieldTypes map[string]string) []string {
+	var payloads []string
 	for _, name := range fields {
 		typeName, named := fieldTypes[name]
 		if named && framingShapes[typeName] {
 			continue
 		}
-		if !named || payload != "" {
-			return ""
+		if !named {
+			return nil
 		}
-		payload = typeName
+		payloads = append(payloads, typeName)
 	}
-	return payload
+	return payloads
 }
 
 // jsonTags returns the json names a struct publishes, sorted, the locally

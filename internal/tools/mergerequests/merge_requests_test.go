@@ -2073,7 +2073,7 @@ func TestFormatReviewersMarkdown_Empty(t *testing.T) {
 // TestFormatIssuesClosedMarkdown_Populated verifies FormatIssuesClosedMarkdown when populated.
 func TestFormatIssuesClosedMarkdown_Populated(t *testing.T) {
 	md := FormatIssuesClosedMarkdown(IssuesClosedOutput{
-		Issues: []issues.Output{
+		Issues: []issues.BasicOutput{
 			{IID: 5, Title: "Bug fix", State: testStateOpened, Author: &toolutil.IssueUserOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
@@ -2150,7 +2150,7 @@ func TestFormatTimeStatsMarkdown_Empty(t *testing.T) {
 // TestFormatRelatedIssuesMarkdown_Populated verifies FormatRelatedIssuesMarkdown when populated.
 func TestFormatRelatedIssuesMarkdown_Populated(t *testing.T) {
 	md := FormatRelatedIssuesMarkdown(RelatedIssuesOutput{
-		Issues: []issues.Output{
+		Issues: []issues.BasicOutput{
 			{IID: 10, Title: "Related bug", State: testStateOpened, Author: &toolutil.IssueUserOutput{Username: testAuthorAlice}, Labels: []string{testLabelBug, "critical"}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
@@ -5852,5 +5852,28 @@ func TestToggleSubscription_NotModifiedError_FallsBackToGet(t *testing.T) {
 	}
 	if out.IID != 1 {
 		t.Errorf("IID = %d, want the merge request the fall-back Get fetched", out.IID)
+	}
+}
+
+// TestMergeRequestIssueLists_ReadTheBasicIssueKeysOffTheCapture verifies the
+// two lists of issues a merge request carries answer with the basic issue
+// entity, its keys client-go does not model read from the captured page, and
+// that a page those keys do not decode from is an error.
+func TestMergeRequestIssueLists_ReadTheBasicIssueKeysOffTheCapture(t *testing.T) {
+	serve := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	closed, err := IssuesClosed(context.Background(), serve(`[{"id":1,"iid":2,"type":"ISSUE"}]`), IssuesClosedInput{ProjectID: "1", MRIID: 5})
+	if err != nil || len(closed.Issues) != 1 || closed.Issues[0].Type != "ISSUE" {
+		t.Errorf("IssuesClosed() = %+v, %v; want the captured type on the row", closed.Issues, err)
+	}
+	related, err := RelatedIssues(context.Background(), serve(`[{"id":1,"iid":2,"type":"TASK"}]`), RelatedIssuesInput{ProjectID: "1", MRIID: 5})
+	if err != nil || len(related.Issues) != 1 || related.Issues[0].Type != "TASK" {
+		t.Errorf("RelatedIssues() = %+v, %v; want the captured type on the row", related.Issues, err)
+	}
+	if _, err = IssuesClosed(context.Background(), serve(`[{"id":1,"iid":2,"type":3}]`), IssuesClosedInput{ProjectID: "1", MRIID: 5}); err == nil {
+		t.Error("IssuesClosed() succeeded on a page whose type is not a string")
 	}
 }

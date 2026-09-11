@@ -203,41 +203,58 @@ type CreateInput struct {
 	TagList               []string `json:"tag_list,omitempty" jsonschema:"Project tags (deprecated: use topics)"`
 }
 
-// Output is the common output for project operations. It mirrors gl.Project
-// field-for-field (1:1 audit policy), surfacing every scalar plus full nested
-// objects on their canonical keys (namespace, owner, permissions,
-// forked_from_project, _links, statistics, shared_with_groups, license,
-// container_expiration_policy, custom_attributes).
-type Output struct {
+// BasicOutput is a project as API::Entities::BasicProjectDetails renders it:
+// the twenty-four keys GitLab sends wherever the full project is not the
+// answer. Two routes ask for exactly this shape, the project search scope
+// (lib/api/search.rb) and the job token allowlist, and every route that takes
+// `simple=true` narrows to it. [Output] embeds it, mirroring GitLab's own
+// entity inheritance.
+type BasicOutput struct {
 	toolutil.HintableOutput
-	ID                                        int64    `json:"id"`
-	Name                                      string   `json:"name"`
-	Path                                      string   `json:"path"`
-	PathWithNamespace                         string   `json:"path_with_namespace"`
-	NameWithNamespace                         string   `json:"name_with_namespace,omitempty"`
-	Visibility                                string   `json:"visibility"`
-	DefaultBranch                             string   `json:"default_branch"`
-	WebURL                                    string   `json:"web_url"`
-	Description                               string   `json:"description"`
+	ID                int64                   `json:"id"`
+	Name              string                  `json:"name"`
+	Path              string                  `json:"path"`
+	PathWithNamespace string                  `json:"path_with_namespace"`
+	NameWithNamespace string                  `json:"name_with_namespace,omitempty"`
+	Description       string                  `json:"description"`
+	Visibility        string                  `json:"visibility"`
+	DefaultBranch     string                  `json:"default_branch"`
+	WebURL            string                  `json:"web_url"`
+	HTTPURLToRepo     string                  `json:"http_url_to_repo,omitempty"`
+	SSHURLToRepo      string                  `json:"ssh_url_to_repo,omitempty"`
+	ReadmeURL         string                  `json:"readme_url,omitempty"`
+	AvatarURL         string                  `json:"avatar_url,omitempty"`
+	LicenseURL        string                  `json:"license_url,omitempty"`
+	Topics            []string                `json:"topics"`
+	TagList           []string                `json:"tag_list,omitempty"`
+	ForksCount        int64                   `json:"forks_count,omitempty"`
+	StarCount         int64                   `json:"star_count,omitempty"`
+	CreatedAt         string                  `json:"created_at"`
+	LastActivityAt    string                  `json:"last_activity_at,omitempty"`
+	RepositoryStorage string                  `json:"repository_storage,omitempty"`
+	Namespace         *NamespaceOutput        `json:"namespace,omitempty"`
+	License           *LicenseOutput          `json:"license,omitempty"`
+	CustomAttributes  []CustomAttributeOutput `json:"custom_attributes,omitempty"`
+}
+
+// Output is a project as API::Entities::Project renders it: everything
+// [BasicOutput] carries plus what only the full entity adds. It mirrors
+// gl.Project field-for-field (1:1 audit policy), surfacing every scalar plus
+// full nested objects on their canonical keys (owner, permissions,
+// forked_from_project, _links, statistics, shared_with_groups,
+// container_expiration_policy).
+type Output struct {
+	BasicOutput
 	Archived                                  bool     `json:"archived"`
 	EmptyRepo                                 bool     `json:"empty_repo,omitempty"`
-	ForksCount                                int64    `json:"forks_count,omitempty"`
-	StarCount                                 int64    `json:"star_count,omitempty"`
 	OpenIssuesCount                           int64    `json:"open_issues_count,omitempty"`
-	HTTPURLToRepo                             string   `json:"http_url_to_repo,omitempty"`
-	SSHURLToRepo                              string   `json:"ssh_url_to_repo,omitempty"`
-	Topics                                    []string `json:"topics"`
 	MergeMethod                               string   `json:"merge_method,omitempty"`
 	SquashOption                              string   `json:"squash_option,omitempty"`
 	OnlyAllowMergeIfPipelineSucceeds          bool     `json:"only_allow_merge_if_pipeline_succeeds"`
 	OnlyAllowMergeIfAllDiscussionsAreResolved bool     `json:"only_allow_merge_if_all_discussions_are_resolved"`
 	RemoveSourceBranchAfterMerge              bool     `json:"remove_source_branch_after_merge"`
 	MarkedForDeletionOn                       string   `json:"marked_for_deletion_on,omitempty"`
-	CreatedAt                                 string   `json:"created_at"`
 	UpdatedAt                                 string   `json:"updated_at,omitempty"`
-	LastActivityAt                            string   `json:"last_activity_at,omitempty"`
-	ReadmeURL                                 string   `json:"readme_url,omitempty"`
-	AvatarURL                                 string   `json:"avatar_url,omitempty"`
 	CreatorID                                 int64    `json:"creator_id,omitempty"`
 	RequestAccessEnabled                      bool     `json:"request_access_enabled"`
 	LFSEnabled                                bool     `json:"lfs_enabled"`
@@ -344,37 +361,60 @@ type Output struct {
 	ResourceGroupDefaultProcessMode          string `json:"resource_group_default_process_mode,omitempty"`
 	RunnerTokenExpirationInterval            int64  `json:"runner_token_expiration_interval,omitempty"`
 	RunnersToken                             string `json:"runners_token,omitempty"`
-	RepositoryStorage                        string `json:"repository_storage,omitempty"`
 	CanCreateMergeRequestIn                  bool   `json:"can_create_merge_request_in"`
-	LicenseURL                               string `json:"license_url,omitempty"`
 	MergeRequestDefaultTargetSelf            bool   `json:"mr_default_target_self"`
 
 	// Nested objects (1:1 SDK parity, full mirrors).
-	Namespace                 *NamespaceOutput                 `json:"namespace,omitempty"`
 	Owner                     *OwnerOutput                     `json:"owner,omitempty"`
 	Permissions               *PermissionsOutput               `json:"permissions,omitempty"`
 	ForkedFromProject         *ForkParentOutput                `json:"forked_from_project,omitempty"`
 	Links                     *LinksOutput                     `json:"_links,omitempty"`
 	Statistics                *StatisticsOutput                `json:"statistics,omitempty"`
 	SharedWithGroups          []SharedWithGroupOutput          `json:"shared_with_groups,omitempty"`
-	License                   *LicenseOutput                   `json:"license,omitempty"`
 	ContainerExpirationPolicy *ContainerExpirationPolicyOutput `json:"container_expiration_policy,omitempty"`
-	CustomAttributes          []CustomAttributeOutput          `json:"custom_attributes,omitempty"`
 
 	// Deprecated SDK fields, surfaced additively for 1:1 parity.
-	IssuesEnabled                bool     `json:"issues_enabled"`
-	MergeRequestsEnabled         bool     `json:"merge_requests_enabled"`
-	WikiEnabled                  bool     `json:"wiki_enabled"`
-	JobsEnabled                  bool     `json:"jobs_enabled"`
-	SnippetsEnabled              bool     `json:"snippets_enabled,omitempty"`
-	ContainerRegistryEnabled     bool     `json:"container_registry_enabled,omitempty"`
-	PackagesEnabled              bool     `json:"packages_enabled,omitempty"`
-	PublicBuilds                 bool     `json:"public_builds,omitempty"`
-	ApprovalsBeforeMerge         int64    `json:"approvals_before_merge,omitempty" tier:"premium"`
-	TagList                      []string `json:"tag_list,omitempty"`
-	MarkedForDeletionAt          string   `json:"marked_for_deletion_at,omitempty"`
-	RestrictUserDefinedVariables bool     `json:"restrict_user_defined_variables"`
-	EmailsDisabled               bool     `json:"emails_disabled"`
+	IssuesEnabled                bool   `json:"issues_enabled"`
+	MergeRequestsEnabled         bool   `json:"merge_requests_enabled"`
+	WikiEnabled                  bool   `json:"wiki_enabled"`
+	JobsEnabled                  bool   `json:"jobs_enabled"`
+	SnippetsEnabled              bool   `json:"snippets_enabled,omitempty"`
+	ContainerRegistryEnabled     bool   `json:"container_registry_enabled,omitempty"`
+	PackagesEnabled              bool   `json:"packages_enabled,omitempty"`
+	PublicBuilds                 bool   `json:"public_builds,omitempty"`
+	ApprovalsBeforeMerge         int64  `json:"approvals_before_merge,omitempty" tier:"premium"`
+	MarkedForDeletionAt          string `json:"marked_for_deletion_at,omitempty"`
+	RestrictUserDefinedVariables bool   `json:"restrict_user_defined_variables"`
+	EmailsDisabled               bool   `json:"emails_disabled"`
+
+	// Fields API::Entities::Project sends that client-go's Project does not
+	// model, read from the captured response (ADR-0021). Each is a pointer
+	// because none of them is unconditional in practice: the four without a
+	// gate below are still absent whenever the caller asked for the simple
+	// form, and the rest are gated on a licensed feature, an ability or
+	// GitLab.com.
+	DescriptionHTML                        *string `json:"description_html,omitempty"`
+	RepositoryObjectFormat                 *string `json:"repository_object_format,omitempty"`
+	ShowDiffPreviewInEmail                 *bool   `json:"show_diff_preview_in_email,omitempty"`
+	WarnAboutPotentiallyUnwantedCharacters *bool   `json:"warn_about_potentially_unwanted_characters,omitempty"`
+	// SecretPushProtectionEnabled is gated on the read_secret_push_protection_info
+	// ability rather than on a license, and carries the same value as the older
+	// spelling PreReceiveSecretDetectionEnabled.
+	SecretPushProtectionEnabled *bool `json:"secret_push_protection_enabled,omitempty"`
+	// WebBasedCommitSigningEnabled is a GitLab.com feature (Gitlab::Saas), so a
+	// self-managed instance never sends it whatever its license.
+	WebBasedCommitSigningEnabled          *bool  `json:"web_based_commit_signing_enabled,omitempty"`
+	MergeTrainEnforcement                 *bool  `json:"merge_train_enforcement,omitempty" tier:"premium"`
+	MaxPipelinesPerMergeTrain             *int64 `json:"max_pipelines_per_merge_train,omitempty" tier:"premium"`
+	DuoRemoteFlowsEnabled                 *bool  `json:"duo_remote_flows_enabled,omitempty" tier:"premium"`
+	DuoFoundationalFlowsEnabled           *bool  `json:"duo_foundational_flows_enabled,omitempty" tier:"premium"`
+	OnlyAllowMergeIfAllStatusChecksPassed *bool  `json:"only_allow_merge_if_all_status_checks_passed,omitempty" tier:"ultimate"`
+	DuoSastFPDetectionEnabled             *bool  `json:"duo_sast_fp_detection_enabled,omitempty" tier:"ultimate"`
+	DuoSastVRWorkflowEnabled              *bool  `json:"duo_sast_vr_workflow_enabled,omitempty" tier:"ultimate"`
+	DuoSecretDetectionFPEnabled           *bool  `json:"duo_secret_detection_fp_enabled,omitempty" tier:"ultimate"`
+	DuoDependencyBumpBreakingChanges      *bool  `json:"duo_dependency_bump_breaking_changes_enabled,omitempty" tier:"ultimate"`
+	SecurityPolicyPipelineMustSucceed     *bool  `json:"security_policy_pipeline_must_succeed,omitempty" tier:"ultimate"`
+	SPPRepositoryPipelineAccess           *bool  `json:"spp_repository_pipeline_access,omitempty" tier:"ultimate"`
 }
 
 // GetInput defines parameters for retrieving a project.
@@ -424,10 +464,17 @@ type ListInput struct {
 }
 
 // ListOutput holds a paginated list of projects.
+//
+// GitLab answers a project list with one of two entities and the caller
+// chooses which: the full project by default, BasicProjectDetails when simple
+// is true. Each has a field of its own here, so that a basic row never reads
+// as a full one with every key the basic entity lacks set to false or zero;
+// exactly one of the two is present in a response.
 type ListOutput struct {
 	toolutil.HintableOutput
-	Projects   []Output                  `json:"projects"`
-	Pagination toolutil.PaginationOutput `json:"pagination"`
+	Projects       []Output                  `json:"projects,omitzero"`
+	SimpleProjects []BasicOutput             `json:"simple_projects,omitzero"`
+	Pagination     toolutil.PaginationOutput `json:"pagination"`
 }
 
 // DeleteInput defines parameters for deleting a project.
@@ -579,36 +626,104 @@ type UpdateInput struct {
 	ModelRegistryAccessLevel         string `json:"model_registry_access_level,omitempty" jsonschema:"Model registry access level (disabled, private, enabled)"`
 }
 
-// ToOutput converts a GitLab API [gl.Project] to the MCP tool output format,
-// mapping every SDK field 1:1 including full nested objects on their canonical
-// keys (namespace, owner, permissions, forked_from_project, _links, statistics,
-// shared_with_groups, license, container_expiration_policy, custom_attributes).
-func ToOutput(p *gl.Project) Output {
+// projectOutput finishes a handler that answers with one project: it reads the
+// keys client-go does not model off the captured answer and pairs them with
+// what the SDK decoded.
+func projectOutput(op string, p *gl.Project, captured *gitlabclient.ResponseCapture) (Output, error) {
+	extra, err := toolutil.CapturedProject(captured)
+	if err != nil {
+		return Output{}, toolutil.WrapErr(op, err)
+	}
+	return ToOutput(p, extra), nil
+}
+
+// projectListOutput finishes a handler that answers with a page of projects,
+// one extra per project in order.
+func projectListOutput(op string, list []*gl.Project, captured *gitlabclient.ResponseCapture) ([]Output, error) {
+	extras, err := toolutil.CapturedProjects(captured, len(list))
+	if err != nil {
+		return nil, toolutil.WrapErr(op, err)
+	}
+	out := make([]Output, len(list))
+	for i, p := range list {
+		out[i] = ToOutput(p, extras[i])
+	}
+	return out, nil
+}
+
+// projectRows finishes a handler that answers with a page of projects in the
+// entity the caller asked for: BasicProjectDetails when simple was set, which
+// carries every key client-go models and so needs nothing from the capture,
+// and the full project otherwise. Exactly one of the two slices is non-nil.
+func projectRows(op string, simple bool, list []*gl.Project, captured *gitlabclient.ResponseCapture) ([]Output, []BasicOutput, error) {
+	if simple {
+		basic := make([]BasicOutput, len(list))
+		for i, p := range list {
+			basic[i] = ToBasicOutput(p)
+		}
+		return nil, basic, nil
+	}
+	full, err := projectListOutput(op, list, captured)
+	return full, nil, err
+}
+
+// ToBasicOutput converts a project the way API::Entities::BasicProjectDetails
+// renders it. A route that sends the basic entity calls this directly, and
+// [ToOutput] fills the embedded half of the full project with it.
+func ToBasicOutput(p *gl.Project) BasicOutput {
+	out := BasicOutput{
+		ID:                p.ID,
+		Name:              p.Name,
+		Path:              p.Path,
+		PathWithNamespace: p.PathWithNamespace,
+		NameWithNamespace: p.NameWithNamespace,
+		Description:       p.Description,
+		Visibility:        string(p.Visibility),
+		DefaultBranch:     p.DefaultBranch,
+		WebURL:            p.WebURL,
+		HTTPURLToRepo:     p.HTTPURLToRepo,
+		SSHURLToRepo:      p.SSHURLToRepo,
+		ReadmeURL:         p.ReadmeURL,
+		AvatarURL:         p.AvatarURL,
+		LicenseURL:        p.LicenseURL,
+		Topics:            p.Topics,
+		TagList:           p.TagList, //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
+		ForksCount:        p.ForksCount,
+		StarCount:         p.StarCount,
+		RepositoryStorage: p.RepositoryStorage,
+		Namespace:         namespaceOutput(p.Namespace),
+		License:           licenseOutput(p.License),
+		CustomAttributes:  customAttributesOutput(p.CustomAttributes),
+	}
+	if out.Topics == nil {
+		out.Topics = []string{}
+	}
+	if p.CreatedAt != nil {
+		out.CreatedAt = p.CreatedAt.Format(time.RFC3339)
+	}
+	if p.LastActivityAt != nil {
+		out.LastActivityAt = p.LastActivityAt.Format(time.RFC3339)
+	}
+	return out
+}
+
+// ToOutput converts a GitLab API [gl.Project] the way API::Entities::Project
+// renders it: everything [ToBasicOutput] carries, every other SDK field with
+// full nested objects on their canonical keys (owner, permissions,
+// forked_from_project, _links, statistics, shared_with_groups,
+// container_expiration_policy), and the seventeen keys client-go does not
+// model, read from the captured response.
+func ToOutput(p *gl.Project, extra toolutil.ProjectExtra) Output {
 	out := Output{
-		ID:                               p.ID,
-		Name:                             p.Name,
-		Path:                             p.Path,
-		PathWithNamespace:                p.PathWithNamespace,
-		NameWithNamespace:                p.NameWithNamespace,
-		Visibility:                       string(p.Visibility),
-		DefaultBranch:                    p.DefaultBranch,
-		WebURL:                           p.WebURL,
-		Description:                      p.Description,
+		BasicOutput:                      ToBasicOutput(p),
 		Archived:                         p.Archived,
 		EmptyRepo:                        p.EmptyRepo,
-		ForksCount:                       p.ForksCount,
-		StarCount:                        p.StarCount,
 		OpenIssuesCount:                  p.OpenIssuesCount,
-		HTTPURLToRepo:                    p.HTTPURLToRepo,
-		SSHURLToRepo:                     p.SSHURLToRepo,
-		Topics:                           p.Topics,
 		MergeMethod:                      string(p.MergeMethod),
 		SquashOption:                     string(p.SquashOption),
 		OnlyAllowMergeIfPipelineSucceeds: p.OnlyAllowMergeIfPipelineSucceeds,
 		OnlyAllowMergeIfAllDiscussionsAreResolved: p.OnlyAllowMergeIfAllDiscussionsAreResolved,
 		RemoveSourceBranchAfterMerge:              p.RemoveSourceBranchAfterMerge,
-		ReadmeURL:                                 p.ReadmeURL,
-		AvatarURL:                                 p.AvatarURL,
 		CreatorID:                                 p.CreatorID,
 		RequestAccessEnabled:                      p.RequestAccessEnabled,
 		LFSEnabled:                                p.LFSEnabled,
@@ -707,21 +822,16 @@ func ToOutput(p *gl.Project) Output {
 		ResourceGroupDefaultProcessMode:          string(p.ResourceGroupDefaultProcessMode),
 		RunnerTokenExpirationInterval:            p.RunnerTokenExpirationInterval,
 		RunnersToken:                             p.RunnersToken,
-		RepositoryStorage:                        p.RepositoryStorage,
 		CanCreateMergeRequestIn:                  p.CanCreateMergeRequestIn,
-		LicenseURL:                               p.LicenseURL,
 		MergeRequestDefaultTargetSelf:            p.MergeRequestDefaultTargetSelf,
 
-		Namespace:                 namespaceOutput(p.Namespace),
 		Owner:                     ownerOutput(p.Owner),
 		Permissions:               permissionsOutput(p.Permissions),
 		ForkedFromProject:         forkParentOutput(p.ForkedFromProject),
 		Links:                     linksOutput(p.Links),
 		Statistics:                statisticsOutput(p.Statistics),
 		SharedWithGroups:          sharedWithGroupsOutput(p.SharedWithGroups),
-		License:                   licenseOutput(p.License),
 		ContainerExpirationPolicy: containerExpirationPolicyOutput(p.ContainerExpirationPolicy),
-		CustomAttributes:          customAttributesOutput(p.CustomAttributes),
 
 		IssuesEnabled:                accessLevelEnabled(p.IssuesAccessLevel),
 		MergeRequestsEnabled:         accessLevelEnabled(p.MergeRequestsAccessLevel),
@@ -732,12 +842,26 @@ func ToOutput(p *gl.Project) Output {
 		SnippetsEnabled:              accessLevelEnabled(p.SnippetsAccessLevel),
 		PackagesEnabled:              p.PackagesEnabled,              //nolint:staticcheck // Preserve backward-compatible field in output.
 		ApprovalsBeforeMerge:         p.ApprovalsBeforeMerge,         //nolint:staticcheck // No replacement field on Project struct.
-		TagList:                      p.TagList,                      //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
 		RestrictUserDefinedVariables: p.RestrictUserDefinedVariables, //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
 		EmailsDisabled:               p.EmailsDisabled,               //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
-	}
-	if out.Topics == nil {
-		out.Topics = []string{}
+
+		DescriptionHTML:                        extra.DescriptionHTML,
+		RepositoryObjectFormat:                 extra.RepositoryObjectFormat,
+		ShowDiffPreviewInEmail:                 extra.ShowDiffPreviewInEmail,
+		WarnAboutPotentiallyUnwantedCharacters: extra.WarnAboutPotentiallyUnwantedCharacters,
+		SecretPushProtectionEnabled:            extra.SecretPushProtectionEnabled,
+		WebBasedCommitSigningEnabled:           extra.WebBasedCommitSigningEnabled,
+		MergeTrainEnforcement:                  extra.MergeTrainEnforcement,
+		MaxPipelinesPerMergeTrain:              extra.MaxPipelinesPerMergeTrain,
+		DuoRemoteFlowsEnabled:                  extra.DuoRemoteFlowsEnabled,
+		DuoFoundationalFlowsEnabled:            extra.DuoFoundationalFlowsEnabled,
+		OnlyAllowMergeIfAllStatusChecksPassed:  extra.OnlyAllowMergeIfAllStatusChecksPassed,
+		DuoSastFPDetectionEnabled:              extra.DuoSastFPDetectionEnabled,
+		DuoSastVRWorkflowEnabled:               extra.DuoSastVRWorkflowEnabled,
+		DuoSecretDetectionFPEnabled:            extra.DuoSecretDetectionFPEnabled,
+		DuoDependencyBumpBreakingChanges:       extra.DuoDependencyBumpBreakingChanges,
+		SecurityPolicyPipelineMustSucceed:      extra.SecurityPolicyPipelineMustSucceed,
+		SPPRepositoryPipelineAccess:            extra.SPPRepositoryPipelineAccess,
 	}
 	if p.MarkedForDeletionOn != nil {
 		out.MarkedForDeletionOn = time.Time(*p.MarkedForDeletionOn).Format(time.DateOnly)
@@ -745,14 +869,8 @@ func ToOutput(p *gl.Project) Output {
 	if p.MarkedForDeletionAt != nil { //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
 		out.MarkedForDeletionAt = time.Time(*p.MarkedForDeletionAt).Format(time.DateOnly) //nolint:staticcheck // 1:1 SDK parity; deprecated field surfaced additively.
 	}
-	if p.CreatedAt != nil {
-		out.CreatedAt = p.CreatedAt.Format(time.RFC3339)
-	}
 	if p.UpdatedAt != nil {
 		out.UpdatedAt = p.UpdatedAt.Format(time.RFC3339)
-	}
-	if p.LastActivityAt != nil {
-		out.LastActivityAt = p.LastActivityAt.Format(time.RFC3339)
 	}
 	return out
 }
@@ -1059,6 +1177,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 	opts := buildCreateOpts(input)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Projects.CreateProject(opts, gl.WithContext(ctx))
 	if err != nil {
 		switch {
@@ -1070,7 +1189,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 			return Output{}, toolutil.WrapErrWithMessage("projectCreate", err)
 		}
 	}
-	return ToOutput(p), nil
+	return projectOutput("projectCreate", p, captured)
 }
 
 // Get retrieves a single GitLab project by its ID or URL-encoded path.
@@ -1091,6 +1210,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if input.WithCustomAttributes != nil {
 		opts.WithCustomAttributes = input.WithCustomAttributes
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Projects.GetProject(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
@@ -1099,7 +1219,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		}
 		return Output{}, toolutil.WrapErrWithMessage("projectGet", err)
 	}
-	return ToOutput(p), nil
+	return projectOutput("projectGet", p, captured)
 }
 
 // buildListOpts maps ListInput fields to the GitLab API list options. ListInput,
@@ -1150,15 +1270,16 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	opts := buildListOpts(input)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	projects, resp, err := client.GL().Projects.ListProjects(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithMessage("projectList", err)
 	}
-	out := make([]Output, len(projects))
-	for i, p := range projects {
-		out[i] = ToOutput(p)
+	full, basic, err := projectRows("projectList", input.Simple, projects, captured)
+	if err != nil {
+		return ListOutput{}, err
 	}
-	return ListOutput{Projects: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return ListOutput{Projects: full, SimpleProjects: basic, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // Delete deletes a GitLab project by its ID or URL-encoded path.
@@ -1274,6 +1395,7 @@ func Restore(ctx context.Context, client *gitlabclient.Client, input RestoreInpu
 	if input.ProjectID == "" {
 		return Output{}, errors.New("projectRestore: project_id is required. Use gitlab_project_list with include_pending_delete=true to find projects marked for deletion")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Projects.RestoreProject(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
@@ -1283,7 +1405,7 @@ func Restore(ctx context.Context, client *gitlabclient.Client, input RestoreInpu
 		return Output{}, toolutil.WrapErrWithStatusHint("projectRestore", err, http.StatusNotFound,
 			"verify project_id; restoring requires the project to be in pending_delete state. Use gitlab_project_list with include_pending_delete=true")
 	}
-	return ToOutput(p), nil
+	return projectOutput("projectRestore", p, captured)
 }
 
 // buildUpdateOpts maps UpdateInput fields to the GitLab API edit options.
@@ -1653,6 +1775,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		return Output{}, errors.New("projectUpdate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	opts := buildUpdateOpts(input)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Projects.EditProject(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		switch {
@@ -1664,7 +1787,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 			return Output{}, toolutil.WrapErrWithMessage("projectUpdate", err)
 		}
 	}
-	return ToOutput(p), nil
+	return projectOutput("projectUpdate", p, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -1722,6 +1845,7 @@ func Fork(ctx context.Context, client *gitlabclient.Client, input ForkInput) (Ou
 	if input.MergeRequestDefaultTargetSelf != nil {
 		opts.MergeRequestDefaultTargetSelf = input.MergeRequestDefaultTargetSelf
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Projects.ForkProject(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
@@ -1729,7 +1853,7 @@ func Fork(ctx context.Context, client *gitlabclient.Client, input ForkInput) (Ou
 		}
 		return Output{}, toolutil.WrapErrWithMessage("projectFork", err)
 	}
-	return ToOutput(p), nil
+	return projectOutput("projectFork", p, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -1749,7 +1873,8 @@ func Star(ctx context.Context, client *gitlabclient.Client, input StarInput) (Ou
 	if input.ProjectID == "" {
 		return Output{}, errors.New("projectStar: project_id is required. Use gitlab_project_list to find the ID, then pass it as project_id")
 	}
-	p, _, err := client.GL().Projects.StarProject(string(input.ProjectID), gl.WithContext(ctx))
+	starCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	p, _, err := client.GL().Projects.StarProject(string(input.ProjectID), gl.WithContext(starCtx))
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return Get(ctx, client, GetInput{ProjectID: input.ProjectID})
@@ -1757,7 +1882,7 @@ func Star(ctx context.Context, client *gitlabclient.Client, input StarInput) (Ou
 		return Output{}, toolutil.WrapErrWithStatusHint("projectStar", err, http.StatusNotModified,
 			"project is already starred by the authenticated user. Use gitlab_project_get to inspect star_count and gitlab_project_list_user_starred to list current stars")
 	}
-	return ToOutput(p), nil
+	return projectOutput("projectStar", p, captured)
 }
 
 // UnstarInput defines parameters for unstarring a project.
@@ -1773,12 +1898,13 @@ func Unstar(ctx context.Context, client *gitlabclient.Client, input UnstarInput)
 	if input.ProjectID == "" {
 		return Output{}, errors.New("projectUnstar: project_id is required. Use gitlab_project_list to find the ID, then pass it as project_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Projects.UnstarProject(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("projectUnstar", err, http.StatusNotModified,
 			"project is not currently starred by the authenticated user. Nothing to unstar")
 	}
-	return ToOutput(p), nil
+	return projectOutput("projectUnstar", p, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -1798,6 +1924,7 @@ func Archive(ctx context.Context, client *gitlabclient.Client, input ArchiveInpu
 	if input.ProjectID == "" {
 		return Output{}, errors.New("projectArchive: project_id is required. Use gitlab_project_list to find the ID, then pass it as project_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Projects.ArchiveProject(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -1805,7 +1932,7 @@ func Archive(ctx context.Context, client *gitlabclient.Client, input ArchiveInpu
 		}
 		return Output{}, toolutil.WrapErrWithMessage("projectArchive", err)
 	}
-	return ToOutput(p), nil
+	return projectOutput("projectArchive", p, captured)
 }
 
 // UnarchiveInput defines parameters for unarchiving a project.
@@ -1821,6 +1948,7 @@ func Unarchive(ctx context.Context, client *gitlabclient.Client, input Unarchive
 	if input.ProjectID == "" {
 		return Output{}, errors.New("projectUnarchive: project_id is required. Use gitlab_project_list to find the ID, then pass it as project_id")
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Projects.UnarchiveProject(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -1828,7 +1956,7 @@ func Unarchive(ctx context.Context, client *gitlabclient.Client, input Unarchive
 		}
 		return Output{}, toolutil.WrapErrWithMessage("projectUnarchive", err)
 	}
-	return ToOutput(p), nil
+	return projectOutput("projectUnarchive", p, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -1855,6 +1983,7 @@ func Transfer(ctx context.Context, client *gitlabclient.Client, input TransferIn
 	opts := &gl.TransferProjectOptions{
 		Namespace: input.Namespace,
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Projects.TransferProject(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		switch {
@@ -1871,7 +2000,7 @@ func Transfer(ctx context.Context, client *gitlabclient.Client, input TransferIn
 			return Output{}, toolutil.WrapErrWithMessage("projectTransfer", err)
 		}
 	}
-	return ToOutput(p), nil
+	return projectOutput("projectTransfer", p, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -1922,8 +2051,11 @@ type ListForksInput struct {
 // ListForksOutput holds a paginated list of project forks.
 type ListForksOutput struct {
 	toolutil.HintableOutput
-	Forks      []Output                  `json:"forks"`
-	Pagination toolutil.PaginationOutput `json:"pagination"`
+	// Forks and SimpleForks split for the reason [ListOutput] splits: simple
+	// switches the entity GitLab renders, and exactly one is present.
+	Forks       []Output                  `json:"forks,omitzero"`
+	SimpleForks []BasicOutput             `json:"simple_forks,omitzero"`
+	Pagination  toolutil.PaginationOutput `json:"pagination"`
 }
 
 // buildForkListOpts maps ListForksInput filters onto the shared
@@ -1963,18 +2095,20 @@ func ListForks(ctx context.Context, client *gitlabclient.Client, input ListForks
 		return ListForksOutput{}, errors.New("projectListForks: project_id is required. Use gitlab_project_list to find the ID, then pass it as project_id")
 	}
 	opts := buildForkListOpts(input)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	forks, resp, err := client.GL().Projects.ListProjectForks(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListForksOutput{}, toolutil.WrapErrWithStatusHint("projectListForks", err, http.StatusNotFound,
 			"verify the parent project exists with gitlab_project_get")
 	}
-	out := make([]Output, 0, len(forks))
-	for _, f := range forks {
-		out = append(out, ToOutput(f))
+	full, basic, err := projectRows("projectListForks", input.Simple, forks, captured)
+	if err != nil {
+		return ListForksOutput{}, err
 	}
 	return ListForksOutput{
-		Forks:      out,
-		Pagination: toolutil.PaginationFromResponse(resp),
+		Forks:       full,
+		SimpleForks: basic,
+		Pagination:  toolutil.PaginationFromResponse(resp),
 	}, nil
 }
 
@@ -2589,40 +2723,42 @@ func listUserScopedProjects(ctx context.Context, userID toolutil.StringOrInt, op
 	if userID == "" {
 		return ListOutput{}, errors.New(missingUserMsg)
 	}
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	projects, resp, err := list(string(userID), buildUserProjectOpts(filters), gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, notFoundHint)
 	}
-	out := make([]Output, len(projects))
-	for i, project := range projects {
-		out[i] = ToOutput(project)
+	full, basic, err := projectRows(operation, filters.Simple, projects, captured)
+	if err != nil {
+		return ListOutput{}, err
 	}
-	return ListOutput{Projects: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return ListOutput{Projects: full, SimpleProjects: basic, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // ---------------------------------------------------------------------------
 // ListProjectUsers — list users of a project
 // ---------------------------------------------------------------------------.
 
-// ProjectUserOutput represents a project user.
-type ProjectUserOutput struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	Username  string `json:"username"`
-	State     string `json:"state"`
-	AvatarURL string `json:"avatar_url,omitempty"`
-	WebURL    string `json:"web_url,omitempty"`
-}
+// ProjectUserOutput represents a project user. It is an alias rather than a
+// copy because the route presents API::Entities::UserBasic, which
+// [toolutil.UserBasicOutput] already declares key for key, and a second
+// declaration of one entity is how locked and public_email went missing here
+// in the first place.
+type ProjectUserOutput = toolutil.UserBasicOutput
 
-// projectUserOutputFromGL maps project user output from gl between API and evaluator models.
-func projectUserOutputFromGL(u *gl.ProjectUser) ProjectUserOutput {
+// projectUserOutputFromGL maps project user output from gl between API and
+// evaluator models, taking locked and public_email from the captured answer
+// because client-go's ProjectUser models neither.
+func projectUserOutputFromGL(u *gl.ProjectUser, extra toolutil.UserBasicExtra) ProjectUserOutput {
 	return ProjectUserOutput{
-		ID:        u.ID,
-		Name:      u.Name,
-		Username:  u.Username,
-		State:     u.State,
-		AvatarURL: u.AvatarURL,
-		WebURL:    u.WebURL,
+		ID:          u.ID,
+		Name:        u.Name,
+		Username:    u.Username,
+		State:       u.State,
+		AvatarURL:   u.AvatarURL,
+		WebURL:      u.WebURL,
+		Locked:      extra.Locked,
+		PublicEmail: extra.PublicEmail,
 	}
 }
 
@@ -2654,14 +2790,19 @@ func ListProjectUsers(ctx context.Context, client *gitlabclient.Client, input Li
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	users, resp, err := client.GL().Projects.ListProjectsUsers(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectUsersOutput{}, toolutil.WrapErrWithStatusHint("projectListUsers", err, http.StatusNotFound,
 			hintVerifyProjectExists)
 	}
+	extras, err := toolutil.CapturedUserBasics(captured, len(users))
+	if err != nil {
+		return ListProjectUsersOutput{}, toolutil.WrapErr("projectListUsers", err)
+	}
 	out := make([]ProjectUserOutput, len(users))
 	for i, u := range users {
-		out[i] = projectUserOutputFromGL(u)
+		out[i] = projectUserOutputFromGL(u, extras[i])
 	}
 	return ListProjectUsersOutput{
 		Users:      out,
@@ -2792,16 +2933,21 @@ func ListProjectStarrers(ctx context.Context, client *gitlabclient.Client, input
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	applyKeysetOrder(&opts.ListOptions, input.OrderBy, input.Sort)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	starrers, resp, err := client.GL().Projects.ListProjectStarrers(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectStarrersOutput{}, toolutil.WrapErrWithStatusHint("projectListStarrers", err, http.StatusNotFound,
 			hintVerifyProjectExists)
 	}
+	extras, err := toolutil.CapturedNestedUserBasics(captured, len(starrers))
+	if err != nil {
+		return ListProjectStarrersOutput{}, toolutil.WrapErr("projectListStarrers", err)
+	}
 	out := make([]StarrerOutput, len(starrers))
 	for i, s := range starrers {
 		out[i] = StarrerOutput{
 			StarredSince: s.StarredSince.Format(time.RFC3339),
-			User:         projectUserOutputFromGL(&s.User),
+			User:         projectUserOutputFromGL(&s.User, extras[i]),
 		}
 	}
 	return ListProjectStarrersOutput{
@@ -3616,6 +3762,7 @@ func CreateForkRelation(ctx context.Context, client *gitlabclient.Client, input 
 		return Output{}, errors.New("projectCreateForkRelation: forked_from_id is required")
 	}
 	path := fmt.Sprintf("projects/%s/fork/%d", gl.PathEscape(string(input.ProjectID)), input.ForkedFromID)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	project, _, err := doProjectRequest[*gl.Project](ctx, client, http.MethodPost, path, nil)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
@@ -3625,7 +3772,7 @@ func CreateForkRelation(ctx context.Context, client *gitlabclient.Client, input 
 		return Output{}, toolutil.WrapErrWithStatusHint("projectCreateForkRelation", err, http.StatusNotFound,
 			"verify both project_id and forked_from_id reference existing projects with gitlab_project_get")
 	}
-	return ToOutput(project), nil
+	return projectOutput("projectCreateForkRelation", project, captured)
 }
 
 // DeleteForkRelationInput defines parameters for deleting a fork relation.
@@ -3677,6 +3824,7 @@ func UploadAvatar(ctx context.Context, client *gitlabclient.Client, input Upload
 	}
 	defer cleanup()
 
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Projects.UploadAvatar(string(input.ProjectID), reader, input.Filename, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
@@ -3686,7 +3834,7 @@ func UploadAvatar(ctx context.Context, client *gitlabclient.Client, input Upload
 		return Output{}, toolutil.WrapErrWithStatusHint("projectUploadAvatar", err, http.StatusForbidden,
 			"updating the project avatar requires Maintainer/Owner role")
 	}
-	return ToOutput(p), nil
+	return projectOutput("projectUploadAvatar", p, captured)
 }
 
 // DownloadAvatarInput defines parameters for downloading a project avatar.
@@ -3851,6 +3999,7 @@ func CreateForUser(ctx context.Context, client *gitlabclient.Client, input Creat
 	}
 	createOpts := buildCreateOpts(input.CreateInput)
 	opts := (*gl.CreateProjectForUserOptions)(createOpts)
+	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	p, _, err := client.GL().Projects.CreateProjectForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
@@ -3860,5 +4009,5 @@ func CreateForUser(ctx context.Context, client *gitlabclient.Client, input Creat
 		return Output{}, toolutil.WrapErrWithStatusHint("projectCreateForUser", err, http.StatusNotFound,
 			"target user_id not found. Use gitlab_get_user to verify")
 	}
-	return ToOutput(p), nil
+	return projectOutput("projectCreateForUser", p, captured)
 }

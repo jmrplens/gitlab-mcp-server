@@ -1007,3 +1007,115 @@ func TestMergeRequestOutput_ApplyExtra_FillsEveryCapturedKey(t *testing.T) {
 		t.Errorf("rendered pair = %q/%q, want the extra's own values", out.TitleHTML, out.DescriptionHTML)
 	}
 }
+
+// TestCapturedSplitReaders_ReadOneObjectEach verifies the single-object readers
+// the one-type-per-entity split added (a group, a basic and a full issue, a
+// project, a group hook, a project approval rule): each decodes the keys its
+// entity sends on the spelling GitLab uses, a key inherited from the narrower
+// entity included, and each reports a capture nothing ran under.
+func TestCapturedSplitReaders_ReadOneObjectEach(t *testing.T) {
+	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+	for _, testCase := range []struct {
+		name string
+		body string
+		read func(*gitlabclient.ResponseCapture) (bool, error)
+	}{
+		{"group", `{"allow_personal_snippets":true}`, func(c *gitlabclient.ResponseCapture) (bool, error) {
+			x, e := CapturedGroup(c)
+			return x.AllowPersonalSnippets != nil && *x.AllowPersonalSnippets, e
+		}},
+		{"basic issue", `{"blocking_issues_count":3,"type":"ISSUE"}`, func(c *gitlabclient.ResponseCapture) (bool, error) {
+			x, e := CapturedIssueBasic(c)
+			return x.BlockingIssuesCount != nil && *x.BlockingIssuesCount == 3 && x.Type == "ISSUE", e
+		}},
+		{"issue", `{"epic_iid":5,"severity":"HIGH","start_date":"2026-01-02"}`, func(c *gitlabclient.ResponseCapture) (bool, error) {
+			x, e := CapturedIssue(c)
+			return x.EpicIID != nil && *x.EpicIID == 5 && x.Severity == "HIGH" && x.StartDate == "2026-01-02", e
+		}},
+		{"project", `{"max_pipelines_per_merge_train":4,"description_html":"<p>d</p>"}`, func(c *gitlabclient.ResponseCapture) (bool, error) {
+			x, e := CapturedProject(c)
+			return x.MaxPipelinesPerMergeTrain != nil && *x.MaxPipelinesPerMergeTrain == 4 &&
+				x.DescriptionHTML != nil && *x.DescriptionHTML == "<p>d</p>", e
+		}},
+		{"group hook", `{"repository_update_events":true}`, func(c *gitlabclient.ResponseCapture) (bool, error) {
+			x, e := CapturedGroupHook(c)
+			return x.RepositoryUpdateEvents, e
+		}},
+		{"project approval rule", `{"coverage_minimum_threshold":80}`, func(c *gitlabclient.ResponseCapture) (bool, error) {
+			x, e := CapturedProjectApprovalRule(c)
+			return x.CoverageMinimumThreshold != nil && *x.CoverageMinimumThreshold == 80, e
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if ok, err := testCase.read(gitlabclient.CapturedBody([]byte(testCase.body))); err != nil || !ok {
+				t.Errorf("read = %v, %v; want the captured keys", ok, err)
+			}
+			if _, err := testCase.read(untouched); !errors.Is(err, gitlabclient.ErrNoResponseCaptured) {
+				t.Errorf("read on a capture nothing ran under = %v, want ErrNoResponseCaptured", err)
+			}
+		})
+	}
+}
+
+// TestCapturedSplitListReaders_ReadAndHoldTheCount verifies the list readers
+// the same split added, the one that reads the user out of a starrer row
+// included: each reads its keys off a page, refuses a page whose length is
+// not the count the SDK decoded, and reports a capture nothing ran under.
+func TestCapturedSplitListReaders_ReadAndHoldTheCount(t *testing.T) {
+	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+	for _, testCase := range []struct {
+		name string
+		body string
+		read func(*gitlabclient.ResponseCapture, int) (bool, error)
+	}{
+		{"keys", `[{"usage_type":"auth"}]`, func(c *gitlabclient.ResponseCapture, n int) (bool, error) {
+			x, e := CapturedKeys(c, n)
+			return len(x) == 1 && x[0].UsageType == "auth", e
+		}},
+		{"groups", `[{"show_diff_preview_in_email":true}]`, func(c *gitlabclient.ResponseCapture, n int) (bool, error) {
+			x, e := CapturedGroups(c, n)
+			return len(x) == 1 && x[0].ShowDiffPreviewInEmail, e
+		}},
+		{"basic issues", `[{"type":"INCIDENT"}]`, func(c *gitlabclient.ResponseCapture, n int) (bool, error) {
+			x, e := CapturedIssueBasics(c, n)
+			return len(x) == 1 && x[0].Type == "INCIDENT", e
+		}},
+		{"issues", `[{"task_status":"1 of 2 checklist items completed"}]`, func(c *gitlabclient.ResponseCapture, n int) (bool, error) {
+			x, e := CapturedIssues(c, n)
+			return len(x) == 1 && x[0].TaskStatus == "1 of 2 checklist items completed", e
+		}},
+		{"projects", `[{"repository_object_format":"sha256"}]`, func(c *gitlabclient.ResponseCapture, n int) (bool, error) {
+			x, e := CapturedProjects(c, n)
+			return len(x) == 1 && x[0].RepositoryObjectFormat != nil && *x[0].RepositoryObjectFormat == "sha256", e
+		}},
+		{"project users", `[{"locked":true,"public_email":"dev@example.com"}]`, func(c *gitlabclient.ResponseCapture, n int) (bool, error) {
+			x, e := CapturedUserBasics(c, n)
+			return len(x) == 1 && x[0].Locked && x[0].PublicEmail == "dev@example.com", e
+		}},
+		{"starrers", `[{"starred_since":"2026-01-02T00:00:00Z","user":{"locked":true,"public_email":"s@example.com"}}]`, func(c *gitlabclient.ResponseCapture, n int) (bool, error) {
+			x, e := CapturedNestedUserBasics(c, n)
+			return len(x) == 1 && x[0].Locked && x[0].PublicEmail == "s@example.com", e
+		}},
+		{"group hooks", `[{"repository_update_events":true}]`, func(c *gitlabclient.ResponseCapture, n int) (bool, error) {
+			x, e := CapturedGroupHooks(c, n)
+			return len(x) == 1 && x[0].RepositoryUpdateEvents, e
+		}},
+		{"project approval rules", `[{"coverage_minimum_threshold":90}]`, func(c *gitlabclient.ResponseCapture, n int) (bool, error) {
+			x, e := CapturedProjectApprovalRules(c, n)
+			return len(x) == 1 && x[0].CoverageMinimumThreshold != nil && *x[0].CoverageMinimumThreshold == 90, e
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			page := gitlabclient.CapturedBody([]byte(testCase.body))
+			if ok, err := testCase.read(page, 1); err != nil || !ok {
+				t.Errorf("read of a one-row page = %v, %v; want the captured keys", ok, err)
+			}
+			if _, err := testCase.read(page, 2); err == nil || !strings.Contains(err.Error(), "holds 1") {
+				t.Errorf("read with a count the page does not hold = %v, want the two numbers", err)
+			}
+			if _, err := testCase.read(untouched, 0); !errors.Is(err, gitlabclient.ErrNoResponseCaptured) {
+				t.Errorf("read on a capture nothing ran under = %v, want ErrNoResponseCaptured", err)
+			}
+		})
+	}
+}

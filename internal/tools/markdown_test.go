@@ -1517,9 +1517,9 @@ var allMarkdownFixtureData = []markdownFixture{
 	{"mergerequests.RebaseOutput", mergerequests.RebaseOutput{RebaseInProgress: true}},
 	{"mergerequests.ParticipantsOutput", mergerequests.ParticipantsOutput{Participants: []mergerequests.ParticipantOutput{{Username: "u"}}}},
 	{"mergerequests.ReviewersOutput", mergerequests.ReviewersOutput{Reviewers: []mergerequests.ReviewerOutput{{Username: "u"}}}},
-	{"mergerequests.IssuesClosedOutput", mergerequests.IssuesClosedOutput{Issues: []issues.Output{{IID: 1}}}},
+	{"mergerequests.IssuesClosedOutput", mergerequests.IssuesClosedOutput{Issues: []issues.BasicOutput{{IID: 1}}}},
 	{"mergerequests.TimeStatsOutput", mergerequests.TimeStatsOutput{HumanTimeEstimate: "1h"}},
-	{"mergerequests.RelatedIssuesOutput", mergerequests.RelatedIssuesOutput{Issues: []issues.Output{{IID: 1}}}},
+	{"mergerequests.RelatedIssuesOutput", mergerequests.RelatedIssuesOutput{Issues: []issues.BasicOutput{{IID: 1}}}},
 	{"mergerequests.CreateTodoOutput", mergerequests.CreateTodoOutput{ID: 1, ActionName: "marked"}},
 	{"mergerequests.DependencyOutput", mergerequests.DependencyOutput{ID: 1, BlockingMergeRequest: &mergerequests.BlockingMergeRequestOutput{IID: 2}}},
 	{"mergerequests.DependenciesOutput", mergerequests.DependenciesOutput{Dependencies: []mergerequests.DependencyOutput{{ID: 1}}}},
@@ -1540,7 +1540,7 @@ var allMarkdownFixtureData = []markdownFixture{
 	{"mrchanges.RawDiffsOutput", mrchanges.RawDiffsOutput{MRIID: 1, RawDiff: "diff content"}},
 
 	// MR Approvals
-	{"mrapprovals.StateOutput", mrapprovals.StateOutput{Rules: []mrapprovals.RuleOutput{{ID: 1, Name: "rule"}}}},
+	{"mrapprovals.StateOutput", mrapprovals.StateOutput{Rules: []mrapprovals.StateRuleOutput{{ID: 1, Name: "rule"}}}},
 	{"mrapprovals.RulesOutput", mrapprovals.RulesOutput{Rules: []mrapprovals.RuleOutput{{ID: 1, Name: "rule"}}}},
 	{"mrapprovals.ConfigOutput", mrapprovals.ConfigOutput{Approved: true}},
 	{"mrapprovals.RuleOutput", mrapprovals.RuleOutput{ID: 1, Name: "rule"}},

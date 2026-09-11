@@ -36,7 +36,7 @@ type Action struct {
 var buildCatalog = tools.BuildActionCatalog
 
 // Actions returns every action in the catalog at the widest tier, so the counts
-// below are of the whole surface rather than one licence's.
+// below are of the whole surface rather than one license's.
 func Actions() ([]Action, error) {
 	catalog, err := buildCatalog(nil, tools.ActionCatalogOptions{Tier: edition.Ultimate})
 	if err != nil {
