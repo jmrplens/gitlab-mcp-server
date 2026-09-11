@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -77,7 +79,116 @@ func runMetadataAudit(client *gitlabclient.Client) {
 		violations = append(violations, auditRegisterMetaDefinitionViolations(registerMetaDefinitions)...)
 	}
 
-	printMetadataReport(individualTools, metaTools, violations, registerMetaDefinitions)
+	printMetadataReport(individualTools, metaTools, violations, registerMetaDefinitions, auditResultEnvelopes())
+}
+
+// envelopeAudit is what driving every registered Markdown formatter with a
+// zero and a populated fixture found about the envelope its result travels
+// in: a nil result, which reaches the dispatcher as no content block at all,
+// and a content block with no Annotations, which reaches the client with no
+// audience. It reports and does not gate in this layer: a formatter that
+// renders nothing for a zero value is a guard, not a defect, and is counted
+// apart from one that renders nothing for a populated value.
+type envelopeAudit struct {
+	Formatters           int      `json:"formatters"`
+	NilOnZero            int      `json:"nil_on_zero"`
+	NilOnPopulated       []string `json:"nil_on_populated"`
+	Unannotated          []string `json:"unannotated"`
+	Panicked             []string `json:"panicked"`
+	RegistrationProblems []string `json:"registration_problems"`
+}
+
+// auditResultEnvelopes drives every registered formatter through
+// MarkdownForResult, the way the dispatchers do, with the zero value and the
+// populated fixture the runtime gate uses, and records what the envelope
+// lacked.
+func auditResultEnvelopes() envelopeAudit {
+	audit := envelopeAudit{RegistrationProblems: toolutil.MarkdownRegistrationProblems()}
+	for _, typ := range toolutil.RegisteredMarkdownTypes() {
+		audit.Formatters++
+		name := typ.String()
+		if fn := toolutil.RegisteredMarkdownFormatterName(typ); fn != "" {
+			name += " (" + fn + ")"
+		}
+		for _, state := range []testutil.FixtureState{testutil.FixtureZero, testutil.FixtureMultiPage} {
+			result, panicked := renderEnvelope(typ, state)
+			switch {
+			case panicked != "":
+				audit.Panicked = append(audit.Panicked, name+" ["+state.String()+"]: "+panicked)
+			case result == nil && state == testutil.FixtureZero:
+				audit.NilOnZero++
+			case result == nil:
+				audit.NilOnPopulated = append(audit.NilOnPopulated, name)
+			default:
+				for i, block := range result.Content {
+					if !blockAnnotated(block) {
+						audit.Unannotated = append(audit.Unannotated, fmt.Sprintf("%s [%s] block %d (%T)", name, state, i, block))
+					}
+				}
+			}
+		}
+	}
+	return audit
+}
+
+// renderEnvelope renders one type in one state, reporting a panic rather
+// than ending the audit on it.
+func renderEnvelope(typ reflect.Type, state testutil.FixtureState) (result *mcp.CallToolResult, panicked string) {
+	defer func() {
+		if r := recover(); r != nil {
+			panicked = fmt.Sprint(r)
+		}
+	}()
+	return toolutil.MarkdownForResult(testutil.FillFixture(typ, testutil.FixtureOptions{State: state}).Interface()), ""
+}
+
+// blockAnnotated reports whether a content block carries Annotations, for
+// the block kinds a formatter writes.
+func blockAnnotated(block mcp.Content) bool {
+	switch b := block.(type) {
+	case *mcp.TextContent:
+		return b.Annotations != nil
+	case *mcp.ImageContent:
+		return b.Annotations != nil
+	case *mcp.EmbeddedResource:
+		return b.Annotations != nil
+	default:
+		return false
+	}
+}
+
+// printResultEnvelopes writes the envelope section of the Markdown report:
+// the counts, and the formatters whose populated render is nil, unannotated
+// or a panic, so the list is the work list. The JSON view carries the same
+// audit under the metadata report's "envelopes" key.
+func printResultEnvelopes(audit envelopeAudit) {
+	fmt.Printf("\n## Result Envelopes\n\n")
+	fmt.Printf("Every registered Markdown formatter driven with a zero and a populated fixture. This section reports and does not gate: a nil render of a zero value is a guard, and is counted apart.\n\n")
+	fmt.Printf("| Metric | Count |\n")
+	fmt.Printf("| --- | ---: |\n")
+	fmt.Printf("| Registered formatters | %d |\n", audit.Formatters)
+	fmt.Printf("| Nil render of the zero value | %d |\n", audit.NilOnZero)
+	fmt.Printf("| Nil render of the populated value | %d |\n", len(audit.NilOnPopulated))
+	fmt.Printf("| Content blocks without Annotations | %d |\n", len(audit.Unannotated))
+	fmt.Printf("| Formatters that panicked | %d |\n", len(audit.Panicked))
+	fmt.Printf("| Registration problems | %d |\n\n", len(audit.RegistrationProblems))
+	printEnvelopeList("Nil render of the populated value", audit.NilOnPopulated)
+	printEnvelopeList("Content blocks without Annotations", audit.Unannotated)
+	printEnvelopeList("Formatters that panicked", audit.Panicked)
+	printEnvelopeList("Registration problems", audit.RegistrationProblems)
+}
+
+// printEnvelopeList writes one list of the envelope section, when it has
+// entries.
+func printEnvelopeList(title string, entries []string) {
+	if len(entries) == 0 {
+		return
+	}
+	fmt.Printf("### %s (%d)\n\n", title, len(entries))
+	for _, entry := range entries {
+		fmt.Printf("- `%s`\n", entry)
+	}
+	fmt.Println()
 }
 
 // auditNaming checks that every tool name matches the given regex pattern.
@@ -220,22 +331,25 @@ func auditDuplicates(tls []*mcp.Tool, kind string) []violation {
 }
 
 // printMetadataReport writes the full markdown audit report to stdout,
-// including summary counts, violations grouped by category, and a
-// complete listing of all individual and meta-tools with their annotations.
-func printMetadataReport(individual, meta []*mcp.Tool, vs []violation, registerMetaDefinitions []registerMetaDefinition) {
+// including summary counts, violations grouped by category, a complete
+// listing of all individual and meta-tools with their annotations, and the
+// result-envelope section.
+func printMetadataReport(individual, meta []*mcp.Tool, vs []violation, registerMetaDefinitions []registerMetaDefinition, envelopes envelopeAudit) {
 	if outputJSON {
 		report := struct {
-			View            string      `json:"view"`
-			IndividualTools int         `json:"individual_tools"`
-			MetaTools       int         `json:"meta_tools"`
-			Violations      int         `json:"violations"`
-			Entries         []jsonEntry `json:"entries"`
-		}{"metadata", len(individual), len(meta), len(vs), toEntries(vs)}
+			View            string        `json:"view"`
+			IndividualTools int           `json:"individual_tools"`
+			MetaTools       int           `json:"meta_tools"`
+			Violations      int           `json:"violations"`
+			Entries         []jsonEntry   `json:"entries"`
+			Envelopes       envelopeAudit `json:"envelopes"`
+		}{"metadata", len(individual), len(meta), len(vs), toEntries(vs), envelopes}
 		if err := json.NewEncoder(os.Stdout).Encode(report); err != nil {
 			fmt.Fprintf(os.Stderr, "encode json: %v\n", err)
 		}
 		return
 	}
+	defer printResultEnvelopes(envelopes)
 	now := time.Now().Format("2006-01-02 15:04:05")
 	fmt.Printf("# MCP Tool Metadata Audit Report\n\n")
 	fmt.Printf("Generated: %s\n\n", now)

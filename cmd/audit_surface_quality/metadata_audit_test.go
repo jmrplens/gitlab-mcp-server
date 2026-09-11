@@ -4,11 +4,13 @@
 package main
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -248,6 +250,101 @@ func TestPtrBool_FormatsPointer(t *testing.T) {
 	}
 }
 
+// TestAuditResultEnvelopes_Registry_DrivesEveryFormatterAndCountsWhatItLacks
+// runs the envelope audit over the real registry and checks its shape: every
+// registered formatter is driven, a nil render of a zero value is counted
+// apart from one of a populated value, nothing panics, and the registration
+// record is the registry's own. What the lists hold is reported, not
+// asserted: the audit reports in this layer, and the dispatcher annotates
+// every text block on its way out, so an unannotated block here is a
+// formatter building its own envelope rather than a block the client sees
+// bare.
+func TestAuditResultEnvelopes_Registry_DrivesEveryFormatterAndCountsWhatItLacks(t *testing.T) {
+	// Two formatters registered here, for this process, give the audit one of
+	// each shape the tree does not have: a render that is nothing for a
+	// populated value, and a render that panics on a zero value.
+	type silent struct{ Name string }
+	type fragile struct{ Name string }
+	toolutil.RegisterMarkdown(func(silent) string { return "" })
+	toolutil.RegisterMarkdown(func(v fragile) string {
+		if v.Name == "" {
+			panic("no name")
+		}
+		return "## " + v.Name
+	})
+
+	audit := auditResultEnvelopes()
+
+	if audit.Formatters == 0 || audit.Formatters != toolutil.MarkdownFormatterCount() {
+		t.Errorf("formatters = %d, want the %d the registry holds", audit.Formatters, toolutil.MarkdownFormatterCount())
+	}
+	if audit.NilOnZero == 0 {
+		t.Error("no formatter rendered nothing for a zero value, and the guarded ones do")
+	}
+	if !hasEntryContaining(audit.NilOnPopulated, ".silent") {
+		t.Errorf("nil on populated = %v, want the silent formatter listed", audit.NilOnPopulated)
+	}
+	if !hasEntryContaining(audit.Panicked, ".fragile (") || !hasEntryContaining(audit.Panicked, "[zero]: no name") {
+		t.Errorf("panicked = %v, want the fragile formatter listed with its message", audit.Panicked)
+	}
+	if got := strings.Join(audit.RegistrationProblems, "\n"); got != strings.Join(toolutil.MarkdownRegistrationProblems(), "\n") {
+		t.Errorf("registration problems = %q, want the registry's own record", got)
+	}
+	t.Logf("envelopes: %d formatter(s), %d nil on zero, %d nil on populated, %d unannotated block(s), %d registration problem(s)",
+		audit.Formatters, audit.NilOnZero, len(audit.NilOnPopulated), len(audit.Unannotated), len(audit.RegistrationProblems))
+	for _, entry := range append(append([]string{}, audit.NilOnPopulated...), audit.Unannotated...) {
+		t.Logf("envelope: %s", entry)
+	}
+}
+
+// hasEntryContaining reports whether any entry of a list carries the text.
+func hasEntryContaining(entries []string, text string) bool {
+	for _, entry := range entries {
+		if strings.Contains(entry, text) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestRenderEnvelope_Panic_IsReportedRatherThanRaised checks the recovery
+// the audit relies on to finish a run whose one formatter panics.
+func TestRenderEnvelope_Panic_IsReportedRatherThanRaised(t *testing.T) {
+	type panicking struct{ Name string }
+	toolutil.RegisterMarkdown(func(panicking) string { panic("no render") })
+
+	result, panicked := renderEnvelope(reflect.TypeFor[panicking](), testutil.FixtureMultiPage)
+
+	if result != nil || panicked != "no render" {
+		t.Errorf("renderEnvelope = %v, %q, want nil and the panic's message", result, panicked)
+	}
+}
+
+// TestBlockAnnotated_Blocks_ReadsTheAnnotationOfEachKind checks the block
+// kinds the audit knows and the one it does not.
+func TestBlockAnnotated_Blocks_ReadsTheAnnotationOfEachKind(t *testing.T) {
+	cases := []struct {
+		name  string
+		block mcp.Content
+		want  bool
+	}{
+		{name: "annotated text", block: &mcp.TextContent{Text: "x", Annotations: toolutil.ContentList}, want: true},
+		{name: "bare text", block: &mcp.TextContent{Text: "x"}, want: false},
+		{name: "annotated image", block: &mcp.ImageContent{Annotations: toolutil.ContentUser}, want: true},
+		{name: "bare image", block: &mcp.ImageContent{}, want: false},
+		{name: "annotated resource", block: &mcp.EmbeddedResource{Annotations: toolutil.ContentDetail}, want: true},
+		{name: "bare resource", block: &mcp.EmbeddedResource{}, want: false},
+		{name: "a kind the audit does not know", block: &mcp.AudioContent{}, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := blockAnnotated(tc.block); got != tc.want {
+				t.Errorf("blockAnnotated = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestPrintReport_EmptyViolationsWritesNoViolationsMessage verifies the report
 // writes the no-violations message when there are no findings.
 func TestPrintReport_EmptyViolationsWritesNoViolationsMessage(t *testing.T) {
@@ -258,6 +355,7 @@ func TestPrintReport_EmptyViolationsWritesNoViolationsMessage(t *testing.T) {
 			[]*mcp.Tool{{Name: "gitlab_y"}},
 			nil,
 			nil,
+			envelopeAudit{Formatters: 3, NilOnZero: 1},
 		)
 	})
 
@@ -267,6 +365,9 @@ func TestPrintReport_EmptyViolationsWritesNoViolationsMessage(t *testing.T) {
 		"| Meta-tools | 1 |",
 		"| Total violations | 0 |",
 		"**No violations found.**",
+		"## Result Envelopes",
+		"| Registered formatters | 3 |",
+		"| Nil render of the zero value | 1 |",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(output, want) {
@@ -290,7 +391,12 @@ func TestPrintReport_GroupsViolationsByCategory(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		printMetadataReport(individual, nil, violations, nil)
+		printMetadataReport(individual, nil, violations, nil, envelopeAudit{
+			NilOnPopulated:       []string{"x.Output (x.FormatMarkdown)"},
+			Unannotated:          []string{"y.Output [multi-page] block 0 (*mcp.TextContent)"},
+			Panicked:             []string{"z.Output [zero]: nil map"},
+			RegistrationProblems: []string{"duplicate Markdown formatter for w.Output: the first registration is kept"},
+		})
 	})
 
 	for _, want := range []string{
@@ -301,6 +407,11 @@ func TestPrintReport_GroupsViolationsByCategory(t *testing.T) {
 		"`tool_a` | bad name",
 		"`tool_b` | too short",
 		"### Individual Tools (2)",
+		"### Nil render of the populated value (1)",
+		"- `x.Output (x.FormatMarkdown)`",
+		"### Content blocks without Annotations (1)",
+		"### Formatters that panicked (1)",
+		"### Registration problems (1)",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(output, want) {
@@ -323,7 +434,7 @@ func TestPrintReport_ListsAllMetaToolsAndTruncatesDescription(t *testing.T) {
 	vs := []violation{{tool: "tool_a", category: "naming", detail: "bad"}}
 
 	output := captureStdout(t, func() {
-		printMetadataReport(individual, meta, vs, nil)
+		printMetadataReport(individual, meta, vs, nil, envelopeAudit{})
 	})
 
 	if !strings.Contains(output, "### Meta-Tools (1)") {

@@ -615,6 +615,8 @@ Consolidated MCP tool surface quality audit. It combines metadata-quality checks
 
 Both views judge the surface as a client receives it, because both list it through `cmd/internal/mcpsurface`: the meta view therefore includes `gitlab_server`, and every schema it inspects has been through the lockdown and the pagination bounds. `make audit-docs` runs the command once with the default `-view=all` rather than once per view, since one listing now serves both.
 
+The metadata view ends with a **Result Envelopes** section (the `envelopes` key of its JSON report): every registered Markdown formatter driven through `MarkdownForResult` with a zero and a populated fixture from `internal/testutil`, counting the nil renders of a zero value apart from those of a populated value, listing every content block that carries no `Annotations`, every formatter that panicked, and the registry's own record of refused or half-honored registrations. It reports and does not gate: the dispatchers annotate every text block on the way out, so a bare block here is a formatter building its own envelope, and the list is the migration's work list.
+
 #### Usage
 
 ```bash

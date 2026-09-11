@@ -4,19 +4,28 @@
 package tools
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
 	"regexp"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/accesstokens"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/cilint"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/civariables"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/deployments"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/elicitationtools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/environments"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/files"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/groups"
@@ -24,6 +33,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issuelinks"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issuenotes"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/iterationdata"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/labels"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/members"
@@ -2060,4 +2070,729 @@ func TestMarkdownForResult_DeleteOutput(t *testing.T) {
 	if !strings.Contains(md, "Resource deleted") {
 		t.Errorf("delete message not in output: %q", md)
 	}
+}
+
+// The runtime structural gate.
+//
+// Every registered formatter is driven through MarkdownForResult with
+// reflective fixtures and the text the client would receive is read with the
+// GFM line model in internal/testutil, which is the only reader here that
+// applies a renderer's block rules rather than a substring check. The rules
+// are the ones the markdown audit proved the tree breaks: a table whose
+// header lazily continues a hint bullet, a footer absorbed as a row, a card
+// row written inside a table, a guidance section ExtractHints cannot read,
+// a heading that counts the page rather than the total, a field GitLab
+// omitted rendered as a glyph, and a hostile value that changes the shape of
+// the document. Every rule reports and none gates in this layer: the
+// findings are the migration's work list, the exception map below is the
+// mechanism the layer that turns the gate on will use, and the one assertion
+// made now is that the gate sees the two files the audit proved broken.
+
+// mdGateCase is one thing the gate renders: a registered type, or a renderer
+// outside the registry driven by hand.
+type mdGateCase struct {
+	// name is what a finding is filed under: the type, or the function.
+	name string
+	// pkg is the package the finding belongs to.
+	pkg string
+	// typ is the registered type, nil for a renderer outside the registry.
+	typ reflect.Type
+	// explicit renders a case outside the registry from the fixture options,
+	// returning "" when the case has no render for that state.
+	explicit func(opts testutil.FixtureOptions) string
+}
+
+// mdGateFinding is one finding the gate reports.
+type mdGateFinding struct {
+	kase   mdGateCase
+	state  string
+	rule   string
+	line   int
+	text   string
+	detail string
+}
+
+// String renders a finding as one report line.
+func (f mdGateFinding) String() string {
+	where := ""
+	if f.line > 0 {
+		where = fmt.Sprintf(" line %d: %q", f.line, f.text)
+	}
+	return fmt.Sprintf("%s %s [%s]%s: %s", f.rule, f.kase.name, f.state, where, f.detail)
+}
+
+// mdGateExceptions names the cases the gate leaves out, each with the reason,
+// keyed by the case name a finding prints. It is empty while the gate
+// reports only; the layer that turns a rule on fills it with the cases that
+// rule accepts, and an entry naming no case fails, so a fixed formatter
+// cannot leave a stale exception behind.
+var mdGateExceptions = map[string]string{}
+
+// mdGateStates are the populated states every case is rendered in beside the
+// zero value.
+var mdGateStates = []testutil.FixtureState{testutil.FixtureZero, testutil.FixtureMultiPage, testutil.FixtureSinglePage}
+
+// mdGateCases lists everything the gate renders: every registered type, and
+// the renderers outside the registry the plan names.
+func mdGateCases(t *testing.T) []mdGateCase {
+	t.Helper()
+	var cases []mdGateCase
+	for _, typ := range toolutil.RegisteredMarkdownTypes() {
+		cases = append(cases, mdGateCase{name: typ.String(), pkg: mdGatePackage(typ), typ: typ})
+	}
+	cases = append(cases, mdGateExplicitCases(t)...)
+	return cases
+}
+
+// mdGatePackage names the package a type belongs to the way a finding does.
+func mdGatePackage(typ reflect.Type) string {
+	for typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	return filepath.Base(typ.PkgPath())
+}
+
+// mdGateExplicitCases are the renderers no registration reaches: the shared
+// iteration renderers two packages wrap, the elicitation outcomes, and the
+// dynamic surface's find, search and describe output.
+func mdGateExplicitCases(t *testing.T) []mdGateCase {
+	t.Helper()
+	registry := dynamic.NewRegistryFromCatalog(mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true, IncludeMCP: true}))
+	populated := func(opts testutil.FixtureOptions) bool { return opts.State != testutil.FixtureZero }
+	iteration := func(opts testutil.FixtureOptions) iterationdata.Output {
+		return testutil.FillFixture(reflect.TypeFor[iterationdata.Output](), opts).Interface().(iterationdata.Output)
+	}
+	return []mdGateCase{
+		{name: "iterationdata.FormatOutputMarkdown", pkg: "iterationdata", explicit: func(opts testutil.FixtureOptions) string {
+			return iterationdata.FormatOutputMarkdown(iteration(opts), "Use action 'iteration_list' to list iterations")
+		}},
+		{name: "iterationdata.FormatListMarkdown", pkg: "iterationdata", explicit: func(opts testutil.FixtureOptions) string {
+			var items []iterationdata.Output
+			if populated(opts) {
+				items = []iterationdata.Output{iteration(opts), iteration(opts)}
+			}
+			pagination := testutil.FillFixture(reflect.TypeFor[toolutil.PaginationOutput](), opts).Interface().(toolutil.PaginationOutput)
+			return iterationdata.FormatListMarkdown("Iterations", "No iterations found.", items, pagination)
+		}},
+		{name: "elicitationtools.UnsupportedResult", pkg: "elicitationtools", explicit: func(opts testutil.FixtureOptions) string {
+			if !populated(opts) {
+				return ""
+			}
+			return extractTextContent(elicitationtools.UnsupportedResult("gitlab_interactive_issue_create"))
+		}},
+		{name: "elicitationtools.CancelledResult", pkg: "elicitationtools", explicit: func(opts testutil.FixtureOptions) string {
+			if !populated(opts) {
+				return ""
+			}
+			return extractTextContent(elicitationtools.CancelledResult("Issue creation cancelled"))
+		}},
+		{name: "elicitationtools.FormatResult", pkg: "elicitationtools", explicit: func(opts testutil.FixtureOptions) string {
+			issue := testutil.FillFixture(reflect.TypeFor[issues.Output](), opts).Interface().(issues.Output)
+			return extractTextContent(elicitationtools.FormatResult(issue))
+		}},
+		{name: "dynamic.Registry.Search", pkg: "dynamic", explicit: func(opts testutil.FixtureOptions) string {
+			if !populated(opts) {
+				return ""
+			}
+			result, _, err := registry.Search(context.Background(), nil, dynamic.SearchInput{Query: "project create", Explain: true})
+			if err != nil {
+				return ""
+			}
+			return extractTextContent(result)
+		}},
+		{name: "dynamic.Registry.Find", pkg: "dynamic", explicit: func(opts testutil.FixtureOptions) string {
+			if !populated(opts) {
+				return ""
+			}
+			result, _, err := registry.Find(context.Background(), nil, dynamic.FindInput{Query: "merge request approve", Explain: true})
+			if err != nil {
+				return ""
+			}
+			return extractTextContent(result)
+		}},
+		{name: "dynamic.Registry.Describe", pkg: "dynamic", explicit: func(opts testutil.FixtureOptions) string {
+			if !populated(opts) {
+				return ""
+			}
+			result, _, err := registry.Describe(context.Background(), nil, dynamic.DescribeInput{Actions: []string{"project.create", "issue.list"}})
+			if err != nil {
+				return ""
+			}
+			return extractTextContent(result)
+		}},
+	}
+}
+
+// render produces the text the client would receive for one case in one
+// state: through MarkdownForResult for a registered type, so the text is
+// exactly what the dispatcher hands the client, and a panic is itself
+// reported rather than ending the run.
+func (c mdGateCase) render(opts testutil.FixtureOptions) (md string, rendered bool, panicked string) {
+	defer func() {
+		if r := recover(); r != nil {
+			panicked = fmt.Sprint(r)
+		}
+	}()
+	if c.explicit != nil {
+		md = c.explicit(opts)
+		return md, md != "", ""
+	}
+	value := testutil.FillFixture(c.typ, opts)
+	result := toolutil.MarkdownForResult(value.Interface())
+	if result == nil {
+		return "", false, ""
+	}
+	md = extractTextContent(result)
+	return md, md != "", ""
+}
+
+// mdGateOptional lists the fields a case's fixture can leave absent, for the
+// differential; a case outside the registry has none.
+func (c mdGateCase) optionalFields() []testutil.FixtureField {
+	if c.typ == nil {
+		return nil
+	}
+	return testutil.OptionalFields(c.typ)
+}
+
+// mdGateReport is one run over every case, built once and read by every
+// rule's test.
+type mdGateReport struct {
+	cases    []mdGateCase
+	findings []mdGateFinding
+	rendered int
+	silent   int
+}
+
+var (
+	mdGateOnce   sync.Once
+	mdGateShared *mdGateReport
+)
+
+// mdGateScan renders every case in every state and applies the rules that
+// read one render: the table, block and hint rules of the line model, the
+// hint agreement with ExtractHints, the preserve-links hint over a render
+// with no link, the raw timestamp, and the list heading against the
+// pagination it was rendered with.
+func mdGateScan(t *testing.T) *mdGateReport {
+	t.Helper()
+	mdGateOnce.Do(func() {
+		report := &mdGateReport{cases: mdGateCases(t)}
+		for _, c := range report.cases {
+			for _, state := range mdGateStates {
+				report.scan(c, state)
+			}
+			report.scanListHeading(c)
+		}
+		mdGateShared = report
+	})
+	return mdGateShared
+}
+
+// scan renders one case in one state and applies the single-render rules.
+func (r *mdGateReport) scan(c mdGateCase, state testutil.FixtureState) {
+	md, rendered, panicked := c.render(testutil.FixtureOptions{State: state})
+	if panicked != "" {
+		r.add(c, state, "P0", 0, "", "the formatter panicked: "+panicked)
+		return
+	}
+	if !rendered {
+		r.silent++
+		return
+	}
+	r.rendered++
+	doc := testutil.ScanGFM(md)
+	for _, f := range doc.Findings {
+		r.add(c, state, f.Rule, f.Line, f.Text, f.Detail)
+	}
+	if len(doc.Hints) == 1 {
+		if got := toolutil.ExtractHints(md); !mdGateSameHints(got, doc.Hints[0].Bullets) {
+			r.add(c, state, "H1", doc.Hints[0].Line+1, doc.Lines[doc.Hints[0].Line],
+				fmt.Sprintf("the guidance section holds %d hint(s) and ExtractHints reads %d: the section is neither leading nor trailing", len(doc.Hints[0].Bullets), len(got)))
+		}
+	}
+	if strings.Contains(md, toolutil.HintPreserveLinks) {
+		switch {
+		case state == testutil.FixtureZero:
+			r.add(c, state, "H2", 0, "", "HintPreserveLinks on the empty render, which has no link to preserve")
+		case !mdGateHasFixtureLink(doc.Links):
+			r.add(c, state, "H2", 0, "", "HintPreserveLinks over a render with no link outside the hints")
+		}
+	}
+	if state != testutil.FixtureZero {
+		for _, raw := range []string{"2001-02-03T04:05:06", "2001-02-03 04:05:06", "+0000 UTC"} {
+			if strings.Contains(md, raw) {
+				r.add(c, state, "R1", 0, "", "the sentinel instant renders as "+raw+" rather than through FormatTime")
+				break
+			}
+		}
+	}
+}
+
+// scanListHeading applies the list heading rule to a case whose output
+// carries offset pagination: rendered with a total of 45 and two rows, the
+// heading must count 45; rendered with no total and a next page, it must not
+// count 0.
+func (r *mdGateReport) scanListHeading(c mdGateCase) {
+	if c.typ == nil || !mdGateHasPagination(c.typ) {
+		return
+	}
+	multi, rendered, _ := c.render(testutil.FixtureOptions{State: testutil.FixtureMultiPage})
+	if rendered {
+		if n, counted := mdGateHeadingCount(multi); counted && n != 45 {
+			r.add(c, testutil.FixtureMultiPage, "L1", 1, mdGateFirstLine(multi), fmt.Sprintf("the heading counts %d while the response reports 45 in all", n))
+		}
+	}
+	keyset, rendered, _ := c.render(testutil.FixtureOptions{State: testutil.FixtureKeyset})
+	if rendered {
+		if n, counted := mdGateHeadingCount(keyset); counted && n == 0 {
+			r.add(c, testutil.FixtureKeyset, "L2", 1, mdGateFirstLine(keyset), "the heading counts 0 while rows are shown and GitLab sent no total")
+		}
+	}
+}
+
+// add records one finding, unless the case is excepted.
+func (r *mdGateReport) add(c mdGateCase, state testutil.FixtureState, rule string, line int, text, detail string) {
+	if _, excepted := mdGateExceptions[c.name]; excepted {
+		return
+	}
+	r.findings = append(r.findings, mdGateFinding{kase: c, state: state.String(), rule: rule, line: line, text: text, detail: detail})
+}
+
+// mdGateSortedKeys returns a set's members in order.
+func mdGateSortedKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// mdGateSameHints compares the hints ExtractHints read with the bullets the
+// line model found under the heading.
+func mdGateSameHints(got, bullets []string) bool {
+	if len(got) != len(bullets) {
+		return false
+	}
+	for i := range got {
+		if strings.TrimSpace(got[i]) != strings.TrimSpace(bullets[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// mdGateHasFixtureLink reports whether any link points at a fixture URL.
+func mdGateHasFixtureLink(links []string) bool {
+	for _, link := range links {
+		if strings.HasPrefix(link, testutil.FixtureURLBase) {
+			return true
+		}
+	}
+	return false
+}
+
+// mdGateHasPagination reports whether a type carries offset pagination at
+// its top level, which is what the list heading rule reads.
+func mdGateHasPagination(typ reflect.Type) bool {
+	for typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	if typ.Kind() != reflect.Struct {
+		return false
+	}
+	for field := range typ.Fields() {
+		if field.Type == reflect.TypeFor[toolutil.PaginationOutput]() {
+			return true
+		}
+	}
+	return false
+}
+
+var mdGateHeadingCountRe = regexp.MustCompile(`^## .*\((\d+)\)\s*$`)
+
+// mdGateHeadingCount reads the count a list heading reports, when it
+// reports one as a bare number.
+func mdGateHeadingCount(md string) (int, bool) {
+	m := mdGateHeadingCountRe.FindStringSubmatch(mdGateFirstLine(md))
+	if m == nil {
+		return 0, false
+	}
+	n := 0
+	for _, r := range m[1] {
+		n = n*10 + int(r-'0')
+	}
+	return n, true
+}
+
+// mdGateFirstLine returns the first line of a render.
+func mdGateFirstLine(md string) string {
+	line, _, _ := strings.Cut(md, "\n")
+	return line
+}
+
+// mdGateLog writes a report's findings to the test log: the counts, the
+// packages, and every finding on its own line, so a run with -v is the work
+// list and a run without is the summary.
+func mdGateLog(t *testing.T, title string, findings []mdGateFinding) {
+	t.Helper()
+	byRule := map[string]int{}
+	ruleNames := map[string]bool{}
+	pkgs := map[string]bool{}
+	for _, f := range findings {
+		byRule[f.rule]++
+		ruleNames[f.rule] = true
+		pkgs[f.kase.pkg] = true
+	}
+	var rules []string
+	for _, rule := range mdGateSortedKeys(ruleNames) {
+		rules = append(rules, fmt.Sprintf("%s %d", rule, byRule[rule]))
+	}
+	t.Logf("%s: %d finding(s) in %d package(s); by rule: %s", title, len(findings), len(pkgs), strings.Join(rules, ", "))
+	t.Logf("%s: packages: %s", title, strings.Join(mdGateSortedKeys(pkgs), " "))
+	for _, f := range findings {
+		t.Logf("finding: %s", f)
+	}
+}
+
+// TestMarkdownRegistry_EveryFormatter_KeepsTableBoundaries drives every
+// registered formatter and the renderers outside the registry through the
+// line model and reports what the client would render differently from what
+// the formatter wrote. It reports rather than fails, and asserts the one
+// thing that proves the gate works: the two files the audit proved broken,
+// mergetrains and iterationdata, are among what it reports.
+func TestMarkdownRegistry_EveryFormatter_KeepsTableBoundaries(t *testing.T) {
+	report := mdGateScan(t)
+
+	mdGateLog(t, "structural scan", report.findings)
+	t.Logf("structural scan: %d case(s), %d render(s), %d silent render(s)", len(report.cases), report.rendered, report.silent)
+	for _, name := range []string{"mergetrains", "iterationdata"} {
+		t.Run(name+" is reported", func(t *testing.T) {
+			for _, f := range report.findings {
+				if f.kase.pkg == name {
+					return
+				}
+			}
+			t.Errorf("the gate reports nothing for %s, whose tables the audit proved broken, so the gate does not see the defect it exists for", name)
+		})
+	}
+	for _, f := range report.findings {
+		if f.rule == "P0" {
+			t.Errorf("%s", f)
+		}
+	}
+}
+
+// TestMarkdownRegistry_Exceptions_NameACaseEach checks the discipline every
+// declaration table here is held to: an exception that matches no case
+// fails, so a fixed formatter cannot leave a stale one behind.
+func TestMarkdownRegistry_Exceptions_NameACaseEach(t *testing.T) {
+	report := mdGateScan(t)
+	names := map[string]bool{}
+	for _, c := range report.cases {
+		names[c.name] = true
+	}
+
+	for name, reason := range mdGateExceptions {
+		t.Run(name, func(t *testing.T) {
+			if reason == "" {
+				t.Errorf("the exception for %s gives no reason", name)
+			}
+			if !names[name] {
+				t.Errorf("the exception for %s names no case the gate renders", name)
+			}
+		})
+	}
+}
+
+// TestMarkdownRegistry_Registrations_HaveNoUndeclaredProblems pins the
+// registrations the registry refused or could only half honor to the ones
+// the tree has today, a baseline that may only shrink, so a new duplicate or
+// a new interface-typed registration fails while the known ones are retired
+// by the migration. The audit knew of two; the record shows twelve, because
+// the shared note and discussion shapes are registered by every domain that
+// renders them and the first init to run wins for all of them, which is the
+// same defect as the runner token with more surfaces behind it.
+func TestMarkdownRegistry_Registrations_HaveNoUndeclaredProblems(t *testing.T) {
+	got := toolutil.MarkdownRegistrationProblems()
+
+	want := []string{
+		"Markdown formatter registered for the interface type interface {}: nothing looks a formatter up by an interface",
+		"duplicate Markdown formatter for iterationdata.Output: the first registration is kept",
+		"duplicate Markdown formatter for labeldata.Output: the first registration is kept",
+		"duplicate Markdown formatter for runners.AuthTokenOutput: the first registration is kept",
+		"duplicate Markdown formatter for toolutil.DiscussionThreadNoteOutput: the first registration is kept",
+		"duplicate Markdown formatter for toolutil.DiscussionThreadNoteOutput: the first registration is kept",
+		"duplicate Markdown formatter for toolutil.DiscussionThreadNoteOutput: the first registration is kept",
+		"duplicate Markdown formatter for toolutil.DiscussionThreadOutput: the first registration is kept",
+		"duplicate Markdown formatter for toolutil.DiscussionThreadOutput: the first registration is kept",
+		"duplicate Markdown formatter for toolutil.DiscussionThreadOutput: the first registration is kept",
+		"duplicate Markdown formatter for toolutil.NoteOutput: the first registration is kept",
+		"duplicate Markdown formatter for toolutil.NoteOutput: the first registration is kept",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("registration problems:\n got %q\nwant %q", got, want)
+	}
+}
+
+// mdGateGlyphRules are the glyphs an absent value must not render as, each
+// with what it reads as.
+var mdGateGlyphRules = []struct {
+	re     *regexp.Regexp
+	detail string
+}{
+	{regexp.MustCompile(`@(?:\s|$|\||\*|\))`), "an @ with no handle"},
+	{regexp.MustCompile(`\[\]\(|\]\(\)`), "a link with an empty half"},
+	{regexp.MustCompile(`(?:\*\*:|:\*\*)\s*$`), "a label with nothing after it"},
+	{regexp.MustCompile(`^\|[^|]*[^|\s][^|]*\|\s*\|\s*$`), "a two-cell row whose value cell is empty"},
+	{regexp.MustCompile(`(?:^|[^\w])[#!]0(?:\D|$)`), "a zero reference"},
+	{regexp.MustCompile(`0001-01-01`), "the zero time"},
+	{regexp.MustCompile(`Page 0 of 0`), "a zero page"},
+}
+
+var mdGateZeroIDRe = regexp.MustCompile(`(?:^|[\s|:])0(?:[\s|]|$)`)
+
+// TestMarkdownRegistry_AbsentValue_RendersNoGlyph re-renders every registered
+// type with one optional field zeroed at a time and reads the lines that
+// changed for a glyph that reads as data: an @ with no handle, an empty link
+// half, a label with nothing after it, a zero reference or ID, the zero
+// time. The oracle for optional is the struct's own declaration. It reports
+// rather than fails.
+func TestMarkdownRegistry_AbsentValue_RendersNoGlyph(t *testing.T) {
+	report := mdGateScan(t)
+	var findings []mdGateFinding
+	for _, c := range report.cases {
+		fields := c.optionalFields()
+		if len(fields) == 0 {
+			continue
+		}
+		base, rendered, _ := c.render(testutil.FixtureOptions{State: testutil.FixtureMultiPage})
+		if !rendered {
+			continue
+		}
+		baseLines := map[string]bool{}
+		for line := range strings.SplitSeq(base, "\n") {
+			baseLines[line] = true
+		}
+		baseRules := map[string]bool{}
+		for _, rule := range testutil.ScanGFM(base).Rules() {
+			baseRules[rule] = true
+		}
+		for _, field := range fields {
+			findings = append(findings, mdGateAbsent(c, field, baseLines, baseRules)...)
+		}
+	}
+
+	mdGateLog(t, "absent-value differential", findings)
+}
+
+// mdGateAbsent renders one case with one field zeroed and judges the lines
+// that changed.
+func mdGateAbsent(c mdGateCase, field testutil.FixtureField, baseLines, baseRules map[string]bool) []mdGateFinding {
+	value := testutil.FillFixture(c.typ, testutil.FixtureOptions{State: testutil.FixtureMultiPage})
+	if !testutil.ZeroField(value, field.Path) {
+		return nil
+	}
+	md, rendered, panicked := mdGateRenderValue(value)
+	if panicked != "" {
+		return []mdGateFinding{{kase: c, state: "absent " + field.Name, rule: "P0", detail: "the formatter panicked with the field absent: " + panicked}}
+	}
+	if !rendered {
+		return nil
+	}
+	var findings []mdGateFinding
+	for i, line := range strings.Split(md, "\n") {
+		if baseLines[line] {
+			continue
+		}
+		for _, rule := range mdGateGlyphRules {
+			if rule.re.MatchString(line) {
+				findings = append(findings, mdGateFinding{kase: c, state: "absent " + field.Name, rule: "A1", line: i + 1, text: line, detail: rule.detail})
+			}
+		}
+		if strings.HasSuffix(field.Name, "ID") && mdGateZeroIDRe.MatchString(line) {
+			findings = append(findings, mdGateFinding{kase: c, state: "absent " + field.Name, rule: "A1", line: i + 1, text: line, detail: "an ID of 0"})
+		}
+	}
+	for _, f := range testutil.ScanGFM(md).Findings {
+		if !baseRules[f.Rule] {
+			findings = append(findings, mdGateFinding{kase: c, state: "absent " + field.Name, rule: "A2", line: f.Line, text: f.Text, detail: f.Rule + " appears only with the field absent: " + f.Detail})
+		}
+	}
+	return findings
+}
+
+// mdGateRenderValue renders one filled value through the registry.
+func mdGateRenderValue(value reflect.Value) (md string, rendered bool, panicked string) {
+	defer func() {
+		if r := recover(); r != nil {
+			panicked = fmt.Sprint(r)
+		}
+	}()
+	result := toolutil.MarkdownForResult(value.Interface())
+	if result == nil {
+		return "", false, ""
+	}
+	md = extractTextContent(result)
+	return md, md != "", ""
+}
+
+// mdGateHostile are the values a GitLab-authored string is set to, each
+// aimed at one construct: a cell, a heading, a list item, a link, raw HTML,
+// a fence, and the server's own guidance section.
+var mdGateHostile = []struct {
+	name    string
+	payload string
+}{
+	{"pipe", "x|y"},
+	{"heading", "x\n## injected"},
+	{"item", "x\n- injected"},
+	{"link", "x](http://attacker.invalid/y)"},
+	{"html", `<a href="http://attacker.invalid">x</a>`},
+	{"fence", "x\n```\ninjected"},
+	{"guidance", "x\n" + testutil.GFMHintsHeading + "\n- injected"},
+}
+
+// TestMarkdownRegistry_HostileValues_ChangeNoStructure renders every case
+// twice, with benign sentinels and with one hostile payload in every string
+// field a directive in the package does not declare safe, and compares the
+// structure outside quotes and fences: the count of headings, top-level
+// items, table rows and cells, the hints ExtractHints reads, and the link
+// destinations. It is the dynamic twin of the escaping gate, reading the
+// bytes the client receives rather than the source, so it does not share the
+// static walk's blind spots. It reports rather than fails.
+func TestMarkdownRegistry_HostileValues_ChangeNoStructure(t *testing.T) {
+	report := mdGateScan(t)
+	exempt := map[string]map[string]bool{}
+	var findings []mdGateFinding
+	for _, c := range report.cases {
+		if c.typ == nil && !strings.HasPrefix(c.name, "iterationdata.") && c.name != "elicitationtools.FormatResult" {
+			continue
+		}
+		base, rendered, _ := c.render(testutil.FixtureOptions{State: testutil.FixtureMultiPage})
+		if !rendered {
+			continue
+		}
+		if _, known := exempt[c.pkg]; !known {
+			exempt[c.pkg] = mdGateDirectiveFields(t, c)
+		}
+		baseDoc := testutil.ScanGFM(base)
+		baseHints := toolutil.ExtractHints(base)
+		for _, hostile := range mdGateHostile {
+			// An address field keeps its fixture URL: a payload there is a
+			// destination and not an injection, and the rule asks whether a
+			// value that is not an address can open a link.
+			text := func(path string) string {
+				if name := mdGateLastField(path); exempt[c.pkg][name] || testutil.FixtureURLShaped(name) {
+					return testutil.FixtureText(path)
+				}
+				return hostile.payload
+			}
+			md, hostileRendered, panicked := c.render(testutil.FixtureOptions{State: testutil.FixtureMultiPage, Text: text})
+			if panicked != "" {
+				findings = append(findings, mdGateFinding{kase: c, state: "hostile " + hostile.name, rule: "P0", detail: "the formatter panicked: " + panicked})
+				continue
+			}
+			if !hostileRendered {
+				continue
+			}
+			findings = append(findings, mdGateCompare(c, hostile.name, baseDoc, baseHints, md)...)
+		}
+	}
+
+	mdGateLog(t, "hostile values", findings)
+}
+
+// mdGateCompare reports every way a hostile render's structure differs from
+// the benign one.
+func mdGateCompare(c mdGateCase, hostile string, base *testutil.GFMDocument, baseHints []string, md string) []mdGateFinding {
+	doc := testutil.ScanGFM(md)
+	state := "hostile " + hostile
+	var findings []mdGateFinding
+	report := func(detail string) {
+		findings = append(findings, mdGateFinding{kase: c, state: state, rule: "X1", detail: detail})
+	}
+	if len(doc.Headings) != len(base.Headings) {
+		report(fmt.Sprintf("the value adds or removes a heading: %d became %d", len(base.Headings), len(doc.Headings)))
+	}
+	if len(doc.Items) != len(base.Items) {
+		report(fmt.Sprintf("the value adds or removes a top-level list item: %d became %d", len(base.Items), len(doc.Items)))
+	}
+	if doc.Rows != base.Rows || doc.Cells != base.Cells {
+		report(fmt.Sprintf("the value changes the table: %d row(s) and %d cell(s) became %d and %d", base.Rows, base.Cells, doc.Rows, doc.Cells))
+	}
+	if hints := toolutil.ExtractHints(md); len(hints) != len(baseHints) {
+		report(fmt.Sprintf("the value adds or removes a hint: %d became %d", len(baseHints), len(hints)))
+	}
+	if foreign := mdGateForeignLinks(doc.Links) - mdGateForeignLinks(base.Links); foreign > 0 {
+		report(fmt.Sprintf("the value opens %d link(s) to a destination the fixture never named", foreign))
+	}
+	if hostile == "html" {
+		for _, line := range doc.Content {
+			if strings.Contains(line, `<a href="http://attacker.invalid">`) {
+				findings = append(findings, mdGateFinding{kase: c, state: state, rule: "X2", text: line, detail: "the value reaches the page as a raw tag"})
+				break
+			}
+		}
+	}
+	return findings
+}
+
+// mdGateForeignLinks counts the link destinations outside the fixture's
+// origin.
+func mdGateForeignLinks(links []string) int {
+	n := 0
+	for _, link := range links {
+		if !strings.HasPrefix(link, testutil.FixtureURLBase) {
+			n++
+		}
+	}
+	return n
+}
+
+// mdGateLastField returns the field name a fixture path ends with, the slice
+// index dropped.
+func mdGateLastField(path string) string {
+	name := path
+	if i := strings.LastIndex(path, "."); i >= 0 {
+		name = path[i+1:]
+	}
+	return strings.TrimRight(name, "0123456789")
+}
+
+var mdGateDirectiveRe = regexp.MustCompile(`//gitlab:allow-unescaped\s+([^:]+):`)
+
+var mdGateSelectorRe = regexp.MustCompile(`\.([A-Za-z_]\w*)`)
+
+// mdGateDirectiveFields reads the field names the escaping directives of a
+// case's package declare safe, mapped by the last selector of each
+// expression, which errs toward exempting too much rather than inventing a
+// finding.
+func mdGateDirectiveFields(t *testing.T, c mdGateCase) map[string]bool {
+	t.Helper()
+	dir := c.pkg
+	if c.pkg == "toolutil" {
+		dir = filepath.Join("..", "toolutil")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return map[string]bool{}
+	}
+	fields := map[string]bool{}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		src, readErr := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if readErr != nil {
+			t.Fatalf("read %s: %v", entry.Name(), readErr)
+		}
+		for _, m := range mdGateDirectiveRe.FindAllStringSubmatch(string(src), -1) {
+			for _, sel := range mdGateSelectorRe.FindAllStringSubmatch(m[1], -1) {
+				fields[sel[1]] = true
+			}
+		}
+	}
+	return fields
 }

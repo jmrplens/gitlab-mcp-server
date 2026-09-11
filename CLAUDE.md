@@ -70,7 +70,7 @@ gitlab-mcp-server/
 │   ├── audit_metrics/           # Audits MCP tool/resource/prompt metrics
 │   ├── audit_readonly_graphql/  # Fails when an action classified ReadOnly can reach a GraphQL mutation, which `--read-only` and a read_api token's narrowed surface would both keep (make check-readonly-graphql). The documents are `cmd/internal/graphqldocs`' inventory, the same one the schema gate judges, so a document moved into a `.graphql` file is seen here too; only the read-against-write rule is its own. A document that inventory holds and this gate can tie to no handler, having no defining object and no literal in a body, is itself a finding rather than a silence
 │   ├── audit_supply_chain/      # Audits five release-configuration invariants: SHA-pinned uses:, credentialed jobs that run no run-time-resolved code, stated Dependabot cooldowns, a current SECURITY.md, signature-verifying installers (make check-supply-chain)
-│   ├── audit_surface_quality/   # Consolidated surface audit: metadata violations + output quality (was audit_tools + audit_output)
+│   ├── audit_surface_quality/   # Consolidated surface audit: metadata violations + output quality (was audit_tools + audit_output), plus the report-only result-envelope section driving every registered Markdown formatter with a zero and a populated fixture
 │   ├── audit_test_goroutines/   # Audits testing.T aborts made off the test goroutine (A/B categories, --check gate)
 │   ├── audit_test_names/        # Audits test function naming compliance; -check-files gates test-file naming (make check-test-file-names)
 │   ├── audit_test_subtests/     # Audits case loops that assert without a t.Run subtest; -fix rewrites the unambiguous ones (make check-test-subtests)

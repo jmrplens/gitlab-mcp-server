@@ -532,7 +532,19 @@ migration to name rather than guessed at here:
   formatter that needs a table per nested object should open a Section.
 - **`Note` for multi-paragraph server prose.** Nothing in the tree writes
   one; if a migration finds it, `Note` gains a paragraph form then.
-- **The runtime scan** (L1-09) that turns invariants 1 to 5 into CI failures.
-  The static card gate (`plan.gates[0]`, L1-08) exists and reports; naming it
-  beside `all` in `make check-md-escaping` is the layer that finishes the
-  migration, since every row it lists is a row Card has not written yet.
+- **Turning the two gates on.** Both exist and report. The static card gate
+  (`plan.gates[0]`, L1-08) is named beside `all` in `make check-md-escaping`
+  by the layer that finishes the migration, since every row it lists is a row
+  Card has not written yet. The runtime scan (L1-09) lives in
+  `internal/tools/markdown_test.go` (`TestMarkdownRegistry_*`), driving every
+  registered type through `MarkdownForResult` with the reflective fixtures of
+  `internal/testutil` and reading the text with the GFM line model there
+  (`testutil.ScanGFM`); it logs its findings by rule and fails only on the
+  proof that it works (mergetrains and iterationdata reported), on an
+  exception naming no case, and on a registration problem the baseline does
+  not list. Measured at L1-09: 571 structural findings in 104 packages (T1
+  41, T3 15, T4 54, B1 1, B2 5, B3 62, H1 37, H2 135, L1 52, L2 53, R1 116),
+  51 absent-value findings in 25 packages, 469 hostile-value findings in 63
+  packages (X1 402, X2 67), and twelve registration problems, ten of them
+  the shared note and discussion shapes registered by every domain that
+  renders them. Each rule becomes an assertion when its list is empty.
