@@ -133,16 +133,24 @@ func assertAttestationOutputWithoutTimestamps(t *testing.T, got Output) {
 
 // --- FormatOutputMarkdown ---.
 
+// attestationCardHints is the guidance section every attestation card closes
+// with.
+const attestationCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use `gitlab_download_attestation` to download this attestation's content\n" +
+	"- Use `gitlab_list_attestations` to view all attestations for the project\n"
+
 // TestFormatOutputMarkdown validates the single-attestation markdown renderer.
 // Covers zero-ID (empty), full output with all optional fields, and partial
 // output with some optional fields omitted.
+//
+// Each case pins the whole card. A card is one document — heading, rows,
+// guidance — and a substring assertion cannot tell a row that rendered from a
+// row that landed somewhere Markdown shows as literal text.
 func TestFormatOutputMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    Output
-		want     string
-		notWant  []string
-		contains []string
+		name  string
+		input Output
+		want  string
 	}{
 		{
 			name:  "zero ID returns empty string",
@@ -162,21 +170,19 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				SubjectDigest: "sha256:deadbeef",
 				DownloadURL:   "https://gitlab.example.com/download",
 				CreatedAt:     "2026-06-15T12:00:00Z",
-				ExpireAt:      "2026-06-15T12:00:00Z",
+				ExpireAt:      "2026-07-15T12:00:00Z",
 			},
-			contains: []string{
-				"## Attestation #42 (IID 7)",
-				"**Project ID**: 10",
-				"**Build ID**: 200",
-				"**Status**: success",
-				"**Predicate Kind**: slsa_provenance",
-				"**Predicate Type**: https://slsa.dev/provenance/v0.2",
-				"`sha256:deadbeef`",
-				"**Download URL**",
-				"**Created**: 2026-06-15T12:00:00Z",
-				"**Expires**: 2026-06-15T12:00:00Z",
-				"gitlab_download_attestation",
-			},
+			want: "## Attestation #42 (IID 7)\n\n" +
+				"- **Project ID**: 10\n" +
+				"- **Build ID**: 200\n" +
+				"- **Status**: success\n" +
+				"- **Predicate Kind**: slsa_provenance\n" +
+				"- **Predicate Type**: https://slsa.dev/provenance/v0.2\n" +
+				"- **Subject Digest**: `sha256:deadbeef`\n" +
+				"- **Download URL**: [https://gitlab.example.com/download](https://gitlab.example.com/download)\n" +
+				"- **Created**: 15 Jun 2026 12:00 UTC\n" +
+				"- **Expires**: 15 Jul 2026 12:00 UTC\n" +
+				attestationCardHints,
 		},
 		{
 			name: "partial output omits empty optional fields",
@@ -186,38 +192,18 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				BuildID: 100,
 				Status:  "pending",
 			},
-			contains: []string{
-				"## Attestation #1 (IID 1)",
-				"**Status**: pending",
-			},
-			notWant: []string{
-				"Predicate Kind",
-				"Predicate Type",
-				"Subject Digest",
-				"Download URL",
-				"Created",
-				"Expires",
-			},
+			want: "## Attestation #1 (IID 1)\n\n" +
+				"- **Project ID**: 0\n" +
+				"- **Build ID**: 100\n" +
+				"- **Status**: pending\n" +
+				attestationCardHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatOutputMarkdown(tt.input)
-			if tt.want != "" || (len(tt.contains) == 0 && len(tt.notWant) == 0) {
-				if got != tt.want {
-					t.Errorf("got %q, want %q", got, tt.want)
-				}
-			}
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("output missing %q", s)
-				}
-			}
-			for _, s := range tt.notWant {
-				if strings.Contains(got, s) {
-					t.Errorf("output should not contain %q", s)
-				}
+			if got := FormatOutputMarkdown(tt.input); got != tt.want {
+				t.Errorf("FormatOutputMarkdown() =\n%q\nwant:\n%q", got, tt.want)
 			}
 		})
 	}
@@ -226,17 +212,19 @@ func TestFormatOutputMarkdown(t *testing.T) {
 // --- FormatListMarkdown ---.
 
 // TestFormatListMarkdown validates the attestation list markdown table renderer.
-// Covers empty list (no attestations message) and populated list with table headers.
+// Covers the empty list, which is one sentence and no heading counting zero,
+// and a populated list whose timestamps render in the display form and whose
+// guidance closes the response rather than opening it.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    ListOutput
-		contains []string
+		name  string
+		input ListOutput
+		want  string
 	}{
 		{
-			name:     "empty list shows no-results message",
-			input:    ListOutput{},
-			contains: []string{"No attestations found."},
+			name:  "empty list shows no-results message",
+			input: ListOutput{},
+			want:  "No attestations found.\n",
 		},
 		{
 			name: "populated list renders markdown table",
@@ -259,22 +247,20 @@ func TestFormatListMarkdown(t *testing.T) {
 					},
 				},
 			},
-			contains: []string{
-				"## Attestations (2)",
-				"| ID | IID | Build | Status | Predicate Kind | Created |",
-				"| 1 | 1 | 100 | success | slsa_provenance | 2026-01-01T00:00:00Z |",
-				"| 2 | 2 | 101 | failed |",
-			},
+			want: "## Attestations (2)\n\n" +
+				"| ID | IID | Build | Status | Predicate Kind | Created |\n" +
+				"| --- | --- | --- | --- | --- | --- |\n" +
+				"| 1 | 1 | 100 | success | slsa_provenance | 1 Jan 2026 00:00 UTC |\n" +
+				"| 2 | 2 | 101 | failed |  | 1 Feb 2026 00:00 UTC |\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use `gitlab_download_attestation` with an IID from the table to fetch one attestation's bundle\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatListMarkdown(tt.input)
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("output missing %q\ngot:\n%s", s, got)
-				}
+			if got := FormatListMarkdown(tt.input); got != tt.want {
+				t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, tt.want)
 			}
 		})
 	}
@@ -283,13 +269,13 @@ func TestFormatListMarkdown(t *testing.T) {
 // --- FormatDownloadMarkdown ---.
 
 // TestFormatDownloadMarkdown validates the download result markdown renderer.
-// Covers zero IID (empty) and populated output with size and content info.
+// Covers zero IID (empty) and populated output with size and content info,
+// both pinned as whole documents.
 func TestFormatDownloadMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    DownloadOutput
-		want     string
-		contains []string
+		name  string
+		input DownloadOutput
+		want  string
 	}{
 		{
 			name:  "zero IID returns empty string",
@@ -303,28 +289,18 @@ func TestFormatDownloadMarkdown(t *testing.T) {
 				Size:           1024,
 				ContentBase64:  "dGVzdA==",
 			},
-			contains: []string{
-				"## Attestation Download (IID 7)",
-				"**Size**: 1024 bytes",
-				"Base64-encoded",
-				"content_base64",
-				"gitlab_list_attestations",
-			},
+			want: "## Attestation Download (IID 7)\n\n" +
+				"- **Size**: 1024 bytes\n" +
+				"- **Content**: Base64-encoded in the `content_base64` field\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use `gitlab_list_attestations` to view all attestations for the project\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatDownloadMarkdown(tt.input)
-			if tt.want != "" || len(tt.contains) == 0 {
-				if tt.want != "" && got != tt.want {
-					t.Errorf("got %q, want %q", got, tt.want)
-				}
-			}
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("output missing %q\ngot:\n%s", s, got)
-				}
+			if got := FormatDownloadMarkdown(tt.input); got != tt.want {
+				t.Errorf("FormatDownloadMarkdown() =\n%q\nwant:\n%q", got, tt.want)
 			}
 		})
 	}

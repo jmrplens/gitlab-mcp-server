@@ -2,6 +2,7 @@ package containerregistry
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -9,171 +10,191 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatRepositoryMarkdown formats a single registry repository as markdown.
+// FormatRepositoryMarkdown renders one registry repository as the card of one
+// object.
 func FormatRepositoryMarkdown(out RepositoryOutput) string {
-	heading := out.Path
-	if heading == "" {
-		heading = out.Name
+	name := out.Path
+	if name == "" {
+		name = out.Name
 	}
 	var b strings.Builder
 	// The name, the path and the location a path is built into are the image
 	// name whoever pushed it chose. What holds them to a safe character set is
 	// the OCI reference grammar, which a separate service enforces and this one
 	// neither sees nor models.
-	fmt.Fprintf(&b, "## Registry Repository: %s\n\n", toolutil.EscapeMdHeading(heading))
-	fmt.Fprint(&b, toolutil.TblFieldValue)
-	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&b, "| Path | %s |\n", toolutil.EscapeMdTableCell(out.Path))
-	fmt.Fprintf(&b, "| Location | %s |\n", toolutil.EscapeMdTableCell(out.Location))
-	fmt.Fprintf(&b, "| Tags Count | %d |\n", out.TagsCount)
-	if out.Status != "" {
-		//gitlab:allow-unescaped out.Status: a container repository status, a gl.ContainerRegistryStatus GitLab picks from a fixed set (delete_scheduled, delete_failed, delete_ongoing).
-		fmt.Fprintf(&b, "| Status | %s |\n", out.Status)
-	}
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, "| Created At | %s |\n", toolutil.FormatTime(out.CreatedAt))
-	}
-	toolutil.WriteHints(
-		&b,
+	c := toolutil.NewCard(&b, repositoryHeading(name))
+	c.Int("ID", out.ID)
+	c.Field("Name", out.Name)
+	c.Field("Path", out.Path)
+	c.Field("Location", out.Location)
+	// The tag count is sent only when the caller asked for it, so a zero is
+	// GitLab saying nothing rather than a repository with no tags; Count is
+	// the row that writes nothing for it.
+	c.Count("Tags Count", out.TagsCount)
+	c.Field("Status", string(out.Status))
+	c.Time("Created At", out.CreatedAt)
+	c.End(
 		"Use action 'registry_tag_list' to list tags in this repository",
 		"Use action 'registry_delete' to delete this repository",
 	)
 	return b.String()
 }
 
+// repositoryHeading names the card after the image when GitLab sent a name,
+// and after the resource alone when it did not, so the heading never ends in
+// a colon with nothing behind it.
+func repositoryHeading(name string) string {
+	if strings.TrimSpace(name) == "" {
+		return "Registry Repository"
+	}
+	return "Registry Repository: " + name
+}
+
 // FormatRepositoryListMarkdown formats a list of registry repositories.
 func FormatRepositoryListMarkdown(out RepositoryListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Registry Repositories (%d)\n\n", len(out.Repositories))
-	toolutil.WriteListSummary(&b, len(out.Repositories), out.Pagination)
 	if len(out.Repositories) == 0 {
-		b.WriteString("No registry repositories found.\n")
-		toolutil.WritePagination(&b, out.Pagination)
-		return b.String()
+		return toolutil.EmptyMessage("registry repositories")
 	}
-	b.WriteString(toolutil.MarkdownTableHeader("Name", "Path", "Tags Count"))
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Registry Repositories", len(out.Repositories), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Path", "Tags Count"))
 	for _, r := range out.Repositories {
-		fmt.Fprintf(&b, "| %s | %s | %d |\n",
-			toolutil.EscapeMdTableCell(r.Name), toolutil.EscapeMdTableCell(r.Path), r.TagsCount)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(r.ID, 10),
+			toolutil.EscapeMdTableCell(r.Name),
+			toolutil.EscapeMdTableCell(r.Path),
+			countCell(r.TagsCount),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use action 'registry_get' with repository_id for full details",
-	)
+	// The table carries no link, so the footer carries no instruction to keep
+	// the links of a table that has none.
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		"Use action 'registry_get' with repository_id for full details")
 	return b.String()
 }
 
-// FormatTagMarkdown formats a single registry tag as markdown.
+// countCell renders a count GitLab sends only when it was asked for: a dash
+// says nothing was reported, where a bare 0 would claim the repository has no
+// tags. Distinguishing an absent count from a real zero needs the field to be
+// optional in the output type, which is a surface change this does not make.
+func countCell(count int64) string {
+	if count == 0 {
+		return "-"
+	}
+	return strconv.FormatInt(count, 10)
+}
+
+// FormatTagMarkdown renders one registry tag as the card of one object.
 func FormatTagMarkdown(out TagOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Registry Tag: %s\n\n", toolutil.EscapeMdHeading(out.Name))
-	fmt.Fprint(&b, toolutil.TblFieldValue)
-	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&b, "| Path | %s |\n", toolutil.EscapeMdTableCell(out.Path))
-	fmt.Fprintf(&b, "| Location | %s |\n", toolutil.EscapeMdTableCell(out.Location))
-	if out.Digest != "" {
-		//gitlab:allow-unescaped out.Digest: an image manifest digest, an algorithm name and hexadecimal digits.
-		fmt.Fprintf(&b, "| Digest | %s |\n", out.Digest)
-	}
-	if out.Revision != "" {
-		//gitlab:allow-unescaped out.Revision: an image revision, hexadecimal digits only.
-		fmt.Fprintf(&b, "| Revision | %s |\n", out.Revision)
-	}
-	fmt.Fprintf(&b, "| Total Size | %d |\n", out.TotalSize)
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, "| Created At | %s |\n", toolutil.FormatTime(out.CreatedAt))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'registry_tag_delete' to remove this tag",
-	)
+	c := toolutil.NewCard(&b, tagHeading(out.Name))
+	c.Field("Name", out.Name)
+	c.Field("Path", out.Path)
+	c.Field("Location", out.Location)
+	// The digest and the revision are values a reader copies character by
+	// character, so each is a code span sized to its content.
+	c.Code("Digest", out.Digest)
+	c.Code("Revision", out.Revision)
+	c.Code("Short Revision", out.ShortRevision)
+	c.Field("Total Size", fmt.Sprintf("%d bytes", out.TotalSize))
+	c.Time("Created At", out.CreatedAt)
+	c.End("Use action 'registry_tag_delete' to remove this tag")
 	return b.String()
+}
+
+// tagHeading names the card after the tag when GitLab sent a name, and after
+// the resource alone when it did not.
+func tagHeading(name string) string {
+	if strings.TrimSpace(name) == "" {
+		return "Registry Tag"
+	}
+	return "Registry Tag: " + name
 }
 
 // FormatTagListMarkdown formats a list of registry tags.
 func FormatTagListMarkdown(out TagListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Registry Tags (%d)\n\n", len(out.Tags))
-	toolutil.WriteListSummary(&b, len(out.Tags), out.Pagination)
 	if len(out.Tags) == 0 {
-		b.WriteString("No registry tags found.\n")
-		toolutil.WritePagination(&b, out.Pagination)
-		return b.String()
+		return toolutil.EmptyMessage("registry tags")
 	}
-	b.WriteString(toolutil.MarkdownTableHeader("Name", "Path", "Total Size"))
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Registry Tags", len(out.Tags), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Name", "Path", "Total Size (bytes)"))
 	for _, t := range out.Tags {
-		fmt.Fprintf(&b, "| %s | %s | %d |\n",
-			toolutil.EscapeMdTableCell(t.Name), toolutil.EscapeMdTableCell(t.Path), t.TotalSize)
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.EscapeMdTableCell(t.Name),
+			toolutil.EscapeMdTableCell(t.Path),
+			strconv.FormatInt(t.TotalSize, 10),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
+	toolutil.WriteListFooter(&b, out.Pagination, false,
 		"Use action 'registry_tag_get' with tag name for full details",
-		"Use action 'registry_tag_delete_bulk' to clean up old tags",
-	)
+		"Use action 'registry_tag_delete_bulk' to clean up old tags")
 	return b.String()
 }
 
-// FormatProtectionRuleMarkdown formats a single protection rule as markdown.
+// FormatProtectionRuleMarkdown renders one repository-path protection rule as
+// the card of one object.
 func FormatProtectionRuleMarkdown(out ProtectionRuleOutput) string {
 	var b strings.Builder
 	// The pattern is free text this server's own registry_rule_create and
 	// registry_rule_update pass through with no validation of their own.
-	fmt.Fprintf(&b, "## Protection Rule: %s\n\n", toolutil.EscapeMdHeading(out.RepositoryPathPattern))
-	fmt.Fprint(&b, toolutil.TblFieldValue)
-	fmt.Fprintf(&b, "| Repository Path Pattern | %s |\n", toolutil.EscapeMdTableCell(out.RepositoryPathPattern))
-	//gitlab:allow-unescaped out.MinimumAccessLevelForPush: a protection rule access level, a gl.ProtectionRuleAccessLevel GitLab picks from a fixed set (maintainer, owner, admin).
-	fmt.Fprintf(&b, "| Min Access Level (Push) | %s |\n", out.MinimumAccessLevelForPush)
-	//gitlab:allow-unescaped out.MinimumAccessLevelForDelete: a protection rule access level, a gl.ProtectionRuleAccessLevel GitLab picks from a fixed set (maintainer, owner, admin).
-	fmt.Fprintf(&b, "| Min Access Level (Delete) | %s |\n", out.MinimumAccessLevelForDelete)
-	toolutil.WriteHints(
-		&b,
+	c := toolutil.NewCard(&b, protectionRuleHeading("Protection Rule", out.RepositoryPathPattern))
+	c.Int("ID", out.ID)
+	c.Code("Repository Path Pattern", out.RepositoryPathPattern)
+	c.Field("Min Access Level (Push)", string(out.MinimumAccessLevelForPush))
+	c.Field("Min Access Level (Delete)", string(out.MinimumAccessLevelForDelete))
+	c.End(
 		"Use action 'registry_rule_update' to modify access levels",
 		"Use action 'registry_rule_delete' to remove this rule",
 	)
 	return b.String()
 }
 
+// protectionRuleHeading names a rule card after the pattern it matches, and
+// after the resource alone when GitLab sent none.
+func protectionRuleHeading(resource, pattern string) string {
+	if strings.TrimSpace(pattern) == "" {
+		return resource
+	}
+	return resource + ": " + pattern
+}
+
 // FormatProtectionRuleListMarkdown formats a list of protection rules.
+//
+// GitLab sends no pagination headers for this endpoint, so the heading counts
+// what is shown rather than a total nobody reported.
 func FormatProtectionRuleListMarkdown(out ProtectionRuleListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Protection Rules (%d)\n\n", len(out.Rules))
-	toolutil.WriteListSummary(&b, len(out.Rules), out.Pagination)
 	if len(out.Rules) == 0 {
-		b.WriteString("No protection rules found.\n")
-		toolutil.WritePagination(&b, out.Pagination)
-		return b.String()
+		return toolutil.EmptyMessage("protection rules")
 	}
-	b.WriteString(toolutil.MarkdownTableHeader("Pattern", "Min Push", "Min Delete"))
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Protection Rules", len(out.Rules), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Pattern", "Min Push", "Min Delete"))
 	for _, r := range out.Rules {
-		fmt.Fprintf(&b, "| %s | %s | %s |\n",
-			//gitlab:allow-unescaped r.MinimumAccessLevelForPush: a protection rule access level, a gl.ProtectionRuleAccessLevel GitLab picks from a fixed set (maintainer, owner, admin).
-			//gitlab:allow-unescaped r.MinimumAccessLevelForDelete: a protection rule access level, a gl.ProtectionRuleAccessLevel GitLab picks from a fixed set (maintainer, owner, admin).
-			toolutil.EscapeMdTableCell(r.RepositoryPathPattern), r.MinimumAccessLevelForPush, r.MinimumAccessLevelForDelete)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(r.ID, 10),
+			toolutil.MdCodeSpanCell(r.RepositoryPathPattern),
+			toolutil.EscapeMdTableCell(string(r.MinimumAccessLevelForPush)),
+			toolutil.EscapeMdTableCell(string(r.MinimumAccessLevelForDelete)),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use action 'registry_rule_create' to add a new rule",
-	)
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		"Use action 'registry_rule_create' to add a new rule")
 	return b.String()
 }
 
-// FormatTagProtectionRuleMarkdown formats a single tag protection rule as markdown.
+// FormatTagProtectionRuleMarkdown renders one tag protection rule as the card
+// of one object.
 func FormatTagProtectionRuleMarkdown(out TagProtectionRuleOutput) string {
 	var b strings.Builder
 	// An RE2 pattern a person types, where '|' is ordinary alternation, so
 	// "v.+|latest" would end the heading's own line without it.
-	fmt.Fprintf(&b, "## Tag Protection Rule: %s\n\n", toolutil.EscapeMdHeading(out.TagNamePattern))
-	fmt.Fprint(&b, toolutil.TblFieldValue)
-	fmt.Fprintf(&b, "| Tag Name Pattern | %s |\n", toolutil.EscapeMdTableCell(out.TagNamePattern))
-	//gitlab:allow-unescaped protectionAccessLabel(out.MinimumAccessLevelForPush): the same access level through a helper whose only other result is the constant "immutable".
-	fmt.Fprintf(&b, "| Min Access Level (Push) | %s |\n", protectionAccessLabel(out.MinimumAccessLevelForPush))
-	//gitlab:allow-unescaped protectionAccessLabel(out.MinimumAccessLevelForDelete): the same access level through a helper whose only other result is the constant "immutable".
-	fmt.Fprintf(&b, "| Min Access Level (Delete) | %s |\n", protectionAccessLabel(out.MinimumAccessLevelForDelete))
-	toolutil.WriteHints(
-		&b,
+	c := toolutil.NewCard(&b, protectionRuleHeading("Tag Protection Rule", out.TagNamePattern))
+	c.Int("ID", out.ID)
+	c.Code("Tag Name Pattern", out.TagNamePattern)
+	c.Field("Min Access Level (Push)", protectionAccessLabel(out.MinimumAccessLevelForPush))
+	c.Field("Min Access Level (Delete)", protectionAccessLabel(out.MinimumAccessLevelForDelete))
+	c.End(
 		"Use action 'registry_tag_rule_update' to modify access levels",
 		"Use action 'registry_tag_rule_delete' to remove this rule",
 	)
@@ -182,27 +203,23 @@ func FormatTagProtectionRuleMarkdown(out TagProtectionRuleOutput) string {
 
 // FormatTagProtectionRuleListMarkdown formats a list of tag protection rules.
 func FormatTagProtectionRuleListMarkdown(out TagProtectionRuleListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Tag Protection Rules (%d)\n\n", len(out.Rules))
-	toolutil.WriteListSummary(&b, len(out.Rules), out.Pagination)
 	if len(out.Rules) == 0 {
-		b.WriteString("No tag protection rules found.\n")
-		toolutil.WritePagination(&b, out.Pagination)
-		return b.String()
+		return toolutil.EmptyMessage("tag protection rules")
 	}
-	b.WriteString(toolutil.MarkdownTableHeader("Tag Pattern", "Min Push", "Min Delete"))
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Tag Protection Rules", len(out.Rules), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Tag Pattern", "Min Push", "Min Delete"))
 	for _, r := range out.Rules {
-		fmt.Fprintf(&b, "| %s | %s | %s |\n",
-			//gitlab:allow-unescaped protectionAccessLabel(r.MinimumAccessLevelForPush): the same access level through a helper whose only other result is the constant "immutable".
-			//gitlab:allow-unescaped protectionAccessLabel(r.MinimumAccessLevelForDelete): the same access level through a helper whose only other result is the constant "immutable".
-			toolutil.EscapeMdTableCell(r.TagNamePattern), protectionAccessLabel(r.MinimumAccessLevelForPush), protectionAccessLabel(r.MinimumAccessLevelForDelete))
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(r.ID, 10),
+			toolutil.MdCodeSpanCell(r.TagNamePattern),
+			toolutil.EscapeMdTableCell(protectionAccessLabel(r.MinimumAccessLevelForPush)),
+			toolutil.EscapeMdTableCell(protectionAccessLabel(r.MinimumAccessLevelForDelete)),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
+	toolutil.WriteListFooter(&b, out.Pagination, false,
 		"Use action 'registry_tag_rule_create' to add a new rule",
-		"These rules protect image *tags*; use action 'registry_rule_list' for repository-path protection rules",
-	)
+		"These rules protect image *tags*; use action 'registry_rule_list' for repository-path protection rules")
 	return b.String()
 }
 

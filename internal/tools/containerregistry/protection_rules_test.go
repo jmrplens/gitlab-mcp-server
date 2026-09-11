@@ -220,9 +220,14 @@ func TestDeleteProtectionRule_MissingRuleID(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatProtectionRuleMarkdown verifies the ProtectionRuleMarkdown Markdown formatter for a representative protectionrule input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// protectionRuleCardHints is the guidance a repository-path protection rule
+// card closes with.
+const protectionRuleCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'registry_rule_update' to modify access levels\n" +
+	"- Use action 'registry_rule_delete' to remove this rule\n"
+
+// TestFormatProtectionRuleMarkdown verifies the whole card of a
+// repository-path protection rule.
 func TestFormatProtectionRuleMarkdown(t *testing.T) {
 	out := ProtectionRuleOutput{
 		ID: 1, ProjectID: 10,
@@ -230,23 +235,34 @@ func TestFormatProtectionRuleMarkdown(t *testing.T) {
 		MinimumAccessLevelForPush:   "maintainer",
 		MinimumAccessLevelForDelete: "admin",
 	}
-	md := FormatProtectionRuleMarkdown(out)
-	if !strings.Contains(md, testProdPattern) {
-		t.Errorf("expected pattern in markdown, got: %s", md)
+	got := FormatProtectionRuleMarkdown(out)
+	want := "## Protection Rule: " + testProdPattern + "\n\n" +
+		"- **ID**: 1\n" +
+		"- **Repository Path Pattern**: `" + testProdPattern + "`\n" +
+		"- **Min Access Level (Push)**: maintainer\n" +
+		"- **Min Access Level (Delete)**: admin\n" +
+		protectionRuleCardHints
+	if got != want {
+		t.Errorf("FormatProtectionRuleMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatProtectionRuleListMarkdown verifies the ProtectionRuleListMarkdown Markdown formatter for a representative protectionrulelist input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatProtectionRuleListMarkdown verifies the whole table for a
+// single-rule list.
 func TestFormatProtectionRuleListMarkdown(t *testing.T) {
 	out := ProtectionRuleListOutput{
 		Rules: []ProtectionRuleOutput{
 			{ID: 1, RepositoryPathPattern: testProdPattern, MinimumAccessLevelForPush: "maintainer", MinimumAccessLevelForDelete: "admin"},
 		},
 	}
-	md := FormatProtectionRuleListMarkdown(out)
-	if !strings.Contains(md, testProdPattern) {
-		t.Errorf("expected pattern in markdown, got: %s", md)
+	got := FormatProtectionRuleListMarkdown(out)
+	want := "## Protection Rules (1)\n\n" +
+		"| ID | Pattern | Min Push | Min Delete |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 1 | `" + testProdPattern + "` | maintainer | admin |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'registry_rule_create' to add a new rule\n"
+	if got != want {
+		t.Errorf("FormatProtectionRuleListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }

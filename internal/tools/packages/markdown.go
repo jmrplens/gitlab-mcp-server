@@ -8,27 +8,27 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const fmtSizeBytes = "- **Size**: %d bytes\n"
+// shortDigestLength is how much of a SHA-256 digest a table column shows
+// before the ellipsis; a digest of exactly this length is left whole, so the
+// ellipsis always means something was cut.
+const shortDigestLength = 12
 
-// FormatPublishMarkdown renders a published package file as Markdown.
+// FormatPublishMarkdown renders a published package file as the card of one
+// object.
 func FormatPublishMarkdown(out PublishOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Package Published\n\n")
-	fmt.Fprintf(&b, "- **Package File ID**: %d\n", out.PackageFileID)
-	fmt.Fprintf(&b, "- **Package ID**: %d\n", out.PackageID)
+	c := toolutil.NewCard(&b, "Package Published")
+	c.Int("Package File ID", out.PackageFileID)
+	c.Int("Package ID", out.PackageID)
 	// The only validation on a package file name refuses a space and a leading
 	// tilde or at-sign, so a pipe and a '<' both survive.
-	fmt.Fprintf(&b, "- **File Name**: %s\n", toolutil.EscapeMdTableCell(out.FileName))
-	fmt.Fprintf(&b, fmtSizeBytes, out.Size)
-	if out.SHA256 != "" {
-		//gitlab:allow-unescaped out.SHA256: a SHA-256 digest, computed by GitLab for a published file and by crypto/sha256 here for a downloaded one, so hexadecimal either way.
-		fmt.Fprintf(&b, "- **SHA256**: %s\n", out.SHA256)
-	}
-	if out.URL != "" {
-		toolutil.WriteMdURL(&b, out.URL)
-	}
-	toolutil.WriteHints(
-		&b,
+	c.Field("File Name", out.FileName)
+	c.Field("Size", fmt.Sprintf("%d bytes", out.Size))
+	// A digest is a value a reader compares character by character, so it is a
+	// code span sized to its content rather than a raw interpolation.
+	c.Code("SHA256", out.SHA256)
+	c.URL(out.URL)
+	c.End(
 		"Use action 'publish_and_link' to also create a release asset link in one step",
 		"Use action 'publish_directory' to batch-upload all files from a directory",
 		"Use action 'list' to see all packages in this project",
@@ -36,19 +36,17 @@ func FormatPublishMarkdown(out PublishOutput) string {
 	return b.String()
 }
 
-// FormatDownloadMarkdown renders a downloaded package file as Markdown.
+// FormatDownloadMarkdown renders a downloaded package file as the card of one
+// object.
 func FormatDownloadMarkdown(out DownloadOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Package Downloaded\n\n")
+	c := toolutil.NewCard(&b, "Package Downloaded")
 	// The output path is the caller's own argument echoed back, before any
 	// canonicalization.
-	fmt.Fprintf(&b, "- **Output Path**: %s\n", toolutil.EscapeMdTableCell(out.OutputPath))
-	fmt.Fprintf(&b, fmtSizeBytes, out.Size)
-	if out.SHA256 != "" {
-		fmt.Fprintf(&b, "- **SHA256**: %s\n", out.SHA256)
-	}
-	toolutil.WriteHints(
-		&b,
+	c.Field("Output Path", out.OutputPath)
+	c.Field("Size", fmt.Sprintf("%d bytes", out.Size))
+	c.Code("SHA256", out.SHA256)
+	c.End(
 		"Use action 'file_list' to see all files in this package",
 		"Use action 'list' to browse other packages in the project",
 	)
@@ -57,22 +55,18 @@ func FormatDownloadMarkdown(out DownloadOutput) string {
 
 // FormatListMarkdown renders a paginated list of packages as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Packages (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Packages), out.Pagination)
 	if len(out.Packages) == 0 {
-		b.WriteString("No packages found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("packages")
 	}
-	b.WriteString("| ID | Name | Version | Type | Status | Creator | Pipeline |\n")
-	b.WriteString(toolutil.TblSep7Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Packages", len(out.Packages), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Version", "Type", "Status", "Creator", "Pipeline"))
 	for _, p := range out.Packages {
 		writePackageRow(&b, p, pipelineSummary(p))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
+	// The pipeline column carries a link, so the footer keeps the instruction
+	// to preserve it.
+	toolutil.WriteListFooter(&b, out.Pagination, true,
 		"Use action 'file_list' with a package_id to see individual files",
 		"Use action 'delete' to remove a package",
 		"Use action 'publish' or 'publish_directory' to upload new packages",
@@ -88,18 +82,15 @@ func FormatListMarkdown(out ListOutput) string {
 // cell escaper turns a finished link back into text, so each summary escapes
 // the GitLab-authored text it holds and this row writes the column as given.
 func writePackageRow(b *strings.Builder, p ListItem, lastColumn string) {
-	fmt.Fprintf(
-		b, "| %d | %s | %s | %s | %s | %s | %s |\n",
-		p.ID,
+	b.WriteString(toolutil.MarkdownTableRow(
+		strconv.FormatInt(p.ID, 10),
 		toolutil.EscapeMdTableCell(p.Name),
 		toolutil.EscapeMdTableCell(versionSummary(p)),
-		//gitlab:allow-unescaped p.PackageType: the registry format GitLab stores the package under, one of its own enum values (generic, maven, npm and the rest).
-		p.PackageType,
-		//gitlab:allow-unescaped p.Status: a GitLab package status enum value (default, hidden, processing, error).
-		p.Status,
+		toolutil.EscapeMdTableCell(p.PackageType),
+		toolutil.EscapeMdTableCell(p.Status),
 		creatorSummary(p),
 		lastColumn,
-	)
+	))
 }
 
 // versionSummary names the package's version and how many others GitLab sent
@@ -148,22 +139,19 @@ func pipelineItemSummary(pipeline PipelineItem) string {
 
 // FormatGroupListMarkdown renders a paginated list of group packages as a Markdown table.
 func FormatGroupListMarkdown(out GroupListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Group Packages (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Packages), out.Pagination)
 	if len(out.Packages) == 0 {
-		b.WriteString("No packages found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("packages")
 	}
-	b.WriteString("| ID | Name | Version | Type | Status | Creator | Project |\n")
-	b.WriteString(toolutil.TblSep7Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Group Packages", len(out.Packages), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Version", "Type", "Status", "Creator", "Project"))
 	for _, p := range out.Packages {
 		writePackageRow(&b, p.ListItem, groupProjectSummary(p))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
+	// Unlike the project list, this table's last column is the owning project's
+	// path rather than a pipeline link, so no column here carries one and the
+	// footer drops the instruction to preserve them.
+	toolutil.WriteListFooter(&b, out.Pagination, false,
 		"Use action 'list' to scope packages to a single project",
 		"Use action 'file_list' with a package_id to see individual files",
 		"Use action 'delete' to remove a package",
@@ -185,100 +173,110 @@ func groupProjectSummary(pkg GroupListItem) string {
 
 // FormatFileListMarkdown renders a paginated list of package files as a Markdown table.
 func FormatFileListMarkdown(out FileListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Package Files (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Files), out.Pagination)
 	if len(out.Files) == 0 {
-		b.WriteString("No package files found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("package files")
 	}
-	b.WriteString("| ID | File Name | Size | SHA256 |\n")
-	b.WriteString(toolutil.TblSep4Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Package Files", len(out.Files), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "File Name", "Size (bytes)", "SHA256"))
 	for _, f := range out.Files {
-		sha := f.SHA256
-		if len(sha) > 12 {
-			sha = sha[:12] + "..."
-		}
-		fmt.Fprintf(
-			&b, "| %d | %s | %d | %s |\n",
-			f.PackageFileID,
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(f.PackageFileID, 10),
 			toolutil.EscapeMdTableCell(f.FileName),
-			f.Size,
-			//gitlab:allow-unescaped sha: the leading characters of a SHA-256 digest, which is hexadecimal, so slicing it cannot split a rune.
-			sha,
-		)
+			strconv.FormatInt(f.Size, 10),
+			toolutil.MdCodeSpanCell(shortDigest(f.SHA256)),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
+	// The table carries no link, so the footer carries no instruction to keep
+	// the links of a table that has none.
+	toolutil.WriteListFooter(&b, out.Pagination, false,
 		"Use action 'download' to retrieve a specific file",
 		"Use action 'file_delete' to remove a single file",
 	)
 	return b.String()
 }
 
-// FormatPublishAndLinkMarkdown renders a publish-and-link result as Markdown.
+// shortDigest is the leading characters of a SHA-256 digest, with an ellipsis
+// when anything was cut. A digest is hexadecimal, so slicing it cannot split a
+// rune.
+func shortDigest(sha string) string {
+	if len(sha) <= shortDigestLength {
+		return sha
+	}
+	return sha[:shortDigestLength] + "..."
+}
+
+// FormatPublishAndLinkMarkdown renders a publish-and-link result as one card
+// with a section per object: the package file and the release link it now has.
 func FormatPublishAndLinkMarkdown(out PublishAndLinkOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Package Published & Linked\n\n")
-	fmt.Fprintf(&b, "### Package\n\n")
-	fmt.Fprintf(&b, "- **Package File ID**: %d\n", out.Package.PackageFileID)
-	fmt.Fprintf(&b, "- **File Name**: %s\n", toolutil.EscapeMdTableCell(out.Package.FileName))
-	fmt.Fprintf(&b, fmtSizeBytes, out.Package.Size)
-	if out.Package.URL != "" {
-		toolutil.WriteMdURL(&b, out.Package.URL)
-	}
-	fmt.Fprintf(&b, "\n### Release Link\n\n")
-	fmt.Fprintf(&b, toolutil.FmtMdID, out.ReleaseLink.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(out.ReleaseLink.Name))
-	if out.ReleaseLink.URL != "" {
-		toolutil.WriteMdURL(&b, out.ReleaseLink.URL)
-	}
-	toolutil.WriteHints(
-		&b,
+	c := toolutil.NewCard(&b, "Package Published & Linked")
+	pkg := c.Section("Package")
+	pkg.Int("Package File ID", out.Package.PackageFileID)
+	pkg.Field("File Name", out.Package.FileName)
+	pkg.Field("Size", fmt.Sprintf("%d bytes", out.Package.Size))
+	pkg.URL(out.Package.URL)
+	link := c.Section("Release Link")
+	link.Int("ID", out.ReleaseLink.ID)
+	link.Field("Name", out.ReleaseLink.Name)
+	link.URL(out.ReleaseLink.URL)
+	c.End(
 		"Repeat for more files, or use 'publish_directory' to batch-upload a directory",
 		"Use gitlab_release action 'get' to verify the release links",
 	)
 	return b.String()
 }
 
-// FormatPublishDirMarkdown renders a directory publish result as Markdown.
+// FormatPublishDirMarkdown renders a directory publish result as the card of
+// one object.
+//
+// The heading names the outcome rather than always claiming success: a run
+// where every file failed used to be headed "Directory Published" with an
+// errors section under it, which is the opposite of what happened. The count
+// is published out of the two lists too, because TotalFiles is the number of
+// files that succeeded and reads as the number attempted.
 func FormatPublishDirMarkdown(out PublishDirOutput) string {
+	published, failed := len(out.Published), len(out.Errors)
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Directory Published\n\n")
-	fmt.Fprintf(&b, "- **Total Files**: %d\n", out.TotalFiles)
-	fmt.Fprintf(&b, "- **Total Bytes**: %d\n", out.TotalBytes)
-	if len(out.Published) > 0 {
-		b.WriteString("\n| File | Size | SHA256 |\n")
-		b.WriteString(toolutil.TblSep3Col)
+	c := toolutil.NewCard(&b, publishDirHeading(published, failed))
+	c.Field("Published", fmt.Sprintf("%d of %d files", published, published+failed))
+	c.Field("Total Bytes", fmt.Sprintf("%d bytes", out.TotalBytes))
+	if published > 0 {
+		files := c.Table("Published Files", "File", "Size (bytes)", "SHA256")
 		for _, p := range out.Published {
-			sha := p.SHA256
-			if len(sha) > 12 {
-				sha = sha[:12] + "..."
-			}
-			fmt.Fprintf(
-				&b, "| %s | %d | %s |\n",
+			files.Row(
 				toolutil.EscapeMdTableCell(p.FileName),
-				p.Size,
-				sha,
+				strconv.FormatInt(p.Size, 10),
+				toolutil.MdCodeSpanCell(shortDigest(p.SHA256)),
 			)
 		}
 	}
-	if len(out.Errors) > 0 {
-		fmt.Fprintf(&b, "\n### Errors (%d)\n\n", len(out.Errors))
+	if failed > 0 {
+		errs := c.Table(fmt.Sprintf("Errors (%d)", failed), "Error")
 		for _, e := range out.Errors {
 			// Each is a local directory entry name plus a wrapped error whose
 			// text carries GitLab's own message.
-			fmt.Fprintf(&b, "- %s\n", toolutil.EscapeMdTableCell(e))
+			errs.Row(toolutil.EscapeMdTableCell(e))
 		}
 	}
-	toolutil.WriteHints(
-		&b,
+	c.End(
 		"Use 'publish_and_link' to also create release asset links for each file",
 		"Use gitlab_release to create/manage releases and link these packages",
 		"Use action 'list' to verify the uploaded packages",
 	)
 	return b.String()
+}
+
+// publishDirHeading names what the run actually did.
+func publishDirHeading(published, failed int) string {
+	switch {
+	case failed == 0:
+		return "Directory Published"
+	case published == 0:
+		return "Directory Publish Failed"
+	default:
+		return "Directory Partially Published"
+	}
 }
 
 func init() {

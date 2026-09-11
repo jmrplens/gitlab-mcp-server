@@ -191,11 +191,26 @@ func TestUnlock_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// listHints is the guidance a Terraform state list closes with.
+const listHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use `gitlab_get_terraform_state` to view details of a specific state\n"
+
+// TestFormatListMarkdown verifies FormatListMarkdown renders the whole table:
+// a heading counting the states, one row each, and a state nothing has
+// written to yet saying so rather than showing a serial of zero.
 func TestFormatListMarkdown(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{States: []StateItem{{Name: "state1", LatestSerial: 3}}})
-	if md == "" {
-		t.Error("expected non-empty markdown")
+	got := FormatListMarkdown(ListOutput{States: []StateItem{
+		{Name: "state1", LatestSerial: 3},
+		{Name: "fresh"},
+	}})
+	want := "## Terraform States (2)\n\n" +
+		"| Name | Latest Serial |\n" +
+		"| --- | --- |\n" +
+		"| state1 | 3 |\n" +
+		"| fresh | no versions |\n" +
+		listHints
+	if got != want {
+		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -220,15 +235,37 @@ func TestDeleteVersion_Error(t *testing.T) {
 // FormatStateMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatStateMarkdown_Coverage verifies FormatStateMarkdown when coverage.
+// stateHints is the guidance a Terraform state card closes with: what
+// locking really needs, how to clear a stale lock, and how to delete.
+const stateHints = "\n---\n💡 **Next steps:**\n" +
+	"- " + hintLockNeedsCLI + "\n" +
+	"- " + hintUnlockStaleLock + "\n" +
+	"- Use `gitlab_delete_terraform_state` to remove it\n"
+
+// TestFormatStateMarkdown_Coverage verifies FormatStateMarkdown renders the
+// whole card for a written state, and that the guidance no longer sends a
+// reader to gitlab_lock_terraform_state, which GitLab refuses on every call.
 func TestFormatStateMarkdown_Coverage(t *testing.T) {
-	md := FormatStateMarkdown(StateItem{Name: "prod-state", LatestSerial: 42, DownloadPath: "/dl/path"})
-	for _, want := range []string{"prod-state", "42", "/dl/path"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("missing %q in markdown", want)
-			}
-		})
+	got := FormatStateMarkdown(StateItem{Name: "prod-state", LatestSerial: 42, DownloadPath: "/dl/path"})
+	want := "## Terraform State: prod-state\n\n" +
+		"- **Latest Serial**: 42\n" +
+		"- **Download Path**: `/dl/path`\n" +
+		stateHints
+	if got != want {
+		t.Errorf("FormatStateMarkdown() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestFormatStateMarkdown_UnwrittenState verifies a state with no serial and
+// no download path renders neither row and says why, rather than printing two
+// labels with nothing after them.
+func TestFormatStateMarkdown_UnwrittenState(t *testing.T) {
+	got := FormatStateMarkdown(StateItem{Name: "fresh"})
+	want := "## Terraform State: fresh\n\n" +
+		"GitLab has recorded no versions of this state.\n" +
+		stateHints
+	if got != want {
+		t.Errorf("FormatStateMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -236,14 +273,18 @@ func TestFormatStateMarkdown_Coverage(t *testing.T) {
 // FormatLockMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatLockMarkdown_Coverage verifies FormatLockMarkdown when coverage.
+// TestFormatLockMarkdown_Coverage verifies FormatLockMarkdown renders the
+// whole card, with the outcome as the flag glyph rather than the word "true".
 func TestFormatLockMarkdown_Coverage(t *testing.T) {
-	md := FormatLockMarkdown(LockOutput{Success: true, Message: "State 'x' locked"})
-	if !strings.Contains(md, "true") {
-		t.Error("missing success in markdown")
-	}
-	if !strings.Contains(md, "locked") {
-		t.Error("missing lock message in markdown")
+	got := FormatLockMarkdown(LockOutput{Success: true, Message: "State 'x' locked"})
+	want := "## Terraform State Lock\n\n" +
+		"- **Success**: " + toolutil.BoolEmoji(true) + "\n" +
+		"- **Message**: State 'x' locked\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + hintLockNeedsCLI + "\n" +
+		"- " + hintUnlockStaleLock + "\n"
+	if got != want {
+		t.Errorf("FormatLockMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -251,11 +292,13 @@ func TestFormatLockMarkdown_Coverage(t *testing.T) {
 // FormatListMarkdown — empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies an empty list is the one sentence and
+// nothing else: no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{States: nil})
-	if !strings.Contains(md, "No Terraform states found") {
-		t.Error("missing empty message")
+	got := FormatListMarkdown(ListOutput{States: nil})
+	want := "No Terraform states found.\n"
+	if got != want {
+		t.Errorf("FormatListMarkdown() = %q, want %q", got, want)
 	}
 }
 

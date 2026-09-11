@@ -1,7 +1,6 @@
 package dependencyfirewall
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -41,33 +40,40 @@ func init() {
 // assurance nobody made.
 func FormatEvaluatePackageMarkdown(out EvaluatePackageOutput) string {
 	var b strings.Builder
-	b.WriteString("## Dependency Firewall Evaluation\n\n")
+	c := toolutil.NewCard(&b, "Dependency Firewall Evaluation")
 
+	// The three documented outcomes are rendered as composed rows: the glyph
+	// and the parenthetical are the server's own words beside a word GitLab
+	// chose, and the word is one of the three constants above. An outcome the
+	// documentation does not list is written through the escaping row, since
+	// it is a value GitLab sent and nothing here constrains it.
 	switch strings.ToLower(out.Outcome) {
 	case outcomeAllowed:
-		fmt.Fprintf(&b, "- Outcome: %s **allowed** (no policy rule matched the package)\n", toolutil.EmojiSuccess)
+		c.Markdown("Outcome", toolutil.EmojiSuccess+" **allowed** (no policy rule matched the package)")
 	case outcomeWarned:
-		fmt.Fprintf(&b, "- Outcome: %s **warned** (a policy rule matched and the policy is in warn mode)\n", toolutil.EmojiWarning)
+		c.Markdown("Outcome", toolutil.EmojiWarning+" **warned** (a policy rule matched and the policy is in warn mode)")
 	case outcomeBlocked:
-		fmt.Fprintf(&b, "- Outcome: %s **blocked** (a policy rule matched and the policy is in enforce mode)\n", toolutil.EmojiCross)
+		c.Markdown("Outcome", toolutil.EmojiCross+" **blocked** (a policy rule matched and the policy is in enforce mode)")
 	case "":
-		b.WriteString("- Outcome: not reported\n")
+		c.Field("Outcome", "not reported")
 	default:
-		fmt.Fprintf(&b, "- Outcome: %s\n", toolutil.EscapeMdTableCell(out.Outcome))
+		c.Field("Outcome", out.Outcome)
 	}
 
-	if out.Reason != nil && strings.TrimSpace(*out.Reason) != "" {
-		fmt.Fprintf(&b, "- Reason: %s\n", toolutil.EscapeMdTableCell(*out.Reason))
+	if out.Reason != nil {
+		c.Field("Reason", *out.Reason)
 	}
 
 	switch strings.ToLower(out.Outcome) {
 	case outcomeWarned, outcomeBlocked:
-		toolutil.WriteHints(&b,
+		c.End(
 			"The reason names the policy that matched. Read it with the project's security policy configuration before overriding anything",
-			"An allowed alternative version can be found by evaluating other versions of the same package")
+			"An allowed alternative version can be found by evaluating other versions of the same package",
+		)
 	default:
-		toolutil.WriteHints(&b,
-			"An allowed outcome means no policy rule matched, not that GitLab holds vulnerability or license data for the package")
+		c.End(
+			"An allowed outcome means no policy rule matched, not that GitLab holds vulnerability or license data for the package",
+		)
 	}
 	return b.String()
 }

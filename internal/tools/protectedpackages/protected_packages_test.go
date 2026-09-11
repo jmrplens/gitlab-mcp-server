@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const (
@@ -418,28 +419,30 @@ func TestDelete_CancelledContext(t *testing.T) {
 
 // Markdown tests.
 
-// TestFormatOutputMarkdown_Basic verifies FormatOutputMarkdown produces a
-// rule header, the package pattern, and the push access level for a fully
-// populated Output.
+// ruleCardHints is the guidance section a protection rule card closes with.
+const ruleCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use `gitlab_update_package_protection_rule` to modify this rule\n" +
+	"- Use `gitlab_delete_package_protection_rule` to remove it\n"
+
+// TestFormatOutputMarkdown_Basic verifies FormatOutputMarkdown renders a
+// fully populated rule as the whole card: the heading, the pattern as a code
+// span, the type and both access levels.
 func TestFormatOutputMarkdown_Basic(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:                          1,
 		PackageNamePattern:          "@scope/pkg*",
 		PackageType:                 "npm",
 		MinimumAccessLevelForPush:   "maintainer",
 		MinimumAccessLevelForDelete: "owner",
 	})
-	if !contains(md, "## Package Protection Rule #1") {
-		t.Error("missing header")
-	}
-	if !contains(md, "@scope/pkg*") {
-		t.Error("missing pattern")
-	}
-	if !contains(md, "MinimumAccessLevelForPush") || !contains(md, "Min Push Level") {
-		// check for at least one — implementation uses "Min Push Level"
-		if !contains(md, "Min Push Level") {
-			t.Error("missing push level")
-		}
+	want := "## Package Protection Rule #1\n\n" +
+		"- **Pattern**: `@scope/pkg*`\n" +
+		"- **Package Type**: npm\n" +
+		"- **Min Push Level**: maintainer\n" +
+		"- **Min Delete Level**: owner\n" +
+		ruleCardHints
+	if got != want {
+		t.Errorf("FormatOutputMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -453,50 +456,73 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 }
 
 // TestFormatOutputMarkdown_NoAccessLevels verifies FormatOutputMarkdown omits
-// the push/delete level rows when those fields are empty.
+// the push/delete level rows when those fields are empty: the card shows what
+// GitLab sent and never a label with nothing after it.
 func TestFormatOutputMarkdown_NoAccessLevels(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:                 2,
 		PackageNamePattern: "mylib*",
 		PackageType:        "pypi",
 	})
-	if !contains(md, "## Package Protection Rule #2") {
-		t.Error("missing header")
-	}
-	if contains(md, "Min Push Level") {
-		t.Error("should not contain push level when empty")
-	}
-	if contains(md, "Min Delete Level") {
-		t.Error("should not contain delete level when empty")
+	want := "## Package Protection Rule #2\n\n" +
+		"- **Pattern**: `mylib*`\n" +
+		"- **Package Type**: pypi\n" +
+		ruleCardHints
+	if got != want {
+		t.Errorf("FormatOutputMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown emits a
-// "No package protection rules found" message for an empty list.
+// TestFormatListMarkdown_Empty verifies an empty list is the one sentence and
+// nothing else: no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !contains(md, "No package protection rules found") {
-		t.Error("missing empty message")
+	got := FormatListMarkdown(ListOutput{})
+	want := "No package protection rules found.\n"
+	if got != want {
+		t.Errorf("FormatListMarkdown() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_WithRules verifies FormatListMarkdown produces a
-// table with one row per rule, including the package type column.
+// TestFormatListMarkdown_WithRules verifies FormatListMarkdown produces the
+// whole table: one row per rule, the pattern as a code span, and the guidance
+// after the rows rather than before them.
 func TestFormatListMarkdown_WithRules(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Rules: []Output{
 			{ID: 1, PackageNamePattern: "@scope/pkg*", PackageType: "npm", MinimumAccessLevelForPush: "maintainer"},
 			{ID: 2, PackageNamePattern: "mylib*", PackageType: "pypi"},
 		},
 	})
-	if !contains(md, "| 1 |") {
-		t.Error("missing rule 1 row")
+	want := "## Package Protection Rules (2)\n\n" +
+		"| ID | Pattern | Type | Min Push | Min Delete |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | `@scope/pkg*` | npm | maintainer |  |\n" +
+		"| 2 | `mylib*` | pypi |  |  |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use `gitlab_create_package_protection_rule` to add a new rule\n"
+	if got != want {
+		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
-	if !contains(md, "| 2 |") {
-		t.Error("missing rule 2 row")
-	}
-	if !contains(md, "npm") {
-		t.Error("missing npm type")
+}
+
+// TestFormatListMarkdown_CountsTheTotalGitLabSent verifies the heading counts
+// what the response reports rather than the page length, which is what a
+// reader compares against the rows.
+func TestFormatListMarkdown_CountsTheTotalGitLabSent(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Rules:      []Output{{ID: 1, PackageNamePattern: "a*", PackageType: "npm"}},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 45, TotalPages: 45, HasMore: true, NextPage: 2},
+	})
+	want := "## Package Protection Rules (45)\n\n" +
+		"Showing 1 of 45 results (page 1 of 45)\n\n" +
+		"| ID | Pattern | Type | Min Push | Min Delete |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | `a*` | npm |  |  |\n" +
+		"\nPage 1 of 45 | 45 items total | 1 per page\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use `gitlab_create_package_protection_rule` to add a new rule\n"
+	if got != want {
+		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -531,17 +557,4 @@ func TestDelete_APIError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for 500")
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && containsSubstring(s, substr)
-}
-
-func containsSubstring(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }

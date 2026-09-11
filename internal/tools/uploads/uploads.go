@@ -278,20 +278,32 @@ func DeleteBySecret(ctx context.Context, client *gitlabclient.Client, input Dele
 }
 
 // UploadToolResult builds a CallToolResult for upload operations. For image
-// files it appends a Markdown image embed with the full URL so capable MCP
-// clients can render the image inline. Non-image uploads return text only.
+// files the card carries a Markdown image embed with the full URL so capable
+// MCP clients can render the image inline. Non-image uploads return text only.
+//
+// Two things the hand-built literal this replaced got wrong. The embed was
+// appended after the card, which put it below the guidance section and left
+// that section neither leading nor trailing, the one position
+// [toolutil.ExtractHints] refuses to read, so the upload's hint never reached
+// next_steps; it is now written between the rows and the guidance. And the
+// result was assembled as a literal with no annotations and no normalization,
+// which skipped the control-byte strip every other response passes through;
+// it now goes through [toolutil.ToolResultAnnotated], carrying
+// [toolutil.ContentUser] when an image embed is present, since that block is
+// for a person to look at, and the assistant default otherwise.
 func UploadToolResult(u UploadOutput) *mcp.CallToolResult {
-	md := FormatUploadMarkdown(u)
+	embed := ""
 	if toolutil.IsImageFile(u.Alt) && u.FullURL != "" {
 		// An image embed is a link with a '!' in front, so both halves want the
 		// same escaping MdTitleLink gives a link, applied here because the
 		// helper writes no '!'.
-		md += fmt.Sprintf("\n![%s](%s)\n",
+		embed = fmt.Sprintf("![%s](%s)",
 			toolutil.EscapeMdLinkLabel(u.Alt), toolutil.EscapeMdLinkDestination(u.FullURL))
 	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: md},
-		},
+	var b strings.Builder
+	writeUploadCard(&b, u, embed)
+	if embed == "" {
+		return toolutil.ToolResultWithMarkdown(b.String())
 	}
+	return toolutil.ToolResultAnnotated(b.String(), toolutil.ContentUser)
 }
