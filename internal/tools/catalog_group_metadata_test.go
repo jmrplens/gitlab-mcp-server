@@ -92,6 +92,7 @@ func TestCatalogGroupDescription_FallsBackWhenNothingIsLeftToUse(t *testing.T) {
 	catalogMetaToolDescriptions = map[string]string{
 		"gitlab_widget":       preamble,
 		"gitlab_other_widget": "Widget actions with no runtime preamble in front of them.",
+		"gitlab_blank_widget": "   ",
 	}
 
 	cases := []struct {
@@ -101,6 +102,10 @@ func TestCatalogGroupDescription_FallsBackWhenNothingIsLeftToUse(t *testing.T) {
 	}{
 		{name: "a row that is only the runtime preamble", toolName: "gitlab_widget", want: "GitLab widget actions."},
 		{name: "a row with no preamble to strip", toolName: "gitlab_other_widget", want: "GitLab other widget actions."},
+		// The one row that makes the emptiness check decide: a description of
+		// nothing but spaces is too short for the prefix stripper to touch, so
+		// it comes back unchanged and only the trimmed test tells it from prose.
+		{name: "a row that is blank rather than absent", toolName: "gitlab_blank_widget", want: "GitLab blank widget actions."},
 		{name: "a tool name the snapshot does not carry", toolName: "gitlab_absent_widget", want: "GitLab absent widget actions."},
 	}
 	for _, tc := range cases {

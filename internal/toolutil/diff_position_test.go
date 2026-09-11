@@ -375,10 +375,17 @@ func TestParseDiffLines_BeforeFirstHunk(t *testing.T) {
 	}
 }
 
-// TestValidateDiffLinePosition_DefaultBranch exercises the unreachable default
-// branch (both line numbers zero) that should never produce a match.
+// TestValidateDiffLinePosition_DefaultBranch exercises the default branch, the
+// one [ValidateDiffPosition] refuses before the loop: neither line number set.
+//
+// The fixture is a context line with both line numbers zero, which is the only
+// one that can tell the default branch from the two single-line branches: a row
+// whose NewLine is 5 matches nothing whatever branch runs, so an earlier version
+// of this test passed even when the wrong branch was taken. A zero-line context
+// row would be claimed by either single-line validator, which is exactly what a
+// widened case expression would do.
 func TestValidateDiffLinePosition_DefaultBranch(t *testing.T) {
-	dl := DiffLine{Type: LineAdded, NewLine: 5}
+	dl := DiffLine{Type: LineContext}
 	matched, err := validateDiffLinePosition(dl, 0, 0)
 	if matched || err != nil {
 		t.Errorf("validateDiffLinePosition(0,0) = (%v, %v), want (false, nil)", matched, err)
