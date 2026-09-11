@@ -206,6 +206,133 @@ func TestMiddleware_ActionIsRecordedWhereTheToolNameIsNot(t *testing.T) {
 	}
 }
 
+// dispatchingIdentifier predicts from the arguments and resolves a dispatched
+// route from a fixed table, the two answers the catalog identifier gives.
+type dispatchingIdentifier struct {
+	predicted  Identity
+	dispatched map[string]Identity
+}
+
+func (d dispatchingIdentifier) Identify(string, any) (Identity, bool) { return d.predicted, true }
+
+func (d dispatchingIdentifier) IdentifyDispatch(tool, action string) (Identity, bool) {
+	identity, ok := d.dispatched[tool+"/"+action]
+	return identity, ok
+}
+
+// TestMiddleware_TheDispatchedActionReplacesThePrediction verifies that the
+// action a dispatcher reports through RecordDispatch is what the span and the
+// metric name, instead of the one predicted from the arguments.
+//
+// gitlab_environment with action get and an environment name runs
+// protected_get; the prediction reads get from the arguments. A resolution
+// that names no domain keeps the predicted one on both, because a span
+// attribute cannot be removed and the metric must agree with the span.
+func TestMiddleware_TheDispatchedActionReplacesThePrediction(t *testing.T) {
+	tests := map[string]struct {
+		resolved   Identity
+		wantDomain string
+	}{
+		"with its domain":    {resolved: Identity{ActionID: "environment.protected_get", Domain: "environments"}, wantDomain: "environments"},
+		"without any domain": {resolved: Identity{ActionID: "environment.protected_get"}, wantDomain: "environment"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			recorder := newRecorder(t)
+			reader, restore := newMetricRecorder(t)
+			defer restore()
+
+			identifier := dispatchingIdentifier{
+				predicted:  Identity{ActionID: "environment.get", Domain: "environment"},
+				dispatched: map[string]Identity{"gitlab_environment/protected_get": tc.resolved},
+			}
+			handler := Middleware(Options{Identifier: identifier, Surface: "meta"})(
+				func(ctx context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+					RecordDispatch(ctx, "gitlab_environment", "protected_get")
+					return &mcp.CallToolResult{}, nil
+				},
+			)
+			_, _ = handler(context.Background(), "tools/call",
+				callToolRequest("gitlab_environment", map[string]any{"action": "get"}, nil))
+
+			spans := recorder.Ended()
+			if len(spans) != 1 {
+				t.Fatalf("recorded %d spans, want 1", len(spans))
+			}
+			if got, _ := attrOf(spans[0], AttrActionID); got.AsString() != "environment.protected_get" {
+				t.Errorf("span action = %q, want the dispatched environment.protected_get", got.AsString())
+			}
+			if got, _ := attrOf(spans[0], AttrDomain); got.AsString() != tc.wantDomain {
+				t.Errorf("span domain = %q, want %q", got.AsString(), tc.wantDomain)
+			}
+			onMetric := map[attribute.Key]string{}
+			for _, kv := range collectedAttributes(t, reader) {
+				onMetric[kv.Key] = kv.Value.AsString()
+			}
+			if onMetric[AttrActionID] != "environment.protected_get" {
+				t.Errorf("metric action = %q, want the dispatched environment.protected_get", onMetric[AttrActionID])
+			}
+			if onMetric[AttrDomain] != tc.wantDomain {
+				t.Errorf("metric domain = %q, want %q", onMetric[AttrDomain], tc.wantDomain)
+			}
+		})
+	}
+}
+
+// TestMiddleware_ThePredictionStandsWhenNoDispatchResolves verifies that the
+// predicted action is kept whenever the dispatch cannot improve on it: nothing
+// reported, an incomplete report, an identifier that does not resolve
+// dispatches, and a report the identifier cannot name.
+func TestMiddleware_ThePredictionStandsWhenNoDispatchResolves(t *testing.T) {
+	predicted := Identity{ActionID: "environment.get", Domain: "environment"}
+	resolving := dispatchingIdentifier{predicted: predicted, dispatched: map[string]Identity{
+		"gitlab_environment/protected_get": {ActionID: "environment.protected_get", Domain: "environment"},
+		"gitlab_environment/invented":      {Domain: "environment"},
+	}}
+	predicting := IdentifierFunc(func(string, any) (Identity, bool) { return predicted, true })
+
+	tests := map[string]struct {
+		identifier CallIdentifier
+		tool       string
+		action     string
+	}{
+		"nothing reported":                        {identifier: resolving},
+		"a report without an action":              {identifier: resolving, tool: "gitlab_environment"},
+		"a report without a tool":                 {identifier: resolving, action: "protected_get"},
+		"an identifier that resolves no dispatch": {identifier: predicting, tool: "gitlab_environment", action: "protected_get"},
+		"a route the identifier does not know":    {identifier: resolving, tool: "gitlab_environment", action: "unknown"},
+		"a route that resolves to a domain alone": {identifier: resolving, tool: "gitlab_environment", action: "invented"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			recorder := newRecorder(t)
+			handler := Middleware(Options{Identifier: tc.identifier, Surface: "meta"})(
+				func(ctx context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+					RecordDispatch(ctx, tc.tool, tc.action)
+					return &mcp.CallToolResult{}, nil
+				},
+			)
+			_, _ = handler(context.Background(), "tools/call",
+				callToolRequest("gitlab_environment", map[string]any{"action": "get"}, nil))
+
+			spans := recorder.Ended()
+			if len(spans) != 1 {
+				t.Fatalf("recorded %d spans, want 1", len(spans))
+			}
+			if got, _ := attrOf(spans[0], AttrActionID); got.AsString() != "environment.get" {
+				t.Errorf("span action = %q, want the predicted environment.get", got.AsString())
+			}
+		})
+	}
+}
+
+// TestRecordDispatch_OutsideARequestIsANoOp verifies that a dispatcher called
+// without the middleware in front of it, as every unit test of a handler does,
+// records nothing and does not panic.
+func TestRecordDispatch_OutsideARequestIsANoOp(t *testing.T) {
+	RecordDispatch(context.Background(), "gitlab_environment", "protected_get")
+}
+
 // TestMiddleware_SuccessLeavesTheStatusUnset covers the MUST in this area.
 //
 // "Span Status Code MUST be left unset if the instrumented operation has ended

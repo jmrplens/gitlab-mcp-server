@@ -12,6 +12,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -255,6 +256,31 @@ func TestWrapMutatingToolsForSafeMode_MixedTools(t *testing.T) {
 	}
 	if preview.Tool != "gitlab_update_issue" {
 		t.Errorf("expected tool 'gitlab_update_issue', got %q", preview.Tool)
+	}
+}
+
+// TestSafeModeHandler_RecordsTheInterceptionAsARefusal verifies that an
+// individual tool intercepted by safe mode reaches telemetry as a safe_mode
+// refusal, as the dispatcher surfaces' previews already did, rather than as an
+// ordinary failing call nobody can count.
+func TestSafeModeHandler_RecordsTheInterceptionAsARefusal(t *testing.T) {
+	recorder := recordSpans(t)
+	handler := mcpotel.Middleware(mcpotel.Options{Surface: "individual"})(
+		func(ctx context.Context, _ string, req mcp.Request) (mcp.Result, error) {
+			return safeModeHandler("gitlab_issue_create")(ctx, req.(*mcp.CallToolRequest))
+		},
+	)
+	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "gitlab_issue_create", Arguments: json.RawMessage(`{"project_id":"1"}`)}}
+	if _, err := handler(context.Background(), "tools/call", req); err != nil {
+		t.Fatalf("tools/call error = %v", err)
+	}
+
+	spans := recorder.Ended()
+	if len(spans) != 1 {
+		t.Fatalf("recorded %d spans, want 1", len(spans))
+	}
+	if got := spanString(spans[0], mcpotel.AttrRefusalReason); got != toolutil.RefusalSafeMode {
+		t.Errorf("refusal reason = %q, want %q", got, toolutil.RefusalSafeMode)
 	}
 }
 

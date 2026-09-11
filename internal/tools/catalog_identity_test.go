@@ -3,16 +3,24 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -484,6 +492,111 @@ func TestNewCallIdentifier_IndividualNameBelongsToTheRegisteredAction(t *testing
 	if got, want := action.IndividualTool.Description, registered["gitlab_test_shared"].Description; got != want {
 		t.Fatalf("resolved %s (%q), but registration served %q", identity.ActionID, got, want)
 	}
+}
+
+// TestNewCallIdentifier_TelemetryNamesTheRouteTheDispatcherRan verifies, with
+// the real catalog, the real dispatchers and the real middleware, that a call
+// the dispatcher rewrites is recorded under the action that ran.
+//
+// gitlab_environment with action get and an environment name runs
+// protected_get, on the meta surface and on the dynamic one, which re-enters
+// the same meta handler. The middleware predicts environment.get from the
+// arguments before anything runs; the span has to end up naming
+// environment.protected_get.
+func TestNewCallIdentifier_TelemetryNamesTheRouteTheDispatcherRan(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"name":"production"}`)
+	}))
+	catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Tier: edition.Ultimate})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	// A name where get expects a numeric id is what sends get to
+	// protected_get, and unlike an environment parameter it passes the
+	// dynamic surface's schema check for environment.get.
+	params := map[string]any{"project_id": "1", "environment_id": "production"}
+	metaHandler := toolutil.MakeMetaHandler("gitlab_environment", catalog.ActionMaps()["gitlab_environment"], markdownForResult)
+	registry := dynamic.NewRegistryFromCatalog(catalog)
+
+	tests := map[string]struct {
+		surface string
+		tool    string
+		action  string
+		run     func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error)
+	}{
+		"meta": {
+			surface: config.ToolSurfaceMeta, tool: "gitlab_environment", action: "get",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				result, _, runErr := metaHandler(ctx, req, MetaToolInput{Action: "get", Params: params})
+				return result, runErr
+			},
+		},
+		"dynamic": {
+			surface: config.ToolSurfaceDynamic, tool: dynamic.ExecuteActionToolName, action: "environment.get",
+			run: func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				result, _, runErr := registry.Execute(ctx, req, dynamic.ExecuteInput{Action: "environment.get", Params: params})
+				return result, runErr
+			},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			recorder := recordSpans(t)
+			handler := mcpotel.Middleware(mcpotel.Options{Identifier: NewCallIdentifier(catalog, tc.surface), Surface: tc.surface})(
+				func(ctx context.Context, _ string, req mcp.Request) (mcp.Result, error) {
+					return tc.run(ctx, req.(*mcp.CallToolRequest))
+				},
+			)
+			arguments, marshalErr := json.Marshal(map[string]any{"action": tc.action, "params": params})
+			if marshalErr != nil {
+				t.Fatalf("json.Marshal() error = %v", marshalErr)
+			}
+			req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: tc.tool, Arguments: arguments}}
+			if _, callErr := handler(context.Background(), "tools/call", req); callErr != nil {
+				t.Fatalf("tools/call error = %v", callErr)
+			}
+
+			// The GitLab request the route makes records a client span of
+			// its own; the tools/call span is the server one.
+			var server []sdktrace.ReadOnlySpan
+			for _, span := range recorder.Ended() {
+				if span.SpanKind() == trace.SpanKindServer {
+					server = append(server, span)
+				}
+			}
+			if len(server) != 1 {
+				t.Fatalf("recorded %d server spans, want 1", len(server))
+			}
+			if got := spanString(server[0], mcpotel.AttrActionID); got != "environment.protected_get" {
+				t.Errorf("span action = %q, want environment.protected_get, the route that ran", got)
+			}
+		})
+	}
+}
+
+// recordSpans installs a real tracer provider that keeps finished spans in
+// memory for the rest of the test, restoring the global one afterwards.
+func recordSpans(t *testing.T) *tracetest.SpanRecorder {
+	t.Helper()
+	recorder := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	previous := otel.GetTracerProvider()
+	otel.SetTracerProvider(provider)
+	t.Cleanup(func() {
+		_ = provider.Shutdown(context.Background())
+		otel.SetTracerProvider(previous)
+	})
+	return recorder
+}
+
+// spanString reads one string attribute off a recorded span, empty when absent.
+func spanString(span sdktrace.ReadOnlySpan, key attribute.Key) string {
+	for _, kv := range span.Attributes() {
+		if kv.Key == key {
+			return kv.Value.AsString()
+		}
+	}
+	return ""
 }
 
 // ambiguousIndividualToolOwners names every individual tool that more than one

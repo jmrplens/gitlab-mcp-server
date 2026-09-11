@@ -22,6 +22,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 )
 
 // maxInt is the maximum int value; used for overflow-safe capacity calculations.
@@ -2454,6 +2455,11 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 			LogToolRefusal(ctx, req, metaCallName(toolName, input.Action), refusal)
 			return validationResult, nil, nil
 		}
+		// input.Action is the route now, after both alias rewrites, and it is
+		// what telemetry should name rather than what the arguments said:
+		// get with an environment name runs protected_get. The dynamic surface
+		// enters this handler too, so this one call covers both surfaces.
+		mcpotel.RecordDispatch(ctx, toolName, input.Action)
 
 		// Confirm destructive actions before execution using route metadata.
 		if route.Destructive {

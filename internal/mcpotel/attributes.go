@@ -169,7 +169,7 @@ func RecordRefusal(ctx context.Context, reason string) {
 	// The metric first, because it is the one that can be missed: the holder is
 	// only in the context when a middleware put it there, and a handler called
 	// from somewhere else still gets the span attribute.
-	if holder, ok := ctx.Value(refusalHolderKey{}).(*refusalHolder); ok {
+	if holder, ok := ctx.Value(callHolderKey{}).(*callHolder); ok {
 		holder.reason = reason
 	}
 	if span := trace.SpanFromContext(ctx); span.IsRecording() {
@@ -177,28 +177,55 @@ func RecordRefusal(ctx context.Context, reason string) {
 	}
 }
 
-// refusalHolderKey is the context key for the holder below. An empty struct
-// type rather than a string, so nothing else can collide with it.
-type refusalHolderKey struct{}
-
-// refusalHolder carries a reason back from the handler to the middleware.
+// RecordDispatch tells the middleware which action a dispatching tool ran: the
+// tool it belongs to and the action name as its route table spells it.
 //
-// The middleware cannot learn it any other way. A refusal travels as a
+// The middleware names the action before the span starts, from the arguments,
+// because a sampler can only see what is present at creation. That is a
+// prediction, and dispatch can overrule it: gitlab_environment with action get
+// and an environment name runs protected_get, and the dynamic surface re-enters
+// the same meta handler. Called from where the route is chosen, after every
+// rewrite, so the span and the metric name what ran rather than what was asked.
+//
+// A later call overwrites an earlier one, and the last is the route that ran: a
+// dynamic call resolves its action and then enters the meta handler, which
+// records the final route. A no-op outside a request the middleware wraps.
+func RecordDispatch(ctx context.Context, tool, action string) {
+	if tool == "" || action == "" {
+		return
+	}
+	if holder, ok := ctx.Value(callHolderKey{}).(*callHolder); ok {
+		holder.dispatchTool = tool
+		holder.dispatchAction = action
+	}
+}
+
+// callHolderKey is the context key for the holder below. An empty struct type
+// rather than a string, so nothing else can collide with it.
+type callHolderKey struct{}
+
+// callHolder carries back from the handler to the middleware what only the
+// handler knows: why it declined the call, and which action it dispatched.
+//
+// The middleware cannot learn either any other way. A refusal travels as a
 // successful JSON-RPC response carrying a failure meant for the model, so from
 // outside the handler it is indistinguishable from a handler that ran and
-// failed, which is the same reason RecordRefusal is called from where the
-// refusal is decided.
+// failed; and the route a dispatcher chose depends on rewrites applied after
+// the middleware has already described the call.
 //
 // One holder per request, reachable only through that request's context, so
 // there is nothing to synchronize: the handler writes before it returns and the
 // middleware reads after.
-type refusalHolder struct {
+type callHolder struct {
 	reason string
+
+	dispatchTool   string
+	dispatchAction string
 }
 
-// withRefusalHolder returns a context a handler can report a refusal through,
-// and the holder to read afterwards.
-func withRefusalHolder(ctx context.Context) (context.Context, *refusalHolder) {
-	holder := &refusalHolder{}
-	return context.WithValue(ctx, refusalHolderKey{}, holder), holder
+// withCallHolder returns a context a handler can report through, and the
+// holder to read afterwards.
+func withCallHolder(ctx context.Context) (context.Context, *callHolder) {
+	holder := &callHolder{}
+	return context.WithValue(ctx, callHolderKey{}, holder), holder
 }
