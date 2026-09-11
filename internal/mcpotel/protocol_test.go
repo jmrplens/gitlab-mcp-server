@@ -72,6 +72,65 @@ func TestProtocolVersionFor_TheHTTPHeaderIsTheLastResort(t *testing.T) {
 	}
 }
 
+// withProtocolHeader builds a tools/call carrying the HTTP protocol header, and
+// optionally a session and a _meta.
+func withProtocolHeader(session *mcp.ServerSession, meta mcp.Meta, headerValue string) mcp.Request {
+	h := http.Header{}
+	h.Set(protocolHeader, headerValue)
+	params := &mcp.CallToolParamsRaw{Name: "gitlab_execute_action"}
+	if meta != nil {
+		params.SetMeta(meta)
+	}
+	return &mcp.CallToolRequest{Session: session, Params: params, Extra: &mcp.RequestExtra{Header: h}}
+}
+
+// TestProtocolVersionFor_ASessionStillInItsHandshakeLeavesItToTheHeader
+// verifies that a session which has not recorded its initialize parameters
+// yet is passed over rather than read.
+//
+// That is the state of every session while its initialize request is being
+// handled: the middleware sees the request before the SDK records what it
+// carried. A client that sends no per-request version reaches the session
+// source then with nothing in it, and has to fall through to the header.
+func TestProtocolVersionFor_ASessionStillInItsHandshakeLeavesItToTheHeader(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	_, serverTransport := mcp.NewInMemoryTransports()
+	session, err := server.Connect(t.Context(), serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	if session.InitializeParams() != nil {
+		t.Fatal("the session already carries initialize parameters, so this test no longer drives the handshake")
+	}
+
+	got := protocolVersionFor(withProtocolHeader(session, nil, "2025-11-25"), allowedVersions([]string{"2025-11-25"}))
+
+	if got != "2025-11-25" {
+		t.Errorf("protocolVersionFor = %q, want the header's 2025-11-25 while the session has nothing to say", got)
+	}
+}
+
+// TestAllowedVersions_ABlankEntryAdmitsNothing verifies that an empty entry in
+// the configured list is dropped rather than admitted.
+//
+// A list split from a string with a trailing comma carries one. Admitted, it
+// would let a client's empty _meta version end the search as an answer, so
+// the header a well-behaved proxy set would never be read.
+func TestAllowedVersions_ABlankEntryAdmitsNothing(t *testing.T) {
+	t.Parallel()
+
+	allowed := allowedVersions([]string{"", "2025-11-25"})
+
+	if _, admitted := allowed[""]; admitted {
+		t.Error("the empty string was admitted as a protocol version")
+	}
+	blankMeta := mcp.Meta{metaProtocolVersionKey: ""}
+	if got := protocolVersionFor(withProtocolHeader(nil, blankMeta, "2025-11-25"), allowed); got != "2025-11-25" {
+		t.Errorf("protocolVersionFor = %q, want the header's 2025-11-25 past an empty _meta version", got)
+	}
+}
+
 // connectedServerSession returns a live [*mcp.ServerSession] whose initialize
 // parameters have been negotiated with a real client.
 //

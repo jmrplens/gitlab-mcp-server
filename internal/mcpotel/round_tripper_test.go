@@ -187,6 +187,82 @@ func TestNewTransport_ATransportFailureIsBoundedAndSaysNothingAboutTheAddress(t 
 	})
 }
 
+// TestNewTransport_ABaseThatAnswersNothingIsPassedThroughUnread verifies that a
+// base transport breaking the RoundTripper contract, with neither a response
+// nor an error, is handed back as it came and not read.
+//
+// net/http's client turns that pair into an error naming the transport, which
+// puts the defect where it belongs. A wrapper that read the status off the
+// missing response would instead panic inside every GitLab call made through
+// it, and the report would name this package.
+func TestNewTransport_ABaseThatAnswersNothingIsPassedThroughUnread(t *testing.T) {
+	recorder := newRecorder(t)
+
+	// The pair the contract forbids, which is the whole of this stub.
+	var noResponse *http.Response
+	transport := NewTransport(roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return noResponse, nil
+	}))
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://gitlab.example/api/v4/user", nil)
+	if err != nil {
+		t.Fatalf("building the request: %v", err)
+	}
+	resp, err := transport.RoundTrip(req)
+	if resp != nil {
+		_ = resp.Body.Close()
+		t.Errorf("RoundTrip answered with %v, want the base's nil response handed back", resp)
+	}
+	if err != nil {
+		t.Errorf("RoundTrip answered with the error %v, want the base's nil handed back", err)
+	}
+
+	span := findSpan(t, recorder, http.MethodGet)
+	if value, recorded := attrOf(span, attrHTTPResponseStatus); recorded {
+		t.Errorf("http.response.status_code = %v was recorded for a response that never arrived", value)
+	}
+}
+
+// TestSetMetricServerAddresses_ABlankHostIsNotDeclared verifies that an empty
+// entry in the declared hosts is dropped rather than declared.
+//
+// A list split from a configuration string with a doubled or trailing comma
+// carries one. Declared, it would let a request whose URL names no host label
+// the metric with an empty server.address and its port beside it, a series
+// that names no instance at all.
+func TestSetMetricServerAddresses_ABlankHostIsNotDeclared(t *testing.T) {
+	previous := metricServerAddresses.Load()
+	t.Cleanup(func() { metricServerAddresses.Store(previous) })
+
+	SetMetricServerAddresses([]string{"", "gitlab.example.com"})
+
+	if got := boundedServerAddress(""); got != OtherServerAddress {
+		t.Errorf("an empty host reached the metric as %q, want %q", got, OtherServerAddress)
+	}
+	if got := boundedServerAddress("gitlab.example.com"); got != "gitlab.example.com" {
+		t.Errorf("the declared host beside the blank one was bounded away to %q", got)
+	}
+}
+
+// TestServerPort_APortThatDoesNotFitFallsBackToTheSchemeDefault verifies the
+// answer for a written port too large to be an int.
+//
+// url.Parse accepts any run of digits as a port, and strconv answers one that
+// overflows with the largest int and an error. Reading past the error would put
+// that clamped number on the span as the port a request used, which is a value
+// the request never had.
+func TestServerPort_APortThatDoesNotFitFallsBackToTheSchemeDefault(t *testing.T) {
+	t.Parallel()
+
+	parsed, err := url.Parse("https://gitlab.example.com:99999999999999999999")
+	if err != nil {
+		t.Fatalf("url.Parse refused the port, so this test no longer reaches the conversion: %v", err)
+	}
+	if got := serverPort(parsed); got != 443 {
+		t.Errorf("serverPort = %d, want the https default 443", got)
+	}
+}
+
 // findSpan returns the one recorded span with the given name.
 func findSpan(t *testing.T, recorder *tracetest.SpanRecorder, name string) sdktrace.ReadOnlySpan {
 	t.Helper()

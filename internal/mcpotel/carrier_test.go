@@ -2,9 +2,11 @@ package mcpotel
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // TestMetaCarrier_KeysNamesOnlyThePropagationKeys covers the method that decides
@@ -126,6 +128,141 @@ func requestsWithoutParams() map[string]mcp.Request {
 		"tools/list":     &mcp.ListToolsRequest{},
 		"prompts/list":   &mcp.ListPromptsRequest{},
 		"resources/list": &mcp.ListResourcesRequest{},
+	}
+}
+
+// traceStateOf parses a tracestate a test built, failing when the W3C parser
+// refuses it: a refused value reaches the bound as an empty state, and a test
+// of the bound would then pass on nothing.
+func traceStateOf(t *testing.T, raw string) trace.TraceState {
+	t.Helper()
+
+	state, err := trace.ParseTraceState(raw)
+	if err != nil {
+		t.Fatalf("the W3C parser refused the test's tracestate: %v", err)
+	}
+	return state
+}
+
+// TestBoundTraceState_TruncatesToTheBoundAndNoFurther verifies both edges of the
+// tracestate bound: a value at the bound is left alone and reported unchanged,
+// and a value over it loses whole entries from the end until it fits.
+//
+// Each edge is its own way to be wrong. Dropping an entry that already fit
+// throws away vendor state the bound was chosen to keep, and reporting a change
+// that did not happen makes the caller rebuild a context for nothing. At the
+// other end, a head entry can exceed the bound by itself, since W3C allows a
+// 256-byte key beside a 256-byte value, and keeping the head is then no reason
+// to exceed the bound.
+func TestBoundTraceState_TruncatesToTheBoundAndNoFurther(t *testing.T) {
+	t.Parallel()
+
+	// Two members whose encoding is exactly the bound: "a=" and 256 bytes, the
+	// comma, then "b=" and whatever is left.
+	atTheBound := "a=" + strings.Repeat("v", 256) + ",b=" + strings.Repeat("v", maxTraceStateBytes-2-256-3)
+	if len(atTheBound) != maxTraceStateBytes {
+		t.Fatalf("the fixture is %d bytes, want exactly the %d-byte bound", len(atTheBound), maxTraceStateBytes)
+	}
+
+	tests := []struct {
+		name          string
+		raw           string
+		want          string
+		wantTruncated bool
+	}{
+		{
+			name: "a tracestate exactly at the bound is left alone",
+			raw:  atTheBound,
+			want: atTheBound,
+		},
+		{
+			name:          "one entry over the bound loses that entry and no more",
+			raw:           atTheBound + ",c=x",
+			want:          atTheBound,
+			wantTruncated: true,
+		},
+		{
+			name:          "a head entry larger than the bound goes too",
+			raw:           strings.Repeat("k", 256) + "=" + strings.Repeat("v", 256),
+			want:          "",
+			wantTruncated: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			bounded, truncated := boundTraceState(traceStateOf(t, tt.raw))
+			if got := bounded.String(); got != tt.want {
+				t.Errorf("bounded to %d bytes, want the %d-byte %.40q...", len(got), len(tt.want), tt.want)
+			}
+			if truncated != tt.wantTruncated {
+				t.Errorf("truncated = %v, want %v", truncated, tt.wantTruncated)
+			}
+		})
+	}
+}
+
+// TestSanitizeRemoteContext_ALocalParentIsLeftExactlyAsItIs verifies that the
+// bounds apply only to a span context that arrived from outside the process.
+//
+// An ambient span this server created is its own: its sampling decision came
+// from this process's sampler and its tracestate from this process's code, so
+// neither is a caller's claim to bound. Treating it as remote would also stamp
+// it remote, which tells a sampler an inbound trace arrived when none did.
+func TestSanitizeRemoteContext_ALocalParentIsLeftExactlyAsItIs(t *testing.T) {
+	t.Parallel()
+
+	traceID, err := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
+	if err != nil {
+		t.Fatalf("parsing the trace id: %v", err)
+	}
+	spanID, err := trace.SpanIDFromHex("00f067aa0ba902b7")
+	if err != nil {
+		t.Fatalf("parsing the span id: %v", err)
+	}
+	// Unsampled and over the tracestate bound: both are things the sanitizer
+	// changes on a remote parent, so either would show if it touched this one.
+	local := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceState: traceStateOf(t, maximalTraceState()),
+	})
+	ctx := trace.ContextWithSpanContext(context.Background(), local)
+
+	got := trace.SpanContextFromContext(sanitizeRemoteContext(ctx, false))
+
+	if !got.Equal(local) {
+		t.Errorf("the local parent came back as %v (remote=%v, sampled=%v, %d bytes of tracestate), want it untouched",
+			got, got.IsRemote(), got.IsSampled(), len(got.TraceState().String()))
+	}
+}
+
+// valueParams is a Params implementation that is a struct value rather than a
+// pointer. The SDK allows one: embedding its ParamsBase by pointer promotes
+// every method the interface asks for, the unexported ones included.
+type valueParams struct {
+	*mcp.ParamsBase
+}
+
+// TestParamsOf_AParamsValueThatIsNotAPointer_IsReturned verifies that the
+// typed-nil check asks a pointer whether it is nil and asks nothing of any
+// other kind of value.
+//
+// reflect's IsNil panics on a struct, so a check that skipped the kind would
+// turn a custom params type into a panic on every request carrying one, on the
+// receiving path of every method, which is the failure the typed-nil check was
+// written to end.
+func TestParamsOf_AParamsValueThatIsNotAPointer_IsReturned(t *testing.T) {
+	t.Parallel()
+
+	params := valueParams{ParamsBase: &mcp.ParamsBase{}}
+
+	got := paramsOf(&mcp.ServerRequest[mcp.Params]{Params: params})
+
+	if _, same := got.(valueParams); !same {
+		t.Errorf("paramsOf = %#v, want the params value the request carries", got)
 	}
 }
 

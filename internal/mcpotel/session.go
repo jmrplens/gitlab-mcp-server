@@ -83,8 +83,9 @@ func (t *sessionTracker) observe(req mcp.Request, protocolVersion string) {
 	if t == nil || req == nil {
 		return
 	}
-	session, ok := req.GetSession().(*mcp.ServerSession)
-	if !ok || session == nil {
+	// A failed assertion yields a nil session too, so one check covers both.
+	session, _ := req.GetSession().(*mcp.ServerSession)
+	if session == nil {
 		return
 	}
 	// A session with no id under a network transport is one stateless POST.
@@ -144,9 +145,10 @@ func sessionIDOf(req mcp.Request) string {
 	}
 	// A request built without a session hands back a non-nil interface wrapping
 	// a nil pointer, so the interface comparison passes and the method call
-	// then dereferences nil. The typed assertion is what actually catches it.
-	session, ok := req.GetSession().(*mcp.ServerSession)
-	if !ok || session == nil {
+	// then dereferences nil. The typed assertion is what actually catches it:
+	// it hands back that nil pointer, and a failed one hands back nil as well.
+	session, _ := req.GetSession().(*mcp.ServerSession)
+	if session == nil {
 		return ""
 	}
 	return session.ID()

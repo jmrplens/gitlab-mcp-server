@@ -2,6 +2,7 @@ package mcpotel
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -144,16 +145,17 @@ func Middleware(opts Options) mcp.Middleware {
 			version := protocolVersionFor(req, allowed)
 			sessionID := sessionIDOf(req)
 
-			attrs := make([]attribute.KeyValue, 0, len(constant)+len(call.attributes)+len(identityAttrs)+2)
-			attrs = append(attrs, constant...)
-			attrs = append(attrs, call.attributes...)
+			// The two optional attributes are gathered first so the list the
+			// span starts with is sized by the slices it joins, in one
+			// allocation, rather than by a count kept beside them.
+			optional := make([]attribute.KeyValue, 0, 2)
 			if version != "" {
-				attrs = append(attrs, AttrMCPProtocolVersion.String(version))
+				optional = append(optional, AttrMCPProtocolVersion.String(version))
 			}
 			if sessionID != "" {
-				attrs = append(attrs, AttrMCPSessionID.String(sessionID))
+				optional = append(optional, AttrMCPSessionID.String(sessionID))
 			}
-			attrs = append(attrs, identityAttrs...)
+			attrs := slices.Concat(constant, call.attributes, optional, identityAttrs)
 
 			// The context returned by Start is the one passed onward. Passing
 			// the original would compile, run, and silently produce a flat
@@ -164,8 +166,11 @@ func Middleware(opts Options) mcp.Middleware {
 			}
 			// Only when Extract actually changed the parent. With no incoming
 			// context the ambient span is already the parent, and linking a
-			// span to its own parent says nothing.
-			if ambient.IsValid() && parent.IsValid() && !parent.Equal(ambient) {
+			// span to its own parent says nothing. The parent needs no check of
+			// its own: under a valid ambient span it is valid too, because a
+			// propagator that cannot parse what arrived leaves the context as
+			// it was, and bounding a remote context never invalidates it.
+			if ambient.IsValid() && !parent.Equal(ambient) {
 				startOpts = append(startOpts, trace.WithLinks(trace.Link{SpanContext: ambient}))
 			}
 
@@ -262,7 +267,10 @@ func (c call) dispatched(holder *callHolder, identifier CallIdentifier, span tra
 	if identity.Domain != "" {
 		resolved = append(resolved, AttrDomain.String(identity.Domain))
 	}
-	attrs := make([]attribute.KeyValue, 0, len(c.attributes)+len(resolved))
+	// Sized to the prediction: each attribute the resolution names takes the
+	// place of one the prediction named, so the list outgrows it only when
+	// dispatch resolved an action the arguments could not predict.
+	attrs := make([]attribute.KeyValue, 0, len(c.attributes))
 	for _, kv := range c.attributes {
 		if kv.Key != AttrActionID && (kv.Key != AttrDomain || identity.Domain == "") {
 			attrs = append(attrs, kv)

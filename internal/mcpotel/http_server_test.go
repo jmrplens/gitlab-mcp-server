@@ -211,6 +211,51 @@ func TestStatusRecorder_WriteMarksTheResponseWritten(t *testing.T) {
 	}
 }
 
+// TestStatusRecorder_TheFirstStatusSentIsTheOneRecorded verifies that once a
+// response is committed, a later WriteHeader does not relabel it.
+//
+// net/http sends the first status and ignores every later one, so a recorder
+// that kept the last would label the measurement with a code the client never
+// received: a handler that streams a 200 and calls WriteHeader(500) on its way
+// out would count as a server failure that did not happen. A body and a flush
+// both commit the implicit 200, the second being what an SSE response does.
+func TestStatusRecorder_TheFirstStatusSentIsTheOneRecorded(t *testing.T) {
+	tests := []struct {
+		name   string
+		commit func(*statusRecorder)
+		want   int
+	}{
+		{
+			name:   "an explicit status",
+			commit: func(r *statusRecorder) { r.WriteHeader(http.StatusUnauthorized) },
+			want:   http.StatusUnauthorized,
+		},
+		{
+			name:   "a body, which sends an implicit 200",
+			commit: func(r *statusRecorder) { _, _ = r.Write([]byte("body")) },
+			want:   http.StatusOK,
+		},
+		{
+			name:   "a flush, which sends an implicit 200",
+			commit: func(r *statusRecorder) { r.Flush() },
+			want:   http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := &statusRecorder{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
+
+			tt.commit(recorder)
+			recorder.WriteHeader(http.StatusInternalServerError)
+
+			if recorder.status != tt.want {
+				t.Errorf("recorded status %d, want %d: the response was already committed", recorder.status, tt.want)
+			}
+		})
+	}
+}
+
 // flushCountingWriter records how many times it was flushed.
 type flushCountingWriter struct {
 	*httptest.ResponseRecorder

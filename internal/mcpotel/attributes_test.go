@@ -128,6 +128,56 @@ func TestRecordRefusal_AnOrdinaryCallCarriesNoReason(t *testing.T) {
 	}
 }
 
+// TestRecordDispatch_OnlyACompleteRecordReplacesTheLastOne verifies which of
+// several dispatch reports the middleware reads back: the last complete one.
+//
+// A dynamic call records the action it resolved and then enters the meta
+// handler, which records the route that actually ran, so a later report has to
+// replace an earlier one. A report missing its tool or its action is not a
+// route at all, and letting it overwrite the one before would put the
+// prediction back on a call whose dispatcher had already named what it ran.
+func TestRecordDispatch_OnlyACompleteRecordReplacesTheLastOne(t *testing.T) {
+	type report struct{ tool, action string }
+	tests := []struct {
+		name       string
+		reports    []report
+		wantTool   string
+		wantAction string
+	}{
+		{
+			name:       "a later complete report replaces an earlier one",
+			reports:    []report{{"gitlab_execute_action", "issue.list"}, {"gitlab_issue", "list"}},
+			wantTool:   "gitlab_issue",
+			wantAction: "list",
+		},
+		{
+			name:       "a report without an action leaves the earlier one",
+			reports:    []report{{"gitlab_environment", "protected_get"}, {"gitlab_environment", ""}},
+			wantTool:   "gitlab_environment",
+			wantAction: "protected_get",
+		},
+		{
+			name:       "a report without a tool leaves the earlier one",
+			reports:    []report{{"gitlab_environment", "protected_get"}, {"", "get"}},
+			wantTool:   "gitlab_environment",
+			wantAction: "protected_get",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, holder := withCallHolder(context.Background())
+			for _, r := range tt.reports {
+				RecordDispatch(ctx, r.tool, r.action)
+			}
+			if holder.dispatchTool != tt.wantTool || holder.dispatchAction != tt.wantAction {
+				t.Errorf("the middleware reads back %q/%q, want %q/%q",
+					holder.dispatchTool, holder.dispatchAction, tt.wantTool, tt.wantAction)
+			}
+		})
+	}
+}
+
 // TestRecordRefusal_WithoutTheHolderStillMarksTheSpan pins the fallback, which
 // is what a handler reached from outside this middleware gets.
 //

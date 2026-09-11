@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -228,6 +230,11 @@ func (d dispatchingIdentifier) IdentifyDispatch(tool, action string) (Identity, 
 // protected_get; the prediction reads get from the arguments. A resolution
 // that names no domain keeps the predicted one on both, because a span
 // attribute cannot be removed and the metric must agree with the span.
+//
+// The metric's whole attribute set is compared, not only the two replaced
+// keys: the replacement rebuilds the call's attribute list, and a rebuild that
+// kept the action and lost the method or the tool name would still pass a
+// check of the action alone.
 func TestMiddleware_TheDispatchedActionReplacesThePrediction(t *testing.T) {
 	tests := map[string]struct {
 		resolved   Identity
@@ -269,11 +276,16 @@ func TestMiddleware_TheDispatchedActionReplacesThePrediction(t *testing.T) {
 			for _, kv := range collectedAttributes(t, reader) {
 				onMetric[kv.Key] = kv.Value.AsString()
 			}
-			if onMetric[AttrActionID] != "environment.protected_get" {
-				t.Errorf("metric action = %q, want the dispatched environment.protected_get", onMetric[AttrActionID])
+			wantMetric := map[attribute.Key]string{
+				AttrToolSurface:        "meta",
+				AttrMCPMethodName:      "tools/call",
+				AttrGenAIToolName:      "gitlab_environment",
+				AttrGenAIOperationName: "execute_tool",
+				AttrActionID:           "environment.protected_get",
+				AttrDomain:             tc.wantDomain,
 			}
-			if onMetric[AttrDomain] != tc.wantDomain {
-				t.Errorf("metric domain = %q, want %q", onMetric[AttrDomain], tc.wantDomain)
+			if !maps.Equal(onMetric, wantMetric) {
+				t.Errorf("metric attributes = %v, want %v", onMetric, wantMetric)
 			}
 		})
 	}
@@ -530,6 +542,25 @@ func TestMiddleware_PromptAndResourceNaming(t *testing.T) {
 	}
 }
 
+// TestMiddleware_AnUnnamedPromptKeepsTheBareMethod verifies that a prompts/get
+// naming no prompt is named by its method alone and carries no prompt name.
+//
+// An empty gen_ai.prompt.name would be a dimension value meaning nothing was
+// looked at, and a span name of "prompts/get " with a trailing space would sort
+// apart from the bare method a backend groups the other malformed calls under.
+func TestMiddleware_AnUnnamedPromptKeepsTheBareMethod(t *testing.T) {
+	span := runOnce(t, Options{}, "prompts/get",
+		&mcp.GetPromptRequest{Params: &mcp.GetPromptParams{}},
+		nil, errInvalidParams)
+
+	if got := span.Name(); got != "prompts/get" {
+		t.Errorf("span name = %q, want the bare method for a prompt with no name", got)
+	}
+	if value, recorded := attrOf(span, AttrGenAIPromptName); recorded {
+		t.Errorf("%s = %q was recorded for a request that named no prompt", AttrGenAIPromptName, value.AsString())
+	}
+}
+
 // TestMiddleware_WithoutAnIdentifier degrades to no action attribute rather
 // than to a panic. This runs on every tool call, so forgetting to wire the
 // identifier must cost one attribute, not the process.
@@ -744,6 +775,44 @@ func TestMiddleware_UnadmittedProtocolVersionIsDropped(t *testing.T) {
 
 	if _, ok := attrOf(span, AttrMCPProtocolVersion); ok {
 		t.Error("an unadmitted version was recorded; a caller can then mint one time series per spelling")
+	}
+}
+
+// TestMiddleware_TheAdmittedVersionIsAMetricDimension verifies that the
+// negotiated revision reaches the duration metric as well as the span, and
+// that a version the allow-list refused adds no dimension there at all.
+//
+// It is the one value a caller supplies that the metric may carry, because the
+// allow-list bounds it, and it is what splits a latency change by the revision
+// a client speaks. An unadmitted request must not carry an empty value either:
+// a label present with nothing in it is a series of its own.
+func TestMiddleware_TheAdmittedVersionIsAMetricDimension(t *testing.T) {
+	tests := []struct {
+		name string
+		sent string
+		want []string
+	}{
+		{name: "an admitted version is carried", sent: "2026-07-28", want: []string{"2026-07-28"}},
+		{name: "an unadmitted version adds no dimension", sent: "1999-01-01-not-a-revision"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reader, restore := newMetricRecorder(t)
+			defer restore()
+
+			handler := Middleware(Options{ProtocolVersions: admitted})(
+				func(context.Context, string, mcp.Request) (mcp.Result, error) {
+					return &mcp.CallToolResult{}, nil
+				},
+			)
+			_, _ = handler(context.Background(), "tools/call",
+				callToolRequest("gitlab_execute_action", nil, map[string]any{metaProtocolVersionKey: tt.sent}))
+
+			if got := dimensionValues(t, reader, string(AttrMCPProtocolVersion)); !slices.Equal(got, tt.want) {
+				t.Errorf("%s on the metric = %q, want %q", AttrMCPProtocolVersion, got, tt.want)
+			}
+		})
 	}
 }
 

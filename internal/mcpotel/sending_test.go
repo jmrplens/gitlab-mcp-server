@@ -3,10 +3,12 @@ package mcpotel
 import (
 	"context"
 	"errors"
+	"maps"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
@@ -51,6 +53,55 @@ func TestSendingMiddleware_IsClientKind(t *testing.T) {
 	value, ok := attrOf(span, AttrMCPMethodName)
 	if !ok || value.AsString() != "elicitation/create" {
 		t.Errorf("%s = %v, want the method name", AttrMCPMethodName, value.AsString())
+	}
+}
+
+// TestSendingMiddleware_CarriesTheConfiguredSurfaceAndTransport verifies that
+// the deployment's surface and transport reach the client span exactly when
+// they were configured.
+//
+// They are what tells an elicitation on stdio from one over HTTP, and on which
+// catalog, when a trace is read months later. Unset, they must be absent rather
+// than present and empty: a key carrying nothing reads as a value somebody
+// chose, and on the metric it is a series of its own.
+func TestSendingMiddleware_CarriesTheConfiguredSurfaceAndTransport(t *testing.T) {
+	tests := []struct {
+		name string
+		opts Options
+		want map[attribute.Key]string
+	}{
+		{
+			name: "both configured",
+			opts: Options{Surface: "dynamic", Transport: TransportPipe},
+			want: map[attribute.Key]string{AttrToolSurface: "dynamic", AttrNetworkTransport: TransportPipe},
+		},
+		{name: "neither configured", opts: Options{}, want: map[attribute.Key]string{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := newRecorder(t)
+			handler := SendingMiddleware(tt.opts)(
+				func(context.Context, string, mcp.Request) (mcp.Result, error) {
+					return &mcp.ElicitResult{}, nil
+				},
+			)
+			_, _ = handler(context.Background(), "elicitation/create", callToolRequest("unused", nil, nil))
+
+			spans := recorder.Ended()
+			if len(spans) != 1 {
+				t.Fatalf("recorded %d spans, want exactly 1", len(spans))
+			}
+			got := map[attribute.Key]string{}
+			for _, key := range []attribute.Key{AttrToolSurface, AttrNetworkTransport} {
+				if value, ok := attrOf(spans[0], key); ok {
+					got[key] = value.AsString()
+				}
+			}
+			if !maps.Equal(got, tt.want) {
+				t.Errorf("client span carries %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
