@@ -12,6 +12,34 @@ import (
 // it is a heading of the server's response rather than a line of a file.
 const injectedLine = "## Injected heading"
 
+// The guidance sections the three submodule formatters close with, pinned
+// once so each whole-output expectation names them rather than restating them.
+const (
+	submoduleListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.read_submodule_file' to read a file out of one submodule\n" +
+		"- Use action 'repository.update_submodule' to move a submodule to another commit\n"
+
+	submoduleReadHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.update_submodule' to change the commit SHA this submodule is pinned to\n"
+
+	submoduleUpdateHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.list_submodules' to see every submodule of this repository\n" +
+		"- Use action 'repository.read_submodule_file' to read a file at the new commit\n"
+)
+
+// renderedText returns the Markdown a formatter's result carries.
+func renderedText(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
+	if result == nil || len(result.Content) == 0 {
+		t.Fatal("the formatter returned no content")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("first content is %T, want text", result.Content[0])
+	}
+	return text.Text
+}
+
 // TestFormatReadMarkdown_FenceOutlivesBacktickRunsInTheContent checks that the
 // block wrapping a submodule's file is closed by nothing the file contains.
 //

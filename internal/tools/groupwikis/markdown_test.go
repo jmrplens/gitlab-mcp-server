@@ -1,185 +1,158 @@
 // markdown_test.go validates Markdown formatting functions for group wiki
-// MCP tool output. Covers single-page rendering (with/without content and
-// encoding), list rendering (empty, single, multiple pages), and special
-// characters in fields.
+// MCP tool output. Every expectation is the whole render: a substring
+// assertion is what let a table that had stopped rendering keep passing.
 package groupwikis
 
 import (
-	"strings"
 	"testing"
 )
 
-// TestFormatOutputMarkdown validates the single wiki page Markdown formatter.
-// It covers pages with full fields, optional encoding, optional content, and
-// minimal fields.
+// The guidance sections the two group wiki formatters close with.
+const (
+	groupWikiCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.wiki_edit' to update this page\n" +
+		"- Use action 'group.wiki_delete' to remove this page\n"
+
+	groupWikiListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.wiki_get' to read one page's content\n" +
+		"- Use action 'group.wiki_create' to add a new page\n"
+)
+
+// TestFormatOutputMarkdown pins the whole card of a group wiki page, in each
+// of the four shapes GitLab answers with: a Markdown page, a page in another
+// format, a page read without its content, and a page whose every field is
+// empty.
 func TestFormatOutputMarkdown(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    Output
-		contains []string
-		excludes []string
+	cases := []struct {
+		name  string
+		input Output
+		want  string
 	}{
 		{
-			name: "full fields with content and encoding",
+			// A Markdown body is quoted, so a heading in the page cannot become
+			// a heading of the response: this content used to be written raw.
+			name: "markdown page is quoted",
 			input: Output{
 				Title:    "Home",
 				Slug:     "home",
 				Format:   "markdown",
-				Content:  "# Welcome",
+				Content:  "# Welcome\n\nRead the setup guide.",
 				Encoding: "utf-8",
 			},
-			contains: []string{
-				"## Wiki: Home",
-				"**Slug**: home",
-				"**Format**: markdown",
-				"**Encoding**: utf-8",
-				"### Content",
-				"# Welcome",
-				"gitlab_group_wiki_edit",
-				"gitlab_group_wiki_delete",
-			},
+			want: "## Wiki: Home\n\n" +
+				"- **Slug**: home\n" +
+				"- **Format**: markdown\n" +
+				"- **Encoding**: utf-8\n" +
+				"- **Content**:\n" +
+				"  > # Welcome\n" +
+				"  >\n" +
+				"  > Read the setup guide.\n" +
+				groupWikiCardHints,
 		},
 		{
-			name: "without encoding omits encoding line",
+			// A page in another format is fenced with that format, since
+			// quoting it would render it as the Markdown it is not.
+			name: "asciidoc page is fenced",
 			input: Output{
 				Title:   "Setup",
 				Slug:    "setup",
 				Format:  "asciidoc",
-				Content: "Setup instructions",
+				Content: "= Setup instructions",
 			},
-			contains: []string{
-				"## Wiki: Setup",
-				"**Slug**: setup",
-				"**Format**: asciidoc",
-				"### Content",
-				"Setup instructions",
-			},
-			excludes: []string{
-				"**Encoding**",
-			},
+			want: "## Wiki: Setup\n\n" +
+				"- **Slug**: setup\n" +
+				"- **Format**: asciidoc\n" +
+				"\n### Content\n\n" +
+				"```asciidoc\n= Setup instructions\n```\n" +
+				groupWikiCardHints,
 		},
 		{
-			name: "without content omits content section",
-			input: Output{
-				Title:  "Empty",
-				Slug:   "empty",
-				Format: "markdown",
-			},
-			contains: []string{
-				"## Wiki: Empty",
-				"**Slug**: empty",
-			},
-			excludes: []string{
-				"### Content",
-			},
+			name:  "page read without its content",
+			input: Output{Title: "Empty", Slug: "empty", Format: "markdown"},
+			want: "## Wiki: Empty\n\n" +
+				"- **Slug**: empty\n" +
+				"- **Format**: markdown\n" +
+				groupWikiCardHints,
 		},
 		{
-			name: "minimal fields",
-			input: Output{
-				Title:  "",
-				Slug:   "",
-				Format: "",
-			},
-			contains: []string{
-				"## Wiki:",
-				"**Slug**:",
-				"**Format**:",
-			},
+			// Every field absent writes no row at all, rather than a label with
+			// nothing after it.
+			name:  "every field empty",
+			input: Output{},
+			want:  "## Wiki\n" + groupWikiCardHints,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := FormatOutputMarkdown(tt.input)
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("output missing %q\ngot:\n%s", s, got)
-				}
-			}
-			for _, s := range tt.excludes {
-				if strings.Contains(got, s) {
-					t.Errorf("output should not contain %q\ngot:\n%s", s, got)
-				}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := FormatOutputMarkdown(c.input); got != c.want {
+				t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, c.want)
 			}
 		})
 	}
 }
 
-// TestFormatListMarkdown validates the wiki list Markdown table formatter.
-// It covers empty list, single page, and multiple pages with special characters.
+// TestFormatListMarkdown pins the whole group wiki listing. The table used to
+// be written under a guidance section the formatter opened with, which made
+// its header a lazy continuation of that section's last list item: no table
+// rendered at all, and the substring assertions that replaced this one passed
+// throughout.
 func TestFormatListMarkdown(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    ListOutput
-		contains []string
-		excludes []string
+	cases := []struct {
+		name  string
+		input ListOutput
+		want  string
 	}{
 		{
-			name:  "empty list returns no-results message",
+			name:  "no pages",
 			input: ListOutput{WikiPages: nil},
-			contains: []string{
-				"No group wiki pages found.",
-			},
-			excludes: []string{
-				"| Title",
-			},
+			want:  "No group wiki pages found.\n",
 		},
 		{
-			name: "single page renders table",
-			input: ListOutput{
-				WikiPages: []Output{
-					{Title: "Home", Slug: "home", Format: "markdown"},
-				},
-			},
-			contains: []string{
-				"| Title | Slug | Format |",
-				"| --- | --- | --- |",
-				"| Home | home | markdown |",
-				"gitlab_group_wiki_get",
-				"gitlab_group_wiki_create",
-			},
+			name: "one page",
+			input: ListOutput{WikiPages: []Output{
+				{Title: "Home", Slug: "home", Format: "markdown"},
+			}},
+			want: "## Group Wiki Pages (1)\n\n" +
+				"| Title | Slug | Format |\n" +
+				"| --- | --- | --- |\n" +
+				"| Home | home | markdown |\n" +
+				groupWikiListHints,
 		},
 		{
-			name: "multiple pages render rows",
-			input: ListOutput{
-				WikiPages: []Output{
-					{Title: "Home", Slug: "home", Format: "markdown"},
-					{Title: "Setup Guide", Slug: "setup-guide", Format: "asciidoc"},
-					{Title: "FAQ", Slug: "faq", Format: "rdoc"},
-				},
-			},
-			contains: []string{
-				"| Home | home | markdown |",
-				"| Setup Guide | setup-guide | asciidoc |",
-				"| FAQ | faq | rdoc |",
-			},
+			name: "several pages",
+			input: ListOutput{WikiPages: []Output{
+				{Title: "Home", Slug: "home", Format: "markdown"},
+				{Title: "Setup Guide", Slug: "setup-guide", Format: "asciidoc"},
+				{Title: "FAQ", Slug: "faq", Format: "rdoc"},
+			}},
+			want: "## Group Wiki Pages (3)\n\n" +
+				"| Title | Slug | Format |\n" +
+				"| --- | --- | --- |\n" +
+				"| Home | home | markdown |\n" +
+				"| Setup Guide | setup-guide | asciidoc |\n" +
+				"| FAQ | faq | rdoc |\n" +
+				groupWikiListHints,
 		},
 		{
-			name: "special characters in title are escaped",
-			input: ListOutput{
-				WikiPages: []Output{
-					{Title: "Pipe | Test", Slug: "pipe-test", Format: "markdown"},
-				},
-			},
-			contains: []string{
-				"pipe-test",
-				"markdown",
-			},
+			// A pipe a page author typed into a title is an entity, so it stays
+			// inside its cell instead of opening a column of its own.
+			name: "a pipe in a title stays in its cell",
+			input: ListOutput{WikiPages: []Output{
+				{Title: "Pipe | Test", Slug: "pipe-test", Format: "markdown"},
+			}},
+			want: "## Group Wiki Pages (1)\n\n" +
+				"| Title | Slug | Format |\n" +
+				"| --- | --- | --- |\n" +
+				"| Pipe &#124; Test | pipe-test | markdown |\n" +
+				groupWikiListHints,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := FormatListMarkdown(tt.input)
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("output missing %q\ngot:\n%s", s, got)
-				}
-			}
-			for _, s := range tt.excludes {
-				if strings.Contains(got, s) {
-					t.Errorf("output should not contain %q\ngot:\n%s", s, got)
-				}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := FormatListMarkdown(c.input); got != c.want {
+				t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, c.want)
 			}
 		})
 	}

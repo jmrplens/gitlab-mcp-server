@@ -2,12 +2,24 @@ package branches
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+// Canonical action IDs the hints name that the action specs do not already
+// spell, the one form every surface resolves: the dynamic surface executes
+// them, and the meta and individual surfaces resolve them to their own tool
+// names.
+const (
+	actionBranchGet          = "branch.get"
+	actionBranchCreate       = "branch.create"
+	actionBranchDelete       = "branch.delete"
+	actionCommitList         = "repository.commit_list"
+	actionMergeRequestCreate = "merge_request.create"
 )
 
 type branchNotFoundOutput struct {
@@ -22,110 +34,135 @@ func formatBranchNotFound(out branchNotFoundOutput) *mcp.CallToolResult {
 	)
 }
 
-// FormatOutputMarkdown renders a single branch as a Markdown summary.
+// FormatOutputMarkdown renders one branch as a card: its flags, what the
+// caller may do with it, and the head commit as a nested object.
+//
+// The three permission flags GitLab sends on every branch — whether the caller
+// can push, and whether developers may push or merge — used to be dropped, so
+// a reader could not tell a branch they may write from one they may not.
 func FormatOutputMarkdown(br Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Branch: %s\n\n", toolutil.EscapeMdHeading(br.Name))
-	fmt.Fprintf(&b, "- **Protected**: %v\n", br.Protected)
-	fmt.Fprintf(&b, "- **Default**: %v\n", br.Default)
-	fmt.Fprintf(&b, "- **Merged**: %v\n", br.Merged)
+	c := toolutil.NewCard(&b, "Branch: "+br.Name)
+	c.Bool("Protected", br.Protected)
+	c.Bool("Default", br.Default)
+	c.Bool("Merged", br.Merged)
+	c.Bool("You Can Push", br.CanPush)
+	c.Bool("Developers Can Push", br.DevelopersCanPush)
+	c.Bool("Developers Can Merge", br.DevelopersCanMerge)
 	if br.Commit != nil {
-		//gitlab:allow-unescaped br.Commit.ID: a commit SHA, hexadecimal by construction.
-		fmt.Fprintf(&b, "- **Commit**: %s\n", br.Commit.ID)
+		commit := c.Sub("Commit")
+		commit.Code("SHA", br.Commit.ID)
+		commit.Field("Title", br.Commit.Title)
+		commit.Field("Author", br.Commit.AuthorName)
+		commit.Time("Committed", br.Commit.CommittedDate)
 	}
-	if br.WebURL != "" {
-		toolutil.WriteMdURL(&b, br.WebURL)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use the selected tool surface's merge-request create action to open an MR from this branch",
-		"Use the selected tool surface's repository commit-list action with the same project_id and ref_name to see recent commits on this branch",
-		"Use the selected tool surface's branch delete action with the same project_id, branch_name, and explicit confirm=true to remove the branch after merging",
+	c.URL(br.WebURL)
+	c.End(
+		toolutil.HintAction(actionMergeRequestCreate, "open a merge request from this branch"),
+		toolutil.HintAction(actionCommitList, "see recent commits on this branch"),
+		toolutil.HintAction(actionBranchDelete, "remove the branch after merging"),
 	)
 	return b.String()
 }
 
-// FormatListMarkdown renders a list of branches as a Markdown table.
+// FormatListMarkdown renders a page of branches as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Branches (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Branches), out.Pagination)
 	if len(out.Branches) == 0 {
-		b.WriteString("No branches found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("branches")
 	}
-	b.WriteString("| Name | Protected | Default | Merged |\n")
-	b.WriteString(toolutil.TblSep4Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Branches", len(out.Branches), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Name", "Protected", "Default", "Merged"))
 	for _, br := range out.Branches {
-		name := toolutil.MdTitleLink(br.Name, br.WebURL)
-		fmt.Fprintf(&b, "| %s | %v | %v | %v |\n", name, br.Protected, br.Default, br.Merged)
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(br.Name, br.WebURL),
+			toolutil.BoolEmoji(br.Protected),
+			toolutil.BoolEmoji(br.Default),
+			toolutil.BoolEmoji(br.Merged),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use the selected tool surface's branch get action with project_id and branch_name to see full details",
-		"Use the selected tool surface's branch create action with project_id, branch_name, and ref to create a new branch",
-		"Use the selected tool surface's branch protect action with project_id and branch_name to protect a branch",
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(actionBranchGet, "see one branch in full"),
+		toolutil.HintAction(actionBranchCreate, "create a new branch"),
+		toolutil.HintAction(actionBranchProtect, "protect a branch"),
 	)
 	return b.String()
 }
 
-// accessLevelsSummary renders a compact comma-separated list of the numeric
-// access levels in a protected branch access-level array (e.g. "30, 40"), or
-// "-" when the array is empty.
+// accessLevelsSummary renders the access levels of a protected branch rule as
+// the role names GitLab gives them ("Maintainers, Developers"), or "-" when
+// the array is empty. The numbers alone, which this used to print, are a
+// lookup table a reader does not have.
 func accessLevelsSummary(levels []BranchAccessDescriptionOutput) string {
 	if len(levels) == 0 {
 		return "-"
 	}
 	parts := make([]string, 0, len(levels))
 	for _, l := range levels {
-		parts = append(parts, strconv.Itoa(l.AccessLevel))
+		parts = append(parts, accessLevelLabel(l))
 	}
 	return strings.Join(parts, ", ")
 }
 
-// FormatProtectedMarkdown renders a single protected branch as Markdown.
+// accessLevelLabel names one access-level entry: the role the level stands
+// for, and the principal the entry names when it grants one user, group or
+// deploy key rather than a role.
+func accessLevelLabel(l BranchAccessDescriptionOutput) string {
+	label := toolutil.AccessLevelDescription(gl.AccessLevelValue(l.AccessLevel))
+	switch {
+	case l.UserID != 0:
+		return fmt.Sprintf("%s (User #%d)", label, l.UserID)
+	case l.GroupID != 0:
+		return fmt.Sprintf("%s (Group #%d)", label, l.GroupID)
+	case l.DeployKeyID != 0:
+		return fmt.Sprintf("%s (Deploy Key #%d)", label, l.DeployKeyID)
+	default:
+		return label
+	}
+}
+
+// FormatProtectedMarkdown renders one protected branch rule as a card.
 func FormatProtectedMarkdown(pb ProtectedOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Protected Branch: %s\n\n", toolutil.EscapeMdHeading(pb.Name))
-	fmt.Fprintf(&b, toolutil.FmtMdID, pb.ID)
-	fmt.Fprintf(&b, "- **Push Access Levels**: %s\n", accessLevelsSummary(pb.PushAccessLevels))
-	fmt.Fprintf(&b, "- **Merge Access Levels**: %s\n", accessLevelsSummary(pb.MergeAccessLevels))
-	fmt.Fprintf(&b, "- **Unprotect Access Levels**: %s\n", accessLevelsSummary(pb.UnprotectAccessLevels))
-	fmt.Fprintf(&b, "- **Allow Force Push**: %v\n", pb.AllowForcePush)
-	if pb.Inherited {
-		b.WriteString("- **Inherited**: yes (this rule comes from the group, not the project)\n")
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use the selected tool surface's branch get_protected action with the same project_id and branch_name when a workflow asks to fetch this protection before updating it",
-		"Use the selected tool surface's branch update_protected action with the same project_id and branch_name to change protection settings",
-		"Use the selected tool surface's branch unprotect action with the same project_id, branch_name, and explicit confirm=true to remove branch protection",
+	c := toolutil.NewCard(&b, "Protected Branch: "+pb.Name)
+	c.Int("ID", pb.ID)
+	c.Field("Push Access Levels", accessLevelsSummary(pb.PushAccessLevels))
+	c.Field("Merge Access Levels", accessLevelsSummary(pb.MergeAccessLevels))
+	c.Field("Unprotect Access Levels", accessLevelsSummary(pb.UnprotectAccessLevels))
+	c.Bool("Allow Force Push", pb.AllowForcePush)
+	c.Bool("Code Owner Approval Required", pb.CodeOwnerApprovalRequired)
+	c.Flag("", "Inherited from the group, not set on the project", pb.Inherited)
+	c.End(
+		toolutil.HintAction(actionBranchGetProtected, "fetch this protection again before updating it"),
+		toolutil.HintAction(actionBranchUpdateProtected, "change protection settings"),
+		toolutil.HintAction(actionBranchUnprotect, "remove branch protection"),
 	)
 	return b.String()
 }
 
-// FormatProtectedListMarkdown renders a list of protected branches as a Markdown table.
+// FormatProtectedListMarkdown renders a page of protected branch rules as a
+// Markdown table.
 func FormatProtectedListMarkdown(out ProtectedListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Protected Branches (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Branches), out.Pagination)
 	if len(out.Branches) == 0 {
-		b.WriteString("No protected branches found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("protected branches")
 	}
-	b.WriteString("| Name | Push Levels | Merge Levels | Force Push |\n")
-	b.WriteString(toolutil.TblSep4Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Protected Branches", len(out.Branches), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Name", "Push Levels", "Merge Levels", "Force Push", "Code Owner Approval"))
 	for _, pb := range out.Branches {
-		fmt.Fprintf(&b, "| %s | %s | %s | %v |\n", toolutil.EscapeMdTableCell(pb.Name), accessLevelsSummary(pb.PushAccessLevels), accessLevelsSummary(pb.MergeAccessLevels), pb.AllowForcePush)
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.EscapeMdTableCell(pb.Name),
+			toolutil.EscapeMdTableCell(accessLevelsSummary(pb.PushAccessLevels)),
+			toolutil.EscapeMdTableCell(accessLevelsSummary(pb.MergeAccessLevels)),
+			toolutil.BoolEmoji(pb.AllowForcePush),
+			toolutil.BoolEmoji(pb.CodeOwnerApprovalRequired),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use the selected tool surface's branch get_protected action with the same project_id and branch_name for full details before update/unprotect workflows",
-		"Use the selected tool surface's branch protect action with project_id and branch_name to add branch protection",
+	// The table carries no link, so the instruction to preserve one is dropped.
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionBranchGetProtected, "see one rule in full before updating or unprotecting"),
+		toolutil.HintAction(actionBranchProtect, "add branch protection"),
+		toolutil.HintAction(actionBranchList, "list the branches these rules match"),
 	)
 	return b.String()
 }

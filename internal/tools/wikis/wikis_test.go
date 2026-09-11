@@ -665,24 +665,43 @@ func TestUploadAttachment_APIError(t *testing.T) {
 	}
 }
 
-// TestFormatAttachmentMarkdownString verifies FormatAttachmentMarkdownString.
+// The guidance sections the three wiki formatters close with.
+const (
+	wikiCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'wiki.update' to edit this wiki page\n" +
+		"- Use action 'wiki.delete' to remove this wiki page\n"
+
+	wikiListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'wiki.get' to read one wiki page\n" +
+		"- Use action 'wiki.create' to add a new wiki page\n"
+
+	wikiAttachmentHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'wiki.get' to view the wiki page where this attachment is used\n" +
+		"- Use action 'wiki.list' to see all wiki pages\n"
+)
+
+// TestFormatAttachmentMarkdownString pins the whole card of an uploaded
+// attachment, the snippet GitLab built for it included: it is meant to be
+// copied into a page verbatim, so it is a code span rather than a live image.
 func TestFormatAttachmentMarkdownString(t *testing.T) {
-	out := AttachmentOutput{
+	got := FormatAttachmentMarkdownString(AttachmentOutput{
 		FileName: "diagram.png",
 		FilePath: "uploads/abc/diagram.png",
 		Branch:   "main",
 		URL:      "/uploads/abc/diagram.png",
 		Markdown: "![diagram](uploads/abc/diagram.png)",
-	}
-	md := FormatAttachmentMarkdownString(out)
-	if md == "" {
-		t.Fatal("FormatAttachmentMarkdownString() returned empty string")
-	}
-	if !strings.Contains(md, "diagram.png") {
-		t.Errorf("markdown should contain filename")
-	}
-	if !strings.Contains(md, "main") {
-		t.Errorf("markdown should contain branch")
+	})
+
+	want := "## Wiki Attachment Uploaded\n\n" +
+		"- **File Name**: diagram.png\n" +
+		"- **File Path**: uploads/abc/diagram.png\n" +
+		"- **Branch**: main\n" +
+		"- **URL**: [/uploads/abc/diagram.png](/uploads/abc/diagram.png)\n" +
+		"- **Markdown**: `![diagram](uploads/abc/diagram.png)`\n" +
+		wikiAttachmentHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -825,28 +844,63 @@ func TestUploadAttachment_NoBranch(t *testing.T) {
 // Formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdownString_WithEncodingAndContent verifies FormatOutputMarkdownString when with encoding and content.
+// TestFormatOutputMarkdownString_WithEncodingAndContent pins the whole card of
+// a Markdown page: the body is quoted under its label, so a heading a page
+// author typed stays text instead of becoming a heading of the response.
 func TestFormatOutputMarkdownString_WithEncodingAndContent(t *testing.T) {
-	s := FormatOutputMarkdownString(Output{
+	got := FormatOutputMarkdownString(Output{
 		Title: "Test", Slug: "test", Format: "markdown",
-		Content: "# Hello", Encoding: "UTF-8",
+		Content: "# Hello\n\nSecond paragraph.", Encoding: "UTF-8",
 	})
-	if !strings.Contains(s, "Encoding") {
-		t.Error("expected Encoding field")
-	}
-	if !strings.Contains(s, "# Hello") {
-		t.Error("expected content")
+
+	want := "## Wiki: Test\n\n" +
+		"- **Slug**: test\n" +
+		"- **Format**: markdown\n" +
+		"- **Encoding**: UTF-8\n" +
+		"- **Content**:\n" +
+		"  > # Hello\n" +
+		"  >\n" +
+		"  > Second paragraph.\n" +
+		wikiCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatOutputMarkdownString_Minimal verifies FormatOutputMarkdownString when minimal.
-func TestFormatOutputMarkdownString_Minimal(t *testing.T) {
-	s := FormatOutputMarkdownString(Output{Title: "T", Slug: "t", Format: "markdown"})
-	if strings.Contains(s, "Encoding") {
-		t.Error("should not include Encoding")
+// TestFormatOutputMarkdownString_NonMarkdownFormat pins that a page in a
+// format other than Markdown is fenced with that format rather than quoted,
+// since quoting it would render it as the Markdown it is not.
+func TestFormatOutputMarkdownString_NonMarkdownFormat(t *testing.T) {
+	got := FormatOutputMarkdownString(Output{
+		Title: "Setup", Slug: "setup", Format: "rdoc", Content: "= Setup",
+	})
+
+	want := "## Wiki: Setup\n\n" +
+		"- **Slug**: setup\n" +
+		"- **Format**: rdoc\n" +
+		"\n### Content\n\n" +
+		"```rdoc\n= Setup\n```\n" +
+		wikiCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	if strings.Contains(s, "Content") {
-		t.Error("should not include Content section")
+}
+
+// TestFormatOutputMarkdownString_Minimal pins the card of a page read without
+// its content: neither the encoding nor the body is written as a label with
+// nothing after it.
+func TestFormatOutputMarkdownString_Minimal(t *testing.T) {
+	got := FormatOutputMarkdownString(Output{Title: "T", Slug: "t", Format: "markdown"})
+
+	want := "## Wiki: T\n\n" +
+		"- **Slug**: t\n" +
+		"- **Format**: markdown\n" +
+		wikiCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -858,25 +912,36 @@ func TestFormatOutputMarkdown_NonNil(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithPages verifies FormatListMarkdownString when with pages.
+// TestFormatListMarkdownString_WithPages pins the whole wiki listing, heading
+// included: the list used to open straight into a table header with no
+// heading above it at all.
 func TestFormatListMarkdownString_WithPages(t *testing.T) {
-	s := FormatListMarkdownString(ListOutput{WikiPages: []Output{
+	got := FormatListMarkdownString(ListOutput{WikiPages: []Output{
 		{Title: "Home", Slug: "home", Format: "markdown"},
 		{Title: "FAQ", Slug: "faq", Format: "rdoc"},
 	}})
-	if !strings.Contains(s, "Home") {
-		t.Error("expected Home")
-	}
-	if !strings.Contains(s, "FAQ") {
-		t.Error("expected FAQ")
+
+	want := "## Wiki Pages (2)\n\n" +
+		"| Title | Slug | Format |\n" +
+		"| --- | --- | --- |\n" +
+		"| Home | home | markdown |\n" +
+		"| FAQ | faq | rdoc |\n" +
+		wikiListHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
+// TestFormatListMarkdownString_Empty pins the whole response of a project with
+// no wiki pages.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
-	s := FormatListMarkdownString(ListOutput{})
-	if !strings.Contains(s, "No wiki pages found") {
-		t.Error("expected empty message")
+	got := FormatListMarkdownString(ListOutput{})
+
+	want := "No wiki pages found.\n"
+
+	if got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -888,11 +953,20 @@ func TestFormatListMarkdown_NonNil(t *testing.T) {
 	}
 }
 
-// TestFormatAttachmentMarkdownString_NoBranch verifies FormatAttachmentMarkdownString when no branch.
+// TestFormatAttachmentMarkdownString_NoBranch pins that an upload GitLab
+// answered with no branch writes no branch row at all.
 func TestFormatAttachmentMarkdownString_NoBranch(t *testing.T) {
-	s := FormatAttachmentMarkdownString(AttachmentOutput{FileName: "f", FilePath: "p", URL: "u", Markdown: "m"})
-	if strings.Contains(s, "Branch") {
-		t.Error("should not include Branch")
+	got := FormatAttachmentMarkdownString(AttachmentOutput{FileName: "f", FilePath: "p", URL: "u", Markdown: "m"})
+
+	want := "## Wiki Attachment Uploaded\n\n" +
+		"- **File Name**: f\n" +
+		"- **File Path**: p\n" +
+		"- **URL**: [u](u)\n" +
+		"- **Markdown**: `m`\n" +
+		wikiAttachmentHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

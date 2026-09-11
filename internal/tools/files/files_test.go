@@ -1446,9 +1446,35 @@ func TestGetRawFileMetaData_WithLFS(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// The guidance sections the file formatters close with, pinned once so each
+// whole-output expectation names them rather than restating them.
+const (
+	fileCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.file_update' to modify this file\n" +
+		"- Use action 'repository.file_blame' to see who changed each line\n" +
+		"- Use action 'repository.file_delete' to remove this file\n"
+
+	fileInfoHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.file_get' to verify the file content\n" +
+		"- Use action 'repository.commit_list' to see the commit history\n"
+
+	fileBlameHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_get' to view one blame range's commit in full\n" +
+		"- Use action 'repository.file_get' to read the current file content\n"
+
+	fileMetadataHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.file_get' to read the file content\n" +
+		"- Use action 'repository.file_blame' to see blame information\n"
+
+	fileRawHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.file_update' to modify this file\n" +
+		"- Use action 'repository.file_blame' to see who last changed each line\n"
+)
+
+// TestFormatOutputMarkdown pins the whole card of a repository file. The body
+// is fenced here rather than dropped: this card used to fall through its
+// content-category switch with nothing at all for a text file, which is every
+// ordinary source file the action is asked for.
 func TestFormatOutputMarkdown(t *testing.T) {
 	t.Run("empty file path returns empty string", func(t *testing.T) {
 		got := FormatOutputMarkdown(Output{})
@@ -1457,52 +1483,68 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		}
 	})
 
-	t.Run("non-empty file renders markdown", func(t *testing.T) {
+	t.Run("a text file carries its content", func(t *testing.T) {
 		got := FormatOutputMarkdown(Output{
+			FileName: "main.go",
 			FilePath: "src/main.go",
 			Size:     1024,
 			Ref:      "main",
 			Encoding: "base64",
 			BlobID:   "blob123",
+			Content:  "package main",
 		})
-		for _, want := range []string{
-			"## File: src/main.go",
-			"**Size**: 1024 bytes",
-			"**Ref**: main",
-			"**Encoding**: base64",
-			"**Blob ID**: blob123",
-		} {
-			t.Run(want, func(t *testing.T) {
-				if !strings.Contains(got, want) {
-					t.Errorf("FormatOutputMarkdown missing %q in:\n%s", want, got)
-				}
-			})
+
+		want := "## File: src/main.go\n\n" +
+			"- **Name**: main.go\n" +
+			"- **Size (bytes)**: 1024\n" +
+			"- **Ref**: main\n" +
+			"- **Encoding**: base64\n" +
+			"- **Blob ID**: `blob123`\n" +
+			"- **Executable**: ❌\n" +
+			"\n### Content\n\n" +
+			"```go\npackage main\n```\n" +
+			fileCardHints
+
+		if got != want {
+			t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+		}
+	})
+
+	t.Run("a binary file names its category and prints no body", func(t *testing.T) {
+		got := FormatOutputMarkdown(Output{
+			FilePath:        "logo.bin",
+			Size:            9,
+			ContentCategory: "binary",
+		})
+
+		want := "## File: logo.bin\n\n" +
+			"- **Size (bytes)**: 9\n" +
+			"- **Executable**: ❌\n" +
+			"- **Content Type**: binary (content omitted, not viewable as text)\n" +
+			fileCardHints
+
+		if got != want {
+			t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 }
 
-// TestFormatFileInfoMarkdown verifies the FileInfoMarkdown Markdown formatter for a representative fileinfo input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatFileInfoMarkdown pins the whole card of a create, update or delete
+// result, with and without the commit ids GitLab answers with.
 func TestFormatFileInfoMarkdown(t *testing.T) {
 	t.Run("without commit IDs", func(t *testing.T) {
 		got := FormatFileInfoMarkdown(FileInfoOutput{
 			FilePath: "new_file.txt",
 			Branch:   "feature",
 		})
-		for _, want := range []string{
-			"## File Operation Result",
-			"**File**: new_file.txt",
-			"**Branch**: feature",
-		} {
-			t.Run(want, func(t *testing.T) {
-				if !strings.Contains(got, want) {
-					t.Errorf("FormatFileInfoMarkdown missing %q in:\n%s", want, got)
-				}
-			})
-		}
-		if strings.Contains(got, "Commit ID") {
-			t.Errorf("FormatFileInfoMarkdown should omit empty commit IDs:\n%s", got)
+
+		want := "## File Operation Result\n\n" +
+			"- **File**: new_file.txt\n" +
+			"- **Branch**: feature\n" +
+			fileInfoHints
+
+		if got != want {
+			t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 
@@ -1513,27 +1555,34 @@ func TestFormatFileInfoMarkdown(t *testing.T) {
 			CommitID:     "commit123",
 			LastCommitID: "last456",
 		})
-		for _, want := range []string{"**Commit ID**: commit123", "**Last commit ID**: last456"} {
-			t.Run(want, func(t *testing.T) {
-				if !strings.Contains(got, want) {
-					t.Errorf("FormatFileInfoMarkdown missing %q in:\n%s", want, got)
-				}
-			})
+
+		want := "## File Operation Result\n\n" +
+			"- **File**: new_file.txt\n" +
+			"- **Branch**: feature\n" +
+			"- **Commit ID**: `commit123`\n" +
+			"- **Last Commit ID**: `last456`\n" +
+			fileInfoHints
+
+		if got != want {
+			t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 }
 
-// TestFormatBlameMarkdown verifies the BlameMarkdown Markdown formatter for a representative blame input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatBlameMarkdown pins the whole blame render: one section per range,
+// the commit that last touched it as rows of that section, and the lines
+// themselves fenced.
 func TestFormatBlameMarkdown(t *testing.T) {
 	t.Run("empty ranges", func(t *testing.T) {
-		got := FormatBlameMarkdown(BlameOutput{
-			FilePath: "empty.go",
-			Ranges:   nil,
-		})
-		if !strings.Contains(got, "No blame data found") {
-			t.Errorf("expected 'No blame data found' in:\n%s", got)
+		got := FormatBlameMarkdown(BlameOutput{FilePath: "empty.go"})
+
+		want := "## File Blame: empty.go\n\n" +
+			"GitLab returned no blame ranges for this file.\n" +
+			"\n---\n\U0001F4A1 **Next steps:**\n" +
+			"- Use action 'repository.file_get' to read the current file content\n"
+
+		if got != want {
+			t.Errorf("blame mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 
@@ -1543,28 +1592,27 @@ func TestFormatBlameMarkdown(t *testing.T) {
 			Ranges: []BlameRangeOutput{
 				{
 					Commit: BlameRangeCommitOutput{
-						ID:         "abc12345deadbeef",
-						Message:    "initial commit",
-						AuthorName: "Alice",
+						ID:            "abc12345deadbeef",
+						Message:       "initial commit",
+						AuthorName:    "Alice",
+						CommittedDate: "2026-03-20T15:45:00Z",
 					},
 					Lines: []string{"package main", "", "func main() {}"},
 				},
 			},
 		})
-		for _, want := range []string{
-			"## File Blame: main.go",
-			"Range 1",
-			"Alice",
-			"abc12345",
-			"initial commit",
-			"package main",
-			"func main() {}",
-		} {
-			t.Run(want, func(t *testing.T) {
-				if !strings.Contains(got, want) {
-					t.Errorf("FormatBlameMarkdown missing %q in:\n%s", want, got)
-				}
-			})
+
+		want := "## File Blame: main.go\n\n" +
+			"### Range 1: abc12345\n\n" +
+			"- **Commit**: `abc12345`\n" +
+			"- **Author**: Alice\n" +
+			"- **Committed**: 20 Mar 2026 15:45 UTC\n" +
+			"- **Message**: initial commit\n" +
+			"\n```go\npackage main\n\nfunc main() {}\n```\n" +
+			fileBlameHints
+
+		if got != want {
+			t.Errorf("blame mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 
@@ -1573,24 +1621,29 @@ func TestFormatBlameMarkdown(t *testing.T) {
 			FilePath: "short.go",
 			Ranges: []BlameRangeOutput{
 				{
-					Commit: BlameRangeCommitOutput{
-						ID:         "abc",
-						Message:    "short",
-						AuthorName: "Bob",
-					},
-					Lines: []string{"line1"},
+					Commit: BlameRangeCommitOutput{ID: "abc", Message: "short", AuthorName: "Bob"},
+					Lines:  []string{"line1"},
 				},
 			},
 		})
-		if !strings.Contains(got, "abc") {
-			t.Errorf("expected short ID 'abc' in:\n%s", got)
+
+		want := "## File Blame: short.go\n\n" +
+			"### Range 1: abc\n\n" +
+			"- **Commit**: `abc`\n" +
+			"- **Author**: Bob\n" +
+			"- **Message**: short\n" +
+			"\n```go\nline1\n```\n" +
+			fileBlameHints
+
+		if got != want {
+			t.Errorf("blame mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 }
 
-// TestFormatMetaDataMarkdown verifies the MetaDataMarkdown Markdown formatter for a representative metadata input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMetaDataMarkdown pins the whole metadata card, which carries no
+// body at all: the executable bit is a flag rather than the word "yes", so a
+// file that is not executable says so instead of saying nothing.
 func TestFormatMetaDataMarkdown(t *testing.T) {
 	t.Run("without execute filemode", func(t *testing.T) {
 		got := FormatMetaDataMarkdown(MetaDataOutput{
@@ -1604,20 +1657,21 @@ func TestFormatMetaDataMarkdown(t *testing.T) {
 			LastCommitID: "c1",
 			SHA256:       "sha256val",
 		})
-		for _, want := range []string{
-			"## File Metadata: data.json",
-			"**Name**: data.json",
-			"**Size**: 512 bytes",
-			"**SHA-256**: sha256val",
-		} {
-			t.Run(want, func(t *testing.T) {
-				if !strings.Contains(got, want) {
-					t.Errorf("FormatMetaDataMarkdown missing %q in:\n%s", want, got)
-				}
-			})
-		}
-		if strings.Contains(got, "Executable") {
-			t.Error("should not contain 'Executable' when ExecuteFilemode is false")
+
+		want := "## File Metadata: data.json\n\n" +
+			"- **Name**: data.json\n" +
+			"- **Size (bytes)**: 512\n" +
+			"- **Ref**: main\n" +
+			"- **Encoding**: base64\n" +
+			"- **Blob ID**: `b1`\n" +
+			"- **Commit ID**: `c1`\n" +
+			"- **Last Commit ID**: `c1`\n" +
+			"- **SHA-256**: `sha256val`\n" +
+			"- **Executable**: ❌\n" +
+			fileMetadataHints
+
+		if got != want {
+			t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 
@@ -1627,32 +1681,35 @@ func TestFormatMetaDataMarkdown(t *testing.T) {
 			FileName:        "script.sh",
 			ExecuteFilemode: true,
 		})
-		if !strings.Contains(got, "**Executable**: yes") {
-			t.Errorf("expected '**Executable**: yes' in:\n%s", got)
+
+		want := "## File Metadata: script.sh\n\n" +
+			"- **Name**: script.sh\n" +
+			"- **Size (bytes)**: 0\n" +
+			"- **Executable**: ✅\n" +
+			fileMetadataHints
+
+		if got != want {
+			t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 }
 
-// TestFormatRawMarkdown verifies the RawMarkdown Markdown formatter for a representative raw input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatRawMarkdown pins the whole card of a raw file read, the body
+// fenced with the language the path names.
 func TestFormatRawMarkdown(t *testing.T) {
 	got := FormatRawMarkdown(RawOutput{
 		FilePath: "readme.md",
 		Size:     42,
 		Content:  "# Hello World",
 	})
-	for _, want := range []string{
-		"## Raw File: readme.md",
-		"**Size**: 42 bytes",
-		"# Hello World",
-		"```",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(got, want) {
-				t.Errorf("FormatRawMarkdown missing %q in:\n%s", want, got)
-			}
-		})
+
+	want := "## Raw File: readme.md\n\n" +
+		"- **Size (bytes)**: 42\n" +
+		"\n```markdown\n# Hello World\n```\n" +
+		fileRawHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

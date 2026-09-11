@@ -156,44 +156,80 @@ func TestFormatProject_ListMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatBranch_Markdown verifies that branch fields appear in Markdown output.
+// TestFormatBranch_Markdown pins the branch card as the reader sees it: the
+// flags as glyphs and the head commit as a nested object.
 func TestFormatBranch_Markdown(t *testing.T) {
-	br := branches.Output{Name: "feature-x", Protected: true, Default: false, Merged: false, Commit: &branches.CommitOutput{ID: "abc123"}}
-	md := branches.FormatOutputMarkdown(br)
+	got := branches.FormatOutputMarkdown(branches.Output{
+		Name: "feature-x", Protected: true, Commit: &branches.CommitOutput{ID: "abc123"},
+	})
 
-	if !strings.Contains(md, "## Branch: feature-x") {
-		t.Error(errMissingHeader)
-	}
-	if !strings.Contains(md, "**Protected**: true") {
-		t.Error("missing protected field")
-	}
-	if !strings.Contains(md, "**Commit**: abc123") {
-		t.Error("missing commit")
+	want := "## Branch: feature-x\n\n" +
+		"- **Protected**: ✅\n" +
+		"- **Default**: ❌\n" +
+		"- **Merged**: ❌\n" +
+		"- **You Can Push**: ❌\n" +
+		"- **Developers Can Push**: ❌\n" +
+		"- **Developers Can Merge**: ❌\n" +
+		"- **Commit**:\n" +
+		"  - **SHA**: `abc123`\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'merge_request.create' to open a merge request from this branch\n" +
+		"- Use action 'repository.commit_list' to see recent commits on this branch\n" +
+		"- Use action 'branch.delete' to remove the branch after merging\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatBranch_ListMarkdown verifies table rendering for branch lists.
+// TestFormatBranch_ListMarkdown pins the branch table row.
 func TestFormatBranch_ListMarkdown(t *testing.T) {
-	out := branches.ListOutput{
+	got := branches.FormatListMarkdown(branches.ListOutput{
 		Branches:   []branches.Output{{Name: "main", Protected: true, Default: true}},
 		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
-	}
-	md := branches.FormatListMarkdown(out)
-	if !strings.Contains(md, "| main | true | true |") {
-		t.Error("missing branch row")
+	})
+
+	want := "## Branches (1)\n\n" +
+		"| Name | Protected | Default | Merged |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| main | ✅ | ✅ | ❌ |\n" +
+		"\nPage 1 of 1 | 1 items total | 20 per page\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- Use action 'branch.get' to see one branch in full\n" +
+		"- Use action 'branch.create' to create a new branch\n" +
+		"- Use action 'branch.protect' to protect a branch\n"
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatProtected_BranchMarkdown verifies protected branch fields in Markdown.
+// TestFormatProtected_BranchMarkdown pins the protection card: the access
+// levels as the role names they stand for rather than the numbers GitLab
+// sends.
 func TestFormatProtected_BranchMarkdown(t *testing.T) {
-	pb := branches.ProtectedOutput{ID: 1, Name: "main", PushAccessLevels: []branches.BranchAccessDescriptionOutput{{AccessLevel: 40}}, MergeAccessLevels: []branches.BranchAccessDescriptionOutput{{AccessLevel: 30}}, AllowForcePush: false}
-	md := branches.FormatProtectedMarkdown(pb)
+	got := branches.FormatProtectedMarkdown(branches.ProtectedOutput{
+		ID:                1,
+		Name:              "main",
+		PushAccessLevels:  []branches.BranchAccessDescriptionOutput{{AccessLevel: 40}},
+		MergeAccessLevels: []branches.BranchAccessDescriptionOutput{{AccessLevel: 30}},
+	})
 
-	if !strings.Contains(md, "## Protected Branch: main") {
-		t.Error(errMissingHeader)
-	}
-	if !strings.Contains(md, "**Push Access Levels**: 40") {
-		t.Error("missing push level")
+	want := "## Protected Branch: main\n\n" +
+		"- **ID**: 1\n" +
+		"- **Push Access Levels**: Maintainer\n" +
+		"- **Merge Access Levels**: Developer\n" +
+		"- **Unprotect Access Levels**: -\n" +
+		"- **Allow Force Push**: ❌\n" +
+		"- **Code Owner Approval Required**: ❌\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'branch.get_protected' to fetch this protection again before updating it\n" +
+		"- Use action 'branch.update_protected' to change protection settings\n" +
+		"- Use action 'branch.unprotect' to remove branch protection\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -221,15 +257,26 @@ func TestFormatTag_Markdown(t *testing.T) {
 	}
 }
 
-// TestFormatTag_ListMarkdown verifies table rendering for tag lists.
+// TestFormatTag_ListMarkdown pins the tag table row. The commit column is the
+// commit the tag resolves to, and falls back to the tag object's own id where
+// GitLab sent no commit.
 func TestFormatTag_ListMarkdown(t *testing.T) {
-	out := tags.ListOutput{
+	got := tags.FormatListMarkdownString(tags.ListOutput{
 		Tags:       []tags.Output{{Name: "v1.0", Target: "abc", Protected: true}},
 		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
-	}
-	md := tags.FormatListMarkdownString(out)
-	if !strings.Contains(md, "| v1.0 | abc | true |") {
-		t.Error("missing tag row")
+	})
+
+	want := "## Tags (1)\n\n" +
+		"| Name | Commit | Protected |\n" +
+		"| --- | --- | --- |\n" +
+		"| v1.0 | `abc` | ✅ |\n" +
+		"\nPage 1 of 1 | 1 items total | 20 per page\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'tag.get' to see one tag in full\n" +
+		"- Use action 'tag.create' to create a new tag\n"
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -480,33 +527,50 @@ func TestFormatMR_ChangesMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatCommit_Markdown verifies that commit fields appear in Markdown.
+// TestFormatCommit_Markdown pins the commit card. The author's address is
+// written in parentheses rather than in angle brackets, which GFM turns into a
+// mailto autolink.
 func TestFormatCommit_Markdown(t *testing.T) {
-	c := commits.Output{
+	got := commits.FormatOutputMarkdown(commits.Output{
 		ID: "abc123full", ShortID: "abc123", Title: testTitleFixBug,
 		AuthorName: "Dev", AuthorEmail: "dev@example.com",
 		CommittedDate: testDate20260101, WebURL: "https://gitlab.example.com/commit/abc123",
-	}
-	md := commits.FormatOutputMarkdown(c)
+	})
 
-	if !strings.Contains(md, "## Commit abc123") {
-		t.Error(errMissingHeader)
-	}
-	if !strings.Contains(md, "**Author**: Dev <dev@example.com>") {
-		t.Error("missing author")
+	want := "## Commit abc123\n\n" +
+		"- **Title**: " + testTitleFixBug + "\n" +
+		"- **Author**: Dev (dev@example.com)\n" +
+		"- **Date**: 1 Jan 2026\n" +
+		"- **URL**: [https://gitlab.example.com/commit/abc123](https://gitlab.example.com/commit/abc123)\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_get' to see this commit's full details and stats\n" +
+		"- Use action 'repository.commit_diff' to see the file changes for this commit\n" +
+		"- Use action 'repository.commit_refs' to see the branches and tags containing it\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatFile_Markdown verifies that file metadata fields appear in Markdown.
+// TestFormatFile_Markdown pins the file card of a metadata-only read.
 func TestFormatFile_Markdown(t *testing.T) {
-	f := files.Output{FilePath: testFileSrcMainGo, Size: 1024, Ref: "main", Encoding: "base64", BlobID: "blob123"}
-	md := files.FormatOutputMarkdown(f)
+	got := files.FormatOutputMarkdown(files.Output{
+		FilePath: testFileSrcMainGo, Size: 1024, Ref: "main", Encoding: "base64", BlobID: "blob123",
+	})
 
-	if !strings.Contains(md, "## File: src/main.go") {
-		t.Error(errMissingHeader)
-	}
-	if !strings.Contains(md, "**Size**: 1024 bytes") {
-		t.Error("missing size")
+	want := "## File: src/main.go\n\n" +
+		"- **Size (bytes)**: 1024\n" +
+		"- **Ref**: main\n" +
+		"- **Encoding**: base64\n" +
+		"- **Blob ID**: `blob123`\n" +
+		"- **Executable**: ❌\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.file_update' to modify this file\n" +
+		"- Use action 'repository.file_blame' to see who changed each line\n" +
+		"- Use action 'repository.file_delete' to remove this file\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -905,22 +969,33 @@ func TestFormatCommit_ListMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatCommit_DetailMarkdown verifies commit detail fields including stats.
+// TestFormatCommit_DetailMarkdown pins the commit detail card, the message
+// quoted under its own label where it says more than the title.
 func TestFormatCommit_DetailMarkdown(t *testing.T) {
-	c := commits.DetailOutput{
+	got := commits.FormatDetailMarkdown(commits.DetailOutput{
 		ShortID: "abc1234", Title: "feat: add feature", Message: "feat: add feature\n\nDetailed description",
 		AuthorName: "dev", AuthorEmail: "dev@example.com", CommittedDate: testDate20260101,
 		ParentIDs: []string{"parent1", "parent2"}, WebURL: "https://gl.example.com/commit/abc",
 		Stats: &commits.CommitStatsOutput{Additions: 10, Deletions: 3, Total: 13},
-	}
-	md := commits.FormatDetailMarkdown(c)
-	checks := []string{"## Commit abc1234", "+10 -3", "parent1, parent2", "### Message"}
-	for _, ch := range checks {
-		t.Run(ch, func(t *testing.T) {
-			if !strings.Contains(md, ch) {
-				t.Errorf(fmtMissing, ch)
-			}
-		})
+	})
+
+	want := "## Commit abc1234\n\n" +
+		"- **Title**: feat: add feature\n" +
+		"- **Author**: dev (dev@example.com)\n" +
+		"- **Date**: 1 Jan 2026\n" +
+		"- **Parents**: `parent1, parent2`\n" +
+		"- **Stats**: +10 -3 (13 total)\n" +
+		"- **URL**: [https://gl.example.com/commit/abc](https://gl.example.com/commit/abc)\n" +
+		"- **Message**:\n" +
+		"  > feat: add feature\n" +
+		"  >\n" +
+		"  > Detailed description\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_diff' to view the file changes\n" +
+		"- Use action 'repository.commit_cherry_pick' to apply this commit to another branch\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

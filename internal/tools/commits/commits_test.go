@@ -1928,55 +1928,161 @@ func TestRevert_EmptyBranch(t *testing.T) {
 // Format*Markdown Tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// The guidance sections the commit formatters close with, pinned once so each
+// whole-output expectation names them rather than restating them.
+const (
+	commitCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_get' to see this commit's full details and stats\n" +
+		"- Use action 'repository.commit_diff' to see the file changes for this commit\n" +
+		"- Use action 'repository.commit_refs' to see the branches and tags containing it\n"
+
+	noCommitHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_cherry_pick' to apply the commit for real\n" +
+		"- Use action 'repository.commit_list' to check the branch for the commit\n"
+
+	commitListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- Use action 'repository.commit_get' to see one commit in full\n" +
+		"- Use action 'repository.commit_diff' to see the file changes of one commit\n"
+
+	commitDetailHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_diff' to view the file changes\n" +
+		"- Use action 'repository.commit_cherry_pick' to apply this commit to another branch\n"
+
+	commitDiffHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.file_get' to view one changed file\n" +
+		"- Use action 'repository.commit_comment_create' to comment on the changes\n"
+
+	commitRefsHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'branch.get' to view one branch\n" +
+		"- Use action 'tag.get' to view one tag\n"
+
+	commitCommentsHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_comment_create' to add a comment\n" +
+		"- Use action 'repository.commit_get' to view the commit\n"
+
+	commitCommentHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_comments' to list every comment on the commit\n" +
+		"- Use action 'repository.file_get' to view the referenced file\n"
+
+	commitStatusesHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_status_set' to update a status\n" +
+		"- Use action 'repository.commit_get' to view the commit\n"
+
+	commitStatusHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_status_set' to update this status\n" +
+		"- Use action 'repository.commit_statuses' to see all statuses on the commit\n"
+
+	commitMRsHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- Use action 'merge_request.get' to view one merge request\n" +
+		"- Use action 'merge_request.changes_get' to see its diff\n"
+
+	commitSignatureHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_get' to view the full commit details\n"
+)
+
+// TestFormatOutputMarkdown pins the whole commit card. The author's address is
+// written in parentheses rather than in angle brackets, which GFM turns into a
+// mailto autolink to an address nobody chose to publish.
 func TestFormatOutputMarkdown(t *testing.T) {
-	c := Output{ShortID: "abc12", Title: "feat: init", AuthorName: "Alice", AuthorEmail: "a@t.com", CommittedDate: "2026-01-01", WebURL: "https://example.com"}
-	md := FormatOutputMarkdown(c)
-	if !strings.Contains(md, "abc12") {
-		t.Error(errExpShortID)
-	}
-	if !strings.Contains(md, "feat: init") {
-		t.Error("expected title")
-	}
-	if !strings.Contains(md, "Alice") {
-		t.Error("expected author")
+	got := FormatOutputMarkdown(Output{
+		ShortID:       "abc12",
+		Title:         "feat: init",
+		AuthorName:    "Alice",
+		AuthorEmail:   "a@t.com",
+		CommittedDate: "2026-01-01",
+		WebURL:        "https://example.com",
+	})
+
+	want := "## Commit abc12\n\n" +
+		"- **Title**: feat: init\n" +
+		"- **Author**: Alice (a@t.com)\n" +
+		"- **Date**: 1 Jan 2026\n" +
+		"- **URL**: [https://example.com](https://example.com)\n" +
+		commitCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_Pipeline pins the pipeline row: a commit whose
+// pipeline the card omits is one a reader cannot tell has failed.
+func TestFormatOutputMarkdown_Pipeline(t *testing.T) {
+	got := FormatOutputMarkdown(Output{
+		ShortID: "abc12",
+		Title:   "feat: init",
+		Status:  "running",
+		LastPipeline: &LastPipelineOutput{
+			ID: 77, Status: "failed", WebURL: "https://gitlab.example.com/-/pipelines/77",
+		},
+	})
+
+	want := "## Commit abc12\n\n" +
+		"- **Title**: feat: init\n" +
+		"- **Pipeline**: ❌ failed [#77](https://gitlab.example.com/-/pipelines/77)\n" +
+		commitCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatOutputMarkdown_DryRun pins the answer to a cherry-pick or revert
+// run with dry_run, which commits nothing and which GitLab answers with no
+// commit at all: this used to render as a commit card whose heading and every
+// field were empty, indistinguishable from a commit that had been made.
+func TestFormatOutputMarkdown_DryRun(t *testing.T) {
+	got := FormatOutputMarkdown(Output{})
+
+	want := "## No Commit Created\n\n" +
+		"GitLab returned no commit. A dry run reports whether the change would apply cleanly and commits nothing; run the same action without dry_run to commit it.\n" +
+		noCommitHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown pins the whole commit listing, the pipeline of each
+// commit included.
 func TestFormatListMarkdown(t *testing.T) {
-	out := ListOutput{
-		Commits:    []Output{{ShortID: "a1", Title: "feat: x", AuthorName: "A", CommittedDate: "2026-01-01"}},
+	got := FormatListMarkdown(ListOutput{
+		Commits: []Output{
+			{ShortID: "a1", Title: "feat: x", AuthorName: "A", CommittedDate: "2026-01-01", Status: "success"},
+		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
-	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "Commits (1)") {
-		t.Errorf("expected header, got:\n%s", md)
-	}
-	if !strings.Contains(md, "a1") {
-		t.Error(errExpShortID)
+	})
+
+	want := "## Commits (1)\n\n" +
+		"| Short ID | Title | Author | Date | Pipeline |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| a1 | feat: x | A | 1 Jan 2026 | ✅ success |\n" +
+		"\n1 items total\n" +
+		commitListHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_Empty pins the whole response of a ref with no
+// commits.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	out := ListOutput{Commits: nil, Pagination: toolutil.PaginationOutput{}}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "No commits found") {
-		t.Error("expected 'No commits found'")
+	got := FormatListMarkdown(ListOutput{})
+
+	want := "No commits found.\n"
+
+	if got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_ClickableCommitLinks verifies that commit short IDs
-// in the list are rendered as clickable Markdown links [shortID](weburl).
+// TestFormatListMarkdown_ClickableCommitLinks pins that a commit the response
+// carried an address for is linked by its short id.
 func TestFormatListMarkdown_ClickableCommitLinks(t *testing.T) {
-	out := ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Commits: []Output{
 			{
 				ShortID: "abc123", Title: "feat: x", AuthorName: "A",
@@ -1985,18 +2091,25 @@ func TestFormatListMarkdown_ClickableCommitLinks(t *testing.T) {
 			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
-	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "[abc123](https://gitlab.example.com/commit/abc123)") {
-		t.Errorf("expected clickable commit link, got:\n%s", md)
+	})
+
+	want := "## Commits (1)\n\n" +
+		"| Short ID | Title | Author | Date | Pipeline |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| [abc123](https://gitlab.example.com/commit/abc123) | feat: x | A | 1 Jan 2026 |  |\n" +
+		"\n1 items total\n" +
+		commitListHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatDetailMarkdown verifies the DetailMarkdown Markdown formatter for a representative detail input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatDetailMarkdown pins the whole commit detail card: the parents as a
+// code span, the stats, and the message quoted under its label where it says
+// more than the title.
 func TestFormatDetailMarkdown(t *testing.T) {
-	c := DetailOutput{
+	got := FormatDetailMarkdown(DetailOutput{
 		ShortID:     "abc",
 		Title:       "feat: test",
 		Message:     "feat: test\n\nLong description",
@@ -2005,316 +2118,352 @@ func TestFormatDetailMarkdown(t *testing.T) {
 		ParentIDs:   []string{"p1", "p2"},
 		Stats:       &CommitStatsOutput{Additions: 10, Deletions: 3, Total: 13},
 		WebURL:      "https://example.com",
-	}
-	md := FormatDetailMarkdown(c)
-	if !strings.Contains(md, "abc") {
-		t.Error(errExpShortID)
-	}
-	if !strings.Contains(md, "p1, p2") {
-		t.Error("expected parent IDs")
-	}
-	if !strings.Contains(md, "+10") {
-		t.Error("expected additions stat")
-	}
-	if !strings.Contains(md, "Long description") {
-		t.Error("expected message body")
+	})
+
+	want := "## Commit abc\n\n" +
+		"- **Title**: feat: test\n" +
+		"- **Author**: Bob (b@t.com)\n" +
+		"- **Parents**: `p1, p2`\n" +
+		"- **Stats**: +10 -3 (13 total)\n" +
+		"- **URL**: [https://example.com](https://example.com)\n" +
+		"- **Message**:\n" +
+		"  > feat: test\n" +
+		"  >\n" +
+		"  > Long description\n" +
+		commitDetailHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatDetailMarkdown_Minimal verifies the DetailMarkdown_Minimal Markdown formatter for a representative detail_minimal input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatDetailMarkdown_Minimal pins that a commit with no parents, no
+// stats and a message that repeats its title writes none of the three.
 func TestFormatDetailMarkdown_Minimal(t *testing.T) {
-	c := DetailOutput{ShortID: "x", Title: "t", Message: "t", WebURL: "u"}
-	md := FormatDetailMarkdown(c)
-	if strings.Contains(md, "Parents") {
-		t.Error("should not show Parents when empty")
-	}
-	if strings.Contains(md, "Stats") {
-		t.Error("should not show Stats when nil")
-	}
-	if strings.Contains(md, "### Message") {
-		t.Error("should not show Message section when title == message")
+	got := FormatDetailMarkdown(DetailOutput{ShortID: "x", Title: "t", Message: "t", WebURL: "u"})
+
+	want := "## Commit x\n\n" +
+		"- **Title**: t\n" +
+		"- **URL**: [u](u)\n" +
+		commitDetailHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatDiffMarkdown verifies the DiffMarkdown Markdown formatter for a representative diff input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatDiffMarkdown pins the whole diff listing, the four statuses
+// included.
 func TestFormatDiffMarkdown(t *testing.T) {
-	out := DiffOutput{
+	got := FormatDiffMarkdown(DiffOutput{
 		Diffs: []toolutil.DiffOutput{
 			{OldPath: "a.go", NewPath: "a.go", NewFile: true},
 			{OldPath: "b.go", NewPath: "b.go", DeletedFile: true},
 			{OldPath: "c.go", NewPath: "d.go", RenamedFile: true},
 			{OldPath: "e.go", NewPath: "e.go"},
 		},
-	}
-	md := FormatDiffMarkdown(out)
-	if !strings.Contains(md, "4 files") {
-		t.Error("expected '4 files' header")
-	}
-	if !strings.Contains(md, "added") {
-		t.Error("expected 'added' status")
-	}
-	if !strings.Contains(md, "deleted") {
-		t.Error("expected 'deleted' status")
-	}
-	if !strings.Contains(md, "renamed") {
-		t.Error("expected 'renamed' status")
-	}
-	if !strings.Contains(md, "modified") {
-		t.Error("expected 'modified' status")
+	})
+
+	want := "## Commit Diffs (4)\n\n" +
+		"| Status | Old Path | New Path |\n" +
+		"| --- | --- | --- |\n" +
+		"| added | `a.go` | `a.go` |\n" +
+		"| deleted | `b.go` | `b.go` |\n" +
+		"| renamed | `c.go` | `d.go` |\n" +
+		"| modified | `e.go` | `e.go` |\n" +
+		commitDiffHints
+
+	if got != want {
+		t.Errorf("diff mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatDiffMarkdown_Empty verifies the DiffMarkdown_Empty Markdown formatter for a representative diff_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatDiffMarkdown_Empty pins the whole response of a commit that
+// changed nothing.
 func TestFormatDiffMarkdown_Empty(t *testing.T) {
-	out := DiffOutput{Diffs: nil}
-	md := FormatDiffMarkdown(out)
-	if !strings.Contains(md, "No diffs found") {
-		t.Error("expected 'No diffs found'")
+	got := FormatDiffMarkdown(DiffOutput{})
+
+	want := "No changed files found.\n"
+
+	if got != want {
+		t.Errorf("empty diff mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatRefsMarkdown verifies the RefsMarkdown Markdown formatter for a representative refs input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatRefsMarkdown pins the whole ref listing.
 func TestFormatRefsMarkdown(t *testing.T) {
-	out := RefsOutput{
+	got := FormatRefsMarkdown(RefsOutput{
 		Refs: []RefOutput{
 			{Type: "branch", Name: "main"},
 			{Type: "tag", Name: "v1.0"},
 		},
-	}
-	md := FormatRefsMarkdown(out)
-	if !strings.Contains(md, "Commit Refs (2)") {
-		t.Error("expected header with count")
-	}
-	if !strings.Contains(md, "main") {
-		t.Error("expected 'main' branch")
-	}
-	if !strings.Contains(md, "v1.0") {
-		t.Error("expected 'v1.0' tag")
+	})
+
+	want := "## Commit Refs (2)\n\n" +
+		"| Type | Name |\n" +
+		"| --- | --- |\n" +
+		"| branch | main |\n" +
+		"| tag | v1.0 |\n" +
+		commitRefsHints
+
+	if got != want {
+		t.Errorf("refs mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatRefsMarkdown_Empty verifies the RefsMarkdown_Empty Markdown formatter for a representative refs_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatRefsMarkdown_Empty pins the whole response of a commit on no
+// branch or tag.
 func TestFormatRefsMarkdown_Empty(t *testing.T) {
-	out := RefsOutput{Refs: nil}
-	md := FormatRefsMarkdown(out)
-	if !strings.Contains(md, "No branch or tag refs found") {
-		t.Error("expected 'No branch or tag refs found'")
+	got := FormatRefsMarkdown(RefsOutput{})
+
+	want := "No branch or tag refs found.\n"
+
+	if got != want {
+		t.Errorf("empty refs mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatCommentsMarkdown verifies the CommentsMarkdown Markdown formatter for a representative comments input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatCommentsMarkdown pins the whole comment listing, and the heading
+// counting what GitLab reported in all rather than the length of the page.
 func TestFormatCommentsMarkdown(t *testing.T) {
-	out := CommentsOutput{
+	got := FormatCommentsMarkdown(CommentsOutput{
 		Comments: []CommentOutput{
 			{Author: &BasicUserOutput{Username: "dev"}, Note: "LGTM", Path: testFileMainGo, Line: 10},
 			{Author: &BasicUserOutput{Username: "bot"}, Note: "OK"},
 		},
-	}
-	md := FormatCommentsMarkdown(out)
-	if !strings.Contains(md, "Commit Comments (2)") {
-		t.Error("expected header with count")
-	}
-	if !strings.Contains(md, "LGTM") {
-		t.Error("expected note text")
-	}
-	if !strings.Contains(md, "10") {
-		t.Error("expected line number")
-	}
-	if !strings.Contains(md, "| - |") {
-		t.Error("expected dash for empty path")
+		Pagination: toolutil.PaginationOutput{TotalItems: 45, TotalPages: 3, Page: 1, PerPage: 20},
+	})
+
+	want := "## Commit Comments (45)\n\n" +
+		"Showing 2 of 45 results (page 1 of 3)\n\n" +
+		"| Author | Note | Path | Line |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| dev | LGTM | main.go | 10 |\n" +
+		"| bot | OK | - | - |\n" +
+		"\nPage 1 of 3 | 45 items total | 20 per page\n" +
+		commitCommentsHints
+
+	if got != want {
+		t.Errorf("comments mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatCommentsMarkdown_Empty verifies the CommentsMarkdown_Empty Markdown formatter for a representative comments_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatCommentsMarkdown_Empty pins the whole response of a commit with no
+// comments.
 func TestFormatCommentsMarkdown_Empty(t *testing.T) {
-	out := CommentsOutput{Comments: nil}
-	md := FormatCommentsMarkdown(out)
-	if !strings.Contains(md, "No commit comments found") {
-		t.Error("expected 'No commit comments found'")
+	got := FormatCommentsMarkdown(CommentsOutput{})
+
+	want := "No commit comments found.\n"
+
+	if got != want {
+		t.Errorf("empty comments mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatCommentMarkdown verifies the CommentMarkdown Markdown formatter for a representative comment input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatCommentMarkdown pins the whole card of one commit comment.
 func TestFormatCommentMarkdown(t *testing.T) {
-	c := CommentOutput{Author: &BasicUserOutput{Username: "dev"}, Note: "Nice!", Path: testFileMainGo, Line: 5}
-	md := FormatCommentMarkdown(c)
-	if !strings.Contains(md, "Commit Comment") {
-		t.Error(errExpHeader)
-	}
-	if !strings.Contains(md, "Nice!") {
-		t.Error("expected note")
-	}
-	if !strings.Contains(md, testFileMainGo) {
-		t.Error("expected path")
+	got := FormatCommentMarkdown(CommentOutput{
+		Author:    &BasicUserOutput{Username: "dev"},
+		Note:      "Nice!",
+		Path:      testFileMainGo,
+		Line:      5,
+		LineType:  "new",
+		CreatedAt: "2026-03-20T15:45:00Z",
+	})
+
+	want := "## Commit Comment\n\n" +
+		"- **Author**: @dev\n" +
+		"- **Created**: 20 Mar 2026 15:45 UTC\n" +
+		"- **Path**: `main.go`\n" +
+		"- **Line**: 5\n" +
+		"- **Line Type**: new\n" +
+		"- **Note**: Nice!\n" +
+		commitCommentHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatCommentMarkdown_NoPath verifies the CommentMarkdown_NoPath Markdown formatter for a representative comment_nopath input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatCommentMarkdown_NoPath pins a comment on the commit itself rather
+// than on a line: neither the path nor the line is written, where "line 0"
+// used to read as a line number.
 func TestFormatCommentMarkdown_NoPath(t *testing.T) {
-	c := CommentOutput{Author: &BasicUserOutput{Username: "dev"}, Note: "OK"}
-	md := FormatCommentMarkdown(c)
-	if strings.Contains(md, "Path") {
-		t.Error("should not show Path when empty")
+	got := FormatCommentMarkdown(CommentOutput{Author: &BasicUserOutput{Username: "dev"}, Note: "OK"})
+
+	want := "## Commit Comment\n\n" +
+		"- **Author**: @dev\n" +
+		"- **Note**: OK\n" +
+		commitCommentHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatStatusesMarkdown verifies the StatusesMarkdown Markdown formatter for a representative statuses input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatStatusesMarkdown pins the whole status listing, each build state
+// carrying the glyph every pipeline status in this tree shows.
 func TestFormatStatusesMarkdown(t *testing.T) {
-	out := StatusesOutput{
+	got := FormatStatusesMarkdown(StatusesOutput{
 		Statuses: []StatusOutput{
 			{ID: 1, Status: "success", Name: "build", Ref: "main", Description: "OK"},
 		},
-	}
-	md := FormatStatusesMarkdown(out)
-	if !strings.Contains(md, "Commit Statuses (1)") {
-		t.Error(errExpHeader)
-	}
-	if !strings.Contains(md, "success") {
-		t.Error("expected status")
+	})
+
+	want := "## Commit Statuses (1)\n\n" +
+		"| ID | Status | Name | Ref | Description |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | ✅ success | build | main | OK |\n" +
+		commitStatusesHints
+
+	if got != want {
+		t.Errorf("statuses mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatStatusesMarkdown_Empty verifies the StatusesMarkdown_Empty Markdown formatter for a representative statuses_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatStatusesMarkdown_Empty pins the whole response of a commit with no
+// statuses.
 func TestFormatStatusesMarkdown_Empty(t *testing.T) {
-	out := StatusesOutput{Statuses: nil}
-	md := FormatStatusesMarkdown(out)
-	if !strings.Contains(md, "No commit statuses found") {
-		t.Error("expected 'No commit statuses found'")
+	got := FormatStatusesMarkdown(StatusesOutput{})
+
+	want := "No commit statuses found.\n"
+
+	if got != want {
+		t.Errorf("empty statuses mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatStatusMarkdown verifies the StatusMarkdown Markdown formatter for a representative status input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatStatusMarkdown pins the whole card of one commit status.
 func TestFormatStatusMarkdown(t *testing.T) {
-	s := StatusOutput{ID: 1, Status: "success", Name: "build", Ref: "main", Description: "Passed", TargetURL: testCIURL}
-	md := FormatStatusMarkdown(s)
-	if !strings.Contains(md, "Commit Status #1") {
-		t.Error(errExpHeader)
-	}
-	if !strings.Contains(md, "Passed") {
-		t.Error("expected description")
-	}
-	if !strings.Contains(md, testCIURL) {
-		t.Error("expected target URL")
+	got := FormatStatusMarkdown(StatusOutput{
+		ID: 1, Status: "success", Name: "build", Ref: "main",
+		SHA: "abc123", Description: "Passed", TargetURL: testCIURL,
+		PipelineID: 9, CreatedAt: "2026-03-20T15:45:00Z",
+		Author: &BasicUserOutput{Username: "ci"},
+	})
+
+	want := "## Commit Status #1\n\n" +
+		"- **Status**: ✅ success\n" +
+		"- **Name**: build\n" +
+		"- **Ref**: main\n" +
+		"- **SHA**: `abc123`\n" +
+		"- **Author**: @ci\n" +
+		"- **Allow Failure**: ❌\n" +
+		"- **Pipeline ID**: 9\n" +
+		"- **Created**: 20 Mar 2026 15:45 UTC\n" +
+		"- **Target**: [" + testCIURL + "](" + testCIURL + ")\n" +
+		"- **Description**: Passed\n" +
+		commitStatusHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatStatusMarkdown_Minimal verifies the StatusMarkdown_Minimal Markdown formatter for a representative status_minimal input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatStatusMarkdown_Minimal pins a status GitLab sent no description,
+// target or author for: none of the three is written as a label with nothing
+// after it.
 func TestFormatStatusMarkdown_Minimal(t *testing.T) {
-	s := StatusOutput{ID: 2, Status: "pending", Name: "test", Ref: "dev"}
-	md := FormatStatusMarkdown(s)
-	if strings.Contains(md, "Description") {
-		t.Error("should not show Description when empty")
-	}
-	if strings.Contains(md, "http") {
-		t.Error("should not show URL when empty")
+	got := FormatStatusMarkdown(StatusOutput{ID: 2, Status: "pending", Name: "test", Ref: "dev"})
+
+	want := "## Commit Status #2\n\n" +
+		"- **Status**: \U0001F7E1 pending\n" +
+		"- **Name**: test\n" +
+		"- **Ref**: dev\n" +
+		"- **Allow Failure**: ❌\n" +
+		commitStatusHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatMRsByCommitMarkdown verifies the MRsByCommitMarkdown Markdown formatter for a representative mrsbycommit input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMRsByCommitMarkdown pins the whole listing of the merge requests a
+// commit belongs to, each state carrying its glyph.
 func TestFormatMRsByCommitMarkdown(t *testing.T) {
-	out := MRsByCommitOutput{
+	got := FormatMRsByCommitMarkdown(MRsByCommitOutput{
 		MergeRequests: []BasicMROutput{
-			{IID: 1, Title: "Feature", State: "merged", SourceBranch: "feat", TargetBranch: "main", Author: "dev"},
+			{
+				IID: 1, Title: "Feature", State: "merged",
+				SourceBranch: "feat", TargetBranch: "main", Author: "dev",
+				WebURL: "https://gitlab.example.com/-/merge_requests/1",
+			},
 		},
-	}
-	md := FormatMRsByCommitMarkdown(out)
-	if !strings.Contains(md, "Merge Requests for Commit (1)") {
-		t.Error(errExpHeader)
-	}
-	if !strings.Contains(md, "Feature") {
-		t.Error("expected MR title")
-	}
-	if !strings.Contains(md, "merged") {
-		t.Error("expected state")
+	})
+
+	want := "## Merge Requests for Commit (1)\n\n" +
+		"| IID | Title | State | Source -> Target | Author |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| [!1](https://gitlab.example.com/-/merge_requests/1) | Feature | \U0001F7E3 merged | feat -> main | dev |\n" +
+		commitMRsHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatMRsByCommitMarkdown_Empty verifies the MRsByCommitMarkdown_Empty Markdown formatter for a representative mrsbycommit_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMRsByCommitMarkdown_Empty pins the whole response of a commit that
+// belongs to no merge request.
 func TestFormatMRsByCommitMarkdown_Empty(t *testing.T) {
-	out := MRsByCommitOutput{MergeRequests: nil}
-	md := FormatMRsByCommitMarkdown(out)
-	if !strings.Contains(md, "No merge requests found") {
-		t.Error("expected 'No merge requests found'")
+	got := FormatMRsByCommitMarkdown(MRsByCommitOutput{})
+
+	want := "No merge requests found.\n"
+
+	if got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatGPGSignatureMarkdown verifies the GPGSignatureMarkdown Markdown formatter for a representative gpgsignature input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatGPGSignatureMarkdown pins the whole card of a PGP-signed commit,
+// the key's user written without the angle brackets GFM autolinks.
 func TestFormatGPGSignatureMarkdown(t *testing.T) {
-	sig := GPGSignatureOutput{
+	got := FormatGPGSignatureMarkdown(GPGSignatureOutput{
 		KeyID:              1,
 		KeyPrimaryKeyID:    "ABC123",
 		KeyUserName:        "Test",
 		KeyUserEmail:       "t@t.com",
 		VerificationStatus: "verified",
-	}
-	md := FormatGPGSignatureMarkdown(sig)
-	if !strings.Contains(md, "Commit Signature") {
-		t.Error(errExpHeader)
-	}
-	if !strings.Contains(md, "verified") {
-		t.Error("expected verification status")
-	}
-	if !strings.Contains(md, "ABC123") {
-		t.Error("expected key ID")
+	})
+
+	want := "## Commit Signature\n\n" +
+		"- **Verification**: verified\n" +
+		"- **Key User**: Test (t@t.com)\n" +
+		"- **Key ID**: 1\n" +
+		"- **Primary Key ID**: `ABC123`\n" +
+		commitSignatureHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatGPGSignatureMarkdown_SSH verifies the signature Markdown formatter
-// renders SSH-signature details (type, key title, usage) for an SSH-signed
-// commit and omits the PGP key-user block.
+// TestFormatGPGSignatureMarkdown_SSH pins the whole card of an SSH-signed
+// commit: the key's title and usage, and none of the PGP key-user rows.
 func TestFormatGPGSignatureMarkdown_SSH(t *testing.T) {
-	sig := GPGSignatureOutput{
+	got := FormatGPGSignatureMarkdown(GPGSignatureOutput{
 		SignatureType:      "SSH",
 		VerificationStatus: "verified",
 		CommitSource:       "gitaly",
 		Key:                &SSHSignatureKey{ID: 11, Title: "MyKey", UsageType: "auth_and_signing"},
-	}
-	md := FormatGPGSignatureMarkdown(sig)
-	for _, want := range []string{"SSH", "verified", "MyKey", "auth_and_signing", "gitaly"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("expected Markdown to contain %q\n%s", want, md)
-			}
-		})
+	})
+
+	want := "## Commit Signature\n\n" +
+		"- **Type**: SSH\n" +
+		"- **Verification**: verified\n" +
+		"- **SSH Key**: MyKey\n" +
+		"- **Usage**: auth_and_signing\n" +
+		"- **Commit Source**: gitaly\n" +
+		commitSignatureHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatGPGSignatureMarkdown_X509 verifies the signature Markdown formatter
-// renders X.509-certificate details (subject, email) for an X.509-signed commit.
+// TestFormatGPGSignatureMarkdown_X509 pins the whole card of an X.509-signed
+// commit.
 func TestFormatGPGSignatureMarkdown_X509(t *testing.T) {
-	sig := GPGSignatureOutput{
+	got := FormatGPGSignatureMarkdown(GPGSignatureOutput{
 		SignatureType:      "X509",
 		VerificationStatus: "unverified",
 		X509Certificate: &X509CertificateOutput{
@@ -2322,14 +2471,38 @@ func TestFormatGPGSignatureMarkdown_X509(t *testing.T) {
 			Subject: "CN=gitlab@example.org,OU=Example,O=World",
 			Email:   "gitlab@example.org",
 		},
+	})
+
+	want := "## Commit Signature\n\n" +
+		"- **Type**: X509\n" +
+		"- **Verification**: unverified\n" +
+		"- **X.509 Subject**: CN=gitlab@example.org,OU=Example,O=World\n" +
+		"- **X.509 Email**: gitlab@example.org\n" +
+		commitSignatureHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	md := FormatGPGSignatureMarkdown(sig)
-	for _, want := range []string{"X509", "unverified", "CN=gitlab@example.org", "gitlab@example.org"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("expected Markdown to contain %q\n%s", want, md)
-			}
-		})
+}
+
+// TestFormatGPGSignatureMarkdown_AbsentX509Subject pins that a certificate
+// GitLab sent no subject for writes no subject row: a label with nothing after
+// it reads as a value that failed to render.
+func TestFormatGPGSignatureMarkdown_AbsentX509Subject(t *testing.T) {
+	got := FormatGPGSignatureMarkdown(GPGSignatureOutput{
+		SignatureType:      "X509",
+		VerificationStatus: "unverified",
+		X509Certificate:    &X509CertificateOutput{ID: 1, Email: "gitlab@example.org"},
+	})
+
+	want := "## Commit Signature\n\n" +
+		"- **Type**: X509\n" +
+		"- **Verification**: unverified\n" +
+		"- **X.509 Email**: gitlab@example.org\n" +
+		commitSignatureHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -2670,6 +2843,50 @@ func TestActionSpecs_CommitGetRoute(t *testing.T) {
 	}
 	if out.ID != "abc123" {
 		t.Fatalf("ID = %q, want abc123", out.ID)
+	}
+}
+
+// TestGet_TimestampsAreTheWireForm pins that the three timestamps a commit
+// carries go out in RFC 3339, the form every other date this server publishes
+// takes and the one the display helper can read back.
+//
+// They used to be written with Go's default layout, which is not RFC 3339, so
+// nothing could parse them: the Markdown time helper fell through to its
+// escape branch and printed "2026-01-01 00:00:00 +0000 UTC" where every other
+// card shows a date a reader can read.
+func TestGet_TimestampsAreTheWireForm(t *testing.T) {
+	const respJSON = `{"id":"abc123","short_id":"abc123","title":"T","message":"M",` +
+		`"authored_date":"2026-01-01T00:00:00Z","committed_date":"2026-03-20T15:45:00Z",` +
+		`"created_at":"2026-01-02T03:04:05Z","web_url":"u"}`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123" {
+			testutil.RespondJSON(w, http.StatusOK, respJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", SHA: "abc123"})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+
+	fields := []struct {
+		name, got, want string
+	}{
+		{"committed_date", out.CommittedDate, "2026-03-20T15:45:00Z"},
+		{"authored_date", out.AuthoredDate, "2026-01-01T00:00:00Z"},
+		{"created_at", out.CreatedAt, "2026-01-02T03:04:05Z"},
+	}
+	for _, f := range fields {
+		t.Run(f.name, func(t *testing.T) {
+			if f.got != f.want {
+				t.Errorf("%s = %q, want %q", f.name, f.got, f.want)
+			}
+		})
+	}
+	if got := toolutil.FormatTime(out.CommittedDate); got != "20 Mar 2026 15:45 UTC" {
+		t.Errorf("the display helper reads the committed date as %q, want %q", got, "20 Mar 2026 15:45 UTC")
 	}
 }
 

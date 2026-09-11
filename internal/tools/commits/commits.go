@@ -104,9 +104,7 @@ func authorToOutput(a gl.Author) *BasicUserOutput {
 		State:    a.State,
 		Blocked:  a.Blocked,
 	}
-	if a.CreatedAt != nil {
-		out.CreatedAt = a.CreatedAt.String()
-	}
+	out.CreatedAt = toolutil.RFC3339Ptr(a.CreatedAt)
 	return out
 }
 
@@ -218,15 +216,14 @@ func commitToFields(c *gl.Commit) commitFields {
 		extendedTrailers: c.ExtendedTrailers,
 		lastPipeline:     pipelineInfoToOutput(c.LastPipeline),
 	}
-	if c.CommittedDate != nil {
-		f.committedDate = c.CommittedDate.String()
-	}
-	if c.AuthoredDate != nil {
-		f.authoredDate = c.AuthoredDate.String()
-	}
-	if c.CreatedAt != nil {
-		f.createdAt = c.CreatedAt.String()
-	}
+	// The three timestamps go out in the wire form every other date this server
+	// publishes takes. Go's default layout, which these used to carry, is not
+	// RFC 3339, so nothing could parse them back: the Markdown time helper fell
+	// through to its escape branch and printed "2026-03-20 15:45:00 +0000 UTC"
+	// where every other card shows a date a reader can read.
+	f.committedDate = toolutil.RFC3339Ptr(c.CommittedDate)
+	f.authoredDate = toolutil.RFC3339Ptr(c.AuthoredDate)
+	f.createdAt = toolutil.RFC3339Ptr(c.CreatedAt)
 	if c.Status != nil {
 		f.status = string(*c.Status)
 	}
@@ -781,15 +778,9 @@ func statusToOutput(s *gl.CommitStatus) StatusOutput {
 		PipelineID:   s.PipelineID,
 		AllowFailure: s.AllowFailure,
 	}
-	if s.CreatedAt != nil {
-		out.CreatedAt = s.CreatedAt.String()
-	}
-	if s.StartedAt != nil {
-		out.StartedAt = s.StartedAt.String()
-	}
-	if s.FinishedAt != nil {
-		out.FinishedAt = s.FinishedAt.String()
-	}
+	out.CreatedAt = toolutil.RFC3339Ptr(s.CreatedAt)
+	out.StartedAt = toolutil.RFC3339Ptr(s.StartedAt)
+	out.FinishedAt = toolutil.RFC3339Ptr(s.FinishedAt)
 	out.Author = authorToOutput(s.Author)
 	return out
 }

@@ -549,6 +549,32 @@ func TestRepositoryArchive_DefaultFormat(t *testing.T) {
 	}
 }
 
+// TestRepositoryArchive_EscapesPathAndQuery pins that the address this action
+// hands back is built by escaping its two caller-supplied parts: a full
+// project path carries the separators that would end the segment early, and a
+// ref may carry any of "?", "#", "&" or a space, each of which built a
+// different address than the one asked for.
+func TestRepositoryArchive_EscapesPathAndQuery(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+
+	out, err := Archive(context.Background(), client, ArchiveInput{
+		ProjectID: "group/sub/project",
+		SHA:       "feature/a b?c",
+		Format:    "zip",
+	})
+	if err != nil {
+		t.Fatalf("Archive() unexpected error: %v", err)
+	}
+
+	base := client.GL().BaseURL().String()
+	want := base + "projects/group%2Fsub%2Fproject/repository/archive.zip?sha=feature%2Fa+b%3Fc"
+	if out.URL != want {
+		t.Errorf("Archive URL = %q, want %q", out.URL, want)
+	}
+}
+
 // TestRepositoryArchive_EmptyProjectID verifies RepositoryArchive when empty project ID.
 func TestRepositoryArchive_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1031,163 +1057,235 @@ func TestRepositoryTree_WithPagination(t *testing.T) {
 // Format*Markdown Tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatTreeMarkdown verifies FormatTreeMarkdown.
+// The guidance sections the repository formatters close with, pinned once so
+// each whole-output expectation names them rather than restating them.
+const (
+	treeHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.file_get' to read one file's content\n" +
+		"- Use action 'repository.compare' to see differences between branches or commits\n"
+
+	compareHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_get' to view one of these commits\n" +
+		"- Use action 'repository.file_get' to read a changed file\n"
+
+	compareAgainHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.compare' to compare two different refs\n"
+
+	contributorsHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_list' to view commits by one contributor\n"
+
+	blobHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.raw_blob' to read the decoded text content\n"
+
+	rawBlobHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.file_get' to view the file with its metadata\n"
+
+	archiveHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.tree' to browse the repository instead of downloading it\n"
+
+	changelogGenerateHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.changelog_generate' to generate the notes for another range\n"
+
+	changelogDataHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.changelog_add' to commit this changelog to the repository\n" +
+		"- Use action 'release.create' to create a release with these notes\n"
+)
+
+// TestFormatTreeMarkdown pins the whole tree listing. A submodule is a commit
+// object pinned inside the tree rather than a file, and it carries a marker of
+// its own: marking it as a file told a reader it could be read with file_get.
 func TestFormatTreeMarkdown(t *testing.T) {
-	out := TreeOutput{
+	got := FormatTreeMarkdown(TreeOutput{
 		Tree: []TreeNodeOutput{
 			{ID: "a", Name: "README.md", Type: "blob", Path: "README.md", Mode: "100644"},
 			{ID: "b", Name: "src", Type: "tree", Path: "src", Mode: "040000"},
+			{ID: "c", Name: "core", Type: "commit", Path: "libs/core", Mode: "160000"},
 		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 2},
-	}
-	md := FormatTreeMarkdown(out)
-	if !strings.Contains(md, "Repository Tree (2 entries)") {
-		t.Errorf("expected header with count, got:\n%s", md)
-	}
-	if !strings.Contains(md, "README.md") {
-		t.Error("expected README.md in output")
-	}
-	if !strings.Contains(md, "src") {
-		t.Error("expected src in output")
+		Pagination: toolutil.PaginationOutput{TotalItems: 3},
+	})
+
+	want := "## Repository Tree (3)\n\n" +
+		"| Type | Name | Path |\n" +
+		"| --- | --- | --- |\n" +
+		"| \U0001F4C4 | README.md | `README.md` |\n" +
+		"| \U0001F4C1 | src | `src` |\n" +
+		"| \U0001F517 | core | `libs/core` |\n" +
+		"\n3 items total\n" +
+		treeHints
+
+	if got != want {
+		t.Errorf("tree mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatTreeMarkdown_Empty verifies FormatTreeMarkdown when empty.
+// TestFormatTreeMarkdown_Empty pins the whole response of an empty tree.
 func TestFormatTreeMarkdown_Empty(t *testing.T) {
-	out := TreeOutput{
-		Tree:       nil,
-		Pagination: toolutil.PaginationOutput{TotalItems: 0},
-	}
-	md := FormatTreeMarkdown(out)
-	if !strings.Contains(md, "No files or directories found") {
-		t.Errorf("expected 'No files or directories found', got:\n%s", md)
+	got := FormatTreeMarkdown(TreeOutput{})
+
+	want := "No files or directories found.\n"
+
+	if got != want {
+		t.Errorf("empty tree mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatCompareMarkdown verifies FormatCompareMarkdown.
+// TestFormatCompareMarkdown pins the whole comparison: the two counts as rows
+// of the card, then the commits and the changed files as the nested
+// collections they are.
 func TestFormatCompareMarkdown(t *testing.T) {
-	out := CompareOutput{
+	got := FormatCompareMarkdown(CompareOutput{
 		Commits: []commits.Output{
 			{ShortID: "abc1", Title: "feat: init", AuthorName: "Alice"},
 		},
 		Diffs: []DiffOutput{
-			{OldPath: "a.go", NewPath: "a.go", NewFile: false, DeletedFile: false, RenamedFile: false},
+			{OldPath: "a.go", NewPath: "a.go"},
 		},
 		WebURL: "https://gitlab.example.com/-/compare/main...develop",
-	}
-	md := FormatCompareMarkdown(out)
-	if !strings.Contains(md, "Repository Compare") {
-		t.Error("expected header")
-	}
-	if !strings.Contains(md, "abc1") {
-		t.Error("expected short_id in output")
-	}
-	if !strings.Contains(md, "a.go") {
-		t.Error("expected file path in output")
-	}
-	if !strings.Contains(md, "modified") {
-		t.Error("expected 'modified' status")
-	}
-	if !strings.Contains(md, "https://gitlab.example.com") {
-		t.Error("expected web URL")
+	})
+
+	want := "## Repository Compare\n\n" +
+		"- **Commits**: 1\n" +
+		"- **Changed Files**: 1\n" +
+		"- **URL**: [https://gitlab.example.com/-/compare/main...develop](https://gitlab.example.com/-/compare/main...develop)\n" +
+		"\n### Commits\n\n" +
+		"| Short ID | Title | Author |\n" +
+		"| --- | --- | --- |\n" +
+		"| `abc1` | feat: init | Alice |\n" +
+		"\n### Changed Files\n\n" +
+		"| Status | Path |\n" +
+		"| --- | --- |\n" +
+		"| modified | `a.go` |\n" +
+		compareHints
+
+	if got != want {
+		t.Errorf("compare mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatCompareMarkdown_NewDeletedRenamed verifies FormatCompareMarkdown when new deleted renamed.
+// TestFormatCompareMarkdown_NewDeletedRenamed pins the three statuses a diff
+// carries beside "modified".
 func TestFormatCompareMarkdown_NewDeletedRenamed(t *testing.T) {
-	out := CompareOutput{
+	got := FormatCompareMarkdown(CompareOutput{
 		Diffs: []DiffOutput{
 			{NewPath: "new.go", NewFile: true},
 			{NewPath: "old.go", DeletedFile: true},
 			{NewPath: "moved.go", RenamedFile: true},
 		},
-	}
-	md := FormatCompareMarkdown(out)
-	if !strings.Contains(md, "added") {
-		t.Error("expected 'added' status for new file")
-	}
-	if !strings.Contains(md, "deleted") {
-		t.Error("expected 'deleted' status")
-	}
-	if !strings.Contains(md, "renamed") {
-		t.Error("expected 'renamed' status")
+	})
+
+	want := "## Repository Compare\n\n" +
+		"- **Commits**: 0\n" +
+		"- **Changed Files**: 3\n" +
+		"\n### Changed Files\n\n" +
+		"| Status | Path |\n" +
+		"| --- | --- |\n" +
+		"| added | `new.go` |\n" +
+		"| deleted | `old.go` |\n" +
+		"| renamed | `moved.go` |\n" +
+		compareHints
+
+	if got != want {
+		t.Errorf("compare mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatCompareMarkdown_SameRef verifies FormatCompareMarkdown when same ref.
+// TestFormatCompareMarkdown_SameRef pins the whole answer to a comparison of a
+// ref with itself.
 func TestFormatCompareMarkdown_SameRef(t *testing.T) {
-	out := CompareOutput{CompareSameRef: true}
-	md := FormatCompareMarkdown(out)
-	if !strings.Contains(md, "same ref") {
-		t.Errorf("expected 'same ref' message, got:\n%s", md)
+	got := FormatCompareMarkdown(CompareOutput{CompareSameRef: true})
+
+	want := "## Repository Compare: same ref\n\n" +
+		"Both references point to the same commit.\n" +
+		compareAgainHints
+
+	if got != want {
+		t.Errorf("compare mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatCompareMarkdown_Timeout verifies FormatCompareMarkdown when timeout.
+// TestFormatCompareMarkdown_Timeout pins the whole answer to a comparison
+// GitLab gave up on.
 func TestFormatCompareMarkdown_Timeout(t *testing.T) {
-	out := CompareOutput{CompareTimeout: true}
-	md := FormatCompareMarkdown(out)
-	if !strings.Contains(md, "timeout") {
-		t.Errorf("expected 'timeout' message, got:\n%s", md)
+	got := FormatCompareMarkdown(CompareOutput{CompareTimeout: true})
+
+	want := "## Repository Compare: timeout\n\n" +
+		"The comparison timed out. Try again with a smaller range.\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.compare' to compare a smaller range\n"
+
+	if got != want {
+		t.Errorf("compare mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatContributorsMarkdown verifies FormatContributorsMarkdown.
+// TestFormatContributorsMarkdown pins the whole contributor listing, the
+// heading counting what the response vouches for.
 func TestFormatContributorsMarkdown(t *testing.T) {
-	out := ContributorsOutput{
+	got := FormatContributorsMarkdown(ContributorsOutput{
 		Contributors: []ContributorOutput{
 			{Name: "Alice", Email: "alice@test.com", Commits: 10, Additions: 500, Deletions: 100},
 			{Name: "Bob", Email: "bob@test.com", Commits: 5, Additions: 200, Deletions: 50},
 		},
-	}
-	md := FormatContributorsMarkdown(out)
-	if !strings.Contains(md, "Repository Contributors (2)") {
-		t.Errorf("expected header with count, got:\n%s", md)
-	}
-	if !strings.Contains(md, "Alice") {
-		t.Error("expected Alice in output")
-	}
-	if !strings.Contains(md, "Bob") {
-		t.Error("expected Bob in output")
+		Pagination: toolutil.PaginationOutput{TotalItems: 45, TotalPages: 3, Page: 1, PerPage: 20},
+	})
+
+	want := "## Repository Contributors (45)\n\n" +
+		"Showing 2 of 45 results (page 1 of 3)\n\n" +
+		"| Name | Email | Commits | Additions | Deletions |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| Alice | alice@test.com | 10 | 500 | 100 |\n" +
+		"| Bob | bob@test.com | 5 | 200 | 50 |\n" +
+		"\nPage 1 of 3 | 45 items total | 20 per page\n" +
+		contributorsHints
+
+	if got != want {
+		t.Errorf("contributors mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatContributorsMarkdown_Empty verifies FormatContributorsMarkdown when empty.
+// TestFormatContributorsMarkdown_Empty pins the whole response of a repository
+// with no contributors.
 func TestFormatContributorsMarkdown_Empty(t *testing.T) {
-	out := ContributorsOutput{Contributors: nil}
-	md := FormatContributorsMarkdown(out)
-	if !strings.Contains(md, "No contributors found") {
-		t.Errorf("expected 'No contributors found', got:\n%s", md)
+	got := FormatContributorsMarkdown(ContributorsOutput{})
+
+	want := "No contributors found.\n"
+
+	if got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatBlobMarkdown verifies FormatBlobMarkdown.
+// TestFormatBlobMarkdown pins the whole blob card, which carries the metadata
+// and no body: raw_blob is the action that decodes the bytes.
 func TestFormatBlobMarkdown(t *testing.T) {
-	out := BlobOutput{SHA: "abc123", Size: 1024, Content: "base64data"}
-	md := FormatBlobMarkdown(out)
-	if !strings.Contains(md, "Repository Blob") {
-		t.Error("expected header")
-	}
-	if !strings.Contains(md, "abc123") {
-		t.Error("expected SHA in output")
-	}
-	if !strings.Contains(md, "1024 bytes") {
-		t.Error("expected size in output")
+	got := FormatBlobMarkdown(BlobOutput{SHA: "abc123", Size: 1024, Content: "base64data"})
+
+	want := "## Repository Blob\n\n" +
+		"- **SHA**: `abc123`\n" +
+		"- **Size (bytes)**: 1024\n" +
+		"- **Content Type**: text\n" +
+		"- **Characters**: 10\n" +
+		blobHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatRawBlobContentMarkdown verifies FormatRawBlobContentMarkdown.
+// TestFormatRawBlobContentMarkdown pins the whole raw blob card, the body
+// fenced: the blob is a file of the repository, so a fixed fence would be
+// closed by the first run of three backticks whoever pushed it wrote.
 func TestFormatRawBlobContentMarkdown(t *testing.T) {
-	out := RawBlobContentOutput{SHA: "def456", Size: 42, Content: "hello world"}
-	md := FormatRawBlobContentMarkdown(out)
-	if !strings.Contains(md, "Raw Blob Content") {
-		t.Error("expected header")
-	}
-	if !strings.Contains(md, "def456") {
-		t.Error("expected SHA in output")
-	}
-	if !strings.Contains(md, "hello world") {
-		t.Error("expected content in output")
+	got := FormatRawBlobContentMarkdown(RawBlobContentOutput{SHA: "def456", Size: 42, Content: "hello world"})
+
+	want := "## Repository Raw Blob Content\n\n" +
+		"- **SHA**: `def456`\n" +
+		"- **Size (bytes)**: 42\n" +
+		"\n```\nhello world\n```\n" +
+		rawBlobHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1203,7 +1301,7 @@ func TestMarkdownForResult_BlobContentCategories(t *testing.T) {
 		{
 			name:     "blob text",
 			result:   BlobOutput{SHA: "textsha", Size: 4, Content: "text", ContentCategory: "text"},
-			wantText: "Content**: text",
+			wantText: "Content Type**: text",
 		},
 		{
 			name:     "blob binary",
@@ -1312,72 +1410,101 @@ func TestClassifyBlobContent(t *testing.T) {
 	}
 }
 
-// TestFormatArchiveMarkdown verifies FormatArchiveMarkdown.
+// TestFormatArchiveMarkdown pins the whole archive card. All three values are
+// the caller's own arguments echoed back, so all three are rows the card
+// escapes.
 func TestFormatArchiveMarkdown(t *testing.T) {
-	out := ArchiveOutput{ProjectID: "42", SHA: "main", Format: "zip", URL: "https://example.com/archive.zip"}
-	md := FormatArchiveMarkdown(out)
-	if !strings.Contains(md, "Repository Archive") {
-		t.Error("expected header")
-	}
-	if !strings.Contains(md, "zip") {
-		t.Error("expected format in output")
-	}
-	if !strings.Contains(md, "main") {
-		t.Error("expected SHA/Ref in output")
-	}
-	if !strings.Contains(md, "https://example.com/archive.zip") {
-		t.Error("expected URL in output")
+	got := FormatArchiveMarkdown(ArchiveOutput{
+		ProjectID: "42", SHA: "main", Format: "zip", URL: "https://example.com/archive.zip",
+	})
+
+	want := "## Repository Archive\n\n" +
+		"- **Project**: 42\n" +
+		"- **Format**: zip\n" +
+		"- **SHA/Ref**: main\n" +
+		"- **URL**: [https://example.com/archive.zip](https://example.com/archive.zip)\n" +
+		archiveHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatArchiveMarkdown_NoSHA verifies FormatArchiveMarkdown when no SHA.
+// TestFormatArchiveMarkdown_NoSHA pins that an archive of the default branch,
+// which names no ref, writes no ref row.
 func TestFormatArchiveMarkdown_NoSHA(t *testing.T) {
-	out := ArchiveOutput{ProjectID: "42", Format: "tar.gz", URL: "https://example.com/archive.tar.gz"}
-	md := FormatArchiveMarkdown(out)
-	if strings.Contains(md, "SHA/Ref") {
-		t.Error("expected no SHA/Ref line when SHA is empty")
+	got := FormatArchiveMarkdown(ArchiveOutput{
+		ProjectID: "42", Format: "tar.gz", URL: "https://example.com/archive.tar.gz",
+	})
+
+	want := "## Repository Archive\n\n" +
+		"- **Project**: 42\n" +
+		"- **Format**: tar.gz\n" +
+		"- **URL**: [https://example.com/archive.tar.gz](https://example.com/archive.tar.gz)\n" +
+		archiveHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatAddChangelogMarkdown_Success verifies FormatAddChangelogMarkdown when success.
+// TestFormatAddChangelogMarkdown_Success pins the whole confirmation. The
+// version is the caller's own argument, so it is a row the card escapes rather
+// than bold text interpolated into a sentence.
 func TestFormatAddChangelogMarkdown_Success(t *testing.T) {
-	out := AddChangelogOutput{Success: true, Version: "1.0.0"}
-	md := FormatAddChangelogMarkdown(out)
-	if !strings.Contains(md, "Changelog Updated") {
-		t.Error("expected success header")
-	}
-	if !strings.Contains(md, "1.0.0") {
-		t.Error("expected version in output")
+	got := FormatAddChangelogMarkdown(AddChangelogOutput{Success: true, Version: "1.0.0"})
+
+	want := "## Changelog Updated\n\n" +
+		"- **Version**: 1.0.0\n\n" +
+		"The changelog data was committed successfully.\n" +
+		changelogGenerateHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatAddChangelogMarkdown_Failure verifies FormatAddChangelogMarkdown when failure.
+// TestFormatAddChangelogMarkdown_Failure pins the whole failure answer.
 func TestFormatAddChangelogMarkdown_Failure(t *testing.T) {
-	out := AddChangelogOutput{Success: false}
-	md := FormatAddChangelogMarkdown(out)
-	if !strings.Contains(md, "Failed") {
-		t.Error("expected failure header")
+	got := FormatAddChangelogMarkdown(AddChangelogOutput{Success: false})
+
+	want := "## Changelog Update Failed\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.changelog_generate' to generate the notes without committing them\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatChangelogDataMarkdown verifies FormatChangelogDataMarkdown.
+// TestFormatChangelogDataMarkdown pins the whole generated-changelog render.
+// The notes are release prose built out of commit messages, so they are fenced
+// rather than written raw, where a commit title carrying a heading used to
+// become part of this response.
 func TestFormatChangelogDataMarkdown(t *testing.T) {
-	out := ChangelogDataOutput{Notes: "## 1.0.0\n\n- feat: initial release\n"}
-	md := FormatChangelogDataMarkdown(out)
-	if !strings.Contains(md, "Generated Changelog Data") {
-		t.Error("expected header")
-	}
-	if !strings.Contains(md, "1.0.0") {
-		t.Error("expected notes content")
+	got := FormatChangelogDataMarkdown(ChangelogDataOutput{Notes: "## 1.0.0\n\n- feat: initial release\n"})
+
+	want := "## Generated Changelog Data\n\n" +
+		"```markdown\n## 1.0.0\n\n- feat: initial release\n```\n" +
+		changelogDataHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatChangelogDataMarkdown_Empty verifies FormatChangelogDataMarkdown when empty.
+// TestFormatChangelogDataMarkdown_Empty pins the whole answer for a range with
+// no changelog entries.
 func TestFormatChangelogDataMarkdown_Empty(t *testing.T) {
-	out := ChangelogDataOutput{Notes: ""}
-	md := FormatChangelogDataMarkdown(out)
-	if !strings.Contains(md, "No changelog entries found") {
-		t.Errorf("expected 'No changelog entries found', got:\n%s", md)
+	got := FormatChangelogDataMarkdown(ChangelogDataOutput{})
+
+	want := "## Generated Changelog Data\n\n" +
+		"GitLab generated no changelog entries for this range.\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.changelog_generate' to widen the range with from and to\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

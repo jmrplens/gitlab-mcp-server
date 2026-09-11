@@ -1,11 +1,32 @@
 package commits
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+// Canonical action IDs the hints name, the one form every surface resolves:
+// the dynamic surface executes them, and the meta and individual surfaces
+// resolve them to their own tool names. Every commit action is a route on the
+// gitlab_repository catalog group, so each ID carries that domain rather than
+// a "commit." prefix of its own.
+const (
+	hintCommitGet           = "repository.commit_get"
+	hintCommitList          = "repository.commit_list"
+	hintCommitDiff          = "repository.commit_diff"
+	hintCommitRefs          = "repository.commit_refs"
+	hintCommitComments      = "repository.commit_comments"
+	hintCommitCommentCreate = "repository.commit_comment_create"
+	hintCommitStatuses      = "repository.commit_statuses"
+	hintCommitStatusSet     = "repository.commit_status_set"
+	hintCommitCherryPick    = "repository.commit_cherry_pick"
+	hintFileGet             = "repository.file_get"
+	hintBranchGet           = "branch.get"
+	hintTagGet              = "tag.get"
+	hintMRGet               = "merge_request.get"
+	hintMRChangesGet        = "merge_request.changes_get"
 )
 
 // userDisplay returns a human-readable name for a commit comment/status author,
@@ -24,91 +45,159 @@ func userDisplay(u *BasicUserOutput) string {
 	return "-"
 }
 
-// FormatOutputMarkdown renders a single commit as a Markdown summary.
+// userHandle renders a commit comment or status author as the "@handle"
+// GitLab shows, and nothing at all when GitLab sent no author, so a card
+// carries no row rather than a dash.
+func userHandle(u *BasicUserOutput) string {
+	if u == nil {
+		return ""
+	}
+	if handle := toolutil.MdUserHandle(u.Username); handle != "" {
+		return handle
+	}
+	return toolutil.EscapeMdTableCell(u.Name)
+}
+
+// pipelineSummary renders the pipeline of a commit as its status glyph, the
+// status word and a link to the pipeline itself, and nothing when GitLab
+// reported neither. A commit whose pipeline the card omits is one a reader
+// cannot tell has failed.
+func pipelineSummary(status string, p *LastPipelineOutput) string {
+	state := status
+	if p != nil && p.Status != "" {
+		state = p.Status
+	}
+	summary := ""
+	if state != "" {
+		summary = toolutil.PipelineStatusEmoji(state) + " " + toolutil.EscapeMdTableCell(state)
+	}
+	if p == nil || p.ID == 0 {
+		return summary
+	}
+	link := toolutil.MdTitleLink("#"+strconv.FormatInt(p.ID, 10), p.WebURL)
+	if summary == "" {
+		return link
+	}
+	return summary + " " + link
+}
+
+// commitIdent renders the person a commit names: their name, and the address
+// beside it in parentheses rather than in angle brackets, which GFM turns
+// into a mailto autolink to an address nobody chose to publish.
+func commitIdent(name, email string) string {
+	switch {
+	case name == "" && email == "":
+		return ""
+	case email == "":
+		return toolutil.EscapeMdTableCell(name)
+	case name == "":
+		return toolutil.EscapeMdTableCell(email)
+	default:
+		return toolutil.EscapeMdTableCell(name) + " (" + toolutil.EscapeMdTableCell(email) + ")"
+	}
+}
+
+// FormatOutputMarkdown renders one commit as a card.
+//
+// A cherry-pick or revert run with dry_run commits nothing and GitLab answers
+// with no commit at all, which this used to render as a commit card whose
+// heading and every field were empty: a reader could not tell it from a commit
+// that had been made.
 func FormatOutputMarkdown(c Output) string {
+	if c.ID == "" && c.ShortID == "" {
+		return formatNoCommitMarkdown()
+	}
 	var b strings.Builder
-	//gitlab:allow-unescaped c.ShortID: an abbreviated git object id, which is hexadecimal.
-	fmt.Fprintf(&b, "## Commit %s\n\n", c.ShortID)
+	card := toolutil.NewCard(&b, "Commit "+c.ShortID)
 	// A commit's title and ident are what whoever made the commit typed, and
 	// this server's own commit.create passes an author name and email through.
-	fmt.Fprintf(&b, toolutil.FmtMdTitle, toolutil.EscapeMdTableCell(c.Title))
-	fmt.Fprintf(&b, "- **Author**: %s <%s>\n",
-		toolutil.EscapeMdTableCell(c.AuthorName), toolutil.EscapeMdTableCell(c.AuthorEmail))
-	fmt.Fprintf(&b, "- **Date**: %s\n", toolutil.FormatTime(c.CommittedDate))
-	toolutil.WriteMdURL(&b, c.WebURL)
-	toolutil.WriteHints(
-		&b,
-		"Use action 'commit_get' with this SHA to see full commit details and stats",
-		"Use action 'commit_diff' to see file changes for this commit",
-		"Use action 'commit_refs' to see branches/tags containing this commit",
+	card.Field("Title", c.Title)
+	card.Markdown("Author", commitIdent(c.AuthorName, c.AuthorEmail))
+	card.Time("Date", c.CommittedDate)
+	card.Markdown("Pipeline", pipelineSummary(c.Status, c.LastPipeline))
+	card.URL(c.WebURL)
+	card.End(
+		toolutil.HintAction(hintCommitGet, "see this commit's full details and stats"),
+		toolutil.HintAction(hintCommitDiff, "see the file changes for this commit"),
+		toolutil.HintAction(hintCommitRefs, "see the branches and tags containing it"),
 	)
 	return b.String()
 }
 
-// FormatListMarkdown renders a paginated list of commits as a Markdown table.
-func FormatListMarkdown(out ListOutput) string {
+// formatNoCommitMarkdown is the answer to a call GitLab returned no commit
+// for: a dry run reports whether the change applies and commits nothing.
+func formatNoCommitMarkdown() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Commits (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Commits), out.Pagination)
-	if len(out.Commits) == 0 {
-		b.WriteString("No commits found.\n")
-		return b.String()
-	}
-	b.WriteString("| Short ID | Title | Author | Date |\n")
-	b.WriteString(toolutil.TblSep4Col)
-	for _, c := range out.Commits {
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", toolutil.MdTitleLink(c.ShortID, c.WebURL), toolutil.EscapeMdTableCell(c.Title), toolutil.EscapeMdTableCell(c.AuthorName), toolutil.FormatTime(c.CommittedDate))
-	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use action 'commit_get' with a SHA to see commit summary",
-		"Use action 'commit_diff' to see file changes for a specific commit",
+	card := toolutil.NewCard(&b, "No Commit Created")
+	card.Note("GitLab returned no commit. A dry run reports whether the change would apply cleanly and commits nothing; run the same action without dry_run to commit it.")
+	card.End(
+		toolutil.HintAction(hintCommitCherryPick, "apply the commit for real"),
+		toolutil.HintAction(hintCommitList, "check the branch for the commit"),
 	)
 	return b.String()
 }
 
-// FormatDetailMarkdown renders a single commit detail as a Markdown summary.
+// FormatListMarkdown renders a page of commits as a Markdown table.
+func FormatListMarkdown(out ListOutput) string {
+	if len(out.Commits) == 0 {
+		return toolutil.EmptyMessage("commits")
+	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Commits", len(out.Commits), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Short ID", "Title", "Author", "Date", "Pipeline"))
+	for _, c := range out.Commits {
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(c.ShortID, c.WebURL),
+			toolutil.EscapeMdTableCell(c.Title),
+			toolutil.EscapeMdTableCell(c.AuthorName),
+			toolutil.FormatTime(c.CommittedDate),
+			pipelineSummary(c.Status, c.LastPipeline),
+		))
+	}
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(hintCommitGet, "see one commit in full"),
+		toolutil.HintAction(hintCommitDiff, "see the file changes of one commit"),
+	)
+	return b.String()
+}
+
+// FormatDetailMarkdown renders one commit in full as a card: its fields, then
+// its message as quoted prose when the message says more than the title.
 func FormatDetailMarkdown(c DetailOutput) string {
 	var b strings.Builder
-	//gitlab:allow-unescaped c.ShortID: an abbreviated git object id, which is hexadecimal.
-	fmt.Fprintf(&b, "## Commit %s\n\n", c.ShortID)
+	card := toolutil.NewCard(&b, "Commit "+c.ShortID)
 	// A commit's title and ident are what whoever made the commit typed, and
 	// this server's own commit.create passes an author name and email through.
-	fmt.Fprintf(&b, toolutil.FmtMdTitle, toolutil.EscapeMdTableCell(c.Title))
-	fmt.Fprintf(&b, "- **Author**: %s <%s>\n",
-		toolutil.EscapeMdTableCell(c.AuthorName), toolutil.EscapeMdTableCell(c.AuthorEmail))
-	fmt.Fprintf(&b, "- **Date**: %s\n", toolutil.FormatTime(c.CommittedDate))
-	if len(c.ParentIDs) > 0 {
-		//gitlab:allow-unescaped strings.Join(c.ParentIDs, ", "): full git object ids, which are hexadecimal.
-		fmt.Fprintf(&b, "- **Parents**: %s\n", strings.Join(c.ParentIDs, ", "))
-	}
+	card.Field("Title", c.Title)
+	card.Markdown("Author", commitIdent(c.AuthorName, c.AuthorEmail))
+	card.Markdown("Committer", commitIdent(c.CommitterName, c.CommitterEmail))
+	card.Time("Date", c.CommittedDate)
+	card.Code("Parents", strings.Join(c.ParentIDs, ", "))
 	if c.Stats != nil {
-		fmt.Fprintf(&b, "- **Stats**: +%d -%d (%d total)\n", c.Stats.Additions, c.Stats.Deletions, c.Stats.Total)
+		card.Field("Stats", "+"+strconv.FormatInt(c.Stats.Additions, 10)+
+			" -"+strconv.FormatInt(c.Stats.Deletions, 10)+
+			" ("+strconv.FormatInt(c.Stats.Total, 10)+" total)")
 	}
+	card.Markdown("Pipeline", pipelineSummary(c.Status, c.LastPipeline))
+	card.URL(c.WebURL)
 	if c.Message != "" && c.Message != c.Title {
-		fmt.Fprintf(&b, "\n### Message\n\n%s\n", toolutil.WrapGFMBody(c.Message))
+		card.Text("Message", c.Message)
 	}
-	toolutil.WriteMdURLNewline(&b, c.WebURL)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_commit_diff` to view file changes",
-		"Use `gitlab_commit_cherry_pick` to apply this commit to another branch",
+	card.End(
+		toolutil.HintAction(hintCommitDiff, "view the file changes"),
+		toolutil.HintAction(hintCommitCherryPick, "apply this commit to another branch"),
 	)
 	return b.String()
 }
 
-// FormatDiffMarkdown renders a paginated list of commit diffs as a Markdown table.
+// FormatDiffMarkdown renders the files one commit changed as a Markdown table.
 func FormatDiffMarkdown(out DiffOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Commit Diffs (%d files)\n\n", len(out.Diffs))
 	if len(out.Diffs) == 0 {
-		b.WriteString("No diffs found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("changed files")
 	}
-	b.WriteString("| Status | Old Path | New Path |\n")
-	b.WriteString(toolutil.TblSep3Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Commit Diffs", len(out.Diffs), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Status", "Old Path", "New Path"))
 	for _, d := range out.Diffs {
 		status := "modified"
 		switch {
@@ -119,50 +208,50 @@ func FormatDiffMarkdown(out DiffOutput) string {
 		case d.RenamedFile:
 			status = "renamed"
 		}
-		fmt.Fprintf(&b, toolutil.FmtRow3Str, status, toolutil.EscapeMdTableCell(d.OldPath), toolutil.EscapeMdTableCell(d.NewPath))
+		b.WriteString(toolutil.MarkdownTableRow(
+			status,
+			toolutil.MdCodeSpanCell(d.OldPath),
+			toolutil.MdCodeSpanCell(d.NewPath),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_file_get` to view a specific changed file",
-		"Use `gitlab_commit_comment_create` to comment on the changes",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(hintFileGet, "view one changed file"),
+		toolutil.HintAction(hintCommitCommentCreate, "comment on the changes"),
 	)
 	return b.String()
 }
 
-// FormatRefsMarkdown renders a paginated list of commit refs as Markdown.
+// FormatRefsMarkdown renders the branches and tags a commit is on as a
+// Markdown table.
 func FormatRefsMarkdown(out RefsOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Commit Refs (%d)\n\n", len(out.Refs))
 	if len(out.Refs) == 0 {
-		b.WriteString("No branch or tag refs found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("branch or tag refs")
 	}
-	b.WriteString("| Type | Name |\n")
-	b.WriteString(toolutil.TblSep2Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Commit Refs", len(out.Refs), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Type", "Name"))
 	for _, r := range out.Refs {
-		//gitlab:allow-unescaped r.Type: the ref kind GitLab answers with, either branch or tag.
-		fmt.Fprintf(&b, "| %s | %s |\n", r.Type, toolutil.EscapeMdTableCell(r.Name))
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.EscapeMdTableCell(r.Type),
+			toolutil.EscapeMdTableCell(r.Name),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_branch_get` to view branch details",
-		"Use `gitlab_tag_get` to view tag details",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(hintBranchGet, "view one branch"),
+		toolutil.HintAction(hintTagGet, "view one tag"),
 	)
 	return b.String()
 }
 
-// FormatCommentsMarkdown renders a paginated list of commit comments.
+// FormatCommentsMarkdown renders a page of commit comments as a Markdown
+// table.
 func FormatCommentsMarkdown(out CommentsOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Commit Comments (%d)\n\n", len(out.Comments))
 	if len(out.Comments) == 0 {
-		b.WriteString("No commit comments found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("commit comments")
 	}
-	b.WriteString("| Author | Note | Path | Line |\n")
-	b.WriteString(toolutil.TblSep4Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Commit Comments", len(out.Comments), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Author", "Note", "Path", "Line"))
 	for _, c := range out.Comments {
 		path := c.Path
 		if path == "" {
@@ -172,147 +261,157 @@ func FormatCommentsMarkdown(out CommentsOutput) string {
 		if c.Line > 0 {
 			line = strconv.FormatInt(c.Line, 10)
 		}
-		fmt.Fprintf(&b, toolutil.FmtRow4Str, toolutil.EscapeMdTableCell(userDisplay(c.Author)), toolutil.EscapeMdTableCell(c.Note), toolutil.EscapeMdTableCell(path), line)
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.EscapeMdTableCell(userDisplay(c.Author)),
+			toolutil.EscapeMdTableCell(c.Note),
+			toolutil.EscapeMdTableCell(path),
+			line,
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_commit_comment_create` to add a comment",
-		"Use `gitlab_commit_get` to view the commit details",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(hintCommitCommentCreate, "add a comment"),
+		toolutil.HintAction(hintCommitGet, "view the commit"),
 	)
 	return b.String()
 }
 
-// FormatCommentMarkdown renders a single commit comment.
+// FormatCommentMarkdown renders one commit comment as a card.
 func FormatCommentMarkdown(c CommentOutput) string {
 	var b strings.Builder
-	b.WriteString("## Commit Comment\n\n")
-	fmt.Fprintf(&b, toolutil.FmtMdAuthor, toolutil.EscapeMdTableCell(userDisplay(c.Author)))
-	fmt.Fprintf(&b, "- **Note**: %s\n", toolutil.EscapeMdTableCell(c.Note))
-	if c.Path != "" {
-		fmt.Fprintf(&b, "- **Path**: %s (line %d)\n", toolutil.EscapeMdTableCell(c.Path), c.Line)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_commit_comments` to list all comments",
-		"Use `gitlab_file_get` to view the referenced file",
+	card := toolutil.NewCard(&b, "Commit Comment")
+	card.Markdown("Author", userHandle(c.Author))
+	card.Time("Created", c.CreatedAt)
+	card.Code("Path", c.Path)
+	// A line of zero means the comment is on the commit rather than on a line,
+	// which "line 0" read as a line number.
+	card.Count("Line", c.Line)
+	card.Field("Line Type", c.LineType)
+	card.Text("Note", c.Note)
+	card.End(
+		toolutil.HintAction(hintCommitComments, "list every comment on the commit"),
+		toolutil.HintAction(hintFileGet, "view the referenced file"),
 	)
 	return b.String()
 }
 
-// FormatStatusesMarkdown renders a paginated list of commit statuses.
+// FormatStatusesMarkdown renders a page of commit statuses as a Markdown
+// table.
 func FormatStatusesMarkdown(out StatusesOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Commit Statuses (%d)\n\n", len(out.Statuses))
 	if len(out.Statuses) == 0 {
-		b.WriteString("No commit statuses found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("commit statuses")
 	}
-	b.WriteString("| ID | Status | Name | Ref | Description |\n")
-	b.WriteString(toolutil.TblSep5Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Commit Statuses", len(out.Statuses), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Status", "Name", "Ref", "Description"))
 	for _, s := range out.Statuses {
-		//gitlab:allow-unescaped s.Status: a build state GitLab rejects with a 400 unless it is one of the six its own schema enumerates.
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n", s.ID, s.Status, toolutil.EscapeMdTableCell(s.Name), toolutil.EscapeMdTableCell(s.Ref), toolutil.EscapeMdTableCell(s.Description))
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(s.ID, 10),
+			statusCell(s.Status),
+			toolutil.EscapeMdTableCell(s.Name),
+			toolutil.EscapeMdTableCell(s.Ref),
+			toolutil.EscapeMdTableCell(s.Description),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_commit_status_set` to update a status",
-		"Use `gitlab_commit_get` to view commit details",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(hintCommitStatusSet, "update a status"),
+		toolutil.HintAction(hintCommitGet, "view the commit"),
 	)
 	return b.String()
 }
 
-// FormatStatusMarkdown renders a single commit status.
+// statusCell renders a build state with the glyph every pipeline status in
+// this tree carries, and nothing when GitLab sent no state.
+func statusCell(status string) string {
+	if status == "" {
+		return ""
+	}
+	return toolutil.PipelineStatusEmoji(status) + " " + toolutil.EscapeMdTableCell(status)
+}
+
+// FormatStatusMarkdown renders one commit status as a card.
 func FormatStatusMarkdown(s StatusOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Commit Status #%d\n\n", s.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdStatus, s.Status)
+	card := toolutil.NewCard(&b, "Commit Status #"+strconv.FormatInt(s.ID, 10))
+	card.Markdown("Status", statusCell(s.Status))
 	// The name and the ref of a commit status are both supplied by whatever CI
 	// system posted it, and this server's own commit_status_set writes them.
-	fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(s.Name))
-	fmt.Fprintf(&b, "- **Ref**: %s\n", toolutil.EscapeMdTableCell(s.Ref))
-	if s.Description != "" {
-		toolutil.WriteDescription(&b, s.Description)
-	}
-	if s.TargetURL != "" {
-		toolutil.WriteMdURL(&b, s.TargetURL)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_commit_status_set` to update this status",
-		"Use `gitlab_commit_statuses` to see all statuses",
+	card.Field("Name", s.Name)
+	card.Field("Ref", s.Ref)
+	card.Code("SHA", s.SHA)
+	card.Markdown("Author", userHandle(s.Author))
+	card.Bool("Allow Failure", s.AllowFailure)
+	card.Count("Pipeline ID", s.PipelineID)
+	card.Time("Created", s.CreatedAt)
+	card.Time("Started", s.StartedAt)
+	card.Time("Finished", s.FinishedAt)
+	card.Link("Target", s.TargetURL, s.TargetURL)
+	card.Text("Description", s.Description)
+	card.End(
+		toolutil.HintAction(hintCommitStatusSet, "update this status"),
+		toolutil.HintAction(hintCommitStatuses, "see all statuses on the commit"),
 	)
 	return b.String()
 }
 
-// FormatMRsByCommitMarkdown renders a list of merge requests for a commit.
+// FormatMRsByCommitMarkdown renders the merge requests a commit belongs to as
+// a Markdown table.
 func FormatMRsByCommitMarkdown(out MRsByCommitOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Merge Requests for Commit (%d)\n\n", len(out.MergeRequests))
 	if len(out.MergeRequests) == 0 {
-		b.WriteString("No merge requests found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("merge requests")
 	}
-	b.WriteString("| IID | Title | State | Source -> Target | Author |\n")
-	b.WriteString(toolutil.TblSep5Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Merge Requests for Commit", len(out.MergeRequests), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Source -> Target", "Author"))
 	for _, mr := range out.MergeRequests {
-		fmt.Fprintf(&b, "| !%d | %s | %s | %s -> %s | %s |\n",
-			//gitlab:allow-unescaped mr.State: a merge request state, one of GitLab's fixed set (opened, closed, locked, merged).
-			mr.IID, toolutil.EscapeMdTableCell(mr.Title), mr.State,
-			toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch),
-			toolutil.EscapeMdTableCell(mr.Author))
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink("!"+strconv.FormatInt(mr.IID, 10), mr.WebURL),
+			toolutil.EscapeMdTableCell(mr.Title),
+			mrStateCell(mr.State),
+			toolutil.EscapeMdTableCell(mr.SourceBranch)+" -> "+toolutil.EscapeMdTableCell(mr.TargetBranch),
+			toolutil.EscapeMdTableCell(mr.Author),
+		))
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_mr_get` to view MR details",
-		"Use `gitlab_mr_changes_get` to see MR diff",
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
+		toolutil.HintAction(hintMRGet, "view one merge request"),
+		toolutil.HintAction(hintMRChangesGet, "see its diff"),
 	)
 	return b.String()
 }
 
-// FormatGPGSignatureMarkdown renders a GPG signature as Markdown.
+// mrStateCell renders a merge request state with its emoji, the way every
+// merge request row in the tree shows it.
+func mrStateCell(state string) string {
+	if state == "" {
+		return ""
+	}
+	return toolutil.MRStateEmoji(state) + " " + toolutil.EscapeMdTableCell(state)
+}
+
+// FormatGPGSignatureMarkdown renders a commit's signature as a card: the
+// verdict, then whichever signer object the signing scheme carries.
 func FormatGPGSignatureMarkdown(sig GPGSignatureOutput) string {
 	var b strings.Builder
-	b.WriteString("## Commit Signature\n\n")
-	if sig.SignatureType != "" {
-		//gitlab:allow-unescaped sig.SignatureType: the signing scheme GitLab names, one of PGP, SSH or X509.
-		fmt.Fprintf(&b, "- **Type**: %s\n", sig.SignatureType)
-	}
-	//gitlab:allow-unescaped sig.VerificationStatus: a verification verdict GitLab computes, not text it stored.
-	fmt.Fprintf(&b, "- **Verification**: %s\n", sig.VerificationStatus)
+	c := toolutil.NewCard(&b, "Commit Signature")
+	c.Field("Type", sig.SignatureType)
+	c.Field("Verification", sig.VerificationStatus)
 	switch {
 	case sig.X509Certificate != nil:
-		fmt.Fprintf(&b, "- **X.509 Subject**: %s\n", toolutil.EscapeMdTableCell(sig.X509Certificate.Subject))
-		if sig.X509Certificate.Email != "" {
-			// Read out of the signer's own certificate, like the subject above.
-			fmt.Fprintf(&b, "- **X.509 Email**: %s\n", toolutil.EscapeMdTableCell(sig.X509Certificate.Email))
-		}
+		// Both are read out of the signer's own certificate, which GitLab
+		// stores as parsed rather than validating.
+		c.Field("X.509 Subject", sig.X509Certificate.Subject)
+		c.Field("X.509 Email", sig.X509Certificate.Email)
 	case sig.Key != nil:
-		if sig.Key.Title != "" {
-			fmt.Fprintf(&b, "- **SSH Key**: %s\n", toolutil.EscapeMdTableCell(sig.Key.Title))
-		}
-		if sig.Key.UsageType != "" {
-			//gitlab:allow-unescaped sig.Key.UsageType: the key usage GitLab records, one of auth, signing or auth_and_signing.
-			fmt.Fprintf(&b, "- **Usage**: %s\n", sig.Key.UsageType)
-		}
+		c.Field("SSH Key", sig.Key.Title)
+		c.Field("Usage", sig.Key.UsageType)
 	default:
 		// Both come out of the GPG key's user ID packet, which is whatever the
 		// key's owner typed when they generated it.
-		fmt.Fprintf(&b, "- **Key User**: %s <%s>\n",
-			toolutil.EscapeMdTableCell(sig.KeyUserName), toolutil.EscapeMdTableCell(sig.KeyUserEmail))
-		fmt.Fprintf(&b, "- **Key ID**: %d\n", sig.KeyID)
-		//gitlab:allow-unescaped sig.KeyPrimaryKeyID: a GPG key id, which is hexadecimal.
-		fmt.Fprintf(&b, "- **Primary Key ID**: %s\n", sig.KeyPrimaryKeyID)
+		c.Markdown("Key User", commitIdent(sig.KeyUserName, sig.KeyUserEmail))
+		c.Int("Key ID", sig.KeyID)
+		c.Code("Primary Key ID", sig.KeyPrimaryKeyID)
 	}
-	if sig.CommitSource != "" {
-		//gitlab:allow-unescaped sig.CommitSource: where GitLab read the commit from, either gitaly or rugged.
-		fmt.Fprintf(&b, "- **Commit Source**: %s\n", sig.CommitSource)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_commit_get` to view the full commit details",
-	)
+	c.Field("Commit Source", sig.CommitSource)
+	c.End(toolutil.HintAction(hintCommitGet, "view the full commit details"))
 	return b.String()
 }
 

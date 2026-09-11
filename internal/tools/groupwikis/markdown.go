@@ -1,55 +1,91 @@
 package groupwikis
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown renders a single group wiki page as Markdown.
+// Canonical action IDs the hints name that the action specs do not already
+// spell. Group wiki actions are routes on the gitlab_group catalog group, so
+// their IDs carry the group domain.
+//
+// The two are declared one per line with a directive each because gosec reads
+// a constant whose name ends in a verb over a dotted value as a credential;
+// the sibling IDs in action_specs.go are excused by path in .golangci.yml for
+// the same reason.
+const (
+	//nolint:gosec // G101 false positive: a canonical catalog action ID, never a credential.
+	actionGroupWikiCreate = "group.wiki_create"
+	//nolint:gosec // G101 false positive: a canonical catalog action ID, never a credential.
+	actionGroupWikiDelete = "group.wiki_delete"
+)
+
+// FormatOutputMarkdown renders one group wiki page as a card: the page's own
+// fields, then its body under a label of its own.
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Wiki: %s\n\n", toolutil.EscapeMdHeading(out.Title))
-	fmt.Fprintf(&b, "- **Slug**: %s\n", toolutil.EscapeMdTableCell(out.Slug))
-	//gitlab:allow-unescaped out.Format: a wiki format, a gl.WikiFormatValue GitLab picks from a fixed set (markdown, rdoc, asciidoc, org).
-	fmt.Fprintf(&b, "- **Format**: %s\n", out.Format)
-	if out.Encoding != "" {
-		fmt.Fprintf(&b, "- **Encoding**: %s\n", toolutil.EscapeMdTableCell(out.Encoding))
-	}
-	if out.Content != "" {
-		fmt.Fprintf(&b, "\n### Content\n\n%s\n", out.Content)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use gitlab_group_wiki_edit to update this page",
-		"Use gitlab_group_wiki_delete to remove this page",
+	c := toolutil.NewCard(&b, wikiHeading(out.Title))
+	c.Field("Slug", out.Slug)
+	c.Field("Format", out.Format)
+	c.Field("Encoding", out.Encoding)
+	c.Count("Page Metadata ID", out.WikiPageMetaID)
+	writeWikiContent(c, out.Format, out.Content)
+	c.End(
+		toolutil.HintAction(actionGroupWikiEdit, "update this page"),
+		toolutil.HintAction(actionGroupWikiDelete, "remove this page"),
 	)
 	return b.String()
 }
 
-// FormatListMarkdown renders a list of group wiki pages as a Markdown table.
+// wikiHeading names the card: the page's title, and the bare word when GitLab
+// sent none, so the heading never ends in a colon with nothing after it.
+func wikiHeading(title string) string {
+	if strings.TrimSpace(title) == "" {
+		return "Wiki"
+	}
+	return "Wiki: " + title
+}
+
+// writeWikiContent writes the page body under its own label. A Markdown page
+// is quoted, so nothing a page author wrote can add a heading, a row or a
+// guidance section to the card; a page in any other format is fenced with that
+// format as the info string, since quoting rdoc or asciidoc would render it as
+// the Markdown it is not. The body used to be written raw, which let a page
+// forge the whole response.
+func writeWikiContent(c *toolutil.Card, format, content string) {
+	if content == "" {
+		return
+	}
+	if format == "" || strings.EqualFold(format, "markdown") {
+		c.Text("Content", content)
+		return
+	}
+	c.Fence("Content", format, content)
+}
+
+// FormatListMarkdown renders a page of group wiki pages as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.WikiPages) == 0 {
-		return "No group wiki pages found.\n"
+		return toolutil.EmptyMessage("group wiki pages")
 	}
 	var b strings.Builder
-	toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
-	b.WriteString("| Title | Slug | Format |\n")
-	b.WriteString("| --- | --- | --- |\n")
+	toolutil.WriteListHeading(&b, "Group Wiki Pages", len(out.WikiPages), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("Title", "Slug", "Format"))
 	for _, w := range out.WikiPages {
-		fmt.Fprintf(
-			&b, "| %s | %s | %s |\n",
+		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(w.Title),
 			toolutil.EscapeMdTableCell(w.Slug),
-			//gitlab:allow-unescaped w.Format: a wiki format, a gl.WikiFormatValue GitLab picks from a fixed set (markdown, rdoc, asciidoc, org).
-			w.Format,
-		)
+			toolutil.EscapeMdTableCell(w.Format),
+		))
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use gitlab_group_wiki_get with a slug to read page content",
-		"Use gitlab_group_wiki_create to add a new page",
+	// The table carries no link, so the hints carry no instruction to preserve
+	// one: the leading HintPreserveLinks this list used to open with put a
+	// guidance section above its own table header, which stopped the table
+	// rendering at all.
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(actionGroupWikiGet, "read one page's content"),
+		toolutil.HintAction(actionGroupWikiCreate, "add a new page"),
 	)
 	return b.String()
 }

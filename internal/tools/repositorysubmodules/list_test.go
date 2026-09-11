@@ -10,8 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -208,33 +206,37 @@ func TestParseGitmodules_RemoteWithCredentials_PublishesNeither(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_RemoteWithCredentials_RendersNoPassword verifies that
-// the rendered submodule table, which is the text a model reads, carries no
-// part of a credentialed remote.
+// TestFormatListMarkdown_RemoteWithCredentials_RendersNoPassword pins the
+// whole rendered submodule table for a .gitmodules remote carrying a user name
+// and a password, which is the text a model reads: neither half of the
+// credential appears anywhere in it.
+//
+// The expectation is the whole render rather than two "does not contain"
+// checks, because an absence assertion passes just as happily over a table
+// that stopped rendering: this one fails if any byte of the row moves.
 func TestFormatListMarkdown_RemoteWithCredentials_RendersNoPassword(t *testing.T) {
 	entries := parseGitmodules("[submodule \"lib\"]\n\tpath = lib\n\turl = https://ciuser:s3cretpw@gitlab.example.com/group/project.git\n")
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
-	result := FormatListMarkdown(ListOutput{Submodules: entries, Count: len(entries)})
-	if len(result.Content) == 0 {
-		t.Fatal("expected rendered content")
-	}
-	text, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected text content, got %T", result.Content[0])
-	}
-	md := text.Text
 
+	got := renderedText(t, FormatListMarkdown(ListOutput{Submodules: entries, Count: len(entries)}))
+
+	want := "## Repository Submodules (1)\n\n" +
+		"| Name | Path | Commit SHA | Resolved Project |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| lib | `lib` |  | group/project |\n" +
+		submoduleListHints
+
+	if got != want {
+		t.Errorf("table mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
 	for _, secret := range []string{"s3cretpw", "ciuser"} {
 		t.Run("withholds "+secret, func(t *testing.T) {
-			if strings.Contains(md, secret) {
-				t.Errorf("submodule table leaked %q:\n%s", secret, md)
+			if strings.Contains(got, secret) {
+				t.Errorf("submodule table leaked %q:\n%s", secret, got)
 			}
 		})
-	}
-	if !strings.Contains(md, "group/project") {
-		t.Errorf("submodule table missing the resolved project:\n%s", md)
 	}
 }
 
@@ -374,42 +376,39 @@ func TestList_CancelledContext(t *testing.T) {
 
 // FormatListMarkdown tests.
 
-// TestFormatListMarkdown_WithEntries verifies FormatListMarkdown when with entries.
+// TestFormatListMarkdown_WithEntries pins the whole submodule table: the path
+// and the abbreviated commit are code spans a reader copies, and a pipe typed
+// into a .gitmodules name stays inside its own cell.
 func TestFormatListMarkdown_WithEntries(t *testing.T) {
-	out := ListOutput{
+	got := renderedText(t, FormatListMarkdown(ListOutput{
 		Submodules: []SubmoduleEntry{
 			{Name: "lib", Path: "lib", CommitSHA: "abc123def456", ResolvedProject: "group/lib"},
+			{Name: "a | b", Path: "vendor/x", CommitSHA: "0123456", ResolvedProject: "group/x"},
 		},
-		Count: 1,
-	}
-	r := FormatListMarkdown(out)
-	if r == nil {
-		t.Fatal("expected non-nil result")
-	}
-	tc, ok := r.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatal("expected TextContent")
-	}
-	if !strings.Contains(tc.Text, "abc123de") {
-		t.Error("expected truncated SHA in output")
-	}
-	if !strings.Contains(tc.Text, "group/lib") {
-		t.Error("expected resolved project in output")
+		Count: 2,
+	}))
+
+	want := "## Repository Submodules (2)\n\n" +
+		"| Name | Path | Commit SHA | Resolved Project |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| lib | `lib` | `abc123de` | group/lib |\n" +
+		"| a &#124; b | `vendor/x` | `0123456` | group/x |\n" +
+		submoduleListHints
+
+	if got != want {
+		t.Errorf("table mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty pins the whole response of a repository with no
+// submodules: one sentence, and no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	r := FormatListMarkdown(ListOutput{Submodules: []SubmoduleEntry{}, Count: 0})
-	if r == nil {
-		t.Fatal("expected non-nil result")
-	}
-	tc, ok := r.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatal("expected TextContent")
-	}
-	if !strings.Contains(tc.Text, "No submodules found") {
-		t.Error("expected empty message")
+	got := renderedText(t, FormatListMarkdown(ListOutput{Submodules: []SubmoduleEntry{}, Count: 0}))
+
+	want := "No submodules found.\n"
+
+	if got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

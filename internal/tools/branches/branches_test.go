@@ -1143,151 +1143,234 @@ func TestProtectedToOutput_EmptyAccessLevels(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// The guidance sections the four branch formatters close with, pinned once so
+// each whole-output expectation names them rather than restating them.
+const (
+	branchCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'merge_request.create' to open a merge request from this branch\n" +
+		"- Use action 'repository.commit_list' to see recent commits on this branch\n" +
+		"- Use action 'branch.delete' to remove the branch after merging\n"
+
+	branchListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- Use action 'branch.get' to see one branch in full\n" +
+		"- Use action 'branch.create' to create a new branch\n" +
+		"- Use action 'branch.protect' to protect a branch\n"
+
+	protectedCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'branch.get_protected' to fetch this protection again before updating it\n" +
+		"- Use action 'branch.update_protected' to change protection settings\n" +
+		"- Use action 'branch.unprotect' to remove branch protection\n"
+
+	protectedListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'branch.get_protected' to see one rule in full before updating or unprotecting\n" +
+		"- Use action 'branch.protect' to add branch protection\n" +
+		"- Use action 'branch.list' to list the branches these rules match\n"
+)
+
+// TestFormatOutputMarkdown pins the whole card of a branch: its three state
+// flags, the three permission flags GitLab sends on every branch, the head
+// commit as a nested object, and the address.
 func TestFormatOutputMarkdown(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		Name:      "main",
 		Protected: true,
 		Default:   true,
 		Merged:    false,
-		Commit:    &CommitOutput{ID: "abc123"},
-		WebURL:    "https://gitlab.example.com/-/tree/main",
+		CanPush:   true,
+		Commit: &CommitOutput{
+			ID:            "abc123",
+			Title:         "Fix login",
+			AuthorName:    "Alice",
+			CommittedDate: "2026-03-20T15:45:00Z",
+		},
+		WebURL: "https://gitlab.example.com/-/tree/main",
 	})
-	if !strings.Contains(md, "## Branch: main") {
-		t.Error("expected heading with branch name")
-	}
-	if !strings.Contains(md, "abc123") {
-		t.Error("expected commit ID")
-	}
-	if !strings.Contains(md, "https://gitlab.example.com/-/tree/main") {
-		t.Error("expected web URL")
+
+	want := "## Branch: main\n\n" +
+		"- **Protected**: ✅\n" +
+		"- **Default**: ✅\n" +
+		"- **Merged**: ❌\n" +
+		"- **You Can Push**: ✅\n" +
+		"- **Developers Can Push**: ❌\n" +
+		"- **Developers Can Merge**: ❌\n" +
+		"- **Commit**:\n" +
+		"  - **SHA**: `abc123`\n" +
+		"  - **Title**: Fix login\n" +
+		"  - **Author**: Alice\n" +
+		"  - **Committed**: 20 Mar 2026 15:45 UTC\n" +
+		"- **URL**: [https://gitlab.example.com/-/tree/main](https://gitlab.example.com/-/tree/main)\n" +
+		branchCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_NoURL verifies the OutputMarkdown_NoURL Markdown formatter for a representative output_nourl input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_NoURL pins the card of a branch GitLab answered
+// with no commit and no address: neither is written as a label with nothing
+// after it.
 func TestFormatOutputMarkdown_NoURL(t *testing.T) {
-	md := FormatOutputMarkdown(Output{Name: "dev"})
-	if !strings.Contains(md, "## Branch: dev") {
-		t.Error("expected heading with branch name")
-	}
-	if strings.Contains(md, "URL") {
-		t.Error("should not contain URL when empty")
+	got := FormatOutputMarkdown(Output{Name: "dev"})
+
+	want := "## Branch: dev\n\n" +
+		"- **Protected**: ❌\n" +
+		"- **Default**: ❌\n" +
+		"- **Merged**: ❌\n" +
+		"- **You Can Push**: ❌\n" +
+		"- **Developers Can Push**: ❌\n" +
+		"- **Developers Can Merge**: ❌\n" +
+		branchCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown pins the whole branch listing: the count GitLab
+// vouched for, a linked name where the response carried an address and a
+// plain one where it did not, and the flags as glyphs.
 func TestFormatListMarkdown(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Branches: []Output{
-			{Name: "main", Protected: true, Default: true},
-			{Name: "dev", Protected: false, Default: false},
+			{Name: "main", Protected: true, Default: true, WebURL: "https://gitlab.example.com/-/tree/main"},
+			{Name: "dev", Merged: true},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	})
-	if !strings.Contains(md, "## Branches (2)") {
-		t.Error("expected heading with count")
-	}
-	if !strings.Contains(md, "| main |") {
-		t.Error("expected main branch row")
-	}
-	if !strings.Contains(md, "| dev |") {
-		t.Error("expected dev branch row")
+
+	want := "## Branches (2)\n\n" +
+		"| Name | Protected | Default | Merged |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| [main](https://gitlab.example.com/-/tree/main) | ✅ | ✅ | ❌ |\n" +
+		"| dev | ❌ | ❌ | ✅ |\n" +
+		"\n2 items total\n" +
+		branchListHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_ClickableBranchLinks verifies the ListMarkdown_ClickableBranchLinks Markdown formatter for a representative list_clickablebranchlinks input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown_ClickableBranchLinks(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{
-		Branches: []Output{
-			{Name: "main", Protected: true, Default: true, WebURL: "https://gitlab.example.com/-/tree/main"},
-		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1},
+// TestFormatListMarkdown_Keyset pins the heading of a keyset page, which
+// carries no total: the count is what is shown, and the reader is told more
+// follows rather than being shown a total of zero above two rows.
+func TestFormatListMarkdown_Keyset(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Branches:   []Output{{Name: "main"}},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 20, NextPage: 2, HasMore: true},
 	})
-	if !strings.Contains(md, "[main](https://gitlab.example.com/-/tree/main)") {
-		t.Errorf("expected clickable branch link, got:\n%s", md)
+
+	want := "## Branches (1 shown, more available)\n\n" +
+		"| Name | Protected | Default | Merged |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| main | ❌ | ❌ | ❌ |\n" +
+		"\nPage 1 | 20 per page | more pages available\n" +
+		branchListHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_NoLinkWithoutWebURL verifies the ListMarkdown_NoLinkWithoutWebURL Markdown formatter for a representative list_nolinkwithoutweburl input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown_NoLinkWithoutWebURL(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{
-		Branches: []Output{
-			{Name: "dev", Protected: false, Default: false},
-		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1},
-	})
-	if strings.Contains(md, "[dev](") {
-		t.Errorf("should not contain link when WebURL is empty, got:\n%s", md)
-	}
-	if !strings.Contains(md, "dev") {
-		t.Errorf("should contain branch name as plain text, got:\n%s", md)
-	}
-}
-
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_Empty pins the whole response of a project with no
+// branches: one sentence, and no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No branches found") {
-		t.Error("expected 'No branches found' message")
+	got := FormatListMarkdown(ListOutput{})
+
+	want := "No branches found.\n"
+
+	if got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatProtectedMarkdown verifies the ProtectedMarkdown Markdown formatter for a representative protected input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatProtectedMarkdown pins the whole card of a protection rule: the
+// access levels as the role names they stand for rather than as the numbers
+// GitLab sends, and both flags.
 func TestFormatProtectedMarkdown(t *testing.T) {
-	md := FormatProtectedMarkdown(ProtectedOutput{
+	got := FormatProtectedMarkdown(ProtectedOutput{
 		ID:                1,
 		Name:              "main",
 		PushAccessLevels:  []BranchAccessDescriptionOutput{{AccessLevel: 0}},
 		MergeAccessLevels: []BranchAccessDescriptionOutput{{AccessLevel: 40}},
 		AllowForcePush:    false,
 	})
-	if !strings.Contains(md, "## Protected Branch: main") {
-		t.Error("expected heading with protected branch name")
-	}
-	if !strings.Contains(md, "Push Access Levels") {
-		t.Error("expected push access levels")
+
+	want := "## Protected Branch: main\n\n" +
+		"- **ID**: 1\n" +
+		"- **Push Access Levels**: No access\n" +
+		"- **Merge Access Levels**: Maintainer\n" +
+		"- **Unprotect Access Levels**: -\n" +
+		"- **Allow Force Push**: ❌\n" +
+		"- **Code Owner Approval Required**: ❌\n" +
+		protectedCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatProtectedListMarkdown verifies the ProtectedListMarkdown Markdown formatter for a representative protectedlist input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatProtectedMarkdown_GranularLevels pins an entry that names one
+// user, group or deploy key rather than a role: the principal is named beside
+// the role the level stands for.
+func TestFormatProtectedMarkdown_GranularLevels(t *testing.T) {
+	got := FormatProtectedMarkdown(ProtectedOutput{
+		ID:                        7,
+		Name:                      "release/*",
+		PushAccessLevels:          []BranchAccessDescriptionOutput{{AccessLevel: 40, UserID: 3}},
+		MergeAccessLevels:         []BranchAccessDescriptionOutput{{AccessLevel: 30, GroupID: 9}},
+		UnprotectAccessLevels:     []BranchAccessDescriptionOutput{{AccessLevel: 60, DeployKeyID: 4}},
+		AllowForcePush:            true,
+		CodeOwnerApprovalRequired: true,
+		Inherited:                 true,
+	})
+
+	want := "## Protected Branch: release/*\n\n" +
+		"- **ID**: 7\n" +
+		"- **Push Access Levels**: Maintainer (User #3)\n" +
+		"- **Merge Access Levels**: Developer (Group #9)\n" +
+		"- **Unprotect Access Levels**: Admin (Deploy Key #4)\n" +
+		"- **Allow Force Push**: ✅\n" +
+		"- **Code Owner Approval Required**: ✅\n" +
+		"- **Inherited from the group, not set on the project**\n" +
+		protectedCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatProtectedListMarkdown pins the whole protected-branch listing.
 func TestFormatProtectedListMarkdown(t *testing.T) {
-	md := FormatProtectedListMarkdown(ProtectedListOutput{
+	got := FormatProtectedListMarkdown(ProtectedListOutput{
 		Branches: []ProtectedOutput{
 			{ID: 1, Name: "main", PushAccessLevels: []BranchAccessDescriptionOutput{{AccessLevel: 0}}, MergeAccessLevels: []BranchAccessDescriptionOutput{{AccessLevel: 40}}},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
-	if !strings.Contains(md, "## Protected Branches (1)") {
-		t.Error("expected heading with count")
-	}
-	if !strings.Contains(md, "| main |") {
-		t.Error("expected main row")
+
+	want := "## Protected Branches (1)\n\n" +
+		"| Name | Push Levels | Merge Levels | Force Push | Code Owner Approval |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| main | No access | Maintainer | ❌ | ❌ |\n" +
+		"\n1 items total\n" +
+		protectedListHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatProtectedListMarkdown_Empty verifies the ProtectedListMarkdown_Empty Markdown formatter for a representative protectedlist_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatProtectedListMarkdown_Empty pins the whole response of a project
+// with no protection rules.
 func TestFormatProtectedListMarkdown_Empty(t *testing.T) {
-	md := FormatProtectedListMarkdown(ProtectedListOutput{})
-	if !strings.Contains(md, "No protected branches found") {
-		t.Error("expected 'No protected branches found' message")
+	got := FormatProtectedListMarkdown(ProtectedListOutput{})
+
+	want := "No protected branches found.\n"
+
+	if got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -2099,14 +2182,26 @@ func TestShapeConverters_NilAndEmpty(t *testing.T) {
 	}
 }
 
-// TestAccessLevelsSummary verifies the compact access-level markdown summary.
+// TestAccessLevelsSummary verifies the access-level summary names the roles
+// the numbers stand for, and a level GitLab's own table does not name keeps
+// its number, which is the one thing a reader can act on.
 func TestAccessLevelsSummary(t *testing.T) {
-	if got := accessLevelsSummary(nil); got != "-" {
-		t.Errorf("empty summary = %q, want dash", got)
+	cases := []struct {
+		name   string
+		levels []BranchAccessDescriptionOutput
+		want   string
+	}{
+		{"empty", nil, "-"},
+		{"roles", []BranchAccessDescriptionOutput{{AccessLevel: 30}, {AccessLevel: 40}}, "Developer, Maintainer"},
+		{"unknown level", []BranchAccessDescriptionOutput{{AccessLevel: 35}}, "Level 35"},
+		{"user entry", []BranchAccessDescriptionOutput{{AccessLevel: 40, UserID: 3}}, "Maintainer (User #3)"},
 	}
-	got := accessLevelsSummary([]BranchAccessDescriptionOutput{{AccessLevel: 30}, {AccessLevel: 40}})
-	if got != "30, 40" {
-		t.Errorf("summary = %q, want \"30, 40\"", got)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := accessLevelsSummary(c.levels); got != c.want {
+				t.Errorf("summary = %q, want %q", got, c.want)
+			}
+		})
 	}
 }
 
@@ -2166,14 +2261,29 @@ func branchSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]too
 // not model it, and it is the difference between a rule that can be edited here
 // and one that has to be edited on the group.
 func TestFormatProtectedMarkdown_Inherited(t *testing.T) {
-	inherited := FormatProtectedMarkdown(ProtectedOutput{ID: 1, Name: "main", Inherited: true})
-	if !strings.Contains(inherited, "**Inherited**: yes") {
-		t.Errorf("markdown missing the inherited line:\n%s", inherited)
-	}
-	own := FormatProtectedMarkdown(ProtectedOutput{ID: 1, Name: "main"})
-	if strings.Contains(own, "**Inherited**") {
-		t.Errorf("markdown claims a project's own rule is inherited:\n%s", own)
-	}
+	body := "## Protected Branch: main\n\n" +
+		"- **ID**: 1\n" +
+		"- **Push Access Levels**: -\n" +
+		"- **Merge Access Levels**: -\n" +
+		"- **Unprotect Access Levels**: -\n" +
+		"- **Allow Force Push**: ❌\n" +
+		"- **Code Owner Approval Required**: ❌\n"
+
+	t.Run("inherited from the group", func(t *testing.T) {
+		got := FormatProtectedMarkdown(ProtectedOutput{ID: 1, Name: "main", Inherited: true})
+		want := body + "- **Inherited from the group, not set on the project**\n" + protectedCardHints
+		if got != want {
+			t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+		}
+	})
+
+	t.Run("the project's own rule", func(t *testing.T) {
+		got := FormatProtectedMarkdown(ProtectedOutput{ID: 1, Name: "main"})
+		want := body + protectedCardHints
+		if got != want {
+			t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+		}
+	})
 }
 
 // TestProtectedBranches_UnreadableCapturedInherited verifies that every

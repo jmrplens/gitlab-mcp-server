@@ -10,8 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -229,9 +227,11 @@ func TestRead_Base64Content(t *testing.T) {
 
 // FormatReadMarkdown tests.
 
-// TestFormatReadMarkdown verifies FormatReadMarkdown.
+// TestFormatReadMarkdown pins the whole card of a file read out of a
+// submodule: the paths and the abbreviated commit as code spans, and the body
+// fenced with the language the file's own extension names.
 func TestFormatReadMarkdown(t *testing.T) {
-	out := ReadOutput{
+	got := renderedText(t, FormatReadMarkdown(ReadOutput{
 		FileName:        "main.c",
 		FilePath:        "src/main.c",
 		SubmodulePath:   "libs/core-module",
@@ -239,29 +239,22 @@ func TestFormatReadMarkdown(t *testing.T) {
 		CommitSHA:       "abc123def456789",
 		Size:            42,
 		Content:         "int main() {}",
-	}
-	r := FormatReadMarkdown(out)
-	if r == nil {
-		t.Fatal("expected non-nil result")
-	}
-	tc, ok := r.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatal("expected TextContent")
-	}
-	if !strings.Contains(tc.Text, "libs/core-module") {
-		t.Error("expected submodule path")
-	}
-	if !strings.Contains(tc.Text, "org/project") {
-		t.Error("expected resolved project")
-	}
-	if !strings.Contains(tc.Text, "abc123de") {
-		t.Error("expected truncated commit SHA")
-	}
-	if !strings.Contains(tc.Text, "int main() {}") {
-		t.Error("expected file content")
-	}
-	if !strings.Contains(tc.Text, "```c") {
-		t.Error("expected code block with extension")
+		Encoding:        "text",
+	}))
+
+	want := "## File from Submodule\n\n" +
+		"- **Submodule**: `libs/core-module`\n" +
+		"- **Resolved Project**: org/project\n" +
+		"- **Commit**: `abc123de`\n" +
+		"- **File**: `src/main.c`\n" +
+		"- **Size (bytes)**: 42\n" +
+		"- **Encoding**: text\n" +
+		"\n### Content\n\n" +
+		"```c\nint main() {}\n```\n" +
+		submoduleReadHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

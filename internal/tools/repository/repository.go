@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -432,9 +433,14 @@ func Archive(ctx context.Context, client *gitlabclient.Client, input ArchiveInpu
 	}
 	baseURL := client.GL().BaseURL().String()
 	pid := string(input.ProjectID)
-	archiveURL := fmt.Sprintf("%sprojects/%s/repository/archive.%s", baseURL, pid, format)
+	// The project id is a path segment and the ref is a query value, and both
+	// are the caller's own text: a full project path carries the separators
+	// that end a segment, and a ref may carry any of "?", "#", "&" or a space,
+	// each of which built a different address than the one asked for.
+	archiveURL := fmt.Sprintf("%sprojects/%s/repository/archive.%s",
+		baseURL, url.PathEscape(pid), url.PathEscape(format))
 	if input.SHA != "" {
-		archiveURL += "?sha=" + input.SHA
+		archiveURL += "?" + url.Values{"sha": {input.SHA}}.Encode()
 	}
 	return ArchiveOutput{
 		ProjectID: pid,
