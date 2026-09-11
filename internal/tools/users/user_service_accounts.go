@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -190,55 +191,83 @@ func CreateCurrentUserPAT(ctx context.Context, client *gitlabclient.Client, inpu
 // FormatServiceAccountMarkdownString formats a single service account as Markdown.
 func FormatServiceAccountMarkdownString(out ServiceAccountOutput) string {
 	var sb strings.Builder
-	sb.WriteString("## Service Account\n\n")
-	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&sb, "- **Username**: %s\n", toolutil.EscapeMdTableCell(out.Username))
-	fmt.Fprintf(&sb, "- **Name**: %s\n", toolutil.EscapeMdTableCell(out.Name))
-	if out.Email != "" {
-		fmt.Fprintf(&sb, "- **Email**: %s\n", toolutil.EscapeMdTableCell(out.Email))
-	}
-	if out.UnconfirmedEmail != "" {
-		fmt.Fprintf(&sb, "- **Unconfirmed Email**: %s\n", toolutil.EscapeMdTableCell(out.UnconfirmedEmail))
-	}
+	card := toolutil.NewCard(&sb, "Service Account")
+	card.Int("ID", out.ID)
+	card.Field("Username", out.Username)
+	card.Field("Name", out.Name)
+	card.Field("Email", out.Email)
+	card.Field("Unconfirmed Email", out.UnconfirmedEmail)
+	card.End()
 	return sb.String()
 }
 
 // FormatServiceAccountListMarkdownString formats a list of service accounts as Markdown.
 func FormatServiceAccountListMarkdownString(out ServiceAccountListOutput) string {
 	if len(out.Accounts) == 0 {
-		return fmt.Sprintf("## Service Accounts\n\n%s No service accounts found.\n", toolutil.EmojiWarning)
+		return toolutil.EmptyMessage("service accounts")
 	}
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Service Accounts (%d)\n\n", len(out.Accounts))
-	sb.WriteString("| ID | Username | Name | Email |\n")
-	sb.WriteString("|---|---|---|---|\n")
+	var pagination toolutil.PaginationOutput
+	toolutil.WriteListHeading(&sb, "Service Accounts", len(out.Accounts), pagination)
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "Email"))
 	for _, a := range out.Accounts {
-		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", a.ID, toolutil.EscapeMdTableCell(a.Username), toolutil.EscapeMdTableCell(a.Name), toolutil.EscapeMdTableCell(a.Email))
+		sb.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(a.ID, 10),
+			toolutil.EscapeMdTableCell(a.Username),
+			toolutil.EscapeMdTableCell(a.Name),
+			toolutil.EscapeMdTableCell(a.Email),
+		))
 	}
+	toolutil.WriteListFooter(&sb, pagination, false, hintCreateServiceAccount)
 	return sb.String()
 }
 
-// FormatCurrentUserPATMarkdownString formats a PAT as Markdown.
+// FormatCurrentUserPATMarkdownString formats a PAT as a card. A granular token
+// is scoped by the permissions of each granular scope rather than by the
+// scopes list, and the card said nothing about either: it now says the token
+// is granular and writes one row per scope under a heading of its own.
 func FormatCurrentUserPATMarkdownString(out CurrentUserPATOutput) string {
 	var sb strings.Builder
-	sb.WriteString("## Personal Access Token\n\n")
-	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&sb, "- **Name**: %s\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&sb, "- **Active**: %v\n", out.Active)
-	//gitlab:allow-unescaped strings.Join(out.Scopes, ", "): token scopes, which GitLab refuses to store outside its own fixed set.
-	fmt.Fprintf(&sb, "- **Scopes**: %s\n", strings.Join(out.Scopes, ", "))
-	if out.Description != "" {
-		fmt.Fprintf(&sb, "- **Description**: %s\n", toolutil.EscapeMdTableCell(out.Description))
-	}
-	if out.ExpiresAt != "" {
-		//gitlab:allow-unescaped out.ExpiresAt: a date toolutil.NewPersonalTokenOutput formatted itself, on the ISO date layout.
-		fmt.Fprintf(&sb, "- **Expires At**: %s\n", out.ExpiresAt)
-	}
-	if out.Token != "" {
-		//gitlab:allow-unescaped out.Token: the secret GitLab minted, which the reader has to copy back verbatim.
-		fmt.Fprintf(&sb, "- **Token**: `%s`\n", out.Token)
-	}
+	card := toolutil.NewCard(&sb, "Personal Access Token")
+	card.Int("ID", out.ID)
+	card.Field("Name", out.Name)
+	card.Bool("Active", out.Active)
+	card.Field("Scopes", strings.Join(out.Scopes, ", "))
+	card.Bool("Granular", out.Granular)
+	card.Field("Description", out.Description)
+	card.Time("Expires At", out.ExpiresAt)
+	card.Secret("Token", out.Token)
+	writeGranularScopes(card, out.GranularScopes)
+	card.End()
 	return sb.String()
+}
+
+// writeGranularScopes writes the granular scopes of a token as the nested
+// collection they are: one row per scope, naming what it reaches and the
+// permissions it carries there.
+func writeGranularScopes(card *toolutil.Card, scopes []toolutil.TokenGranularScopeOutput) {
+	if len(scopes) == 0 {
+		return
+	}
+	table := card.Table("Granular Scopes", "Access", "Project ID", "Group ID", "Permissions")
+	for _, scope := range scopes {
+		table.Row(
+			toolutil.EscapeMdTableCell(scope.Access),
+			optionalID(scope.ProjectID),
+			optionalID(scope.GroupID),
+			toolutil.EscapeMdTableCell(strings.Join(scope.Permissions, ", ")),
+		)
+	}
+}
+
+// optionalID renders a namespace identifier a granular scope carries only for
+// its own kind of namespace: project_id is absent on a group scope and
+// group_id on a project one, and a zero there is an absence rather than an ID.
+func optionalID(id int64) string {
+	if id == 0 {
+		return ""
+	}
+	return strconv.FormatInt(id, 10)
 }
 
 // toCurrentUserPATOutput converts a gl.PersonalAccessToken into the shared

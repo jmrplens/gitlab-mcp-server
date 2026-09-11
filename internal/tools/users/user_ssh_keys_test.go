@@ -522,7 +522,7 @@ func TestDeleteSSHKey_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestFormatSSHKeyMarkdownString_WithData verifies single SSH key markdown formatting.
+// TestFormatSSHKeyMarkdownString_WithData verifies the whole SSH key card.
 func TestFormatSSHKeyMarkdownString_WithData(t *testing.T) {
 	out := SSHKeyOutput{
 		ID:        1,
@@ -532,36 +532,40 @@ func TestFormatSSHKeyMarkdownString_WithData(t *testing.T) {
 		CreatedAt: "2026-01-01T00:00:00Z",
 		ExpiresAt: "2026-01-01T00:00:00Z",
 	}
-	md := FormatSSHKeyMarkdownString(out)
 
-	for _, want := range []string{
-		"## SSH Key: Work Laptop",
-		"**Title**: Work Laptop",
-		"**Usage Type**: auth",
-		"**Expires At**",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatSSHKeyMarkdownString(out),
+		"## SSH Key: Work Laptop\n\n"+
+			"- **ID**: 1\n"+
+			"- **Title**: Work Laptop\n"+
+			"- **Key**: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBig`\n"+
+			"- **Usage Type**: auth\n"+
+			"- **Created**: 1 Jan 2026 00:00 UTC\n"+
+			"- **Expires At**: 1 Jan 2026 00:00 UTC\n")
 }
 
-// TestFormatSSHKeyMarkdownString_MinimalFields verifies markdown with no optional fields.
+// TestFormatSSHKeyMarkdownString_LongKey verifies that a key longer than the
+// preview is ellipsized, and that one shorter than it is not: the line used to
+// append the ellipsis to every key, including one it had not cut.
+func TestFormatSSHKeyMarkdownString_LongKey(t *testing.T) {
+	long := "ssh-rsa " + strings.Repeat("A", 60)
+
+	assertMarkdown(t, FormatSSHKeyMarkdownString(SSHKeyOutput{ID: 2, Title: "big", Key: long}),
+		"## SSH Key: big\n\n"+
+			"- **ID**: 2\n"+
+			"- **Title**: big\n"+
+			"- **Key**: `ssh-rsa "+strings.Repeat("A", 32)+"...`\n")
+}
+
+// TestFormatSSHKeyMarkdownString_MinimalFields verifies that the optional rows
+// write nothing when GitLab sent nothing for them.
 func TestFormatSSHKeyMarkdownString_MinimalFields(t *testing.T) {
-	md := FormatSSHKeyMarkdownString(SSHKeyOutput{
+	assertMarkdown(t, FormatSSHKeyMarkdownString(SSHKeyOutput{
 		ID: 1, Title: "k", Key: "ssh-rsa AAAA...........BBBBCCCC",
-	})
-	if !strings.Contains(md, "## SSH Key: k") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	if strings.Contains(md, "**Usage Type**") {
-		t.Error("should not contain Usage Type when empty")
-	}
-	if strings.Contains(md, "**Expires At**") {
-		t.Error("should not contain Expires At when empty")
-	}
+	}),
+		"## SSH Key: k\n\n"+
+			"- **ID**: 1\n"+
+			"- **Title**: k\n"+
+			"- **Key**: `ssh-rsa AAAA...........BBBBCCCC`\n")
 }
 
 // TestFormatSSHKeyMarkdown_ReturnsMCPResult verifies the MCP result wrapper.

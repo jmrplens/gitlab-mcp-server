@@ -570,8 +570,10 @@ func TestGetUserMemberships_CancelledContext(t *testing.T) {
 
 // --- Markdown formatter tests ---
 
-// TestFormatUserActivitiesMarkdownString_WithData verifies activities markdown
-// rendering with data including table rows.
+// TestFormatUserActivitiesMarkdownString_WithData verifies the whole list
+// render: the dates go through the display form rather than reaching the
+// reader as the ISO strings GitLab sent, and the footer names no
+// preserve-links instruction over a table that carries no link.
 func TestFormatUserActivitiesMarkdownString_WithData(t *testing.T) {
 	out := UserActivitiesOutput{
 		Activities: []UserActivityOutput{
@@ -580,32 +582,27 @@ func TestFormatUserActivitiesMarkdownString_WithData(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatUserActivitiesMarkdownString(out)
 
-	for _, want := range []string{
-		"## User Activities (2)",
-		"| Username | Last Activity |",
-		"| alice | 2026-06-15 |",
-		"| bob | 2026-06-14 |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatUserActivitiesMarkdownString(out),
+		"## User Activities (2)\n\n"+
+			"| Username | Last Activity |\n"+
+			"| --- | --- |\n"+
+			"| alice | 15 Jun 2026 |\n"+
+			"| bob | 14 Jun 2026 |\n"+
+			"\nPage 1 of 1 | 2 items total | 20 per page\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'user.get' to view full details for a user\n")
 }
 
-// TestFormatUserActivitiesMarkdownString_Empty verifies empty activities message.
+// TestFormatUserActivitiesMarkdownString_Empty verifies that a list with
+// nothing in it is the one sentence and nothing else.
 func TestFormatUserActivitiesMarkdownString_Empty(t *testing.T) {
-	md := FormatUserActivitiesMarkdownString(UserActivitiesOutput{})
-	if !strings.Contains(md, "No user activities found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
+	assertMarkdown(t, FormatUserActivitiesMarkdownString(UserActivitiesOutput{}), "No user activities found.\n")
 }
 
-// TestFormatUserMembershipsMarkdownString_WithData verifies memberships markdown
-// rendering with data.
+// TestFormatUserMembershipsMarkdownString_WithData verifies the whole list
+// render. The access level is the name GitLab gives it rather than the bare
+// number that used to reach the reader as "30".
 func TestFormatUserMembershipsMarkdownString_WithData(t *testing.T) {
 	out := UserMembershipsOutput{
 		Memberships: []UserMembershipOutput{
@@ -614,92 +611,100 @@ func TestFormatUserMembershipsMarkdownString_WithData(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatUserMembershipsMarkdownString(out)
 
-	for _, want := range []string{
-		"## User Memberships (2)",
-		"| Source ID | Source Name | Source Type | Access Level |",
-		"| 1 | my-project | Project | 30 |",
-		"| 2 | my-group | Namespace | 50 |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatUserMembershipsMarkdownString(out),
+		"## User Memberships (2)\n\n"+
+			"| Source ID | Source Name | Source Type | Access Level |\n"+
+			"| --- | --- | --- | --- |\n"+
+			"| 1 | my-project | Project | Developer |\n"+
+			"| 2 | my-group | Namespace | Owner |\n"+
+			"\nPage 1 of 1 | 2 items total | 20 per page\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'user.get' to view the user's profile\n")
 }
 
-// TestFormatUserMembershipsMarkdownString_Empty verifies empty memberships message.
+// TestFormatUserMembershipsMarkdownString_Empty verifies that a list with
+// nothing in it is the one sentence and nothing else.
 func TestFormatUserMembershipsMarkdownString_Empty(t *testing.T) {
-	md := FormatUserMembershipsMarkdownString(UserMembershipsOutput{})
-	if !strings.Contains(md, "No memberships found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
+	assertMarkdown(t, FormatUserMembershipsMarkdownString(UserMembershipsOutput{}), "No memberships found.\n")
 }
 
-// TestFormatUserRunnerMarkdownString verifies runner markdown output.
+// TestFormatUserRunnerMarkdownString verifies the whole runner card. The token
+// is a value GitLab shows once, so the card writes it as a secret and closes
+// with the sentence that says so.
 func TestFormatUserRunnerMarkdownString(t *testing.T) {
 	out := UserRunnerOutput{
 		ID: 101, Token: "glrt-abc123", TokenExpiresAt: "2026-06-01T00:00:00Z",
 	}
-	md := FormatUserRunnerMarkdownString(out)
 
-	for _, want := range []string{
-		"## User Runner Created",
-		"101",
-		"glrt-abc123",
-		"Token Expires At",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatUserRunnerMarkdownString(out),
+		"## User Runner Created\n\n"+
+			"- **ID**: 101\n"+
+			"- **Token**: `glrt-abc123`\n"+
+			"- **Token Expires At**: 1 Jun 2026 00:00 UTC\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Store the token securely. It cannot be retrieved later\n")
 }
 
-// TestFormatUserRunnerMarkdownString_NoExpiry verifies runner markdown without expiry.
+// TestFormatUserRunnerMarkdownString_NoExpiry verifies that an absent expiry
+// writes no row.
 func TestFormatUserRunnerMarkdownString_NoExpiry(t *testing.T) {
-	md := FormatUserRunnerMarkdownString(UserRunnerOutput{ID: 1, Token: "tok"})
-	if strings.Contains(md, "Token Expires At") {
-		t.Error("should not contain Token Expires At when empty")
-	}
+	assertMarkdown(t, FormatUserRunnerMarkdownString(UserRunnerOutput{ID: 1, Token: "tok"}),
+		"## User Runner Created\n\n"+
+			"- **ID**: 1\n"+
+			"- **Token**: `tok`\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Store the token securely. It cannot be retrieved later\n")
 }
 
 // TestFormatUserRunnerMarkdownString_TokenShapes_AreCodeSpannedAndGuarded
 // verifies that the created runner's token is written inside a code span and
-// that a card with no token announces none.
+// that a card with no token announces none, and carries no hint about storing
+// a credential it never showed.
 //
 // A token written as bare Markdown is read as Markdown, so an underscore pair
 // in it is eaten as emphasis and the value copied back is not the one GitLab
-// minted. The one-time nature of the value is already stated by the hint below
-// it, so an empty **Token** line promises a credential the card never carried.
+// minted.
 func TestFormatUserRunnerMarkdownString_TokenShapes_AreCodeSpannedAndGuarded(t *testing.T) {
 	t.Run("token is inside a code span", func(t *testing.T) {
-		md := FormatUserRunnerMarkdownString(UserRunnerOutput{ID: 101, Token: "glrt-a_b_c"})
-		if !strings.Contains(md, "- **Token**: `glrt-a_b_c`\n") {
-			t.Errorf("token not written inside a code span:\n%s", md)
-		}
+		assertMarkdown(t, FormatUserRunnerMarkdownString(UserRunnerOutput{ID: 101, Token: "glrt-a_b_c"}),
+			"## User Runner Created\n\n"+
+				"- **ID**: 101\n"+
+				"- **Token**: `glrt-a_b_c`\n"+
+				"\n---\n💡 **Next steps:**\n"+
+				"- Store the token securely. It cannot be retrieved later\n")
 	})
-	t.Run("empty token writes no line", func(t *testing.T) {
-		md := FormatUserRunnerMarkdownString(UserRunnerOutput{ID: 101, TokenExpiresAt: "2026-06-01T00:00:00Z"})
-		if strings.Contains(md, "**Token**:") {
-			t.Errorf("empty token still announced:\n%s", md)
-		}
+	t.Run("empty token writes no line and no hint", func(t *testing.T) {
+		assertMarkdown(t, FormatUserRunnerMarkdownString(UserRunnerOutput{ID: 101, TokenExpiresAt: "2026-06-01T00:00:00Z"}),
+			"## User Runner Created\n\n"+
+				"- **ID**: 101\n"+
+				"- **Token Expires At**: 1 Jun 2026 00:00 UTC\n")
 	})
 }
 
-// TestFormatDeleteUserIdentityMarkdownString verifies identity deletion markdown.
+// TestFormatDeleteUserIdentityMarkdownString verifies the whole card for both
+// outcomes: the deletion flag is the tick or the cross rather than a success
+// glyph printed beside the word "false".
 func TestFormatDeleteUserIdentityMarkdownString(t *testing.T) {
-	md := FormatDeleteUserIdentityMarkdownString(DeleteUserIdentityOutput{
-		UserID: 42, Provider: "saml", Deleted: true,
-	})
-	for _, want := range []string{"42", "saml", "true"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
+	tests := []struct {
+		name  string
+		input DeleteUserIdentityOutput
+		want  string
+	}{
+		{
+			name:  "the identity was deleted",
+			input: DeleteUserIdentityOutput{UserID: 42, Provider: "saml", Deleted: true},
+			want:  "## User Identity Deleted\n\n- **ID**: 42\n- **Provider**: saml\n- **Deleted**: ✅\n",
+		},
+		{
+			name:  "the identity was not deleted",
+			input: DeleteUserIdentityOutput{UserID: 42, Provider: "saml", Deleted: false},
+			want:  "## User Identity Deleted\n\n- **ID**: 42\n- **Provider**: saml\n- **Deleted**: ❌\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertMarkdown(t, FormatDeleteUserIdentityMarkdownString(tt.input), tt.want)
 		})
 	}
 }

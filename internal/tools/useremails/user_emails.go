@@ -3,8 +3,8 @@ package useremails
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -206,37 +206,37 @@ func DeleteForUser(ctx context.Context, client *gitlabclient.Client, input Delet
 
 // --- Markdown formatters ---.
 
-// FormatListMarkdownString formats a list of emails as Markdown.
+// FormatListMarkdownString renders the addresses on an account as the
+// collection they are, the confirmation state of each in the column a reader
+// is looking at it for.
 func FormatListMarkdownString(out ListOutput) string {
 	if len(out.Emails) == 0 {
-		return fmt.Sprintf("## Emails\n\n%s No emails found.\n", toolutil.EmojiWarning)
+		return toolutil.EmptyMessage("emails")
 	}
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Emails (%d)\n\n", len(out.Emails))
-	sb.WriteString("| ID | Email | Confirmed At |\n")
-	sb.WriteString("|---|---|---|\n")
+	var pagination toolutil.PaginationOutput
+	toolutil.WriteListHeading(&sb, "Emails", len(out.Emails), pagination)
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Email", "Confirmed"))
 	for _, e := range out.Emails {
-		confirmed := "-"
-		if e.ConfirmedAt != "" {
-			confirmed = e.ConfirmedAt
-		}
-		//gitlab:allow-unescaped confirmed: a timestamp this package formatted itself, or the dash this loop substitutes.
-		fmt.Fprintf(&sb, "| %d | %s | %s |\n", e.ID, toolutil.EscapeMdTableCell(e.Email), confirmed)
+		sb.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(e.ID, 10),
+			// GitLab validates an address with a regexp that forbids only '@'
+			// and whitespace, so '|' and '<' both pass.
+			toolutil.EscapeMdTableCell(e.Email),
+			confirmationValue(e.ConfirmedAt),
+		))
 	}
+	toolutil.WriteListFooter(&sb, pagination, false, hintGetEmail)
 	return sb.String()
 }
 
-// FormatMarkdownString formats a single email as Markdown.
+// FormatMarkdownString renders one address as a card.
 func FormatMarkdownString(out Output) string {
 	var sb strings.Builder
-	sb.WriteString("## Email\n\n")
-	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
-	// GitLab validates an address with a regexp that forbids only '@' and
-	// whitespace, so '|' and '<' both pass.
-	fmt.Fprintf(&sb, "- **Email**: %s\n", toolutil.EscapeMdTableCell(out.Email))
-	if out.ConfirmedAt != "" {
-		//gitlab:allow-unescaped out.ConfirmedAt: a timestamp this package formatted itself from the time client-go parsed.
-		fmt.Fprintf(&sb, "- **Confirmed At**: %s\n", out.ConfirmedAt)
-	}
+	card := toolutil.NewCard(&sb, "Email")
+	card.Int("ID", out.ID)
+	card.Field("Email", out.Email)
+	card.Markdown("Confirmed", confirmationValue(out.ConfirmedAt))
+	card.End()
 	return sb.String()
 }

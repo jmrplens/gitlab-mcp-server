@@ -45,14 +45,36 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown verifies the Markdown Markdown formatter for a representative  input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatMarkdown(t *testing.T) {
-	md := FormatMarkdown(GetOutput{AvatarURL: "https://example.com/avatar.png"})
-	if md == "" {
-		t.Error("expected non-empty markdown")
+// assertMarkdown compares a rendered result with the whole document it is
+// meant to be. A substring assertion is what let a card open a table and then
+// write list rows into it in two packages of this tree: every row the test
+// named was present in the string and none of them rendered as a row, so the
+// rule here is the whole document or nothing.
+func assertMarkdown(t *testing.T, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("markdown mismatch\n--- got ---\n%s\n--- want ---\n%s\n--- got (quoted) ---\n%q", got, want, got)
 	}
+}
+
+// TestFormatMarkdown verifies the whole avatar card. The address is the whole
+// answer and is written as a link, not as escaped text: the hint tells the
+// reader to use the URL directly, which needs the URL to be navigable.
+func TestFormatMarkdown(t *testing.T) {
+	assertMarkdown(t, FormatMarkdown(GetOutput{AvatarURL: "https://example.com/avatar.png"}),
+		"## Avatar\n\n"+
+			"- **URL**: [https://example.com/avatar.png](https://example.com/avatar.png)\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use the avatar URL directly in your application\n")
+}
+
+// TestFormatMarkdown_NoAvatar verifies that an answer with no address writes
+// no row: a label with nothing after it reads as a value GitLab lost.
+func TestFormatMarkdown_NoAvatar(t *testing.T) {
+	assertMarkdown(t, FormatMarkdown(GetOutput{}),
+		"## Avatar\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use the avatar URL directly in your application\n")
 }
 
 // ---------- Tests consolidated from coverage_test.go ----------.
@@ -90,10 +112,11 @@ func TestGet_Success_Coverage(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_Coverage(t *testing.T) {
-	md := FormatMarkdown(GetOutput{AvatarURL: "https://img.example.com/a.png"})
-	if !strings.Contains(md, "https://img.example.com/a.png") {
-		t.Error("expected avatar URL in markdown")
-	}
+	assertMarkdown(t, FormatMarkdown(GetOutput{AvatarURL: "https://img.example.com/a.png"}),
+		"## Avatar\n\n"+
+			"- **URL**: [https://img.example.com/a.png](https://img.example.com/a.png)\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use the avatar URL directly in your application\n")
 }
 
 // TestActionSpecs_Metadata_Coverage validates the Metadata_Coverage route through the catalog surface.

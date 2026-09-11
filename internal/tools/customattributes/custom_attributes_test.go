@@ -201,38 +201,65 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Output verifies the ListMarkdown_Output Markdown formatter for a representative list_output input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// assertMarkdown compares a rendered result with the whole document it is
+// meant to be. A substring assertion is what let a card open a table and then
+// write list rows into it in two packages of this tree: every row the test
+// named was present in the string and none of them rendered as a row, so the
+// rule here is the whole document or nothing.
+func assertMarkdown(t *testing.T, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("markdown mismatch\n--- got ---\n%s\n--- want ---\n%s\n--- got (quoted) ---\n%q", got, want, got)
+	}
+}
+
+// TestFormatListMarkdown_Output verifies the whole list render: the heading
+// with its count, the two columns and the guidance section naming the
+// canonical action ID.
 func TestFormatListMarkdown_Output(t *testing.T) {
 	out := ListOutput{Attributes: []AttributeItem{{Key: testKeyDept, Value: "eng"}}}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, testKeyDept) {
-		t.Error("missing key")
-	}
-	if !strings.Contains(md, "eng") {
-		t.Error("missing value")
-	}
+	assertMarkdown(t, FormatListMarkdown(out),
+		"## Custom Attributes (1)\n\n"+
+			"| Key | Value |\n"+
+			"| --- | --- |\n"+
+			"| "+testKeyDept+" | eng |\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'admin.custom_attr_set' to add or update an attribute\n")
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_Empty verifies that a list with nothing in it is the
+// one sentence and nothing else: no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No custom attributes") {
-		t.Error("missing empty message")
-	}
+	assertMarkdown(t, FormatListMarkdown(ListOutput{}), "No custom attributes found.\n")
 }
 
-// TestFormatGetMarkdown_Output verifies the GetMarkdown_Output Markdown formatter for a representative get_output input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatGetMarkdown_Output verifies the whole card. The two values used to
+// be written as bullet-less "**Key**: …" lines, which a Markdown reader runs
+// together into one paragraph, and neither was escaped.
 func TestFormatGetMarkdown_Output(t *testing.T) {
-	md := FormatGetMarkdown(GetOutput{Key: "k", Value: "v"})
-	if !strings.Contains(md, "k") || !strings.Contains(md, "v") {
-		t.Error("missing key/value")
-	}
+	assertMarkdown(t, FormatGetMarkdown(GetOutput{Key: "k", Value: "v"}),
+		"## Custom Attribute\n\n"+
+			"- **Key**: k\n"+
+			"- **Value**: v\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'admin.custom_attr_set' to update this attribute\n"+
+			"- Use action 'admin.custom_attr_delete' to remove it\n")
+}
+
+// TestFormatGetMarkdown_HostileValue verifies the containment: a value
+// carrying a heading, a list item and a link opens none of them, because every
+// row of a card goes through the cell escaper.
+func TestFormatGetMarkdown_HostileValue(t *testing.T) {
+	assertMarkdown(t, FormatGetMarkdown(GetOutput{
+		Key:   "a|b",
+		Value: "x\n## injected\n- item\n[click](http://attacker.invalid/)",
+	}),
+		"## Custom Attribute\n\n"+
+			"- **Key**: a&#124;b\n"+
+			"- **Value**: x ## injected - item &#91;click](http://attacker.invalid/)\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'admin.custom_attr_set' to update this attribute\n"+
+			"- Use action 'admin.custom_attr_delete' to remove it\n")
 }
 
 // TestList_InvalidResourceID verifies the List_InvalidResourceID handler.
@@ -494,13 +521,12 @@ func TestList_Error(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatSetMarkdown_Coverage(t *testing.T) {
-	md := FormatSetMarkdown(SetOutput{Key: "env", Value: "prod"})
-	if !strings.Contains(md, "env") || !strings.Contains(md, "prod") {
-		t.Error("missing key/value in markdown")
-	}
-	if !strings.Contains(md, "Set") {
-		t.Error("missing 'Set' in title")
-	}
+	assertMarkdown(t, FormatSetMarkdown(SetOutput{Key: "env", Value: "prod"}),
+		"## Custom Attribute Set\n\n"+
+			"- **Key**: env\n"+
+			"- **Value**: prod\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'admin.custom_attr_get' to verify the value\n")
 }
 
 // ---------------------------------------------------------------------------

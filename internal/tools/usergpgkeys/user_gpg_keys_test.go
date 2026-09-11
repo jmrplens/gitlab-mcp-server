@@ -5,7 +5,6 @@ package usergpgkeys
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -234,20 +233,52 @@ func TestDeleteForUser_Success(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the ListMarkdownString_Empty markdown formatter output.
-func TestFormatListMarkdownString_Empty(t *testing.T) {
-	md := FormatListMarkdownString(ListOutput{})
-	if md == "" {
-		t.Fatal("expected non-empty markdown for empty list")
+// assertMarkdown compares a rendered result with the whole document it is
+// meant to be. A substring assertion is what let a card open a table and then
+// write list rows into it in two packages of this tree: every row the test
+// named was present in the string and none of them rendered as a row, so the
+// rule here is the whole document or nothing.
+func assertMarkdown(t *testing.T, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("markdown mismatch\n--- got ---\n%s\n--- want ---\n%s\n--- got (quoted) ---\n%q", got, want, got)
 	}
 }
 
-// TestFormatMarkdownString verifies the MarkdownString markdown formatter output.
+// The armored keys the preview tests read. One carries a body short enough to
+// show whole; the other's body is longer than the preview, so what is shown is
+// its tail. Both carry the armor lines, the header line and the checksum that
+// every armored key shares and that no preview should be made of.
+const (
+	shortArmoredKey = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n" +
+		"Version: GnuPG v1\n" +
+		"\n" +
+		"mQENBFoneKEY\n" +
+		"=Zm9v\n" +
+		"-----END PGP PUBLIC KEY BLOCK-----\n"
+	longArmoredKey = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n" +
+		"Version: GnuPG v1\n" +
+		"\n" +
+		"HEADPARTHEADPARTHEADPART\n" +
+		"TAILTAILTAILTAILTAILTAIL\n" +
+		"=Zm9v\n" +
+		"-----END PGP PUBLIC KEY BLOCK-----\n"
+)
+
+// TestFormatListMarkdownString_Empty verifies that a list with nothing in it
+// is the one sentence and nothing else.
+func TestFormatListMarkdownString_Empty(t *testing.T) {
+	assertMarkdown(t, FormatListMarkdownString(ListOutput{}), "No GPG keys found.\n")
+}
+
+// TestFormatMarkdownString verifies the whole card: the ID, the key preview in
+// a code span, and the creation date in the display form.
 func TestFormatMarkdownString(t *testing.T) {
-	md := FormatMarkdownString(Output{ID: 1, Key: "pgp-key", CreatedAt: "2026-01-15"})
-	if md == "" {
-		t.Fatal("expected non-empty markdown")
-	}
+	assertMarkdown(t, FormatMarkdownString(Output{ID: 1, Key: "pgp-key", CreatedAt: "2026-01-15"}),
+		"## GPG Key\n\n"+
+			"- **ID**: 1\n"+
+			"- **Key**: `pgp-key`\n"+
+			"- **Created**: 15 Jan 2026\n")
 }
 
 // --- Context cancellation tests ---
@@ -525,79 +556,97 @@ func TestList_EmptyResult(t *testing.T) {
 // These tests cover formatting branches for markdown renderers including
 // FormatDeleteMarkdownString, non-empty lists with long keys, and long single keys.
 
-// TestFormatDeleteMarkdownString verifies the DeleteMarkdownString markdown formatter output.
+// TestFormatDeleteMarkdownString verifies the whole deletion confirmation for
+// both deletion states.
 func TestFormatDeleteMarkdownString(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   DeleteOutput
-		wantSub string
+		name  string
+		input DeleteOutput
+		want  string
 	}{
 		{
-			name:    "deleted true",
-			input:   DeleteOutput{KeyID: 42, Deleted: true},
-			wantSub: "42",
+			name:  "deleted true",
+			input: DeleteOutput{KeyID: 42, Deleted: true},
+			want:  "## GPG Key Deleted\n\n- **Key ID**: 42\n- **Deleted**: ✅\n",
 		},
 		{
-			name:    "deleted false",
-			input:   DeleteOutput{KeyID: 7, Deleted: false},
-			wantSub: "7",
+			name:  "deleted false",
+			input: DeleteOutput{KeyID: 7, Deleted: false},
+			want:  "## GPG Key Deleted\n\n- **Key ID**: 7\n- **Deleted**: ❌\n",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			md := FormatDeleteMarkdownString(tt.input)
-			if md == "" {
-				t.Fatal("expected non-empty markdown")
-			}
-			if !strings.Contains(md, tt.wantSub) {
-				t.Errorf("markdown missing %q:\n%s", tt.wantSub, md)
-			}
+			assertMarkdown(t, FormatDeleteMarkdownString(tt.input), tt.want)
 		})
 	}
 }
 
-// TestFormatListMarkdownString_WithKeys verifies the list markdown renderer
-// correctly renders a non-empty key list including the truncation of long keys.
+// TestFormatListMarkdownString_WithKeys verifies the whole list render. The
+// preview column is what the change here is about: every armored key opens
+// with the same header line and the same first base64 characters, so a preview
+// cut from the front printed one identical string for every key on the
+// account. It is the tail of the body now, with the armor, the header line and
+// the checksum dropped.
 func TestFormatListMarkdownString_WithKeys(t *testing.T) {
-	longKey := strings.Repeat("A", 60)
 	out := ListOutput{Keys: []Output{
-		{ID: 1, Key: "short-key", CreatedAt: "2026-01-15T10:00:00Z"},
-		{ID: 2, Key: longKey, CreatedAt: ""},
+		{ID: 1, Key: shortArmoredKey, CreatedAt: "2026-01-15T10:00:00Z"},
+		{ID: 2, Key: longArmoredKey, CreatedAt: ""},
 	}}
-	md := FormatListMarkdownString(out)
-	if !strings.Contains(md, "(2)") {
-		t.Error("markdown should contain key count (2)")
-	}
-	if !strings.Contains(md, "short-key") {
-		t.Error("markdown should contain the short key")
-	}
-	if !strings.Contains(md, "...") {
-		t.Error("long key should be truncated with '...'")
-	}
-	if strings.Contains(md, "No GPG keys found") {
-		t.Error("non-empty list should not contain 'No GPG keys found'")
-	}
+
+	assertMarkdown(t, FormatListMarkdownString(out),
+		"## GPG Keys (2)\n\n"+
+			"| ID | Key (truncated) | Created At |\n"+
+			"| --- | --- | --- |\n"+
+			"| 1 | `mQENBFoneKEY` | 15 Jan 2026 10:00 UTC |\n"+
+			"| 2 | `...TAILTAILTAILTAILTAILTAIL` |  |\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'user.get_gpg_key' to view full key details\n")
 }
 
-// TestFormatMarkdownString_LongKey verifies FormatMarkdownString truncates
-// keys longer than 80 characters.
+// TestFormatMarkdownString_LongKey verifies that a body longer than the card's
+// preview is shown as its tail, and that the armor never reaches the card.
 func TestFormatMarkdownString_LongKey(t *testing.T) {
-	longKey := strings.Repeat("B", 100)
-	md := FormatMarkdownString(Output{ID: 5, Key: longKey})
-	if !strings.Contains(md, "...") {
-		t.Error("long key should be truncated with '...'")
+	assertMarkdown(t, FormatMarkdownString(Output{ID: 5, Key: longArmoredKey}),
+		"## GPG Key\n\n"+
+			"- **ID**: 5\n"+
+			"- **Key**: `HEADPARTHEADPARTHEADPARTTAILTAILTAILTAILTAILTAIL`\n")
+}
+
+// TestFormatMarkdownString_NoCreatedAt verifies that an absent instant writes
+// no row rather than a label with nothing after it.
+func TestFormatMarkdownString_NoCreatedAt(t *testing.T) {
+	assertMarkdown(t, FormatMarkdownString(Output{ID: 3, Key: "short"}),
+		"## GPG Key\n\n"+
+			"- **ID**: 3\n"+
+			"- **Key**: `short`\n")
+}
+
+// TestKeyPreview_TailIsWhatDistinguishesTwoKeys is the property the preview
+// exists for: two keys from the same generator share their armor, their
+// headers and their leading base64, and only their tails differ, so two
+// previews must differ too.
+func TestKeyPreview_TailIsWhatDistinguishesTwoKeys(t *testing.T) {
+	const head = "-----BEGIN PGP PUBLIC KEY BLOCK-----\nVersion: GnuPG v1\n\n" + "mQENBFoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+	one := keyPreview(head+"ONEONEONEONEONEONEONEONE\n=Zm9v\n-----END PGP PUBLIC KEY BLOCK-----\n", listPreviewRunes)
+	two := keyPreview(head+"TWOTWOTWOTWOTWOTWOTWOTWO\n=Zm9v\n-----END PGP PUBLIC KEY BLOCK-----\n", listPreviewRunes)
+	if one == two {
+		t.Errorf("two keys share the preview %q", one)
 	}
-	if strings.Contains(md, longKey) {
-		t.Error("full long key should not appear in markdown")
+	if one != "...ONEONEONEONEONEONEONEONE" {
+		t.Errorf("preview = %q, want the tail of the body", one)
 	}
 }
 
-// TestFormatMarkdownString_NoCreatedAt verifies the formatter omits the
-// Created At line when it is empty.
-func TestFormatMarkdownString_NoCreatedAt(t *testing.T) {
-	md := FormatMarkdownString(Output{ID: 3, Key: "short"})
-	if strings.Contains(md, "Created") {
-		t.Error("empty CreatedAt should not produce a Created line")
+// TestArmoredBody_ValueWithNoArmorIsItsOwnBody verifies the fallback: a value
+// carrying no armor at all, which is what a truncated or hand-entered key
+// looks like, is previewed as itself rather than as nothing.
+func TestArmoredBody_ValueWithNoArmorIsItsOwnBody(t *testing.T) {
+	if got := armoredBody("  ssh-style-value  "); got != "ssh-style-value" {
+		t.Errorf("armoredBody = %q, want %q", got, "ssh-style-value")
+	}
+	if got := armoredBody("-----BEGIN PGP PUBLIC KEY BLOCK-----\n-----END PGP PUBLIC KEY BLOCK-----"); got == "" {
+		t.Error("a value that is only armor must still preview as something")
 	}
 }
 

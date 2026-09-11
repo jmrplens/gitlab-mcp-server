@@ -1,7 +1,7 @@
 package users
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -9,7 +9,27 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const fmtDeletedRow = "- **Deleted**: %s %v\n"
+// The next steps a user result offers, each naming the canonical catalog ID
+// every surface accepts rather than an individual tool name the default
+// surface does not register.
+var (
+	hintGetUser           = toolutil.HintAction(actionUserGet, "see full user details")
+	hintUserProfile       = toolutil.HintAction(actionUserGet, "view the user's profile")
+	hintUserStatus        = toolutil.HintAction("user.get_status", "check the user's current status")
+	hintSetStatus         = toolutil.HintAction("user.set_status", "update your status")
+	hintListSSHKeys       = toolutil.HintAction(actionUserSSHKeys, "list the account's SSH keys")
+	hintGetSSHKey         = toolutil.HintAction(actionUserGetSSHKey, "view one key in full")
+	hintCurrentUser       = toolutil.HintAction(actionUserCurrent, "view your full profile")
+	hintContributionEvent = toolutil.HintAction("user.contribution_events", "see recent activity")
+	hintUserDetails       = toolutil.HintAction(actionUserGet, "view full details for a user")
+
+	hintCreateServiceAccount = toolutil.HintAction("user.create_service_account", "add a service account")
+)
+
+// sshKeyPreviewRunes is how much of a public key the card shows: the algorithm
+// name and the start of the base64 body, which identify the key, and short of
+// the free-text comment its owner may have put at the end.
+const sshKeyPreviewRunes = 40
 
 type userNotFoundOutput struct {
 	Identifier string `json:"identifier"`
@@ -21,40 +41,55 @@ func formatUserNotFound(out userNotFoundOutput) *mcp.CallToolResult {
 		"The user may have been blocked or deleted")
 }
 
-// FormatMarkdownString renders the authenticated user profile as a Markdown summary.
+// FormatMarkdownString renders a user as a card.
+//
+// The avatar upload answers with an avatar URL and nothing else on GitLab 19,
+// so a response carrying no identity is rendered as the avatar result it is:
+// the user card used to print an ID of zero, an empty email and an empty
+// address for it, which reads as a user whose profile GitLab lost rather than
+// as the narrow answer it is.
 func FormatMarkdownString(u Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## GitLab User: %s\n\n", toolutil.EscapeMdHeading(u.Name))
-	fmt.Fprintf(&b, toolutil.FmtMdID, u.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdUsername, toolutil.EscapeMdTableCell(u.Username))
+	if u.ID == 0 && u.Username == "" && u.AvatarURL != "" {
+		card := toolutil.NewCard(&b, "Avatar Updated")
+		card.Link("Avatar", u.AvatarURL, u.AvatarURL)
+		card.End(u.NextSteps...)
+		return b.String()
+	}
+	card := toolutil.NewCard(&b, "GitLab User: "+u.Name)
+	card.Int("ID", u.ID)
+	card.Field("Username", u.Username)
 	// GitLab validates an address with a regexp that excludes whitespace and a
 	// second '@' and admits both '|' and '<'.
-	fmt.Fprintf(&b, toolutil.FmtMdEmail, toolutil.EscapeMdTableCell(u.Email))
-	//gitlab:allow-unescaped u.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned, ldap_blocked).
-	fmt.Fprintf(&b, toolutil.FmtMdState, u.State)
-	if u.Bio != "" {
-		// A bio is free profile text, and GitLab allows newlines in it.
-		fmt.Fprintf(&b, "- **Bio**: %s\n", toolutil.EscapeMdTableCell(u.Bio))
-	}
-	fmt.Fprintf(&b, "- **Admin**: %v\n", u.IsAdmin)
-	toolutil.WriteMdURL(&b, u.WebURL)
-	if u.AvatarURL != "" {
-		fmt.Fprintf(&b, "- **Avatar**: %s\n", toolutil.EscapeMdTableCell(u.AvatarURL))
-	}
-	if len(u.SCIMIdentities) > 0 {
-		b.WriteString("\n### SCIM Identities\n\n")
-		b.WriteString(toolutil.MarkdownTableHeader("Extern UID", "Group ID", "Active"))
-		for _, identity := range u.SCIMIdentities {
-			fmt.Fprintf(&b, "| %s | %d | %v |\n",
-				toolutil.EscapeMdTableCell(identity.ExternUID), identity.GroupID, identity.Active)
-		}
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'get_status' to check user's current status",
-		"Use action 'ssh_keys' to list SSH keys",
-	)
+	card.Field("Email", u.Email)
+	card.Field("State", u.State)
+	// A bio is free profile text, and GitLab allows newlines in it.
+	card.Text("Bio", u.Bio)
+	card.Bool("Admin", u.IsAdmin)
+	card.Bool("Bot", u.Bot)
+	card.Bool("External", u.External)
+	card.Warn("Locked", u.Locked)
+	card.URL(u.WebURL)
+	card.Link("Avatar", u.AvatarURL, u.AvatarURL)
+	writeSCIMIdentities(card, u.SCIMIdentities)
+	card.End(hintUserStatus, hintListSSHKeys)
 	return b.String()
+}
+
+// writeSCIMIdentities writes the user's SCIM identities as the nested
+// collection they are, under a heading of their own.
+func writeSCIMIdentities(card *toolutil.Card, identities []SCIMIdentityOutput) {
+	if len(identities) == 0 {
+		return
+	}
+	table := card.Table("SCIM Identities", "Extern UID", "Group ID", "Active")
+	for _, identity := range identities {
+		table.Row(
+			toolutil.EscapeMdTableCell(identity.ExternUID),
+			strconv.FormatInt(identity.GroupID, 10),
+			toolutil.BoolEmoji(identity.Active),
+		)
+	}
 }
 
 // FormatMarkdown renders the user as an MCP CallToolResult.
@@ -64,27 +99,22 @@ func FormatMarkdown(u Output) *mcp.CallToolResult {
 
 // FormatListMarkdownString renders a user list as a Markdown string.
 func FormatListMarkdownString(o ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## GitLab Users (%d)\n\n", len(o.Users))
-	toolutil.WriteListSummary(&b, len(o.Users), o.Pagination)
 	if len(o.Users) == 0 {
-		b.WriteString("No users found.\n")
-	} else {
-		b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "Email", "State"))
-		for _, u := range o.Users {
-			//gitlab:allow-unescaped u.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned, ldap_blocked).
-			fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
-				u.ID, toolutil.MdTitleLink("@"+u.Username, u.WebURL),
-				toolutil.EscapeMdTableCell(u.Name),
-				toolutil.EscapeMdTableCell(u.Email), u.State)
-		}
+		return toolutil.EmptyMessage("users")
 	}
-	toolutil.WritePagination(&b, o.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use action 'get' with user_id to see full user details",
-	)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "GitLab Users", len(o.Users), o.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "Email", "State"))
+	for _, u := range o.Users {
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(u.ID, 10),
+			toolutil.MdUserLink(u.Username, u.WebURL),
+			toolutil.EscapeMdTableCell(u.Name),
+			toolutil.EscapeMdTableCell(u.Email),
+			toolutil.EscapeMdTableCell(u.State),
+		))
+	}
+	toolutil.WriteListFooter(&b, o.Pagination, true, hintGetUser)
 	return b.String()
 }
 
@@ -96,26 +126,12 @@ func FormatListMarkdown(o ListOutput) *mcp.CallToolResult {
 // FormatStatusMarkdownString renders a user status as a Markdown string.
 func FormatStatusMarkdownString(o StatusOutput) string {
 	var b strings.Builder
-	b.WriteString("## User Status\n\n")
-	if o.Emoji != "" {
-		// The status widget's emoji name is a plain string in the SDK, and this
-		// server's own set_user_status writes the field.
-		fmt.Fprintf(&b, "- **Emoji**: %s\n", toolutil.EscapeMdTableCell(o.Emoji))
-	}
-	if o.Message != "" {
-		fmt.Fprintf(&b, "- **Message**: %s\n", toolutil.EscapeMdTableCell(o.Message))
-	}
-	if o.Availability != "" {
-		//gitlab:allow-unescaped o.Availability: a gl.AvailabilityValue, whose values are not_set and busy.
-		fmt.Fprintf(&b, "- **Availability**: %s\n", o.Availability)
-	}
-	if o.ClearStatusAt != "" {
-		fmt.Fprintf(&b, "- **Clear At**: %s\n", toolutil.FormatTime(o.ClearStatusAt))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_set_user_status` to update your status",
-	)
+	card := toolutil.NewCard(&b, "User Status")
+	card.Field("Emoji", o.Emoji)
+	card.Field("Message", o.Message)
+	card.Field("Availability", o.Availability)
+	card.Time("Clear At", o.ClearStatusAt)
+	card.End(hintSetStatus)
 	return b.String()
 }
 
@@ -127,22 +143,26 @@ func FormatStatusMarkdown(o StatusOutput) *mcp.CallToolResult {
 // FormatSSHKeyMarkdownString renders a single SSH key as a Markdown string.
 func FormatSSHKeyMarkdownString(o SSHKeyOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## SSH Key: %s\n\n", toolutil.EscapeMdHeading(o.Title))
-	fmt.Fprintf(&b, toolutil.FmtMdID, o.ID)
-	fmt.Fprintf(&b, "- **Title**: %s\n", toolutil.EscapeMdTableCell(o.Title))
-	//gitlab:allow-unescaped o.Key: GitLab stores only a public key it could parse, and this truncation stops inside the algorithm name and the base64 body, short of the free-text comment.
-	fmt.Fprintf(&b, "- **Key**: `%.40s...`\n", o.Key)
-	if o.UsageType != "" {
-		//gitlab:allow-unescaped o.UsageType: an SSH key usage GitLab picks from a fixed set (auth, signing, auth_and_signing).
-		fmt.Fprintf(&b, "- **Usage Type**: %s\n", o.UsageType)
-	}
-	if o.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(o.CreatedAt))
-	}
-	if o.ExpiresAt != "" {
-		fmt.Fprintf(&b, "- **Expires At**: %s\n", toolutil.FormatTime(o.ExpiresAt))
-	}
+	card := toolutil.NewCard(&b, "SSH Key: "+o.Title)
+	card.Int("ID", o.ID)
+	card.Field("Title", o.Title)
+	card.Code("Key", sshKeyPreview(o.Key))
+	card.Field("Usage Type", o.UsageType)
+	card.Time("Created", o.CreatedAt)
+	card.Time("Expires At", o.ExpiresAt)
+	card.End()
 	return b.String()
+}
+
+// sshKeyPreview is the head of a public key, ellipsized only when there is
+// more of it: the line used to append the ellipsis to every key, including one
+// shorter than the cut.
+func sshKeyPreview(key string) string {
+	runes := []rune(key)
+	if len(runes) <= sshKeyPreviewRunes {
+		return key
+	}
+	return string(runes[:sshKeyPreviewRunes]) + "..."
 }
 
 // FormatSSHKeyMarkdown renders a single SSH key as an MCP CallToolResult.
@@ -152,26 +172,22 @@ func FormatSSHKeyMarkdown(o SSHKeyOutput) *mcp.CallToolResult {
 
 // FormatSSHKeyListMarkdownString renders an SSH key list as a Markdown string.
 func FormatSSHKeyListMarkdownString(o SSHKeyListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## SSH Keys (%d)\n\n", len(o.Keys))
-	toolutil.WriteListSummary(&b, len(o.Keys), o.Pagination)
 	if len(o.Keys) == 0 {
-		b.WriteString("No SSH keys found.\n")
-	} else {
-		b.WriteString(toolutil.MarkdownTableHeader("ID", "Title", "Usage Type", "Created At", "Expires At"))
-		for _, k := range o.Keys {
-			fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
-				//gitlab:allow-unescaped k.UsageType: an SSH key usage GitLab picks from a fixed set (auth, signing, auth_and_signing).
-				//gitlab:allow-unescaped k.CreatedAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
-				//gitlab:allow-unescaped k.ExpiresAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
-				k.ID, toolutil.EscapeMdTableCell(k.Title), k.UsageType, k.CreatedAt, k.ExpiresAt)
-		}
+		return toolutil.EmptyMessage("SSH keys")
 	}
-	toolutil.WritePagination(&b, o.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_list_ssh_keys` to view all SSH keys",
-	)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "SSH Keys", len(o.Keys), o.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Title", "Usage Type", "Created At", "Expires At"))
+	for _, k := range o.Keys {
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(k.ID, 10),
+			toolutil.EscapeMdTableCell(k.Title),
+			toolutil.EscapeMdTableCell(k.UsageType),
+			toolutil.FormatTime(k.CreatedAt),
+			toolutil.FormatTime(k.ExpiresAt),
+		))
+	}
+	toolutil.WriteListFooter(&b, o.Pagination, false, hintGetSSHKey)
 	return b.String()
 }
 
@@ -182,21 +198,33 @@ func FormatSSHKeyListMarkdown(o SSHKeyListOutput) *mcp.CallToolResult {
 
 // FormatEmailListMarkdownString renders an email list as a Markdown string.
 func FormatEmailListMarkdownString(o EmailListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Email Addresses (%d)\n\n", len(o.Emails))
 	if len(o.Emails) == 0 {
-		b.WriteString("No email addresses found.\n")
-	} else {
-		b.WriteString(toolutil.MarkdownTableHeader("ID", "Email", "Confirmed At"))
-		for _, e := range o.Emails {
-			fmt.Fprintf(&b, "| %d | %s | %s |\n", e.ID, toolutil.EscapeMdTableCell(e.Email), toolutil.FormatTime(e.ConfirmedAt))
-		}
+		return toolutil.EmptyMessage("email addresses")
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_user_current` to view your full profile",
-	)
+	var b strings.Builder
+	var pagination toolutil.PaginationOutput
+	toolutil.WriteListHeading(&b, "Email Addresses", len(o.Emails), pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Email", "Confirmed"))
+	for _, e := range o.Emails {
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(e.ID, 10),
+			toolutil.EscapeMdTableCell(e.Email),
+			confirmationValue(e.ConfirmedAt),
+		))
+	}
+	toolutil.WriteListFooter(&b, pagination, false, hintCurrentUser)
 	return b.String()
+}
+
+// confirmationValue renders the confirmation state of an address: the instant
+// GitLab confirmed it, or the cross and the reason when it never did, since an
+// address waiting for its confirmation mail is the answer a reader is asking
+// for and an empty cell said nothing.
+func confirmationValue(confirmedAt string) string {
+	if confirmedAt == "" {
+		return toolutil.BoolEmoji(false) + " awaiting confirmation"
+	}
+	return toolutil.BoolEmoji(true) + " " + toolutil.FormatTime(confirmedAt)
 }
 
 // FormatEmailListMarkdown renders an email list as an MCP CallToolResult.
@@ -206,27 +234,27 @@ func FormatEmailListMarkdown(o EmailListOutput) *mcp.CallToolResult {
 
 // FormatContributionEventsMarkdownString renders contribution events as a Markdown string.
 func FormatContributionEventsMarkdownString(o ContributionEventsOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Contribution Events (%d)\n\n", len(o.Events))
 	if len(o.Events) == 0 {
-		b.WriteString("No contribution events found.\n")
-	} else {
-		b.WriteString(toolutil.MarkdownTableHeader("ID", "Action", "Target Type", "Target", "Created At"))
-		for _, e := range o.Events {
-			target := toolutil.FormatTarget(e.TargetType, e.TargetIID, e.TargetTitle, e.TargetURL)
-			fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
-				//gitlab:allow-unescaped e.ActionName: a contribution-event action GitLab writes from its own vocabulary (opened, closed, pushed to and the rest).
-				//gitlab:allow-unescaped e.TargetType: the target's class name in GitLab, such as Issue, MergeRequest or Milestone.
-				//gitlab:allow-unescaped e.CreatedAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
-				e.ID, e.ActionName, e.TargetType, target, e.CreatedAt)
-		}
+		return toolutil.EmptyMessage("contribution events")
 	}
-	toolutil.WritePagination(&b, o.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_get_user` to view user profile details",
-	)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Contribution Events", len(o.Events), o.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Action", "Target Type", "Target", "Created At"))
+	linked := false
+	for _, e := range o.Events {
+		target := toolutil.FormatTarget(e.TargetType, e.TargetIID, e.TargetTitle, e.TargetURL)
+		if target != "" && e.TargetURL != "" {
+			linked = true
+		}
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(e.ID, 10),
+			toolutil.EscapeMdTableCell(e.ActionName),
+			toolutil.EscapeMdTableCell(e.TargetType),
+			target,
+			toolutil.FormatTime(e.CreatedAt),
+		))
+	}
+	toolutil.WriteListFooter(&b, o.Pagination, linked, hintUserProfile)
 	return b.String()
 }
 
@@ -238,16 +266,12 @@ func FormatContributionEventsMarkdown(o ContributionEventsOutput) *mcp.CallToolR
 // FormatAssociationsCountMarkdownString renders user associations count as a Markdown string.
 func FormatAssociationsCountMarkdownString(o AssociationsCountOutput) string {
 	var b strings.Builder
-	b.WriteString("## User Associations Count\n\n")
-	fmt.Fprintf(&b, "- **Groups**: %d\n", o.GroupsCount)
-	fmt.Fprintf(&b, "- **Projects**: %d\n", o.ProjectsCount)
-	fmt.Fprintf(&b, "- **Issues**: %d\n", o.IssuesCount)
-	fmt.Fprintf(&b, "- **Merge Requests**: %d\n", o.MergeRequestsCount)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_get_user` to view the user's profile",
-		"Use `gitlab_list_user_contribution_events` to see recent activity",
-	)
+	card := toolutil.NewCard(&b, "User Associations Count")
+	card.Int("Groups", o.GroupsCount)
+	card.Int("Projects", o.ProjectsCount)
+	card.Int("Issues", o.IssuesCount)
+	card.Int("Merge Requests", o.MergeRequestsCount)
+	card.End(hintUserProfile, hintContributionEvent)
 	return b.String()
 }
 
@@ -258,14 +282,22 @@ func FormatAssociationsCountMarkdown(o AssociationsCountOutput) *mcp.CallToolRes
 
 // FormatDeleteUserMarkdownString renders user deletion output as Markdown.
 func FormatDeleteUserMarkdownString(o DeleteOutput) string {
-	return fmt.Sprintf("## User Deleted\n\n"+toolutil.FmtMdID+fmtDeletedRow,
-		o.UserID, toolutil.EmojiSuccess, o.Deleted)
+	var b strings.Builder
+	card := toolutil.NewCard(&b, "User Deleted")
+	card.Int("ID", o.UserID)
+	card.Bool("Deleted", o.Deleted)
+	card.End()
+	return b.String()
 }
 
 // FormatDeleteSSHKeyMarkdownString renders SSH key deletion output as Markdown.
 func FormatDeleteSSHKeyMarkdownString(o DeleteSSHKeyOutput) string {
-	return fmt.Sprintf("## SSH Key Deleted\n\n"+toolutil.FmtMdID+fmtDeletedRow,
-		o.KeyID, toolutil.EmojiSuccess, o.Deleted)
+	var b strings.Builder
+	card := toolutil.NewCard(&b, "SSH Key Deleted")
+	card.Int("ID", o.KeyID)
+	card.Bool("Deleted", o.Deleted)
+	card.End()
+	return b.String()
 }
 
 func init() {

@@ -3,8 +3,8 @@ package users
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -318,81 +318,70 @@ func DeleteUserIdentity(ctx context.Context, client *gitlabclient.Client, input 
 
 // FormatUserActivitiesMarkdownString renders user activities as a Markdown string.
 func FormatUserActivitiesMarkdownString(o UserActivitiesOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## User Activities (%d)\n\n", len(o.Activities))
-	toolutil.WriteListSummary(&b, len(o.Activities), o.Pagination)
 	if len(o.Activities) == 0 {
-		b.WriteString("No user activities found.\n")
-	} else {
-		b.WriteString("| Username | Last Activity |\n")
-		b.WriteString("|---|---|\n")
-		for _, a := range o.Activities {
-			fmt.Fprintf(&b, "| %s | %s |\n",
-				//gitlab:allow-unescaped a.LastActivityOn: a date this package formatted itself, with time.Time.Format on the ISO date layout.
-				toolutil.EscapeMdTableCell(a.Username), a.LastActivityOn)
-		}
+		return toolutil.EmptyMessage("user activities")
 	}
-	toolutil.WritePagination(&b, o.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_get_user` to view full details for a user",
-	)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "User Activities", len(o.Activities), o.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Username", "Last Activity"))
+	for _, a := range o.Activities {
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.EscapeMdTableCell(a.Username),
+			toolutil.FormatTime(a.LastActivityOn),
+		))
+	}
+	// The table carries no link, so the footer carries no instruction to keep
+	// them.
+	toolutil.WriteListFooter(&b, o.Pagination, false, hintUserDetails)
 	return b.String()
 }
 
 // FormatUserMembershipsMarkdownString renders user memberships as a Markdown string.
+// The access level is the name GitLab gives it rather than the bare number a
+// reader has to know the scale to read.
 func FormatUserMembershipsMarkdownString(o UserMembershipsOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## User Memberships (%d)\n\n", len(o.Memberships))
-	toolutil.WriteListSummary(&b, len(o.Memberships), o.Pagination)
 	if len(o.Memberships) == 0 {
-		b.WriteString("No memberships found.\n")
-	} else {
-		b.WriteString("| Source ID | Source Name | Source Type | Access Level |\n")
-		b.WriteString("|---|---|---|---|\n")
-		for _, m := range o.Memberships {
-			fmt.Fprintf(&b, "| %d | %s | %s | %d |\n",
-				//gitlab:allow-unescaped m.SourceType: GitLab names the membership source Project or Namespace, and nothing else.
-				m.SourceID, toolutil.EscapeMdTableCell(m.SourceName), m.SourceType, m.AccessLevel)
-		}
+		return toolutil.EmptyMessage("memberships")
 	}
-	toolutil.WritePagination(&b, o.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_get_user` to view the user's profile",
-	)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "User Memberships", len(o.Memberships), o.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Source ID", "Source Name", "Source Type", "Access Level"))
+	for _, m := range o.Memberships {
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(m.SourceID, 10),
+			toolutil.EscapeMdTableCell(m.SourceName),
+			toolutil.EscapeMdTableCell(m.SourceType),
+			toolutil.EscapeMdTableCell(toolutil.AccessLevelDescription(gl.AccessLevelValue(m.AccessLevel))),
+		))
+	}
+	toolutil.WriteListFooter(&b, o.Pagination, false, hintUserProfile)
 	return b.String()
 }
 
 // FormatUserRunnerMarkdownString renders a user runner as a Markdown string.
+// The token is a value GitLab shows once, so it is written as a secret and the
+// card ends with the sentence that says so.
 func FormatUserRunnerMarkdownString(o UserRunnerOutput) string {
 	var b strings.Builder
-	b.WriteString("## User Runner Created\n\n")
-	fmt.Fprintf(&b, toolutil.FmtMdID, o.ID)
-	if o.Token != "" {
-		//gitlab:allow-unescaped o.Token: the runner token GitLab minted, inside a code span so the reader can copy it back verbatim.
-		fmt.Fprintf(&b, "- **Token**: `%s`\n", o.Token)
-	}
-	if o.TokenExpiresAt != "" {
-		fmt.Fprintf(&b, "- **Token Expires At**: %s\n", toolutil.FormatTime(o.TokenExpiresAt))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Save the runner token. It cannot be retrieved again",
-	)
+	card := toolutil.NewCard(&b, "User Runner Created")
+	card.Int("ID", o.ID)
+	card.Secret("Token", o.Token)
+	card.Time("Token Expires At", o.TokenExpiresAt)
+	card.End()
 	return b.String()
 }
 
 // FormatDeleteUserIdentityMarkdownString renders a delete identity result as Markdown.
 func FormatDeleteUserIdentityMarkdownString(o DeleteUserIdentityOutput) string {
-	return fmt.Sprintf("## User Identity Deleted\n\n"+
-		toolutil.FmtMdID+
-		"- **Provider**: %s\n"+
-		"- **Deleted**: %s %v\n",
-		// The provider is the caller's own argument echoed back, not a response
-		// field, so nothing in this repository constrains it.
-		o.UserID, toolutil.EscapeMdTableCell(o.Provider), toolutil.EmojiSuccess, o.Deleted)
+	var b strings.Builder
+	card := toolutil.NewCard(&b, "User Identity Deleted")
+	card.Int("ID", o.UserID)
+	// The provider is the caller's own argument echoed back, not a response
+	// field, so nothing in this repository constrains it.
+	card.Field("Provider", o.Provider)
+	card.Bool("Deleted", o.Deleted)
+	card.End()
+	return b.String()
 }
 
 // parseDate parses a YYYY-MM-DD string to time.Time, returning zero on failure.

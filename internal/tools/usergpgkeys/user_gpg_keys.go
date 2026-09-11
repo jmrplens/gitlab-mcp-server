@@ -3,8 +3,8 @@ package usergpgkeys
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -231,45 +231,84 @@ func toOutputList(keys []*gl.GPGKey) []Output {
 
 // Markdown formatters.
 
-// FormatListMarkdownString renders a GPG key list as a Markdown string.
+// The number of trailing characters of the base64 body each preview shows:
+// enough to tell one key from another at a glance in a row, and enough to
+// compare against a key the reader holds on the card.
+const (
+	listPreviewRunes   = 24
+	detailPreviewRunes = 64
+)
+
+// FormatListMarkdownString renders the GPG keys on an account as the
+// collection they are.
 func FormatListMarkdownString(o ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## GPG Keys (%d)\n\n", len(o.Keys))
 	if len(o.Keys) == 0 {
-		b.WriteString("No GPG keys found.\n")
-	} else {
-		b.WriteString("| ID | Key (truncated) | Created At |\n")
-		b.WriteString("|---|---|---|\n")
-		for _, k := range o.Keys {
-			keyPreview := k.Key
-			if len(keyPreview) > 40 {
-				keyPreview = keyPreview[:40] + "..."
-			}
-			fmt.Fprintf(&b, "| %d | `%s` | %s |\n",
-				k.ID, toolutil.EscapeMdTableCell(keyPreview), toolutil.FormatTime(k.CreatedAt))
-		}
+		return toolutil.EmptyMessage("GPG keys")
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_get_gpg_key` to view full key details",
-	)
+	var b strings.Builder
+	var pagination toolutil.PaginationOutput
+	toolutil.WriteListHeading(&b, "GPG Keys", len(o.Keys), pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Key (truncated)", "Created At"))
+	for _, k := range o.Keys {
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(k.ID, 10),
+			toolutil.MdCodeSpanCell(keyPreview(k.Key, listPreviewRunes)),
+			toolutil.FormatTime(k.CreatedAt),
+		))
+	}
+	toolutil.WriteListFooter(&b, pagination, false, hintGetGPGKey)
 	return b.String()
 }
 
-// FormatMarkdownString renders a single GPG key as a Markdown string.
+// FormatMarkdownString renders one GPG key as a card.
 func FormatMarkdownString(o Output) string {
 	var b strings.Builder
-	b.WriteString("## GPG Key\n\n")
-	fmt.Fprintf(&b, toolutil.FmtMdID, o.ID)
-	keyPreview := o.Key
-	if len(keyPreview) > 80 {
-		keyPreview = keyPreview[:80] + "..."
-	}
-	// The preview is truncated rather than constrained, and an armored GPG
-	// block carries whatever the key's owner put in its user ID packet.
-	fmt.Fprintf(&b, "- **Key**: `%s`\n", toolutil.EscapeMdTableCell(keyPreview))
-	if o.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(o.CreatedAt))
-	}
+	card := toolutil.NewCard(&b, "GPG Key")
+	card.Int("ID", o.ID)
+	card.Code("Key", keyPreview(o.Key, detailPreviewRunes))
+	card.Time("Created", o.CreatedAt)
+	card.End()
 	return b.String()
+}
+
+// keyPreview renders the part of an armored GPG key that tells one key from
+// another. Every armored block opens with the same "-----BEGIN PGP PUBLIC KEY
+// BLOCK-----" line, the same optional header lines and the same first base64
+// characters, so a preview cut from the front showed one identical string for
+// every key on the account. The tail of the body is what differs, so that is
+// what is shown, cut on a rune boundary, with an ellipsis saying it is a tail.
+func keyPreview(key string, runes int) string {
+	body := []rune(armoredBody(key))
+	if len(body) <= runes {
+		return string(body)
+	}
+	return "..." + string(body[len(body)-runes:])
+}
+
+// armoredBody is the base64 payload of an armored GPG key. The armor lines,
+// the header lines that follow them up to the first blank line, and the CRC
+// line that closes the payload are what every key shares, and none of them is
+// the key; a value carrying none of that structure is its own body.
+func armoredBody(key string) string {
+	var body strings.Builder
+	inHeaders := false
+	for line := range strings.SplitSeq(key, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case line == "":
+			inHeaders = false
+		case strings.HasPrefix(line, "-----"):
+			inHeaders = true
+		case strings.HasPrefix(line, "="):
+			// The CRC24 checksum closing the payload.
+		case inHeaders && strings.Contains(line, ": "):
+			// An armor header, such as "Version: GnuPG v1".
+		default:
+			body.WriteString(line)
+		}
+	}
+	if body.Len() == 0 {
+		return strings.TrimSpace(key)
+	}
+	return body.String()
 }

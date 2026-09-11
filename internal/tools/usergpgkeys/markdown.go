@@ -1,10 +1,14 @@
 package usergpgkeys
 
 import (
-	"fmt"
+	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// hintGetGPGKey names the canonical catalog ID every surface accepts, rather
+// than an individual tool name the default surface does not register.
+var hintGetGPGKey = toolutil.HintAction("user.get_gpg_key", "view full key details")
 
 func init() {
 	toolutil.RegisterMarkdown(FormatMarkdownString)
@@ -14,6 +18,10 @@ func init() {
 
 // FormatDeleteMarkdownString renders a GPG key deletion confirmation.
 func FormatDeleteMarkdownString(o DeleteOutput) string {
-	return fmt.Sprintf("## GPG Key Deleted\n\n- **Key ID**: %d\n- **Deleted**: %s\n",
-		o.KeyID, toolutil.BoolEmoji(o.Deleted))
+	var b strings.Builder
+	card := toolutil.NewCard(&b, "GPG Key Deleted")
+	card.Int("Key ID", o.KeyID)
+	card.Bool("Deleted", o.Deleted)
+	card.End()
+	return b.String()
 }

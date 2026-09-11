@@ -3,8 +3,8 @@ package users
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
+	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -169,11 +169,14 @@ func DisableTwoFactor(ctx context.Context, client *gitlabclient.Client, input Ad
 }
 
 // FormatAdminActionMarkdownString renders an admin action result as Markdown.
+// The outcome is the tick or the cross [toolutil.BoolEmoji] gives it, rather
+// than a success glyph printed beside the word "false".
 func FormatAdminActionMarkdownString(o AdminActionOutput) string {
-	return fmt.Sprintf("## User Admin Action\n\n"+
-		toolutil.FmtMdID+
-		"- **Action**: %s\n"+
-		"- **Success**: %s %v\n",
-		//gitlab:allow-unescaped o.Action: one of the nine constants this file writes beside the request, never a value GitLab returned.
-		o.UserID, o.Action, toolutil.EmojiSuccess, o.Success)
+	var b strings.Builder
+	card := toolutil.NewCard(&b, "User Admin Action")
+	card.Int("ID", o.UserID)
+	card.Field("Action", o.Action)
+	card.Bool("Success", o.Success)
+	card.End()
+	return b.String()
 }

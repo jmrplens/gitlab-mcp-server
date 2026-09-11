@@ -5,7 +5,6 @@ package users
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -167,13 +166,14 @@ func TestRejectUser_Success(t *testing.T) {
 	}
 }
 
-// TestFormatAdminActionMarkdownString verifies FormatAdminActionMarkdownString
-// produces non-empty markdown for a successful admin action result.
+// TestFormatAdminActionMarkdownString verifies the whole admin-action card for
+// a successful action.
 func TestFormatAdminActionMarkdownString(t *testing.T) {
-	md := FormatAdminActionMarkdownString(AdminActionOutput{UserID: 42, Action: "block", Success: true})
-	if md == "" {
-		t.Fatal("expected non-empty markdown")
-	}
+	assertMarkdown(t, FormatAdminActionMarkdownString(AdminActionOutput{UserID: 42, Action: "block", Success: true}),
+		"## User Admin Action\n\n"+
+			"- **ID**: 42\n"+
+			"- **Action**: block\n"+
+			"- **Success**: ✅\n")
 }
 
 // TestAdminActions_TableDriven validates all admin state actions (block, unblock,
@@ -311,17 +311,29 @@ func assertAdminActionCancelledContext(t *testing.T, action struct {
 	}
 }
 
-// TestFormatAdminActionMarkdownString_Fields verifies that all output fields
-// appear in the formatted Markdown string.
+// TestFormatAdminActionMarkdownString_Fields verifies the whole card for both
+// outcomes. A refused action used to print the success glyph beside the word
+// "false", which reads as a success whatever the word says.
 func TestFormatAdminActionMarkdownString_Fields(t *testing.T) {
-	md := FormatAdminActionMarkdownString(AdminActionOutput{
-		UserID: 99, Action: "banned", Success: true,
-	})
-	for _, want := range []string{"99", "banned", "true"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
+	tests := []struct {
+		name  string
+		input AdminActionOutput
+		want  string
+	}{
+		{
+			name:  "the action succeeded",
+			input: AdminActionOutput{UserID: 99, Action: "banned", Success: true},
+			want:  "## User Admin Action\n\n- **ID**: 99\n- **Action**: banned\n- **Success**: ✅\n",
+		},
+		{
+			name:  "the action did not succeed",
+			input: AdminActionOutput{UserID: 99, Action: "banned", Success: false},
+			want:  "## User Admin Action\n\n- **ID**: 99\n- **Action**: banned\n- **Success**: ❌\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertMarkdown(t, FormatAdminActionMarkdownString(tt.input), tt.want)
 		})
 	}
 }

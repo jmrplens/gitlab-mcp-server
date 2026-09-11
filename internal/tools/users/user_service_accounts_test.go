@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestCreateCurrentUserPAT_ReadsWhatTheSDKDoesNotModel verifies the token
@@ -171,24 +172,26 @@ func TestCreateCurrentUserPAT_EmptyScopes(t *testing.T) {
 	}
 }
 
-// TestFormatServiceAccountListMarkdownString_Empty verifies the markdown
-// formatter returns a non-empty string for an empty service account list.
+// TestFormatServiceAccountListMarkdownString_Empty verifies that a list with
+// nothing in it is the one sentence and nothing else: it used to be a heading
+// counting nothing above a warning sign, which reads as a failure rather than
+// as an instance with no service accounts on it.
 func TestFormatServiceAccountListMarkdownString_Empty(t *testing.T) {
-	md := FormatServiceAccountListMarkdownString(ServiceAccountListOutput{})
-	if md == "" {
-		t.Fatal("expected non-empty markdown for empty list")
-	}
+	assertMarkdown(t, FormatServiceAccountListMarkdownString(ServiceAccountListOutput{}), "No service accounts found.\n")
 }
 
-// TestFormatCurrentUserPATMarkdownString verifies FormatCurrentUserPATMarkdownString
-// produces non-empty markdown for a PAT output.
+// TestFormatCurrentUserPATMarkdownString verifies the whole card for a token
+// GitLab returned without its secret, which is every read of an existing one.
 func TestFormatCurrentUserPATMarkdownString(t *testing.T) {
-	md := FormatCurrentUserPATMarkdownString(CurrentUserPATOutput{
+	assertMarkdown(t, FormatCurrentUserPATMarkdownString(CurrentUserPATOutput{
 		ID: 1, Name: "test", Scopes: []string{"api"}, UserID: 42,
-	})
-	if md == "" {
-		t.Fatal("expected non-empty markdown")
-	}
+	}),
+		"## Personal Access Token\n\n"+
+			"- **ID**: 1\n"+
+			"- **Name**: test\n"+
+			"- **Active**: ❌\n"+
+			"- **Scopes**: api\n"+
+			"- **Granular**: ❌\n")
 }
 
 // TestCreateServiceAccount_APIError verifies error handling on API failure.
@@ -304,7 +307,8 @@ func TestCreateCurrentUserPAT_WithDescription(t *testing.T) {
 	}
 }
 
-// TestFormatServiceAccountListMarkdownString_WithData verifies full table rendering.
+// TestFormatServiceAccountListMarkdownString_WithData verifies the whole list
+// render.
 func TestFormatServiceAccountListMarkdownString_WithData(t *testing.T) {
 	out := ServiceAccountListOutput{
 		Accounts: []ServiceAccountOutput{
@@ -312,26 +316,22 @@ func TestFormatServiceAccountListMarkdownString_WithData(t *testing.T) {
 			{ID: 2, Username: "svc-2", Name: "Service 2"},
 		},
 	}
-	md := FormatServiceAccountListMarkdownString(out)
 
-	for _, want := range []string{
-		"## Service Accounts (2)",
-		"| ID | Username | Name |",
-		"| 1 | svc-1 | Service 1 |",
-		"| 2 | svc-2 | Service 2 |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatServiceAccountListMarkdownString(out),
+		"## Service Accounts (2)\n\n"+
+			"| ID | Username | Name | Email |\n"+
+			"| --- | --- | --- | --- |\n"+
+			"| 1 | svc-1 | Service 1 |  |\n"+
+			"| 2 | svc-2 | Service 2 |  |\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'user.create_service_account' to add a service account\n")
 }
 
-// TestFormatCurrentUserPATMarkdownString_WithAllFields verifies full PAT markdown
-// including token and expires_at.
+// TestFormatCurrentUserPATMarkdownString_WithAllFields verifies the whole card
+// for a token GitLab minted: the secret in a code span, the expiry in the
+// display form, and the store-securely sentence the secret row adds.
 func TestFormatCurrentUserPATMarkdownString_WithAllFields(t *testing.T) {
-	md := FormatCurrentUserPATMarkdownString(CurrentUserPATOutput{
+	assertMarkdown(t, FormatCurrentUserPATMarkdownString(CurrentUserPATOutput{
 		ID:          10,
 		Name:        "my-pat",
 		Active:      true,
@@ -340,23 +340,45 @@ func TestFormatCurrentUserPATMarkdownString_WithAllFields(t *testing.T) {
 		Description: "Test token",
 		ExpiresAt:   "2026-01-15",
 		UserID:      1,
-	})
+	}),
+		"## Personal Access Token\n\n"+
+			"- **ID**: 10\n"+
+			"- **Name**: my-pat\n"+
+			"- **Active**: ✅\n"+
+			"- **Scopes**: api, read_user\n"+
+			"- **Granular**: ❌\n"+
+			"- **Description**: Test token\n"+
+			"- **Expires At**: 15 Jan 2026\n"+
+			"- **Token**: `glpat-secret`\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Store the token securely. It cannot be retrieved later\n")
+}
 
-	for _, want := range []string{
-		"## Personal Access Token",
-		"**Name**: my-pat",
-		"**Active**: true",
-		"**Scopes**: api, read_user",
-		"**Description**: Test token",
-		"**Expires At**: 2026-01-15",
-		"`glpat-secret`",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
+// TestFormatCurrentUserPATMarkdownString_Granular verifies the granular token:
+// a token scoped by permissions rather than by the scopes list carried neither
+// the flag nor the scopes, so the card said nothing about what it could reach.
+func TestFormatCurrentUserPATMarkdownString_Granular(t *testing.T) {
+	assertMarkdown(t, FormatCurrentUserPATMarkdownString(CurrentUserPATOutput{
+		ID:       11,
+		Name:     "granular-pat",
+		Active:   true,
+		Scopes:   []string{},
+		Granular: true,
+		GranularScopes: []toolutil.TokenGranularScopeOutput{
+			{Access: "personal_projects", Permissions: []string{"read_job", "read_code"}, ProjectID: 3},
+			{Access: "group", Permissions: []string{"read_group"}, GroupID: 9},
+		},
+	}),
+		"## Personal Access Token\n\n"+
+			"- **ID**: 11\n"+
+			"- **Name**: granular-pat\n"+
+			"- **Active**: ✅\n"+
+			"- **Granular**: ✅\n"+
+			"\n### Granular Scopes\n\n"+
+			"| Access | Project ID | Group ID | Permissions |\n"+
+			"| --- | --- | --- | --- |\n"+
+			"| personal_projects | 3 |  | read_job, read_code |\n"+
+			"| group |  | 9 | read_group |\n")
 }
 
 // --- UpdateInstanceServiceAccount tests ---.
@@ -496,43 +518,27 @@ func TestFormatServiceAccountMarkdownString_WithEmail(t *testing.T) {
 		Email:            "svc7@example.com",
 		UnconfirmedEmail: "pending@example.com",
 	}
-	md := FormatServiceAccountMarkdownString(out)
-
-	for _, want := range []string{
-		"## Service Account",
-		"**Username**: svc-7",
-		"**Name**: Service Seven",
-		"**Email**: svc7@example.com",
-		"**Unconfirmed Email**: pending@example.com",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatServiceAccountMarkdownString(out),
+		"## Service Account\n\n"+
+			"- **ID**: 7\n"+
+			"- **Username**: svc-7\n"+
+			"- **Name**: Service Seven\n"+
+			"- **Email**: svc7@example.com\n"+
+			"- **Unconfirmed Email**: pending@example.com\n")
 }
 
-// TestFormatServiceAccountMarkdownString_NoEmail verifies FormatServiceAccountMarkdownString
-// omits the Email and UnconfirmedEmail lines when those fields are empty.
+// TestFormatServiceAccountMarkdownString_NoEmail verifies that the two absent
+// addresses write no row rather than a label with nothing after it.
 func TestFormatServiceAccountMarkdownString_NoEmail(t *testing.T) {
 	out := ServiceAccountOutput{
 		ID:       8,
 		Username: "svc-8",
 		Name:     "Service Eight",
 	}
-	md := FormatServiceAccountMarkdownString(out)
 
-	if !strings.Contains(md, "**Username**: svc-8") {
-		t.Errorf("markdown missing Username:\n%s", md)
-	}
-	if !strings.Contains(md, "**Name**: Service Eight") {
-		t.Errorf("markdown missing Name:\n%s", md)
-	}
-	if strings.Contains(md, "**Email**") {
-		t.Errorf("markdown should not contain Email when empty:\n%s", md)
-	}
-	if strings.Contains(md, "**Unconfirmed Email**") {
-		t.Errorf("markdown should not contain Unconfirmed Email when empty:\n%s", md)
-	}
+	assertMarkdown(t, FormatServiceAccountMarkdownString(out),
+		"## Service Account\n\n"+
+			"- **ID**: 8\n"+
+			"- **Username**: svc-8\n"+
+			"- **Name**: Service Eight\n")
 }
