@@ -195,9 +195,15 @@ func TestCreateTrigger_MintedToken_IsRenderedInFull(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	md := FormatTriggerMarkdown(out)
-	if !strings.Contains(md, "| Token | `"+token+"` |") {
-		t.Errorf("create card missing the minted token in a code span:\n%s", md)
+
+	want := "## Pipeline Trigger #11\n\n" +
+		"- **ID**: 11\n" +
+		"- **Description**: test trigger\n" +
+		"- **Token**: `" + token + "`\n" +
+		ptHintsOpening + ptStoreHint + ptUpdateHint + ptRunHint + ptDeleteHint
+
+	if got := FormatTriggerMarkdown(out); got != want {
+		t.Errorf("create card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -222,15 +228,19 @@ func TestGetTrigger_ExistingToken_IsRenderedByPrefixOnly(t *testing.T) {
 	if out.Token != token {
 		t.Errorf("structured output = %q, want the token GitLab sent kept for 1:1 parity", out.Token)
 	}
+
+	want := "## Pipeline Trigger #10\n\n" +
+		"- **ID**: 10\n" +
+		"- **Description**: deploy\n" +
+		"- **Token**: `glptt-stor...`\n" +
+		ptMaskedHints
+
 	md := FormatTriggerMarkdown(out)
+	if md != want {
+		t.Errorf("get card mismatch:\ngot:\n%s\nwant:\n%s", md, want)
+	}
 	if strings.Contains(md, token) {
 		t.Errorf("get card rendered the whole token:\n%s", md)
-	}
-	if !strings.Contains(md, "| Token | `glptt-stor...` |") {
-		t.Errorf("get card missing the masked token prefix:\n%s", md)
-	}
-	if !strings.Contains(md, "Only the prefix of the token is shown here") {
-		t.Errorf("get card missing the hint naming where the full value is:\n%s", md)
 	}
 }
 
@@ -242,7 +252,7 @@ func TestGetTrigger_ExistingToken_IsRenderedByPrefixOnly(t *testing.T) {
 func TestFormatListTriggersMarkdown_Tokens_AreRenderedByPrefixOnly(t *testing.T) {
 	const tokenA = "glptt-aaaasecret0123456789"
 	const tokenB = "glptt-bbbbsecret0123456789"
-	md := FormatListTriggersMarkdown(ListOutput{
+	got := FormatListTriggersMarkdown(ListOutput{
 		Triggers: []Output{
 			{ID: 1, Description: "A", Token: tokenA},
 			{ID: 2, Description: "B", Token: tokenB},
@@ -250,17 +260,20 @@ func TestFormatListTriggersMarkdown_Tokens_AreRenderedByPrefixOnly(t *testing.T)
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	})
 
+	want := "## Pipeline Triggers (2)\n\n" +
+		ptListHeader +
+		"| 1 | A | `glptt-aaaa...` |  |  | never |\n" +
+		"| 2 | B | `glptt-bbbb...` |  |  | never |\n\n" +
+		"Page 1 of 1 | 2 items total | 20 per page\n" +
+		ptListHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
 	for _, token := range []string{tokenA, tokenB} {
 		t.Run(token, func(t *testing.T) {
-			if strings.Contains(md, token) {
-				t.Errorf("list rendered the whole token %q:\n%s", token, md)
-			}
-		})
-	}
-	for _, want := range []string{"glptt-aaaa...", "glptt-bbbb..."} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("list missing the masked prefix %q:\n%s", want, md)
+			if strings.Contains(got, token) {
+				t.Errorf("list rendered the whole token %q:\n%s", token, got)
 			}
 		})
 	}
@@ -632,56 +645,97 @@ func TestRunTrigger_MissingToken(t *testing.T) {
 // Markdown formatters
 // ----------------------------------------------.
 
-// TestFormatTriggerMarkdown verifies FormatTriggerMarkdown.
+// The pieces the pipeline-trigger formatters close with. A card that showed a
+// masked token points the reader at the structured output instead of at a run
+// action it cannot supply a token for; the list table carries no link, so it
+// does not ask the model to preserve any.
+const (
+	ptHintsOpening = "\n---\n\U0001F4A1 **Next steps:**\n"
+	ptStoreHint    = "- Store the token securely. It cannot be retrieved later\n"
+	ptUpdateHint   = "- Use the selected tool surface's pipeline-trigger update action with the same project_id and trigger_id to modify this trigger\n"
+	ptRunHint      = "- Use the selected tool surface's pipeline-trigger run action with the same project_id, ref, and this token to execute a pipeline\n"
+	ptPrefixHint   = "- Only the prefix of the token is shown here. Read the full value from this result's structured output, or use the pipeline-trigger create action to mint a new trigger, before calling the pipeline-trigger run action\n"
+	ptDeleteHint   = "- Use the selected tool surface's pipeline-trigger delete action with the same project_id, trigger_id, and explicit confirm=true to remove this trigger\n"
+
+	ptMaskedHints  = ptHintsOpening + ptUpdateHint + ptPrefixHint + ptDeleteHint
+	ptNoTokenHints = ptHintsOpening + ptUpdateHint + ptRunHint + ptDeleteHint
+
+	ptListHeader = "| ID | Description | Token | Owner | Last Used | Expires |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n"
+
+	ptListHints = ptHintsOpening +
+		"- The Token column shows each token's prefix only. Read the full value from this result's structured output when a pipeline-trigger run action needs one\n" +
+		"- Use the selected tool surface's pipeline-trigger get action with the same project_id and trigger_id for full details\n" +
+		"- Use the selected tool surface's pipeline-trigger create action with project_id to add a new pipeline trigger\n"
+
+	ptRunCardHints = ptHintsOpening +
+		"- Use the selected tool surface's pipeline get action with the returned id to monitor progress\n"
+)
+
+// TestFormatTriggerMarkdown pins the whole card a get answers with: the token
+// masked to its prefix inside a code span, and the run hint replaced by the
+// one that says where the full value is.
 func TestFormatTriggerMarkdown(t *testing.T) {
-	md := FormatTriggerMarkdown(Output{ID: 10, Description: "deploy", Token: "abc123", Owner: &UserOutput{ID: 1, Name: "Admin"}, CreatedAt: "2026-01-01T00:00:00Z"})
-	if md == "" {
-		t.Error("expected non-empty markdown")
+	got := FormatTriggerMarkdown(Output{ID: 10, Description: "deploy", Token: "glptt-abc123def", Owner: &UserOutput{ID: 1, Name: "Admin"}, CreatedAt: "2026-01-01T00:00:00Z"})
+
+	want := "## Pipeline Trigger #10\n\n" +
+		"- **ID**: 10\n" +
+		"- **Description**: deploy\n" +
+		"- **Token**: `glptt-abc1...`\n" +
+		"- **Owner**: Admin\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		ptMaskedHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListTriggersMarkdown_Empty verifies FormatListTriggersMarkdown when empty.
+// TestFormatListTriggersMarkdown_Empty pins the whole response of a list with
+// no triggers.
 func TestFormatListTriggersMarkdown_Empty(t *testing.T) {
-	md := FormatListTriggersMarkdown(ListOutput{})
-	if !contains(md, "No pipeline triggers found") {
-		t.Error("expected empty-state message")
+	if got, want := FormatListTriggersMarkdown(ListOutput{}), "No pipeline triggers found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListTriggersMarkdown_WithData verifies FormatListTriggersMarkdown when with data.
+// TestFormatListTriggersMarkdown_WithData pins the whole list document for one
+// trigger, the Expires column included.
 func TestFormatListTriggersMarkdown_WithData(t *testing.T) {
-	md := FormatListTriggersMarkdown(ListOutput{
-		Triggers: []Output{{ID: 1, Description: "test", Token: "tok"}},
+	got := FormatListTriggersMarkdown(ListOutput{
+		Triggers: []Output{{ID: 1, Description: "test", Token: "glptt-tokvalue1234", ExpiresAt: "2027-03-04T00:00:00Z"}},
 		Pagination: toolutil.PaginationOutput{
 			Page: 1, PerPage: 20, TotalItems: 1, TotalPages: 1,
 		},
 	})
-	if md == "" {
-		t.Error("expected non-empty markdown")
+
+	want := "## Pipeline Triggers (1)\n\n" +
+		ptListHeader +
+		"| 1 | test | `glptt-tokv...` |  |  | 4 Mar 2027 00:00 UTC |\n\n" +
+		"Page 1 of 1 | 1 items total | 20 per page\n" +
+		ptListHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatRunOutputMarkdown verifies FormatRunOutputMarkdown.
+// TestFormatRunOutputMarkdown pins the whole card of a pipeline a trigger
+// started, the status with the glyph its state earns.
 func TestFormatRunOutputMarkdown(t *testing.T) {
-	md := FormatRunOutputMarkdown(RunOutput{ID: 99, SHA: "abc", Ref: "main", Status: "created", WebURL: "https://gl/p/1"})
-	if md == "" {
-		t.Error("expected non-empty markdown")
-	}
-}
+	got := FormatRunOutputMarkdown(RunOutput{ID: 99, SHA: "abc", Ref: "main", Status: "created", WebURL: "https://gl/p/1"})
 
-// contains reports whether contains.
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(s) > 0 && containsHelper(s, sub))
-}
+	want := "## Pipeline Triggered\n\n" +
+		"- **Pipeline ID**: 99\n" +
+		"- **SHA**: `abc`\n" +
+		"- **Ref**: main\n" +
+		"- **Status**: " + toolutil.PipelineStatusEmoji("created") + " created\n" +
+		"- **URL**: [https://gl/p/1](https://gl/p/1)\n" +
+		ptRunCardHints
 
-// containsHelper reports whether contains helper.
-func containsHelper(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	return false
 }
 
 // ---------- Tests consolidated from coverage_test.go ----------.
@@ -954,9 +1008,10 @@ func TestRunTrigger_CancelledContext(t *testing.T) {
 // FormatTriggerMarkdown — all optional fields, minimal fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatTriggerMarkdown_AllFields verifies FormatTriggerMarkdown when all fields.
+// TestFormatTriggerMarkdown_AllFields pins the whole card of a trigger with
+// every field GitLab sends set.
 func TestFormatTriggerMarkdown_AllFields(t *testing.T) {
-	md := FormatTriggerMarkdown(Output{
+	got := FormatTriggerMarkdown(Output{
 		ID:          10,
 		Description: "deploy trigger",
 		Token:       "glptt-abc123def456",
@@ -966,43 +1021,54 @@ func TestFormatTriggerMarkdown_AllFields(t *testing.T) {
 		LastUsed:    "2026-12-01T00:00:00Z",
 	})
 
-	for _, want := range []string{
-		"## Pipeline Trigger",
-		"| ID | 10 |",
-		"deploy trigger",
-		"glptt-abc1...",
-		"Admin",
-		"1 Jan 2026 00:00 UTC",
-		"1 Dec 2026 00:00 UTC",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Pipeline Trigger #10\n\n" +
+		"- **ID**: 10\n" +
+		"- **Description**: deploy trigger\n" +
+		"- **Token**: `glptt-abc1...`\n" +
+		"- **Owner**: Admin\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Last Used**: 1 Dec 2026 00:00 UTC\n" +
+		ptMaskedHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatTriggerMarkdown_MinimalFields verifies FormatTriggerMarkdown when minimal fields.
+// TestFormatTriggerMarkdown_MinimalFields pins the card of a trigger GitLab
+// sent no owner and no timestamps for, and the token too short to spare four
+// characters withheld whole.
 func TestFormatTriggerMarkdown_MinimalFields(t *testing.T) {
-	md := FormatTriggerMarkdown(Output{
+	got := FormatTriggerMarkdown(Output{
 		ID:          5,
 		Description: "minimal",
 		Token:       "tok",
 	})
-	if !strings.Contains(md, "## Pipeline Trigger") {
-		t.Errorf("missing header:\n%s", md)
+
+	want := "## Pipeline Trigger #5\n\n" +
+		"- **ID**: 5\n" +
+		"- **Description**: minimal\n" +
+		"- **Token**: `" + toolutil.RedactedPlaceholder + "`\n" +
+		ptMaskedHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	for _, absent := range []string{
-		"| Owner |",
-		"| Created |",
-		"| Last Used |",
-	} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-			}
-		})
+}
+
+// TestFormatTriggerMarkdown_NoToken pins the card of a trigger GitLab answered
+// with no token at all: no token row, no store-it hint, and the ordinary run
+// hint.
+func TestFormatTriggerMarkdown_NoToken(t *testing.T) {
+	got := FormatTriggerMarkdown(Output{ID: 7, Description: "tokenless"})
+
+	want := "## Pipeline Trigger #7\n\n" +
+		"- **ID**: 7\n" +
+		"- **Description**: tokenless\n" +
+		ptNoTokenHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1010,7 +1076,8 @@ func TestFormatTriggerMarkdown_MinimalFields(t *testing.T) {
 // FormatListTriggersMarkdown — detailed checks
 // ---------------------------------------------------------------------------.
 
-// TestFormatListTriggersMarkdown_DetailedContent verifies FormatListTriggersMarkdown when detailed content.
+// TestFormatListTriggersMarkdown_DetailedContent pins the whole list document
+// for two triggers, one of which GitLab never reported a last use for.
 func TestFormatListTriggersMarkdown_DetailedContent(t *testing.T) {
 	out := ListOutput{
 		Triggers: []Output{
@@ -1019,25 +1086,16 @@ func TestFormatListTriggersMarkdown_DetailedContent(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListTriggersMarkdown(out)
 
-	for _, want := range []string{
-		"## Pipeline Triggers",
-		"| ID | Description | Token | Owner | Last Used |",
-		"| 1 |",
-		"| 2 |",
-		"Trigger A",
-		"Trigger B",
-		"glptt-tokA...",
-		"glptt-tokB...",
-		"admin",
-		"user1",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Pipeline Triggers (2)\n\n" +
+		ptListHeader +
+		"| 1 | Trigger A | `glptt-tokA...` | admin | 1 Jan 2026 00:00 UTC | never |\n" +
+		"| 2 | Trigger B | `glptt-tokB...` | user1 |  | never |\n\n" +
+		"Page 1 of 1 | 2 items total | 20 per page\n" +
+		ptListHints
+
+	if got := FormatListTriggersMarkdown(out); got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1045,66 +1103,74 @@ func TestFormatListTriggersMarkdown_DetailedContent(t *testing.T) {
 // FormatRunOutputMarkdown — without web URL, empty values
 // ---------------------------------------------------------------------------.
 
-// TestFormatRunOutputMarkdown_WithoutWebURL verifies FormatRunOutputMarkdown when without web URL.
+// TestFormatRunOutputMarkdown_WithoutWebURL pins the card of a pipeline
+// GitLab gave no address for: no URL row at all, rather than a label with
+// nothing after it.
 func TestFormatRunOutputMarkdown_WithoutWebURL(t *testing.T) {
-	md := FormatRunOutputMarkdown(RunOutput{
+	got := FormatRunOutputMarkdown(RunOutput{
 		ID:     50,
 		SHA:    "deadbeef",
 		Ref:    "develop",
 		Status: "pending",
 	})
-	for _, want := range []string{
-		"## Pipeline Triggered",
-		"| Pipeline ID | 50 |",
-		"| SHA | deadbeef |",
-		"| Ref | develop |",
-		"| Status | pending |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-	if strings.Contains(md, "| URL |") {
-		t.Errorf("should not contain URL row when WebURL is empty:\n%s", md)
+
+	want := "## Pipeline Triggered\n\n" +
+		"- **Pipeline ID**: 50\n" +
+		"- **SHA**: `deadbeef`\n" +
+		"- **Ref**: develop\n" +
+		"- **Status**: " + toolutil.PipelineStatusEmoji("pending") + " pending\n" +
+		ptRunCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatRunOutputMarkdown_AllFields verifies FormatRunOutputMarkdown when all fields.
+// TestFormatRunOutputMarkdown_AllFields pins the whole card of a triggered
+// pipeline with an address.
 func TestFormatRunOutputMarkdown_AllFields(t *testing.T) {
-	md := FormatRunOutputMarkdown(RunOutput{
+	const url = "https://gl/p/1/-/pipelines/99"
+	got := FormatRunOutputMarkdown(RunOutput{
 		ID:        99,
 		SHA:       "abc",
 		Ref:       "main",
 		Status:    "created",
-		WebURL:    "https://gl/p/1/-/pipelines/99",
+		WebURL:    url,
 		CreatedAt: "2026-06-01T00:00:00Z",
 	})
-	for _, want := range []string{
-		"## Pipeline Triggered",
-		"| Pipeline ID | 99 |",
-		"| URL | [Pipeline #99](https://gl/p/1/-/pipelines/99) |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+
+	want := "## Pipeline Triggered\n\n" +
+		"- **Pipeline ID**: 99\n" +
+		"- **SHA**: `abc`\n" +
+		"- **Ref**: main\n" +
+		"- **Status**: " + toolutil.PipelineStatusEmoji("created") + " created\n" +
+		"- **URL**: [" + url + "](" + url + ")\n" +
+		ptRunCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatTriggerMarkdown_ExpiresAt verifies the expiry reaches the rendered
-// table. It is read off the captured response because the SDK does not model
-// it, and a trigger shown without it reads as one that never expires.
+// TestFormatTriggerMarkdown_ExpiresAt pins that the expiry reaches the card.
+// It is read off the captured response because the SDK does not model it, and
+// a trigger shown without it reads as one that never expires.
 func TestFormatTriggerMarkdown_ExpiresAt(t *testing.T) {
-	withExpiry := FormatTriggerMarkdown(Output{ID: 1, Description: "nightly", ExpiresAt: "2026-05-05T00:00:00Z"})
-	if !strings.Contains(withExpiry, "| Expires At |") {
-		t.Errorf("markdown missing the expiry row:\n%s", withExpiry)
+	withExpiry := "## Pipeline Trigger #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Description**: nightly\n" +
+		"- **Expires At**: 5 May 2026 00:00 UTC\n" +
+		ptNoTokenHints
+	if got := FormatTriggerMarkdown(Output{ID: 1, Description: "nightly", ExpiresAt: "2026-05-05T00:00:00Z"}); got != withExpiry {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, withExpiry)
 	}
-	without := FormatTriggerMarkdown(Output{ID: 1, Description: "nightly"})
-	if strings.Contains(without, "| Expires At |") {
-		t.Errorf("markdown shows an expiry GitLab did not send:\n%s", without)
+
+	without := "## Pipeline Trigger #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Description**: nightly\n" +
+		ptNoTokenHints
+	if got := FormatTriggerMarkdown(Output{ID: 1, Description: "nightly"}); got != without {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, without)
 	}
 }
 

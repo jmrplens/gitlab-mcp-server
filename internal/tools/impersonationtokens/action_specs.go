@@ -8,6 +8,7 @@ import (
 const (
 	actionImpersonationTokenRevoke = "impersonationtokens.revoke_impersonation_token"
 	actionImpersonationTokenList   = "impersonationtokens.list_impersonation_tokens"
+	actionImpersonationTokenGet    = "impersonationtokens.get_impersonation_token"
 )
 
 // ActionSpecs returns canonical specs for impersonation and user PAT actions exposed through gitlab_user.

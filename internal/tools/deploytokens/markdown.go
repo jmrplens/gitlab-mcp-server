@@ -2,58 +2,50 @@ package deploytokens
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown formats a single deploy token.
+// FormatOutputMarkdown renders one deploy token as a card.
 func FormatOutputMarkdown(o Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Deploy Token: %s (ID: %d)\n\n", toolutil.EscapeMdHeading(o.Name), o.ID)
-	b.WriteString(toolutil.TblFieldValue)
-	fmt.Fprintf(&b, "| ID | %d |\n", o.ID)
-	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(o.Name))
-	fmt.Fprintf(&b, "| Username | %s |\n", toolutil.EscapeMdTableCell(o.Username))
-	if o.Token != "" {
-		//gitlab:allow-unescaped o.Token: the secret GitLab generated, which the reader has to copy back verbatim.
-		fmt.Fprintf(&b, "| Token | %s |\n", o.Token)
-	}
-	//gitlab:allow-unescaped strings.Join(o.Scopes, ", "): deploy token scopes, which GitLab accepts only from its own fixed set.
-	fmt.Fprintf(&b, "| Scopes | %s |\n", strings.Join(o.Scopes, ", "))
-	fmt.Fprintf(&b, "| Revoked | %t |\n", o.Revoked)
-	fmt.Fprintf(&b, "| Expired | %t |\n", o.Expired)
-	if o.ExpiresAt != "" {
-		fmt.Fprintf(&b, "| Expires | %s |\n", toolutil.FormatTime(o.ExpiresAt))
-	}
-	toolutil.WriteHints(
-		&b,
+	c := toolutil.NewCard(&b, fmt.Sprintf("Deploy Token: %s (ID: %d)", o.Name, o.ID))
+	c.Int("ID", o.ID)
+	c.Field("Name", o.Name)
+	c.Field("Username", o.Username)
+	c.Secret("Token", o.Token)
+	c.Field("Scopes", strings.Join(o.Scopes, ", "))
+	c.Warn("Revoked", o.Revoked)
+	c.Warn("Expired", o.Expired)
+	c.Time("Expires", o.ExpiresAt)
+	c.End(
 		"Use the selected tool surface's deploy-token get action with the matching scope (project or group) and deploy_token_id to fetch this deploy token before changing it",
 		"Use the selected tool surface's deploy-token delete action with the matching scope (project or group), this deploy_token_id, and explicit confirm=true to revoke this deploy token",
 	)
 	return b.String()
 }
 
-// FormatListMarkdown formats a list of deploy tokens.
+// FormatListMarkdown renders a list of deploy tokens as a table.
 func FormatListMarkdown(o ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Deploy Tokens (%d)\n\n", len(o.DeployTokens))
-	toolutil.WriteListSummary(&b, len(o.DeployTokens), o.Pagination)
 	if len(o.DeployTokens) == 0 {
-		b.WriteString("No deploy tokens found.\n")
-		toolutil.WritePagination(&b, o.Pagination)
-		return b.String()
+		return toolutil.EmptyMessage("deploy tokens")
 	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Deploy Tokens", len(o.DeployTokens), o.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Username", "Scopes", "Revoked", "Expired"))
 	for _, t := range o.DeployTokens {
-		//gitlab:allow-unescaped strings.Join(t.Scopes, ", "): deploy token scopes, which GitLab accepts only from its own fixed set.
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %t | %t |\n",
-			t.ID, toolutil.EscapeMdTableCell(t.Name), toolutil.EscapeMdTableCell(t.Username), strings.Join(t.Scopes, ", "), t.Revoked, t.Expired)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(t.ID, 10),
+			toolutil.EscapeMdTableCell(t.Name),
+			toolutil.EscapeMdTableCell(t.Username),
+			toolutil.EscapeMdTableCell(strings.Join(t.Scopes, ", ")),
+			toolutil.BoolEmoji(t.Revoked),
+			toolutil.BoolEmoji(t.Expired),
+		))
 	}
-	toolutil.WritePagination(&b, o.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
+	toolutil.WriteListFooter(&b, o.Pagination, false,
 		"Use the selected tool surface's deploy-token get action with the matching scope (project or group) and deploy_token_id for full details",
 		"Use the selected tool surface's deploy-token create action with the matching scope (project or group) to generate a new deploy token",
 	)

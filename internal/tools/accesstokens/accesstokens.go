@@ -1110,30 +1110,5 @@ func PersonalRevokeSelf(ctx context.Context, client *gitlabclient.Client, _ Pers
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------.
-
-// tokenAccessLevelNames maps GitLab numeric access levels to role names.
-var tokenAccessLevelNames = map[int]string{
-	5:  "Minimal access",
-	10: "Guest",
-	15: "Planner",
-	20: "Reporter",
-	25: "Security Manager",
-	30: "Developer",
-	40: "Maintainer",
-	50: "Owner",
-	60: "Admin",
-}
-
-// accessLevelName maps GitLab numeric access levels to human-readable role names.
-func accessLevelName(level int) string {
-	if name, ok := tokenAccessLevelNames[level]; ok {
-		return name
-	}
-	return fmt.Sprintf("Unknown (%d)", level)
-}
-
-// ---------------------------------------------------------------------------
 // Markdown formatters
 // ---------------------------------------------------------------------------.

@@ -695,39 +695,22 @@ func TestPersonalRevoke_Validation(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestAccessLevelName verifies that accessLevelName maps GitLab access level
-// integers (10/20/30/40/50) to their canonical human-readable names and
-// falls back to "Unknown (N)" for any other value.
-//
-// The test runs a table-driven check across the five known levels plus two
-// out-of-range values (0 and 99). This protects the human-facing output
-// across all GitLab access tiers.
-func TestAccessLevelName(t *testing.T) {
-	tests := []struct {
-		level int
-		want  string
-	}{
-		{10, "Guest"},
-		{20, "Reporter"},
-		{30, "Developer"},
-		{40, "Maintainer"},
-		{50, "Owner"},
-		{0, "Unknown (0)"},
-		{99, "Unknown (99)"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.want, func(t *testing.T) {
-			got := accessLevelName(tc.level)
-			if got != tc.want {
-				t.Errorf("accessLevelName(%d) = %q, want %q", tc.level, got, tc.want)
-			}
-		})
-	}
-}
+// tokenCardHints is the guidance section every access-token card ends with.
+const tokenCardHints = "- Use `gitlab_project_access_token_revoke`, `gitlab_group_access_token_revoke`, or `gitlab_personal_access_token_revoke` to revoke this token from the matching scope\n" +
+	"- Use `gitlab_project_access_token_rotate`, `gitlab_group_access_token_rotate`, or `gitlab_personal_access_token_rotate` to rotate this token from the matching scope\n"
 
-// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// tokenListHints is the guidance section every access-token list ends with.
+// The table carries no link, so the preserve-links reminder is not written.
+const tokenListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'get' with token_id for full details\n" +
+	"- Use action 'create' to generate a new access token\n"
+
+// hintsHeading opens the guidance section of a card that carries hints.
+const hintsHeading = "\n---\n\U0001F4A1 **Next steps:**\n"
+
+// TestFormatOutputMarkdown pins the whole card of a token GitLab has just
+// minted: the secret in a code span, and the store-it-now hint the card adds
+// because it showed one.
 func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{
 		ID:     5,
@@ -736,60 +719,113 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		Scopes: []string{"api", "read_api"},
 		Token:  testGlpatABC,
 	}
-	md := FormatOutputMarkdown(out)
-	if !strings.Contains(md, "Access Token #5") {
-		t.Error("markdown should contain token ID heading")
-	}
-	if !strings.Contains(md, testGlpatABC) {
-		t.Error("markdown should contain token value")
+
+	want := "## Access Token #5\n\n" +
+		"- **ID**: 5\n" +
+		"- **Name**: " + testTokenName + "\n" +
+		"- **Active**: " + toolutil.BoolEmoji(true) + "\n" +
+		"- **Scopes**: api, read_api\n" +
+		"- **Granular**: " + toolutil.BoolEmoji(false) + "\n" +
+		"- **Token**: `" + testGlpatABC + "`\n" +
+		hintsHeading +
+		"- Store the token securely. It cannot be retrieved later\n" +
+		tokenCardHints
+
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_AccessLevel verifies the OutputMarkdown_AccessLevel Markdown formatter for a representative output_accesslevel input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_AccessLevel pins the access level as the role name
+// GitLab means with the number beside it, and the revoked token as a warning
+// rather than as the tick BoolEmoji gives a true.
 func TestFormatOutputMarkdown_AccessLevel(t *testing.T) {
 	out := Output{
 		ID:          7,
 		Name:        "level-token",
-		Active:      true,
+		Active:      false,
+		Revoked:     true,
 		AccessLevel: 30,
 	}
-	md := FormatOutputMarkdown(out)
-	if !strings.Contains(md, "Developer") {
-		t.Errorf("expected Developer role name in markdown, got:\n%s", md)
-	}
-	if strings.Contains(md, "**Access Level**: 30") {
-		t.Error("access level should not show as raw number")
+
+	want := "## Access Token #7\n\n" +
+		"- **ID**: 7\n" +
+		"- **Name**: level-token\n" +
+		"- **Active**: " + toolutil.BoolEmoji(false) + "\n" +
+		"- " + toolutil.EmojiWarning + " **Revoked**\n" +
+		"- **Granular**: " + toolutil.BoolEmoji(false) + "\n" +
+		"- **Access Level**: Developer (30)\n" +
+		hintsHeading + tokenCardHints
+
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_GranularScopes pins the nested collection a
+// granular token renders: the flat scope list says "api" and nothing about
+// which namespace that reaches, and the granular scopes say exactly that.
+func TestFormatOutputMarkdown_GranularScopes(t *testing.T) {
+	out := Output{
+		ID:       9,
+		Name:     "granular-token",
+		Active:   true,
+		Scopes:   []string{"api"},
+		Granular: true,
+		GranularScopes: []toolutil.TokenGranularScopeOutput{
+			{Access: "read", Permissions: []string{"read_code", "read_issue"}, ProjectID: 42},
+			{Access: "write", Permissions: []string{"admin_issue"}, GroupID: 7},
+			{Access: "read", Permissions: []string{"read_user"}},
+		},
+	}
+
+	want := "## Access Token #9\n\n" +
+		"- **ID**: 9\n" +
+		"- **Name**: granular-token\n" +
+		"- **Active**: " + toolutil.BoolEmoji(true) + "\n" +
+		"- **Scopes**: api\n" +
+		"- **Granular**: " + toolutil.BoolEmoji(true) + "\n\n" +
+		"### Granular Scopes\n\n" +
+		"| Access | Permissions | Namespace |\n" +
+		"| --- | --- | --- |\n" +
+		"| read | read_code, read_issue | project #42 |\n" +
+		"| write | admin_issue | group #7 |\n" +
+		"| read | read_user | - |\n" +
+		hintsHeading + tokenCardHints
+
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_Empty pins the whole response of a list with no
+// tokens: the one sentence and nothing else.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No access tokens found") {
-		t.Error("empty list should show no tokens message")
+	if got, want := FormatListMarkdown(ListOutput{}), "No access tokens found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_WithTokens verifies the ListMarkdown_WithTokens Markdown formatter for a representative list_withtokens input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_WithTokens pins the whole table, including the
+// expiry a token GitLab sent none for renders as, which is a fact about the
+// token and not a missing value.
 func TestFormatListMarkdown_WithTokens(t *testing.T) {
 	out := ListOutput{
 		Tokens: []Output{
 			{ID: 1, Name: "bot-1", Active: true, Scopes: []string{"api"}, ExpiresAt: "2026-12-31"},
-			{ID: 2, Name: "bot-2", Active: false, Scopes: []string{"read_api"}},
+			{ID: 2, Name: "bot-2", Active: false, Revoked: true, Scopes: []string{"read_api"}},
 		},
 	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "bot-1") || !strings.Contains(md, "bot-2") {
-		t.Error("markdown should contain both token names")
-	}
-	if !strings.Contains(md, "never") {
-		t.Error("token without expiry should show 'never'")
+
+	want := "## Access Tokens (2)\n\n" +
+		"| ID | Name | Active | Revoked | Scopes | Expires |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | bot-1 | " + toolutil.BoolEmoji(true) + " | " + toolutil.BoolEmoji(false) + " | api | 31 Dec 2026 |\n" +
+		"| 2 | bot-2 | " + toolutil.BoolEmoji(false) + " | " + toolutil.BoolEmoji(true) + " | read_api | never |\n" +
+		tokenListHints
+
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1912,9 +1948,9 @@ func TestPersonalRotateSelf_WithExpiresAt(t *testing.T) {
 // FormatOutputMarkdown -- all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_AllFields verifies the OutputMarkdown_AllFields Markdown formatter for a representative output_allfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_AllFields pins the whole card of a token with
+// every optional field set, the last use among them: a token nobody has used
+// and one used an hour ago are the same card without that row.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	out := Output{
 		ID:          42,
@@ -1925,29 +1961,29 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		Scopes:      []string{"api", "read_api", "write_repository"},
 		AccessLevel: 40,
 		CreatedAt:   "2026-06-01T10:00:00Z",
+		LastUsedAt:  "2026-06-02T11:30:00Z",
 		ExpiresAt:   testExpiresDate,
 		Token:       "glpat-secret123",
 	}
-	md := FormatOutputMarkdown(out)
 
-	checks := []string{
-		"Access Token #42",
-		testFullToken,
-		"A token with all fields set",
-		"true",  // Active
-		"false", // Revoked
-		"api, read_api, write_repository",
-		"Maintainer",
-		"1 Jun 2026 10:00 UTC",
-		"31 Dec 2027",
-		"glpat-secret123",
-	}
-	for _, s := range checks {
-		t.Run(s, func(t *testing.T) {
-			if !strings.Contains(md, s) {
-				t.Errorf("FormatOutputMarkdown missing %q in:\n%s", s, md)
-			}
-		})
+	want := "## Access Token #42\n\n" +
+		"- **ID**: 42\n" +
+		"- **Name**: " + testFullToken + "\n" +
+		"- **Description**: A token with all fields set\n" +
+		"- **Active**: " + toolutil.BoolEmoji(true) + "\n" +
+		"- **Scopes**: api, read_api, write_repository\n" +
+		"- **Granular**: " + toolutil.BoolEmoji(false) + "\n" +
+		"- **Access Level**: Maintainer (40)\n" +
+		"- **Created**: 1 Jun 2026 10:00 UTC\n" +
+		"- **Last Used**: 2 Jun 2026 11:30 UTC\n" +
+		"- **Expires**: 31 Dec 2027\n" +
+		"- **Token**: `glpat-secret123`\n" +
+		hintsHeading +
+		"- Store the token securely. It cannot be retrieved later\n" +
+		tokenCardHints
+
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1955,26 +1991,31 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 // FormatListMarkdown -- with pagination data
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithPagination verifies the ListMarkdown_WithPagination Markdown formatter for a representative list_withpagination input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
+// TestFormatListMarkdown_WithPagination pins the heading against the total
+// GitLab reported and the footer against the page it sent, both written after
+// a blank line so the rule that follows them opens a section rather than
+// turning the last row into a setext heading.
 func TestFormatListMarkdown_WithPagination(t *testing.T) {
 	out := ListOutput{
 		Tokens: []Output{
 			{ID: 1, Name: "tok-1", Active: true, Scopes: []string{"api"}, ExpiresAt: "2027-01-01"},
 		},
 	}
-	out.Pagination.Page = 1
-	out.Pagination.PerPage = 20
-	out.Pagination.TotalItems = 1
-	out.Pagination.TotalPages = 1
+	out.Pagination.Page = 2
+	out.Pagination.PerPage = 1
+	out.Pagination.TotalItems = 3
+	out.Pagination.TotalPages = 3
 
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "tok-1") {
-		t.Error("markdown should contain token name")
-	}
-	if !strings.Contains(md, "1 Jan 2027") {
-		t.Error("markdown should contain expiry date")
+	want := "## Access Tokens (3)\n\n" +
+		"Showing 1 of 3 results (page 2 of 3)\n\n" +
+		"| ID | Name | Active | Revoked | Scopes | Expires |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | tok-1 | " + toolutil.BoolEmoji(true) + " | " + toolutil.BoolEmoji(false) + " | api | 1 Jan 2027 |\n\n" +
+		"Page 2 of 3 | 3 items total | 1 per page\n" +
+		tokenListHints
+
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

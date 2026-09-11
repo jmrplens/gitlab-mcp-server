@@ -16,24 +16,28 @@ func FormatMarkdown(out Output) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatMarkdownString(out))
 }
 
-// FormatMarkdownString renders a key as a Markdown summary with the ID,
-// title, truncated public key, owner, and creation timestamp.
+// FormatMarkdownString renders a key as a card: the identity, the truncated
+// public key, when it expires and when it was last used, and the owning user
+// as a nested object.
 func FormatMarkdownString(out Output) string {
 	var b strings.Builder
-	b.WriteString("## SSH Key\n\n")
-	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
-	if out.Title != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdTitle, toolutil.EscapeMdTableCell(out.Title))
-	}
+	c := toolutil.NewCard(&b, fmt.Sprintf("SSH Key #%d", out.ID))
+	c.Int("ID", out.ID)
+	c.Field("Title", out.Title)
 	// The key is truncated here rather than constrained, and its trailing
 	// comment is whatever the key's owner typed.
-	fmt.Fprintf(&b, "- **Key**: `%s`\n", toolutil.EscapeMdTableCell(truncateKey(out.Key)))
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
+	c.Code("Key", truncateKey(out.Key))
+	c.Field("Usage Type", out.UsageType)
+	c.Time("Created", out.CreatedAt)
+	c.Time("Expires", out.ExpiresAt)
+	c.Time("Last Used", out.LastUsedAt)
+	if out.User != (UserOutput{}) {
+		user := c.Sub("User")
+		user.Int("ID", out.User.ID)
+		user.Field("Name", out.User.Name)
+		user.Field("Username", toolutil.MdUserHandle(out.User.Username))
 	}
-	fmt.Fprintf(&b, "- **User**: %s (ID: %d, @%s)\n",
-		toolutil.EscapeMdTableCell(out.User.Name), out.User.ID, toolutil.EscapeMdTableCell(out.User.Username))
-	toolutil.WriteHints(&b, "Use `gitlab_get_key_by_fingerprint` to look up a key by its fingerprint")
+	c.End(toolutil.HintAction("keys.key_get_by_fingerprint", "look a key up by its fingerprint instead of its ID"))
 	return b.String()
 }
 

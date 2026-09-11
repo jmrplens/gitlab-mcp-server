@@ -132,17 +132,86 @@ func TestGetKeyWithUser_APIError(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString verifies FormatMarkdownString.
+// keyCardHints is the guidance section every SSH-key card ends with, naming
+// the sibling lookup by its canonical catalog ID rather than by a tool name
+// the serving surface may not register.
+const keyCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'keys.key_get_by_fingerprint' to look a key up by its fingerprint instead of its ID\n"
+
+// TestFormatMarkdownString pins the whole card of a key with only the fields
+// GitLab always sends, the owning user as a nested object.
 func TestFormatMarkdownString(t *testing.T) {
-	out := Output{
+	got := FormatMarkdownString(Output{
 		ID:    1,
 		Title: "Test Key",
 		Key:   "ssh-rsa AAAA...",
 		User:  UserOutput{ID: 1, Username: "user", Name: "User"},
+	})
+
+	want := "## SSH Key #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Title**: Test Key\n" +
+		"- **Key**: `ssh-rsa AAAA...`\n" +
+		"- **User**:\n" +
+		"  - **ID**: 1\n" +
+		"  - **Name**: User\n" +
+		"  - **Username**: @user\n" +
+		keyCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	md := FormatMarkdownString(out)
-	if md == "" {
-		t.Fatal("expected non-empty markdown")
+}
+
+// TestFormatMarkdownString_SentFields pins the three fields GitLab sends on
+// every SSH key that the card never showed: when it expires, when it was last
+// used, and what it may be used for. A key whose expiry the card omits is one
+// an audit cannot act on.
+func TestFormatMarkdownString_SentFields(t *testing.T) {
+	got := FormatMarkdownString(Output{
+		ID:         8,
+		Title:      "audit-key",
+		Key:        "ssh-ed25519 AAAA",
+		CreatedAt:  "2026-01-01T00:00:00Z",
+		ExpiresAt:  "2027-02-03T04:05:00Z",
+		LastUsedAt: "2026-06-07T08:09:00Z",
+		UsageType:  "auth_and_signing",
+		User:       UserOutput{ID: 3, Username: "dana", Name: "Dana"},
+	})
+
+	want := "## SSH Key #8\n\n" +
+		"- **ID**: 8\n" +
+		"- **Title**: audit-key\n" +
+		"- **Key**: `ssh-ed25519 AAAA`\n" +
+		"- **Usage Type**: auth_and_signing\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Expires**: 3 Feb 2027 04:05 UTC\n" +
+		"- **Last Used**: 7 Jun 2026 08:09 UTC\n" +
+		"- **User**:\n" +
+		"  - **ID**: 3\n" +
+		"  - **Name**: Dana\n" +
+		"  - **Username**: @dana\n" +
+		keyCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatMarkdownString_NoUser pins the card of a key GitLab answered with
+// no owner: the nested object is absent rather than rendered as an ID of 0 and
+// a bare "@".
+func TestFormatMarkdownString_NoUser(t *testing.T) {
+	got := FormatMarkdownString(Output{ID: 9, Title: "orphan", Key: "ssh-rsa AAAA"})
+
+	want := "## SSH Key #9\n\n" +
+		"- **ID**: 9\n" +
+		"- **Title**: orphan\n" +
+		"- **Key**: `ssh-rsa AAAA`\n" +
+		keyCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -226,78 +295,103 @@ func TestToOutput_NilCreatedAt(t *testing.T) {
 // FormatMarkdownString — branch coverage
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_WithCreatedAt verifies FormatMarkdownString when with created at.
+// TestFormatMarkdownString_WithCreatedAt pins the whole card of a key GitLab
+// sent a creation time for, that time rendered through FormatTime.
 func TestFormatMarkdownString_WithCreatedAt(t *testing.T) {
-	out := Output{
+	got := FormatMarkdownString(Output{
 		ID:        1,
 		Title:     "My Key",
 		Key:       "ssh-rsa short",
 		CreatedAt: "2026-01-01T00:00:00Z",
 		User:      UserOutput{ID: 1, Username: "admin", Name: "Admin"},
-	}
+	})
 
-	md := FormatMarkdownString(out)
+	want := "## SSH Key #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Title**: My Key\n" +
+		"- **Key**: `ssh-rsa short`\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **User**:\n" +
+		"  - **ID**: 1\n" +
+		"  - **Name**: Admin\n" +
+		"  - **Username**: @admin\n" +
+		keyCardHints
 
-	if !strings.Contains(md, "**Created**") {
-		t.Error("expected markdown to contain Created field")
-	}
-	if !strings.Contains(md, "1 Jan 2026 00:00 UTC") {
-		t.Error("expected markdown to contain the date value")
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatMarkdownString_EmptyTitle verifies FormatMarkdownString when empty title.
+// TestFormatMarkdownString_EmptyTitle pins that a key with no title renders no
+// title row, rather than a label with nothing after it.
 func TestFormatMarkdownString_EmptyTitle(t *testing.T) {
-	out := Output{
+	got := FormatMarkdownString(Output{
 		ID:   3,
 		Key:  "ssh-rsa short",
 		User: UserOutput{ID: 1, Username: "u", Name: "U"},
-	}
+	})
 
-	md := FormatMarkdownString(out)
+	want := "## SSH Key #3\n\n" +
+		"- **ID**: 3\n" +
+		"- **Key**: `ssh-rsa short`\n" +
+		"- **User**:\n" +
+		"  - **ID**: 1\n" +
+		"  - **Name**: U\n" +
+		"  - **Username**: @u\n" +
+		keyCardHints
 
-	if strings.Contains(md, "**Title**") {
-		t.Error("expected no Title line when title is empty")
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatMarkdownString_LongKey verifies FormatMarkdownString when long key.
+// TestFormatMarkdownString_LongKey pins the whole card of a key longer than
+// the card shows: 57 characters and an ellipsis, inside a code span.
 func TestFormatMarkdownString_LongKey(t *testing.T) {
-	longKey := strings.Repeat("A", 100)
-	out := Output{
+	got := FormatMarkdownString(Output{
 		ID:    4,
 		Title: "Long",
-		Key:   longKey,
+		Key:   strings.Repeat("A", 100),
 		User:  UserOutput{ID: 1, Username: "u", Name: "U"},
-	}
+	})
 
-	md := FormatMarkdownString(out)
+	want := "## SSH Key #4\n\n" +
+		"- **ID**: 4\n" +
+		"- **Title**: Long\n" +
+		"- **Key**: `" + strings.Repeat("A", 57) + "...`\n" +
+		"- **User**:\n" +
+		"  - **ID**: 1\n" +
+		"  - **Name**: U\n" +
+		"  - **Username**: @u\n" +
+		keyCardHints
 
-	if !strings.Contains(md, "...") {
-		t.Error("expected truncated key with ellipsis in markdown")
-	}
-	if strings.Contains(md, longKey) {
-		t.Error("expected key to be truncated, but found full key")
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatMarkdownString_ShortKey verifies FormatMarkdownString when short key.
+// TestFormatMarkdownString_ShortKey pins the other side of the truncation: a
+// key that fits is shown whole, with no ellipsis.
 func TestFormatMarkdownString_ShortKey(t *testing.T) {
-	shortKey := "ssh-rsa AAAA"
-	out := Output{
+	got := FormatMarkdownString(Output{
 		ID:    5,
 		Title: "Short",
-		Key:   shortKey,
+		Key:   "ssh-rsa AAAA",
 		User:  UserOutput{ID: 1, Username: "u", Name: "U"},
-	}
+	})
 
-	md := FormatMarkdownString(out)
+	want := "## SSH Key #5\n\n" +
+		"- **ID**: 5\n" +
+		"- **Title**: Short\n" +
+		"- **Key**: `ssh-rsa AAAA`\n" +
+		"- **User**:\n" +
+		"  - **ID**: 1\n" +
+		"  - **Name**: U\n" +
+		"  - **Username**: @u\n" +
+		keyCardHints
 
-	if !strings.Contains(md, shortKey) {
-		t.Error("expected full short key in markdown")
-	}
-	if strings.Contains(md, "...") {
-		t.Error("short key should not be truncated")
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

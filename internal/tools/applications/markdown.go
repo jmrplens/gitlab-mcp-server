@@ -1,64 +1,62 @@
 package applications
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatListMarkdown formats application list as markdown.
+// FormatListMarkdown renders a list of OAuth applications as a table.
 func FormatListMarkdown(out ListOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Applications\n\n")
-	toolutil.WriteListSummary(&sb, len(out.Applications), out.Pagination)
 	if len(out.Applications) == 0 {
-		sb.WriteString("No applications found.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("applications")
 	}
-	sb.WriteString("| ID | Name | App ID | Callback URL | Confidential | Scopes |\n|---|---|---|---|---|---|\n")
-	for _, a := range out.Applications {
-		fmt.Fprintf(&sb, "| %d | %s | %s | %s | %v | %s |\n",
-			a.ID,
-			toolutil.EscapeMdTableCell(a.ApplicationName),
-			toolutil.EscapeMdTableCell(a.ApplicationID),
-			toolutil.EscapeMdTableCell(a.CallbackURL),
-			a.Confidential,
-			toolutil.EscapeMdTableCell(strings.Join(a.Scopes, ", ")))
-	}
-	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(&sb, "Use `gitlab_create_application` to register a new application")
-	return sb.String()
-}
-
-// formatApplicationDetail renders a single application as a field/value table.
-// It is shared by the create and renew-secret formatters, which differ only in
-// the heading, the label used for the secret row, and the closing hint.
-func formatApplicationDetail(heading string, item ApplicationItem, secretLabel, hint string) string {
 	var sb strings.Builder
-	sb.WriteString("## " + heading + "\n\n")
-	sb.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| ID | %d |\n", item.ID)
-	fmt.Fprintf(&sb, "| Name | %s |\n", toolutil.EscapeMdTableCell(item.ApplicationName))
-	fmt.Fprintf(&sb, "| App ID | %s |\n", toolutil.EscapeMdTableCell(item.ApplicationID))
-	fmt.Fprintf(&sb, "| Callback URL | %s |\n", toolutil.EscapeMdTableCell(item.CallbackURL))
-	fmt.Fprintf(&sb, "| Confidential | %v |\n", item.Confidential)
-	fmt.Fprintf(&sb, "| %s | %s |\n", secretLabel, toolutil.EscapeMdTableCell(item.Secret))
-	fmt.Fprintf(&sb, "| Scopes | %s |\n", toolutil.EscapeMdTableCell(strings.Join(item.Scopes, ", ")))
-	toolutil.WriteHints(&sb, hint)
+	toolutil.WriteListHeading(&sb, "Applications", len(out.Applications), out.Pagination)
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "App ID", "Callback URL", "Confidential", "Scopes"))
+	for _, a := range out.Applications {
+		sb.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(a.ID, 10),
+			toolutil.EscapeMdTableCell(a.ApplicationName),
+			toolutil.MdCodeSpanCell(a.ApplicationID),
+			toolutil.EscapeMdTableCell(a.CallbackURL),
+			toolutil.BoolEmoji(a.Confidential),
+			toolutil.EscapeMdTableCell(strings.Join(a.Scopes, ", ")),
+		))
+	}
+	toolutil.WriteListFooter(&sb, out.Pagination, false,
+		"Use `gitlab_create_application` to register a new application")
 	return sb.String()
 }
 
-// FormatCreateMarkdown formats a created application as markdown.
-func FormatCreateMarkdown(out CreateOutput) string {
-	return formatApplicationDetail("Application Created", out.ApplicationItem, "Secret",
-		"Store the application secret securely. It cannot be retrieved later")
+// formatApplicationDetail renders one application as a card. It is shared by
+// the create and renew-secret formatters, which differ only in the heading,
+// the label the secret row carries, and the closing hints; the advice to store
+// the secret is added by the card itself, from the row that showed one.
+func formatApplicationDetail(heading string, item ApplicationItem, secretLabel string, hints ...string) string {
+	var sb strings.Builder
+	c := toolutil.NewCard(&sb, heading)
+	c.Int("ID", item.ID)
+	c.Field("Name", item.ApplicationName)
+	c.Code("App ID", item.ApplicationID)
+	c.Field("Callback URL", item.CallbackURL)
+	c.Bool("Confidential", item.Confidential)
+	c.Secret(secretLabel, item.Secret)
+	c.Field("Scopes", strings.Join(item.Scopes, ", "))
+	c.End(hints...)
+	return sb.String()
 }
 
-// FormatRenewSecretMarkdown formats a renewed application secret as markdown.
+// FormatCreateMarkdown renders a newly registered application.
+func FormatCreateMarkdown(out CreateOutput) string {
+	return formatApplicationDetail("Application Created", out.ApplicationItem, "Secret")
+}
+
+// FormatRenewSecretMarkdown renders an application whose secret was renewed.
 func FormatRenewSecretMarkdown(out RenewSecretOutput) string {
 	return formatApplicationDetail("Application Secret Renewed", out.ApplicationItem, "New Secret",
-		"Store the new secret securely. The previous secret is now invalid and any client using it must be updated")
+		"The previous secret is now invalid and any client using it must be updated")
 }
 
 func init() {

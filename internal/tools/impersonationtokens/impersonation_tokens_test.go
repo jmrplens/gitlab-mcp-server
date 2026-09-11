@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const (
@@ -383,33 +384,61 @@ func TestCreatePAT_EmptyName(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the ListMarkdownString_Empty Markdown formatter for a representative liststring_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// The guidance sections the impersonation-token formatters close with.
+const (
+	tokHintsOpening = "\n---\n\U0001F4A1 **Next steps:**\n"
+
+	tokCardHints = tokHintsOpening +
+		"- Use action 'impersonationtokens.revoke_impersonation_token' to revoke this token\n"
+
+	tokListHints = tokHintsOpening +
+		"- Use action 'impersonationtokens.get_impersonation_token' to read one of these tokens in full\n" +
+		"- Use action 'impersonationtokens.revoke_impersonation_token' to revoke one of these tokens\n"
+
+	tokRevokeHints = tokHintsOpening +
+		"- Use action 'impersonationtokens.list_impersonation_tokens' to list the tokens this user has left\n"
+)
+
+// TestFormatListMarkdownString_Empty pins the whole response of a list with no
+// tokens: the one sentence, where the warning sign under a heading counting
+// nothing used to say the same thing twice.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
-	md := FormatListMarkdownString(ListOutput{})
-	if md == "" {
-		t.Fatal("expected non-empty markdown for empty list")
+	if got, want := FormatListMarkdownString(ListOutput{}), "No impersonation tokens found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatMarkdownString verifies the MarkdownString Markdown formatter for a representative string input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString pins the whole card of an ordinary impersonation
+// token: no secret row, so no store-it hint.
 func TestFormatMarkdownString(t *testing.T) {
-	md := FormatMarkdownString(Output{ID: 1, Name: "test", Scopes: []string{"api"}, Active: true})
-	if md == "" {
-		t.Fatal("expected non-empty markdown")
+	got := FormatMarkdownString(Output{ID: 1, Name: "test", Scopes: []string{"api"}, Active: true})
+
+	want := "## Impersonation Token #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: test\n" +
+		"- **Active**: " + toolutil.BoolEmoji(true) + "\n" +
+		"- **Scopes**: api\n" +
+		tokCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatPATMarkdownString verifies the PATMarkdownString Markdown formatter for a representative patstring input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatPATMarkdownString pins the whole card of a personal access token
+// created for another user.
 func TestFormatPATMarkdownString(t *testing.T) {
-	md := FormatPATMarkdownString(PATOutput{ID: 1, Name: "test", Scopes: []string{"api"}, UserID: 42})
-	if md == "" {
-		t.Fatal("expected non-empty markdown")
+	got := FormatPATMarkdownString(PATOutput{ID: 1, Name: "test", Scopes: []string{"api"}, UserID: 42})
+
+	want := "## Personal Access Token #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: test\n" +
+		"- **Active**: " + toolutil.BoolEmoji(false) + "\n" +
+		"- **Scopes**: api\n" +
+		"- **User ID**: 42\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -706,76 +735,74 @@ func TestToPATOutput_WithLastUsedAt(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithTokens verifies proper Markdown table rendering
-// for a non-empty token list, including tokens with and without expiration dates.
+// TestFormatListMarkdownString_WithTokens pins the whole table, the Revoked
+// column included: a list of tokens that never said which of them are dead is
+// what a reader of an audit cannot act on.
 func TestFormatListMarkdownString_WithTokens(t *testing.T) {
 	out := ListOutput{
 		Tokens: []Output{
 			{ID: 1, Name: "token-a", Active: true, Scopes: []string{"api", "read_user"}, ExpiresAt: "2026-12-31"},
-			{ID: 2, Name: "token-b", Active: false, Scopes: []string{"read_api"}, ExpiresAt: ""},
+			{ID: 2, Name: "token-b", Active: false, Revoked: true, Scopes: []string{"read_api"}, ExpiresAt: ""},
 		},
 	}
-	md := FormatListMarkdownString(out)
 
-	checks := []string{
-		"## Impersonation Tokens (2)",
-		"| ID | Name | Active | Scopes | Expires At |",
-		"| 1 | token-a | true | api, read_user | 2026-12-31 |",
-		"| 2 | token-b | false | read_api | - |",
-	}
-	for _, want := range checks {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q\ngot:\n%s", want, md)
-			}
-		})
+	yes, no := toolutil.BoolEmoji(true), toolutil.BoolEmoji(false)
+	want := "## Impersonation Tokens (2)\n\n" +
+		"| ID | Name | Active | Revoked | Scopes | Expires At |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | token-a | " + yes + " | " + no + " | api, read_user | 31 Dec 2026 |\n" +
+		"| 2 | token-b | " + no + " | " + yes + " | read_api | never |\n" +
+		tokListHints
+
+	if got := FormatListMarkdownString(out); got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatMarkdownString_AllOptionalFields verifies the MarkdownString_AllOptionalFields Markdown formatter for a representative string_alloptionalfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString_AllOptionalFields pins the whole card of a token
+// with every optional field set, the revocation among them.
 func TestFormatMarkdownString_AllOptionalFields(t *testing.T) {
 	out := Output{
-		ID: 5, Name: "full-token", Active: true,
+		ID: 5, Name: "full-token", Active: true, Revoked: true,
 		Scopes: []string{"api"}, ExpiresAt: "2026-06-15", Token: "glpat-secret",
 	}
-	md := FormatMarkdownString(out)
 
-	checks := []string{
-		"## Impersonation Token",
-		"**Name**: full-token",
-		"**Active**: true",
-		"**Scopes**: api",
-		"**Expires At**: 2026-06-15",
-		"**Token**: `glpat-secret`",
-	}
-	for _, want := range checks {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q\ngot:\n%s", want, md)
-			}
-		})
+	want := "## Impersonation Token #5\n\n" +
+		"- **ID**: 5\n" +
+		"- **Name**: full-token\n" +
+		"- **Active**: " + toolutil.BoolEmoji(true) + "\n" +
+		"- " + toolutil.EmojiWarning + " **Revoked**\n" +
+		"- **Scopes**: api\n" +
+		"- **Expires At**: 15 Jun 2026\n" +
+		"- **Token**: `glpat-secret`\n" +
+		tokHintsOpening +
+		"- Store the token securely. It cannot be retrieved later\n" +
+		"- Use action 'impersonationtokens.revoke_impersonation_token' to revoke this token\n"
+
+	if got := FormatMarkdownString(out); got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatMarkdownString_MinimalFields verifies the MarkdownString_MinimalFields Markdown formatter for a representative string_minimalfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString_MinimalFields pins the card of a token GitLab sent
+// no expiry and no secret for: neither row is written, and no store-it hint.
 func TestFormatMarkdownString_MinimalFields(t *testing.T) {
-	out := Output{ID: 6, Name: "basic", Active: false, Scopes: []string{"read_user"}}
-	md := FormatMarkdownString(out)
+	got := FormatMarkdownString(Output{ID: 6, Name: "basic", Active: false, Scopes: []string{"read_user"}})
 
-	if strings.Contains(md, "**Expires At**") {
-		t.Error("markdown should not contain '**Expires At**' for empty ExpiresAt")
-	}
-	if strings.Contains(md, "**Token**") {
-		t.Error("markdown should not contain '**Token**' for empty Token")
+	want := "## Impersonation Token #6\n\n" +
+		"- **ID**: 6\n" +
+		"- **Name**: basic\n" +
+		"- **Active**: " + toolutil.BoolEmoji(false) + "\n" +
+		"- **Scopes**: read_user\n" +
+		tokCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatPATMarkdownString_AllOptionalFields verifies that FormatPATMarkdownString
-// renders Description, ExpiresAt, and Token fields when present.
+// TestFormatPATMarkdownString_AllOptionalFields pins the whole card of a
+// personal access token with description, expiry and secret.
 func TestFormatPATMarkdownString_AllOptionalFields(t *testing.T) {
 	out := PATOutput{
 		ID: 10, Name: "full-pat", Active: true,
@@ -784,63 +811,52 @@ func TestFormatPATMarkdownString_AllOptionalFields(t *testing.T) {
 		ExpiresAt:   "2026-12-01",
 		Token:       "glpat-fullpat",
 	}
-	md := FormatPATMarkdownString(out)
 
-	checks := []string{
-		"## Personal Access Token",
-		"**Name**: full-pat",
-		"**Description**: My important PAT",
-		"**User ID**: 42",
-		"**Expires At**: 2026-12-01",
-		"**Token**: `glpat-fullpat`",
-	}
-	for _, want := range checks {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q\ngot:\n%s", want, md)
-			}
-		})
+	want := "## Personal Access Token #10\n\n" +
+		"- **ID**: 10\n" +
+		"- **Name**: full-pat\n" +
+		"- **Active**: " + toolutil.BoolEmoji(true) + "\n" +
+		"- **Scopes**: api\n" +
+		"- **Description**: My important PAT\n" +
+		"- **User ID**: 42\n" +
+		"- **Expires At**: 1 Dec 2026\n" +
+		"- **Token**: `glpat-fullpat`\n" +
+		tokHintsOpening +
+		"- Store the token securely. It cannot be retrieved later\n"
+
+	if got := FormatPATMarkdownString(out); got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatPATMarkdownString_MinimalFields verifies the PATMarkdownString_MinimalFields Markdown formatter for a representative patstring_minimalfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatPATMarkdownString_MinimalFields pins the card of a personal access
+// token GitLab sent nothing optional on.
 func TestFormatPATMarkdownString_MinimalFields(t *testing.T) {
-	out := PATOutput{ID: 11, Name: "bare", Active: false, Scopes: []string{"read_api"}, UserID: 99}
-	md := FormatPATMarkdownString(out)
+	got := FormatPATMarkdownString(PATOutput{ID: 11, Name: "bare", Active: false, Scopes: []string{"read_api"}, UserID: 99})
 
-	if strings.Contains(md, "**Description**") {
-		t.Error("markdown should not contain '**Description**' when empty")
-	}
-	if strings.Contains(md, "**Expires At**") {
-		t.Error("markdown should not contain '**Expires At**' when empty")
-	}
-	if strings.Contains(md, "**Token**") {
-		t.Error("markdown should not contain '**Token**' when empty")
+	want := "## Personal Access Token #11\n\n" +
+		"- **ID**: 11\n" +
+		"- **Name**: bare\n" +
+		"- **Active**: " + toolutil.BoolEmoji(false) + "\n" +
+		"- **Scopes**: read_api\n" +
+		"- **User ID**: 99\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatRevokeMarkdownString verifies the RevokeMarkdownString Markdown formatter for a representative revokestring input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatRevokeMarkdownString pins the whole revocation confirmation.
 func TestFormatRevokeMarkdownString(t *testing.T) {
-	out := RevokeOutput{UserID: 42, TokenID: 7, Revoked: true}
-	md := FormatRevokeMarkdownString(out)
+	got := FormatRevokeMarkdownString(RevokeOutput{UserID: 42, TokenID: 7, Revoked: true})
 
-	checks := []string{
-		"## Token Revoked",
-		"**User ID**: 42",
-		"**Token ID**: 7",
-	}
-	for _, want := range checks {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q\ngot:\n%s", want, md)
-			}
-		})
-	}
-	if md == "" {
-		t.Fatal("expected non-empty markdown")
+	want := "## Token Revoked\n\n" +
+		"- **User ID**: 42\n" +
+		"- **Token ID**: 7\n" +
+		"- **Revoked**: " + toolutil.BoolEmoji(true) + "\n" +
+		tokRevokeHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }

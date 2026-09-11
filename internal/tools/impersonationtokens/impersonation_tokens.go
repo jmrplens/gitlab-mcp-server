@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -288,66 +287,6 @@ func CreatePAT(ctx context.Context, client *gitlabclient.Client, input CreatePAT
 	return toPATOutput(token, extra), nil
 }
 
-// --- Markdown formatters ---.
-
-// FormatListMarkdownString formats a list of impersonation tokens as Markdown.
-func FormatListMarkdownString(out ListOutput) string {
-	if len(out.Tokens) == 0 {
-		return fmt.Sprintf("## Impersonation Tokens\n\n%s No tokens found.\n", toolutil.EmojiWarning)
-	}
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Impersonation Tokens (%d)\n\n", len(out.Tokens))
-	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Active", "Scopes", "Expires At"))
-	for _, t := range out.Tokens {
-		expires := "-"
-		if t.ExpiresAt != "" {
-			expires = t.ExpiresAt
-		}
-		fmt.Fprintf(&sb, "| %d | %s | %v | %s | %s |\n",
-			//gitlab:allow-unescaped strings.Join(t.Scopes, ", "): a scope is one of the fixed identifiers GitLab accepts on creation and refuses anything outside.
-			//gitlab:allow-unescaped expires: toOutput renders the expiry with time.Time.Format, so the cell is digits and dashes, or the literal dash.
-			t.ID, toolutil.EscapeMdTableCell(t.Name), t.Active, strings.Join(t.Scopes, ", "), expires)
-	}
-	return sb.String()
-}
-
-// FormatMarkdownString formats a single impersonation token as Markdown.
-func FormatMarkdownString(out Output) string {
-	var sb strings.Builder
-	sb.WriteString("## Impersonation Token\n\n")
-	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&sb, "- **Name**: %s\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&sb, "- **Active**: %v\n", out.Active)
-	//gitlab:allow-unescaped strings.Join(out.Scopes, ", "): a scope is one of the fixed identifiers GitLab accepts on creation and refuses anything outside.
-	fmt.Fprintf(&sb, "- **Scopes**: %s\n", strings.Join(out.Scopes, ", "))
-	if out.ExpiresAt != "" {
-		//gitlab:allow-unescaped out.ExpiresAt: both token shapes render the expiry with time.Time.Format, so it is digits and dashes.
-		fmt.Fprintf(&sb, "- **Expires At**: %s\n", out.ExpiresAt)
-	}
-	if out.Token != "" {
-		//gitlab:allow-unescaped out.Token: the secret GitLab generated, which the reader has to copy back verbatim.
-		fmt.Fprintf(&sb, "- **Token**: `%s`\n", out.Token)
-	}
-	return sb.String()
-}
-
-// FormatPATMarkdownString formats a personal access token as Markdown.
-func FormatPATMarkdownString(out PATOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Personal Access Token\n\n")
-	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&sb, "- **Name**: %s\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&sb, "- **Active**: %v\n", out.Active)
-	fmt.Fprintf(&sb, "- **Scopes**: %s\n", strings.Join(out.Scopes, ", "))
-	if out.Description != "" {
-		fmt.Fprintf(&sb, "- **Description**: %s\n", toolutil.EscapeMdTableCell(out.Description))
-	}
-	fmt.Fprintf(&sb, "- **User ID**: %d\n", out.UserID)
-	if out.ExpiresAt != "" {
-		fmt.Fprintf(&sb, "- **Expires At**: %s\n", out.ExpiresAt)
-	}
-	if out.Token != "" {
-		fmt.Fprintf(&sb, "- **Token**: `%s`\n", out.Token)
-	}
-	return sb.String()
-}
+// The Markdown formatters of this package live in markdown.go, with the
+// package's other rendering, so that a card and the list it belongs to are
+// read and changed together.
