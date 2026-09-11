@@ -810,6 +810,12 @@
       "package": "internal/tools",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/protected_environments/production"
+    },
+    {
+      "package": "internal/tools",
+      "kind": "rest",
+      "method": "GET",
       "path": "/user"
     },
     {
