@@ -1,8 +1,10 @@
 package dynamic
 
 import (
+	"cmp"
 	"fmt"
-	"sort"
+	"slices"
+	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
@@ -81,14 +83,12 @@ func AuditRegistryDiscoveryTerms(registry *Registry) []CatalogDiscoveryFinding {
 			Message:  "dense catalog action has no aliases, tags, usage guidance, related actions, parameter names, schema descriptions, or enum values beyond its canonical ID",
 		})
 	}
-	sort.Slice(findings, func(i, j int) bool {
-		if findings[i].Severity != findings[j].Severity {
-			return findings[i].Severity < findings[j].Severity
-		}
-		if findings[i].Tool != findings[j].Tool {
-			return findings[i].Tool < findings[j].Tool
-		}
-		return findings[i].ID < findings[j].ID
+	slices.SortFunc(findings, func(a, b CatalogDiscoveryFinding) int {
+		return cmp.Or(
+			strings.Compare(a.Severity, b.Severity),
+			strings.Compare(a.Tool, b.Tool),
+			strings.Compare(a.ID, b.ID),
+		)
 	})
 	return findings
 }
@@ -130,14 +130,16 @@ func auditActionAliases(catalog *actioncatalog.Catalog, aliases []actionAlias) [
 	findings, aliasTargets := detectAliasErrors(aliases, canonicalIDs, catalog != nil)
 	findings = append(findings, detectAmbiguousAliases(aliasTargets)...)
 
-	sort.Slice(findings, func(i, j int) bool {
-		if findings[i].Severity != findings[j].Severity {
-			return findings[i].Severity < findings[j].Severity
-		}
-		if findings[i].Problem != findings[j].Problem {
-			return findings[i].Problem < findings[j].Problem
-		}
-		return findings[i].Alias < findings[j].Alias
+	// Canonical is the last key rather than the last tie: two aliases can share
+	// a name and a problem and differ only in what they point at, and ordering
+	// those by nothing left their order to the sort.
+	slices.SortFunc(findings, func(a, b AliasAuditFinding) int {
+		return cmp.Or(
+			strings.Compare(a.Severity, b.Severity),
+			strings.Compare(a.Problem, b.Problem),
+			strings.Compare(a.Alias, b.Alias),
+			strings.Compare(a.Canonical, b.Canonical),
+		)
 	})
 	return findings
 }
