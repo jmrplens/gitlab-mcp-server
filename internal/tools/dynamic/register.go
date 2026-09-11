@@ -3478,9 +3478,10 @@ func scoreActionSpecificityValue(entry actionEntry, terms []searchTerm) int {
 		}
 		unmatched++
 	}
-	if unmatched == 0 {
-		return 0
-	}
+	// No early return for unmatched == 0: the product below is already 0, so a
+	// guard here would be a branch no input could distinguish. The sibling
+	// scoreActionSpecificity keeps its guard because there it decides whether a
+	// MatchReason is emitted at all, which is observable.
 	return unmatched * scoreUnmatchedActionWord
 }
 
