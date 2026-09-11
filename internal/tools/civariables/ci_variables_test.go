@@ -768,26 +768,25 @@ func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 		Description:      "Database host",
 	})
 
-	for _, want := range []string{
-		"## Variable: DB_HOST",
-		"| Type | env_var |",
-		"| Protected | ✅ |",
-		"| Masked | ❌ |",
-		"| Raw | ✅ |",
-		"| Environment Scope | production |",
-		"| Description | Database host |",
-		"| Value | localhost |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-	if strings.Contains(md, "| Hidden | ✅ |") {
-		t.Error("should not contain Hidden line when hidden=false")
+	want := "## Variable: DB_HOST\n\n" +
+		"- **Type**: env_var\n" +
+		"- **Protected**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Masked**: " + toolutil.EmojiCross + "\n" +
+		"- **Raw**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Environment Scope**: " + testEnvScope + "\n" +
+		"- **Description**: Database host\n" +
+		"- **Value**: localhost\n" +
+		variableCardHints
+	if md != want {
+		t.Errorf("variable card:\n got %q\nwant %q", md, want)
 	}
 }
+
+// variableCardHints is the guidance section every CI/CD variable card ends
+// with, shared by the whole-output expectations below.
+const variableCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'update' to change this variable\n" +
+	"- Use action 'delete' to remove this variable\n"
 
 // TestFormatOutputMarkdown_MaskedValue verifies the OutputMarkdown_MaskedValue Markdown formatter for a representative output_maskedvalue input.
 // The test exercises the GET path of the underlying GitLab API call.
@@ -801,11 +800,16 @@ func TestFormatOutputMarkdown_MaskedValue(t *testing.T) {
 		EnvironmentScope: "*",
 	})
 
-	if !strings.Contains(md, "| Value | [masked] |") {
-		t.Errorf("expected masked value placeholder:\n%s", md)
-	}
-	if strings.Contains(md, "super-secret") {
-		t.Error("masked value should not appear in markdown")
+	want := "## Variable: SECRET\n\n" +
+		"- **Type**: env_var\n" +
+		"- **Protected**: " + toolutil.EmojiCross + "\n" +
+		"- **Masked**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Raw**: " + toolutil.EmojiCross + "\n" +
+		"- **Environment Scope**: *\n" +
+		"- **Value**: [masked]\n" +
+		variableCardHints
+	if md != want {
+		t.Errorf("masked variable card:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -821,11 +825,17 @@ func TestFormatOutputMarkdown_HiddenValue(t *testing.T) {
 		EnvironmentScope: "*",
 	})
 
-	if !strings.Contains(md, "| Hidden | ✅ |") {
-		t.Errorf("expected Hidden line:\n%s", md)
-	}
-	if !strings.Contains(md, "| Value | [masked] |") {
-		t.Errorf("hidden variable should show [masked]:\n%s", md)
+	want := "## Variable: TOKEN\n\n" +
+		"- **Type**: env_var\n" +
+		"- **Protected**: " + toolutil.EmojiCross + "\n" +
+		"- **Masked**: " + toolutil.EmojiCross + "\n" +
+		"- **Hidden**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Raw**: " + toolutil.EmojiCross + "\n" +
+		"- **Environment Scope**: *\n" +
+		"- **Value**: [masked]\n" +
+		variableCardHints
+	if md != want {
+		t.Errorf("hidden variable card:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -840,8 +850,16 @@ func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 		EnvironmentScope: "*",
 	})
 
-	if strings.Contains(md, "| Description |") {
-		t.Error("should not contain Description when empty")
+	want := "## Variable: SIMPLE\n\n" +
+		"- **Type**: env_var\n" +
+		"- **Protected**: " + toolutil.EmojiCross + "\n" +
+		"- **Masked**: " + toolutil.EmojiCross + "\n" +
+		"- **Raw**: " + toolutil.EmojiCross + "\n" +
+		"- **Environment Scope**: *\n" +
+		"- **Value**: val\n" +
+		variableCardHints
+	if md != want {
+		t.Errorf("variable card without a description:\n got %q\nwant %q", md, want)
 	}
 }
 

@@ -123,15 +123,9 @@ func toOutput(m *gl.ProjectMirror) Output {
 		MirrorBranchRegex:     m.MirrorBranchRegex,
 		AuthMethod:            m.AuthMethod,
 	}
-	if m.LastSuccessfulUpdateAt != nil {
-		o.LastSuccessfulUpdateAt = m.LastSuccessfulUpdateAt.Format(toolutil.DateTimeFormat)
-	}
-	if m.LastUpdateAt != nil {
-		o.LastUpdateAt = m.LastUpdateAt.Format(toolutil.DateTimeFormat)
-	}
-	if m.LastUpdateStartedAt != nil {
-		o.LastUpdateStartedAt = m.LastUpdateStartedAt.Format(toolutil.DateTimeFormat)
-	}
+	o.LastSuccessfulUpdateAt = toolutil.RFC3339Ptr(m.LastSuccessfulUpdateAt)
+	o.LastUpdateAt = toolutil.RFC3339Ptr(m.LastUpdateAt)
+	o.LastUpdateStartedAt = toolutil.RFC3339Ptr(m.LastUpdateStartedAt)
 	if m.HostKeys != nil {
 		for _, hk := range *m.HostKeys {
 			o.HostKeys = append(o.HostKeys, HostKeyOutput{FingerprintSHA256: hk.FingerprintSHA256})

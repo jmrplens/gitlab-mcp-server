@@ -522,32 +522,30 @@ func TestFormatNoteMarkdownString_Populated(t *testing.T) {
 		CreatedAt: "2026-03-01T10:00:00Z",
 	}
 	md := FormatNoteMarkdownString(out)
-	for _, want := range []string{
-		"## Note",
-		"42",
-		"@reviewer",
-		"Great work!",
-		"1 Mar 2026 10:00 UTC",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatNoteMarkdownString missing %q", want)
-			}
-		})
+	want := "## Discussion Note #42\n\n" +
+		"- **Author**: @reviewer\n" +
+		"- **Created**: 1 Mar 2026 10:00 UTC\n" +
+		"- **Body**: Great work!\n" +
+		discussionNoteCardHints
+	if md != want {
+		t.Errorf("note card:\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatNoteMarkdownString_Empty verifies the NoteMarkdownString_Empty Markdown formatter for a representative notestring_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// discussionNoteCardHints is the guidance section every issue discussion
+// note card ends with.
+const discussionNoteCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'discussion_update_note' with note_id to edit this note\n" +
+	"- Use action 'discussion_delete_note' with note_id to remove this note\n"
+
+// TestFormatNoteMarkdownString_Empty verifies that a zero note renders the
+// heading and the hints alone: no author, time or body row is written for a
+// value GitLab did not send.
 func TestFormatNoteMarkdownString_Empty(t *testing.T) {
 	md := FormatNoteMarkdownString(NoteOutput{})
-	if !strings.Contains(md, "## Note") {
-		t.Error("FormatNoteMarkdownString should contain Note header for empty output")
-	}
-	// CreatedAt is empty, so "Created" line should not appear.
-	if strings.Contains(md, "**Created**") {
-		t.Error("should not contain Created line when CreatedAt is empty")
+	want := "## Discussion Note #0\n\n" + strings.TrimPrefix(discussionNoteCardHints, "\n")
+	if md != want {
+		t.Errorf("empty note card:\n got %q\nwant %q", md, want)
 	}
 }
 

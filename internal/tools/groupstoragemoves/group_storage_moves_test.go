@@ -589,10 +589,9 @@ func mustParseTime(s string) time.Time {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    Output
-		wantAll  []string
-		wantNone []string
+		name  string
+		input Output
+		want  string
 	}{
 		{
 			name: "full output with group",
@@ -608,16 +607,13 @@ func TestFormatOutputMarkdown(t *testing.T) {
 					WebURL: "https://gitlab.example.com/groups/my-group",
 				},
 			},
-			wantAll: []string{
-				"## Group Storage Move #1",
-				"| **ID** | 1 |",
-				"| **State** | finished |",
-				"| **Source** | default |",
-				"| **Destination** | storage2 |",
-				"2026-01-15",
-				"[my-group](https://gitlab.example.com/groups/my-group)",
-				"(ID: 10)",
-			},
+			want: "## Group Storage Move #1\n\n" +
+				"- **ID**: 1\n" +
+				"- **State**: finished\n" +
+				"- **Source**: default\n" +
+				"- **Destination**: storage2\n" +
+				"- **Created**: 15 Jan 2026 10:30 UTC\n" +
+				"- **Group**: [my-group](https://gitlab.example.com/groups/my-group) (ID: 10)\n",
 		},
 		{
 			name: "output without group",
@@ -627,41 +623,33 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				SourceStorageName:      "default",
 				DestinationStorageName: "storage3",
 			},
-			wantAll: []string{
-				"## Group Storage Move #2",
-				"| **State** | scheduled |",
-			},
-			wantNone: []string{
-				"| **Group** |",
-			},
+			want: "## Group Storage Move #2\n\n" +
+				"- **ID**: 2\n" +
+				"- **State**: scheduled\n" +
+				"- **Source**: default\n" +
+				"- **Destination**: storage3\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatOutputMarkdown(tt.input)
-			for _, want := range tt.wantAll {
-				if !strings.Contains(got, want) {
-					t.Errorf("output missing %q\ngot:\n%s", want, got)
-				}
-			}
-			for _, absent := range tt.wantNone {
-				if strings.Contains(got, absent) {
-					t.Errorf("output should not contain %q\ngot:\n%s", absent, got)
-				}
+			if got := FormatOutputMarkdown(tt.input); got != tt.want {
+				t.Errorf("storage move card:\n got %q\nwant %q", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestFormatListMarkdown validates that FormatListMarkdown produces correct
-// Markdown tables for lists with moves, empty lists, and pagination info.
+// TestFormatListMarkdown validates that FormatListMarkdown produces the whole
+// list byte for byte: the heading counting what was shown, the table with
+// the group linked, the keyset footer with the link hint, the empty message
+// alone, and a link-less page with no hint at all.
 func TestFormatListMarkdown(t *testing.T) {
+	linkHint := "\n---\n\U0001F4A1 **Next steps:**\n- " + toolutil.HintPreserveLinks + "\n"
 	tests := []struct {
-		name     string
-		input    ListOutput
-		wantAll  []string
-		wantNone []string
+		name  string
+		input ListOutput
+		want  string
 	}{
 		{
 			name: "list with moves and pagination",
@@ -687,28 +675,20 @@ func TestFormatListMarkdown(t *testing.T) {
 				},
 				Pagination: toolutil.PaginationOutput{Page: 1},
 			},
-			wantAll: []string{
-				"## Group Storage Moves",
-				"| ID | State | Source | Destination | Group | Created |",
-				"| 1 | finished | default | storage2 |",
-				"[my-group](https://gitlab.example.com/groups/my-group)",
-				"| 2 | scheduled | default | storage3 |",
-				"_Page 1, 2 moves shown._",
-			},
+			want: "## Group Storage Moves (2)\n\n" +
+				"| ID | State | Source | Destination | Group | Created |\n" +
+				"| --- | --- | --- | --- | --- | --- |\n" +
+				"| 1 | finished | default | storage2 | [my-group](https://gitlab.example.com/groups/my-group) |  |\n" +
+				"| 2 | scheduled | default | storage3 |  |  |\n" +
+				"\nPage 1 | no more pages\n" +
+				linkHint,
 		},
 		{
 			name: "empty list shows no-moves message",
 			input: ListOutput{
 				Moves: []Output{},
 			},
-			wantAll: []string{
-				"## Group Storage Moves",
-				"No group storage moves found.",
-			},
-			wantNone: []string{
-				"_Page",
-				"| ID |",
-			},
+			want: "No group storage moves found.\n",
 		},
 		{
 			name: "list without pagination does not show page line",
@@ -722,27 +702,17 @@ func TestFormatListMarkdown(t *testing.T) {
 					},
 				},
 			},
-			wantAll: []string{
-				"| 3 | started |",
-			},
-			wantNone: []string{
-				"_Page",
-			},
+			want: "## Group Storage Moves (1)\n\n" +
+				"| ID | State | Source | Destination | Group | Created |\n" +
+				"| --- | --- | --- | --- | --- | --- |\n" +
+				"| 3 | started | default | storage4 |  |  |\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatListMarkdown(tt.input)
-			for _, want := range tt.wantAll {
-				if !strings.Contains(got, want) {
-					t.Errorf("output missing %q\ngot:\n%s", want, got)
-				}
-			}
-			for _, absent := range tt.wantNone {
-				if strings.Contains(got, absent) {
-					t.Errorf("output should not contain %q\ngot:\n%s", absent, got)
-				}
+			if got := FormatListMarkdown(tt.input); got != tt.want {
+				t.Errorf("storage move list:\n got %q\nwant %q", got, tt.want)
 			}
 		})
 	}

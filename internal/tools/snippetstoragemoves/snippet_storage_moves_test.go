@@ -609,26 +609,25 @@ func TestFormatOutputMarkdown_WithSnippet(t *testing.T) {
 	}
 
 	md := FormatOutputMarkdown(o)
-	for _, want := range []string{
-		"## Snippet Storage Move #1",
-		"| **ID** | 1 |",
-		"| **State** | finished |",
-		"| **Source** | default |",
-		"| **Destination** | storage2 |",
-		"| **Created** | 2026-01-15 10:30:00 |",
-		"[my-snippet](https://gitlab.example.com/snippets/55)",
-		"(ID: 55)",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("output missing %q\ngot:\n%s", want, md)
-			}
-		})
+	want := "## Snippet Storage Move #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **State**: finished\n" +
+		"- **Source**: default\n" +
+		"- **Destination**: storage2\n" +
+		"- **Created**: 15 Jan 2026 10:30 UTC\n" +
+		"- **Snippet**: [my-snippet](https://gitlab.example.com/snippets/55) (ID: 55)\n" +
+		snippetMoveCardHints
+	if md != want {
+		t.Errorf("storage move card:\n got %q\nwant %q", md, want)
 	}
 }
 
+// snippetMoveCardHints is the guidance section every snippet storage move
+// card ends with.
+const snippetMoveCardHints = "\n---\n\U0001F4A1 **Next steps:**\n- Use `gitlab_retrieve_all_snippet_storage_moves` to view all moves\n"
+
 // TestFormatOutputMarkdown_WithoutSnippet verifies that FormatOutputMarkdown
-// renders a table without the Snippet row when snippet data is nil.
+// renders the card without the Snippet row when snippet data is nil.
 func TestFormatOutputMarkdown_WithoutSnippet(t *testing.T) {
 	o := Output{
 		ID:                     2,
@@ -638,11 +637,14 @@ func TestFormatOutputMarkdown_WithoutSnippet(t *testing.T) {
 	}
 
 	md := FormatOutputMarkdown(o)
-	if !strings.Contains(md, "## Snippet Storage Move #2") {
-		t.Errorf("missing header in output:\n%s", md)
-	}
-	if strings.Contains(md, "| **Snippet**") {
-		t.Errorf("should not contain Snippet row when snippet is nil:\n%s", md)
+	want := "## Snippet Storage Move #2\n\n" +
+		"- **ID**: 2\n" +
+		"- **State**: started\n" +
+		"- **Source**: default\n" +
+		"- **Destination**: storage3\n" +
+		snippetMoveCardHints
+	if md != want {
+		t.Errorf("storage move card:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -687,19 +689,15 @@ func TestFormatListMarkdown_WithMoves(t *testing.T) {
 	}
 
 	md := FormatListMarkdown(o)
-	for _, want := range []string{
-		"## Snippet Storage Moves",
-		"| ID | State | Source | Destination | Snippet | Created |",
-		"| 1 | finished | default | storage2 |",
-		"[my-snippet](https://gitlab.example.com/snippets/55)",
-		"| 2 | started | default | storage3 |",
-		"_Page 1, 2 moves shown._",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("output missing %q\ngot:\n%s", want, md)
-			}
-		})
+	want := "## Snippet Storage Moves (2)\n\n" +
+		"| ID | State | Source | Destination | Snippet | Created |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | finished | default | storage2 | [my-snippet](https://gitlab.example.com/snippets/55) | 1 Jun 2026 12:00 UTC |\n" +
+		"| 2 | started | default | storage3 |  | 1 Jun 2026 12:00 UTC |\n" +
+		"\nPage 1 | no more pages\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n- " + toolutil.HintPreserveLinks + "\n"
+	if md != want {
+		t.Errorf("storage move list:\n got %q\nwant %q", md, want)
 	}
 }
 

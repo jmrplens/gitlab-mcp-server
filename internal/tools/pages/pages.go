@@ -395,8 +395,7 @@ func DeleteDomain(ctx context.Context, client *gitlabclient.Client, input Delete
 // ---------------------------------------------------------------------------.
 
 // toPagesOutput converts a [gl.Pages] response into the package's
-// [Output], formatting each deployment timestamp with
-// [toolutil.DateTimeFormat].
+// [Output], writing each deployment timestamp in the wire form.
 func toPagesOutput(p *gl.Pages) Output {
 	if p == nil {
 		return Output{}
@@ -409,7 +408,7 @@ func toPagesOutput(p *gl.Pages) Output {
 	}
 	for _, d := range p.Deployments {
 		out.Deployments = append(out.Deployments, DeploymentOutput{
-			CreatedAt:     d.CreatedAt.Format(toolutil.DateTimeFormat),
+			CreatedAt:     toolutil.RFC3339(d.CreatedAt),
 			URL:           d.URL,
 			PathPrefix:    d.PathPrefix,
 			RootDirectory: d.RootDirectory,
@@ -419,9 +418,8 @@ func toPagesOutput(p *gl.Pages) Output {
 }
 
 // toDomainOutput converts a [gl.PagesDomain] response into the
-// package's [DomainOutput], formatting the optional EnabledUntil
-// and certificate expiration timestamps with
-// [toolutil.DateTimeFormat].
+// package's [DomainOutput], writing the optional EnabledUntil and
+// certificate expiration timestamps in the wire form.
 func toDomainOutput(d *gl.PagesDomain, extra toolutil.PagesDomainExtra) DomainOutput {
 	if d == nil {
 		return DomainOutput{}
@@ -441,12 +439,8 @@ func toDomainOutput(d *gl.PagesDomain, extra toolutil.PagesDomainExtra) DomainOu
 			CertificateText: d.Certificate.CertificateText,
 		},
 	}
-	if d.EnabledUntil != nil {
-		out.EnabledUntil = d.EnabledUntil.Format(toolutil.DateTimeFormat)
-	}
-	if d.Certificate.Expiration != nil {
-		out.Certificate.Expiration = d.Certificate.Expiration.Format(toolutil.DateTimeFormat)
-	}
+	out.EnabledUntil = toolutil.RFC3339Ptr(d.EnabledUntil)
+	out.Certificate.Expiration = toolutil.RFC3339Ptr(d.Certificate.Expiration)
 	return out
 }
 

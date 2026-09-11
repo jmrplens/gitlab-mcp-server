@@ -22,7 +22,7 @@ func FormatNoteMarkdownString(out NoteOutput) string {
 }
 
 func toMarkdownDiscussion(out Output) toolutil.DiscussionMarkdown {
-	return toolutil.NewDiscussionMarkdown(out.ID, toolutil.DiscussionNoteMarkdowns(out.Notes, toMarkdownNote))
+	return toolutil.NewDiscussionMarkdown(out.ID, toolutil.NoteMarkdowns(out.Notes, toMarkdownNote))
 }
 
 func toMarkdownNote(out NoteOutput) toolutil.DiscussionNoteMarkdown {

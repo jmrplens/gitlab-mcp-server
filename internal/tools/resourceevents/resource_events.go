@@ -563,9 +563,7 @@ func toLabelEventOutput(e *gl.LabelEvent) LabelEventOutput {
 		User:         eventUserOutput(&e.User),
 		Label:        labelEventLabelOutput(e.Label),
 	}
-	if e.CreatedAt != nil {
-		out.CreatedAt = e.CreatedAt.Format(toolutil.DateTimeFormat)
-	}
+	out.CreatedAt = toolutil.RFC3339Ptr(e.CreatedAt)
 	return out
 }
 
@@ -595,9 +593,7 @@ func toMilestoneEventOutput(e *gl.MilestoneEvent, extra toolutil.ResourceMilesto
 		Milestone:    milestoneOutput(e.Milestone),
 		State:        extra.State,
 	}
-	if e.CreatedAt != nil {
-		out.CreatedAt = e.CreatedAt.Format(toolutil.DateTimeFormat)
-	}
+	out.CreatedAt = toolutil.RFC3339Ptr(e.CreatedAt)
 	return out
 }
 
@@ -627,9 +623,7 @@ func toStateEventOutput(e *gl.StateEvent, extra toolutil.ResourceStateEventExtra
 		SourceCommit:         extra.SourceCommit,
 		SourceMergeRequestID: extra.SourceMergeRequestID,
 	}
-	if e.CreatedAt != nil {
-		out.CreatedAt = e.CreatedAt.Format(toolutil.DateTimeFormat)
-	}
+	out.CreatedAt = toolutil.RFC3339Ptr(e.CreatedAt)
 	return out
 }
 
@@ -808,9 +802,7 @@ func toIterationEventOutput(e *gl.IterationEvent) IterationEventOutput {
 		User:         eventUserOutput(e.User),
 		Iteration:    iterationOutput(e.Iteration),
 	}
-	if e.CreatedAt != nil {
-		out.CreatedAt = e.CreatedAt.Format(toolutil.DateTimeFormat)
-	}
+	out.CreatedAt = toolutil.RFC3339Ptr(e.CreatedAt)
 	return out
 }
 
@@ -839,9 +831,7 @@ func toWeightEventOutput(e *gl.WeightEvent) WeightEventOutput {
 		Weight:  e.Weight,
 		User:    eventUserOutput(e.User),
 	}
-	if e.CreatedAt != nil {
-		out.CreatedAt = e.CreatedAt.Format(toolutil.DateTimeFormat)
-	}
+	out.CreatedAt = toolutil.RFC3339Ptr(e.CreatedAt)
 	return out
 }
 

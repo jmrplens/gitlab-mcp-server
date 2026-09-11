@@ -9,17 +9,25 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Common date format constants used across tool sub-packages.
-const (
-	DateFormatISO  = "2006-01-02"
-	DateTimeFormat = "2006-01-02T15:04:05Z"
-)
+// DateFormatISO is the date-only layout GitLab uses for a due date or a start
+// date. The literal-Z timestamp layout that sat beside it is gone: it stamped
+// whatever wall clock a value carried with a zone it may not have been in,
+// and [RFC3339] and [RFC3339Ptr] convert to UTC before they write.
+const DateFormatISO = "2006-01-02"
 
-// TblFieldValue is the standard "| Field | Value |" detail table header+separator.
+// TblFieldValue is the "| Field | Value |" detail table header and separator.
+//
+// It is the table form of a one-object card, which [Card] supersedes: a card
+// row is a list item, and a table is for a collection of objects that share
+// columns. The constant stays until every formatter that opens a card as a
+// table has moved; a new formatter starts a card with [NewCard].
 const TblFieldValue = "| Field | Value |\n| --- | --- |\n"
 
 // Table row format constants for common detail-table fields. Each pairs with
-// TblFieldValue and is shared across sub-packages to avoid duplicated literals.
+// TblFieldValue and is superseded by the [Card] rows of the same name:
+// [Card.Int] for the ID, [Card.Field] for the status, [Card.Time] for the two
+// timestamps, and [Card.Warn] for a failure flag, which marks the condition
+// with the warning sign rather than rendering the boolean as "true".
 const (
 	TblRowID          = "| ID | %d |\n"
 	TblRowStatus      = "| Status | %s |\n"
@@ -39,6 +47,10 @@ const (
 )
 
 // Markdown format constants for repeated table separators and field patterns.
+//
+// The FmtMd* card rows are superseded by [Card], which writes the same line
+// through one writer and escapes the value at the write; they stay until the
+// formatters that use them have moved.
 const (
 	FmtMdID          = "- **ID**: %d\n"
 	FmtMdName        = "- **Name**: %s\n"
@@ -81,40 +93,46 @@ const (
 )
 
 // Contextual emoji constants for consistent visual indicators across formatters.
+//
+// EmojiWarning is the negative-polarity flag [Card.Warn] writes: a condition
+// such as revoked, locked, expired or has failures is marked with it and never
+// with the tick [BoolEmoji] gives a true, which on such a label reads as
+// success.
 const (
-	EmojiDraft        = "\U0001F4DD"   // 📝
-	EmojiWarning      = "\u26A0\uFE0F" // ⚠️
-	EmojiConfidential = "\U0001F512"   // 🔒
-	EmojiArchived     = "\U0001F4E6"   // 📦
-	EmojiStar         = "\u2B50"       // ⭐
-	EmojiSuccess      = "\u2705"       // ✅
-	EmojiCross        = "\u274C"       // ❌
-	EmojiRefresh      = "\U0001F504"   // 🔄
-	EmojiFile         = "\U0001F4C4"   // 📄
-	EmojiFolder       = "\U0001F4C1"   // 📁
-	EmojiCalendar     = "\U0001F4C5"   // 📅
-	EmojiUpArrow      = "\u2B06\uFE0F" // ⬆️
-	EmojiDownArrow    = "\u2B07\uFE0F" // ⬇️
-	EmojiInfo         = "\u2139\uFE0F" // ℹ️
-	EmojiQuestion     = "\u2753"       // ❓
-	EmojiLink         = "\U0001F517"   // 🔗
-	EmojiUser         = "\U0001F464"   // 👤
-	EmojiGroup        = "\U0001F465"   // 👥
-	EmojiPipeline     = "\U0001F6A7"   // 🚧
-	EmojiMergeRequest = "\U0001F5C3"   // 🗃️
-	EmojiIssue        = "\U0001F4A1"   // 💡
-	EmojiRed          = "\U0001F534"   // 🔴
-	EmojiYellow       = "\U0001F7E1"   // 🟡
-	EmojiGreen        = "\U0001F7E2"   // 🟢
-	EmojiProhibited   = "\U0001F6AB"   // 🚫
-	EmojiWhiteCircle  = "\u26AA"       // ⚪
-	EmojiParty        = "\U0001F389"   // 🎉
-	EmojiPurple       = "\U0001F7E3"   // 🟣
-	EmojiBlue         = "\U0001F535"   // 🔵
-	EmojiStop         = "\u26D4"       // ⛔
-	EmojiSkip         = "\u23ED\uFE0F" // ⏭️
-	EmojiNew          = "\U0001F195"   // 🆕
-	EmojiHand         = "\u270B"       // ✋
+	EmojiDraft        = "\U0001F4DD" // 📝
+	EmojiWarning      = "⚠️"         // ⚠️
+	EmojiConfidential = "\U0001F512" // 🔒
+	EmojiArchived     = "\U0001F4E6" // 📦
+	EmojiStar         = "⭐"          // ⭐
+	EmojiSuccess      = "✅"          // ✅
+	EmojiCross        = "❌"          // ❌
+	EmojiRefresh      = "\U0001F504" // 🔄
+	EmojiFile         = "\U0001F4C4" // 📄
+	EmojiFolder       = "\U0001F4C1" // 📁
+	EmojiCalendar     = "\U0001F4C5" // 📅
+	EmojiUpArrow      = "⬆️"         // ⬆️
+	EmojiDownArrow    = "⬇️"         // ⬇️
+	EmojiInfo         = "ℹ️"         // ℹ️
+	EmojiQuestion     = "❓"          // ❓
+	EmojiLink         = "\U0001F517" // 🔗
+	EmojiUser         = "\U0001F464" // 👤
+	EmojiGroup        = "\U0001F465" // 👥
+	EmojiPipeline     = "\U0001F6A7" // 🚧
+	EmojiMergeRequest = "\U0001F5C3" // 🗃️
+	EmojiIssue        = "\U0001F4A1" // 💡
+	EmojiRed          = "\U0001F534" // 🔴
+	EmojiOrange       = "\U0001F7E0" // 🟠
+	EmojiYellow       = "\U0001F7E1" // 🟡
+	EmojiGreen        = "\U0001F7E2" // 🟢
+	EmojiProhibited   = "\U0001F6AB" // 🚫
+	EmojiWhiteCircle  = "⚪"          // ⚪
+	EmojiParty        = "\U0001F389" // 🎉
+	EmojiPurple       = "\U0001F7E3" // 🟣
+	EmojiBlue         = "\U0001F535" // 🔵
+	EmojiStop         = "⛔"          // ⛔
+	EmojiSkip         = "⏭️"         // ⏭️
+	EmojiNew          = "\U0001F195" // 🆕
+	EmojiHand         = "✋"          // ✋
 )
 
 // WriteMdURL appends the "- **URL**: ..." line, rendering url as a link whose
@@ -126,6 +144,9 @@ const (
 // hand-wrote a link with nothing in front of it, and the audit flagged every
 // one of them twice. Escaping belongs here, once, rather than in a decision
 // each of 22 packages makes for itself.
+//
+// [Card.URL] is the same row on a card, and writes nothing for an empty
+// address where this writes a bare label.
 func WriteMdURL(b *strings.Builder, url string) {
 	fmt.Fprintf(b, fmtMdURLLine, MdTitleLink(url, url))
 }
@@ -137,19 +158,238 @@ func WriteMdURLNewline(b *strings.Builder, url string) {
 	WriteMdURL(b, url)
 }
 
-// WritePagination appends a newline-wrapped pagination summary to the builder.
+// WritePagination appends the pagination footer after a blank line, whatever
+// the builder ends with, so the footer opens a paragraph of its own rather
+// than continuing the last table row or list item as a lazy line. A
+// pagination that says nothing (no page, no total, no page size) writes
+// nothing, since "Page 0 of 0 | 0 items total" is an answer GitLab never
+// gave.
 func WritePagination(b *strings.Builder, p PaginationOutput) {
-	fmt.Fprintf(b, FmtMdSectionText, FormatPagination(p))
+	line := formatPagination(p)
+	if line == "" {
+		return
+	}
+	endBlock(b)
+	b.WriteString(line)
+	b.WriteString("\n")
+}
+
+// formatPagination renders pagination metadata as a compact line of what is
+// known: the page and the page count when GitLab sent a total, the page alone
+// under keyset pagination where no total exists, and whether more pages
+// follow. Nothing known renders as nothing.
+func formatPagination(p PaginationOutput) string {
+	var parts []string
+	switch {
+	case p.TotalPages > 0 && p.Page > 0:
+		parts = append(parts, fmt.Sprintf("Page %d of %d", p.Page, p.TotalPages))
+	case p.Page > 0:
+		parts = append(parts, fmt.Sprintf("Page %d", p.Page))
+	}
+	if p.TotalItems > 0 {
+		parts = append(parts, fmt.Sprintf("%d items total", p.TotalItems))
+	}
+	if p.PerPage > 0 {
+		parts = append(parts, fmt.Sprintf("%d per page", p.PerPage))
+	}
+	if p.TotalPages == 0 && p.Page > 0 {
+		if p.HasMore || p.NextPage > 0 {
+			parts = append(parts, "more pages available")
+		} else {
+			parts = append(parts, "no more pages")
+		}
+	}
+	return strings.Join(parts, " | ")
 }
 
 // WriteListSummary appends a brief "Showing N of M results (page X of Y)"
 // line between the heading and the table body. It is a no-op when there is
-// only a single page, because the heading count already conveys everything.
+// only a single page, because the heading count already conveys everything,
+// and it names no total when GitLab sent none rather than saying "of 0".
 func WriteListSummary(b *strings.Builder, shown int, p PaginationOutput) {
 	if p.TotalPages <= 1 {
 		return
 	}
-	fmt.Fprintf(b, "Showing %d of %d results (page %d of %d)\n\n", shown, p.TotalItems, p.Page, p.TotalPages)
+	if p.TotalItems > 0 {
+		fmt.Fprintf(b, "Showing %d of %d results (page %d of %d)\n\n", shown, p.TotalItems, p.Page, p.TotalPages)
+		return
+	}
+	fmt.Fprintf(b, "Showing %d results (page %d of %d)\n\n", shown, p.Page, p.TotalPages)
+}
+
+// WriteListHeading writes the H2 a list result opens with, "## Title (N)",
+// and the summary line [WriteListSummary] adds for a multi-page result.
+//
+// N is what the response can vouch for: the total GitLab sent when it sent
+// one, the count shown with "more available" when the page has a successor
+// but no total (keyset pagination sends none), and the count shown otherwise.
+// A heading that printed the page length under a larger total, or a zero
+// total above a table of rows, was the commonest way a list misled its
+// reader.
+func WriteListHeading(b *strings.Builder, title string, shown int, p PaginationOutput) {
+	count := strconv.Itoa(shown)
+	switch {
+	case p.TotalItems > 0:
+		count = strconv.FormatInt(p.TotalItems, 10)
+	case shown > 0 && (p.HasMore || p.NextPage > 0):
+		count = fmt.Sprintf("%d shown, more available", shown)
+	}
+	fmt.Fprintf(b, "## %s (%s)\n\n", EscapeMdHeading(title), count)
+	WriteListSummary(b, shown, p)
+}
+
+// WriteListFooter closes a list result: the pagination footer through
+// [WritePagination], then the guidance section. When linked is true the
+// table carried a link column and [HintPreserveLinks] leads the hints, as
+// [ListHints] arranges; when it is false the hint is dropped even if the
+// caller passed it, since an instruction to keep the links of a table that
+// has none is noise the model has to read past.
+func WriteListFooter(b *strings.Builder, p PaginationOutput, linked bool, hints ...string) {
+	WritePagination(b, p)
+	if linked {
+		WriteHints(b, ListHints(hints...)...)
+		return
+	}
+	WriteHints(b, withoutPreserveLinks(hints)...)
+}
+
+// withoutPreserveLinks drops [HintPreserveLinks] and empty hints from hints.
+func withoutPreserveLinks(hints []string) []string {
+	out := make([]string, 0, len(hints))
+	for _, hint := range hints {
+		if hint == "" || hint == HintPreserveLinks {
+			continue
+		}
+		out = append(out, hint)
+	}
+	return out
+}
+
+// WriteGraphQLPagination writes the cursor summary of a GraphQL list after a
+// blank line, the one way a cursor-paginated list ends: the line used to be
+// written four ways across ten packages, one of them with no blank line in
+// front of it, which glued it to the last row of the table.
+func WriteGraphQLPagination(b *strings.Builder, p GraphQLPaginationOutput, shown int) {
+	endBlock(b)
+	b.WriteString(FormatGraphQLPagination(p, shown))
+	b.WriteString("\n")
+}
+
+// EmptyMessage is the one sentence an empty list renders, "No <resource>
+// found." with its newline, the whole response of a list with nothing in it.
+// The resource is a plural noun the formatter names ("merge requests",
+// "protected branches"). It replaces the heading rather than sitting under
+// it: a heading counting zero above a sentence saying so said it twice.
+func EmptyMessage(resource string) string {
+	return "No " + resource + " found.\n"
+}
+
+// emptyResult renders the empty-list message a shared renderer was configured
+// with as the whole response, ending in exactly one newline whichever way the
+// caller spelled it.
+func emptyResult(message string) string {
+	return strings.TrimRight(message, "\r\n") + "\n"
+}
+
+// MdUserHandle renders a username as the "@handle" GitLab shows, escaped for
+// a card row or a cell, or nothing for an empty name, so a card never shows a
+// bare "@".
+func MdUserHandle(username string) string {
+	if blank(username) {
+		return ""
+	}
+	return "@" + EscapeMdTableCell(username)
+}
+
+// MdUserLink renders a username as its handle linked to the user's profile,
+// through [MdTitleLink], the escaped handle alone when the profile URL is
+// empty, and nothing for an empty name.
+func MdUserLink(username, webURL string) string {
+	if blank(username) {
+		return ""
+	}
+	return MdTitleLink("@"+username, webURL)
+}
+
+// HintAction composes a next-step hint that names an action by its canonical
+// catalog ID, "Use action 'issue.update' to change this issue". The ID is the
+// one form every surface accepts: the dynamic surface executes it directly,
+// and the meta and individual surfaces resolve it to their own tool names, so
+// a hint written this way is never a name the serving surface does not
+// register.
+func HintAction(actionID, purpose string) string {
+	return "Use action '" + actionID + "' to " + purpose
+}
+
+// WriteHookSecretKeys writes the tables of a webhook's URL variables and
+// custom headers, keys only, with every value redacted: both are secrets
+// GitLab itself never sends back, and the key is what a reader needs to
+// know which ones are set. Either list may be empty, in which case its table
+// is not written.
+func WriteHookSecretKeys(b *strings.Builder, urlVariableKeys, customHeaderKeys []string) {
+	writeRedactedKeyTable(b, "URL Variables", urlVariableKeys)
+	writeRedactedKeyTable(b, "Custom Headers", customHeaderKeys)
+}
+
+// writeRedactedKeyTable writes one Key/Value table under an H3, every value
+// [RedactedSecretValue].
+func writeRedactedKeyTable(b *strings.Builder, title string, keys []string) {
+	if len(keys) == 0 {
+		return
+	}
+	endBlock(b)
+	fmt.Fprintf(b, "### %s\n\n", title)
+	b.WriteString(MarkdownTableHeader("Key", "Value"))
+	for _, key := range keys {
+		b.WriteString(MarkdownTableRow(EscapeMdTableCell(key), RedactedSecretValue))
+	}
+}
+
+// SeverityBadge renders a vulnerability or finding severity as its color
+// glyph and the level in capitals, the one badge the security domains share.
+// A level the table does not know is rendered escaped, since it is a value
+// GitLab sent.
+func SeverityBadge(severity string) string {
+	switch strings.ToUpper(strings.TrimSpace(severity)) {
+	case "CRITICAL":
+		return EmojiRed + " CRITICAL"
+	case "HIGH":
+		return EmojiOrange + " HIGH"
+	case "MEDIUM":
+		return EmojiYellow + " MEDIUM"
+	case "LOW":
+		return EmojiBlue + " LOW"
+	case "INFO":
+		return EmojiInfo + " INFO"
+	case "UNKNOWN":
+		return EmojiQuestion + " UNKNOWN"
+	default:
+		return EscapeMdTableCell(severity)
+	}
+}
+
+// mapSlice applies f to every element of in, the one mapping the shared
+// renderers used to spell six times over.
+func mapSlice[T, U any](in []T, f func(T) U) []U {
+	out := make([]U, 0, len(in))
+	for _, v := range in {
+		out = append(out, f(v))
+	}
+	return out
+}
+
+// endBlock leaves the builder empty or ending in a blank line, whatever it
+// ends with now, so what is written next opens a block of its own rather than
+// continuing the last line as a lazy paragraph or a table row.
+func endBlock(b *strings.Builder) {
+	written := b.String()
+	switch {
+	case written == "" || strings.HasSuffix(written, "\n\n"):
+	case strings.HasSuffix(written, "\n"):
+		b.WriteString("\n")
+	default:
+		b.WriteString("\n\n")
+	}
 }
 
 // MarkdownTableHeader returns a Markdown table header followed by a standard
@@ -161,13 +401,13 @@ func MarkdownTableHeader(columns ...string) string {
 
 	var b strings.Builder
 	b.WriteString(markdownTableLine(columns))
-	b.WriteString(MarkdownTableSeparator(len(columns)))
+	b.WriteString(markdownTableSeparator(len(columns)))
 	return b.String()
 }
 
-// MarkdownTableSeparator returns a standard left-aligned Markdown separator row
-// for the requested number of columns.
-func MarkdownTableSeparator(columns int) string {
+// markdownTableSeparator returns a standard left-aligned Markdown separator
+// row for the requested number of columns.
+func markdownTableSeparator(columns int) string {
 	if columns <= 0 {
 		return ""
 	}
@@ -231,19 +471,9 @@ func NewStorageMoveMarkdown(id int64, state, sourceStorageName, destinationStora
 	}
 }
 
-// StorageMoveMarkdowns maps package-specific storage move outputs to the
-// shared Markdown view model.
-func StorageMoveMarkdowns[T any](moves []T, convert func(T) StorageMoveMarkdown) []StorageMoveMarkdown {
-	out := make([]StorageMoveMarkdown, 0, len(moves))
-	for _, move := range moves {
-		out = append(out, convert(move))
-	}
-	return out
-}
-
-// StorageMoveListMarkdownOptions configures the shared storage move list
+// storageMoveListMarkdownOptions configures the shared storage move list
 // renderer.
-type StorageMoveListMarkdownOptions struct {
+type storageMoveListMarkdownOptions struct {
 	Title        string
 	EmptyMessage string
 	EntityColumn string
@@ -251,39 +481,38 @@ type StorageMoveListMarkdownOptions struct {
 }
 
 // FormatStorageMoveDetailMarkdown renders one repository storage move as a
-// Markdown detail table.
+// card: the identity and state rows, the two storages, the creation time in
+// the display form, and the moved entity as a link with its ID.
 func FormatStorageMoveDetailMarkdown(move StorageMoveMarkdown, title string, hints ...string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## %s #%d\n\n", title, move.ID)
-	b.WriteString(TblFieldValue)
-	fmt.Fprintf(&b, "| **ID** | %d |\n", move.ID)
-	fmt.Fprintf(&b, "| **State** | %s |\n", EscapeMdTableCell(move.State))
-	fmt.Fprintf(&b, "| **Source** | %s |\n", EscapeMdTableCell(move.SourceStorageName))
-	fmt.Fprintf(&b, "| **Destination** | %s |\n", EscapeMdTableCell(move.DestinationStorageName))
-	fmt.Fprintf(&b, "| **Created** | %s |\n", move.CreatedAt.Format("2006-01-02 15:04:05"))
+	c := NewCard(&b, fmt.Sprintf("%s #%d", title, move.ID))
+	c.Int("ID", move.ID)
+	c.Field("State", move.State)
+	c.Field("Source", move.SourceStorageName)
+	c.Field("Destination", move.DestinationStorageName)
+	c.Time("Created", RFC3339(move.CreatedAt))
 	if move.Entity != nil {
-		fmt.Fprintf(&b, "| **%s** | %s |\n", EscapeMdTableCell(move.Entity.Label), storageMoveEntityCell(*move.Entity, true))
+		c.Markdown(move.Entity.Label, storageMoveEntityCell(*move.Entity, true))
 	}
-	WriteHints(&b, hints...)
+	c.End(hints...)
 	return b.String()
 }
 
-// FormatStorageMoveListMarkdown renders repository storage moves as a Markdown
+// formatStorageMoveListMarkdown renders repository storage moves as a Markdown
 // table with the domain-specific entity column supplied by the caller.
-func FormatStorageMoveListMarkdown(moves []StorageMoveMarkdown, opts StorageMoveListMarkdownOptions) string {
-	var b strings.Builder
-	WriteHints(&b, HintPreserveLinks)
-	fmt.Fprintf(&b, FmtMdH2, opts.Title)
+func formatStorageMoveListMarkdown(moves []StorageMoveMarkdown, opts storageMoveListMarkdownOptions) string {
 	if len(moves) == 0 {
-		b.WriteString(opts.EmptyMessage)
-		b.WriteByte('\n')
-		return b.String()
+		return emptyResult(opts.EmptyMessage)
 	}
+	var b strings.Builder
+	WriteListHeading(&b, opts.Title, len(moves), opts.Pagination)
 	b.WriteString(MarkdownTableHeader("ID", "State", "Source", "Destination", opts.EntityColumn, "Created"))
+	linked := false
 	for _, move := range moves {
 		entity := ""
 		if move.Entity != nil {
 			entity = storageMoveEntityCell(*move.Entity, false)
+			linked = linked || move.Entity.URL != ""
 		}
 		b.WriteString(MarkdownTableRow(
 			strconv.FormatInt(move.ID, 10),
@@ -291,19 +520,17 @@ func FormatStorageMoveListMarkdown(moves []StorageMoveMarkdown, opts StorageMove
 			EscapeMdTableCell(move.SourceStorageName),
 			EscapeMdTableCell(move.DestinationStorageName),
 			entity,
-			move.CreatedAt.Format("2006-01-02 15:04:05"),
+			FormatTimeValue(move.CreatedAt),
 		))
 	}
-	if opts.Pagination.Page != 0 {
-		fmt.Fprintf(&b, "\n_Page %d, %d moves shown._\n", opts.Pagination.Page, len(moves))
-	}
+	WriteListFooter(&b, opts.Pagination, linked)
 	return b.String()
 }
 
 // FormatStorageMoveCollectionMarkdown maps package-specific storage moves and
 // renders them as a shared Markdown list.
 func FormatStorageMoveCollectionMarkdown[T any](moves []T, pagination PaginationOutput, convert func(T) StorageMoveMarkdown, title, emptyMessage, entityColumn string) string {
-	return FormatStorageMoveListMarkdown(StorageMoveMarkdowns(moves, convert), StorageMoveListMarkdownOptions{
+	return formatStorageMoveListMarkdown(mapSlice(moves, convert), storageMoveListMarkdownOptions{
 		Title:        title,
 		EmptyMessage: emptyMessage,
 		EntityColumn: entityColumn,
@@ -363,61 +590,53 @@ func NewCICDVariableMarkdown(key, value, variableType string, flags CICDVariable
 	}
 }
 
-// CICDVariableMarkdowns maps package-specific variable outputs to the shared
-// CI/CD variable Markdown view model.
-func CICDVariableMarkdowns[T any](variables []T, convert func(T) CICDVariableMarkdown) []CICDVariableMarkdown {
-	out := make([]CICDVariableMarkdown, 0, len(variables))
-	for _, variable := range variables {
-		out = append(out, convert(variable))
-	}
-	return out
-}
-
-// CICDVariableMarkdownOptions configures the shared CI/CD variable detail
+// cicdVariableMarkdownOptions configures the shared CI/CD variable detail
 // renderer.
-type CICDVariableMarkdownOptions struct {
+type cicdVariableMarkdownOptions struct {
 	Title                   string
 	IncludeEnvironmentScope bool
 	Hints                   []string
 }
 
-// FormatCICDVariableMarkdown renders a single CI/CD variable as a Markdown
-// detail table.
-func FormatCICDVariableMarkdown(v CICDVariableMarkdown, opts CICDVariableMarkdownOptions) string {
+// maskedVariableValue stands in for the value of a masked or hidden variable,
+// which GitLab shows nowhere and this server shows nowhere either.
+const maskedVariableValue = "[masked]"
+
+// formatCICDVariableMarkdown renders a single CI/CD variable as a card. A
+// variable with no key renders nothing: there is no such variable.
+func formatCICDVariableMarkdown(v CICDVariableMarkdown, opts cicdVariableMarkdownOptions) string {
 	if v.Key == "" {
 		return ""
 	}
 	var b strings.Builder
-	// A CI/CD variable key is held to word characters by GitLab, but this same
-	// file escapes the field in its list table, so it is escaped here too.
-	fmt.Fprintf(&b, "## %s: %s\n\n", opts.Title, EscapeMdHeading(v.Key))
-	b.WriteString(TblFieldValue)
-	fmt.Fprintf(&b, "| Type | %s |\n", EscapeMdTableCell(v.VariableType))
-	fmt.Fprintf(&b, "| Protected | %s |\n", BoolEmoji(v.Protected))
-	fmt.Fprintf(&b, "| Masked | %s |\n", BoolEmoji(v.Masked))
+	c := NewCard(&b, opts.Title+": "+v.Key)
+	c.Field("Type", v.VariableType)
+	c.Bool("Protected", v.Protected)
+	c.Bool("Masked", v.Masked)
 	if v.Hidden {
-		fmt.Fprintf(&b, "| Hidden | %s |\n", BoolEmoji(true))
+		c.Bool("Hidden", true)
 	}
-	fmt.Fprintf(&b, "| Raw | %s |\n", BoolEmoji(v.Raw))
+	c.Bool("Raw", v.Raw)
 	if opts.IncludeEnvironmentScope {
-		fmt.Fprintf(&b, "| Environment Scope | %s |\n", EscapeMdTableCell(v.EnvironmentScope))
+		c.Field("Environment Scope", v.EnvironmentScope)
 	}
-	if v.Description != "" {
-		fmt.Fprintf(&b, "| Description | %s |\n", EscapeMdTableCell(v.Description))
-	}
-	if !v.Masked && !v.Hidden {
-		fmt.Fprintf(&b, "| Value | %s |\n", EscapeMdTableCell(v.Value))
+	c.Text("Description", v.Description)
+	// Masked and hidden are separate GitLab flags and either withholds the
+	// value: a hidden variable is never shown again in GitLab's own UI whether
+	// or not it is also masked.
+	if v.Masked || v.Hidden {
+		c.Markdown("Value", maskedVariableValue)
 	} else {
-		b.WriteString("| Value | [masked] |\n")
+		c.Field("Value", v.Value)
 	}
-	WriteHints(&b, opts.Hints...)
+	c.End(opts.Hints...)
 	return b.String()
 }
 
 // FormatCICDVariableDetailMarkdown renders a CI/CD variable with standard
 // update/delete next-step hints shared by project and group variables.
 func FormatCICDVariableDetailMarkdown(v CICDVariableMarkdown, title string, includeEnvironmentScope bool) string {
-	return FormatCICDVariableMarkdown(v, CICDVariableMarkdownOptions{
+	return formatCICDVariableMarkdown(v, cicdVariableMarkdownOptions{
 		Title:                   title,
 		IncludeEnvironmentScope: includeEnvironmentScope,
 		Hints: []string{
@@ -427,23 +646,24 @@ func FormatCICDVariableDetailMarkdown(v CICDVariableMarkdown, title string, incl
 	})
 }
 
-// CICDVariableListMarkdownOptions configures the shared CI/CD variable list
+// cicdVariableListMarkdownOptions configures the shared CI/CD variable list
 // renderer.
-type CICDVariableListMarkdownOptions struct {
+type cicdVariableListMarkdownOptions struct {
 	Title                   string
 	EmptyMessage            string
 	IncludeEnvironmentScope bool
 	Hints                   []string
 }
 
-// FormatCICDVariableListMarkdown renders CI/CD variables as a Markdown table.
-func FormatCICDVariableListMarkdown(variables []CICDVariableMarkdown, pagination PaginationOutput, opts CICDVariableListMarkdownOptions) string {
+// formatCICDVariableListMarkdown renders CI/CD variables as a Markdown table.
+// The table carries no link, so the footer carries no instruction to keep
+// them.
+func formatCICDVariableListMarkdown(variables []CICDVariableMarkdown, pagination PaginationOutput, opts cicdVariableListMarkdownOptions) string {
 	if len(variables) == 0 {
-		return opts.EmptyMessage
+		return emptyResult(opts.EmptyMessage)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, FmtMdH2Count, opts.Title, pagination.TotalItems)
-	WriteListSummary(&b, len(variables), pagination)
+	WriteListHeading(&b, opts.Title, len(variables), pagination)
 	if opts.IncludeEnvironmentScope {
 		b.WriteString(MarkdownTableHeader("Key", "Type", "Protected", "Masked", "Scope"))
 	} else {
@@ -461,15 +681,14 @@ func FormatCICDVariableListMarkdown(variables []CICDVariableMarkdown, pagination
 		}
 		b.WriteString(MarkdownTableRow(cells...))
 	}
-	WritePagination(&b, pagination)
-	WriteHints(&b, ListHints(opts.Hints...)...)
+	WriteListFooter(&b, pagination, false, opts.Hints...)
 	return b.String()
 }
 
 // FormatCICDVariableCollectionMarkdown maps package-specific CI/CD variable
 // outputs and renders them as a shared Markdown list.
 func FormatCICDVariableCollectionMarkdown[T any](variables []T, pagination PaginationOutput, convert func(T) CICDVariableMarkdown, title, emptyMessage string, includeEnvironmentScope bool, hints ...string) string {
-	return FormatCICDVariableListMarkdown(CICDVariableMarkdowns(variables, convert), pagination, CICDVariableListMarkdownOptions{
+	return formatCICDVariableListMarkdown(mapSlice(variables, convert), pagination, cicdVariableListMarkdownOptions{
 		Title:                   title,
 		EmptyMessage:            emptyMessage,
 		IncludeEnvironmentScope: includeEnvironmentScope,
@@ -477,35 +696,24 @@ func FormatCICDVariableCollectionMarkdown[T any](variables []T, pagination Pagin
 	})
 }
 
-// DiscussionNoteMarkdown carries common note fields rendered inside discussion
-// Markdown responses.
-type DiscussionNoteMarkdown struct {
-	ID        int64
-	Body      string
-	Author    string
-	CreatedAt string
-}
+// DiscussionNoteMarkdown is the note of a discussion thread, which is a
+// GitLab note like any other and is rendered by the same view model: the two
+// used to be separate types with renderers that disagreed on the heading, the
+// author's spelling and the body's label, and the discussion one carried no
+// resolution state, which kept the merge request and commit discussion
+// packages from adopting it at all.
+type DiscussionNoteMarkdown = NoteMarkdown
 
-// NewDiscussionNoteMarkdown builds a shared Markdown view model for discussion
-// notes.
-func NewDiscussionNoteMarkdown(id int64, body, author, createdAt string) DiscussionNoteMarkdown {
-	return DiscussionNoteMarkdown{ID: id, Body: body, Author: author, CreatedAt: createdAt}
-}
-
-// DiscussionNoteMarkdowns maps package-specific note outputs to the shared
-// discussion note Markdown view model.
-func DiscussionNoteMarkdowns[T any](notes []T, convert func(T) DiscussionNoteMarkdown) []DiscussionNoteMarkdown {
-	out := make([]DiscussionNoteMarkdown, 0, len(notes))
-	for _, note := range notes {
-		out = append(out, convert(note))
-	}
-	return out
+// NewDiscussionNoteMarkdown builds the note view model from the four fields a
+// discussion note always carries.
+func NewDiscussionNoteMarkdown(id int64, body, author, createdAt string) NoteMarkdown {
+	return NoteMarkdown{ID: id, Body: body, Author: author, CreatedAt: createdAt}
 }
 
 // DiscussionMarkdown carries common discussion fields for Markdown responses.
 type DiscussionMarkdown struct {
 	ID    string
-	Notes []DiscussionNoteMarkdown
+	Notes []NoteMarkdown
 }
 
 // DiscussionRenderer stores stable labels and hints for a discussion family so
@@ -532,7 +740,7 @@ func NewDiscussionRenderer(listTitle, emptyMessage, listHint, discussionHint, no
 
 // FormatRESTList renders REST discussion threads with offset pagination.
 func (r DiscussionRenderer) FormatRESTList(discussions []DiscussionMarkdown, pagination PaginationOutput) string {
-	return FormatDiscussionListMarkdown(discussions, DiscussionListMarkdownOptions{
+	return formatDiscussionListMarkdown(discussions, discussionListMarkdownOptions{
 		Title:        r.ListTitle,
 		EmptyMessage: r.EmptyMessage,
 		Pagination:   pagination,
@@ -540,9 +748,9 @@ func (r DiscussionRenderer) FormatRESTList(discussions []DiscussionMarkdown, pag
 	})
 }
 
-// FormatGraphQLList renders GraphQL discussion threads with cursor pagination.
-func (r DiscussionRenderer) FormatGraphQLList(discussions []DiscussionMarkdown, pagination GraphQLPaginationOutput) string {
-	return FormatDiscussionListMarkdown(discussions, DiscussionListMarkdownOptions{
+// formatGraphQLList renders GraphQL discussion threads with cursor pagination.
+func (r DiscussionRenderer) formatGraphQLList(discussions []DiscussionMarkdown, pagination GraphQLPaginationOutput) string {
+	return formatDiscussionListMarkdown(discussions, discussionListMarkdownOptions{
 		Title:             r.ListTitle,
 		EmptyMessage:      r.EmptyMessage,
 		GraphQLPagination: &pagination,
@@ -554,7 +762,7 @@ func (r DiscussionRenderer) FormatGraphQLList(discussions []DiscussionMarkdown, 
 // connection that only pages forward, so the summary line names no previous
 // page.
 func (r DiscussionRenderer) FormatGraphQLForwardList(discussions []DiscussionMarkdown, pagination GraphQLForwardPaginationOutput) string {
-	return r.FormatGraphQLList(discussions, GraphQLPaginationOutput{
+	return r.formatGraphQLList(discussions, GraphQLPaginationOutput{
 		HasNextPage: pagination.HasNextPage,
 		EndCursor:   pagination.EndCursor,
 	})
@@ -565,29 +773,34 @@ func (r DiscussionRenderer) FormatDiscussion(discussion DiscussionMarkdown) stri
 	return FormatDiscussionMarkdown(discussion, r.DiscussionHints...)
 }
 
-// FormatNote renders a single discussion note using the renderer hints.
-func (r DiscussionRenderer) FormatNote(note DiscussionNoteMarkdown) string {
-	return FormatDiscussionNoteMarkdown(note, r.NoteHints...)
+// FormatNote renders a single discussion note using the renderer hints, as
+// the note card every note tool renders.
+func (r DiscussionRenderer) FormatNote(note NoteMarkdown) string {
+	return FormatNoteMarkdown(note, NoteMarkdownOptions{
+		Title:             discussionNoteTitle,
+		IncludeResolvable: true,
+		Hints:             r.NoteHints,
+	})
 }
+
+// discussionNoteTitle is the heading a discussion note card opens with, the
+// same across the REST and GraphQL discussion families.
+const discussionNoteTitle = "Discussion Note"
 
 // NewDiscussionMarkdown builds a shared Markdown view model for discussion
 // threads.
-func NewDiscussionMarkdown(id string, notes []DiscussionNoteMarkdown) DiscussionMarkdown {
+func NewDiscussionMarkdown(id string, notes []NoteMarkdown) DiscussionMarkdown {
 	return DiscussionMarkdown{ID: id, Notes: notes}
 }
 
 // DiscussionMarkdowns maps package-specific discussion outputs to the shared
 // discussion Markdown view model.
 func DiscussionMarkdowns[T any](discussions []T, convert func(T) DiscussionMarkdown) []DiscussionMarkdown {
-	out := make([]DiscussionMarkdown, 0, len(discussions))
-	for _, discussion := range discussions {
-		out = append(out, convert(discussion))
-	}
-	return out
+	return mapSlice(discussions, convert)
 }
 
-// DiscussionListMarkdownOptions configures shared discussion list rendering.
-type DiscussionListMarkdownOptions struct {
+// discussionListMarkdownOptions configures shared discussion list rendering.
+type discussionListMarkdownOptions struct {
 	Title             string
 	EmptyMessage      string
 	Pagination        PaginationOutput
@@ -595,19 +808,22 @@ type DiscussionListMarkdownOptions struct {
 	Hints             []string
 }
 
-// FormatDiscussionListMarkdown renders discussion threads as Markdown.
-func FormatDiscussionListMarkdown(discussions []DiscussionMarkdown, opts DiscussionListMarkdownOptions) string {
+// formatDiscussionListMarkdown renders discussion threads as Markdown: the
+// list heading, one H3 per thread with its notes quoted under their authors,
+// the pagination the call used, and the hints. The threads carry no link, so
+// the footer carries no instruction to keep them.
+func formatDiscussionListMarkdown(discussions []DiscussionMarkdown, opts discussionListMarkdownOptions) string {
 	if len(discussions) == 0 {
-		return opts.EmptyMessage
+		return emptyResult(opts.EmptyMessage)
 	}
 	var b strings.Builder
-	headingCount := int64(len(discussions))
-	if opts.GraphQLPagination == nil && opts.Pagination.TotalItems > 0 {
-		headingCount = opts.Pagination.TotalItems
-	}
-	fmt.Fprintf(&b, FmtMdH2Count, opts.Title, headingCount)
 	if opts.GraphQLPagination == nil {
-		WriteListSummary(&b, len(discussions), opts.Pagination)
+		WriteListHeading(&b, opts.Title, len(discussions), opts.Pagination)
+	} else {
+		// A keyset connection counts nothing it has not walked, so the heading
+		// carries the count shown and the cursor line at the bottom says
+		// whether more follow.
+		WriteListHeading(&b, opts.Title, len(discussions), PaginationOutput{})
 	}
 	for _, discussion := range discussions {
 		//gitlab:allow-unescaped discussion.ID: a discussion thread id, hexadecimal digits from the REST digest or from the numeric half of a GraphQL global id.
@@ -616,34 +832,22 @@ func FormatDiscussionListMarkdown(discussions []DiscussionMarkdown, opts Discuss
 		b.WriteString("\n")
 	}
 	if opts.GraphQLPagination != nil {
-		b.WriteString(FormatGraphQLPagination(*opts.GraphQLPagination, len(discussions)))
-		b.WriteString("\n")
+		WriteGraphQLPagination(&b, *opts.GraphQLPagination, len(discussions))
 	} else {
 		WritePagination(&b, opts.Pagination)
 	}
-	WriteHints(&b, ListHints(opts.Hints...)...)
+	WriteHints(&b, withoutPreserveLinks(opts.Hints)...)
 	return b.String()
 }
 
 // FormatRESTDiscussionListMarkdown maps REST discussion outputs and renders
 // them with offset pagination metadata.
 func FormatRESTDiscussionListMarkdown[T any](discussions []T, pagination PaginationOutput, convert func(T) DiscussionMarkdown, title, emptyMessage string, hints ...string) string {
-	return FormatDiscussionListMarkdown(DiscussionMarkdowns(discussions, convert), DiscussionListMarkdownOptions{
+	return formatDiscussionListMarkdown(mapSlice(discussions, convert), discussionListMarkdownOptions{
 		Title:        title,
 		EmptyMessage: emptyMessage,
 		Pagination:   pagination,
 		Hints:        hints,
-	})
-}
-
-// FormatGraphQLDiscussionListMarkdown maps GraphQL discussion outputs and
-// renders them with cursor pagination metadata.
-func FormatGraphQLDiscussionListMarkdown[T any](discussions []T, pagination GraphQLPaginationOutput, convert func(T) DiscussionMarkdown, title, emptyMessage string, hints ...string) string {
-	return FormatDiscussionListMarkdown(DiscussionMarkdowns(discussions, convert), DiscussionListMarkdownOptions{
-		Title:             title,
-		EmptyMessage:      emptyMessage,
-		GraphQLPagination: &pagination,
-		Hints:             hints,
 	})
 }
 
@@ -656,34 +860,18 @@ func FormatDiscussionMarkdown(discussion DiscussionMarkdown, hints ...string) st
 	return b.String()
 }
 
-// FormatDiscussionNoteMarkdown renders a single discussion note as Markdown.
-func FormatDiscussionNoteMarkdown(note DiscussionNoteMarkdown, hints ...string) string {
-	var b strings.Builder
-	b.WriteString("## Note\n\n")
-	fmt.Fprintf(&b, FmtMdID, note.ID)
-	fmt.Fprintf(&b, FmtMdAuthorAt, EscapeMdTableCell(note.Author))
-	b.WriteString("- **Body**:\n\n")
-	b.WriteString(WrapGFMBody(note.Body))
-	b.WriteString("\n")
-	if note.CreatedAt != "" {
-		fmt.Fprintf(&b, FmtMdCreated, FormatTime(note.CreatedAt))
-	}
-	WriteHints(&b, hints...)
-	return b.String()
-}
-
-// writeDiscussionNotes renders each note in a thread as a list item whose body
-// is quoted underneath it.
+// writeDiscussionNotes renders each note in a thread as a list item naming
+// the author, the time and the note's ID, with the body quoted underneath it.
+// The ID is there because it is what every note action takes.
 //
 // The body used to be interpolated into the item itself, which is the one
-// discussion path that did not quote — [FormatNoteMarkdown] and
-// [FormatDiscussionNoteMarkdown] both do. A note body is written by anybody who
+// discussion path that did not quote. A note body is written by anybody who
 // can comment on the issue or merge request, and printed raw at column 0 it
 // could add list items of its own, impersonate a system note, open a heading,
 // or forge the server's guidance section.
-func writeDiscussionNotes(b *strings.Builder, notes []DiscussionNoteMarkdown) {
+func writeDiscussionNotes(b *strings.Builder, notes []NoteMarkdown) {
 	for _, note := range notes {
-		fmt.Fprintf(b, "- **@%s** (%s):\n", EscapeMdTableCell(note.Author), FormatTime(note.CreatedAt))
+		fmt.Fprintf(b, "- **@%s** (%s, note %d):\n", EscapeMdTableCell(note.Author), FormatTime(note.CreatedAt), note.ID)
 		quoted := WrapGFMBody(note.Body)
 		if quoted == "" {
 			continue
@@ -742,32 +930,6 @@ func (r TemplateRenderer) FormatContent(name, content string) string {
 	return FormatTemplateContentMarkdown(r.DetailTitle, name, r.Language, content, r.DetailHint)
 }
 
-// NewTemplateMarkdown builds a shared Markdown view model for GitLab template
-// list entries.
-func NewTemplateMarkdown(key, name string) TemplateMarkdown {
-	return TemplateMarkdown{Key: key, Name: name}
-}
-
-// TemplateMarkdowns maps package-specific template outputs to the shared
-// template Markdown view model.
-func TemplateMarkdowns[T any](templates []T, convert func(T) TemplateMarkdown) []TemplateMarkdown {
-	out := make([]TemplateMarkdown, 0, len(templates))
-	for _, template := range templates {
-		out = append(out, convert(template))
-	}
-	return out
-}
-
-// FormatTemplateCollectionMarkdown maps package-specific template outputs and
-// renders them as a shared Markdown list.
-func FormatTemplateCollectionMarkdown[T any](templates []T, pagination PaginationOutput, convert func(T) TemplateMarkdown, title, emptyMessage string, hints ...string) string {
-	return FormatTemplateListMarkdown(TemplateMarkdowns(templates, convert), pagination, TemplateListMarkdownOptions{
-		Title:        title,
-		EmptyMessage: emptyMessage,
-		Hints:        hints,
-	})
-}
-
 // TemplateListMarkdownOptions configures shared template list rendering.
 type TemplateListMarkdownOptions struct {
 	Title        string
@@ -775,37 +937,34 @@ type TemplateListMarkdownOptions struct {
 	Hints        []string
 }
 
-// FormatTemplateListMarkdown renders GitLab template list entries as Markdown.
+// FormatTemplateListMarkdown renders GitLab template list entries as a
+// Key/Name table. The table carries no link, so the footer carries no
+// instruction to keep them.
 func FormatTemplateListMarkdown(templates []TemplateMarkdown, pagination PaginationOutput, opts TemplateListMarkdownOptions) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## %s\n\n", opts.Title)
-	WriteListSummary(&b, len(templates), pagination)
 	if len(templates) == 0 {
-		b.WriteString(opts.EmptyMessage)
-		return b.String()
+		return emptyResult(opts.EmptyMessage)
 	}
+	var b strings.Builder
+	WriteListHeading(&b, opts.Title, len(templates), pagination)
 	b.WriteString(MarkdownTableHeader("Key", "Name"))
 	for _, template := range templates {
 		b.WriteString(MarkdownTableRow(EscapeMdTableCell(template.Key), EscapeMdTableCell(template.Name)))
 	}
-	WritePagination(&b, pagination)
-	WriteHints(&b, ListHints(opts.Hints...)...)
+	WriteListFooter(&b, pagination, false, opts.Hints...)
 	return b.String()
 }
 
-// FormatTemplateContentMarkdown renders a GitLab template body inside a fenced
-// code block.
+// FormatTemplateContentMarkdown renders a GitLab template body as a card
+// whose only content is the body inside a fenced code block, through
+// [Card.Fence], which sizes the fence past the longest backtick run in the
+// body. On an instance with custom file templates the set is served out of a
+// designated project, so the name is a repository file name somebody chose,
+// and the heading is escaped as every card heading is.
 func FormatTemplateContentMarkdown(title, name, language, content string, hints ...string) string {
 	var b strings.Builder
-	//gitlab:allow-unescaped title: the template family label NewTemplateRenderer was built with, a constant at every call site.
-	// On an instance with custom file templates the set is served out of a
-	// designated project, so the name is a repository file name somebody chose.
-	fmt.Fprintf(&b, "## %s: %s\n\n", title, EscapeMdHeading(name))
-	fence := MarkdownCodeFence(content)
-	fmt.Fprintf(&b, "%s%s\n", fence, sanitizeFenceInfo(language))
-	b.WriteString(content)
-	fmt.Fprintf(&b, FmtMdSectionText, fence)
-	WriteHints(&b, hints...)
+	c := NewCard(&b, title+": "+name)
+	c.Fence("", language, content)
+	c.End(hints...)
 	return b.String()
 }
 
@@ -813,7 +972,7 @@ func FormatTemplateContentMarkdown(title, name, language, content string, hints 
 // three backticks, or one more than the longest run inside it.
 //
 // A fixed three-backtick fence is closed by any content that contains one, and
-// the content here is a repository file, a job log, a snippet or a diff —
+// the content here is a repository file, a job log, a snippet or a diff,
 // written by whoever can push a branch or run a pipeline. Everything after the
 // run they wrote renders as live Markdown at the top level of the response:
 // headings, links, and the server's own guidance section. Sizing the fence to
@@ -841,28 +1000,23 @@ func MarkdownCodeFence(content string) string {
 // bullet: its second line is no longer part of the item, so an embedded heading
 // is a heading of the response and an embedded bullet is an item of the
 // server's own list. A one-line description keeps the compact form with the
-// cell escaping applied; anything longer becomes a blockquote, which is what
-// the merge request, wiki and release renderers already do.
+// cell escaping applied and the guidance heading defused, the containment a
+// card row has; anything longer becomes a blockquote, which is what the merge
+// request, wiki and release renderers already do.
+//
+// [Card.Text] is the same row on a card, with the quote indented under the
+// label so it stays inside the item.
 func WriteDescription(b *strings.Builder, description string) {
 	if description == "" {
 		return
 	}
 	if !strings.ContainsAny(description, "\n\r") {
-		fmt.Fprintf(b, FmtMdDescription, inlineUntrusted(description))
+		fmt.Fprintf(b, FmtMdDescription, cardInline(description))
 		return
 	}
 	b.WriteString("- **Description**:\n\n")
 	b.WriteString(WrapGFMBody(description))
 	b.WriteString("\n")
-}
-
-// inlineUntrusted renders a GitLab-authored value on a line the server wrote,
-// without the pipe escaping a table cell needs: line breaks collapse, control
-// characters are dropped, and the guidance heading is defused.
-func inlineUntrusted(s string) string {
-	s = DefuseHintsHeading(StripControlBytes(s))
-	s = strings.ReplaceAll(s, "\r\n", " ")
-	return strings.NewReplacer("\r", " ", "\n", " ").Replace(s)
 }
 
 // MarkdownFencedBlock renders content as a complete fenced code block: a fence
@@ -894,8 +1048,9 @@ func sanitizeFenceInfo(language string) string {
 	return fenceInfoSanitizer.Replace(StripControlBytes(language))
 }
 
-// NoteMarkdown carries common fields rendered by issue, merge request, and
-// snippet note tools.
+// NoteMarkdown carries the fields every GitLab note renders with, whether it
+// stands alone or sits in a discussion thread: issue, merge request, snippet,
+// epic and commit notes alike.
 type NoteMarkdown struct {
 	ID         int64
 	Body       string
@@ -935,11 +1090,7 @@ func NewNoteMarkdown(id int64, body, author, createdAt string, flags NoteMarkdow
 // NoteMarkdowns maps package-specific note outputs to the shared note Markdown
 // view model.
 func NoteMarkdowns[T any](notes []T, convert func(T) NoteMarkdown) []NoteMarkdown {
-	out := make([]NoteMarkdown, 0, len(notes))
-	for _, note := range notes {
-		out = append(out, convert(note))
-	}
-	return out
+	return mapSlice(notes, convert)
 }
 
 // NoteMarkdownOptions configures shared note detail rendering.
@@ -950,30 +1101,27 @@ type NoteMarkdownOptions struct {
 	Hints             []string
 }
 
-// FormatNoteMarkdown renders a single GitLab note as Markdown.
+// FormatNoteMarkdown renders a single GitLab note as a card: the author as a
+// handle, the time, the flags that hold, the resolution state when the domain
+// has one, and the body as the card's long text, quoted under its label when
+// it spans more than one line.
 func FormatNoteMarkdown(note NoteMarkdown, opts NoteMarkdownOptions) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## %s #%d\n\n", opts.Title, note.ID)
-	fmt.Fprintf(&b, FmtMdAuthor, EscapeMdTableCell(note.Author))
-	fmt.Fprintf(&b, FmtMdCreated, FormatTime(note.CreatedAt))
-	if note.System {
-		b.WriteString("- **System note**\n")
-	}
-	if opts.IncludeInternal && note.Internal {
-		b.WriteString("- **Internal note**\n")
-	}
+	c := NewCard(&b, fmt.Sprintf("%s #%d", opts.Title, note.ID))
+	c.Markdown("Author", MdUserHandle(note.Author))
+	c.Time("Created", note.CreatedAt)
+	c.Flag("", "System note", note.System)
+	c.Flag("", "Internal note", opts.IncludeInternal && note.Internal)
 	if opts.IncludeResolvable && note.Resolvable {
 		resolved := "unresolved"
 		if note.Resolved {
 			resolved = "resolved"
 		}
-		fmt.Fprintf(&b, "- **Resolvable**: %s\n", resolved)
-		if note.ResolvedBy != "" {
-			fmt.Fprintf(&b, "- **Resolved By**: @%s\n", EscapeMdTableCell(note.ResolvedBy))
-		}
+		c.Field("Resolvable", resolved)
+		c.Markdown("Resolved By", MdUserHandle(note.ResolvedBy))
 	}
-	fmt.Fprintf(&b, FmtMdSectionText, WrapGFMBody(note.Body))
-	WriteHints(&b, opts.Hints...)
+	c.Text("Body", note.Body)
+	c.End(opts.Hints...)
 	return b.String()
 }
 
@@ -985,15 +1133,15 @@ type NoteListMarkdownOptions struct {
 	Hints           []string
 }
 
-// FormatNoteListMarkdown renders a list of GitLab notes as Markdown.
+// FormatNoteListMarkdown renders a list of GitLab notes as a Markdown table.
+// The table carries no link, so the footer carries no instruction to keep
+// them.
 func FormatNoteListMarkdown(notes []NoteMarkdown, pagination PaginationOutput, opts NoteListMarkdownOptions) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, FmtMdH2Count, opts.Title, pagination.TotalItems)
-	WriteListSummary(&b, len(notes), pagination)
 	if len(notes) == 0 {
-		b.WriteString(opts.EmptyMessage)
-		return b.String()
+		return emptyResult(opts.EmptyMessage)
 	}
+	var b strings.Builder
+	WriteListHeading(&b, opts.Title, len(notes), pagination)
 	if opts.IncludeInternal {
 		b.WriteString(MarkdownTableHeader("ID", "Author", "Created", "System", "Internal"))
 	} else {
@@ -1011,8 +1159,7 @@ func FormatNoteListMarkdown(notes []NoteMarkdown, pagination PaginationOutput, o
 		}
 		b.WriteString(MarkdownTableRow(cells...))
 	}
-	WritePagination(&b, pagination)
-	WriteHints(&b, ListHints(opts.Hints...)...)
+	WriteListFooter(&b, pagination, false, opts.Hints...)
 	return b.String()
 }
 
@@ -1029,7 +1176,7 @@ func markdownTableLine(cells []string) string {
 // ToolResultWithMarkdown wraps a Markdown string into a CallToolResult
 // with a single TextContent entry annotated for assistant-only audience.
 // This prevents MCP clients (e.g. VS Code) from displaying raw Markdown
-// inline — the LLM processes it and presents formatted output to the user.
+// inline: the LLM processes it and presents formatted output to the user.
 //
 // Control characters are dropped here as well as in the helpers that build the
 // Markdown, because this is the last point every rendered response passes
@@ -1074,25 +1221,6 @@ func ToolResultWithImage(md string, ann *mcp.Annotations, imageData []byte, mime
 	return result
 }
 
-// AppendResourceLink preserves the legacy resource-link hook as a no-op.
-//
-// Deprecated: AppendResourceLink is intentionally a no-op. It previously emitted
-// mcp.ResourceLink content blocks with external HTTP URLs (GitLab WebURL),
-// but ResourceLink is reserved for MCP-registered resources (gitlab:// URIs).
-// Clients that received an https:// ResourceLink attempted to resolve it via
-// resources/read, triggering JSON-RPC -32002 "Resource not found" errors.
-// External web links are already included in the Markdown text output.
-// Callers will be removed in a future major version.
-func AppendResourceLink(_ *mcp.CallToolResult, _, _, _ string) {
-	// Intentional no-op: see deprecation notice above.
-}
-
-// FormatPagination renders pagination metadata as a compact Markdown line.
-func FormatPagination(p PaginationOutput) string {
-	return fmt.Sprintf("Page %d of %d | %d items total | %d per page",
-		p.Page, p.TotalPages, p.TotalItems, p.PerPage)
-}
-
 // MRStateEmoji returns the Markdown emoji for a merge request state.
 func MRStateEmoji(state string) string {
 	switch state {
@@ -1119,24 +1247,26 @@ func IssueStateEmoji(state string) string {
 	}
 }
 
-// WriteEmpty writes a standardized empty-result message to the builder.
-// The resource parameter should be a clear, specific plural noun
-// (e.g. "merge requests", "pipeline variables", "protected branches").
-func WriteEmpty(b *strings.Builder, resource string) {
-	fmt.Fprintf(b, "No %s found.\n", resource)
-}
-
-// pipelineStatusEmojis maps pipeline status strings to their Markdown emoji.
+// pipelineStatusEmojis maps pipeline status strings to their Markdown emoji:
+// the states GitLab documents for a pipeline and for a job, including the
+// three the repository already advertised without mapping (scheduled,
+// preparing, waiting_for_resource) and the two newer ones (canceling,
+// waiting_for_callback).
 var pipelineStatusEmojis = map[string]string{
-	"success":   EmojiSuccess,
-	"failed":    EmojiCross,
-	"running":   EmojiBlue,
-	"pending":   EmojiYellow,
-	"canceled":  EmojiStop,
-	"cancelled": EmojiStop,
-	"skipped":   EmojiSkip,
-	"created":   EmojiNew,
-	"manual":    EmojiHand,
+	"success":              EmojiSuccess,
+	"failed":               EmojiCross,
+	"running":              EmojiBlue,
+	"pending":              EmojiYellow,
+	"canceled":             EmojiStop,
+	"cancelled":            EmojiStop,
+	"canceling":            EmojiStop,
+	"skipped":              EmojiSkip,
+	"created":              EmojiNew,
+	"manual":               EmojiHand,
+	"scheduled":            EmojiCalendar,
+	"preparing":            EmojiRefresh,
+	"waiting_for_resource": EmojiRefresh,
+	"waiting_for_callback": EmojiRefresh,
 }
 
 // PipelineStatusEmoji returns the Markdown emoji for a pipeline status.

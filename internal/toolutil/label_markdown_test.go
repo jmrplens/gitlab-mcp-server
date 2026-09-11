@@ -56,24 +56,26 @@ func TestFormatLabelMarkdown_ZeroPrioritySpecified(t *testing.T) {
 	}
 }
 
-// TestFormatLabelMarkdown_MinimalUnescaped verifies optional fields are omitted
-// and descriptions can be left unchanged for callers that already handle them.
-func TestFormatLabelMarkdown_MinimalUnescaped(t *testing.T) {
+// TestFormatLabelMarkdown_Minimal_OmitsOptionalRowsAndEscapesTheDescription
+// verifies optional fields are omitted and that a one-line description is
+// escaped on its row whichever way the caller configured the renderer: the
+// description question has one answer.
+func TestFormatLabelMarkdown_Minimal_OmitsOptionalRowsAndEscapesTheDescription(t *testing.T) {
 	got := FormatLabelMarkdown(LabelMarkdown{
 		Name:        "docs",
 		Color:       "#00ff00",
 		Description: "plain|pipe",
 	}, LabelMarkdownOptions{DetailTitle: "Group Label"})
 
-	for _, unwanted := range []string{"- **Priority**", "- **Issues**", "- **Open MRs**", "&#124;"} {
+	for _, unwanted := range []string{"- **Priority**", "- **Issues**", "- **Open MRs**"} {
 		t.Run(unwanted, func(t *testing.T) {
 			if strings.Contains(got, unwanted) {
 				t.Fatalf("FormatLabelMarkdown() unexpectedly contains %q in:\n%s", unwanted, got)
 			}
 		})
 	}
-	if !strings.Contains(got, "- **Description**: plain|pipe") {
-		t.Fatalf("FormatLabelMarkdown() did not preserve unescaped description:\n%s", got)
+	if !strings.Contains(got, "- **Description**: plain&#124;pipe") {
+		t.Fatalf("FormatLabelMarkdown() did not escape the description:\n%s", got)
 	}
 }
 

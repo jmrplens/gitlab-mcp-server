@@ -253,16 +253,24 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		Description:  "Test var",
 	}
 	md := FormatOutputMarkdown(v)
-	if !strings.Contains(md, "MY_VAR") {
-		t.Error("expected variable key in output")
-	}
-	if !strings.Contains(md, "secret") {
-		t.Error("expected value in output when not masked")
-	}
-	if !strings.Contains(md, "| Protected | "+toolutil.BoolEmoji(true)+" |") {
-		t.Error("expected Protected=true in output")
+	want := "## Instance Variable: MY_VAR\n\n" +
+		"- **Type**: env_var\n" +
+		"- **Protected**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Masked**: " + toolutil.EmojiCross + "\n" +
+		"- **Raw**: " + toolutil.EmojiCross + "\n" +
+		"- **Description**: Test var\n" +
+		"- **Value**: secret\n" +
+		variableCardHints
+	if md != want {
+		t.Errorf("variable card:\n got %q\nwant %q", md, want)
 	}
 }
+
+// variableCardHints is the guidance section every CI/CD variable card ends
+// with, shared by the whole-output expectations in this file.
+const variableCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'update' to change this variable\n" +
+	"- Use action 'delete' to remove this variable\n"
 
 // TestFormatOutputMarkdown_MaskedValue verifies the OutputMarkdown_MaskedValue Markdown formatter for a representative output_maskedvalue input.
 // The test exercises the GET path of the underlying GitLab API call.
@@ -275,11 +283,15 @@ func TestFormatOutputMarkdown_MaskedValue(t *testing.T) {
 		Masked:       true,
 	}
 	md := FormatOutputMarkdown(v)
-	if strings.Contains(md, "hidden-value") {
-		t.Error("masked value should not appear in output")
-	}
-	if !strings.Contains(md, "[masked]") {
-		t.Error("expected [masked] placeholder in output")
+	want := "## Instance Variable: SECRET_VAR\n\n" +
+		"- **Type**: env_var\n" +
+		"- **Protected**: " + toolutil.EmojiCross + "\n" +
+		"- **Masked**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Raw**: " + toolutil.EmojiCross + "\n" +
+		"- **Value**: [masked]\n" +
+		variableCardHints
+	if md != want {
+		t.Errorf("masked variable card:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -704,20 +716,16 @@ func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 		Description:  "Database host",
 	})
 
-	for _, want := range []string{
-		"## Instance Variable: DB_HOST",
-		"| Type | env_var |",
-		"| Protected | " + toolutil.BoolEmoji(true) + " |",
-		"| Masked | " + toolutil.BoolEmoji(false) + " |",
-		"| Raw | " + toolutil.BoolEmoji(true) + " |",
-		"| Description | Database host |",
-		"| Value | localhost |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Instance Variable: DB_HOST\n\n" +
+		"- **Type**: env_var\n" +
+		"- **Protected**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Masked**: " + toolutil.EmojiCross + "\n" +
+		"- **Raw**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Description**: Database host\n" +
+		"- **Value**: localhost\n" +
+		variableCardHints
+	if md != want {
+		t.Errorf("variable card:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -731,11 +739,15 @@ func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 		VariableType: "env_var",
 	})
 
-	if strings.Contains(md, "| Description |") {
-		t.Error("should not contain Description when empty")
-	}
-	if !strings.Contains(md, "| Value | val |") {
-		t.Errorf("expected value in output:\n%s", md)
+	want := "## Instance Variable: SIMPLE\n\n" +
+		"- **Type**: env_var\n" +
+		"- **Protected**: " + toolutil.EmojiCross + "\n" +
+		"- **Masked**: " + toolutil.EmojiCross + "\n" +
+		"- **Raw**: " + toolutil.EmojiCross + "\n" +
+		"- **Value**: val\n" +
+		variableCardHints
+	if md != want {
+		t.Errorf("variable card without a description:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -749,45 +761,35 @@ func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 // card asked only whether the variable was masked, so a hidden-but-unmasked
 // variable was printed in full, which is the one shape the flag exists for.
 func TestFormatOutputMarkdown_HiddenVariable_WithholdsTheValue(t *testing.T) {
+	head := "## Instance Variable: DEPLOY_KEY\n\n- **Type**: env_var\n- **Protected**: " + toolutil.EmojiCross + "\n"
 	cases := []struct {
-		name       string
-		variable   Output
-		wantHidden bool
+		name     string
+		variable Output
+		want     string
 	}{
 		{
-			name:       "hidden and not masked",
-			variable:   Output{Key: "DEPLOY_KEY", Value: "s3cret-value", VariableType: "env_var", Hidden: true},
-			wantHidden: true,
+			name:     "hidden and not masked",
+			variable: Output{Key: "DEPLOY_KEY", Value: "s3cret-value", VariableType: "env_var", Hidden: true},
+			want: head + "- **Masked**: " + toolutil.EmojiCross + "\n- **Hidden**: " + toolutil.EmojiSuccess + "\n" +
+				"- **Raw**: " + toolutil.EmojiCross + "\n- **Value**: [masked]\n" + variableCardHints,
 		},
 		{
-			name:       "masked and hidden",
-			variable:   Output{Key: "DEPLOY_KEY", Value: "s3cret-value", VariableType: "env_var", Masked: true, Hidden: true},
-			wantHidden: true,
+			name:     "masked and hidden",
+			variable: Output{Key: "DEPLOY_KEY", Value: "s3cret-value", VariableType: "env_var", Masked: true, Hidden: true},
+			want: head + "- **Masked**: " + toolutil.EmojiSuccess + "\n- **Hidden**: " + toolutil.EmojiSuccess + "\n" +
+				"- **Raw**: " + toolutil.EmojiCross + "\n- **Value**: [masked]\n" + variableCardHints,
 		},
 		{
-			name:       "neither is still printed",
-			variable:   Output{Key: "DEPLOY_KEY", Value: "s3cret-value", VariableType: "env_var"},
-			wantHidden: false,
+			name:     "neither is still printed",
+			variable: Output{Key: "DEPLOY_KEY", Value: "s3cret-value", VariableType: "env_var"},
+			want: head + "- **Masked**: " + toolutil.EmojiCross + "\n" +
+				"- **Raw**: " + toolutil.EmojiCross + "\n- **Value**: s3cret-value\n" + variableCardHints,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			md := FormatOutputMarkdown(tc.variable)
-			switch {
-			case tc.wantHidden:
-				if strings.Contains(md, "s3cret-value") {
-					t.Errorf("hidden variable rendered its value:\n%s", md)
-				}
-				if !strings.Contains(md, "| Value | [masked] |") {
-					t.Errorf("hidden variable missing the withheld marker:\n%s", md)
-				}
-				if !strings.Contains(md, "| Hidden |") {
-					t.Errorf("hidden variable does not report the flag:\n%s", md)
-				}
-			default:
-				if !strings.Contains(md, "| Value | s3cret-value |") {
-					t.Errorf("readable variable lost its value:\n%s", md)
-				}
+			if md := FormatOutputMarkdown(tc.variable); md != tc.want {
+				t.Errorf("variable card:\n got %q\nwant %q", md, tc.want)
 			}
 		})
 	}

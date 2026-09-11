@@ -32,7 +32,7 @@ func FormatListPendingMarkdownString(out ListPendingInvitationsOutput) string {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString(toolutil.FormatPagination(out.Pagination))
+	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b, "Manage pending invitations by approving, revoking, or resending them")
 	return b.String()
 }

@@ -99,7 +99,7 @@ func FormatTemplateDetailMarkdown(detail TemplateDetailMarkdown) string {
 
 func writeTemplateDescription(b *strings.Builder, description string, plain bool) {
 	if plain {
-		fmt.Fprintf(b, "**Description**: %s\n\n", inlineUntrusted(description))
+		fmt.Fprintf(b, "**Description**: %s\n\n", cardInline(description))
 		return
 	}
 	WriteDescription(b, description)

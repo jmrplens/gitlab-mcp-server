@@ -35,8 +35,9 @@
 // Domain packages register Markdown renderers with [RegisterMarkdown] and
 // [RegisterMarkdownResult]. The registry lets handlers return typed structured
 // output for MCP clients while still producing compact human-readable Markdown.
-// Shared helpers such as [MarkdownTableHeader], [MarkdownTableSeparator], and
-// [MarkdownTableRow] keep table formatting consistent across domains.
+// A result about one GitLab object is written by [Card]; a collection is a
+// table, and the shared helpers [MarkdownTableHeader] and [MarkdownTableRow]
+// keep its formatting consistent across domains.
 //
 // # Dependency Direction
 //

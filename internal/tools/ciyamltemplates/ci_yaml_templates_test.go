@@ -365,11 +365,12 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown_EmptyContent(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{Name: "Empty", Content: ""})
-	if !strings.Contains(md, "## CI YAML Template: Empty") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	if !strings.Contains(md, "```yaml") {
-		t.Errorf("missing yaml block:\n%s", md)
+	// An empty body writes no fence: a fence around nothing reads as content
+	// GitLab did not send, so the card is the heading and the hint.
+	want := "## CI YAML Template: Empty\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n- Copy this template to your `.gitlab-ci.yml` file and customize it\n"
+	if md != want {
+		t.Errorf("template card with no body:\n got %q\nwant %q", md, want)
 	}
 }
 

@@ -126,12 +126,8 @@ func toPATOutput(t *gl.GroupPersonalAccessToken) PATOutput {
 		UserID:      t.UserID,
 		Active:      t.Active,
 	}
-	if t.CreatedAt != nil {
-		o.CreatedAt = t.CreatedAt.Format(toolutil.DateTimeFormat)
-	}
-	if t.LastUsedAt != nil {
-		o.LastUsedAt = t.LastUsedAt.Format(toolutil.DateTimeFormat)
-	}
+	o.CreatedAt = toolutil.RFC3339Ptr(t.CreatedAt)
+	o.LastUsedAt = toolutil.RFC3339Ptr(t.LastUsedAt)
 	if t.ExpiresAt != nil {
 		o.ExpiresAt = t.ExpiresAt.String()
 	}
@@ -148,15 +144,9 @@ func toSSHKeyOutput(k *gl.GroupSSHKey) SSHKeyOutput {
 		UsageType: k.UsageType,
 		UserID:    k.UserID,
 	}
-	if k.CreatedAt != nil {
-		o.CreatedAt = k.CreatedAt.Format(toolutil.DateTimeFormat)
-	}
-	if k.ExpiresAt != nil {
-		o.ExpiresAt = k.ExpiresAt.Format(toolutil.DateTimeFormat)
-	}
-	if k.LastUsedAt != nil {
-		o.LastUsedAt = k.LastUsedAt.Format(toolutil.DateTimeFormat)
-	}
+	o.CreatedAt = toolutil.RFC3339Ptr(k.CreatedAt)
+	o.ExpiresAt = toolutil.RFC3339Ptr(k.ExpiresAt)
+	o.LastUsedAt = toolutil.RFC3339Ptr(k.LastUsedAt)
 	return o
 }
 
