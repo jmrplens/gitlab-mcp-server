@@ -40,12 +40,13 @@ func oauthServer(t *testing.T, gitlabURL string, extra ...string) *server {
 // TestOAuth_MetadataAdvertisesTheScopesItAccepts verifies the RFC 9728
 // document, including the scopes a client may authorize with.
 //
-// A client reads scopes_supported to decide what to ask GitLab for. A
-// read-only deployment advertising "api" would make every user grant write
-// access it can never use; a writing deployment advertising only "api" would
-// leave a client that deliberately wants a credential which cannot break
-// anything no documented way to ask for one — and such a token IS accepted,
-// served the read-only surface.
+// A client reads scopes_supported to decide what to ask GitLab for, and asks
+// for every scope listed. A read-only deployment advertising "api" would make
+// every user grant write access it can never use; a writing deployment
+// advertising both would have a client ask for both, which GitLab refuses from
+// an application that has only one of them. A read_api token is still
+// admitted by a writing deployment and served the read-only surface; the
+// client that wants one names read_api itself.
 func TestOAuth_MetadataAdvertisesTheScopesItAccepts(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
 
@@ -54,7 +55,7 @@ func TestOAuth_MetadataAdvertisesTheScopesItAccepts(t *testing.T) {
 		flags []string
 		want  []string
 	}{
-		{"writes possible", nil, []string{"api", "read_api"}},
+		{"writes possible", nil, []string{"api"}},
 		{"read-only", []string{"--read-only"}, []string{"read_api"}},
 		{"safe mode", []string{"--safe-mode"}, []string{"read_api"}},
 	} {

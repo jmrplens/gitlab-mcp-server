@@ -1261,9 +1261,9 @@ func TestGitLabVerifier_RecipientPinIsEnforcedBeforeAnythingIsCached(t *testing.
 // A deployment that cannot write must not advertise the write scope: a client
 // reading the metadata authorizes for what it is offered, and offering api on a
 // read-only server asks the user to grant a permission the server will never
-// use. A deployment that can write advertises both, so a client that
-// deliberately wants a credential which cannot break anything has one to ask
-// for.
+// use. A deployment that can write advertises api alone: a client asks GitLab
+// for every scope listed, and a list of two is refused by an application that
+// has only one of them.
 func TestSupportedScopes_FollowsWhatTheDeploymentCanDo(t *testing.T) {
 	t.Parallel()
 
@@ -1273,7 +1273,7 @@ func TestSupportedScopes_FollowsWhatTheDeploymentCanDo(t *testing.T) {
 		safeMode bool
 		want     []string
 	}{
-		{name: "a writing deployment offers both", want: []string{ScopeAPI, ScopeReadAPI}},
+		{name: "a writing deployment offers only the write scope", want: []string{ScopeAPI}},
 		{name: "read-only offers only the read scope", readOnly: true, want: []string{ScopeReadAPI}},
 		{name: "safe mode offers only the read scope", safeMode: true, want: []string{ScopeReadAPI}},
 		{name: "both together still offer only the read scope", readOnly: true, safeMode: true, want: []string{ScopeReadAPI}},

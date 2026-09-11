@@ -69,13 +69,12 @@ func (l ResourceLinks) DocumentationURL() string {
 // Protected Resource Metadata. MCP clients use this endpoint to discover the
 // GitLab authorization server associated with this resource.
 //
-// supportedScopes are the scopes a client may authorize with, most capable
-// first, which it reads from scopes_supported to build its authorization
-// request. A deployment that can write lists api and read_api: the first for a
-// client that wants the whole surface, the second for one that wants a
-// credential which cannot mutate anything and is served a read-only surface
-// accordingly. A deployment that never mutates lists only read_api, so no user
-// is asked to grant more than it can use.
+// supportedScopes is the scope a client should authorize with, which it reads
+// from scopes_supported to build its authorization request: api on a
+// deployment that can write, read_api on one that never mutates, so no user is
+// asked to grant more than it can use. One scope, never both: a client asks
+// for everything listed, and GitLab refuses a request naming a scope the
+// application does not have. See [SupportedScopes].
 //
 // links.Documentation is as close as RFC 9728 permits a resource server to come
 // to telling a client which client to be: the specification defines no field

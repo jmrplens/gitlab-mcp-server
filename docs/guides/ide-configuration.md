@@ -325,15 +325,15 @@ Or via JSON configuration (`.mcp.json` or `~/.claude.json`):
 
 Claude Code discovers the GitLab authorization server via `/.well-known/oauth-protected-resource`, opens the browser for authorization, and stores the token securely.
 
-With `--client-id` alone, Claude Code asks GitLab for every scope in the server's RFC 9728 `scopes_supported`, which is `api read_api` on a deployment that can write. The GitLab application therefore needs both checked, or GitLab refuses the authorization with `invalid_scope` ("The requested scope is invalid, unknown, or malformed") before showing a consent screen; see [OAuth App Setup](oauth-app-setup.md#scopes-check-api-and-read_api-avoid-mcp).
+With `--client-id` alone, Claude Code asks GitLab for the scope in the server's RFC 9728 `scopes_supported`: `api` on a deployment that can write, `read_api` on one that runs `--read-only` or `--safe-mode`. The GitLab application needs that scope checked, or GitLab refuses the authorization with `invalid_scope` ("The requested scope is invalid, unknown, or malformed") before showing a consent screen; see [OAuth App Setup](oauth-app-setup.md#scopes-api-read_api-and-mcp). A server older than 3.1.0 listed `api read_api` on a writing deployment, and Claude Code asked for both.
 
-The server cannot know which application a client uses, so an application with a single scope checked is served by pinning that scope in the client. `oauth.scopes` takes precedence over what Claude Code discovers; for an application that has only `read_api`:
+The server cannot know which application a client uses, so an application checked for the other scope is served by pinning that scope in the client. `oauth.scopes` takes precedence over what Claude Code discovers; for an application that has only `read_api`, which a deployment that can write admits and serves its read-only surface:
 
 ```bash
 claude mcp add-json gitlab '{"type":"http","url":"http://your-server:8080/mcp","oauth":{"clientId":"YOUR_GITLAB_APPLICATION_ID","callbackPort":8090,"scopes":"read_api"}}'
 ```
 
-The same object with `"scopes":"api"` serves an application that has only `api` checked.
+The same object with `"scopes":"api"` pins the full surface, which a deployment that can write already asks for.
 
 > **Without `--client-id`**: Claude Code falls back to Dynamic Client Registration (DCR). GitLab's DCR assigns the `mcp` scope instead of `api`, causing most operations to fail.
 

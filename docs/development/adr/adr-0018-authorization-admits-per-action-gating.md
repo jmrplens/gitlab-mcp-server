@@ -69,7 +69,14 @@ action.**
   `read_api` OAuth token would look like "authority unknown" and be served the
   full catalog.
 - `scopes_supported` lists `api` then `read_api` for a deployment that can
-  write, and `read_api` alone for one that cannot.
+  write, and `read_api` alone for one that cannot. [Since 3.1.0 a deployment
+  that can write lists `api` alone. A client reading the document asks GitLab
+  for every scope in it, and GitLab refuses an authorization request naming any
+  scope the OAuth application does not have: Claude Code sent
+  `scope=api read_api`, which an application checked for only one of the two
+  answers with `invalid_scope`. Admission is unchanged; a client that wants a
+  `read_api` credential names the scope itself, from an application that has
+  it.]
 
 **`tools/list` stays authenticated.** The MCP authorization specification
 (checked against 2025-06-18, 2025-11-25, 2026-07-28 and the draft) states that
@@ -161,7 +168,9 @@ without executing.
   `scopes_supported` — and would then be unable to write at all. Revisit if
   step-up authorization (403 `insufficient_scope` on the mutating call, with
   `scope="api"`) is implemented, which is the flow the specification describes
-  for exactly this.
+  for exactly this. [3.1.0: the list is now `api` alone on a deployment that
+  can write, for the reason given in the Decision. The argument here still
+  holds, and it is why the one scope listed is `api` rather than `read_api`.]
 
   Step-up is still unimplemented on the tool-call path, and that is the open
   half of this decision. What has been implemented is the diagnosis. A narrowed

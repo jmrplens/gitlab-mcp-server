@@ -74,19 +74,24 @@ func SatisfiesMinimum(granted []string, minimum string) bool {
 	return minimum == ScopeReadAPI && slices.Contains(granted, ScopeAPI)
 }
 
-// SupportedScopes lists the scopes a client may authorize with, most capable
-// first, for RFC 9728 scopes_supported.
+// SupportedScopes lists the scope published as RFC 9728 scopes_supported: api
+// on a deployment that can write, read_api on one that never mutates.
 //
-// A deployment that can write advertises both: api for a client that wants
-// the whole surface, read_api for one that deliberately wants a credential
-// that cannot break anything — a browser-based inspector, a dashboard, any
-// read-only integration. Listing only api forced every such client to hold a
-// write-capable token or stay out.
+// One scope, because a client that reads the list asks GitLab for every scope
+// in it, and GitLab refuses an authorization request naming any scope the
+// OAuth application does not have. Listing api and read_api together made
+// Claude Code send scope=api read_api, which an application with only api
+// checked, or only read_api, answers with invalid_scope.
+//
+// This is what the deployment asks for, not what it admits. A read_api token
+// is admitted by a deployment that can write and served its read-only surface
+// (see [MinimumScope]); a client that wants such a credential names read_api
+// itself, as a browser-based inspector does, from an application that has it.
 func SupportedScopes(readOnly, safeMode bool) []string {
 	if readOnly || safeMode {
 		return []string{ScopeReadAPI}
 	}
-	return []string{ScopeAPI, ScopeReadAPI}
+	return []string{ScopeAPI}
 }
 
 // UpstreamError reports that the GitLab instance could not answer the

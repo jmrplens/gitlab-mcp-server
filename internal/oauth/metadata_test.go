@@ -63,15 +63,15 @@ func TestNewProtectedResourceHandler_ValidResponse(t *testing.T) {
 // scopes_supported carries what the deployment was built with rather than a
 // constant. A client reads this field to decide what to ask GitLab for, so a
 // read-only server advertising "api" would make every user grant write access
-// the server can never use — and a writing server advertising only "api"
-// would leave a client that deliberately wants a read-only credential no
-// documented way to ask for one.
+// the server can never use, and a writing server advertising both would make a
+// client ask for both, which GitLab refuses from an application that has only
+// one of them.
 func TestNewProtectedResourceHandler_AdvertisesTheScopesItAccepts(t *testing.T) {
 	tests := []struct {
 		name string
 		want []string
 	}{
-		{name: "writing deployment offers both", want: []string{ScopeAPI, ScopeReadAPI}},
+		{name: "writing deployment offers api alone", want: []string{ScopeAPI}},
 		{name: "read-only deployment offers read_api alone", want: []string{ScopeReadAPI}},
 	}
 	for _, tt := range tests {

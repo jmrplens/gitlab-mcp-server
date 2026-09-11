@@ -68,7 +68,7 @@ sequenceDiagram
    - **Name**: `MCP Server` (or any descriptive name)
    - **Redirect URI**: See [Redirect URIs per IDE](#redirect-uris-per-ide) below
    - **Confidential**: **Unchecked** (MCP clients are public OAuth clients)
-   - **Scopes**: Check **`api`** and **`read_api`** — or only **`read_api`** if the deployment runs `--read-only` or `--safe-mode`, which is all such a server asks for (see [Scopes](#scopes-check-api-and-read_api-avoid-mcp))
+   - **Scopes**: Check **`api`** — or **`read_api`** if the deployment runs `--read-only` or `--safe-mode`, or if the application is for a client that should only read (see [Scopes](#scopes-api-read_api-and-mcp))
 4. Click **Save application**
 5. Copy the **Application ID** — this is the `clientId` you will configure in MCP clients
 
@@ -92,18 +92,16 @@ The three types differ only in who owns and can revoke the application — the O
 | Group    | A team shares the endpoint and should keep owning the app                       | Survives any single member leaving           |
 | User     | You run the endpoint yourself, or you are on GitLab.com without group ownership | Tied to your account; revoked with it        |
 
-### Scopes: check `api` and `read_api`, avoid `mcp`
+### Scopes: `api`, `read_api` and `mcp`
 
 - **`api`** — what this server needs. Every action it exposes is a REST v4 or GraphQL call made with the user's token.
 - **`read_api`** — the right choice for any client that should not be able to change anything: a browser-based inspector, a dashboard, a read-only integration. **A `read_api` token is accepted by every deployment, including one that serves writes**, and is served a read-only tool surface — the same catalog `--read-only` projects, with the mutating actions absent. The write check is per action, not per deployment.
 
-  A deployment that can never write (`--read-only` or `--safe-mode`) asks for `read_api` in its challenge and advertises only that scope, so no user is made to grant more than the server can use. One that can write advertises `api` first and lists both in the RFC 9728 `scopes_supported` field, so a client chooses how much authority to hand over.
-
   A token granted `api` is accepted everywhere `read_api` is, since `api` is a superset. The only credential refused at the door is one carrying **no** GitLab API scope at all — a `read_user` token, say — which gets `403 insufficient_scope`.
 
-  **The application of a deployment that can write needs both scopes checked.** A client that reads `scopes_supported` asks for every scope in it: Claude Code does, sending `scope=api read_api` to GitLab's authorization endpoint. GitLab refuses an authorization request that names a scope the application does not have, before any consent screen, with `invalid_scope` ("The requested scope is invalid, unknown, or malformed"). Checking `read_api` beside `api` hands over no more authority than `api` alone, and it is what lets one application serve both a client that asks for both scopes and one that asks for `read_api` only. An application created with `api` alone can be edited in place: the Application ID does not change.
+  **A client asks for one scope, and its application must have that scope checked.** The deployment advertises exactly one in its 401 challenge and in the RFC 9728 `scopes_supported` field: `api` when it can write, `read_api` when it runs `--read-only` or `--safe-mode`, so no user is made to grant more than the server can use. It never lists both, because a client that reads `scopes_supported` asks GitLab for every scope in it, and GitLab refuses an authorization request naming any scope the application does not have, before any consent screen, with `invalid_scope` ("The requested scope is invalid, unknown, or malformed"). An application with only `api` refuses `read_api`, one with only `read_api` refuses `api`, and both refuse `api read_api`.
 
-  An application with only one of the two checked works too, as long as each client pins that scope instead of discovering it: the server cannot tell which application a client uses, and a `read_api` token from an application that has nothing else is admitted and served the read-only surface. See [IDE Configuration](ide-configuration.md) for each client's `scopes` setting.
+  A client that wants a read-only credential from a deployment that can write names `read_api` itself instead of discovering the scope, from an application that has `read_api` checked; the token is admitted and served the read-only surface. See [IDE Configuration](ide-configuration.md) for each client's `scopes` setting. An application's scopes can be edited in place: the Application ID does not change.
 - **`mcp`** — do **not** pick this one. Despite the name it is scoped to *GitLab's own built-in MCP server*, and a credential minted for it grants no general REST or GraphQL access, so every action here would fail. See [Dynamic Client Registration and the `mcp` scope](#dynamic-client-registration-and-the-mcp-scope).
 
 > **Device authorization grant**: leave the checkbox unchecked. No MCP client uses RFC 8628 — the MCP authorization flow is authorization code + PKCE with a browser redirect — and enabling an unused grant only adds device-code phishing surface. It can be enabled later without recreating the app.
@@ -169,7 +167,7 @@ Expected output:
   "resource": "https://mcp.example.com",
   "authorization_servers": ["https://gitlab.example.com"],
   "bearer_methods_supported": ["header"],
-  "scopes_supported": ["api", "read_api"]
+  "scopes_supported": ["api"]
 }
 ```
 
@@ -221,7 +219,7 @@ HTTP/1.1 401 Unauthorized
 WWW-Authenticate: Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/gitlab", scope="api"
 ```
 
-The `scope` hint tells a client which scope buys the deployment's **full** surface. The MCP specification has a client use it first and fall back to every scope in `scopes_supported` only when a challenge names none, but some clients go to `scopes_supported` regardless (Claude Code asks for `api read_api`), and both are served as long as the application has both scopes checked (see [Scopes](#scopes-check-api-and-read_api-avoid-mcp)). A client that instead asks for every scope GitLab's own authorization server advertises is refused by GitLab with `invalid_scope`. The hint is a recommendation, not the admission bar: a client that deliberately asks for `read_api` is admitted and served the read-only surface.
+The `scope` hint names the scope that buys the deployment's **full** surface, and `scopes_supported` names the same single scope, so a client asks for one scope whichever of the two it reads: the MCP specification has a client use the challenge first, and some clients (Claude Code among them) read the metadata instead. A client that asks for every scope GitLab's own authorization server advertises is refused by GitLab with `invalid_scope`. The hint is a recommendation, not the admission bar: a client that deliberately asks for `read_api` is admitted and served the read-only surface (see [Scopes](#scopes-api-read_api-and-mcp)).
 
 Every challenge carries it, not only the `insufficient_scope` one, so a client that reads the header and never fetches the metadata document still knows what to ask for.
 
@@ -350,20 +348,20 @@ page when you pin.
 - **PKCE required**: MCP clients should use PKCE (Proof Key for Code Exchange) to prevent authorization code interception. GitLab supports PKCE
 - **Token storage**: Token security depends on the MCP client's storage mechanism. VS Code stores tokens in the OS credential store
 - **No client secret in config**: Never put a client secret in MCP client configuration files — use the Application ID only
-- **Scope limitation**: The application needs `api` and `read_api` for a deployment that can write and `read_api` alone for one that cannot. Check nothing broader: `sudo`, `admin_mode` and the repository and registry scopes buy this server nothing
+- **Scope limitation**: The application needs the scope its clients ask for: `api` for a deployment that can write, `read_api` for one that cannot or for a client that pins it. Check nothing broader: `sudo`, `admin_mode` and the repository and registry scopes buy this server nothing
 
 ---
 
 ## Troubleshooting
 
-| Issue                                                                                               | Solution                                                                                                                                                                                                                 |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| "redirect_uri_mismatch" from GitLab                                                                 | Add the exact redirect URI used by your IDE to the GitLab OAuth Application. See [Redirect URIs per IDE](#redirect-uris-per-ide)                                                                                         |
-| OAuth flow does not start                                                                           | Verify `--auth-mode=oauth` is set and `/.well-known/oauth-protected-resource` returns metadata                                                                                                                           |
-| "invalid_client" error                                                                              | The `clientId` in MCP client config does not match the GitLab Application ID. Copy the exact value                                                                                                                       |
-| "invalid_scope" before any consent screen ("The requested scope is invalid, unknown, or malformed") | The client asked for a scope the application does not have, typically `read_api` beside `api`. Check both on the application; the Application ID does not change. See [Scopes](#scopes-check-api-and-read_api-avoid-mcp) |
-| Token works with curl but not from IDE                                                              | The IDE may not be sending the token as `Authorization: Bearer`. Check IDE MCP logs                                                                                                                                      |
-| "access_denied" after authorization                                                                 | The GitLab OAuth Application may not have the `api` scope. Recreate with correct scopes                                                                                                                                  |
+| Issue                                                                                               | Solution                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "redirect_uri_mismatch" from GitLab                                                                 | Add the exact redirect URI used by your IDE to the GitLab OAuth Application. See [Redirect URIs per IDE](#redirect-uris-per-ide)                                                                                                                                                                                                                          |
+| OAuth flow does not start                                                                           | Verify `--auth-mode=oauth` is set and `/.well-known/oauth-protected-resource` returns metadata                                                                                                                                                                                                                                                            |
+| "invalid_client" error                                                                              | The `clientId` in MCP client config does not match the GitLab Application ID. Copy the exact value                                                                                                                                                                                                                                                        |
+| "invalid_scope" before any consent screen ("The requested scope is invalid, unknown, or malformed") | The client asked for a scope the application does not have: `api` from an application with only `read_api`, `read_api` from one with only `api`, or both at once from a server older than 3.1.0. Check that scope on the application, or pin the client to the one it has; the Application ID does not change. See [Scopes](#scopes-api-read_api-and-mcp) |
+| Token works with curl but not from IDE                                                              | The IDE may not be sending the token as `Authorization: Bearer`. Check IDE MCP logs                                                                                                                                                                                                                                                                       |
+| "access_denied" after authorization                                                                 | The GitLab OAuth Application may not have the `api` scope. Recreate with correct scopes                                                                                                                                                                                                                                                                   |
 
 ---
 
