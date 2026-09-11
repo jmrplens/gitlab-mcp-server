@@ -325,6 +325,61 @@ func TestBuildActionCatalog_ActionSpecMapErrorReturnsContext(t *testing.T) {
 	}
 }
 
+// TestPruneSchemaProperties_ShapesTheSchemaCanTake covers the three shapes a
+// JSON Schema object reaches the tier pruner in, which are not one shape.
+//
+// A required list is `[]string` when it comes from this repository's own
+// literals and `[]any` when the schema was round-tripped through JSON, and the
+// pruner has to remove a dropped name from either, or a Free instance advertises
+// a required parameter it has just taken out of the properties. A schema with no
+// properties at all is the third: nothing is dropped and nothing may be
+// invented, and the clone still carries the rest of the schema.
+func TestPruneSchemaProperties_ShapesTheSchemaCanTake(t *testing.T) {
+	drop := map[string]bool{"secret": true}
+
+	t.Run("a required list decoded from JSON", func(t *testing.T) {
+		pruned := pruneSchemaProperties(map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"secret": map[string]any{"type": "string"}, "kept": map[string]any{"type": "string"}},
+			"required":   []any{"secret", "kept"},
+		}, drop, false)
+
+		properties, _ := pruned["properties"].(map[string]any)
+		if _, present := properties["secret"]; present {
+			t.Error("the dropped property is still advertised")
+		}
+		if !slices.Equal(pruned["required"].([]any), []any{"kept"}) {
+			t.Errorf("required = %v, want only the property that survived", pruned["required"])
+		}
+	})
+
+	t.Run("a required list written as strings", func(t *testing.T) {
+		pruned := pruneSchemaProperties(map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"secret": map[string]any{"type": "string"}, "kept": map[string]any{"type": "string"}},
+			"required":   []string{"secret", "kept"},
+		}, drop, false)
+
+		if !slices.Equal(pruned["required"].([]string), []string{"kept"}) {
+			t.Errorf("required = %v, want only the property that survived", pruned["required"])
+		}
+	})
+
+	t.Run("a schema with no properties", func(t *testing.T) {
+		pruned := pruneSchemaProperties(map[string]any{"type": "object"}, drop, true)
+
+		if _, present := pruned["properties"]; present {
+			t.Errorf("pruned = %v, want no properties key invented for a schema that had none", pruned)
+		}
+		if pruned["type"] != "object" {
+			t.Errorf("pruned = %v, want the rest of the schema carried over", pruned)
+		}
+		if pruned["additionalProperties"] != true {
+			t.Errorf("pruned = %v, want the lenient output form to accept the higher-tier keys the instance still sends", pruned)
+		}
+	})
+}
+
 // TestMergeActionSpecGroupOverrides_HandlesBlankOverrideMetadata verifies MergeActionSpecGroupOverrides handles blank override metadata.
 func TestMergeActionSpecGroupOverrides_HandlesBlankOverrideMetadata(t *testing.T) {
 	base := []ActionSpecGroup{{ToolName: "gitlab_project", Actions: []toolutil.ActionSpec{
@@ -410,6 +465,48 @@ func TestMergeActionSpecGroup_MetadataOverrides(t *testing.T) {
 	}
 	if len(merged.Actions) != 2 || merged.Actions[0].Name != "list" || merged.Actions[1].Name != "get" {
 		t.Fatalf("merged actions = %+v, want base list plus override get", merged.Actions)
+	}
+}
+
+// TestMergeActionSpecGroup_EmptyOverrideKeepsBaseMetadata pins the direction
+// the merge is named for: an override contributes the fields it declares and
+// leaves the rest of the base group alone.
+//
+// [TestMergeActionSpecGroup_MetadataOverrides] declares every field, so a merge
+// that copied unconditionally would pass it while erasing the metadata an
+// override deliberately says nothing about. Icons and capability requirements
+// are where that is worst: a group would lose the domain icon every surface
+// shows for it, and a group that requires an MCP capability would stop asking
+// for it, both without a word anywhere.
+func TestMergeActionSpecGroup_EmptyOverrideKeepsBaseMetadata(t *testing.T) {
+	base := ActionSpecGroup{
+		ToolName:               "gitlab_project",
+		Title:                  "Base title",
+		Description:            "Base description",
+		Icons:                  []mcp.Icon{{Source: "data:image/svg+xml;base64,base", MIMEType: "image/svg+xml", Sizes: []string{"any"}}},
+		CapabilityRequirements: []string{"roots"},
+		BaseDomain:             "project",
+		OwnerPackage:           "baseowner",
+		Actions:                []toolutil.ActionSpec{toolutil.NewActionSpec("list", testCatalogActionRoute(), toolutil.ActionSpecOptions{})},
+	}
+	override := ActionSpecGroup{
+		ToolName: "gitlab_project",
+		Actions:  []toolutil.ActionSpec{toolutil.NewActionSpec("get", testCatalogActionRoute(), toolutil.ActionSpecOptions{})},
+	}
+
+	merged := mergeActionSpecGroup(base, override)
+
+	if len(merged.Icons) != 1 || merged.Icons[0].Source != "data:image/svg+xml;base64,base" {
+		t.Errorf("merged icons = %+v, want the base icons an override declaring none must not take away", merged.Icons)
+	}
+	if !slices.Equal(merged.CapabilityRequirements, []string{"roots"}) {
+		t.Errorf("merged capability requirements = %+v, want the base requirement kept", merged.CapabilityRequirements)
+	}
+	if merged.Title != "Base title" || merged.Description != "Base description" || merged.BaseDomain != "project" || merged.OwnerPackage != "baseowner" {
+		t.Errorf("merged metadata = %+v, want every field the override left blank to come from the base", merged)
+	}
+	if len(merged.Actions) != 2 {
+		t.Errorf("merged actions = %+v, want the base action plus the override's", merged.Actions)
 	}
 }
 
@@ -521,6 +618,75 @@ func TestGroupFromActionSpecGroup_DefaultsSurfaceKindToMetaGroup(t *testing.T) {
 	}
 	if group.SurfaceKind != actioncatalog.SurfaceKindMetaGroup {
 		t.Fatalf("SurfaceKind = %q, want default %q", group.SurfaceKind, actioncatalog.SurfaceKindMetaGroup)
+	}
+}
+
+// TestGroupFromActionSpecGroup_FillsMissingMetadataAndKeepsDeclared covers the
+// two defaults materialization applies to a group's presentation, from both
+// sides: what a group that declares nothing is given, and what a group that
+// declares something keeps.
+//
+// Both sides are asserted because each default is one `if` away from the
+// opposite behavior, and each direction is silent in its own way. A group left
+// without icons registers with none, so the surface shows a domain with no
+// mark; a group whose declared formatter is dropped renders its results through
+// the shared dispatcher instead, which produces output rather than an error.
+func TestGroupFromActionSpecGroup_FillsMissingMetadataAndKeepsDeclared(t *testing.T) {
+	spec := toolutil.NewActionSpec("get", testCatalogActionRoute(), toolutil.ActionSpecOptions{ReadOnly: true, Idempotent: true})
+
+	t.Run("a group with a mapped tool name gets its domain icon", func(t *testing.T) {
+		group := mustGroupFromActionSpecGroup(t, ActionSpecGroup{ToolName: "gitlab_issue", Actions: []toolutil.ActionSpec{spec}})
+		assertSameIcons(t, group.Icons, toolutil.IconIssue)
+	})
+
+	t.Run("a group no mapping names gets the server icon", func(t *testing.T) {
+		group := mustGroupFromActionSpecGroup(t, ActionSpecGroup{ToolName: "gitlab_zzz_metadata_probe", Actions: []toolutil.ActionSpec{spec}})
+		assertSameIcons(t, group.Icons, toolutil.IconServer)
+	})
+
+	t.Run("declared icons are kept", func(t *testing.T) {
+		declared := []mcp.Icon{{Source: "data:image/svg+xml;base64,declared", MIMEType: "image/svg+xml", Sizes: []string{"any"}}}
+		group := mustGroupFromActionSpecGroup(t, ActionSpecGroup{ToolName: "gitlab_issue", Icons: declared, Actions: []toolutil.ActionSpec{spec}})
+		assertSameIcons(t, group.Icons, declared)
+	})
+
+	t.Run("a declared formatter is kept", func(t *testing.T) {
+		sentinel := &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "declared formatter"}}}
+		group := mustGroupFromActionSpecGroup(t, ActionSpecGroup{
+			ToolName:     "gitlab_zzz_metadata_probe",
+			Actions:      []toolutil.ActionSpec{spec},
+			FormatResult: func(any) *mcp.CallToolResult { return sentinel },
+		})
+		if group.FormatResult == nil {
+			t.Fatal("the declared formatter was dropped, so the group would render through the shared dispatcher instead")
+		}
+		if group.FormatResult(nil) != sentinel {
+			t.Error("the group formats with some other function than the one it declared")
+		}
+	})
+}
+
+// mustGroupFromActionSpecGroup materializes one spec group or fails the test.
+func mustGroupFromActionSpecGroup(t *testing.T, specGroup ActionSpecGroup) actioncatalog.Group {
+	t.Helper()
+	group, err := groupFromActionSpecGroup(specGroup)
+	if err != nil {
+		t.Fatalf("groupFromActionSpecGroup(%s) error = %v", specGroup.ToolName, err)
+	}
+	return group
+}
+
+// assertSameIcons compares two icon sets by source, which identifies an icon
+// without asserting the bytes of its artwork.
+func assertSameIcons(t *testing.T, got, want []mcp.Icon) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("icons = %d entries, want %d", len(got), len(want))
+	}
+	for index := range want {
+		if got[index].Source != want[index].Source {
+			t.Errorf("icon %d source = %q, want %q", index, got[index].Source, want[index].Source)
+		}
 	}
 }
 

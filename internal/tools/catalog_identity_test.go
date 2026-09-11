@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -399,6 +400,142 @@ func TestNewCallIdentifier_NilCatalogIsUsable(t *testing.T) {
 			identifier := NewCallIdentifier(nil, surface)
 			if identity, ok := identifier.Identify("gitlab_issue_list", nil); ok {
 				t.Errorf("a nil catalog resolved something on %s: %+v", surface, identity)
+			}
+		})
+	}
+}
+
+// TestIdentifierActions_IndividualSurfaceReadsRegistrationOrder covers the one
+// surface whose resolver cannot read the catalog's own order.
+//
+// An individual tool name can be declared by more than one action, registration
+// binds it to the first one it visits, and that walk is group by group in tool
+// name order. The catalog's own action list is sorted by canonical id instead,
+// which is a different order whenever a group's tool name and its domain do not
+// sort alike. Reading the wrong one names an action whose handler never ran
+// under that name, which is how every gitlab_commit_list call was once recorded
+// as repository.file_history.
+func TestIdentifierActions_IndividualSurfaceReadsRegistrationOrder(t *testing.T) {
+	catalog := registrationOrderTestCatalog(t)
+
+	if got := actionIDsInOrder(identifierActions(catalog, config.ToolSurfaceIndividual)); !slices.Equal(got, []string{"zeta.list", "alpha.list"}) {
+		t.Errorf("individual order = %v, want the registration order [zeta.list alpha.list]", got)
+	}
+	for _, surface := range []string{config.ToolSurfaceMeta, config.ToolSurfaceDynamic} {
+		t.Run(surface, func(t *testing.T) {
+			if got := actionIDsInOrder(identifierActions(catalog, surface)); !slices.Equal(got, []string{"alpha.list", "zeta.list"}) {
+				t.Errorf("%s order = %v, want the catalog's own order [alpha.list zeta.list]", surface, got)
+			}
+		})
+	}
+
+	registered := registeredIndividualTools(t, catalog)
+	identity, ok := NewCallIdentifier(catalog, config.ToolSurfaceIndividual).Identify(sharedOrderToolName, nil)
+	if !ok {
+		t.Fatalf("%s resolved to nothing", sharedOrderToolName)
+	}
+	action, found := catalog.Action(actioncatalog.ActionID(identity.ActionID))
+	if !found {
+		t.Fatalf("resolved action %q is not in the catalog", identity.ActionID)
+	}
+	if got, want := action.IndividualTool.Description, registered[sharedOrderToolName].Description; got != want {
+		t.Fatalf("resolved %s (%q), but registration served %q", identity.ActionID, got, want)
+	}
+}
+
+// sharedOrderToolName is the individual tool name both groups of
+// [registrationOrderTestCatalog] declare, so which action owns it is decided by
+// the order alone.
+const sharedOrderToolName = "gitlab_test_order_shared"
+
+// registrationOrderTestCatalog returns two groups whose tool names sort the
+// opposite way to their domains, so the registration walk and the catalog's
+// canonical order disagree about which action is first.
+func registrationOrderTestCatalog(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
+	catalog := actioncatalog.NewCatalog()
+	for _, declared := range []struct {
+		toolName    string
+		domain      string
+		description string
+	}{
+		{toolName: "gitlab_test_order_first", domain: "zeta", description: "Zeta."},
+		{toolName: "gitlab_test_order_second", domain: "alpha", description: "Alpha."},
+	} {
+		spec := toolutil.NewActionSpec("list", toolutil.RouteAction(nil,
+			func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+				return struct{}{}, nil
+			}), toolutil.ActionSpecOptions{
+			ReadOnly:       true,
+			OwnerPackage:   "tools",
+			IndividualTool: toolutil.IndividualToolSpec{Name: sharedOrderToolName, Title: "Shared", Description: declared.description},
+		})
+		group, err := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{
+			ToolName:     declared.toolName,
+			BaseDomain:   declared.domain,
+			Title:        "Order probe",
+			Description:  "Order probe group.",
+			OwnerPackage: "tools",
+			SurfaceKind:  actioncatalog.SurfaceKindMetaGroup,
+		}, []toolutil.ActionSpec{spec})
+		if err != nil {
+			t.Fatalf("GroupFromSpecs(%s) error = %v", declared.toolName, err)
+		}
+		if addErr := catalog.AddGroup(group); addErr != nil {
+			t.Fatalf("AddGroup(%s) error = %v", declared.toolName, addErr)
+		}
+	}
+	return catalog
+}
+
+// actionIDsInOrder lists canonical action ids in the order they were given.
+func actionIDsInOrder(actions []actioncatalog.Action) []string {
+	ids := make([]string, 0, len(actions))
+	for _, action := range actions {
+		ids = append(ids, string(action.ID))
+	}
+	return ids
+}
+
+// TestNewCallIdentifier_ActionMissingEitherName_ClaimsNoTool covers the guard
+// that decides which tool names the meta index answers for.
+//
+// An action indexes its tool name only when it also carries a domain, because
+// the pair is what names a catalog action: an entry with one half missing would
+// make the resolver claim a call it can say nothing about, and a dashboard
+// grouped by domain would gain a row named by the empty string. Every action a
+// catalog builds carries both, so only a hand-built one reaches this, which is
+// why the resolver can be built from a plain slice.
+func TestNewCallIdentifier_ActionMissingEitherName_ClaimsNoTool(t *testing.T) {
+	cases := []struct {
+		name   string
+		action actioncatalog.Action
+		tool   string
+	}{
+		{
+			name:   "an action with a tool name and no domain",
+			action: actioncatalog.Action{ID: "ghost.list", Name: "list", ToolName: "gitlab_ghost"},
+			tool:   "gitlab_ghost",
+		},
+		{
+			name:   "an action with a domain and no tool name",
+			action: actioncatalog.Action{ID: "ghost.list", Name: "list", Domain: "ghost"},
+			tool:   "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			identifier := newCallIdentifier([]actioncatalog.Action{tc.action}, config.ToolSurfaceMeta)
+
+			if identity, ok := identifier.Identify(tc.tool, rawArgs(t, map[string]any{"action": "list"})); ok {
+				t.Errorf("Identify(%q) = %+v, true; want a tool the index cannot name to resolve to nothing", tc.tool, identity)
+			}
+			dispatch, isDispatcher := identifier.(mcpotel.DispatchIdentifier)
+			if !isDispatcher {
+				t.Fatalf("the meta resolver is a %T, which names no dispatched route", identifier)
+			}
+			if identity, ok := dispatch.IdentifyDispatch(tc.tool, "list"); ok {
+				t.Errorf("IdentifyDispatch(%q) = %+v, true; want a tool the index cannot name to resolve to nothing", tc.tool, identity)
 			}
 		})
 	}

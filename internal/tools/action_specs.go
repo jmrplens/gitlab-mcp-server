@@ -546,22 +546,18 @@ func buildSearchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGro
 // Enterprise catalog group. The custom group description documents the
 // supported actions in human-readable form for the schema resource.
 func buildSecurityAttributeActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
-	groups := actionSpecGroup("gitlab_security_attribute", editionTaggedSpecs(securityattributes.ActionSpecs(client), editionUltimate))
-	if len(groups) > 0 {
-		groups[0].Description = "Manage GitLab security attributes via GraphQL (Premium/Ultimate). Security attributes classify groups and projects under namespace-level security categories.\nReturns: JSON with created or updated attribute data, project update counts, or destructive confirmation messages. Destructive actions require confirmation.\n\nParam conventions: IDs are numeric GitLab IDs. Mode is one of ADD, REMOVE, or REPLACE.\n\n- create: namespace_id*, category_id*, attributes* (array of {name, description, color})\n- update: attribute_id*, name, description, color\n- delete: attribute_id*\n- project_update: project_id*, add_attribute_ids, remove_attribute_ids\n- bulk_update: group_ids or project_ids*, attribute_ids*, mode*\n\nSee also: gitlab_security_category, gitlab_project, gitlab_group"
-	}
-	return groups
+	return actionSpecGroupWithDescription("gitlab_security_attribute",
+		"Manage GitLab security attributes via GraphQL (Premium/Ultimate). Security attributes classify groups and projects under namespace-level security categories.\nReturns: JSON with created or updated attribute data, project update counts, or destructive confirmation messages. Destructive actions require confirmation.\n\nParam conventions: IDs are numeric GitLab IDs. Mode is one of ADD, REMOVE, or REPLACE.\n\n- create: namespace_id*, category_id*, attributes* (array of {name, description, color})\n- update: attribute_id*, name, description, color\n- delete: attribute_id*\n- project_update: project_id*, add_attribute_ids, remove_attribute_ids\n- bulk_update: group_ids or project_ids*, attribute_ids*, mode*\n\nSee also: gitlab_security_category, gitlab_project, gitlab_group",
+		editionTaggedSpecs(securityattributes.ActionSpecs(client), editionUltimate))
 }
 
 // buildSecurityCategoryActionSpecs contributes the gitlab_security_category
 // Enterprise catalog group. The custom group description documents the
 // supported actions in human-readable form for the schema resource.
 func buildSecurityCategoryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
-	groups := actionSpecGroup("gitlab_security_category", editionTaggedSpecs(securitycategories.ActionSpecs(client), editionUltimate))
-	if len(groups) > 0 {
-		groups[0].Description = "Manage GitLab security categories via GraphQL (Premium/Ultimate). Categories group namespace-level security attributes and control whether multiple attributes can be selected.\nReturns: JSON with category metadata and nested attribute summaries. Delete is destructive and requires confirmation because associated attributes are also deleted.\n\nParam conventions: IDs are numeric GitLab IDs.\n\n- create: namespace_id*, name*, description, multiple_selection\n- update: category_id*, namespace_id*, name, description\n- delete: category_id*\n\nSee also: gitlab_security_attribute, gitlab_group, gitlab_project"
-	}
-	return groups
+	return actionSpecGroupWithDescription("gitlab_security_category",
+		"Manage GitLab security categories via GraphQL (Premium/Ultimate). Categories group namespace-level security attributes and control whether multiple attributes can be selected.\nReturns: JSON with category metadata and nested attribute summaries. Delete is destructive and requires confirmation because associated attributes are also deleted.\n\nParam conventions: IDs are numeric GitLab IDs.\n\n- create: namespace_id*, name*, description, multiple_selection\n- update: category_id*, namespace_id*, name, description\n- delete: category_id*\n\nSee also: gitlab_security_attribute, gitlab_group, gitlab_project",
+		editionTaggedSpecs(securitycategories.ActionSpecs(client), editionUltimate))
 }
 
 // buildSecurityFindingActionSpecs contributes the gitlab_security_finding
@@ -575,11 +571,9 @@ func buildSecurityFindingActionSpecs(client *gitlabclient.Client, _ bool) []Acti
 // description documents the supported actions in human-readable form for the
 // schema resource.
 func buildSecurityScanProfileActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
-	groups := actionSpecGroup("gitlab_security_scan_profile", editionTaggedSpecs(securityscanprofiles.ActionSpecs(client), editionUltimate))
-	if len(groups) > 0 {
-		groups[0].Description = "Attach, detach, and inspect GitLab security scan profiles via GraphQL (Ultimate). Scan profiles bundle a security scanning configuration that applies to projects and groups.\nReturns: JSON with attach/detach confirmations and resolved targets, or per-scan-type profile statuses. Detach is destructive and requires confirmation.\n\nParam conventions: for attach, security_scan_profile_id is a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning) that creates the default profile on the fly. For detach, it is the persisted profile's numeric ID (from list_project_statuses). Targets must belong to a group namespace, not a personal namespace, and share one root namespace. project/group IDs are numeric. project_full_path is namespace/project.\n\n- attach: security_scan_profile_id*, project_ids or group_ids*\n- detach: security_scan_profile_id*, project_ids or group_ids*\n- list_project_statuses: project_full_path*\n\nSee also: gitlab_vulnerability, gitlab_project, gitlab_group"
-	}
-	return groups
+	return actionSpecGroupWithDescription("gitlab_security_scan_profile",
+		"Attach, detach, and inspect GitLab security scan profiles via GraphQL (Ultimate). Scan profiles bundle a security scanning configuration that applies to projects and groups.\nReturns: JSON with attach/detach confirmations and resolved targets, or per-scan-type profile statuses. Detach is destructive and requires confirmation.\n\nParam conventions: for attach, security_scan_profile_id is a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning) that creates the default profile on the fly. For detach, it is the persisted profile's numeric ID (from list_project_statuses). Targets must belong to a group namespace, not a personal namespace, and share one root namespace. project/group IDs are numeric. project_full_path is namespace/project.\n\n- attach: security_scan_profile_id*, project_ids or group_ids*\n- detach: security_scan_profile_id*, project_ids or group_ids*\n- list_project_statuses: project_full_path*\n\nSee also: gitlab_vulnerability, gitlab_project, gitlab_group",
+		editionTaggedSpecs(securityscanprofiles.ActionSpecs(client), editionUltimate))
 }
 
 // buildSnippetActionSpecs contributes the gitlab_snippet catalog group by
@@ -658,11 +652,26 @@ func buildWikiActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup
 // catalog group metadata derived from the tool name. Returns nil when
 // specs is empty so the catalog builder treats the group as absent.
 func actionSpecGroup(toolName string, specs []toolutil.ActionSpec) []ActionSpecGroup {
+	return actionSpecGroupWithDescription(toolName, "", specs)
+}
+
+// actionSpecGroupWithDescription is [actionSpecGroup] for the groups that
+// document their own actions instead of taking the curated snapshot text. An
+// empty description leaves the field unset, which is what makes
+// [groupFromActionSpecGroup] fall back to [catalogGroupDescription].
+//
+// The description is a parameter rather than an assignment to the returned
+// slice because that slice is nil for an empty spec set: each caller that
+// wrote to groups[0] had to guard against that first, and no input reaches the
+// guard, since every domain's ActionSpecs is compiled in and non-empty. One
+// emptiness check, here, decides both.
+func actionSpecGroupWithDescription(toolName, description string, specs []toolutil.ActionSpec) []ActionSpecGroup {
 	if len(specs) == 0 {
 		return nil
 	}
 	return []ActionSpecGroup{{
 		ToolName:               toolName,
+		Description:            description,
 		ReadOnly:               catalogGroupReadOnly(specs),
 		Icons:                  catalogGroupIcons(toolName),
 		CapabilityRequirements: catalogGroupCapabilityRequirements(toolName),

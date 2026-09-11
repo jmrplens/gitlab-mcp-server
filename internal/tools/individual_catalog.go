@@ -121,7 +121,12 @@ func registerIndividualCatalogAction(server *mcp.Server, group actioncatalog.Gro
 		return
 	}
 	tool := mustIndividualToolFromCatalogAction(action, group.Icons, state.opts)
-	if state.opts.ReadOnlyOnly && (tool.Annotations == nil || !tool.Annotations.ReadOnlyHint) {
+	// The annotations are read without a nil check because the tool was built
+	// one line above by the one projection that makes it, and that projection
+	// fills them for every action. A nil check here would guard a value this
+	// function cannot be handed. RemoveNonReadOnlyTools keeps its own, because
+	// the tools it reads come back from a server and were registered by anyone.
+	if state.opts.ReadOnlyOnly && !tool.Annotations.ReadOnlyHint {
 		return
 	}
 	if state.opts.SchemaCacheKey != "" {

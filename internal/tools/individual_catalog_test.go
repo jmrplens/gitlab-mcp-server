@@ -204,6 +204,24 @@ func TestRegisterIndividualCatalogTools_ReadOnlyAndSafeModePolicies(t *testing.T
 	if !ok || !strings.Contains(text.Text, `"status":"blocked"`) {
 		t.Fatalf("safe mode result content = %#v, want blocked preview", result.Content)
 	}
+
+	// The other half of what safe mode means: reads keep working. A mode that
+	// intercepted every call would be read-only mode with a worse message, and
+	// nothing about the blocked write above would say which of the two this is.
+	readResult, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "gitlab_test_read",
+		Arguments: map[string]any{"value": "served"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(read) error = %v", err)
+	}
+	if readResult.IsError {
+		t.Fatalf("safe mode intercepted a read-only action: %#v", readResult.Content)
+	}
+	readText, ok := readResult.Content[0].(*mcp.TextContent)
+	if !ok || !strings.Contains(readText.Text, "served") {
+		t.Fatalf("safe mode read result = %#v, want the handler's own answer", readResult.Content)
+	}
 }
 
 // TestRegisterIndividualCatalogTools_EditionFilters covers RegisterIndividualCatalogTools with table-driven subtests for edition filters.
@@ -682,23 +700,315 @@ func TestRegisterIndividualCatalogTools_NilInputs(t *testing.T) {
 	RegisterIndividualCatalogTools(server, nil, IndividualCatalogRegisterOptions{})
 }
 
+// TestRegisterIndividualCatalogTools_NilServerWithACatalogRegistersNothing is
+// the half of the nil guard a pair of nils cannot reach.
+//
+// A nil server with nothing to register proves nothing: both inputs have to be
+// checked, and only a catalog carrying a projectable action makes the server
+// half decide anything. Without it the loop reaches mcp.AddTool, which reads
+// the server's schema cache before it does anything else and takes the process
+// down with it.
+func TestRegisterIndividualCatalogTools_NilServerWithACatalogRegistersNothing(t *testing.T) {
+	catalog := testIndividualCatalog(t, toolutil.NewActionSpec("get", toolutil.RouteAction(nil,
+		func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+			return struct{}{}, nil
+		}), toolutil.ActionSpecOptions{
+		ReadOnly:       true,
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_nil_server", Title: "Nil server", Description: "Nil server probe."},
+	}))
+
+	RegisterIndividualCatalogTools(nil, catalog, IndividualCatalogRegisterOptions{})
+}
+
+// TestRegisterIndividualCatalogTools_SchemaCacheKeyDecidesWhatIsCompiled covers
+// what the option is for: with a key, the tool's compiled schemas are kept for
+// the process under it, so every later server built for the same tier registers
+// the same tool without recompiling; with no key, nothing is cached at all.
+//
+// The second half is not a formality. The key is assembled as
+// "<key>|<tool name>", so an empty key does not produce an empty one: it
+// produces "|<tool name>", which caches perfectly well under a name that says
+// nothing about the tier or surface the schema was pruned for. Whether
+// compilation happens has to follow the key the caller gave, not the string
+// that concatenation happens to make.
+func TestRegisterIndividualCatalogTools_SchemaCacheKeyDecidesWhatIsCompiled(t *testing.T) {
+	t.Run("a cache key keeps the compiled schema under it", func(t *testing.T) {
+		toolName := "gitlab_test_schema_cached"
+		registerIndividualToolForCaching(t, toolName, "zzz-schema-probe")
+		if !schemaCacheHolds(t, "zzz-schema-probe|"+toolName) {
+			t.Error("nothing was cached under the key registration was given, so every server rebuilding this surface recompiles the schema")
+		}
+	})
+
+	t.Run("no cache key caches nothing", func(t *testing.T) {
+		toolName := "gitlab_test_schema_uncached"
+		registerIndividualToolForCaching(t, toolName, "")
+		if schemaCacheHolds(t, "|"+toolName) {
+			t.Error("a schema was cached under a key the caller never asked for, which would serve it to any surface whose tool has this name")
+		}
+	})
+}
+
+// registerIndividualToolForCaching registers one individual tool named toolName
+// with the given schema cache key.
+func registerIndividualToolForCaching(t *testing.T, toolName, cacheKey string) {
+	t.Helper()
+	catalog := testIndividualCatalog(t, toolutil.NewActionSpec("get", toolutil.RouteAction(nil,
+		func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+			return struct{}{}, nil
+		}), toolutil.ActionSpecOptions{
+		ReadOnly:       true,
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: toolName, Title: "Cached", Description: "Schema cache probe."},
+	}))
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
+	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{SchemaCacheKey: cacheKey})
+}
+
+// schemaCacheHolds reports whether the process schema cache already holds an
+// input schema for key.
+//
+// It asks by compiling a schema of its own under the same key: the cache
+// answers the first writer's schema to everyone afterwards, so getting its own
+// probe schema back means nothing was there. The probe writes the key it
+// misses, so each caller must use a key of its own.
+func schemaCacheHolds(t *testing.T, key string) bool {
+	t.Helper()
+	probe := &mcp.Tool{InputSchema: map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"schema_cache_probe_only": map[string]any{"type": "string"}},
+	}}
+	toolutil.CompileToolSchemas(probe, key)
+	compiled, err := json.Marshal(probe.InputSchema)
+	if err != nil {
+		t.Fatalf("marshal probed schema: %v", err)
+	}
+	return !strings.Contains(string(compiled), "schema_cache_probe_only")
+}
+
 // TestIndividualCatalogGroupEligible_SurfaceAndEditionGates verifies group
 // surface and edition gates used before individual tool projection.
+//
+// Every surface kind is named and every gate is asserted in both directions,
+// because each decides whether a domain exists for a client and the catalog uses
+// only some of them today: the interactive and GitLab-action kinds reach this
+// from the dynamic and elicitation surfaces rather than from the collected
+// domain groups, and a gate that only ever refuses is indistinguishable from one
+// that always refuses.
 func TestIndividualCatalogGroupEligible_SurfaceAndEditionGates(t *testing.T) {
-	if individualCatalogGroupEligible(actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindRuntimeUtility}, IndividualCatalogRegisterOptions{}) {
-		t.Fatal("runtime utility should require standalone utilities opt-in")
+	cases := []struct {
+		name  string
+		group actioncatalog.Group
+		opts  IndividualCatalogRegisterOptions
+		want  bool
+	}{
+		{
+			name:  "a meta group is always eligible",
+			group: actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindMetaGroup},
+			want:  true,
+		},
+		{
+			name:  "an ordinary GitLab action group is always eligible",
+			group: actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindGitLabAction},
+			want:  true,
+		},
+		{
+			name:  "a runtime utility needs the opt-in",
+			group: actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindRuntimeUtility},
+		},
+		{
+			name:  "a runtime utility with the opt-in",
+			group: actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindRuntimeUtility},
+			opts:  IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true},
+			want:  true,
+		},
+		{
+			name:  "an interactive utility needs the opt-in",
+			group: actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindInteractiveUtility},
+		},
+		{
+			name:  "an interactive utility with the opt-in",
+			group: actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindInteractiveUtility},
+			opts:  IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true},
+			want:  true,
+		},
+		{
+			name:  "a dynamic controller belongs to no individual surface",
+			group: actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindDynamicController},
+			opts:  IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true},
+		},
+		{
+			name:  "an unknown surface kind is refused",
+			group: actioncatalog.Group{SurfaceKind: "unknown"},
+			opts:  IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true},
+		},
+		{
+			name:  "an enterprise-only group without enterprise mode",
+			group: actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindMetaGroup, EnterpriseOnly: true},
+			opts:  IndividualCatalogRegisterOptions{ApplyEditionFilters: true},
+		},
+		{
+			name:  "an enterprise-only group on an enterprise instance",
+			group: actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindMetaGroup, EnterpriseOnly: true},
+			opts:  IndividualCatalogRegisterOptions{ApplyEditionFilters: true, Enterprise: true},
+			want:  true,
+		},
+		{
+			name:  "a GitLab.com-only group off GitLab.com",
+			group: actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindMetaGroup, GitLabDotComOnly: true},
+			opts:  IndividualCatalogRegisterOptions{ApplyEditionFilters: true, Enterprise: true},
+		},
+		{
+			name:  "a GitLab.com-only group on GitLab.com",
+			group: actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindMetaGroup, GitLabDotComOnly: true},
+			opts:  IndividualCatalogRegisterOptions{ApplyEditionFilters: true, Enterprise: true, GitLabDotCom: true},
+			want:  true,
+		},
+		{
+			name:  "an enterprise-only group with the filters off",
+			group: actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindMetaGroup, EnterpriseOnly: true, GitLabDotComOnly: true},
+			want:  true,
+		},
 	}
-	if !individualCatalogGroupEligible(actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindRuntimeUtility}, IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true}) {
-		t.Fatal("runtime utility should be eligible when standalone utilities are included")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := individualCatalogGroupEligible(tc.group, tc.opts); got != tc.want {
+				t.Errorf("individualCatalogGroupEligible() = %t, want %t", got, tc.want)
+			}
+		})
 	}
-	if individualCatalogGroupEligible(actioncatalog.Group{SurfaceKind: "unknown"}, IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true}) {
-		t.Fatal("unknown surface kind should be rejected")
+}
+
+// TestIndividualRegistrationOrder_LeavesOutWhatRegistrationSkips pins that the
+// order a tool name is resolved against lists the groups registration visits and
+// no others.
+//
+// The two walks have to agree on the set as well as the order: a group the
+// individual surface never projects (the dynamic controller pair is one) has no
+// individual tool name, so an action of it appearing in this list could only
+// shadow the name of an action that does.
+func TestIndividualRegistrationOrder_LeavesOutWhatRegistrationSkips(t *testing.T) {
+	catalog := testIndividualCatalog(t, toolutil.NewActionSpec("get", toolutil.RouteAction(nil,
+		func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+			return struct{}{}, nil
+		}), toolutil.ActionSpecOptions{
+		ReadOnly:       true,
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_projected", Title: "Projected", Description: "Projected."},
+	}))
+	controller := actioncatalog.NewGroup(actioncatalog.GroupOptions{
+		ToolName:     "gitlab_test_controller",
+		OwnerPackage: "tools",
+		SurfaceKind:  actioncatalog.SurfaceKindDynamicController,
+	})
+	controller.SetAction(actioncatalog.Action{
+		Name:         "find",
+		OwnerPackage: "tools",
+		Route:        toolutil.ActionRoute{InputSchema: map[string]any{"type": "object"}},
+	})
+	if err := catalog.AddGroup(controller); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
 	}
-	if individualCatalogGroupEligible(actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindMetaGroup, EnterpriseOnly: true}, IndividualCatalogRegisterOptions{ApplyEditionFilters: true}) {
-		t.Fatal("enterprise-only group should be rejected without enterprise mode")
+
+	ordered := actionIDsInOrder(individualRegistrationOrder(catalog))
+
+	if !slices.Equal(ordered, []string{"test.get"}) {
+		t.Errorf("registration order = %v, want only the action the individual surface projects", ordered)
 	}
-	if individualCatalogGroupEligible(actioncatalog.Group{SurfaceKind: actioncatalog.SurfaceKindMetaGroup, GitLabDotComOnly: true}, IndividualCatalogRegisterOptions{ApplyEditionFilters: true, Enterprise: true}) {
-		t.Fatal("GitLab.com-only group should be rejected without GitLab.com mode")
+}
+
+// TestRegisterIndividualCatalogTools_GroupFormatterRendersTheResult pins that a
+// group's own formatter reaches the individual surface too.
+//
+// Both dispatchers prefer it and fall back to the shared Markdown renderer, and
+// a group that declares one declares it for every surface it appears on: a
+// formatter honored on the meta surface and dropped here would render the same
+// action two ways depending on how the deployment was configured.
+func TestRegisterIndividualCatalogTools_GroupFormatterRendersTheResult(t *testing.T) {
+	const sentinel = "rendered by the group's own formatter"
+
+	spec := toolutil.NewActionSpec("get", toolutil.RouteAction(nil,
+		func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+			return struct{}{}, nil
+		}), toolutil.ActionSpecOptions{
+		ReadOnly:       true,
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_formatted", Title: "Formatted", Description: "Formatted."},
+	})
+	group, err := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{
+		ToolName:     "gitlab_test_formatted_group",
+		Title:        "Formatted",
+		Description:  "Formatter probe group.",
+		OwnerPackage: "tools",
+		SurfaceKind:  actioncatalog.SurfaceKindMetaGroup,
+		FormatResult: func(any) *mcp.CallToolResult {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: sentinel}}}
+		},
+	}, []toolutil.ActionSpec{spec})
+	if err != nil {
+		t.Fatalf("GroupFromSpecs() error = %v", err)
+	}
+	catalog := actioncatalog.NewCatalog()
+	if addErr := catalog.AddGroup(group); addErr != nil {
+		t.Fatalf("AddGroup() error = %v", addErr)
+	}
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
+	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{})
+	session := connectServerForTools(t, server)
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "gitlab_test_formatted", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool() error = %v", err)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("the tool returned no content at all")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] = %T, want TextContent", result.Content[0])
+	}
+	if !strings.Contains(text.Text, sentinel) {
+		t.Errorf("content = %q, want the group's declared formatter to have rendered it", text.Text)
+	}
+}
+
+// TestRegisterIndividualCatalogTools_DestructiveConfirmationGranted covers the
+// other side of the destructive guard: a call that carries the confirmation runs.
+//
+// A guard is only half tested by watching it refuse. The confirm parameter is
+// how a model proceeds after the user has approved, and it is the only way
+// through for a client that cannot be prompted, so a guard that refused it too
+// would make every destructive tool unusable rather than unsafe.
+func TestRegisterIndividualCatalogTools_DestructiveConfirmationGranted(t *testing.T) {
+	called := false
+	spec := toolutil.NewActionSpec("delete", toolutil.RouteAction(nil,
+		func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+			called = true
+			return struct{}{}, nil
+		}), toolutil.ActionSpecOptions{
+		Destructive:    true,
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_confirmed_delete", Title: "Delete", Description: "Delete test."},
+	})
+	catalog := testIndividualCatalog(t, spec)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
+	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{})
+	session := connectServerForTools(t, server)
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "gitlab_test_confirmed_delete",
+		Arguments: map[string]any{"confirm": true},
+	})
+	if err != nil {
+		t.Fatalf("CallTool() error = %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() IsError = true: %#v", result.Content)
+	}
+	if !called {
+		t.Error("the destructive handler did not run for a call that carried the confirmation")
 	}
 }
 

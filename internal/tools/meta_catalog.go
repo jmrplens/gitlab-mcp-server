@@ -15,6 +15,11 @@ import (
 // the read-only semantics; mutating groups use [toolutil.AddMetaTool].
 // Nil server or catalog inputs are accepted as no-ops.
 func RegisterMetaCatalog(server *mcp.Server, catalog *actioncatalog.Catalog) {
+	// The early return states the contract rather than enforcing it: the loop
+	// below is already a no-op for either nil, because AddMetaTool and
+	// AddReadOnlyMetaTool both refuse a nil server and Groups() answers nil for
+	// a nil catalog. Its sibling in RegisterIndividualCatalogTools is not in
+	// that position, since mcp.AddTool dereferences the server it is given.
 	if server == nil || catalog == nil {
 		return
 	}

@@ -102,7 +102,12 @@ func FilterScopeFilteredCatalog(catalog *actioncatalog.Catalog, tokenScopes []st
 	filtered := actioncatalog.NewCatalog()
 	var removed []string
 	for _, group := range catalog.Groups() {
-		if required := MetaToolScopes[group.ToolName]; len(required) > 0 && !allScopesPresent(scopeSet, required) {
+		// Nothing checks the length of required beside this: allScopesPresent
+		// is true for an empty requirement by contract, so a group
+		// MetaToolScopes does not name is kept by this condition alone. A
+		// `len(required) > 0 &&` in front of it decided nothing, and no scope
+		// list could tell the two forms apart.
+		if required := MetaToolScopes[group.ToolName]; !allScopesPresent(scopeSet, required) {
 			removed = append(removed, group.ToolName)
 			slog.Debug(
 				"catalog group requires missing PAT scope",

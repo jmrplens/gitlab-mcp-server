@@ -123,8 +123,9 @@ func RemoveNonReadOnlyTools(ctx context.Context, server *mcp.Server) int {
 			toRemove = append(toRemove, tool.Name)
 		}
 	}
-	if len(toRemove) > 0 {
-		server.RemoveTools(toRemove...)
-	}
+	// Called unconditionally: RemoveTools decides per name, so an empty list
+	// removes nothing and notifies nobody. A guard in front of it could only
+	// ever skip taking the server's lock, which no client can observe.
+	server.RemoveTools(toRemove...)
 	return len(toRemove)
 }

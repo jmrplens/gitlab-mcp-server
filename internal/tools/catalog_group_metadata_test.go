@@ -73,6 +73,45 @@ func TestCatalogGroupDescription_StripsStoredMetaPrefix(t *testing.T) {
 	}
 }
 
+// TestCatalogGroupDescription_FallsBackWhenNothingIsLeftToUse covers the three
+// ways the curated snapshot answers nothing usable, all of which must end at the
+// derived sentence rather than at a description that is empty or is the runtime
+// preamble a client has already been told.
+//
+// The preamble says how to call a meta-tool and where its per-action schema
+// lives. Serving it as the group's own description would spend a client's
+// context repeating the instructions the tool's schema already carries, and
+// serving the empty string would leave the domain unexplained, so a snapshot row
+// that is only the preamble, one that carries no preamble to remove, and a name
+// with no row at all are all worth the derived sentence instead.
+func TestCatalogGroupDescription_FallsBackWhenNothingIsLeftToUse(t *testing.T) {
+	original := catalogMetaToolDescriptions
+	t.Cleanup(func() { catalogMetaToolDescriptions = original })
+
+	const preamble = "Use {\"action\":\"archive\",\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_widget.<action>."
+	catalogMetaToolDescriptions = map[string]string{
+		"gitlab_widget":       preamble,
+		"gitlab_other_widget": "Widget actions with no runtime preamble in front of them.",
+	}
+
+	cases := []struct {
+		name     string
+		toolName string
+		want     string
+	}{
+		{name: "a row that is only the runtime preamble", toolName: "gitlab_widget", want: "GitLab widget actions."},
+		{name: "a row with no preamble to strip", toolName: "gitlab_other_widget", want: "GitLab other widget actions."},
+		{name: "a tool name the snapshot does not carry", toolName: "gitlab_absent_widget", want: "GitLab absent widget actions."},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := catalogGroupDescription(tc.toolName); got != tc.want {
+				t.Errorf("catalogGroupDescription(%q) = %q, want the derived sentence %q", tc.toolName, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestLoadCatalogToolDescriptions_PanicOnInvalidJSON verifies embedded catalog
 // description snapshots fail fast when their JSON is invalid.
 //
