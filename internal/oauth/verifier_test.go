@@ -539,6 +539,56 @@ func TestNewGitLabVerifier_UnexpectedStatusCode(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_UnansweredStatus_SaysWhetherGitLabFailed verifies the
+// reason an unanswered verification carries, on both sides of the 5xx class.
+//
+// Every status here is reported the same way to the client, so the reason is
+// what an operator reading the server's log has to go on: "server error" sends
+// them to the instance, "unexpected response" to whatever answered in its
+// place, a proxy whose own client left (499) or a route that does not reach
+// GitLab at all (404). The other tests in this file assert only the status and
+// the error's class, so either reason could have been swapped for the other,
+// or the line between them moved by one, without a failure.
+func TestNewGitLabVerifier_UnansweredStatus_SaysWhetherGitLabFailed(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		status     int
+		wantReason string
+	}{
+		{name: "the first status of the 5xx class", status: http.StatusInternalServerError, wantReason: "server error"},
+		{name: "an instance that is down", status: http.StatusServiceUnavailable, wantReason: "server error"},
+		{name: "the last status below the 5xx class", status: 499, wantReason: "unexpected response"},
+		{name: "a route that does not reach GitLab", status: http.StatusNotFound, wantReason: "unexpected response"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+			}))
+			t.Cleanup(srv.Close)
+
+			verifier := NewGitLabVerifier(srv.URL, false, time.Minute, nil)
+			_, err := verifier(t.Context(), "unanswered-token", nil)
+
+			upstream, ok := errors.AsType[*UpstreamError](err)
+			if !ok {
+				t.Fatalf("error should be an *UpstreamError, got %T: %v", err, err)
+			}
+			if upstream.Status != tt.status {
+				t.Errorf("Status = %d, want %d", upstream.Status, tt.status)
+			}
+			if upstream.Err == nil || upstream.Err.Error() != tt.wantReason {
+				t.Errorf("reason = %v, want %q", upstream.Err, tt.wantReason)
+			}
+		})
+	}
+}
+
 // isErrInvalidToken checks if an error wraps auth.ErrInvalidToken.
 func isErrInvalidToken(err error) bool {
 	return errors.Is(err, auth.ErrInvalidToken)
@@ -737,6 +787,10 @@ func TestNewGitLabVerifier_UpstreamFailure_IsNotAnInvalidToken(t *testing.T) {
 		// client to retry immediately — which is what the throttle is for.
 		{"throttled with a zero delta", http.StatusTooManyRequests, "0", http.StatusTooManyRequests, 0},
 		{"throttled with a negative delta", http.StatusTooManyRequests, "-5", http.StatusTooManyRequests, 0},
+		// Parseable as an int and too negative to multiply into a Duration:
+		// clamping the product rather than the delta would wrap it past the
+		// bottom of int64 into a delay of centuries.
+		{"throttled with a delta too negative to convert", http.StatusTooManyRequests, "-9300000000", http.StatusTooManyRequests, 0},
 		{"server error", http.StatusBadGateway, "", http.StatusBadGateway, 0},
 	}
 	for _, tt := range tests {
@@ -1365,6 +1419,24 @@ type roundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
+// TestNewVerificationClient_BoundsEveryExchange verifies that the client a
+// verifier asks GitLab with gives up on an instance that never answers.
+//
+// Admission waits on this client, and nothing else is certain to bound it:
+// the request context the verifier is handed need not carry a deadline, and
+// net/http reads a zero Timeout as no limit at all. Without the bound, an
+// instance that accepts the connection and then says nothing would hold open
+// every request bearing a token it has not seen before. Proving that through
+// the verifier would mean waiting out the bound on every run, so the client is
+// asked directly.
+func TestNewVerificationClient_BoundsEveryExchange(t *testing.T) {
+	t.Parallel()
+
+	if got := newVerificationClient(false).Timeout; got <= 0 {
+		t.Errorf("Timeout = %v, want a positive bound; zero means a verification may wait forever", got)
+	}
+}
+
 // TestEffectiveCacheTTL_NeverOutlivesTheToken covers how long an identity may
 // be answered from memory.
 //
@@ -1373,37 +1445,41 @@ func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { r
 // credential GitLab has already stopped accepting. A token already past its
 // expiry gets the smallest useful lifetime rather than a negative one, which
 // would make the entry immediately stale in the other direction.
+//
+// Every row is measured from one fixed instant, so each is an exact statement
+// about a distance from now rather than a bound loose enough to absorb a slow
+// machine. That is also what reaches the last row, which no real clock lands
+// on: a token whose expiry is this very instant. It counts as past, the same
+// rule [expired] applies to every deadline here, and gets the same second. A
+// lifetime of zero instead would stamp an admission that expires as it is
+// issued, refusing at the door a token GitLab has just accepted.
 func TestEffectiveCacheTTL_NeverOutlivesTheToken(t *testing.T) {
 	t.Parallel()
 
 	const configured = 15 * time.Minute
+	now := time.Date(2030, time.January, 2, 3, 4, 5, 0, time.UTC)
+
 	tests := []struct {
 		name   string
 		expiry time.Time
 		want   time.Duration
 	}{
 		{name: "no expiry keeps the configured TTL", expiry: time.Time{}, want: configured},
-		{name: "an expiry already past gets a second", expiry: time.Now().Add(-time.Hour), want: time.Second},
+		{name: "an expiry later than the TTL keeps the TTL", expiry: now.Add(time.Hour), want: configured},
+		{name: "an expiry sooner than the TTL wins", expiry: now.Add(2 * time.Minute), want: 2 * time.Minute},
+		{name: "an expiry already past gets a second", expiry: now.Add(-time.Hour), want: time.Second},
+		{name: "an expiry of exactly now counts as past", expiry: now, want: time.Second},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := effectiveCacheTTL(configured, tt.expiry); got != tt.want {
-				t.Errorf("effectiveCacheTTL(%s, %v) = %s, want %s", configured, tt.expiry, got, tt.want)
+			if got := effectiveCacheTTL(now, configured, tt.expiry); got != tt.want {
+				t.Errorf("effectiveCacheTTL(%s, %s, %v) = %s, want %s", now, configured, tt.expiry, got, tt.want)
 			}
 		})
 	}
-
-	t.Run("an expiry sooner than the TTL wins", func(t *testing.T) {
-		t.Parallel()
-
-		got := effectiveCacheTTL(configured, time.Now().Add(2*time.Minute))
-		if got > 2*time.Minute || got <= 0 {
-			t.Errorf("effectiveCacheTTL = %s, want at most the token's own two minutes", got)
-		}
-	})
 }
 
 // TestNewGitLabVerifier_CrossHostRedirect_IsRefused verifies that an instance
@@ -1522,10 +1598,15 @@ func TestVerificationRedirect_Policy(t *testing.T) {
 		// rather than let net/http try to dial an empty address.
 		{name: "destination without a host", origin: "https://gitlab.example.com/api/v4/user", dest: "https:///api/v4/user", wantErr: true},
 		// The mirror of the row above: an origin with no host is nowhere
-		// too, and nothing can be a subdomain of it. Without this the
-		// comparison would accept any destination whose name happens to end
-		// in the empty string, which is all of them.
+		// too, and nothing can be a subdomain of it.
 		{name: "origin without a host", origin: "https:///api/v4/user", dest: "https://gitlab.example.com/api/v4/user", wantErr: true},
+		// The row that needs the empty-origin check on its own. Every name
+		// ends in the empty string, and against an empty origin the dot
+		// boundary is the destination's last byte, so a fully qualified name,
+		// which ends in a dot, clears both subdomain tests. The origin is not
+		// contrived: an instance named by a port alone has no host, and Go
+		// dials that as the local machine, so it can answer with a redirect.
+		{name: "origin without a host, destination fully qualified", origin: "http://:8080/api/v4/user", dest: "http://gitlab.example.com./api/v4/user", wantErr: true},
 		// The dot boundary lands correctly and the suffix still differs, so
 		// only the suffix test refuses this one. A dot-boundary check on its
 		// own would follow the hop.

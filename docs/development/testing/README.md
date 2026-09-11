@@ -80,8 +80,10 @@ should be recorded rather than chased:
   where both branches assign the same value at the boundary changes nothing.
   Six of the retry-clamp mutants in `internal/gitlab` are this shape.
 - **A guard that a second guard makes unobservable.** The negative token
-  cache checks "disabled" in both `RecordKind` and `Lookup`, so removing the
-  second changes no answer.
+  cache used to check "disabled" in `Lookup` and `Contains` as well as in
+  `RecordKind`, the only place an entry is stored, so removing either copy
+  changed no answer. Such a copy is redundant code, and deleting it, as was
+  done there, is a better answer than recording its survivors.
 - **A tool artifact.** Mutations inside package-level constant initializers
   and `switch { case … }` expressions are reported as not covered because
   neither carries a statement counter, not because no test reaches them.

@@ -133,21 +133,23 @@ func (e *UpstreamError) Unwrap() error { return e.Err }
 // An HTTP-date is rounded up to the next whole second. The delay is rendered
 // into a Retry-After header with second granularity, so truncating 0.4s to 0
 // would invite a retry before the boundary GitLab asked for.
+//
+// Both forms clamp at zero before converting, rather than branching on the
+// sign: a zero or negative delta and a date already past are the same "not
+// told" as an absent header. Clamping the input rather than the product keeps
+// a huge negative delta from overflowing the multiplication into a positive
+// delay.
 func retryAfter(resp *http.Response) time.Duration {
 	raw := strings.TrimSpace(resp.Header.Get("Retry-After"))
 	if raw == "" {
 		return 0
 	}
 	if seconds, err := strconv.Atoi(raw); err == nil {
-		if seconds <= 0 {
-			return 0
-		}
-		return time.Duration(seconds) * time.Second
+		return time.Duration(max(seconds, 0)) * time.Second
 	}
 	if when, err := http.ParseTime(raw); err == nil {
-		if d := time.Until(when); d > 0 {
-			return time.Duration(math.Ceil(d.Seconds())) * time.Second
-		}
+		wait := max(time.Until(when), 0)
+		return time.Duration(math.Ceil(wait.Seconds())) * time.Second
 	}
 	return 0
 }
@@ -310,6 +312,36 @@ func sameVerificationHost(origin, dest *url.URL) bool {
 		strings.HasSuffix(destHost, originHost)
 }
 
+// newVerificationClient builds the client one verifier sends every question
+// with: a clone of the default transport so proxy settings carry over,
+// certificate checks off only when the operator asked, a bound on each
+// exchange, and the redirect policy that keeps an identity from coming from
+// anywhere but the instance.
+//
+// The bound is the part nothing else supplies. Admission waits on this client,
+// the request context the verifier is handed need not carry a deadline, and
+// net/http reads a zero Timeout as no limit at all, so an instance that
+// accepts the connection and never answers would hold open every request
+// bearing a token it has not seen before.
+func newVerificationClient(skipTLS bool) *http.Client {
+	baseTransport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		baseTransport = &http.Transport{}
+	}
+	transport := baseTransport.Clone()
+	if skipTLS {
+		transport.TLSClientConfig = &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: true, //#nosec G402 //nolint:gosec // user-configured opt-in for self-signed certificates
+		}
+	}
+	return &http.Client{
+		Transport:     transport,
+		Timeout:       10 * time.Second,
+		CheckRedirect: verificationRedirect,
+	}
+}
+
 // NewGitLabVerifier returns an [auth.TokenVerifier] that validates Bearer
 // tokens by calling the GitLab /api/v4/user endpoint. Verified identities
 // are cached in cache (if non-nil) to avoid redundant API calls.
@@ -356,22 +388,7 @@ type InstanceResolver func(*http.Request) (string, error)
 // because --gitlab-url is repeatable and each published instance has its own
 // OAuth application with its own uid.
 func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.Duration, cache *TokenCache, clientUIDs ...string) auth.TokenVerifier {
-	baseTransport, ok := http.DefaultTransport.(*http.Transport)
-	if !ok {
-		baseTransport = &http.Transport{}
-	}
-	transport := baseTransport.Clone()
-	if skipTLS {
-		transport.TLSClientConfig = &tls.Config{
-			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: true, //#nosec G402 //nolint:gosec // user-configured opt-in for self-signed certificates
-		}
-	}
-	client := &http.Client{
-		Transport:     transport,
-		Timeout:       10 * time.Second,
-		CheckRedirect: verificationRedirect,
-	}
+	client := newVerificationClient(skipTLS)
 
 	return func(ctx context.Context, token string, r *http.Request) (*auth.TokenInfo, error) {
 		gitlabURL, err := resolve(r)
@@ -397,33 +414,37 @@ func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.
 		}
 		defer resp.Body.Close()
 
-		switch {
-		case resp.StatusCode == http.StatusOK:
+		switch resp.StatusCode {
+		case http.StatusOK:
 			// success — parse below
-		case resp.StatusCode == http.StatusUnauthorized:
+		case http.StatusUnauthorized:
 			return nil, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, auth.ErrInvalidToken)
-		case resp.StatusCode == http.StatusForbidden:
+		case http.StatusForbidden:
 			if isInsufficientScope(resp) {
 				return nil, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, ErrInsufficientScope)
 			}
 			return nil, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, auth.ErrInvalidToken)
-		case resp.StatusCode == http.StatusTooManyRequests:
+		case http.StatusTooManyRequests:
 			// Not an invalid token: GitLab declined to answer the question.
 			return nil, &UpstreamError{
 				Status:     resp.StatusCode,
 				RetryAfter: retryAfter(resp),
 				Err:        errors.New("rate limit exceeded"),
 			}
-		case resp.StatusCode >= 500:
-			return nil, &UpstreamError{Status: resp.StatusCode, Err: errors.New("server error")}
 		default:
 			// Only 401 and 403 are GitLab judging the credential. Anything
-			// else — a 404 from a misrouted proxy, a 408, whatever an
-			// intermediary invents — is a question that never got answered,
+			// else (a 5xx, a 404 from a misrouted proxy, a 408, whatever an
+			// intermediary invents) is a question that never got answered,
 			// and calling it invalid_token would cache a valid token as
 			// rejected and charge the caller's failure budget for someone
-			// else's routing mistake.
-			return nil, &UpstreamError{Status: resp.StatusCode, Err: errors.New("unexpected response")}
+			// else's routing mistake. The reason is what tells these apart
+			// in the log: a 5xx is the server failing, anything else a
+			// response GitLab does not give to this question.
+			reason := "unexpected response"
+			if resp.StatusCode >= http.StatusInternalServerError {
+				reason = "server error"
+			}
+			return nil, &UpstreamError{Status: resp.StatusCode, Err: errors.New(reason)}
 		}
 
 		var user gitlabUserResponse
@@ -462,13 +483,16 @@ func admitToken(cache *TokenCache, gitlabURL, token string, cacheTTL time.Durati
 	// Caching for the configured TTL alone would keep answering 200 for a token
 	// that expired a moment after it was verified, for as long as fifteen
 	// minutes by default — and the specification requires an expired token to
-	// be answered 401.
-	ttl := effectiveCacheTTL(cacheTTL, result.expiry)
+	// be answered 401. One clock reading serves both the lifetime and the
+	// deadline stamped from it, so an admission the token's expiry bounds ends
+	// at that expiry rather than a clock read later.
+	now := time.Now()
+	ttl := effectiveCacheTTL(now, cacheTTL, result.expiry)
 
 	info := &auth.TokenInfo{
 		UserID:     strconv.Itoa(user.ID),
 		Scopes:     result.scopes,
-		Expiration: time.Now().Add(ttl),
+		Expiration: now.Add(ttl),
 		// The username only. The raw token stays out on purpose; see the
 		// doc comment on [NewGitLabVerifier].
 		Extra: map[string]any{
@@ -483,21 +507,22 @@ func admitToken(cache *TokenCache, gitlabURL, token string, cacheTTL time.Durati
 	return info
 }
 
-// introspectScopes resolves a token's granted scopes. Personal access
-// tokens answer GET /api/v4/personal_access_tokens/self; OAuth access
-// tokens answer GET /oauth/token/info. Either endpoint failing to yield
-// scopes falls back to the historical {"api"} assumption with a debug log —
-// refusal here would brick instances where introspection is restricted.
 // effectiveCacheTTL is the configured TTL, shortened when the token itself dies
-// sooner. A zero expiry means the token does not expire or the instance did not
-// say, in which case the configured TTL stands. A token already past its expiry
-// gets the smallest useful lifetime rather than a negative one; GitLab will have
-// answered 401 for it anyway, so this only guards the arithmetic.
-func effectiveCacheTTL(configured time.Duration, tokenExpiry time.Time) time.Duration {
+// sooner than now plus that TTL. A zero expiry means the token does not expire
+// or the instance did not say, in which case the configured TTL stands. A token
+// already past its expiry gets the smallest useful lifetime rather than a
+// negative one; GitLab will have answered 401 for it anyway, so this only
+// guards the arithmetic.
+//
+// A token whose expiry is exactly now counts as past it, the rule [expired]
+// applies to every deadline in this package. now is the caller's so that the
+// lifetime and the deadline it stamps come from one clock reading, and so that
+// instant can be asked about at all: no real clock lands on it on purpose.
+func effectiveCacheTTL(now time.Time, configured time.Duration, tokenExpiry time.Time) time.Duration {
 	if tokenExpiry.IsZero() {
 		return configured
 	}
-	remaining := time.Until(tokenExpiry)
+	remaining := tokenExpiry.Sub(now)
 	if remaining <= 0 {
 		return time.Second
 	}
@@ -624,9 +649,14 @@ func acceptedRecipient(pinned []string, result introspection) error {
 // returned as parsed. Adding a day — reading the date as "valid through" —
 // would let a cached admission outlive the credential by up to 24 hours, which
 // is the one thing [effectiveCacheTTL] exists to prevent.
+//
+// A token that never expires reads null, which is not a string and returns the
+// zero time without a word. An empty string needs no test of its own: it is
+// not a date, so the parse below refuses it and it is treated like any other
+// value that is not one.
 func expiryFromDate(raw any) time.Time {
 	s, ok := raw.(string)
-	if !ok || s == "" {
+	if !ok {
 		return time.Time{}
 	}
 	day, err := time.Parse(time.DateOnly, s)

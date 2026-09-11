@@ -49,17 +49,9 @@ func (c *TokenCache) Get(gitlabURL, token string) (*auth.TokenInfo, bool) {
 	}
 
 	if expired(entry.expiresAt) {
-		// Re-read under the write lock before deleting. The read lock was
-		// released above, so a Put that reverified this very token in the
-		// meantime has already stored a live entry, and deleting by key alone
-		// would throw that away and send the next request back to GitLab. This
-		// call still reports a miss, which is what it observed.
-		c.mu.Lock()
-		current, stillThere := c.entries[key]
-		if stillStale(current, stillThere) {
-			delete(c.entries, key)
-		}
-		c.mu.Unlock()
+		// This call still reports a miss, which is what it observed, whatever
+		// the re-read finds.
+		c.evictIfStale(key)
 		return nil, false
 	}
 
@@ -129,18 +121,30 @@ func expired(deadline time.Time) bool {
 	return expiredAt(time.Now(), deadline)
 }
 
-// stillStale reports whether an entry re-read under the write lock is still
-// the expired one a read observed under the read lock, and so may be deleted.
+// evictIfStale drops the entry under key if it is still expired when re-read
+// under the write lock.
 //
-// It is a function of its own because both of its false answers come from a
-// race no test can schedule: between releasing the read lock and taking the
-// write lock, another goroutine may have deleted the entry (present is false)
-// or reverified the token and stored a live one (the deadline has moved into
-// the future). Deleting in either case throws away work and sends the next
-// request back to GitLab, so the rule is worth stating and asserting on its
-// own rather than left as a condition only a lucky interleaving reaches.
-func stillStale(entry cacheEntry, present bool) bool {
-	return present && expired(entry.expiresAt)
+// [TokenCache.Get] sees an expired entry under the read lock and releases it
+// before taking the write lock, and in that gap another goroutine may have
+// reverified the token and stored a live entry. Deleting by key alone would
+// throw that verification away and send the next request back to GitLab for
+// an identity this process already holds, so the entry is judged again here
+// and only a stale one goes.
+//
+// An entry another goroutine removed in the gap needs no case of its own: it
+// reads back as the zero entry, whose deadline is long past, and deleting an
+// absent key does nothing.
+//
+// It is a method of its own because the entry worth keeping only exists
+// through a race no test can schedule through Get. A test can leave the cache
+// in the state that race leaves behind and ask this directly, which is the
+// code Get runs rather than a copy of its rule.
+func (c *TokenCache) evictIfStale(key string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if expired(c.entries[key].expiresAt) {
+		delete(c.entries, key)
+	}
 }
 
 // expiredAt is [expired] against a caller-supplied instant, for a sweep that

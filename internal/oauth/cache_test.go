@@ -70,52 +70,48 @@ func TestTokenCache_GetExpired(t *testing.T) {
 	}
 }
 
-// TestStillStale_KeepsWhatAnotherGoroutineSaved verifies the rule the lazy
-// eviction re-checks under the write lock.
+// TestTokenCache_EvictIfStale_KeepsWhatAnotherGoroutineSaved verifies the
+// re-check the lazy eviction makes under the write lock, on the cache states
+// the gap before it can leave behind.
 //
-// Get releases the read lock before taking the write lock, so both false
-// answers here are races a test cannot schedule: another request may have
-// evicted the entry in the gap, or reverified the same token and stored a
-// live one. Deleting in either case discards a verification that has already
-// happened and sends the next request back to GitLab for an identity this
-// process already holds, which is the whole cost the cache exists to avoid.
-func TestStillStale_KeepsWhatAnotherGoroutineSaved(t *testing.T) {
+// Get releases the read lock before taking the write lock, so the entry worth
+// keeping here only exists through a race a test cannot schedule through Get:
+// another request reverified the same token in the gap and stored a live
+// entry. Deleting it discards a verification that has already happened and
+// sends the next request back to GitLab for an identity this process already
+// holds, which is the whole cost the cache exists to avoid. The other rows are
+// what the re-check must still remove, or must survive finding already gone.
+func TestTokenCache_EvictIfStale_KeepsWhatAnotherGoroutineSaved(t *testing.T) {
 	t.Parallel()
 
+	const token = "reverified-token"
 	tests := []struct {
-		name    string
-		entry   cacheEntry
-		present bool
-		want    bool
+		name string
+		// stored says whether an entry is under the key when the re-check
+		// runs, and ttl how long it had to live when it was put there.
+		stored   bool
+		ttl      time.Duration
+		wantKept bool
 	}{
-		{
-			name:    "the expired entry is still there",
-			entry:   cacheEntry{expiresAt: time.Now().Add(-time.Minute)},
-			present: true,
-			want:    true,
-		},
-		{
-			name:    "another goroutine evicted it first",
-			present: false,
-		},
-		{
-			name:    "another goroutine reverified the token",
-			entry:   cacheEntry{expiresAt: time.Now().Add(time.Minute)},
-			present: true,
-		},
-		{
-			name:    "an entry expiring exactly now is stale",
-			entry:   cacheEntry{expiresAt: time.Now()},
-			present: true,
-			want:    true,
-		},
+		{name: "the expired entry is still there", stored: true, ttl: -time.Minute},
+		{name: "another goroutine evicted it first"},
+		{name: "another goroutine reverified the token", stored: true, ttl: time.Minute, wantKept: true},
+		{name: "an entry whose deadline is the instant it was stored is stale", stored: true, ttl: 0},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := stillStale(tt.entry, tt.present); got != tt.want {
-				t.Errorf("stillStale() = %v, want %v", got, tt.want)
+
+			cache := NewTokenCache()
+			if tt.stored {
+				cache.Put(testInstance, token, &auth.TokenInfo{UserID: "7"}, tt.ttl)
+			}
+
+			cache.evictIfStale(tokenKey(testInstance, token))
+
+			if kept := cache.Len() == 1; kept != tt.wantKept {
+				t.Errorf("entry kept = %v, want %v", kept, tt.wantKept)
 			}
 		})
 	}
