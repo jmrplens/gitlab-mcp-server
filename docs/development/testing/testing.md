@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,584 |
-| Unit test functions                                   | 14,970 |
+| Total test functions                                  | 15,586 |
+| Unit test functions                                   | 14,972 |
 | E2E test functions                                    |    614 |
 | cmd test functions                                    |  3,024 |
 | Test files (internal/)                                |    533 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,322 | 79.1% |
+| `TestFunc_Scenario` (2-part)           | 12,324 | 79.1% |
 | `TestFunc` (no underscore)             |    979 |  6.3% |
 | `TestFunc_Scenario_Expected` (3+ part) |  2,283 | 14.6% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,586 |        152 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            360 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          9,000 |        365 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (177) |          9,002 |        365 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            614 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          3,024 |        206 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,584** |    **979** |                                                                                                 |
+| **Total**               |     **15,586** |    **979** |                                                                                                 |
 
 ### Core Packages
 
@@ -86,7 +86,7 @@
 | ----------------- | ----: | -------: | ----: |
 | projects          |   396 |   100.0% |    57 |
 | groups            |   283 |   100.0% |    37 |
-| dynamic           |   265 |   100.0% |     2 |
+| dynamic           |   267 |   100.0% |     2 |
 | mergerequests     |   260 |   100.0% |    30 |
 | issues            |   235 |   100.0% |    21 |
 | users             |   220 |    99.2% |    38 |
@@ -158,7 +158,7 @@
 | deploytokens            |        68 |          2 |   100.0% |         9 |
 | dockerfiletemplates     |        15 |          1 |   100.0% |         2 |
 | dorametrics             |        11 |          2 |   100.0% |         2 |
-| dynamic                 |       265 |          8 |   100.0% |         2 |
+| dynamic                 |       267 |          8 |   100.0% |         2 |
 | dynamiccatalog          |         7 |          1 |   100.0% |         0 |
 | elicitationtools        |        65 |          2 |    98.7% |         4 |
 | enterpriseusers         |        39 |          3 |    99.5% |         4 |
@@ -294,7 +294,7 @@
 | wikis                   |        62 |          2 |   100.0% |         6 |
 | workitems               |       120 |          3 |   100.0% |         6 |
 | workitemsavedviews      |        52 |          4 |   100.0% |         7 |
-| **Total**               | **9,000** |    **365** |          | **1,187** |
+| **Total**               | **9,002** |    **365** |          | **1,187** |
 
 </details>
 
