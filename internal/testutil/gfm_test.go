@@ -197,6 +197,130 @@ func TestScanGFM_Links_ReadsOnlyABracketedLabel(t *testing.T) {
 	}
 }
 
+// TestScanGFM_Links_ReadsAnEscapedBracketAsLabelText pins the clause that
+// decides whether the links this server builds are its own: CommonMark's
+// backslash escapes, where an escaped character "is treated as a regular
+// character and does not have its usual Markdown meaning", and its link rule,
+// where brackets are allowed in link text when they are backslash-escaped or
+// matched. Every link in the tree passes its label through
+// [toolutil.EscapeMdLinkLabel], which escapes the bracket, so a label class
+// that accepts a backslash without honoring it reads the value's own "](url)"
+// as the end of the label and reports an attacker destination for a link that
+// points where the server pointed it. The cases are the four the boundary
+// turns on, each naming the clause that settles it.
+func TestScanGFM_Links_ReadsAnEscapedBracketAsLabelText(t *testing.T) {
+	cases := []struct {
+		name string
+		md   string
+		want string
+	}{
+		{
+			// Backslash escapes: the "]" is a regular character, so the label
+			// runs on to the bracket the formatter wrote and the destination
+			// is the fixture's own. This is what MdTitleLink produces for a
+			// hostile title and what the rule used to report as an attack.
+			name: "an escaped bracket inside the label keeps the fixture destination",
+			md:   `| [x\](http://attacker.invalid/y)](https://gitlab.example/T/7) |` + "\n",
+			want: "https://gitlab.example/T/7",
+		},
+		{
+			// The same line with nothing escaping the bracket: the label ends
+			// at the value's own "]" and the link points at the value's
+			// destination. This is the hand-written fmt.Sprintf("[%s](%s)",
+			// EscapeMdTableCell(title), url) the rule exists to catch, and it
+			// must keep being caught.
+			name: "the same line unescaped still opens the attacker destination",
+			md:   "| [x](http://attacker.invalid/y)](https://gitlab.example/T/7) |\n",
+			want: "http://attacker.invalid/y",
+		},
+		{
+			// An ordinary link has no backslash at all, so neither half of
+			// the label rule applies and the destination is read as before.
+			name: "an ordinary link is unchanged",
+			md:   "| [Title7](https://gitlab.example/T/7) |\n",
+			want: "https://gitlab.example/T/7",
+		},
+		{
+			// Backslash escapes again, one level up: the backslash escapes a
+			// backslash, so the "]" after it is unescaped and really does
+			// close the label. Accepting "a backslash and whatever follows"
+			// as one label character is what gets this right; skipping every
+			// character after a backslash would swallow the real terminator.
+			name: "an escaped backslash leaves the bracket closing the label",
+			md:   `| [a\\](http://attacker.invalid/y) |` + "\n",
+			want: "http://attacker.invalid/y",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := strings.Join(ScanGFM(tc.md).Links, "|"); got != tc.want {
+				t.Errorf("links = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestScanGFM_Bare_ElidesTheCodeSpansAndKeepsTheQuotes checks the view the
+// raw-tag rule reads: a code span's contents are literal and HTML-escaped by
+// CommonMark's code-spans clause, so a tag inside one is text and must be
+// elided; backticks that never close are literal themselves and hide nothing;
+// a row is tokenized per cell, because GFM splits on unescaped pipes before
+// inline parsing and a span cannot cross a cell; a tag written before a span
+// opens is outside it; and a quote line is carried, since the quote contains
+// structure and not tags.
+func TestScanGFM_Bare_ElidesTheCodeSpansAndKeepsTheQuotes(t *testing.T) {
+	cases := []struct {
+		name string
+		md   string
+		want string
+	}{
+		{name: "a tag inside a span is elided", md: "- **A**: `<a href=\"http://x\">`\n", want: "- **A**: " + gfmCodeSpanPlaceholder},
+		{name: "a bare tag stays", md: "- **A**: <a href=\"http://x\">\n", want: "- **A**: <a href=\"http://x\">"},
+		{name: "an unclosed backtick elides nothing", md: "- **A**: `<a href=\"http://x\">\n", want: "- **A**: `<a href=\"http://x\">"},
+		{name: "a longer run does not close a shorter one", md: "- ``a` <b>\n", want: "- ``a` <b>"},
+		{name: "a double-backtick span closes", md: "- ``<a>`` <b>\n", want: "- " + gfmCodeSpanPlaceholder + " <b>"},
+		{name: "a span cannot cross a cell", md: "| `a | <b>` |\n| --- | --- |\n", want: "| `a | <b>` |"},
+		{name: "a span inside one cell is elided", md: "| `<a>` | x |\n| --- | --- |\n", want: "| " + gfmCodeSpanPlaceholder + " | x |"},
+		{name: "a tag before a span stays", md: "- <a> `x`\n", want: "- <a> " + gfmCodeSpanPlaceholder},
+		{name: "a quote line is carried", md: "> <a href=\"http://x\">\n", want: "> <a href=\"http://x\">"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := ScanGFM(tc.md)
+			if len(doc.Bare) == 0 {
+				t.Fatalf("ScanGFM(%q) read no bare line", tc.md)
+			}
+			if got := doc.Bare[0].Bare; got != tc.want {
+				t.Errorf("bare = %q, want %q", got, tc.want)
+			}
+			if doc.Bare[0].Line != 1 || doc.Bare[0].Text != strings.Split(tc.md, "\n")[0] {
+				t.Errorf("bare line = %d, %q, want 1 and the line as written", doc.Bare[0].Line, doc.Bare[0].Text)
+			}
+		})
+	}
+}
+
+// TestScanGFM_Bare_SkipsAFenceAndCarriesWhatContentDrops checks the two ways
+// the bare view differs from Content: a fenced line is left out of both,
+// because a fence is already containment, and a quote line is in the bare
+// view and not in Content, which is the decision the raw-tag rule rests on.
+func TestScanGFM_Bare_SkipsAFenceAndCarriesWhatContentDrops(t *testing.T) {
+	doc := ScanGFM("## T\n\n> quoted <a>\n\n```\nfenced <a>\n```\n")
+
+	var bare []string
+	for _, line := range doc.Bare {
+		bare = append(bare, line.Bare)
+	}
+	if got := strings.Join(bare, "|"); strings.Contains(got, "fenced") || !strings.Contains(got, "quoted <a>") {
+		t.Errorf("bare = %q, want the quote line and nothing from the fence", got)
+	}
+	if got := strings.Join(doc.Content, "|"); strings.Contains(got, "quoted") {
+		t.Errorf("content = %q, want the quote line left out, as it always was", got)
+	}
+}
+
 // TestGFMCells_Lines_SplitsTheWayGFMDoes pins the cell split: the outer
 // pipes dropped, a backslash-escaped pipe kept, a code-span pipe split, the
 // entity left alone.

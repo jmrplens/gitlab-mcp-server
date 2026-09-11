@@ -2680,15 +2680,7 @@ func TestMarkdownRegistry_HostileValues_ChangeNoStructure(t *testing.T) {
 		baseDoc := testutil.ScanGFM(base)
 		baseHints := toolutil.ExtractHints(base)
 		for _, hostile := range mdGateHostile {
-			// An address field keeps its fixture URL: a payload there is a
-			// destination and not an injection, and the rule asks whether a
-			// value that is not an address can open a link.
-			text := func(path string) string {
-				if name := mdGateLastField(path); exempt[c.pkg][name] || testutil.FixtureURLShaped(name) {
-					return testutil.FixtureText(path)
-				}
-				return hostile.payload
-			}
+			text := mdGateHostileText(exempt[c.pkg], hostile.payload)
 			md, hostileRendered, panicked := c.render(testutil.FixtureOptions{State: testutil.FixtureMultiPage, Text: text})
 			if panicked != "" {
 				findings = append(findings, mdGateFinding{kase: c, state: "hostile " + hostile.name, rule: "P0", detail: "the formatter panicked: " + panicked})
@@ -2704,8 +2696,36 @@ func TestMarkdownRegistry_HostileValues_ChangeNoStructure(t *testing.T) {
 	mdGateLog(t, "hostile values", findings)
 }
 
+// mdGateHostileText supplies the string values of one hostile render: the
+// payload in every field, except one its package declared safe and one whose
+// name says it holds an address. An address field keeps its fixture URL,
+// because a payload in a destination is a destination and not an injection,
+// and the rule asks whether a value that is not an address can open a link.
+func mdGateHostileText(exempt map[string]bool, payload string) func(string) string {
+	return func(path string) string {
+		for _, name := range mdGateFieldNames(path) {
+			if exempt[name] || testutil.FixtureURLShaped(name) {
+				return testutil.FixtureText(path)
+			}
+		}
+		return payload
+	}
+}
+
 // mdGateCompare reports every way a hostile render's structure differs from
 // the benign one.
+//
+// X2, the raw-tag rule, reads the bare lines of the render rather than its
+// content, which settles two questions the rule used to inherit rather than
+// decide. A code span is not judged, because CommonMark makes its contents
+// literal and HTML-escaped, so a value a formatter deliberately moved into
+// one is contained and reporting it would condemn the fix. A blockquote line
+// is judged, and that is the decision: the quote is containment against
+// structure, so a heading or a bullet inside one cannot reach the document,
+// and it is no containment at all against a tag, which a client renders as a
+// live anchor wherever it sits. Every offending line is reported rather than
+// the first, since stopping at one hid two findings of the class the rule
+// exists to find.
 func mdGateCompare(c mdGateCase, hostile string, base *testutil.GFMDocument, baseHints []string, md string) []mdGateFinding {
 	doc := testutil.ScanGFM(md)
 	state := "hostile " + hostile
@@ -2725,50 +2745,120 @@ func mdGateCompare(c mdGateCase, hostile string, base *testutil.GFMDocument, bas
 	if hints := toolutil.ExtractHints(md); len(hints) != len(baseHints) {
 		report(fmt.Sprintf("the value adds or removes a hint: %d became %d", len(baseHints), len(hints)))
 	}
-	if foreign := mdGateForeignLinks(doc.Links) - mdGateForeignLinks(base.Links); foreign > 0 {
-		report(fmt.Sprintf("the value opens %d link(s) to a destination the fixture never named", foreign))
+	for _, dest := range mdGateNewForeignLinks(base.Links, doc.Links) {
+		line, text := mdGateLinkLine(doc, dest)
+		findings = append(findings, mdGateFinding{
+			kase: c, state: state, rule: "X1", line: line, text: text,
+			detail: "the value opens a link to " + dest + ", a destination the fixture never named",
+		})
 	}
 	if hostile == "html" {
-		for _, line := range doc.Content {
-			if strings.Contains(line, `<a href="http://attacker.invalid">`) {
-				findings = append(findings, mdGateFinding{kase: c, state: state, rule: "X2", text: line, detail: "the value reaches the page as a raw tag"})
-				break
+		for _, line := range doc.Bare {
+			if strings.Contains(line.Bare, `<a href="http://attacker.invalid">`) {
+				findings = append(findings, mdGateFinding{kase: c, state: state, rule: "X2", line: line.Line, text: line.Text, detail: "the value reaches the page as a raw tag"})
 			}
 		}
 	}
 	return findings
 }
 
-// mdGateForeignLinks counts the link destinations outside the fixture's
-// origin.
-func mdGateForeignLinks(links []string) int {
-	n := 0
-	for _, link := range links {
+// mdGateNewForeignLinks names the destinations behind the links off the
+// fixture's origin that the hostile render opens and the benign one did not.
+//
+// How many there are is still a count, and deliberately: a formatter whose
+// destination half is a field the fixture does not recognize as an address
+// links off-origin in both renders, once with the sentinel and once with the
+// payload, and the value has opened nothing there. What the count cannot do
+// is say which destination or which line, so the destinations the benign
+// render did not carry are named, as many of them as the count says were
+// added, and each is reported on its own line.
+func mdGateNewForeignLinks(base, hostile []string) []string {
+	carried := map[string]int{}
+	before := 0
+	for _, link := range base {
 		if !strings.HasPrefix(link, testutil.FixtureURLBase) {
-			n++
+			carried[link]++
+			before++
 		}
 	}
-	return n
+	after := 0
+	var added []string
+	for _, link := range hostile {
+		if strings.HasPrefix(link, testutil.FixtureURLBase) {
+			continue
+		}
+		after++
+		if carried[link] > 0 {
+			carried[link]--
+			continue
+		}
+		added = append(added, link)
+	}
+	excess := after - before
+	if excess <= 0 {
+		return nil
+	}
+	return added[:min(excess, len(added))]
 }
 
-// mdGateLastField returns the field name a fixture path ends with, the slice
-// index dropped.
-func mdGateLastField(path string) string {
+// mdGateLinkLine finds the line a destination is linked from, so the finding
+// quotes the text a reader has to fix. It answers 0 and no text when no line
+// carries the destination, which a link the model itself read cannot be.
+func mdGateLinkLine(doc *testutil.GFMDocument, dest string) (int, string) {
+	needle := "](" + dest + ")"
+	for i, line := range doc.Lines {
+		if strings.Contains(line, needle) {
+			return i + 1, line
+		}
+	}
+	return 0, ""
+}
+
+// mdGateFieldNames returns the names the last field of a fixture path may be
+// declared safe under: the segment as written, and every segment left by
+// removing its trailing digits one at a time.
+//
+// Both spellings are needed and neither is right alone. The filler appends a
+// slice index to the path, so ".Items0" is the field Items and the digit has
+// to go; but ".SHA256" is a field whose own name ends in digits, and trimming
+// them looked it up as SHA, which silently un-exempted three outputs their
+// packages had already declared safe. Generating both errs toward exempting
+// too much, which is this join's policy: a spelling no field carries matches
+// no declaration either.
+func mdGateFieldNames(path string) []string {
 	name := path
 	if i := strings.LastIndex(path, "."); i >= 0 {
 		name = path[i+1:]
 	}
-	return strings.TrimRight(name, "0123456789")
+	names := []string{name}
+	for trimmed := name; len(trimmed) > 0 && trimmed[len(trimmed)-1] >= '0' && trimmed[len(trimmed)-1] <= '9'; {
+		trimmed = trimmed[:len(trimmed)-1]
+		if trimmed != "" {
+			names = append(names, trimmed)
+		}
+	}
+	return names
 }
 
 var mdGateDirectiveRe = regexp.MustCompile(`//gitlab:allow-unescaped\s+([^:]+):`)
 
 var mdGateSelectorRe = regexp.MustCompile(`\.([A-Za-z_]\w*)`)
 
+var mdGateIdentRe = regexp.MustCompile(`[A-Za-z_]\w*`)
+
 // mdGateDirectiveFields reads the field names the escaping directives of a
-// case's package declare safe, mapped by the last selector of each
-// expression, which errs toward exempting too much rather than inventing a
-// finding.
+// case's package declare safe, mapped by the selectors of each expression,
+// which errs toward exempting too much rather than inventing a finding.
+//
+// A directive is often written on a local variable rather than on the field
+// itself, because a directive's expression is cut at its first colon and a
+// slice expression carries one. Such a declaration names no selector at all,
+// so reading selectors alone mapped it to nothing and left the field it
+// covers un-exempt: mrchanges declares the truncated commit SHA under the
+// name it gave the local, and the field behind it is ShortID. The identifier
+// is therefore looked up in the package's own source and the selectors of
+// whatever it is assigned are declared safe too, which is as far as a join on
+// names can follow it.
 func mdGateDirectiveFields(t *testing.T, c mdGateCase) map[string]bool {
 	t.Helper()
 	dir := c.pkg
@@ -2779,7 +2869,7 @@ func mdGateDirectiveFields(t *testing.T, c mdGateCase) map[string]bool {
 	if err != nil {
 		return map[string]bool{}
 	}
-	fields := map[string]bool{}
+	var sources []string
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
 			continue
@@ -2788,11 +2878,43 @@ func mdGateDirectiveFields(t *testing.T, c mdGateCase) map[string]bool {
 		if readErr != nil {
 			t.Fatalf("read %s: %v", entry.Name(), readErr)
 		}
-		for _, m := range mdGateDirectiveRe.FindAllStringSubmatch(string(src), -1) {
-			for _, sel := range mdGateSelectorRe.FindAllStringSubmatch(m[1], -1) {
+		sources = append(sources, string(src))
+	}
+	fields := map[string]bool{}
+	for _, src := range sources {
+		for _, m := range mdGateDirectiveRe.FindAllStringSubmatch(src, -1) {
+			selectors := mdGateSelectorRe.FindAllStringSubmatch(m[1], -1)
+			for _, sel := range selectors {
 				fields[sel[1]] = true
+			}
+			if len(selectors) > 0 {
+				continue
+			}
+			for _, ident := range mdGateIdentRe.FindAllString(m[1], -1) {
+				fields[ident] = true
+				for _, name := range mdGateAssignedFields(sources, ident) {
+					fields[name] = true
+				}
 			}
 		}
 	}
 	return fields
+}
+
+// mdGateAssignedFields returns the selectors of every value a local of this
+// name is assigned in the package: "short := v.HeadCommitSHA" and
+// "short = c.ShortID" declare both fields safe under the one name the
+// directive could be written on. A line carrying a second "=" is left out, so
+// a comparison is never read as an assignment.
+func mdGateAssignedFields(sources []string, ident string) []string {
+	assignment := regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(ident) + `[ \t]*:?=[^=\n]*$`)
+	var names []string
+	for _, src := range sources {
+		for _, line := range assignment.FindAllString(src, -1) {
+			for _, sel := range mdGateSelectorRe.FindAllStringSubmatch(line, -1) {
+				names = append(names, sel[1])
+			}
+		}
+	}
+	return names
 }

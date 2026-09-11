@@ -44,6 +44,19 @@ type GFMHintSection struct {
 	Bullets []string
 }
 
+// GFMBareLine is one line as the raw-tag rule must read it: the line as it
+// was written, and the same line with every inline code span elided, since a
+// span makes its contents literal and HTML-escaped.
+type GFMBareLine struct {
+	// Line is the 1-based line the text sits on.
+	Line int
+	// Text is that line as written, which is what a finding quotes.
+	Text string
+	// Bare is the line with every code span and its delimiters replaced by a
+	// placeholder, which is what a finding scans.
+	Bare string
+}
+
 // GFMDocument is what the line model read out of one rendered document.
 type GFMDocument struct {
 	Lines    []string
@@ -54,13 +67,19 @@ type GFMDocument struct {
 	// comparison holds constant: the ATX headings, the top-level list items,
 	// the table body rows and their cells, and the link destinations, all
 	// outside fences and quotes. Content is every line outside a fence or a
-	// quote, which is where a raw tag is a tag rather than text.
+	// quote.
 	Headings []string
 	Items    []string
 	Rows     int
 	Cells    int
 	Links    []string
 	Content  []string
+	// Bare is where a raw tag is a live tag rather than text: every line
+	// outside a fence, its code spans elided. It carries quote lines, which
+	// Content does not, because a blockquote contains structure and not tags
+	// and a renderer takes an anchor inside one exactly as it takes one
+	// outside.
+	Bare []GFMBareLine
 }
 
 // gfmKind is the block a line opens, outside a fence.
@@ -88,8 +107,25 @@ var (
 	// gfmLinkRe reads an inline link: a bracketed label and a destination.
 	// A bare "](url)" with no opening bracket before it is text, so a value
 	// that carries one opens nothing unless it lands inside a label.
-	gfmLinkRe = regexp.MustCompile(`\[[^\[\]\n]*\]\(([^)\s]+)\)`)
+	//
+	// A label character is either one that is not a bracket, a backslash or a
+	// newline, or a backslash and whatever follows it. That second half is
+	// CommonMark's own rule twice over: an escaped character "is treated as a
+	// regular character and does not have its usual Markdown meaning", and
+	// brackets are allowed in link text when they are backslash-escaped. A
+	// class that accepts the backslash without giving it that meaning reads
+	// the escaped "]" of a label EscapeMdLinkLabel wrote as the end of the
+	// label, and reports every link this server builds as a link to whatever
+	// destination the value inside it names.
+	gfmLinkRe = regexp.MustCompile(`\[(?:[^\[\]\\\n]|\\.)*\]\(([^)\s]+)\)`)
 )
+
+// gfmCodeSpanPlaceholder stands in for an elided code span: the object
+// replacement character, spelled by its code point so the source carries no
+// invisible byte. It holds no character a renderer acts on, so a rule reading
+// a bare line can neither see structure the span hid nor lose the position
+// the span occupied.
+const gfmCodeSpanPlaceholder = string(rune(0xFFFC))
 
 // ScanGFM reads a rendered Markdown document with a line model of the GFM
 // block rules and reports where the structure the client renders is not the
@@ -102,6 +138,11 @@ var (
 // pipe line followed by a delimiter row, and its cells split on every pipe
 // not preceded by a backslash, because GFM splits inside code spans too. It
 // is a test oracle for the shapes this server writes, not a renderer.
+//
+// Inline content is read in two places only, and each says which rule it
+// serves: a link is a bracketed label whose brackets are escaped or matched,
+// and a bare line is a line whose code spans have been elided, since what a
+// span holds is literal.
 func ScanGFM(md string) *GFMDocument {
 	doc := &GFMDocument{Lines: strings.Split(md, "\n")}
 	s := &gfmScanner{doc: doc, kinds: make([]gfmKind, len(doc.Lines)), inTable: make([]bool, len(doc.Lines))}
@@ -342,12 +383,18 @@ func (s *gfmScanner) hints() {
 }
 
 // structure collects the headings, the top-level items and the links, for a
-// comparison between two renders of one fixture.
+// comparison between two renders of one fixture, and the bare lines the
+// raw-tag rule reads.
 func (s *gfmScanner) structure() {
 	for i, line := range s.doc.Lines {
-		switch s.kinds[i] {
-		case gfmFence, gfmQuote:
+		if s.kinds[i] == gfmFence {
 			continue
+		}
+		s.doc.Bare = append(s.doc.Bare, GFMBareLine{Line: i + 1, Text: line, Bare: s.bareLine(i, line)})
+		if s.kinds[i] == gfmQuote {
+			continue
+		}
+		switch s.kinds[i] {
 		case gfmHeading:
 			s.doc.Headings = append(s.doc.Headings, strings.TrimSpace(line))
 		case gfmItem:
@@ -360,6 +407,110 @@ func (s *gfmScanner) structure() {
 			s.doc.Links = append(s.doc.Links, m[1])
 		}
 	}
+}
+
+// bareLine elides the inline code spans of one line.
+//
+// A row of a recognized table is tokenized per cell first, because GFM splits
+// a row on its unescaped pipes before anything parses the inline content, so
+// a span cannot cross a cell boundary; every other line is walked whole,
+// which is what CommonMark does to a paragraph, a pipe line no table owns
+// included.
+func (s *gfmScanner) bareLine(i int, line string) string {
+	if !s.inTable[i] {
+		return elideCodeSpans(line)
+	}
+	segments := gfmPipeSegments(line)
+	for j, segment := range segments {
+		segments[j] = elideCodeSpans(segment)
+	}
+	return strings.Join(segments, "|")
+}
+
+// elideCodeSpans replaces every inline code span of a line, its delimiters
+// included, with [gfmCodeSpanPlaceholder].
+//
+// The walk is the spec's rule read left to right: a backtick string of length
+// n opens a span that the next backtick string of exactly length n closes,
+// and a run with no such partner is literal text that opens nothing. Reading
+// it in that order settles the one precedence question this has by
+// construction: a "<" written before the first backtick is outside every span
+// the walk recognizes, so a raw tag cannot be hidden by a code span opened
+// after it.
+func elideCodeSpans(line string) string {
+	if !strings.Contains(line, "`") {
+		return line
+	}
+	var b strings.Builder
+	for i := 0; i < len(line); {
+		if line[i] != '`' {
+			b.WriteByte(line[i])
+			i++
+			continue
+		}
+		open := backtickRun(line, i)
+		if closer := nextBacktickRun(line, i+open, open); closer >= 0 {
+			b.WriteString(gfmCodeSpanPlaceholder)
+			i = closer + open
+			continue
+		}
+		b.WriteString(line[i : i+open])
+		i += open
+	}
+	return b.String()
+}
+
+// backtickRun returns the length of the run of backticks at i.
+func backtickRun(line string, i int) int {
+	run := 0
+	for i+run < len(line) && line[i+run] == '`' {
+		run++
+	}
+	return run
+}
+
+// nextBacktickRun returns the index of the first run of exactly n backticks
+// at or after i, or -1 when the line holds none: a longer or a shorter run
+// does not close a span and is stepped over whole.
+func nextBacktickRun(line string, i, n int) int {
+	for j := i; j < len(line); {
+		if line[j] != '`' {
+			j++
+			continue
+		}
+		run := backtickRun(line, j)
+		if run == n {
+			return j
+		}
+		j += run
+	}
+	return -1
+}
+
+// gfmPipeSegments splits a line on the pipes GFM splits a row on: the same
+// unescaped-pipe rule [GFMCells] applies, without its trimming and without
+// dropping the outer empties, since these pieces are rejoined rather than
+// read as cells.
+func gfmPipeSegments(line string) []string {
+	var segments []string
+	var segment strings.Builder
+	escaped := false
+	for _, r := range line {
+		switch {
+		case escaped:
+			segment.WriteRune(r)
+			escaped = false
+		case r == '\\':
+			segment.WriteRune(r)
+			escaped = true
+		case r == '|':
+			segments = append(segments, segment.String())
+			segment.Reset()
+		default:
+			segment.WriteRune(r)
+		}
+	}
+	return append(segments, segment.String())
 }
 
 // finding records one finding at a 0-based line.
