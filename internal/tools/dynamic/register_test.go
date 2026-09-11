@@ -842,8 +842,28 @@ func TestDynamicInputSchema_DefaultsWhenRouteSchemaMissing(t *testing.T) {
 	if schema["type"] != "object" || schema["additionalProperties"] != true {
 		t.Fatalf("schema = %+v, want permissive object fallback", schema)
 	}
-	if description, _ := schema["description"].(string); !strings.Contains(description, "no captured parameter schema") {
-		t.Fatalf("schema description = %q, want fallback guidance", description)
+	// The wording has to be the dynamic one, not the meta-tool sentence
+	// toolutil.MetaActionSchema already writes for a schemaless route: on this
+	// surface the arguments travel inside gitlab_execute_action's params
+	// object, and "send an empty object {}" tells a caller to send the wrong
+	// thing. Both sentences share "no captured parameter schema", so only the
+	// half that differs says which one was served.
+	if description, _ := schema["description"].(string); !strings.Contains(description, "no captured parameter schema") ||
+		!strings.Contains(description, "empty params object") {
+		t.Fatalf("schema description = %q, want the dynamic fallback guidance", description)
+	}
+
+	withSchema := dynamicInputSchema(actionEntry{
+		ID:     "widget.poke",
+		Tool:   "gitlab_widget",
+		Action: "poke",
+		Route: toolutil.ActionRoute{InputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"widget_id": map[string]any{"type": "integer"}},
+		}},
+	})
+	if description, _ := withSchema["description"].(string); description != "" {
+		t.Fatalf("schema description = %q, want none for a route that captured its parameters", description)
 	}
 }
 
@@ -868,6 +888,16 @@ func TestRemoveDynamicRequiredConfirmParam_HandlesStringRequiredLists(t *testing
 	removeDynamicRequiredConfirmParam(schema)
 	if _, ok := schema["required"]; ok {
 		t.Fatalf("required should be deleted when empty: %+v", schema)
+	}
+
+	// Only "confirm" leaves the list. The []any case reads each element with a
+	// type assertion, and the two halves of that test have to hold together:
+	// dropping an element because it is a string, or because it is not one,
+	// deletes required parameters the action cannot run without.
+	mixed := map[string]any{"required": []any{"project_id", 42, "confirm"}}
+	removeDynamicRequiredConfirmParam(mixed)
+	if required, _ := mixed["required"].([]any); !slices.Equal(required, []any{any("project_id"), any(42)}) {
+		t.Fatalf("required = %+v, want project_id and the non-string entry kept", mixed["required"])
 	}
 }
 
@@ -2644,6 +2674,36 @@ func TestExecute_UnknownActionSuggestsCanonicalIDs(t *testing.T) {
 	}
 }
 
+// TestSuggestActionIDs_BreaksAScoreTieByCanonicalID verifies the order the "did
+// you mean" list comes back in when several actions score the same.
+//
+// The list is cut to five, so the tie-break decides which suggestions a caller
+// is shown at all and not merely in what order. Ascending canonical ID is what
+// makes that answer the same on every call and in every process: the scores
+// come out of a map walk, so a comparison that reported a tie as a difference,
+// or ordered one the other way, would let one mistyped action produce
+// different advice on two servers of one fleet.
+func TestSuggestActionIDs_BreaksAScoreTieByCanonicalID(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	// Every member action matches this one term the same way, through a word of
+	// its action name, so the whole set ties and only the ID separates them.
+	got := registry.suggestActionIDs("member", 10)
+	members := make([]string, 0, len(got))
+	for _, suggestion := range got {
+		if strings.Contains(suggestion, "member") {
+			members = append(members, suggestion)
+		}
+	}
+
+	if len(members) < 2 {
+		t.Fatalf("suggestActionIDs(member) = %v, want at least two member actions to tie", got)
+	}
+	if !slices.IsSorted(members) {
+		t.Fatalf("member suggestions = %v, want them in ascending canonical ID order", members)
+	}
+}
+
 // TestExecute_RejectsAmbiguousAlias verifies the Execute_RejectsAmbiguousAlias handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -3243,6 +3303,43 @@ func TestScoredMatches_StopsOnCancellation(t *testing.T) {
 	}
 }
 
+// TestScoredMatches_LooksAtTheContextOncePerBatch pins the cadence of the
+// cancellation check: the first candidate is looked at, and then one candidate
+// every cancellationCheckInterval after it.
+//
+// The error alone cannot tell one cadence from another, because every cadence
+// that looks at the context at all ends up returning one; how many candidates
+// were scored first is what separates them. Both directions matter. Looking
+// more often would put a lock on the hottest loop in the package, which the
+// interval exists to avoid, and looking only once would let an abandoned
+// search walk the rest of a thousand-action catalog after its client is gone.
+func TestScoredMatches_LooksAtTheContextOncePerBatch(t *testing.T) {
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("build action catalog: %v", err)
+	}
+	registry := NewRegistryFromCatalog(catalog)
+	if len(registry.entries) <= cancellationCheckInterval {
+		t.Fatalf("catalog carries %d actions, want more than %d so a second look falls inside the walk", len(registry.entries), cancellationCheckInterval)
+	}
+
+	// One allowance: the look at the first candidate passes, the next one
+	// cancels. Nil terms make every entry a candidate.
+	ctx := &countdownContext{Context: t.Context(), remaining: 1}
+	scored := 0
+	scorer := func(actionEntry, []searchTerm) (int, ScoringExplanation) {
+		scored++
+		return 0, ScoringExplanation{}
+	}
+
+	if _, scoreErr := registry.scoredMatches(ctx, nil, scorer); !errors.Is(scoreErr, context.Canceled) {
+		t.Fatalf("scoredMatches(cancelled at the second look) error = %v, want context.Canceled", scoreErr)
+	}
+	if scored != cancellationCheckInterval {
+		t.Fatalf("scored %d candidates before the second look at the context, want %d", scored, cancellationCheckInterval)
+	}
+}
+
 // TestSegmentedSearchMatches_StopsOnCancellation covers the pass that
 // multiplies the catalog by the query's window count, which is what makes a
 // long query expensive.
@@ -3254,6 +3351,113 @@ func TestSegmentedSearchMatches_StopsOnCancellation(t *testing.T) {
 	terms := normalizeSearchTerms("merge request approve project delete pipeline retry")
 	if _, err := registry.segmentedSearchMatchesWithScorer(ctx, terms, defaultLimit, scoreEntryWithoutExplanation); !errors.Is(err, context.Canceled) {
 		t.Fatalf("segmentedSearchMatchesWithScorer(cancelled) error = %v, want context.Canceled", err)
+	}
+}
+
+// searchTermsFromWords builds terms the way a caller inside the package can
+// hand them to a scorer: one term per word, each its own only alternative,
+// without the synonym expansion normalizeSearchTerms adds. A test that needs a
+// known number of terms, or terms that match nothing in the catalog, cannot get
+// either from a query string.
+func searchTermsFromWords(words ...string) []searchTerm {
+	terms := make([]searchTerm, 0, len(words))
+	for _, word := range words {
+		terms = append(terms, searchTerm{Raw: word, Alternatives: []string{word}})
+	}
+	return terms
+}
+
+// TestSegmentedSearchMatches_ScoresEveryWindowAndTheWidestKeepsATie pins the
+// two halves of the segmented walk: which windows of the query are scored, and
+// which of two windows that reach the same score for one action is kept.
+//
+// The narrowest window is the one that recovers a short intent buried in a long
+// prompt ("delete the merge request in the project we discussed"), so a walk
+// that stopped one size early would silently lose exactly the queries segmented
+// search exists for. The tie rule matters because each window adds its own
+// width to the score: when two windows land on the same total the wider one
+// matched more of what the caller actually asked for, and it is the one seen
+// first, so a tie must not overwrite it.
+func TestSegmentedSearchMatches_ScoresEveryWindowAndTheWidestKeepsATie(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+	terms := searchTermsFromWords("alfa", "bravo", "charlie", "delta", "echo")
+
+	var windows []string
+	// The scorer pays every window's width back, so each one reaches the same
+	// total once segmentedSearchMatchesWithScorer adds it again, and records
+	// the width in the explanation so the kept match names its window.
+	scorer := func(entry actionEntry, window []searchTerm) (int, ScoringExplanation) {
+		raws := make([]string, 0, len(window))
+		for _, term := range window {
+			raws = append(raws, term.Raw)
+		}
+		windows = append(windows, strings.Join(raws, "-"))
+		if entry.ID != "project.get" {
+			return 0, ScoringExplanation{}
+		}
+		return 1000 - len(window)*segmentTermBoost, ScoringExplanation{MatchedTerms: len(window)}
+	}
+
+	matches, err := registry.segmentedSearchMatchesWithScorer(t.Context(), terms, defaultLimit, scorer)
+	if err != nil {
+		t.Fatalf("segmentedSearchMatchesWithScorer() error = %v", err)
+	}
+
+	seen := make(map[string]struct{}, len(windows))
+	for _, window := range windows {
+		seen[window] = struct{}{}
+	}
+	got := slices.Collect(maps.Keys(seen))
+	slices.Sort(got)
+	want := []string{
+		"alfa-bravo-charlie",
+		"alfa-bravo-charlie-delta",
+		"alfa-bravo-charlie-delta-echo",
+		"bravo-charlie-delta",
+		"bravo-charlie-delta-echo",
+		"charlie-delta-echo",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("scored windows = %v, want every window from %d terms down to %d", got, len(terms), minSegmentTerms)
+	}
+
+	if len(matches) != 1 {
+		t.Fatalf("matches = %+v, want the one action the scorer scored", matches)
+	}
+	if matches[0].score != 1000 {
+		t.Fatalf("match score = %d, want 1000 from every window", matches[0].score)
+	}
+	if matches[0].explanation.MatchedTerms != len(terms) {
+		t.Fatalf("kept the window of %d terms, want the widest one of %d", matches[0].explanation.MatchedTerms, len(terms))
+	}
+}
+
+// TestShouldRunSegmentedSearch_OnlyForQueriesLongEnoughToHaveSegments pins the
+// query lengths that pay for the extra passes.
+//
+// Each window is a full scoring pass over the catalog, so this predicate is
+// what keeps an ordinary three or four word query from costing several times
+// what it should; a four-term query admitted here runs three more passes than
+// it needs, on every search.
+func TestShouldRunSegmentedSearch_OnlyForQueriesLongEnoughToHaveSegments(t *testing.T) {
+	cases := []struct {
+		name  string
+		words []string
+		want  bool
+	}{
+		{name: "two terms", words: []string{"alfa", "bravo"}},
+		{name: "three terms", words: []string{"alfa", "bravo", "charlie"}},
+		{name: "four terms", words: []string{"alfa", "bravo", "charlie", "delta"}},
+		{name: "five terms", words: []string{"alfa", "bravo", "charlie", "delta", "echo"}, want: true},
+		{name: "six terms", words: []string{"alfa", "bravo", "charlie", "delta", "echo", "foxtrot"}, want: true},
+		{name: "seven terms", words: []string{"alfa", "bravo", "charlie", "delta", "echo", "foxtrot", "golf"}, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := shouldRunSegmentedSearch(searchTermsFromWords(tc.words...), defaultLimit); got != tc.want {
+				t.Fatalf("shouldRunSegmentedSearch(%d terms) = %t, want %t", len(tc.words), got, tc.want)
+			}
+		})
 	}
 }
 
@@ -5209,6 +5413,41 @@ func TestComputeConfidence_Thresholds(t *testing.T) {
 	}
 }
 
+// TestMergeBestMatches_KeepsTheFirstGroupOnATie verifies which of two matches
+// for one action survives the merge when both carry the same score.
+//
+// The groups arrive in a fixed order: the lexical pass first, then the fuzzy
+// recovery, then the segmented windows. A tie therefore has a right answer,
+// the lexical match, whose explanation says the query matched the action as
+// written rather than at an edit distance; letting a later group overwrite an
+// equal score would hand the caller a fuzzy explanation for a match that was
+// never a typo.
+func TestMergeBestMatches_KeepsTheFirstGroupOnATie(t *testing.T) {
+	lexical := []scoredActionEntry{{
+		entry:       actionEntry{ID: "project.get"},
+		score:       100,
+		explanation: ScoringExplanation{TotalScore: 100, Reasons: []MatchReason{{Field: searchFieldCanonicalID}}},
+	}}
+	fuzzy := []scoredActionEntry{{
+		entry:       actionEntry{ID: "project.get"},
+		score:       100,
+		explanation: ScoringExplanation{TotalScore: 100, Reasons: []MatchReason{{Field: searchFieldFuzzyToken, Fuzzy: true}}},
+	}}
+
+	merged := mergeBestMatches(lexical, fuzzy)
+	if len(merged) != 1 {
+		t.Fatalf("mergeBestMatches() = %+v, want one match per action ID", merged)
+	}
+	if merged[0].explanation.Reasons[0].Field != searchFieldCanonicalID {
+		t.Fatalf("merged reason field = %q, want the first group's %q on a tie", merged[0].explanation.Reasons[0].Field, searchFieldCanonicalID)
+	}
+
+	better := []scoredActionEntry{{entry: actionEntry{ID: "project.get"}, score: 101, explanation: ScoringExplanation{TotalScore: 101}}}
+	if withBetter := mergeBestMatches(lexical, better); withBetter[0].score != 101 {
+		t.Fatalf("mergeBestMatches() score = %d, want the higher-scoring later group to win", withBetter[0].score)
+	}
+}
+
 // TestSearchRuntimeMetrics_RecordQualitySignals verifies the SearchRuntimeMetrics_RecordQualitySignals handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -5247,6 +5486,87 @@ func TestSearchRuntimeMetrics_RecordQualitySignals(t *testing.T) {
 	recordSearchRuntimeMetrics(1, false, false, false, -1)
 	if got := SearchRuntimeMetricsSnapshot().DestructiveFuzzySuppressions; got != destructiveSuppressions {
 		t.Fatalf("DestructiveFuzzySuppressions after negative input = %d, want %d", got, destructiveSuppressions)
+	}
+}
+
+// TestSearchMatches_RecordsAQualitySignalOnlyForTheSearchThatShowsIt counts the
+// fuzzy-fallback and ambiguous-alias signals one search at a time.
+//
+// These counters are read to decide whether the catalog's wording is working,
+// so a signal that fires on every search says nothing at all. The two searches
+// that must not raise the fuzzy counter are the interesting ones: a query that
+// matched exactly never runs the fuzzy pass, and a query that ran it and
+// recovered nothing ran it for nothing. A snapshot taken over several searches
+// cannot tell either apart from a recovery, which is why each search here gets
+// its own.
+func TestSearchMatches_RecordsAQualitySignalOnlyForTheSearchThatShowsIt(t *testing.T) {
+	registry := newRegistry(testRoutes(t), []actionAlias{
+		{Alias: "danger.delete", Canonical: "project.delete"},
+		{Alias: "danger.delete", Canonical: "package.delete"},
+	})
+
+	cases := []struct {
+		name          string
+		query         string
+		wantFuzzy     uint64
+		wantAmbiguous uint64
+	}{
+		{name: "a canonical ID matches outright", query: "project.get"},
+		{name: "a typo the fuzzy pass recovers", query: "merje requesy", wantFuzzy: 1},
+		{name: "a query the fuzzy pass recovers nothing for", query: "zzzzzzzz"},
+		{name: "an alias two actions claim", query: "danger.delete", wantFuzzy: 1, wantAmbiguous: 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ResetSearchRuntimeMetrics()
+			t.Cleanup(ResetSearchRuntimeMetrics)
+
+			if _, err := registry.searchMatches(t.Context(), tc.query, defaultLimit, false); err != nil {
+				t.Fatalf("searchMatches(%q) error = %v", tc.query, err)
+			}
+
+			metrics := SearchRuntimeMetricsSnapshot()
+			if metrics.FuzzyFallbackSearches != tc.wantFuzzy {
+				t.Errorf("FuzzyFallbackSearches = %d, want %d", metrics.FuzzyFallbackSearches, tc.wantFuzzy)
+			}
+			if metrics.AmbiguousAliasQueries != tc.wantAmbiguous {
+				t.Errorf("AmbiguousAliasQueries = %d, want %d", metrics.AmbiguousAliasQueries, tc.wantAmbiguous)
+			}
+		})
+	}
+}
+
+// TestSearchMatches_CountsTheFuzzyMatchesItSuppressedNotTheOnesItSaw verifies
+// the destructive-suppression counter reports what the safety filter removed.
+//
+// The counter is the only record that fuzzy recovery reached a destructive
+// action and was stopped, and it is read against the number of searches to
+// judge whether the filter is too eager. Counting the matches the pass produced
+// instead of the ones it dropped would inflate it by everything the filter
+// allowed through, which is most of them.
+func TestSearchMatches_CountsTheFuzzyMatchesItSuppressedNotTheOnesItSaw(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+	const query = "delet projekt"
+	terms := normalizeSearchTerms(query)
+
+	fuzzy, err := registry.scoredMatches(t.Context(), terms, fuzzyScoreEntryWithoutExplanation)
+	if err != nil {
+		t.Fatalf("scoredMatches(fuzzy) error = %v", err)
+	}
+	kept := filterUnsafeFuzzyMatches(terms, fuzzy)
+	if len(fuzzy) <= len(kept) || len(kept) == 0 {
+		t.Fatalf("fuzzy pass for %q produced %d matches and kept %d, want some suppressed and some kept so the two counts differ", query, len(fuzzy), len(kept))
+	}
+	want := uint64(len(fuzzy)) - uint64(len(kept))
+
+	ResetSearchRuntimeMetrics()
+	t.Cleanup(ResetSearchRuntimeMetrics)
+	if _, searchErr := registry.searchMatches(t.Context(), query, defaultLimit, false); searchErr != nil {
+		t.Fatalf("searchMatches(%q) error = %v", query, searchErr)
+	}
+
+	if got := SearchRuntimeMetricsSnapshot().DestructiveFuzzySuppressions; got != want {
+		t.Fatalf("DestructiveFuzzySuppressions = %d, want %d (%d fuzzy matches less the %d kept)", got, want, len(fuzzy), len(kept))
 	}
 }
 
@@ -5517,6 +5837,40 @@ func TestCompatibilityAliasAndDescriptionBranches(t *testing.T) {
 	}
 }
 
+// TestRelatedActionsForEntry_FallsBackToTheMetadataTable verifies where the
+// related actions of a find result come from: the entry when the catalog
+// carries them, and the hand-written table when it does not.
+//
+// The fallback is the whole reason the table exists. These are the pointers
+// that keep a model from calling package.list for a container registry or
+// job.artifacts for one artifact path, and an entry that declares none of its
+// own has to reach them, so a guard that answered "the entry has none" with an
+// empty list would silently drop every pointer the table holds.
+func TestRelatedActionsForEntry_FallsBackToTheMetadataTable(t *testing.T) {
+	t.Run("the entry carries its own", func(t *testing.T) {
+		entry := actionEntry{ID: "project.get", RelatedActions: []string{"project.list"}}
+		if got := relatedActionsForEntry(entry); !slices.Equal(got, []string{"project.list"}) {
+			t.Fatalf("relatedActionsForEntry() = %v, want the entry's own list", got)
+		}
+	})
+
+	t.Run("an entry with none takes the table's", func(t *testing.T) {
+		want := actionUXMetadataByID["project.get"].RelatedActions
+		if len(want) == 0 {
+			t.Fatal("actionUXMetadataByID no longer carries related actions for project.get")
+		}
+		if got := relatedActionsForEntry(actionEntry{ID: "project.get"}); !slices.Equal(got, want) {
+			t.Fatalf("relatedActionsForEntry() = %v, want the table's %v", got, want)
+		}
+	})
+
+	t.Run("an action the table does not know", func(t *testing.T) {
+		if got := relatedActionsForEntry(actionEntry{ID: "widget.ping"}); len(got) != 0 {
+			t.Fatalf("relatedActionsForEntry() = %v, want none", got)
+		}
+	})
+}
+
 // TestScoredMatchesAndDestructiveFuzzyBranches verifies corrupted-index
 // resilience and destructive fuzzy-match safety checks. The fixture keeps the
 // dynamic registry in memory and injects invalid postings directly.
@@ -5538,6 +5892,87 @@ func TestScoredMatchesAndDestructiveFuzzyBranches(t *testing.T) {
 	if !allowsDestructiveFuzzyMatch(normalizeSearchTerms("delete project"), entry) {
 		t.Fatal("allowsDestructiveFuzzyMatch(delete project) = false, want true")
 	}
+}
+
+// TestTermMatchesResourceSignal_ReadsAWholeNameAndItsWordsAlike verifies the
+// resource signal a destructive fuzzy match has to carry: the query names the
+// domain or the action, either as the identifier itself or as one of its words.
+//
+// Both halves are load-bearing for a multi-word identifier, and each is the
+// only one that fires for its own query shape. "merge_request" as a caller
+// types a canonical ID matches the name and none of the words; "merge" as a
+// caller types a sentence matches a word and not the name. Keeping only one of
+// them would let "delete the merge request" through and refuse
+// "delete merge_request", or the reverse.
+func TestTermMatchesResourceSignal_ReadsAWholeNameAndItsWordsAlike(t *testing.T) {
+	document := searchDocument{
+		Domain:      "merge_request",
+		DomainWords: splitSearchFieldWords("merge_request"),
+		Action:      "note_create",
+		ActionWords: splitSearchFieldWords("note_create"),
+		Tags:        []string{"mr note"},
+	}
+
+	cases := []struct {
+		name string
+		term string
+		want bool
+	}{
+		{name: "the domain as written", term: "merge_request", want: true},
+		{name: "a word of the domain", term: "merge", want: true},
+		{name: "the action as written", term: "note_create", want: true},
+		{name: "a word of the action", term: "create", want: true},
+		{name: "a tag", term: "mr note", want: true},
+		{name: "a term the action is not about", term: "pipeline"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := termMatchesResourceSignal(tc.term, document); got != tc.want {
+				t.Fatalf("termMatchesResourceSignal(%q) = %t, want %t", tc.term, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFuzzyModeForMatches_ReadsTheConfidenceOfTheBestMatch verifies when the
+// fuzzy pass is worth running: never when the lexical pass already produced a
+// confident best match, always when it produced none, and on low confidence in
+// between.
+//
+// The last subtest is about the guard rather than the decision. The preview is
+// empty only when the limit keeps nothing, which no caller asks for today
+// because normalizedLimit runs first, so the guard is what stands between a
+// future caller with a zero limit and an index out of range on the line after.
+func TestFuzzyModeForMatches_ReadsTheConfidenceOfTheBestMatch(t *testing.T) {
+	confident := []scoredActionEntry{
+		{entry: actionEntry{ID: "project.get"}, score: minimumHighConfidenceScore + 100},
+		{entry: actionEntry{ID: "project.list"}, score: minimumHighConfidenceScore},
+	}
+
+	t.Run("no matches at all", func(t *testing.T) {
+		if got := fuzzyModeForMatches(nil, defaultLimit); got != fuzzyZeroResults {
+			t.Fatalf("fuzzyModeForMatches(none) = %v, want %v", got, fuzzyZeroResults)
+		}
+	})
+
+	t.Run("a confident best match", func(t *testing.T) {
+		if got := fuzzyModeForMatches(confident, defaultLimit); got != fuzzyDisabled {
+			t.Fatalf("fuzzyModeForMatches(confident) = %v, want %v", got, fuzzyDisabled)
+		}
+	})
+
+	t.Run("a best match below the score floor", func(t *testing.T) {
+		matches := []scoredActionEntry{{entry: actionEntry{ID: "project.get"}, score: minimumHighConfidenceScore - 1}}
+		if got := fuzzyModeForMatches(matches, defaultLimit); got != fuzzyLowConfidence {
+			t.Fatalf("fuzzyModeForMatches(low confidence) = %v, want %v", got, fuzzyLowConfidence)
+		}
+	})
+
+	t.Run("a limit that keeps nothing", func(t *testing.T) {
+		if got := fuzzyModeForMatches(confident, 0); got != fuzzyDisabled {
+			t.Fatalf("fuzzyModeForMatches(limit 0) = %v, want %v", got, fuzzyDisabled)
+		}
+	})
 }
 
 // testEnumStringer holds test enum stringer data for the dynamic package.
@@ -5697,6 +6132,122 @@ func TestScoreSearchAlternativeWithReason_Branches(t *testing.T) {
 	}
 	if score, explanation := scoreEntryWithExplanation(actionEntry{}, nil); score != 0 || len(explanation.Reasons) != 0 {
 		t.Fatalf("scoreEntryWithExplanation(empty) = %d, %+v; want zero result", score, explanation)
+	}
+}
+
+// TestScoreEntryWithExplanation_ScoresExactlyWhatTheSilentScorerScores holds
+// the two scorers to one ranking over the whole catalog.
+//
+// They are the same function written twice, once returning the score alone and
+// once returning it with its reasons, and a search picks between them on the
+// explain flag. Nothing else pins them together: every rule they share, the
+// match-ratio scaling, the minimum-matched-terms threshold with its explicit
+// intent bypass, and each intent adjustment, is written out in both. If they
+// drift, a caller who asks why an action ranked where it did is told about a
+// ranking that is not the one they were served.
+func TestScoreEntryWithExplanation_ScoresExactlyWhatTheSilentScorerScores(t *testing.T) {
+	t.Parallel()
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("build action catalog: %v", err)
+	}
+	entries := NewRegistryFromCatalog(catalog).entries
+
+	queries := []string{
+		"list open merge requests",
+		"delete the project",
+		"compare refs between two branches",
+		"create a group service account",
+		"search code in project my-org/tools for func Foo",
+		"who am i current user profile",
+		"retry the failed pipeline job",
+		"protected branch rule for the group",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			t.Parallel()
+			terms := normalizeSearchTerms(query)
+			for _, entry := range entries {
+				silent := scoreEntry(entry, terms)
+				explained, explanation := scoreEntryWithExplanation(entry, terms)
+				if silent != explained {
+					t.Fatalf("scoreEntry(%s) = %d, scoreEntryWithExplanation() = %d; want one ranking", entry.ID, silent, explained)
+				}
+				if explained > 0 && explanation.TotalScore != explained {
+					t.Fatalf("explanation.TotalScore for %s = %d, want the score it was returned with, %d", entry.ID, explanation.TotalScore, explained)
+				}
+			}
+		})
+	}
+}
+
+// TestScoreEntry_TheExplicitIntentBypassNeedsBothTwoMatchesAndTheIntent pins
+// the one exception to the minimum-matched-term threshold, in both scorers.
+//
+// A long prompt inflates the threshold: "search code in project my-org/tools
+// for func Foo" is eight terms, of which search.code matches two, so the rule
+// that a query must match nearly all of its terms would drop the one action
+// the caller named outright. The bypass lets those two through, and it is
+// narrow on purpose, in two directions that have to hold together. Two matched
+// terms is the floor, because one term matching is a word in common rather
+// than an intent. And the intent itself is required, or every action matching
+// any two terms of a long query would be promoted, which is the ranking this
+// threshold exists to prevent.
+func TestScoreEntry_TheExplicitIntentBypassNeedsBothTwoMatchesAndTheIntent(t *testing.T) {
+	t.Parallel()
+	// Four terms, of which each entry matches exactly two: one below the
+	// minimum of three that a four-term query asks for.
+	withIntent := scoringEntry("search.code", "search", "code")
+	withIntentTerms := searchTermsFromWords("search", "code", "zzzzzzzz", "yyyyyyyy")
+	withoutIntent := scoringEntry("issue.list", "issue", "list")
+	withoutIntentTerms := searchTermsFromWords("issue", "list", "zzzzzzzz", "yyyyyyyy")
+
+	if got := minimumMatchedTermCount(withIntent, withIntentTerms); got != 3 {
+		t.Fatalf("minimumMatchedTermCount() = %d, want 3 so the two matched terms are below it", got)
+	}
+
+	t.Run("an action carrying the intent is let through", func(t *testing.T) {
+		t.Parallel()
+		if got := scoreEntry(withIntent, withIntentTerms); got <= 0 {
+			t.Errorf("scoreEntry(search.code) = %d, want a positive score through the intent bypass", got)
+		}
+		if got, _ := scoreEntryWithExplanation(withIntent, withIntentTerms); got <= 0 {
+			t.Errorf("scoreEntryWithExplanation(search.code) = %d, want a positive score through the intent bypass", got)
+		}
+	})
+
+	t.Run("an action carrying none is not", func(t *testing.T) {
+		t.Parallel()
+		if got := scoreEntry(withoutIntent, withoutIntentTerms); got != 0 {
+			t.Errorf("scoreEntry(issue.list) = %d, want 0 below the minimum with no intent to bypass it", got)
+		}
+		if got, _ := scoreEntryWithExplanation(withoutIntent, withoutIntentTerms); got != 0 {
+			t.Errorf("scoreEntryWithExplanation(issue.list) = %d, want 0 below the minimum with no intent to bypass it", got)
+		}
+	})
+}
+
+// TestScoreEntryWithExplanation_KeepsTheFirstAlternativeOfATie verifies which
+// expansion of one query term is reported when two of them score the same.
+//
+// A term is scored through its synonyms and the best one is kept, and the term
+// as the caller typed it comes first. On a tie it is the one that explains the
+// match: telling a caller who typed "mr" that the action matched "merge
+// request" describes the synonym table rather than their query.
+func TestScoreEntryWithExplanation_KeepsTheFirstAlternativeOfATie(t *testing.T) {
+	t.Parallel()
+	entry := actionEntry{Document: searchDocument{
+		CanonicalID: "merge_request.list",
+		Tags:        []string{"mr", "merge request"},
+	}}
+	terms := []searchTerm{{Raw: "mr", Alternatives: []string{"mr", "merge request"}}}
+
+	score, explanation := scoreEntryWithExplanation(entry, terms)
+	if score == 0 || len(explanation.Reasons) == 0 {
+		t.Fatalf("scoreEntryWithExplanation() = %d, %+v; want a scored match with reasons", score, explanation)
+	}
+	if explanation.Reasons[0].Field != searchFieldTag || explanation.Reasons[0].MatchedValue != "mr" {
+		t.Fatalf("first reason = %+v, want the tag matched by the term as typed", explanation.Reasons[0])
 	}
 }
 
@@ -5993,6 +6544,191 @@ func TestScoreIntentFunctions_ReturnFalseForNonMatchingEntries(t *testing.T) {
 	}
 	if score, reason := scoreServiceAccountIntent(unrelated, terms); score != 0 || reason != (MatchReason{}) {
 		t.Fatalf("scoreServiceAccountIntent(unrelated) = %d, %v, want 0, empty", score, reason)
+	}
+}
+
+// TestScoreVerbIntentFor_AdjustsByWhatTheQueryAskedAndWhatTheActionDoes pins
+// each verb-intent branch at the value it adjusts by, and pins that an
+// adjustment of zero comes back with no reason attached.
+//
+// This is the adjustment that keeps "show me the projects" from surfacing
+// project.delete, so the sizes are the behavior: a read intent penalizes a
+// destructive action by the full penalty and a merely writing one by half,
+// which is what lets an update still rank behind a read without being buried
+// under it. The diagnostic branch answers to two different tests because a
+// diagnostic action is not always a read one: "lint" and "health" carry no
+// read verb, and a branch that required both would leave a query for a broken
+// pipeline ranking the lint action no higher than anything else.
+func TestScoreVerbIntentFor_AdjustsByWhatTheQueryAskedAndWhatTheActionDoes(t *testing.T) {
+	t.Parallel()
+	destructive := scoringEntry("project.delete", "project", "delete")
+	destructive.Destructive = true
+
+	cases := []struct {
+		name   string
+		entry  actionEntry
+		intent verbIntent
+		want   int
+	}{
+		{name: "a query with no verb at all", entry: scoringEntry("project.get", "project", "get")},
+		{name: "a read intent on a read action", entry: scoringEntry("project.get", "project", "get"), intent: verbIntentRead, want: scoreVerbIntentBoost},
+		{name: "a read intent on a writing action", entry: scoringEntry("project.create", "project", "create"), intent: verbIntentRead, want: scoreVerbIntentPenalty / 2},
+		{name: "a read intent on a destructive action", entry: destructive, intent: verbIntentRead, want: scoreVerbIntentPenalty},
+		{name: "a write intent on a writing action", entry: scoringEntry("project.create", "project", "create"), intent: verbIntentWrite, want: scoreVerbIntentBoost},
+		{name: "a write intent on a read action", entry: scoringEntry("project.get", "project", "get"), intent: verbIntentWrite},
+		{name: "a workflow intent on a workflow action", entry: scoringEntry("pipeline.retry", "pipeline", "retry"), intent: verbIntentWorkflow, want: scoreVerbIntentBoost},
+		{name: "a workflow intent on a read action", entry: scoringEntry("project.get", "project", "get"), intent: verbIntentWorkflow},
+		{name: "a diagnostic intent on a diagnostic action that is no read", entry: scoringEntry("ci_lint.lint", "ci_lint", "lint"), intent: verbIntentDiagnostic, want: scoreVerbIntentBoost},
+		{name: "a diagnostic intent on a read action", entry: scoringEntry("project.get", "project", "get"), intent: verbIntentDiagnostic, want: scoreVerbIntentBoost},
+		{name: "a diagnostic intent on neither", entry: scoringEntry("project.create", "project", "create"), intent: verbIntentDiagnostic},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			adjustment, reason := scoreVerbIntentFor(tc.entry, tc.intent, nil)
+			if adjustment != tc.want {
+				t.Fatalf("scoreVerbIntentFor(%q, %s) = %d, want %d", tc.entry.ID, tc.intent, adjustment, tc.want)
+			}
+			if tc.want == 0 {
+				if reason != (MatchReason{}) {
+					t.Fatalf("reason = %+v, want none for an adjustment of zero", reason)
+				}
+				return
+			}
+			if reason.Field != searchFieldVerbIntent || reason.Score != tc.want || reason.MatchedValue != tc.entry.Action {
+				t.Fatalf("reason = %+v, want the verb intent field carrying %d for %q", reason, tc.want, tc.entry.Action)
+			}
+		})
+	}
+}
+
+// TestScoreDestructiveVerbAdjustment_SeparatesTheNamedVerbsFromTheRest pins
+// what a destructive query does to an action: nothing when the action destroys
+// nothing, a penalty when the query names no resource the action is about, the
+// plain boost for a destructive action, and the tripled boost for the three
+// verbs a caller types when they mean exactly this action.
+//
+// Two facts about the first guard are worth keeping apart, because either
+// alone would drop half the destructive catalog: an action can be marked
+// destructive under a name that says nothing ("purge_all"), and an action can
+// be named "delete" without the catalog marking it so. The query that names no
+// resource is the one protecting a bare "delete" from ranking every destructive
+// action in the catalog above everything else.
+func TestScoreDestructiveVerbAdjustment_SeparatesTheNamedVerbsFromTheRest(t *testing.T) {
+	t.Parallel()
+	markedButNotNamed := scoringEntry("project.purge_all", "project", "purge_all")
+	markedButNotNamed.Destructive = true
+
+	cases := []struct {
+		name  string
+		entry actionEntry
+		terms []searchTerm
+		want  int
+	}{
+		{name: "an action that destroys nothing", entry: scoringEntry("project.get", "project", "get"), terms: searchTermsFromWords("delete", "project")},
+		{name: "a destructive name the catalog did not mark", entry: scoringEntry("project.delete", "project", "delete"), terms: searchTermsFromWords("delete", "project"), want: scoreVerbIntentBoost * 3},
+		{name: "a marked action under a name that says nothing", entry: markedButNotNamed, terms: searchTermsFromWords("purge", "project"), want: scoreVerbIntentBoost},
+		{name: "a query naming no resource at all", entry: scoringEntry("project.delete", "project", "delete"), terms: searchTermsFromWords("zzzzzzzz"), want: scoreVerbIntentPenalty},
+		{name: "remove", entry: scoringEntry("runner.remove", "runner", "remove"), terms: searchTermsFromWords("remove", "runner"), want: scoreVerbIntentBoost * 3},
+		{name: "revoke", entry: scoringEntry("token.revoke", "token", "revoke"), terms: searchTermsFromWords("revoke", "token"), want: scoreVerbIntentBoost * 3},
+		{name: "destroy, which is destructive but is not one of the three", entry: scoringEntry("widget.destroy", "widget", "destroy"), terms: searchTermsFromWords("destroy", "widget"), want: scoreVerbIntentBoost},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := scoreDestructiveVerbAdjustment(tc.entry, tc.terms, documentForEntry(tc.entry))
+			if got != tc.want {
+				t.Fatalf("scoreDestructiveVerbAdjustment(%q) = %d, want %d", tc.entry.ID, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestScoreRequiredParamSignals_WeighsARequiredParamAboveAnOptionalOne pins the
+// parameter signal at both grains: the score the silent scorer adds and the
+// reasons the explaining one reports beside it.
+//
+// A query that names a parameter is naming the call it wants to make, and a
+// required parameter says so twice as loudly as an optional one, which is what
+// separates issue.get from issue.list when the caller mentions an issue_iid.
+// The reason carries the synonym it matched through only when that differs from
+// what the caller typed, so an explanation never claims the caller wrote a word
+// the expansion supplied.
+func TestScoreRequiredParamSignals_WeighsARequiredParamAboveAnOptionalOne(t *testing.T) {
+	t.Parallel()
+	entry := actionEntry{Document: searchDocument{
+		CanonicalID:    "issue.list",
+		Domain:         "issue",
+		Action:         "list",
+		RequiredParams: []string{"project_id"},
+		OptionalParams: []string{"search"},
+	}}
+
+	cases := []struct {
+		name            string
+		terms           []searchTerm
+		want            int
+		wantField       string
+		wantMatched     string
+		wantAlternative string
+	}{
+		{
+			name:        "a required parameter the caller named",
+			terms:       searchTermsFromWords("project_id"),
+			want:        scoreRequiredParamBoost,
+			wantField:   searchFieldRequiredParam,
+			wantMatched: "project_id",
+		},
+		{
+			name:        "an optional parameter the caller named",
+			terms:       searchTermsFromWords("search"),
+			want:        scoreRequiredParamBoost / 2,
+			wantField:   searchFieldOptionalParam,
+			wantMatched: "search",
+		},
+		{
+			name:            "a required parameter reached through a synonym",
+			terms:           []searchTerm{{Raw: "identifier", Alternatives: []string{"project_id"}}},
+			want:            scoreRequiredParamBoost,
+			wantField:       searchFieldRequiredParam,
+			wantMatched:     "project_id",
+			wantAlternative: "project_id",
+		},
+		{
+			name:  "a term naming no parameter",
+			terms: searchTermsFromWords("zzzzzzzz"),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := scoreRequiredParamSignalValue(entry, tc.terms); got != tc.want {
+				t.Fatalf("scoreRequiredParamSignalValue() = %d, want %d", got, tc.want)
+			}
+			total, reasons := scoreRequiredParamSignals(entry, tc.terms)
+			if total != tc.want {
+				t.Fatalf("scoreRequiredParamSignals() total = %d, want %d", total, tc.want)
+			}
+			if tc.want == 0 {
+				if len(reasons) != 0 {
+					t.Fatalf("reasons = %+v, want none", reasons)
+				}
+				return
+			}
+			if len(reasons) != 1 {
+				t.Fatalf("reasons = %+v, want one", reasons)
+			}
+			want := MatchReason{
+				Field:        tc.wantField,
+				QueryTerm:    tc.terms[0].Raw,
+				MatchedValue: tc.wantMatched,
+				Alternative:  tc.wantAlternative,
+				Score:        tc.want,
+			}
+			if reasons[0] != want {
+				t.Fatalf("reason = %+v, want %+v", reasons[0], want)
+			}
+		})
 	}
 }
 
@@ -6673,12 +7409,18 @@ func TestAddAdminReleaseTags_ClaimsOnlyItsOwnDomains(t *testing.T) {
 // say "group" in them, so claiming a project action here would publish tags
 // that name the wrong scope, and claiming a group action that is about neither
 // protection would publish them for an action with no protection at all.
+//
+// The branch domain is read together with a list of four actions for the same
+// reason: branch.list is a branch action about no protection at all, and
+// tagging it "protected branch" would offer it for every query about branch
+// protection.
 func TestAddProtectionTags_ClaimsOnlyGroupAndProtectionShapes(t *testing.T) {
 	runActionTaggerCases(t, addProtectionTags, []actionTaggerCase{
 		{name: "a group protected branch action", id: "group.protected_branch_list", domain: "group", action: "protected_branch_list", matched: true, want: []string{"group protected branch", "list group protected branches"}},
 		{name: "a protected branch id in another domain", id: "project.protected_branch_list", domain: "project", action: "protected_branch_list"},
 		{name: "a group protected environment action", id: "group.protected_env_list", domain: "group", action: "protected_env_list", matched: true, want: []string{"group protected environment"}},
 		{name: "a group action about neither protection", id: "group.epic_list", domain: "group", action: "epic_list"},
+		{name: "a branch action about no protection", id: "branch.list", domain: "branch", action: "list"},
 		{name: "a member role id", id: "member_role.create", domain: "member_role", action: "create", matched: true, want: []string{"custom role"}},
 	})
 }
@@ -6792,6 +7534,29 @@ func TestAdjustServiceAccountVerbScores_AllBranches(t *testing.T) {
 			t.Fatalf("adjustServiceAccountVerbScores() score = %d, want 50 (skipped)", got[0].score)
 		}
 	})
+
+	t.Run("a filled explanation follows the adjusted score", func(t *testing.T) {
+		matches := makeMatches(50)
+		got := adjustServiceAccountVerbScores(matches, normalizeSearchTerms("service account list"))
+		if got[0].explanation.TotalScore != got[0].score {
+			t.Fatalf("explanation.TotalScore = %d, want the adjusted score %d", got[0].explanation.TotalScore, got[0].score)
+		}
+	})
+
+	// A search that was not asked to explain itself scores through
+	// scoreEntryWithoutExplanation, which leaves the explanation zero. Writing
+	// the adjusted score into it here would publish a total with no reasons
+	// under it, and Search reports an explanation whenever one carries a score.
+	t.Run("an explanation nobody asked for stays empty", func(t *testing.T) {
+		matches := []scoredActionEntry{{entry: entry, score: 50}}
+		got := adjustServiceAccountVerbScores(matches, normalizeSearchTerms("service account list"))
+		if got[0].score != 130 {
+			t.Fatalf("adjustServiceAccountVerbScores() score = %d, want 130", got[0].score)
+		}
+		if got[0].explanation.TotalScore != 0 || len(got[0].explanation.Reasons) != 0 {
+			t.Fatalf("explanation = %+v, want it left empty", got[0].explanation)
+		}
+	})
 }
 
 // TestMinimumMatchedTermCount_EdgeCases verifies the minimum-match threshold
@@ -6816,6 +7581,9 @@ func TestMinimumMatchedTermCount_EdgeCases(t *testing.T) {
 		{name: "single term returns 1", query: "service", want: 1},
 		{name: "two terms returns 2", query: "service account", want: 2},
 		{name: "three terms no compound returns 2", query: "service account list", want: 2},
+		// A compound tag lowers the requirement only above three terms: at three
+		// it would drop to one, and a single matched term is not an intent.
+		{name: "three terms with compound returns 2", query: "group service account", want: 2},
 		{name: "four terms no compound returns 3", query: "service account list all", want: 3},
 		{name: "four terms with compound returns 2", query: "group service account list", want: 2},
 	}
@@ -6824,6 +7592,42 @@ func TestMinimumMatchedTermCount_EdgeCases(t *testing.T) {
 			got := minimumMatchedTermCount(entry, normalizeSearchTerms(tc.query))
 			if got != tc.want {
 				t.Fatalf("minimumMatchedTermCount() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMatchedCompoundTagCount_CountsTagsOfTwoWordsUpwards verifies which tags
+// count as the compound evidence that lowers the minimum-matched-term
+// threshold: a tag of at least two words, every one of which the query carries.
+//
+// Two words is where a tag stops being a single token that a long query could
+// brush against by accident and starts being a phrase the caller wrote, which
+// is the whole warrant for lowering the threshold. Counting one-word tags would
+// lower it for any query mentioning "group"; not counting two-word ones would
+// leave the commonest phrases in the catalog ("merge request", "service
+// account") carrying no evidence at all.
+func TestMatchedCompoundTagCount_CountsTagsOfTwoWordsUpwards(t *testing.T) {
+	t.Parallel()
+	entry := actionEntry{Document: searchDocument{
+		CanonicalID: "group.service_account_list",
+		Tags:        []string{"group", "service account", "group service account"},
+	}}
+
+	cases := []struct {
+		name  string
+		query string
+		want  int
+	}{
+		{name: "the two-word tag alone", query: "service account list", want: 1},
+		{name: "both multi-word tags", query: "group service account list", want: 2},
+		{name: "a query carrying none of them", query: "project list", want: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := matchedCompoundTagCount(entry, normalizeSearchTerms(tc.query)); got != tc.want {
+				t.Fatalf("matchedCompoundTagCount(%q) = %d, want %d", tc.query, got, tc.want)
 			}
 		})
 	}
@@ -6854,6 +7658,71 @@ func TestScoreCompoundTagSignals_RepositoryCompareBoost(t *testing.T) {
 	}
 }
 
+// TestScoreCompoundTagSignals_TheCompareBonusNeedsEveryPartOfItsCondition pins
+// the four things that have to hold together before a matched compound tag is
+// worth more than a compound tag: the repository domain, the compare action,
+// a ref word in the tag, and the word compare in it.
+//
+// The bonus exists to settle one confusion, "diff between two refs" reaching
+// repository.compare rather than a branch or tag listing, so each part is what
+// keeps it from paying out somewhere it decides nothing: an action that lists
+// branches in the repository domain, or a compare action in another domain,
+// would take the bonus from the action the caller meant. The singular "ref"
+// and the plural "refs" are both spelled because a tag may carry either, and
+// the catalog happens to carry only the plural today, so nothing else would
+// notice if the singular stopped being read.
+//
+// Both scorers are driven over the same table because they are the same rule
+// written twice, once returning the total and once the reasons behind it.
+func TestScoreCompoundTagSignals_TheCompareBonusNeedsEveryPartOfItsCondition(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		domain string
+		action string
+		tag    string
+		query  string
+		want   int
+	}{
+		{name: "the plural ref spelling", domain: "repository", action: "compare", tag: "compare refs", query: "compare refs", want: scoreCompoundTagBoost + scoreRequiredParamBoost},
+		{name: "the singular ref spelling", domain: "repository", action: "compare", tag: "ref compare", query: "ref compare", want: scoreCompoundTagBoost + scoreRequiredParamBoost},
+		{name: "a tag naming no ref", domain: "repository", action: "compare", tag: "compare branches", query: "compare branches", want: scoreCompoundTagBoost},
+		{name: "a tag not naming the comparison", domain: "repository", action: "compare", tag: "diff refs", query: "diff refs", want: scoreCompoundTagBoost},
+		{name: "the same tag in another domain", domain: "branch", action: "compare", tag: "compare refs", query: "compare refs", want: scoreCompoundTagBoost},
+		{name: "the same tag on another action", domain: "repository", action: "list", tag: "compare refs", query: "compare refs", want: scoreCompoundTagBoost},
+		{name: "a tag the query does not carry", domain: "repository", action: "compare", tag: "compare refs", query: "list branches", want: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			entry := actionEntry{Document: searchDocument{
+				CanonicalID: tc.domain + "." + tc.action,
+				Domain:      tc.domain,
+				Action:      tc.action,
+				Tags:        []string{tc.tag},
+			}}
+			terms := normalizeSearchTerms(tc.query)
+
+			if got := scoreCompoundTagSignalValue(entry, terms); got != tc.want {
+				t.Fatalf("scoreCompoundTagSignalValue(%q on %s.%s) = %d, want %d", tc.tag, tc.domain, tc.action, got, tc.want)
+			}
+			total, reasons := scoreCompoundTagSignals(entry, terms)
+			if total != tc.want {
+				t.Fatalf("scoreCompoundTagSignals(%q on %s.%s) total = %d, want %d", tc.tag, tc.domain, tc.action, total, tc.want)
+			}
+			if tc.want == 0 {
+				if len(reasons) != 0 {
+					t.Fatalf("reasons = %+v, want none", reasons)
+				}
+				return
+			}
+			if len(reasons) != 1 || reasons[0].Score != tc.want || reasons[0].MatchedValue != tc.tag {
+				t.Fatalf("reasons = %+v, want one carrying %d for %q", reasons, tc.want, tc.tag)
+			}
+		})
+	}
+}
+
 // TestScoreServiceAccountIntent_PositiveCase verifies the scoring helpers
 // return a positive score and a populated MatchReason for queries that match
 // the service-account intent (with and without the PAT/verb bonuses).
@@ -6876,6 +7745,30 @@ func TestScoreServiceAccountIntent_PositiveCase(t *testing.T) {
 	patScore := scoreServiceAccountIntentValue(patEntry, normalizeSearchTerms("service account personal access token create"))
 	if patScore <= score {
 		t.Fatalf("scoreServiceAccountIntentValue(pat) = %d, want greater than non-PAT score %d", patScore, score)
+	}
+}
+
+// TestScoreServiceAccountIntentValue_AddsTheScopeBonusOnlyForTheDomainNamed
+// verifies the scope half of the service-account score at the value it adds.
+//
+// Service accounts exist at group scope and at project scope under nearly the
+// same names, so "group service account" and "project service account" are one
+// word apart and the bonus for that word is what separates them. Paying it to
+// an action whose scope the caller never named would flatten that difference
+// back out, and withholding it from the one they did name would leave the two
+// scopes tied.
+func TestScoreServiceAccountIntentValue_AddsTheScopeBonusOnlyForTheDomainNamed(t *testing.T) {
+	t.Parallel()
+	entry := scoringEntry("group.service_account_list", "group", "service_account_list")
+
+	// Boost for the intent, the scope bonus for naming the group, and a second
+	// boost for the verb the action carries.
+	const withScope = scoreServiceAccountBoost + scoreServiceAccountScope + scoreServiceAccountBoost
+	if got := scoreServiceAccountIntentValue(entry, normalizeSearchTerms("group service account list")); got != withScope {
+		t.Fatalf("scoreServiceAccountIntentValue(scoped query) = %d, want %d", got, withScope)
+	}
+	if got := scoreServiceAccountIntentValue(entry, normalizeSearchTerms("service account list")); got != withScope-scoreServiceAccountScope {
+		t.Fatalf("scoreServiceAccountIntentValue(unscoped query) = %d, want %d", got, withScope-scoreServiceAccountScope)
 	}
 }
 

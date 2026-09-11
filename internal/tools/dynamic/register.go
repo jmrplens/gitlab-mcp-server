@@ -1891,7 +1891,10 @@ func addProtectionTags(add tagCollector, id, domain, action string) bool {
 		addGroupProtectedEnvironmentActionTags(add, action)
 	case domain == "branch" && (action == "protect" || action == "get_protected" || action == "update_protected" || action == "unprotect"):
 		add("protected branch", "branch protection")
-	case strings.Contains(id, "protected_env") || strings.Contains(id, "protected_environment"):
+	// "protected_environment" needs no case of its own: every ID carrying it
+	// carries "protected_env" as its prefix, so a second test for the longer
+	// spelling can never be the one that decides.
+	case strings.Contains(id, "protected_env"):
 		add(aliasProtectedEnvironment, aliasEnvironmentProtection)
 	case strings.Contains(id, "member_role"):
 		add("custom role", "member role")
@@ -2625,14 +2628,9 @@ func (r *Registry) suggestActionIDs(query string, limit int) []string {
 		for _, term := range terms {
 			best := 0
 			for _, alternative := range term.Alternatives {
-				candidate := scoreSearchAlternative(entry, term.Raw, alternative)
-				if candidate > best {
-					best = candidate
-				}
+				best = max(best, scoreSearchAlternative(entry, term.Raw, alternative))
 			}
-			if best > 0 {
-				score += best
-			}
+			score += best
 		}
 		if score > 0 {
 			scored = append(scored, scoredEntry{id: entry.ID, score: score})
@@ -2671,11 +2669,10 @@ func aliasesByCanonical(aliases []actionAlias) map[string][]actionAlias {
 	for _, alias := range dedupeActionAliases(aliases) {
 		grouped[alias.Canonical] = append(grouped[alias.Canonical], alias)
 	}
-	for canonical := range grouped {
-		sort.Slice(grouped[canonical], func(i, j int) bool {
-			return grouped[canonical][i].Alias < grouped[canonical][j].Alias
-		})
-	}
+	// The group is deliberately left in catalog order: both readers of it,
+	// aliasNames and searchableAliasNames, hand what they take to
+	// dedupeSortedStrings, so an order imposed here is sorted again and
+	// decides nothing.
 	return grouped
 }
 
@@ -2803,10 +2800,7 @@ func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	for _, term := range terms {
 		best := 0
 		for _, alternative := range term.Alternatives {
-			candidateScore := scoreSearchAlternative(entry, term.Raw, alternative)
-			if candidateScore > best {
-				best = candidateScore
-			}
+			best = max(best, scoreSearchAlternative(entry, term.Raw, alternative))
 		}
 		if best > 0 {
 			matchedCount++
@@ -2936,7 +2930,10 @@ func minimumMatchedTermCount(entry actionEntry, terms []searchTerm) int {
 	if len(terms) > 2 {
 		minRequired = len(terms) - 1
 	}
-	if len(terms) > 3 && matchedCompoundTagCount(entry, terms) > 0 && minRequired > len(terms)-2 {
+	// minRequired is len(terms)-1 here, since more than three terms is more
+	// than two, so it is always above len(terms)-2 and testing that again
+	// would decide nothing.
+	if len(terms) > 3 && matchedCompoundTagCount(entry, terms) > 0 {
 		minRequired = len(terms) - 2
 	}
 	if minRequired < 1 {
