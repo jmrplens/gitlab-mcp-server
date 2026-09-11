@@ -176,6 +176,130 @@ func TestScan_CleanFileHasNoFindings(t *testing.T) {
 	}
 }
 
+// harnessLibraryFixture is a harness library file: not a test, holding a
+// *testing.T, and aborting inside a handler literal. It is the shape the
+// e2e harness is made of, and the reason ordinary .go files under
+// test/e2e/internal are audited at all.
+const harnessLibraryFixture = `package harness
+
+import (
+	"net/http"
+	"testing"
+)
+
+func StartStub(t *testing.T) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("abort off the test goroutine, in a library rather than a test")
+	})
+}
+`
+
+// libraryWithoutTesting is a harness library file that holds no *testing.T. It
+// cannot abort a test, so it is passed over before it is parsed for findings.
+const libraryWithoutTesting = `package harness
+
+import "net/http"
+
+func Handler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+}
+`
+
+// TestScan_HarnessLibrary_AuditsItsNonTestFiles verifies that the harness
+// library is held to the same contract as a test file, and that nothing else
+// is.
+//
+// Three files are planted: one under test/e2e/internal that imports testing
+// and aborts in a handler, one beside it that does not import testing, and one
+// with the same abort under internal/. Only the first is a finding. The second
+// and third are what keep the rule narrow: the corpus is the tree that holds a
+// *testing.T, not every non-test file in the module.
+func TestScan_HarnessLibrary_AuditsItsNonTestFiles(t *testing.T) {
+	root := t.TempDir()
+	harnessDir := filepath.Join(root, "test", "e2e", "internal", "harness")
+	if err := os.MkdirAll(harnessDir, 0o750); err != nil {
+		t.Fatalf("create the harness tree: %v", err)
+	}
+	elsewhere := filepath.Join(root, "internal", "tools")
+	if err := os.MkdirAll(elsewhere, 0o750); err != nil {
+		t.Fatalf("create the unrelated tree: %v", err)
+	}
+
+	audited := filepath.Join(harnessDir, "server.go")
+	// sequential: three files planted for one scan, not three cases
+	for path, source := range map[string]string{
+		audited:                                harnessLibraryFixture,
+		filepath.Join(harnessDir, "names.go"):  libraryWithoutTesting,
+		filepath.Join(elsewhere, "handler.go"): harnessLibraryFixture,
+	} {
+		if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	report, err := scan([]string{root})
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	if len(report.Fatal) != 1 {
+		t.Fatalf("fatal findings = %+v, want exactly the harness library's abort", report.Fatal)
+	}
+	if report.Fatal[0].File != audited {
+		t.Fatalf("finding file = %q, want %q", report.Fatal[0].File, audited)
+	}
+	if report.Fatal[0].Boundary != "http.HandlerFunc" {
+		t.Fatalf("finding boundary = %q, want http.HandlerFunc", report.Fatal[0].Boundary)
+	}
+}
+
+// TestUnderHarnessTree_PathShapes_DecidesByTheTree verifies the predicate that
+// selects the library corpus, on the path spellings a walk produces.
+func TestUnderHarnessTree_PathShapes_DecidesByTheTree(t *testing.T) {
+	cases := map[string]bool{
+		filepath.Join("test", "e2e", "internal", "harness", "server.go"):           true,
+		filepath.Join("test", "e2e", "internal", "fixture", "project.go"):          true,
+		filepath.Join("/tmp", "x", "test", "e2e", "internal", "harness", "env.go"): true,
+		filepath.Join("test", "e2e", "suite", "setup_test.go"):                     false,
+		filepath.Join("internal", "tools", "issues", "issues.go"):                  false,
+		filepath.Join("test", "e2e", "internal"):                                   false,
+	}
+	for path, want := range cases {
+		t.Run(path, func(t *testing.T) {
+			if got := underHarnessTree(path); got != want {
+				t.Fatalf("underHarnessTree(%q) = %t, want %t", path, got, want)
+			}
+		})
+	}
+}
+
+// TestImportsTesting_ImportShapes_AnswersForEachOne verifies the second half of
+// the library filter: a file that cannot reach a *testing.T is not parsed for
+// findings.
+func TestImportsTesting_ImportShapes_AnswersForEachOne(t *testing.T) {
+	cases := map[string]bool{
+		"package x\n\nimport \"testing\"\n":          true,
+		"package x\n\nimport \"testing/synctest\"\n": true,
+		"package x\n\nimport tb \"testing\"\n":       true,
+		"package x\n\nimport (\n\t\"net/http\"\n)\n": false,
+		"package x\n": false,
+		"package x\n\nimport \"github.com/x/testingtools\"\n": false,
+	}
+	for source, want := range cases {
+		t.Run(strings.ReplaceAll(source, "\n", " "), func(t *testing.T) {
+			file, err := parser.ParseFile(token.NewFileSet(), "x.go", source, parser.SkipObjectResolution)
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if got := importsTesting(file); got != want {
+				t.Fatalf("importsTesting(%q) = %t, want %t", source, got, want)
+			}
+		})
+	}
+}
+
 // expectedSite names one finding by the marker comment on its source line,
 // so the fixture can be edited without recounting line numbers.
 type expectedSite struct {

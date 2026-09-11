@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -110,13 +111,28 @@ func run(dirs []string, jsonPath string, check bool, stdout, stderr io.Writer) i
 	return 0
 }
 
-// scan walks every _test.go file under dirs and collects findings.
+// harnessTree is the one tree whose ordinary .go files are audited beside its
+// tests.
+//
+// The e2e harness is a library that holds a *testing.T and asserts with it, so
+// a t.Fatal inside a handler literal there aborts off the test goroutine
+// exactly as one in a _test.go file does. Every other non-test file in the
+// module imports no testing package at all, which is why the corpus is this
+// tree and not the whole module: the walk stays cheap and the rule stays
+// stated.
+const harnessTree = "test/e2e/internal"
+
+// scan walks every _test.go file under dirs, plus the harness library's own
+// non-test files, and collects findings.
 func scan(dirs []string) (*Report, error) {
 	report := &Report{}
 	files := map[string]bool{}
 	fset := token.NewFileSet()
 
-	if walkErr := testsource.WalkFiles(dirs, testsource.TestFiles, collectFindings(fset, report, files)); walkErr != nil {
+	if walkErr := testsource.WalkFiles(dirs, testsource.TestFiles, collectFindings(fset, report, files, false)); walkErr != nil {
+		return nil, walkErr
+	}
+	if walkErr := testsource.WalkFiles(dirs, testsource.NonTestGoFiles, collectFindings(fset, report, files, true)); walkErr != nil {
 		return nil, walkErr
 	}
 
@@ -137,13 +153,24 @@ func scan(dirs []string) (*Report, error) {
 	return report, nil
 }
 
-// collectFindings returns the walk callback that parses each _test.go file and
-// appends its findings to the report.
-func collectFindings(fset *token.FileSet, report *Report, files map[string]bool) func(string) error {
+// collectFindings returns the walk callback that parses each file and appends
+// its findings to the report.
+//
+// With library set, the callback is walking ordinary .go files rather than
+// tests, and takes only the harness tree's files that import testing: nothing
+// else in the module holds a *testing.T, and parsing the rest to discover that
+// would be a thousand files of work for no finding.
+func collectFindings(fset *token.FileSet, report *Report, files map[string]bool, library bool) func(string) error {
 	return func(path string) error {
+		if library && !underHarnessTree(path) {
+			return nil
+		}
 		file, parseErr := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
 		if parseErr != nil {
 			return fmt.Errorf("parse %s: %w", path, parseErr)
+		}
+		if library && !importsTesting(file) {
+			return nil
 		}
 		for _, f := range scanFile(fset, path, file) {
 			files[f.File] = true
@@ -155,6 +182,29 @@ func collectFindings(fset *token.FileSet, report *Report, files map[string]bool)
 		}
 		return nil
 	}
+}
+
+// underHarnessTree reports whether path lies inside the e2e harness library.
+//
+// It is a path predicate rather than a second walk root so that a scan given
+// an absolute directory, which is what this command's own tests do, is judged
+// by the same rule as a scan of the module tree.
+func underHarnessTree(path string) bool {
+	return strings.Contains(filepath.ToSlash(filepath.Clean(path)), harnessTree+"/")
+}
+
+// importsTesting reports whether the file imports the testing package, which
+// is what makes a library file able to abort a test at all.
+func importsTesting(file *ast.File) bool {
+	for _, imported := range file.Imports {
+		if imported.Path == nil {
+			continue
+		}
+		if imported.Path.Value == `"testing"` || strings.HasPrefix(imported.Path.Value, `"testing/`) {
+			return true
+		}
+	}
+	return false
 }
 
 // scanFile finds goroutine-boundary literals in one file and audits their
