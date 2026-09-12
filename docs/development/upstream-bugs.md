@@ -74,12 +74,12 @@ readable without opening the tracker:
 | 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | No | No | No | No | Yes |
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | No | No | No | No | Yes |
 | 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | No | No | No | No | Yes |
-| 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | No | No | No | Was yes | Yes |
+| 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | Yes, by another user | Yes, theirs, open | No | Was yes | Yes |
 | 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | No | No | No | No | None possible |
 | 11 | go-sdk | [Declared, not negotiated, version selects MRTR](#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr) | No | No | No | No | None taken |
 | 12 | go-sdk | [A cancelled call is still answered](#a-cancelled-incoming-call-is-still-answered) | No | No | No | No | Partial |
-| 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | No | No | No | No | None possible |
-| 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | No | No | No | No | None taken |
+| 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | Yes | Yes, open | No | No | None possible |
+| 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Not by us | No | **Yes, unreleased** | No | None taken |
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | No | No | No | No | None taken |
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Retired |
 | 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
@@ -1716,8 +1716,14 @@ The test hung instead of failing, which is how the header-flush half surfaced.
 
 ### A malformed message ends the session instead of answering -32700
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, by another user:
+  [modelcontextprotocol/go-sdk#1209](https://github.com/modelcontextprotocol/go-sdk/issues/1209)
+  (2026-08-29) describes the same stdio behavior.
+- **In review**: yes, theirs:
+  [modelcontextprotocol/go-sdk#1210](https://github.com/modelcontextprotocol/go-sdk/pull/1210),
+  open with no maintainer response as of 2026-09-12. We open no second one;
+  if it stalls, the evidence here (the e2e case and the stdio filter) goes on
+  that thread rather than into a new pull request.
 - **Merged**: no.
 - **Blocking**: it was, on stdio. One client lost its session and its
   accumulated context to a single unparseable line; there was no cross-tenant
@@ -1784,13 +1790,24 @@ seconds into a hanging GitLab call: the client's `notifications/cancelled` at
 
 ### The cancellation reason is discarded before any handler sees it
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes,
+  [modelcontextprotocol/go-sdk#1254](https://github.com/modelcontextprotocol/go-sdk/issues/1254),
+  on 2026-09-12.
+- **In review**: yes,
+  [modelcontextprotocol/go-sdk#1255](https://github.com/modelcontextprotocol/go-sdk/pull/1255):
+  `Connection.CancelCause` in the internal jsonrpc2 package, the canceller
+  cancelling with an error that carries the reason and unwraps to
+  `context.Canceled`, a debug log line with the id and the reason, and two
+  tests. Chosen as the first contribution to that SDK because the maintainers
+  had already accepted the cause plumbing it builds on (their #1100), it adds
+  no exported API, and it answers a SHOULD of the specification.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: none possible. The field is dropped inside the SDK; there is
   no seam to read it from. We log what remains — that the call was cancelled and
-  how long it ran.
+  how long it ran. When the fix lands, `context.Cause(ctx)` in a handler reads
+  `request cancelled by the peer: <reason>`, and the classification in
+  `internal/toolutil` can carry the reason into the log line.
 
 **What**: "Implementations SHOULD log cancellation reasons for debugging."
 `mcp/transport.go` unmarshals `CancelledParams`, uses `params.RequestID` to
@@ -1861,9 +1878,13 @@ only here.
 
 ### `Mcp-Name` is compared without decoding the base64 sentinel
 
-- **Reported**: no.
+- **Reported**: not by us; fixed upstream before we got to it.
 - **In review**: no.
-- **Merged**: no.
+- **Merged**: **yes**, by another contributor:
+  [modelcontextprotocol/go-sdk#1242](https://github.com/modelcontextprotocol/go-sdk/pull/1242)
+  on 2026-09-06 decodes the header before the comparison, and #1246 makes the
+  SDK's own client encode a name that is not header-safe. Neither is in a tag
+  yet (the newest is v1.8.0-pre.2 of 2026-09-04), so the pin does not carry it.
 - **Blocking**: no. Nothing on this server's surface forces the encoded form:
   every tool name is `gitlab_*`, every prompt name is ASCII, and a resource URI
   is a URI, so non-ASCII arrives percent-encoded and matches a plain header.
