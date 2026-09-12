@@ -89,7 +89,7 @@ func handleAuditCommitHygiene(ctx context.Context, client *gitlabclient.Client, 
 		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", shortSHA(commit.ID), mdInline(firstLine(commit.Title)), mdInline(commit.AuthorName), commitHygieneLabel(commit))
 	}
 
-	b.WriteString("\n---\nPlease assess the history quality for release/readiness review. Highlight commits that should be squashed, reworded, linked to issues, or marked as breaking changes. Use Conventional Commits categories such as feat, fix, docs, refactor, test, build, ci, chore, perf, and revert.\n")
+	writeClosingRule(&b, "Please assess the history quality for release/readiness review. Highlight commits that should be squashed, reworded, linked to issues, or marked as breaking changes. Use Conventional Commits categories such as feat, fix, docs, refactor, test, build, ci, chore, perf, and revert.")
 
 	return promptResult(b.String()), nil
 }
@@ -161,7 +161,7 @@ func handleMRDescriptionQuality(ctx context.Context, client *gitlabclient.Client
 		fmt.Fprintf(&b, fmtListItem, mdInline(diff.NewPath), changeType(diff))
 	}
 
-	b.WriteString("\n---\nPlease score this MR description from 0-100 for reviewer readiness. Identify missing context, test evidence, rollout/risk information, screenshots/UI evidence when relevant, and linked work. Then propose a concise improved MR description template for this change.\n")
+	writeClosingRule(&b, "Please score this MR description from 0-100 for reviewer readiness. Identify missing context, test evidence, rollout/risk information, screenshots/UI evidence when relevant, and linked work. Then propose a concise improved MR description template for this change.")
 
 	return promptResult(b.String()), nil
 }

@@ -65,11 +65,16 @@ func handleMyOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.
 	allMRs := deduplicateMRs(authoredMRs, assignedMRs)
 	grouped := groupMRsByProject(allMRs)
 
-	// Count categories
+	// Count categories. The set is keyed on the MR's identity rather than on
+	// its IID: this prompt spans every project the caller can see, and !1 of
+	// one project is not !1 of another. Keyed on the IID alone, an MR assigned
+	// to the caller counted as authored by them whenever any project they
+	// author in happened to have an MR with the same number, which on a busy
+	// account is most of them.
 	var draftCount, conflictCount, authoredCount, assignedOnlyCount int
-	authoredSet := make(map[int64]bool)
+	authoredSet := make(map[mrIdentity]bool, len(authoredMRs))
 	for _, mr := range authoredMRs {
-		authoredSet[mr.IID] = true
+		authoredSet[identifyMR(mr)] = true
 	}
 	for _, mr := range allMRs {
 		if mr.Draft {
@@ -78,7 +83,7 @@ func handleMyOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.
 		if mr.HasConflicts {
 			conflictCount++
 		}
-		if authoredSet[mr.IID] {
+		if authoredSet[identifyMR(mr)] {
 			authoredCount++
 		}
 	}
@@ -98,11 +103,11 @@ func handleMyOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.
 
 	for _, project := range sortedKeys(grouped) {
 		mrs := grouped[project]
-		fmt.Fprintf(&b, "\n## %s (%d MRs)\n\n", project, len(mrs))
+		fmt.Fprintf(&b, "\n## %s (%d MRs)\n\n", mdHeading(project), len(mrs))
 		writeMRTable(&b, mrs)
 	}
 
-	b.WriteString("\n---\nPlease summarize the status of these MRs, highlight any that need attention (conflicts, stale >7d, failing pipeline), and suggest priorities.\n")
+	writeClosingRule(&b, "Please summarize the status of these MRs, highlight any that need attention (conflicts, stale >7d, failing pipeline), and suggest priorities.")
 
 	return promptResult(b.String()), nil
 }
@@ -157,7 +162,7 @@ func handleMyPendingReviews(ctx context.Context, client *gitlabclient.Client, re
 		}
 	}
 
-	b.WriteString("\n---\nPlease prioritize these reviews, highlighting urgent ones (old >5d, large changes, or blocking release).\n")
+	writeClosingRule(&b, "Please prioritize these reviews, highlighting urgent ones (old >5d, large changes, or blocking release).")
 
 	return promptResult(b.String()), nil
 }
@@ -225,11 +230,11 @@ func handleMyIssues(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 
 	for _, project := range sortedKeys(grouped) {
 		projectIssues := grouped[project]
-		fmt.Fprintf(&b, "\n## %s (%d issues)\n\n", project, len(projectIssues))
+		fmt.Fprintf(&b, "\n## %s (%d issues)\n\n", mdHeading(project), len(projectIssues))
 		writeIssueTable(&b, projectIssues)
 	}
 
-	b.WriteString("\n---\nPlease summarize the issue backlog, highlight overdue items, and suggest priorities based on due dates and labels.\n")
+	writeClosingRule(&b, "Please summarize the issue backlog, highlight overdue items, and suggest priorities based on due dates and labels.")
 
 	return promptResult(b.String()), nil
 }
@@ -319,7 +324,7 @@ func handleMyActivitySummary(ctx context.Context, client *gitlabclient.Client, r
 		writeDailyActivityChart(&b, dailyData)
 	}
 
-	b.WriteString("\n---\nPlease provide a comprehensive activity summary with productivity insights and trends.\n")
+	writeClosingRule(&b, "Please provide a comprehensive activity summary with productivity insights and trends.")
 
 	return promptResult(b.String()), nil
 }

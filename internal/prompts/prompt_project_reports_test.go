@@ -488,4 +488,111 @@ func TestMRDiscussionHealth_DiscussionsAPIError_StillRendersReport(t *testing.T)
 	}
 }
 
+// TestProjectActivityReport_WritesTheSectionsItsDescriptionPromises verifies
+// that the report carries the contributor breakdown and the daily activity
+// chart its catalog description advertises.
+//
+// The description has always said "Shows daily activity chart and contributor
+// breakdown" and the handler wrote neither. A description is what a model reads
+// to choose a prompt, so the promise is part of the surface; both sections come
+// out of the project events the handler already fetches, so keeping the promise
+// costs no request.
+func TestProjectActivityReport_WritesTheSectionsItsDescriptionPromises(t *testing.T) {
+	day := time.Now().UTC()
+	stamp := day.Format(time.RFC3339)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/{project}/events", func(w http.ResponseWriter, _ *http.Request) {
+		events := []*gl.ProjectEvent{
+			{ActionName: "pushed to", CreatedAt: stamp, AuthorUsername: "alice"},
+			{ActionName: "opened", CreatedAt: stamp, AuthorUsername: "alice"},
+			{ActionName: "opened", CreatedAt: stamp, AuthorUsername: "bob"},
+			// GitLab sends the username inside the author object as well, and a
+			// system event carries neither.
+			{ActionName: "closed", CreatedAt: stamp, Author: gl.BasicUser{Username: "carol"}},
+			{ActionName: "closed", CreatedAt: stamp},
+		}
+		data, _ := json.Marshal(events)
+		respondJSON(w, http.StatusOK, string(data))
+	})
+	mux.HandleFunc(pathMRs, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc(pathIssues, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	text := getPromptText(t, mux, "project_activity_report", map[string]string{"project_id": "42"})
+
+	for _, row := range []string{
+		"## Contributors\n\n| Contributor | Events |\n|-------------|--------|\n",
+		"| alice | 2 |\n",
+		"| bob | 1 |\n",
+		"| carol | 1 |\n",
+		"| unknown | 1 |\n",
+	} {
+		t.Run("contributor breakdown: "+row, func(t *testing.T) {
+			if !strings.Contains(text, row) {
+				t.Errorf("the contributor breakdown is missing %q:\n%s", row, text)
+			}
+		})
+	}
+
+	t.Run("daily activity chart", func(t *testing.T) {
+		want := "## Daily Activity\n\n```mermaid\nxychart-beta\n  title \"Daily Activity\"\n  x-axis [\"" +
+			day.Format("01-02") + "\"]\n  y-axis \"Events\"\n  bar [5]\n```\n"
+		if !strings.Contains(text, want) {
+			t.Errorf("the daily activity chart is missing or differs:\nwant %q\ngot\n%s", want, text)
+		}
+	})
+}
+
+// TestUnassignedItems_NothingToReport_ClosesWithARuleNotASetextHeading
+// verifies that a report whose last section is a sentence still ends with a
+// thematic break.
+//
+// "---" written directly under a line of text is a setext heading in
+// CommonMark: the rule is not drawn and the sentence above it becomes an H2, so
+// "All open items have assignees. Great job!" was rendered as a heading and the
+// closing instruction ran on from it. The reports with nothing to report were
+// the only ones that reached this, which is why it survived.
+func TestUnassignedItems_NothingToReport_ClosesWithARuleNotASetextHeading(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathMRs, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc(pathIssues, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	text := getPromptText(t, mux, "unassigned_items", map[string]string{"project_id": "42"})
+
+	want := "All open items have assignees. Great job!\n\n---\nPlease identify the most critical unassigned items"
+	if !strings.Contains(text, want) {
+		t.Errorf("the closing rule does not follow a blank line:\nwant %q\ngot\n%s", want, text)
+	}
+	if strings.Contains(text, "Great job!\n---") {
+		t.Errorf("the closing rule still reads as a setext heading of the sentence above it:\n%s", text)
+	}
+}
+
+// TestStaleItemsReport_NothingToReport_ClosesWithARuleNotASetextHeading
+// verifies the same separation for the stale-items report, whose empty result
+// is also a sentence.
+func TestStaleItemsReport_NothingToReport_ClosesWithARuleNotASetextHeading(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathMRs, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc(pathIssues, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	text := getPromptText(t, mux, "stale_items_report", map[string]string{"project_id": "42"})
+
+	want := "No stale items found. The project is well-maintained!\n\n---\nPlease analyze stale items"
+	if !strings.Contains(text, want) {
+		t.Errorf("the closing rule does not follow a blank line:\nwant %q\ngot\n%s", want, text)
+	}
+}
+
 // prompt_milestone_label.go edge branch.

@@ -19,6 +19,12 @@ import (
 
 const fmtFilesChanged = "- **Files changed**: %d\n"
 
+// descriptionExcerptBytes is how much of a merge request description the two
+// list prompts show before they cut it. It is a byte budget, applied on a rune
+// boundary by [truncateRunes], because what it bounds is the size of the
+// message rather than a count of characters anybody would notice.
+const descriptionExcerptBytes = 200
+
 // Reusable prompt argument names and descriptions.
 const (
 	argProjectID  = "project_id"
@@ -258,7 +264,7 @@ func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 	fmt.Fprintf(&b, fmtFilesChanged, len(diffs))
 	fmt.Fprintf(&b, "- **Lines added**: %d\n", m.additions)
 	fmt.Fprintf(&b, "- **Lines removed**: %d\n", m.deletions)
-	fmt.Fprintf(&b, "- **Has conflicts**: %v\n", mr.HasConflicts)
+	fmt.Fprintf(&b, "- **Has conflicts**: %s\n", toolutil.BoolEmoji(mr.HasConflicts))
 
 	// Review plan
 	fmt.Fprintf(&b, "\n## Review Plan\n")
@@ -288,13 +294,32 @@ func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 	b.WriteString("   - Modified/added line -> set `new_line` only (line number in the new file).\n")
 	b.WriteString("   - Removed line -> set `old_line` only (line number in the old file).\n")
 	b.WriteString("   - Unchanged context line -> set both `old_line` and `new_line`.\n")
-	fmt.Fprintf(&b, "   Use base_sha=`%s`, start_sha=`%s`, head_sha=`%s` from this MR.\n", mr.DiffRefs.BaseSha, mr.DiffRefs.StartSha, mr.DiffRefs.HeadSha)
+	writeDiffRefs(&b, mr.DiffRefs)
 	b.WriteString("2. For general comments not tied to a specific line, call `draft_note_create` without the position field.\n")
 	b.WriteString("3. To reply to existing open discussions, call `draft_note_create` with `in_reply_to_discussion_id` set to the discussion ID. You can also set `resolve_discussion: true` to resolve it when published.\n")
 	b.WriteString("4. After ALL comments and replies are created as draft notes, call `draft_note_publish_all` ONCE to publish them all at once (single notification to the MR author).\n")
 	b.WriteString("5. Do NOT use `discussion_create`, `discussion_reply`, or `note_create` for review comments. Those publish immediately and generate one notification each.\n")
 
 	return promptResult(b.String()), nil
+}
+
+// writeDiffRefs writes the three SHAs a draft note's position needs, and says
+// so instead when the merge request does not carry them.
+//
+// GitLab omits diff_refs on a merge request whose diff it cannot resolve — a
+// closed MR whose source branch is gone, one still being prepared — and the
+// line used to be written from that absence: three empty code spans reading
+// "use base_sha=“", which is an instruction to send a position GitLab refuses.
+// Saying the refs are not there is the one thing that lets a model do the other
+// half of this prompt's advice, which is to draft the note without a position.
+func writeDiffRefs(b *strings.Builder, refs gl.MergeRequestDiffRefs) {
+	if refs.BaseSha == "" || refs.StartSha == "" || refs.HeadSha == "" {
+		b.WriteString("   This MR carries no diff refs, so an inline position cannot be built from it: " +
+			"read base_sha, start_sha and head_sha from the merge request before drafting a positioned note, " +
+			"or leave the position out.\n")
+		return
+	}
+	fmt.Fprintf(b, "   Use base_sha=`%s`, start_sha=`%s`, head_sha=`%s` from this MR.\n", refs.BaseSha, refs.StartSha, refs.HeadSha)
 }
 
 // registerSummarizePipelineStatusPrompt registers the summarize_pipeline_status prompt.
@@ -332,15 +357,16 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Pipeline #%d Status: %s\n\n", pipeline.ID, mdHeading(strings.ToUpper(pipeline.Status)))
-	fmt.Fprintf(&b, "**Ref**: %s | **SHA**: %s\n", pipeline.Ref, shortSHA(pipeline.SHA))
-	fmt.Fprintf(&b, "**URL**: %s\n\n", pipeline.WebURL)
+	//gitlab:allow-unescaped shortSHA(pipeline.SHA): the first characters of a commit SHA, which is hexadecimal.
+	fmt.Fprintf(&b, "**Ref**: %s | **SHA**: %s\n", mdInline(pipeline.Ref), shortSHA(pipeline.SHA))
+	fmt.Fprintf(&b, "**URL**: %s\n\n", mdInline(pipeline.WebURL))
 
 	var failed, passed, other []string
 	for _, j := range jobs {
 		//gitlab:allow-unescaped j.Status: a job status GitLab picks from a fixed set (created, running, success, failed and the rest).
 		line := fmt.Sprintf("- **%s** (%s): %s", mdInline(j.Name), mdInline(j.Stage), j.Status)
 		if j.FailureReason != "" {
-			line += ", reason: " + j.FailureReason
+			line += ", reason: " + mdInline(j.FailureReason)
 		}
 		switch j.Status {
 		case "failed":
@@ -576,8 +602,8 @@ func writeReleaseNotesMRs(b *strings.Builder, mrs []*gl.BasicMergeRequest) {
 		fmt.Fprintf(b, "- !%d: %s (@%s)%s\n", mr.IID, mdInline(mr.Title), mdInline(author), labels)
 		if mr.Description != "" {
 			desc, _, _ := strings.Cut(mr.Description, "\n")
-			if len(desc) > 200 {
-				desc = desc[:200] + "..."
+			if len(desc) > descriptionExcerptBytes {
+				desc = truncateRunes(desc, descriptionExcerptBytes) + "..."
 			}
 			fmt.Fprintf(b, "  > %s\n", mdInline(desc))
 		}
@@ -645,8 +671,8 @@ func handleSummarizeOpenMRs(ctx context.Context, client *gitlabclient.Client, re
 		fmt.Fprintf(&b, "- **Age**: %.0f days | **Status**: %s\n", age, mr.DetailedMergeStatus)
 		if mr.Description != "" {
 			desc := mr.Description
-			if len(desc) > 200 {
-				desc = desc[:200] + "..."
+			if len(desc) > descriptionExcerptBytes {
+				desc = truncateRunes(desc, descriptionExcerptBytes) + "..."
 			}
 			fmt.Fprintf(&b, "- **Description**: %s\n", mdInline(desc))
 		}
@@ -967,7 +993,7 @@ func writeMRSection(b *strings.Builder, heading, username string, mrs []*gl.Basi
 	if len(mrs) == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n## %s @%s (%d)\n", heading, username, len(mrs))
+	fmt.Fprintf(b, "\n## %s @%s (%d)\n", heading, mdHeading(username), len(mrs))
 	for _, mr := range mrs {
 		fmt.Fprintf(b, "- !%d: %s (%s -> %s), %s\n", mr.IID, mdInline(mr.Title), mdInline(mr.SourceBranch), mdInline(mr.TargetBranch), mdInline(mr.DetailedMergeStatus))
 	}
@@ -983,7 +1009,7 @@ func writeIssueSection(b *strings.Builder, heading, username string, issues []*g
 	if len(issues) == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n## %s @%s (%d)\n", heading, username, len(issues))
+	fmt.Fprintf(b, "\n## %s @%s (%d)\n", heading, mdHeading(username), len(issues))
 	for _, issue := range issues {
 		age := time.Since(*issue.CreatedAt) / (24 * time.Hour)
 		fmt.Fprintf(b, "- #%d: %s (opened %d days ago)\n", issue.IID, mdInline(issue.Title), age)
@@ -1302,7 +1328,7 @@ func writeDailyActivity(b *strings.Builder, username string, dailyActivity []day
 	b.WriteString("\n## Activity Chart\n\n")
 	writeMermaidChart(b, func(chart *strings.Builder) {
 		chart.WriteString("xychart-beta\n")
-		fmt.Fprintf(chart, "    title \"Daily Activity for @%s\"\n", username)
+		fmt.Fprintf(chart, "    title %s\n", mermaidQuoted("Daily Activity for @"+username))
 		chart.WriteString("    x-axis [")
 		for i, da := range dailyActivity {
 			if i > 0 {
@@ -1396,7 +1422,7 @@ func handleMRRiskAssessment(ctx context.Context, client *gitlabclient.Client, re
 	fmt.Fprintf(&b, "- **New files**: %d\n", m.newFiles)
 	fmt.Fprintf(&b, "- **Deleted files**: %d\n", m.deletedFiles)
 	fmt.Fprintf(&b, "- **Sensitive files touched**: %d\n", m.sensitiveFiles)
-	fmt.Fprintf(&b, "- **Has conflicts**: %v\n", mr.HasConflicts)
+	fmt.Fprintf(&b, "- **Has conflicts**: %s\n", toolutil.BoolEmoji(mr.HasConflicts))
 
 	fmt.Fprintf(&b, "\n## Changed Files\n")
 	for _, d := range diffs {
@@ -1541,12 +1567,11 @@ func changeType(c *gl.MergeRequestDiff) string {
 	}
 }
 
-// shortSHA truncates a commit SHA to 8 characters for compact display.
+// shortSHA truncates a commit SHA to 8 characters for compact display. It cuts
+// on a rune boundary like every other truncation here, so a value that is not
+// the hexadecimal GitLab sends still comes back as text.
 func shortSHA(sha string) string {
-	if len(sha) > 8 {
-		return sha[:8]
-	}
-	return sha
+	return truncateRunes(sha, 8)
 }
 
 // promptResult builds a standard GetPromptResult with a single assistant message.

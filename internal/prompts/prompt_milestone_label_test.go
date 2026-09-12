@@ -520,4 +520,58 @@ func TestProjectContributors_PieChartCap_CapsPieChartSlices(t *testing.T) {
 	}
 }
 
+// TestProjectContributors_ContributorNameWithAQuote_StaysInsideTheChartString
+// verifies that a name carrying a quotation mark cannot add entries to the pie
+// chart it is rendered into.
+//
+// The entries were built with Go's %q, which writes a backslash Mermaid does
+// not read and leaves the quote that closes the label. A commit author name is
+// whatever a contributor put in their git config, so the quote is reachable by
+// anybody who can land a commit; past it, the rest of the name is chart syntax.
+func TestProjectContributors_ContributorNameWithAQuote_StaysInsideTheChartString(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/{project}/repository/contributors", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[{"name":"Al \"ice\" : 99\n    \"Evil","commits":4,"additions":1,"deletions":1}]`)
+	})
+
+	text := getPromptText(t, mux, "project_contributors", map[string]string{"project_id": "42"})
+
+	want := "```mermaid\npie title Commits by Contributor\n    \"Al #quot;ice#quot; : 99     #quot;Evil\" : 4\n```\n"
+	if !strings.Contains(text, want) {
+		t.Errorf("the pie chart is not the contained one:\nwant %q\ngot\n%s", want, text)
+	}
+	if strings.Contains(text, `\"ice\"`) {
+		t.Errorf("a Go string escape reached the Mermaid chart, where a backslash is literal:\n%s", text)
+	}
+}
+
+// TestMilestoneProgress_DueDate_RendersInTheServerDisplayForm verifies that a
+// milestone's due date is written by toolutil.FormatTime rather than by a
+// layout of this package's own.
+//
+// A due date is a date GitLab sent, and a prompt has no more reason to spell it
+// its own way than a card does; the escaping gate's bool-time rule names each
+// hand-rolled layout for that reason.
+func TestMilestoneProgress_DueDate_RendersInTheServerDisplayForm(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeMilestones, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[{"id":1,"title":"v1.0","state":"active","due_date":"2099-03-21"}]`)
+	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/milestones/{id}/issues", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/milestones/{id}/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	text := getPromptText(t, mux, "milestone_progress", map[string]string{"project_id": "42"})
+
+	if !strings.Contains(text, "**Due Date**: 21 Mar 2099 (") {
+		t.Errorf("the due date is not in the server's display form:\n%s", text)
+	}
+	if strings.Contains(text, "**Due Date**: 2099-03-21") {
+		t.Errorf("the due date is still written with this package's own layout:\n%s", text)
+	}
+}
+
 // prompt_git_workflow.go error branches.

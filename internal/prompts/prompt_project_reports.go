@@ -96,7 +96,7 @@ func handleBranchMRSummary(ctx context.Context, client *gitlabclient.Client, req
 
 	writeMRTable(&b, mrs)
 
-	b.WriteString("\n---\nPlease summarize the readiness of these MRs for merging, highlight blockers (conflicts, drafts), and suggest priorities.\n")
+	writeClosingRule(&b, "Please summarize the readiness of these MRs for merging, highlight blockers (conflicts, drafts), and suggest priorities.")
 
 	return promptResult(b.String()), nil
 }
@@ -180,6 +180,8 @@ func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Clien
 		b.WriteString("\n")
 	}
 
+	writeActivityContributors(&b, events)
+
 	// Recently merged MRs
 	if len(mergedMRs) > 0 {
 		b.WriteString("## Recently Merged MRs\n\n")
@@ -187,9 +189,84 @@ func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Clien
 		b.WriteString("\n")
 	}
 
-	b.WriteString("---\nPlease analyze the project activity, highlight trends, and identify areas needing attention.\n")
+	if days := projectEventDays(events); len(days) > 0 {
+		writeDailyActivityChart(&b, days)
+	}
+
+	writeClosingRule(&b, "Please analyze the project activity, highlight trends, and identify areas needing attention.")
 
 	return promptResult(b.String()), nil
+}
+
+// writeActivityContributors writes who produced the events in the period.
+//
+// This section and the daily activity chart beside it are the two the prompt's
+// own description has always promised ("Shows daily activity chart and
+// contributor breakdown") and the handler never wrote. Neither costs a request:
+// both are read from the project events already fetched for the breakdown
+// above. A description is what a model reads to choose a prompt, so the choice
+// was between writing the sections and withdrawing the promise, and the data
+// was already in hand.
+func writeActivityContributors(b *strings.Builder, events []*gl.ProjectEvent) {
+	if len(events) == 0 {
+		return
+	}
+	byAuthor := make(map[string]int, len(events))
+	for _, e := range events {
+		byAuthor[eventAuthor(e)]++
+	}
+	b.WriteString("## Contributors\n\n")
+	b.WriteString("| Contributor | Events |\n|-------------|--------|\n")
+	for _, name := range sortedKeys(byAuthor) {
+		fmt.Fprintf(b, "| %s | %d |\n", mdInline(name), byAuthor[name])
+	}
+	b.WriteString("\n")
+}
+
+// eventAuthor names whoever produced a project event. GitLab sends the username
+// twice, once flat and once inside the author object, and a system event can
+// carry neither.
+func eventAuthor(e *gl.ProjectEvent) string {
+	if e.AuthorUsername != "" {
+		return e.AuthorUsername
+	}
+	if e.Author.Username != "" {
+		return e.Author.Username
+	}
+	return "unknown"
+}
+
+// projectEventDays groups project events by the calendar day GitLab stamped
+// them with, sorted chronologically.
+//
+// A project event carries its timestamp as a string where a contribution event
+// carries a *time.Time, so this cannot reuse [groupEventsByDay]; an event whose
+// timestamp parses as neither a full RFC 3339 instant nor a bare date is left
+// out rather than counted under a day with no name.
+func projectEventDays(events []*gl.ProjectEvent) []dayActivity {
+	counts := make(map[string]int, len(events))
+	for _, e := range events {
+		if day, ok := eventDay(e.CreatedAt); ok {
+			counts[day]++
+		}
+	}
+	days := sortedKeys(counts)
+	result := make([]dayActivity, len(days))
+	for i, d := range days {
+		result[i] = dayActivity{date: d, count: counts[d]}
+	}
+	return result
+}
+
+// eventDay reads the calendar day out of an event timestamp, and reports
+// whether it could.
+func eventDay(stamp string) (string, bool) {
+	for _, layout := range []string{time.RFC3339, toolutil.DateFormatISO} {
+		if t, err := time.Parse(layout, stamp); err == nil {
+			return t.Format(toolutil.DateFormatISO), true
+		}
+	}
+	return "", false
 }
 
 // registerMRDiscussionHealthPrompt registers the mr_discussion_health prompt.
@@ -266,7 +343,7 @@ func handleMRDiscussionHealth(ctx context.Context, client *gitlabclient.Client, 
 	}
 	b.WriteString("\n")
 
-	b.WriteString("---\nPlease identify MRs with the most unresolved threads, assess review health, and suggest actions.\n")
+	writeClosingRule(&b, "Please identify MRs with the most unresolved threads, assess review health, and suggest actions.")
 
 	return promptResult(b.String()), nil
 }
@@ -371,7 +448,7 @@ func handleUnassignedItems(ctx context.Context, client *gitlabclient.Client, req
 		b.WriteString("All open items have assignees. Great job!\n")
 	}
 
-	b.WriteString("---\nPlease identify the most critical unassigned items and suggest who should own them based on expertise.\n")
+	writeClosingRule(&b, "Please identify the most critical unassigned items and suggest who should own them based on expertise.")
 
 	return promptResult(b.String()), nil
 }
@@ -440,7 +517,7 @@ func handleStaleItemsReport(ctx context.Context, client *gitlabclient.Client, re
 		b.WriteString("No stale items found. The project is well-maintained!\n")
 	}
 
-	b.WriteString("---\nPlease analyze stale items, identify which should be closed, reassigned, or prioritized.\n")
+	writeClosingRule(&b, "Please analyze stale items, identify which should be closed, reassigned, or prioritized.")
 
 	return promptResult(b.String()), nil
 }

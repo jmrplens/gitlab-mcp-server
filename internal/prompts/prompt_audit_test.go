@@ -10,6 +10,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const (
@@ -615,25 +617,170 @@ func TestAuditProject_Full(t *testing.T) {
 
 // Helper tests.
 
-// TestAccessLevelName covers AccessLevelName with table-driven subtests.
-func TestAccessLevelName(t *testing.T) {
+// TestAuditProjectFull_SectionThatCouldNotBeRead_SaysSoInsteadOfScoringIt
+// verifies that a full audit whose supporting calls fail reports the questions
+// as unanswered rather than answering them from an empty slice.
+//
+// Every one of those calls used to be made with its error discarded, so a
+// refusal produced an empty list and the empty list produced a verdict: no
+// protected branches, no labels, no milestones, no templates, no webhooks and
+// no push rules — a scorecard of eight failures on a project nobody managed to
+// look at. A reader cannot tell that report from a genuinely unconfigured
+// project, and the whole point of the scorecard is to be acted on.
+func TestAuditProjectFull_SectionThatCouldNotBeRead_SaysSoInsteadOfScoringIt(t *testing.T) {
+	mux := http.NewServeMux()
+	// Only the project itself answers; every supporting call is refused, which
+	// is what a token without the scope for them, or a Free instance asked for
+	// push rules, produces.
+	mux.HandleFunc(routeProject, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"id":42,"path_with_namespace":"group/my-project","default_branch":"main"}`)
+	})
+
+	text := getPromptText(t, mux, "audit_project_full", map[string]string{"project_id": "42"})
+
+	for _, row := range []string{
+		"| Default branch protected | " + unreadSection + " |",
+		"| Push rules configured | " + unreadSection + " |",
+		"| Labels configured | " + unreadSection + " |",
+		"| Active milestones | " + unreadSection + " |",
+		"| Issue templates | " + unreadSection + " |",
+		"| MR templates | " + unreadSection + " |",
+		"| Webhooks configured | " + unreadSection + " |",
+	} {
+		t.Run("the scorecard marks it unread: "+row, func(t *testing.T) {
+			if !strings.Contains(text, row) {
+				t.Errorf("scorecard is missing %q:\n%s", row, text)
+			}
+		})
+	}
+
+	for _, scored := range []string{
+		"| Default branch protected | " + toolutil.EmojiCross + " |",
+		"| Push rules configured | " + toolutil.EmojiCross + " |",
+		"| Labels configured | " + toolutil.EmojiCross + " |",
+		"| Webhooks configured | " + toolutil.EmojiCross + " |",
+	} {
+		t.Run("no verdict on an unread question: "+scored, func(t *testing.T) {
+			if strings.Contains(text, scored) {
+				t.Errorf("an unread question was answered with a verdict: %q\n%s", scored, text)
+			}
+		})
+	}
+
+	for _, absent := range []string{
+		"**Protected branches:** 0",
+		"**Total members:** 0",
+		"**Total:** 0",
+		"**Active:** 0",
+		"**Configured:** 0",
+		"Push rules not configured",
+	} {
+		t.Run("no empty answer reported: "+absent, func(t *testing.T) {
+			if strings.Contains(text, absent) {
+				t.Errorf("a section reported an empty answer it never received: %q\n%s", absent, text)
+			}
+		})
+	}
+
+	// The project fetch succeeded, so these two rows are real answers and must
+	// stay verdicts rather than becoming unread with everything else.
+	for _, row := range []string{
+		"| Pipeline required for merge | " + toolutil.EmojiCross + " |",
+		"| Discussions must be resolved | " + toolutil.EmojiCross + " |",
+	} {
+		t.Run("the project's own answer is still judged: "+row, func(t *testing.T) {
+			if !strings.Contains(text, row) {
+				t.Errorf("a row the project answered is missing %q:\n%s", row, text)
+			}
+		})
+	}
+
+	t.Run("the closing instruction says what an unread section means", func(t *testing.T) {
+		if !strings.Contains(text, "was not audited") {
+			t.Errorf("the closing instruction does not say what an unread section means:\n%s", text)
+		}
+	})
+}
+
+// TestFormatAccessLevels_NamesTheLevelsThroughTheSharedTable verifies that the
+// audit prompts name an access level with toolutil.AccessLevelDescription and
+// no longer with a table of their own.
+//
+// The local table knew five levels, so a Planner, a Minimal-access member and
+// an instance admin were all reported as "Unknown(<n>)" — a word that tells a
+// reader nothing and hides that GitLab did name the level. The shared table
+// names them, and renders one it does not know as the number GitLab sent, which
+// is the one thing a reader can act on.
+func TestFormatAccessLevels_NamesTheLevelsThroughTheSharedTable(t *testing.T) {
 	tests := []struct {
-		name  string
-		level gl.AccessLevelValue
-		want  string
+		name   string
+		levels []*gl.BranchAccessDescription
+		want   string
 	}{
-		{"guest", 10, "Guest"},
-		{"reporter", 20, "Reporter"},
-		{"developer", 30, "Developer"},
-		{"maintainer", 40, "Maintainer"},
-		{"owner", 50, "Owner"},
-		{"unknown_level", 99, "Unknown(99)"},
+		{name: "no levels is no restriction", levels: nil, want: "-"},
+		{
+			name:   "guest",
+			levels: []*gl.BranchAccessDescription{{AccessLevel: gl.GuestPermissions}},
+			want:   "Guest",
+		},
+		{
+			name: "every named level in order",
+			levels: []*gl.BranchAccessDescription{
+				{AccessLevel: gl.ReporterPermissions},
+				{AccessLevel: gl.DeveloperPermissions},
+				{AccessLevel: gl.MaintainerPermissions},
+				{AccessLevel: gl.OwnerPermissions},
+			},
+			want: "Reporter, Developer, Maintainer, Owner",
+		},
+		{
+			name:   "a level the old local table called unknown",
+			levels: []*gl.BranchAccessDescription{{AccessLevel: gl.PlannerPermissions}},
+			want:   "Planner",
+		},
+		{
+			name:   "a level no table names is its number",
+			levels: []*gl.BranchAccessDescription{{AccessLevel: 99}},
+			want:   "Level 99",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := accessLevelName(tc.level)
-			if got != tc.want {
-				t.Errorf("accessLevelName(%d) = %q, want %q", tc.level, got, tc.want)
+			if got := formatAccessLevels(tc.levels); got != tc.want {
+				t.Errorf("formatAccessLevels() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFormatBranchAccessLevel_NamesUserAndGroupGrants verifies that a grant to
+// one user or one group is rendered with its id beside the level's name.
+func TestFormatBranchAccessLevel_NamesUserAndGroupGrants(t *testing.T) {
+	tests := []struct {
+		name  string
+		level *gl.BranchAccessDescription
+		want  string
+	}{
+		{
+			name:  "role grant",
+			level: &gl.BranchAccessDescription{AccessLevel: gl.MaintainerPermissions},
+			want:  "Maintainer",
+		},
+		{
+			name:  "user grant",
+			level: &gl.BranchAccessDescription{AccessLevel: gl.DeveloperPermissions, UserID: 7},
+			want:  "User #7 (Developer)",
+		},
+		{
+			name:  "group grant",
+			level: &gl.BranchAccessDescription{AccessLevel: gl.ReporterPermissions, GroupID: 3},
+			want:  "Group #3 (Reporter)",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := formatBranchAccessLevel(tc.level); got != tc.want {
+				t.Errorf("formatBranchAccessLevel() = %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -687,7 +834,7 @@ func TestWriteFullWebhooksSection_URLWithCredentials_RendersOriginOnly(t *testin
 	}
 
 	var b strings.Builder
-	writeFullWebhooksSection(&b, hooks)
+	writeFullWebhooksSection(&b, hooks, nil)
 	got := b.String()
 
 	for _, secret := range []string{"hookpass", "hookuser", "SECRETPATHVALUE", "B000", "querysecret"} {

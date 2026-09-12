@@ -48,17 +48,24 @@ func countMRStates(mrs []*gl.BasicMergeRequest) (merged, open int) {
 	return merged, open
 }
 
-// writeDueDateSection appends the due date with remaining/overdue days to the builder.
+// writeDueDateSection appends the due date with remaining/overdue days to the
+// builder.
+//
+// The date is rendered by [toolutil.FormatTime], the one display form this
+// server shows a reader, rather than by a layout of this file's own: a due date
+// is a date GitLab sent, and a prompt has no more reason to spell it its own
+// way than a card does.
 func writeDueDateSection(b *strings.Builder, dueDate *gl.ISOTime) {
 	if dueDate == nil {
 		return
 	}
 	t := time.Time(*dueDate)
+	shown := toolutil.FormatTime(t.Format(toolutil.DateFormatISO))
 	daysLeft := int(time.Until(t).Hours() / 24)
 	if daysLeft >= 0 {
-		fmt.Fprintf(b, "\n**Due Date**: %s (%d days remaining)\n", t.Format(toolutil.DateFormatISO), daysLeft)
+		fmt.Fprintf(b, "\n**Due Date**: %s (%d days remaining)\n", shown, daysLeft)
 	} else {
-		fmt.Fprintf(b, "\n**Due Date**: %s (**%d days overdue**)\n", t.Format(toolutil.DateFormatISO), -daysLeft)
+		fmt.Fprintf(b, "\n**Due Date**: %s (**%d days overdue**)\n", shown, -daysLeft)
 	}
 }
 
@@ -137,7 +144,7 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 		b.WriteString("\n")
 	}
 
-	b.WriteString("---\nPlease analyze milestone progress, identify risks of missing due dates, and suggest priorities.\n")
+	writeClosingRule(&b, "Please analyze milestone progress, identify risks of missing due dates, and suggest priorities.")
 
 	return promptResult(b.String()), nil
 }
@@ -206,7 +213,7 @@ func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, r
 	var pieLabels []string
 	for _, l := range labels {
 		if l.OpenIssuesCount > 0 && len(pieLabels) < 8 {
-			pieLabels = append(pieLabels, fmt.Sprintf("    %q : %d", l.Name, l.OpenIssuesCount))
+			pieLabels = append(pieLabels, fmt.Sprintf("    %s : %d", mermaidQuoted(l.Name), l.OpenIssuesCount))
 		}
 	}
 	if len(pieLabels) > 0 {
@@ -219,7 +226,7 @@ func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, r
 		b.WriteString("\n")
 	}
 
-	b.WriteString("---\nPlease analyze label usage patterns, identify underused labels, and suggest improvements to the labeling strategy.\n")
+	writeClosingRule(&b, "Please analyze label usage patterns, identify underused labels, and suggest improvements to the labeling strategy.")
 
 	return promptResult(b.String()), nil
 }
@@ -288,7 +295,7 @@ func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Clie
 		b.WriteString("\n")
 	}
 
-	b.WriteString("---\nPlease analyze group milestone progress and identify cross-project risks.\n")
+	writeClosingRule(&b, "Please analyze group milestone progress and identify cross-project risks.")
 
 	return promptResult(b.String()), nil
 }
@@ -349,7 +356,7 @@ func handleProjectContributors(ctx context.Context, client *gitlabclient.Client,
 		if len(pieEntries) >= 8 {
 			break
 		}
-		pieEntries = append(pieEntries, fmt.Sprintf("    %q : %d", c.Name, c.Commits))
+		pieEntries = append(pieEntries, fmt.Sprintf("    %s : %d", mermaidQuoted(c.Name), c.Commits))
 	}
 	if len(pieEntries) > 0 {
 		writeMermaidChart(&b, func(chart *strings.Builder) {
@@ -361,7 +368,7 @@ func handleProjectContributors(ctx context.Context, client *gitlabclient.Client,
 		b.WriteString("\n")
 	}
 
-	b.WriteString("---\nPlease analyze contributor distribution, identify key contributors, and note any bus factor risks.\n")
+	writeClosingRule(&b, "Please analyze contributor distribution, identify key contributors, and note any bus factor risks.")
 
 	return promptResult(b.String()), nil
 }
