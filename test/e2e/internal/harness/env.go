@@ -53,8 +53,18 @@ type Env struct {
 // changed anything.
 func New(t *testing.T, opts ...Option) *Env {
 	t.Helper()
+	return newEnv(t, bootstrap(t), opts...)
+}
 
-	inst := bootstrap(t)
+// newEnv prepares one test's Env against an instance the caller already
+// resolved.
+//
+// It is split from New so that the harness's own tests, which drive the real
+// binary against a stub GitLab, can build an Env without the package-wide
+// bootstrap a real run goes through. Everything a test observes is here; New
+// is the resolution of the instance and nothing else.
+func newEnv(t *testing.T, inst *instance, opts ...Option) *Env {
+	t.Helper()
 
 	var options envOptions
 	for _, opt := range opts {

@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -124,6 +125,10 @@ func Main(m *testing.M, req Requirement) int {
 
 	code := m.Run()
 
+	// Before the binary is removed, and in this order: on Windows a running
+	// executable cannot be deleted, so a child left alive would leave the
+	// build behind on every run.
+	closeSessions()
 	removeBuiltBinary()
 	return state.finish(code)
 }
@@ -257,6 +262,18 @@ type settings struct {
 
 // get returns one setting, or the empty string.
 func (s settings) get(key string) string { return s.values[key] }
+
+// with returns a copy of the settings carrying one different value.
+//
+// A copy rather than an assignment, because a session given its own credential
+// must not change the credential every other session inherits: the map is
+// shared by every reader of the run's configuration.
+func (s settings) with(key, value string) settings {
+	values := make(map[string]string, len(s.values)+1)
+	maps.Copy(values, s.values)
+	values[key] = value
+	return settings{values: values}
+}
 
 // loadSettings resolves the run's configuration, highest precedence first: the
 // process environment, the file E2E_ENV_FILE names, test/e2e/.env.docker in
