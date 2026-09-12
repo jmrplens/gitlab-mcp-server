@@ -8,218 +8,284 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Hints repeated across formatters, kept as constants so the same wording
-// reaches the model whichever action produced the result.
-const (
-	hintAwardNext     = "Use `gitlab_achievement_award` to hand this achievement to a user"
-	hintRecipientsNex = "Use `gitlab_achievement_recipients` to see who holds this achievement"
-	hintListNext      = "Use `gitlab_achievement_list` to see the other achievements in the namespace"
-	hintUserListNext  = "Use `gitlab_achievement_user_list` to see every award one user holds"
-	hintCursorNext    = "Pass the `end_cursor` above as `after` to fetch the next page"
-)
+// The hints name the canonical action IDs declared in action_specs.go, the one
+// form every surface resolves: the dynamic surface executes them directly and
+// the meta and individual surfaces resolve them to their own tool names, so a
+// hint written this way is never a name the serving surface does not register.
+// They used to name the individual tools (`gitlab_achievement_award`), which
+// the default dynamic surface does not register at all.
 
-// writeAchievementRows renders the fields shared by every single-achievement
-// view, so the detail and delete formatters cannot drift apart.
-func writeAchievementRows(sb *strings.Builder, a Achievement) {
-	fmt.Fprintf(sb, "| Field | Value |\n")
-	fmt.Fprintf(sb, "|-------|-------|\n")
-	fmt.Fprintf(sb, "| ID | %d |\n", a.ID)
-	fmt.Fprintf(sb, "| Name | %s |\n", toolutil.EscapeMdTableCell(a.Name))
-	fmt.Fprintf(sb, "| Namespace ID | %d |\n", a.NamespaceID)
-	if a.Description != "" {
-		fmt.Fprintf(sb, "| Description | %s |\n", toolutil.EscapeMdTableCell(a.Description))
-	}
+// hintCursorNext tells the reader how to spend the cursor the pagination line
+// above it printed.
+const hintCursorNext = "Pass the `end_cursor` above as `after` to fetch the next page"
+
+// dash is the cell a list row shows where GitLab sent nothing, so a column
+// keeps its width and an empty cell is never read as a missing value.
+const dash = "-"
+
+// writeAchievementRows writes the fields shared by every single-achievement
+// card, so the detail and delete views cannot drift apart.
+func writeAchievementRows(c *toolutil.Card, a Achievement) {
+	c.Int("ID", a.ID)
+	c.Field("Name", a.Name)
+	c.Int("Namespace ID", a.NamespaceID)
+	// The description is whatever the namespace's owner typed, so it is quoted
+	// when it runs to more than one line rather than written as Markdown of the
+	// response.
+	c.Text("Description", a.Description)
 	if a.AvatarURL != "" {
-		fmt.Fprintf(sb, "| Avatar | %s |\n", toolutil.MdTitleLink("image", a.AvatarURL))
+		c.Link("Avatar", "image", a.AvatarURL)
 	}
-	if a.CreatedAt != "" {
-		fmt.Fprintf(sb, "| Created | %s |\n", toolutil.FormatTime(a.CreatedAt))
-	}
-	if a.UpdatedAt != "" {
-		fmt.Fprintf(sb, "| Updated | %s |\n", toolutil.FormatTime(a.UpdatedAt))
-	}
+	c.Time("Created", a.CreatedAt)
+	c.Time("Updated", a.UpdatedAt)
 }
 
-// writeUserAchievementRows renders the fields shared by every single-award view.
-func writeUserAchievementRows(sb *strings.Builder, u UserAchievement) {
-	fmt.Fprintf(sb, "| Field | Value |\n")
-	fmt.Fprintf(sb, "|-------|-------|\n")
-	fmt.Fprintf(sb, "| Award ID | %d |\n", u.ID)
-	fmt.Fprintf(sb, "| Achievement ID | %d |\n", u.AchievementID)
-	fmt.Fprintf(sb, "| User ID | %d |\n", u.UserID)
-	fmt.Fprintf(sb, "| Awarded By | %d |\n", u.AwardedByUserID)
-	fmt.Fprintf(sb, "| Shown On Profile | %s |\n", yesNo(u.ShowOnProfile))
-	if u.AwardMessage != "" {
-		fmt.Fprintf(sb, "| Message | %s |\n", toolutil.EscapeMdTableCell(u.AwardMessage))
-	}
+// writeUserAchievementRows writes the fields shared by every single-award card.
+func writeUserAchievementRows(c *toolutil.Card, u UserAchievement) {
+	c.Int("Award ID", u.ID)
+	c.Int("Achievement ID", u.AchievementID)
+	c.Int("User ID", u.UserID)
+	c.Int("Awarded By", u.AwardedByUserID)
+	c.Bool("Shown On Profile", u.ShowOnProfile)
+	// The award message is a note whoever awarded it typed.
+	c.Text("Message", u.AwardMessage)
 	if u.Priority != nil {
-		fmt.Fprintf(sb, "| Priority | %d |\n", *u.Priority)
+		c.Int("Priority", *u.Priority)
 	}
-	if u.RevokedAt != "" {
-		fmt.Fprintf(sb, "| Revoked | %s |\n", toolutil.FormatTime(u.RevokedAt))
-	}
+	c.Time("Revoked", u.RevokedAt)
 	if u.RevokedByUserID != nil {
-		fmt.Fprintf(sb, "| Revoked By | %d |\n", *u.RevokedByUserID)
+		c.Int("Revoked By", *u.RevokedByUserID)
 	}
-	if u.CreatedAt != "" {
-		fmt.Fprintf(sb, "| Created | %s |\n", toolutil.FormatTime(u.CreatedAt))
+	c.Time("Created", u.CreatedAt)
+	c.Time("Updated", u.UpdatedAt)
+}
+
+// userAchievementColumns are the columns every award table shares.
+var userAchievementColumns = []string{
+	"Award ID", "Achievement ID", "User ID", "Priority", "On Profile", "Revoked", "Message",
+}
+
+// userAchievementCells renders one award as the cells of an award table. The
+// revoked column is what tells a reader that a listed award is no longer held,
+// since the API returns revoked awards alongside live ones.
+func userAchievementCells(award UserAchievement) []string {
+	priority := dash
+	if award.Priority != nil {
+		priority = strconv.FormatInt(*award.Priority, 10)
 	}
-	if u.UpdatedAt != "" {
-		fmt.Fprintf(sb, "| Updated | %s |\n", toolutil.FormatTime(u.UpdatedAt))
+	revoked := dash
+	if award.RevokedAt != "" {
+		revoked = toolutil.FormatTime(award.RevokedAt)
+	}
+	message := toolutil.EscapeMdTableCell(award.AwardMessage)
+	if message == "" {
+		message = dash
+	}
+	return []string{
+		strconv.FormatInt(award.ID, 10),
+		strconv.FormatInt(award.AchievementID, 10),
+		strconv.FormatInt(award.UserID, 10),
+		priority,
+		toolutil.BoolEmoji(award.ShowOnProfile),
+		revoked,
+		message,
 	}
 }
 
-// writeUserAchievementTable renders a set of awards as one table. The revoked
-// column is what tells a reader that a listed award is no longer held, since
-// the API returns revoked awards alongside live ones.
+// writeUserAchievementTable renders a set of awards as one table.
 func writeUserAchievementTable(sb *strings.Builder, awards []UserAchievement) {
-	fmt.Fprintf(sb, "| Award ID | Achievement ID | User ID | Priority | On Profile | Revoked | Message |\n")
-	fmt.Fprintf(sb, "|---------:|---------------:|--------:|---------:|------------|---------|---------|\n")
+	sb.WriteString(toolutil.MarkdownTableHeader(userAchievementColumns...))
 	for _, award := range awards {
-		priority := "-"
-		if award.Priority != nil {
-			priority = strconv.FormatInt(*award.Priority, 10)
-		}
-		revoked := "-"
-		if award.RevokedAt != "" {
-			revoked = toolutil.FormatTime(award.RevokedAt)
-		}
-		message := toolutil.EscapeMdTableCell(award.AwardMessage)
-		if message == "" {
-			message = "-"
-		}
-		fmt.Fprintf(sb, "| %d | %d | %d | %s | %s | %s | %s |\n",
-			award.ID, award.AchievementID, award.UserID, priority, yesNo(award.ShowOnProfile), revoked, message)
+		sb.WriteString(toolutil.MarkdownTableRow(userAchievementCells(award)...))
 	}
 }
 
-func yesNo(b bool) string {
-	if b {
-		return "Yes"
-	}
-	return "No"
-}
-
-// FormatOutputMarkdown formats one achievement definition as Markdown.
+// FormatOutputMarkdown renders one achievement definition as the card of one
+// object.
 func FormatOutputMarkdown(out Output) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Achievement: %s\n\n", toolutil.EscapeMdHeading(out.Achievement.Name))
-	writeAchievementRows(&sb, out.Achievement)
-	toolutil.WriteHints(&sb, hintAwardNext, hintRecipientsNex, hintListNext)
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Achievement: "+out.Achievement.Name)
+	writeAchievementRows(c, out.Achievement)
+	c.End(
+		toolutil.HintAction(actionAward, "hand this achievement to a user"),
+		toolutil.HintAction(actionRecipients, "see who holds this achievement"),
+		toolutil.HintAction(actionList, "see the other achievements in the namespace"),
+	)
+	return b.String()
 }
 
-// FormatDeleteOutputMarkdown formats a deleted achievement as Markdown.
+// FormatDeleteOutputMarkdown renders a deleted achievement as the card of the
+// object as it looked when it was removed, which is what the mutation returns
+// instead of a bare acknowledgement.
+//
+// The server's own confirmation sentence is a row rather than a paragraph of
+// its own: it arrives on the output struct, and a value written as a bare
+// paragraph line opens a heading of its own whenever it starts with a '#'.
 func FormatDeleteOutputMarkdown(out DeleteOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Achievement Deleted\n\n%s\n\n", out.Message)
-	writeAchievementRows(&sb, out.Achievement)
-	toolutil.WriteHints(&sb, hintListNext, "Use `gitlab_achievement_create` to define a replacement achievement")
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Achievement Deleted")
+	c.Field("Result", out.Message)
+	writeAchievementRows(c, out.Achievement)
+	c.End(
+		toolutil.HintAction(actionList, "see the other achievements in the namespace"),
+		toolutil.HintAction(actionCreate, "define a replacement achievement"),
+	)
+	return b.String()
 }
 
-// FormatUserAchievementOutputMarkdown formats one award as Markdown.
+// FormatUserAchievementOutputMarkdown renders one award as the card of one
+// object.
 func FormatUserAchievementOutputMarkdown(out UserAchievementOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Award %d\n\n", out.UserAchievement.ID)
-	writeUserAchievementRows(&sb, out.UserAchievement)
-	toolutil.WriteHints(&sb,
-		"Use `gitlab_achievement_user_achievement_update` to change whether this award shows on the profile",
-		"Use `gitlab_achievement_revoke` to revoke it while keeping the record",
-		hintUserListNext)
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, fmt.Sprintf("Award %d", out.UserAchievement.ID))
+	writeUserAchievementRows(c, out.UserAchievement)
+	c.End(
+		toolutil.HintAction(actionUserAchievementUpdate, "change whether this award shows on the profile"),
+		toolutil.HintAction(actionRevoke, "revoke it while keeping the record"),
+		toolutil.HintAction(actionUserList, "see every award one user holds"),
+	)
+	return b.String()
 }
 
-// FormatUserAchievementMutationOutputMarkdown formats a revoked or deleted
-// award as Markdown.
+// FormatUserAchievementMutationOutputMarkdown renders a revoked or deleted
+// award as the card of the award the call was about.
 func FormatUserAchievementMutationOutputMarkdown(out UserAchievementMutationOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Award %d\n\n%s\n\n", out.UserAchievement.ID, out.Message)
-	writeUserAchievementRows(&sb, out.UserAchievement)
-	toolutil.WriteHints(&sb, hintUserListNext, hintRecipientsNex)
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, fmt.Sprintf("Award %d", out.UserAchievement.ID))
+	c.Field("Result", out.Message)
+	writeUserAchievementRows(c, out.UserAchievement)
+	c.End(
+		toolutil.HintAction(actionUserList, "see every award one user holds"),
+		toolutil.HintAction(actionRecipients, "see who holds this achievement"),
+	)
+	return b.String()
 }
 
-// FormatListMarkdown formats a page of achievement definitions as a table.
+// FormatListMarkdown renders a page of achievement definitions as a Markdown
+// table: a collection of objects that share columns.
+//
+// The hints close the response. They used to be written between the heading and
+// the table header, which both continued the guidance paragraph — so the table
+// never rendered — and left the section neither leading nor trailing, where
+// ExtractHints finds nothing and next_steps came back empty.
 func FormatListMarkdown(out ListOutput) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Achievements (%d)\n\n", len(out.Achievements))
 	if len(out.Achievements) == 0 {
-		sb.WriteString("No achievements found in this namespace.\n")
-		toolutil.WriteHints(&sb, "Use `gitlab_achievement_create` to define the first achievement for this namespace")
+		sb.WriteString(toolutil.EmptyMessage("achievements"))
+		toolutil.WriteHints(&sb, toolutil.HintAction(actionCreate, "define the first achievement for this namespace"))
 		return sb.String()
 	}
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks, hintAwardNext, hintCursorNext)
-	fmt.Fprintf(&sb, "| ID | Name | Namespace ID | Description | Avatar |\n")
-	fmt.Fprintf(&sb, "|---:|------|-------------:|-------------|--------|\n")
+	toolutil.WriteListHeading(&sb, "Achievements", len(out.Achievements), toolutil.PaginationOutput{})
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Namespace ID", "Description", "Avatar"))
+	linked := false
 	for _, achievement := range out.Achievements {
 		description := toolutil.EscapeMdTableCell(achievement.Description)
 		if description == "" {
-			description = "-"
+			description = dash
 		}
-		avatar := "-"
+		avatar := dash
 		if achievement.AvatarURL != "" {
 			avatar = toolutil.MdTitleLink("image", achievement.AvatarURL)
+			linked = true
 		}
-		fmt.Fprintf(&sb, "| %d | %s | %d | %s | %s |\n",
-			achievement.ID, toolutil.EscapeMdTableCell(achievement.Name), achievement.NamespaceID, description, avatar)
+		sb.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(achievement.ID, 10),
+			toolutil.EscapeMdTableCell(achievement.Name),
+			strconv.FormatInt(achievement.NamespaceID, 10),
+			description,
+			avatar,
+		))
 	}
-	fmt.Fprintf(&sb, "\n%s\n", toolutil.FormatGraphQLPagination(out.Pagination, len(out.Achievements)))
+	writeCursorFooter(&sb, out.Pagination, len(out.Achievements), linked,
+		toolutil.HintAction(actionAward, "hand one of these achievements to a user"),
+		hintCursorNext,
+	)
 	return sb.String()
 }
 
-// FormatUserAchievementListMarkdown formats a page of awards as a table.
+// writeCursorFooter closes a cursor-paginated list: the cursor summary, then
+// the guidance section, with the instruction to keep links only when a cell
+// carried one. The pagination the footer itself would write is empty because
+// this list's own cursor line has already been written.
+func writeCursorFooter(sb *strings.Builder, p toolutil.GraphQLPaginationOutput, shown int, linked bool, hints ...string) {
+	toolutil.WriteGraphQLPagination(sb, p, shown)
+	toolutil.WriteListFooter(sb, toolutil.PaginationOutput{}, linked, hints...)
+}
+
+// FormatUserAchievementListMarkdown renders a page of awards as a Markdown
+// table. No cell carries a link, so the hints do not ask for links to be kept.
 func FormatUserAchievementListMarkdown(out UserAchievementListOutput) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Awards (%d)\n\n", len(out.UserAchievements))
 	if len(out.UserAchievements) == 0 {
-		sb.WriteString("No awards found.\n")
-		toolutil.WriteHints(&sb, hintAwardNext)
+		sb.WriteString(toolutil.EmptyMessage("awards"))
+		toolutil.WriteHints(&sb, toolutil.HintAction(actionAward, "hand an achievement to a user"))
 		return sb.String()
 	}
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks, hintRecipientsNex, hintCursorNext)
+	toolutil.WriteListHeading(&sb, "Awards", len(out.UserAchievements), toolutil.PaginationOutput{})
 	writeUserAchievementTable(&sb, out.UserAchievements)
-	fmt.Fprintf(&sb, "\n%s\n", toolutil.FormatGraphQLPagination(out.Pagination, len(out.UserAchievements)))
+	writeCursorFooter(&sb, out.Pagination, len(out.UserAchievements), false,
+		toolutil.HintAction(actionRecipients, "see who holds this achievement"),
+		hintCursorNext,
+	)
 	return sb.String()
 }
 
-// FormatReorderOutputMarkdown formats a reordered set of awards as a table.
+// FormatReorderOutputMarkdown renders a reordered set of awards as the card of
+// the reorder, with the awards as the nested collection they are. The mutation
+// returns the whole reordered set rather than a page, so there is no cursor.
 func FormatReorderOutputMarkdown(out ReorderOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Awards Reordered (%d)\n\n%s\n\n", len(out.UserAchievements), out.Message)
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Awards Reordered")
+	c.Field("Result", out.Message)
+	c.Count("Awards", int64(len(out.UserAchievements)))
 	if len(out.UserAchievements) == 0 {
-		sb.WriteString("No awards were returned.\n")
-		toolutil.WriteHints(&sb, hintUserListNext)
-		return sb.String()
+		c.Note("GitLab returned no awards for this reorder.")
+		c.End(toolutil.HintAction(actionUserList, "see every award one user holds"))
+		return b.String()
 	}
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks, hintUserListNext)
-	writeUserAchievementTable(&sb, out.UserAchievements)
-	return sb.String()
+	table := c.Table("Awards", userAchievementColumns...)
+	for _, award := range out.UserAchievements {
+		table.Row(userAchievementCells(award)...)
+	}
+	c.End(toolutil.HintAction(actionUserList, "see every award one user holds"))
+	return b.String()
 }
 
-// FormatUniqueUsersMarkdown formats a page of distinct recipients as a table.
+// FormatUniqueUsersMarkdown renders a page of distinct recipients as a
+// Markdown table.
 func FormatUniqueUsersMarkdown(out UniqueUsersOutput) string {
+	users := make([]*toolutil.BasicUserOutput, 0, len(out.Users))
+	for _, user := range out.Users {
+		if user != nil {
+			users = append(users, user)
+		}
+	}
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Achievement Recipients (%d)\n\n", len(out.Users))
-	if len(out.Users) == 0 {
-		sb.WriteString("No users hold this achievement.\n")
-		toolutil.WriteHints(&sb, hintAwardNext)
+	if len(users) == 0 {
+		sb.WriteString(toolutil.EmptyMessage("recipients of this achievement"))
+		toolutil.WriteHints(&sb, toolutil.HintAction(actionAward, "hand this achievement to a user"))
 		return sb.String()
 	}
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks, hintRecipientsNex, hintCursorNext)
-	fmt.Fprintf(&sb, "| ID | Username | Name | State |\n")
-	fmt.Fprintf(&sb, "|---:|----------|------|-------|\n")
-	for _, user := range out.Users {
-		if user == nil {
-			continue
+	toolutil.WriteListHeading(&sb, "Achievement Recipients", len(users), toolutil.PaginationOutput{})
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "State"))
+	linked := false
+	for _, user := range users {
+		linked = linked || (user.WebURL != "" && user.Username != "")
+		handle := toolutil.MdUserLink(user.Username, user.WebURL)
+		if handle == "" {
+			handle = dash
 		}
-		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n",
-			user.ID,
-			toolutil.MdTitleLink(user.Username, user.WebURL),
+		sb.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(user.ID, 10),
+			handle,
 			toolutil.EscapeMdTableCell(user.Name),
-			toolutil.EscapeMdTableCell(user.State))
+			toolutil.EscapeMdTableCell(user.State),
+		))
 	}
-	fmt.Fprintf(&sb, "\n%s\n", toolutil.FormatGraphQLPagination(out.Pagination, len(out.Users)))
+	writeCursorFooter(&sb, out.Pagination, len(users), linked,
+		toolutil.HintAction(actionRecipients, "see who holds this achievement"),
+		hintCursorNext,
+	)
 	return sb.String()
 }
 

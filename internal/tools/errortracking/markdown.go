@@ -2,53 +2,74 @@ package errortracking
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatSettingsMarkdown formats error tracking settings as markdown.
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionKeyList   = "admin.error_tracking_list"
+	actionKeyCreate = "admin.error_tracking_create"
+	actionKeyDelete = "admin.error_tracking_delete"
+	actionSettings  = "admin.error_tracking_get_settings"
+)
+
+// FormatSettingsMarkdown renders a project's error tracking settings as the
+// card of one object.
 func FormatSettingsMarkdown(out SettingsOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Error Tracking Settings\n\n")
-	fmt.Fprintf(&sb, "- **Active**: %v\n", out.Active)
-	fmt.Fprintf(&sb, "- **Integrated**: %v\n", out.Integrated)
-	if out.ProjectName != "" {
-		fmt.Fprintf(&sb, "- **Project Name**: %s\n", toolutil.EscapeMdTableCell(out.ProjectName))
-	}
-	if out.SentryExternalURL != "" {
-		// Both come from the Sentry integration a maintainer configured.
-		fmt.Fprintf(&sb, "- **Sentry URL**: %s\n", toolutil.EscapeMdTableCell(out.SentryExternalURL))
-	}
-	toolutil.WriteHints(&sb, "Use `gitlab_list_error_tracking_client_keys` to view client keys")
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Error Tracking Settings")
+	c.Bool("Active", out.Active)
+	c.Bool("Integrated", out.Integrated)
+	c.Field("Project Name", out.ProjectName)
+	// Both come from the Sentry integration a maintainer configured.
+	c.Field("Sentry URL", out.SentryExternalURL)
+	c.Field("API URL", out.APIURL)
+	c.End(toolutil.HintAction(actionKeyList, "see the client keys this project publishes"))
+	return b.String()
 }
 
-// FormatListKeysMarkdown formats client keys as markdown.
+// FormatListKeysMarkdown renders a page of error tracking client keys as a
+// Markdown table: a collection of objects that share columns.
 func FormatListKeysMarkdown(out ListClientKeysOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Error Tracking Client Keys\n\n")
 	if len(out.Keys) == 0 {
-		sb.WriteString("No client keys found.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("client keys")
 	}
-	sb.WriteString("| ID | Active | Public Key |\n|----|--------|------------|\n")
+	var sb strings.Builder
+	toolutil.WriteListHeading(&sb, "Error Tracking Client Keys", len(out.Keys), out.Pagination)
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Active", "Public Key"))
 	for _, k := range out.Keys {
-		fmt.Fprintf(&sb, "| %d | %v | %s |\n", k.ID, k.Active, toolutil.EscapeMdTableCell(k.PublicKey))
+		sb.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(k.ID, 10),
+			toolutil.BoolEmoji(k.Active),
+			// The key GitLab generated, hexadecimal digits, shown as the value
+			// a reader copies.
+			toolutil.MdCodeSpanCell(k.PublicKey),
+		))
 	}
-	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(&sb, "Use `gitlab_create_error_tracking_client_key` to generate a new key")
+	toolutil.WriteListFooter(&sb, out.Pagination, false,
+		toolutil.HintAction(actionKeyCreate, "generate another key"),
+		toolutil.HintAction(actionKeyDelete, "revoke one by its ID"),
+	)
 	return sb.String()
 }
 
-// FormatKeyMarkdown formats a single client key as markdown.
+// FormatKeyMarkdown renders a single client key as the card of one object. The
+// key and the DSN are code spans: both are values a reader has to copy into a
+// client's configuration exactly as GitLab composed them.
 func FormatKeyMarkdown(k ClientKeyItem) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Error Tracking Client Key\n\n- **ID**: %d\n- **Active**: %v\n- **Public Key**: %s\n- **Sentry DSN**: %s\n",
-		//gitlab:allow-unescaped k.PublicKey: the client key GitLab generated, hexadecimal digits.
-		//gitlab:allow-unescaped k.SentryDsn: the DSN GitLab composed from the instance URL, that generated key and a numeric project id.
-		k.ID, k.Active, k.PublicKey, k.SentryDsn)
-	toolutil.WriteHints(&b, "Use `gitlab_delete_error_tracking_client_key` to revoke this key")
+	c := toolutil.NewCard(&b, fmt.Sprintf("Error Tracking Client Key #%d", k.ID))
+	c.Int("ID", k.ID)
+	c.Bool("Active", k.Active)
+	c.Code("Public Key", k.PublicKey)
+	c.Code("Sentry DSN", k.SentryDsn)
+	c.End(
+		toolutil.HintAction(actionKeyDelete, "revoke this key"),
+		toolutil.HintAction(actionSettings, "check whether error tracking is enabled for the project"),
+	)
 	return b.String()
 }
 

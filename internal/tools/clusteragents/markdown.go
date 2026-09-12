@@ -2,96 +2,131 @@ package clusteragents
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical action IDs the hints name. They used to name one surface's tool
+// ("Use action 'get'", "Use `gitlab_get_cluster_agent_token`"), which is a
+// route the default dynamic surface does not answer and the meta surface
+// spells differently; the catalog ID is the one form every surface resolves.
+const (
+	actionAgentGet    = "admin.cluster_agent_get"
+	actionAgentList   = "admin.cluster_agent_list"
+	actionTokenGet    = "admin.cluster_agent_token_get"
+	actionTokenList   = "admin.cluster_agent_token_list"
+	actionTokenCreate = "admin.cluster_agent_token_create"
+	actionTokenRevoke = "admin.cluster_agent_token_revoke"
+)
+
 // FormatAgentsListMarkdown renders cluster agents as a compact Markdown table.
 func FormatAgentsListMarkdown(out ListAgentsOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Cluster Agents\n\n")
-	toolutil.WriteListSummary(&sb, len(out.Agents), out.Pagination)
 	if len(out.Agents) == 0 {
-		sb.WriteString("No cluster agents found.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("cluster agents")
 	}
+	var sb strings.Builder
+	toolutil.WriteListHeading(&sb, "Cluster Agents", len(out.Agents), out.Pagination)
 	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name"))
 	for _, a := range out.Agents {
-		fmt.Fprintf(&sb, "| %d | %s |\n", a.ID, toolutil.EscapeMdTableCell(a.Name))
+		sb.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(a.ID, 10),
+			toolutil.EscapeMdTableCell(a.Name),
+		))
 	}
-	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(&sb, "Use action 'get' with agent_id for full agent details")
+	toolutil.WriteListFooter(&sb, out.Pagination, false,
+		toolutil.HintAction(actionAgentGet, "read one agent with its configuration project"),
+		toolutil.HintAction(actionTokenList, "see the tokens issued for an agent"),
+	)
 	return sb.String()
 }
 
-// FormatAgentMarkdown renders a single cluster agent summary.
+// FormatAgentMarkdown renders a single cluster agent as the card of one object.
 func FormatAgentMarkdown(a AgentItem) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Cluster Agent\n\n- **ID**: %d\n- **Name**: %s\n", a.ID, toolutil.EscapeMdTableCell(a.Name))
-	if a.CreatedAt != "" {
-		//gitlab:allow-unescaped a.CreatedAt: a timestamp this package formatted itself, through toolutil.FormatTimePtr.
-		fmt.Fprintf(&b, "- **Created At**: %s\n", a.CreatedAt)
-	}
-	if a.CreatedByUserID != 0 {
-		fmt.Fprintf(&b, "- **Created By User ID**: %d\n", a.CreatedByUserID)
+	c := toolutil.NewCard(&b, fmt.Sprintf("Cluster Agent #%d", a.ID))
+	c.Int("ID", a.ID)
+	c.Field("Name", a.Name)
+	// The agent's timestamps arrive on the output struct in the wire form, so
+	// the card is what renders them for a reader.
+	c.Time("Created At", a.CreatedAt)
+	c.Count("Created By User ID", a.CreatedByUserID)
+	// Receptive is stated only when it holds: GitLab connecting out to the
+	// agent is the exception, and a cross beside every ordinary agent says
+	// nothing a reader needs.
+	c.Flag(toolutil.EmojiLink, "Receptive", a.IsReceptive)
+	if a.ConfigProject.ID != 0 {
+		project := c.Sub("Config Project")
+		project.Int("ID", a.ConfigProject.ID)
+		project.Field("Name", configProjectName(a.ConfigProject))
 	}
 	if a.IsReceptive {
-		b.WriteString("- **Receptive**: yes (GitLab connects out to this agent)\n")
+		c.Note("A receptive agent is one GitLab connects out to, rather than one that connects in to GitLab.")
 	}
-	if a.ConfigProject.ID != 0 {
-		cp := a.ConfigProject
-		name := cp.PathWithNamespace
-		if name == "" {
-			name = cp.Name
-		}
-		fmt.Fprintf(&b, "- **Config Project**: %s (ID %d)\n", toolutil.EscapeMdTableCell(name), cp.ID)
-	}
-	toolutil.WriteHints(&b, "Use action 'list_tokens' to see tokens for this agent")
+	c.End(
+		toolutil.HintAction(actionTokenList, "see the tokens issued for this agent"),
+		toolutil.HintAction(actionAgentList, "see the other agents in the project"),
+	)
 	return b.String()
 }
 
-// FormatTokensListMarkdown renders cluster agent tokens as a compact Markdown table.
-func FormatTokensListMarkdown(out ListAgentTokensOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Agent Tokens\n\n")
-	toolutil.WriteListSummary(&sb, len(out.Tokens), out.Pagination)
-	if len(out.Tokens) == 0 {
-		sb.WriteString("No agent tokens found.\n")
-		return sb.String()
+// configProjectName is the fullest name GitLab sent for the agent's
+// configuration project: its path with namespace, or its bare name.
+func configProjectName(cp ConfigProjectOutput) string {
+	if cp.PathWithNamespace != "" {
+		return cp.PathWithNamespace
 	}
+	return cp.Name
+}
+
+// FormatTokensListMarkdown renders cluster agent tokens as a compact Markdown
+// table.
+func FormatTokensListMarkdown(out ListAgentTokensOutput) string {
+	if len(out.Tokens) == 0 {
+		return toolutil.EmptyMessage("agent tokens")
+	}
+	var sb strings.Builder
+	toolutil.WriteListHeading(&sb, "Agent Tokens", len(out.Tokens), out.Pagination)
 	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Status"))
 	for _, t := range out.Tokens {
-		//gitlab:allow-unescaped t.Status: an agent token status GitLab picks from a fixed set (active, revoked).
-		fmt.Fprintf(&sb, "| %d | %s | %s |\n", t.ID, toolutil.EscapeMdTableCell(t.Name), t.Status)
+		sb.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(t.ID, 10),
+			toolutil.EscapeMdTableCell(t.Name),
+			toolutil.EscapeMdTableCell(t.Status),
+		))
 	}
-	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(&sb, "Use `gitlab_get_cluster_agent_token` to view token details")
+	toolutil.WriteListFooter(&sb, out.Pagination, false,
+		toolutil.HintAction(actionTokenGet, "read one token's details"),
+		toolutil.HintAction(actionTokenCreate, "issue another token for the agent"),
+	)
 	return sb.String()
 }
 
-// FormatTokenMarkdown renders a single cluster agent token summary.
+// FormatTokenMarkdown renders a single cluster agent token as the card of one
+// object.
+//
+// The secret is a code span written by the card rather than a fence of the
+// formatter's own: the value has to be copied back verbatim, and a hand-written
+// fence is closed by the first backtick run the value happens to contain.
+// [toolutil.Card.Secret] also supplies the "store it securely" hint, so the
+// sentence is written once, where it also reaches next_steps.
 func FormatTokenMarkdown(t AgentTokenItem) string {
-	var sb strings.Builder
-	//gitlab:allow-unescaped t.Status: an agent token status GitLab picks from a fixed set (active, revoked).
-	fmt.Fprintf(&sb, "## Agent Token\n\n- **ID**: %d\n- **Name**: %s\n- **Status**: %s\n", t.ID, toolutil.EscapeMdTableCell(t.Name), t.Status)
-	if t.Description != "" {
-		fmt.Fprintf(&sb, "- **Description**: %s\n", toolutil.EscapeMdTableCell(t.Description))
-	}
-	if t.CreatedAt != "" {
-		//gitlab:allow-unescaped t.CreatedAt: a timestamp this package formatted itself, through toolutil.FormatTimePtr.
-		fmt.Fprintf(&sb, "- **Created At**: %s\n", t.CreatedAt)
-	}
-	if t.LastUsedAt != "" {
-		//gitlab:allow-unescaped t.LastUsedAt: a timestamp this package formatted itself, through toolutil.FormatTimePtr.
-		fmt.Fprintf(&sb, "- **Last Used At**: %s\n", t.LastUsedAt)
-	}
-	if t.Token != "" {
-		//gitlab:allow-unescaped t.Token: the secret GitLab generated, which the reader has to copy back verbatim.
-		fmt.Fprintf(&sb, "- **Token**: %s\n", t.Token)
-	}
-	toolutil.WriteHints(&sb, "Store the token value securely. It cannot be retrieved later")
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, fmt.Sprintf("Agent Token #%d", t.ID))
+	c.Int("ID", t.ID)
+	c.Field("Name", t.Name)
+	c.Field("Status", t.Status)
+	// The description is whatever the person who issued the token typed.
+	c.Text("Description", t.Description)
+	c.Time("Created At", t.CreatedAt)
+	c.Time("Last Used At", t.LastUsedAt)
+	c.Secret("Token", t.Token)
+	c.End(
+		toolutil.HintAction(actionTokenList, "see the other tokens issued for this agent"),
+		toolutil.HintAction(actionTokenRevoke, "revoke this token"),
+	)
+	return b.String()
 }
 
 func init() {

@@ -161,26 +161,7 @@ func TestDeleteMetricImage_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown(t *testing.T) {
-	out := ListMetricImagesOutput{Images: []MetricImageItem{{ID: 1, Filename: "img.png", URL: "https://example.com"}}}
-	md := FormatListMarkdown(out)
-	if md == "" {
-		t.Error("expected non-empty markdown")
-	}
-}
-
-// TestFormatImageMarkdown verifies the ImageMarkdown Markdown formatter for a representative image input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatImageMarkdown(t *testing.T) {
-	md := FormatImageMarkdown(MetricImageItem{ID: 1, Filename: testFilename})
-	if md == "" {
-		t.Error("expected non-empty markdown")
-	}
-}
+// The Markdown formatters are asserted whole in markdown_test.go.
 
 // TestListMetricImages_MissingAlertIID verifies that ListMetricImages_MissingAlertIID returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
@@ -455,23 +436,6 @@ func TestUploadMetricImage_WithOptionalFields(t *testing.T) {
 	}
 	if out.URLText != "link" {
 		t.Errorf("expected URLText link, got %s", out.URLText)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FormatListMarkdown — empty images
-// ---------------------------------------------------------------------------.
-
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListMetricImagesOutput{})
-	if !strings.Contains(md, "No metric images found") {
-		t.Errorf("expected empty-state message, got:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
 	}
 }
 

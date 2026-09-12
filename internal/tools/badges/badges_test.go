@@ -4,21 +4,16 @@
 package badges
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
-
-// errExpNonNilResult identifies the err exp non nil result constant used by this package.
-const errExpNonNilResult = "expected non-nil result"
 
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
@@ -46,21 +41,6 @@ const testBadgeName = "coverage"
 
 // testLinkURL identifies the test link URL constant used by this package.
 const testLinkURL = "https://example.com"
-
-func badgeMarkdownText(t *testing.T, result *mcp.CallToolResult) string {
-	t.Helper()
-	if result == nil {
-		t.Fatal("expected non-nil markdown result")
-	}
-	if len(result.Content) != 1 {
-		t.Fatalf("expected one content item, got %d", len(result.Content))
-	}
-	text, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected TextContent, got %T", result.Content[0])
-	}
-	return text.Text
-}
 
 // TestApplyOrderSort verifies that applyOrderSort copies only the supplied
 // order_by and sort fields onto a gl.ListOptions and is a no-op on a nil
@@ -475,42 +455,7 @@ func TestDeleteGroup_BadgeIDRequired(t *testing.T) {
 	}
 }
 
-// Formatters.
-
-// TestFormatBadgeListMarkdown_Empty verifies the BadgeListMarkdown_Empty Markdown formatter for a representative badgelist_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatBadgeListMarkdown_Empty(t *testing.T) {
-	result := FormatBadgeListMarkdown(nil, "Badges", toolutil.PaginationOutput{})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-}
-
-// TestFormatBadgeListMarkdown_WithData verifies the BadgeListMarkdown_WithData Markdown formatter for a representative badgelist_withdata input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatBadgeListMarkdown_WithData(t *testing.T) {
-	result := FormatBadgeListMarkdown([]BadgeItem{
-		{ID: 1, Name: testBadgeName, LinkURL: testLinkURL, ImageURL: "https://img.shields.io", Kind: "project"},
-	}, "Project Badges", toolutil.PaginationOutput{})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-}
-
-// TestFormatBadgeMarkdown verifies the BadgeMarkdown Markdown formatter for a representative badge input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatBadgeMarkdown(t *testing.T) {
-	result := FormatBadgeMarkdown(BadgeItem{
-		ID: 1, Name: testBadgeName, LinkURL: testLinkURL, ImageURL: "https://img.shields.io",
-		RenderedLinkURL: "https://rendered.com", RenderedImageURL: "https://rendered-img.com", Kind: "project",
-	})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-}
+// The Markdown formatters are asserted whole in markdown_test.go.
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
@@ -960,117 +905,6 @@ func TestPreviewGroup_WithName(t *testing.T) {
 	}
 	if out.Badge.ID != 1 {
 		t.Errorf("expected badge ID 1, got %d", out.Badge.ID)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Formatters — edge cases
-// ---------------------------------------------------------------------------.
-
-// TestFormatBadgeMarkdown_MinimalFields verifies the BadgeMarkdown_MinimalFields Markdown formatter for a representative badge_minimalfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatBadgeMarkdown_MinimalFields(t *testing.T) {
-	result := FormatBadgeMarkdown(BadgeItem{ID: 1, Name: "test", LinkURL: "u", ImageURL: "i"})
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	text := fmt.Sprint(result.Content[0])
-	if strings.Contains(text, "Rendered") {
-		t.Error("should not contain Rendered for empty rendered URLs")
-	}
-	if strings.Contains(text, "Kind") {
-		t.Error("should not contain Kind for empty kind")
-	}
-}
-
-// TestFormatBadgeListMarkdown_Pagination verifies the BadgeListMarkdown_Pagination Markdown formatter for a representative badgelist_pagination input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
-func TestFormatBadgeListMarkdown_Pagination(t *testing.T) {
-	result := FormatBadgeListMarkdown(
-		[]BadgeItem{{ID: 1, Name: "b", LinkURL: "l", ImageURL: "i", Kind: "project"}},
-		"Test Badges",
-		toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
-	)
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-}
-
-// TestMarkdownRegistry_BadgeOutputTypes verifies every badge output type is
-// registered with the Markdown registry and routes to the expected formatter.
-func TestMarkdownRegistry_BadgeOutputTypes(t *testing.T) {
-	badge := BadgeItem{ID: 1, Name: testBadgeName, LinkURL: testLinkURL, ImageURL: "https://img.shields.io", Kind: "project"}
-	tests := []struct {
-		name       string
-		output     any
-		want       string
-		wantAbsent string
-	}{
-		{
-			name:   "list project output",
-			output: ListProjectOutput{Badges: []BadgeItem{badge}},
-			want:   "## Project Badges (1)",
-		},
-		{
-			name:   "get project output",
-			output: GetProjectOutput{Badge: badge},
-			want:   "## Badge: coverage (ID: 1)",
-		},
-		{
-			name:   "add project output",
-			output: AddProjectOutput{Badge: badge},
-			want:   "## Badge: coverage (ID: 1)",
-		},
-		{
-			name:   "edit project output",
-			output: EditProjectOutput{Badge: badge},
-			want:   "## Badge: coverage (ID: 1)",
-		},
-		{
-			name:   "preview project output",
-			output: PreviewProjectOutput{Badge: badge},
-			want:   "## Badge: coverage (ID: 1)",
-		},
-		{
-			name:   "list group output",
-			output: ListGroupOutput{Badges: []BadgeItem{badge}},
-			want:   "## Group Badges (1)",
-		},
-		{
-			name:   "get group output",
-			output: GetGroupOutput{Badge: badge},
-			want:   "## Badge: coverage (ID: 1)",
-		},
-		{
-			name:   "add group output",
-			output: AddGroupOutput{Badge: badge},
-			want:   "## Badge: coverage (ID: 1)",
-		},
-		{
-			name:   "edit group output",
-			output: EditGroupOutput{Badge: badge},
-			want:   "## Badge: coverage (ID: 1)",
-		},
-		{
-			name:       "preview group output",
-			output:     PreviewGroupOutput{Badge: BadgeItem{ID: 2, Name: "preview", LinkURL: "u", ImageURL: "i"}},
-			want:       "## Badge: preview (ID: 2)",
-			wantAbsent: "**Kind**",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			text := badgeMarkdownText(t, toolutil.MarkdownForResult(tt.output))
-			if !strings.Contains(text, tt.want) {
-				t.Fatalf("markdown missing %q:\n%s", tt.want, text)
-			}
-			if tt.wantAbsent != "" && strings.Contains(text, tt.wantAbsent) {
-				t.Fatalf("markdown contains %q:\n%s", tt.wantAbsent, text)
-			}
-		})
 	}
 }
 

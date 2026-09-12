@@ -1,6 +1,13 @@
 // markdown_test.go asserts the Markdown rendering of every achievement output
-// type: the tables a model reads, the optional rows that only appear when the
-// API returned them, and the next-step hints each result carries.
+// type: the whole document each formatter writes, the optional rows that only
+// appear when the API returned them, and the next-step hints each result
+// carries.
+//
+// Every expectation is the complete rendered document rather than a fragment of
+// one. A substring assertion is how the defect class this migration closes
+// survived: a formatter opened a table, wrote a list row into it, and every
+// later "| Label | value |" rendered as literal pipes while a test asserting
+// that same substring kept passing.
 package achievements
 
 import (
@@ -45,86 +52,111 @@ var fullUserAchievement = UserAchievement{
 // bareUserAchievement is a live award with no message and no priority.
 var bareUserAchievement = UserAchievement{ID: 89, AchievementID: 1, UserID: 5, AwardedByUserID: 3}
 
-// assertContains fails when the rendered Markdown is missing a fragment.
-func assertContains(t *testing.T, rendered string, fragments ...string) {
+// The rows the two shared writers produce for the two fixtures, so an
+// expectation names them once.
+const (
+	fullAchievementRows = "- **ID**: 1\n" +
+		"- **Name**: First Commit\n" +
+		"- **Namespace ID**: 10\n" +
+		"- **Description**: Awarded for the first commit\n" +
+		"- **Avatar**: [image](https://example.com/badge.png)\n" +
+		"- **Created**: 25 May 2025 13:47 UTC\n" +
+		"- **Updated**: 26 May 2025 09:00 UTC\n"
+
+	fullUserAchievementRows = "- **Award ID**: 88\n" +
+		"- **Achievement ID**: 1\n" +
+		"- **User ID**: 2\n" +
+		"- **Awarded By**: 3\n" +
+		"- **Shown On Profile**: ✅\n" +
+		"- **Message**: Shipped the first release\n" +
+		"- **Priority**: 1\n" +
+		"- **Revoked**: 26 May 2025 09:00 UTC\n" +
+		"- **Revoked By**: 4\n" +
+		"- **Created**: 25 May 2025 13:47 UTC\n" +
+		"- **Updated**: 26 May 2025 09:00 UTC\n"
+
+	awardTableHeader = "| Award ID | Achievement ID | User ID | Priority | On Profile | Revoked | Message |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n"
+
+	fullAwardRow = "| 88 | 1 | 2 | 1 | ✅ | 26 May 2025 09:00 UTC | Shipped the first release |\n"
+	bareAwardRow = "| 89 | 1 | 5 | - | ❌ | - | - |\n"
+)
+
+// assertRendered fails when the rendered document is not exactly want.
+func assertRendered(t *testing.T, got, want string) {
 	t.Helper()
-	for _, fragment := range fragments {
-		if !strings.Contains(rendered, fragment) {
-			t.Errorf("rendered Markdown is missing %q\n---\n%s", fragment, rendered)
-		}
+	if got != want {
+		t.Errorf("rendered Markdown mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
 }
 
-// assertLacks fails when the rendered Markdown carries a fragment it should not.
-func assertLacks(t *testing.T, rendered string, fragments ...string) {
-	t.Helper()
-	for _, fragment := range fragments {
-		if strings.Contains(rendered, fragment) {
-			t.Errorf("rendered Markdown unexpectedly contains %q\n---\n%s", fragment, rendered)
-		}
-	}
-}
-
-// TestFormatOutputMarkdown verifies a single achievement renders its identity
-// and its optional rows, and drops the optional rows when they are empty.
+// TestFormatOutputMarkdown verifies a single achievement renders as a card with
+// its identity and its optional rows, and drops the optional rows when they are
+// empty.
 func TestFormatOutputMarkdown(t *testing.T) {
 	t.Run("every field populated", func(t *testing.T) {
-		rendered := FormatOutputMarkdown(Output{Achievement: fullAchievement})
-		assertContains(t, rendered,
-			"## Achievement: First Commit",
-			"| ID | 1 |",
-			"| Namespace ID | 10 |",
-			"| Description | Awarded for the first commit |",
-			"[image](https://example.com/badge.png)",
-			"25 May 2025",
-			"gitlab_achievement_award")
+		assertRendered(t, FormatOutputMarkdown(Output{Achievement: fullAchievement}),
+			"## Achievement: First Commit\n\n"+
+				fullAchievementRows+
+				"\n---\n💡 **Next steps:**\n"+
+				"- Use action 'achievement.award' to hand this achievement to a user\n"+
+				"- Use action 'achievement.recipients' to see who holds this achievement\n"+
+				"- Use action 'achievement.list' to see the other achievements in the namespace\n")
 	})
 	t.Run("optional rows are omitted", func(t *testing.T) {
-		rendered := FormatOutputMarkdown(Output{Achievement: bareAchievement})
-		assertContains(t, rendered, "## Achievement: Second Commit", "| ID | 2 |")
-		assertLacks(t, rendered, "| Description |", "| Avatar |", "| Created |", "| Updated |")
+		assertRendered(t, FormatOutputMarkdown(Output{Achievement: bareAchievement}),
+			"## Achievement: Second Commit\n\n"+
+				"- **ID**: 2\n"+
+				"- **Name**: Second Commit\n"+
+				"- **Namespace ID**: 10\n"+
+				"\n---\n💡 **Next steps:**\n"+
+				"- Use action 'achievement.award' to hand this achievement to a user\n"+
+				"- Use action 'achievement.recipients' to see who holds this achievement\n"+
+				"- Use action 'achievement.list' to see the other achievements in the namespace\n")
 	})
 }
 
-// TestFormatDeleteOutputMarkdown verifies a deletion states what was removed
-// and still shows the achievement it echoed back.
+// TestFormatDeleteOutputMarkdown verifies a deletion states what was removed as
+// a card row rather than as a bare paragraph, and still shows the achievement
+// GitLab echoed back.
 func TestFormatDeleteOutputMarkdown(t *testing.T) {
-	rendered := FormatDeleteOutputMarkdown(DeleteOutput{
+	assertRendered(t, FormatDeleteOutputMarkdown(DeleteOutput{
 		Status:      "success",
 		Message:     "Successfully deleted the achievement and every award made from it.",
 		Achievement: fullAchievement,
-	})
-	assertContains(t, rendered,
-		"## Achievement Deleted",
-		"every award made from it",
-		"| Name | First Commit |",
-		"gitlab_achievement_create")
+	}),
+		"## Achievement Deleted\n\n"+
+			"- **Result**: Successfully deleted the achievement and every award made from it.\n"+
+			fullAchievementRows+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'achievement.list' to see the other achievements in the namespace\n"+
+			"- Use action 'achievement.create' to define a replacement achievement\n")
 }
 
 // TestFormatUserAchievementOutputMarkdown verifies one award renders its own ID
 // separately from the achievement's, and shows the optional rows only when set.
 func TestFormatUserAchievementOutputMarkdown(t *testing.T) {
+	hints := "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'achievement.user_achievement_update' to change whether this award shows on the profile\n" +
+		"- Use action 'achievement.revoke' to revoke it while keeping the record\n" +
+		"- Use action 'achievement.user_list' to see every award one user holds\n"
 	t.Run("every field populated", func(t *testing.T) {
-		rendered := FormatUserAchievementOutputMarkdown(UserAchievementOutput{UserAchievement: fullUserAchievement})
-		assertContains(t, rendered,
-			"## Award 88",
-			"| Award ID | 88 |",
-			"| Achievement ID | 1 |",
-			"| Shown On Profile | Yes |",
-			"| Message | Shipped the first release |",
-			"| Priority | 1 |",
-			"| Revoked By | 4 |",
-			"gitlab_achievement_revoke")
+		assertRendered(t, FormatUserAchievementOutputMarkdown(UserAchievementOutput{UserAchievement: fullUserAchievement}),
+			"## Award 88\n\n"+fullUserAchievementRows+hints)
 	})
 	t.Run("optional rows are omitted", func(t *testing.T) {
-		rendered := FormatUserAchievementOutputMarkdown(UserAchievementOutput{UserAchievement: bareUserAchievement})
-		assertContains(t, rendered, "| Award ID | 89 |", "| Shown On Profile | No |")
-		assertLacks(t, rendered, "| Message |", "| Priority |", "| Revoked |", "| Revoked By |")
+		assertRendered(t, FormatUserAchievementOutputMarkdown(UserAchievementOutput{UserAchievement: bareUserAchievement}),
+			"## Award 89\n\n"+
+				"- **Award ID**: 89\n"+
+				"- **Achievement ID**: 1\n"+
+				"- **User ID**: 5\n"+
+				"- **Awarded By**: 3\n"+
+				"- **Shown On Profile**: ❌\n"+hints)
 	})
 }
 
 // TestFormatUserAchievementMutationOutputMarkdown verifies a revocation and a
-// deletion each render their own message above the same award table.
+// deletion each render their own message as the card's first row.
 func TestFormatUserAchievementMutationOutputMarkdown(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -135,102 +167,129 @@ func TestFormatUserAchievementMutationOutputMarkdown(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			rendered := FormatUserAchievementMutationOutputMarkdown(UserAchievementMutationOutput{
+			assertRendered(t, FormatUserAchievementMutationOutputMarkdown(UserAchievementMutationOutput{
 				Status:          "success",
 				Message:         tc.message,
 				UserAchievement: fullUserAchievement,
-			})
-			assertContains(t, rendered, "## Award 88", tc.message, "| Award ID | 88 |")
+			}),
+				"## Award 88\n\n"+
+					"- **Result**: "+tc.message+"\n"+
+					fullUserAchievementRows+
+					"\n---\n💡 **Next steps:**\n"+
+					"- Use action 'achievement.user_list' to see every award one user holds\n"+
+					"- Use action 'achievement.recipients' to see who holds this achievement\n")
 		})
 	}
 }
 
-// TestFormatListMarkdown verifies the achievement table, its link-preserving
-// hint, its pagination footer, and the empty case that points at create.
+// TestFormatListMarkdown verifies the achievement table, the cursor footer, and
+// that the guidance section closes the response rather than sitting between the
+// heading and the table header, where it used to swallow the table.
 func TestFormatListMarkdown(t *testing.T) {
 	t.Run("with achievements", func(t *testing.T) {
-		rendered := FormatListMarkdown(ListOutput{
+		assertRendered(t, FormatListMarkdown(ListOutput{
 			Achievements: []Achievement{fullAchievement, bareAchievement},
 			Pagination:   toolutil.GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cursor123"},
-		})
-		assertContains(t, rendered,
-			"## Achievements (2)",
-			toolutil.HintPreserveLinks,
-			"| 1 | First Commit | 10 | Awarded for the first commit | [image](https://example.com/badge.png) |",
-			"| 2 | Second Commit | 10 | - | - |",
-			"next page cursor: `cursor123`")
+		}),
+			"## Achievements (2)\n\n"+
+				"| ID | Name | Namespace ID | Description | Avatar |\n"+
+				"| --- | --- | --- | --- | --- |\n"+
+				"| 1 | First Commit | 10 | Awarded for the first commit | [image](https://example.com/badge.png) |\n"+
+				"| 2 | Second Commit | 10 | - | - |\n"+
+				"\nShowing 2 items | next page cursor: `cursor123`\n"+
+				"\n---\n💡 **Next steps:**\n"+
+				"- "+toolutil.HintPreserveLinks+"\n"+
+				"- Use action 'achievement.award' to hand one of these achievements to a user\n"+
+				"- Pass the `end_cursor` above as `after` to fetch the next page\n")
 	})
 	t.Run("empty", func(t *testing.T) {
-		rendered := FormatListMarkdown(ListOutput{})
-		assertContains(t, rendered, "## Achievements (0)", "No achievements found", "gitlab_achievement_create")
-		assertLacks(t, rendered, "| ID | Name |")
+		assertRendered(t, FormatListMarkdown(ListOutput{}),
+			"No achievements found.\n"+
+				"\n---\n💡 **Next steps:**\n"+
+				"- Use action 'achievement.create' to define the first achievement for this namespace\n")
 	})
 }
 
 // TestFormatUserAchievementListMarkdown verifies the award table shows the
-// revoked column, which is the only signal that a listed award is not held.
+// revoked column, which is the only signal that a listed award is not held, and
+// that a table with no link column does not ask the model to preserve links.
 func TestFormatUserAchievementListMarkdown(t *testing.T) {
 	t.Run("with awards", func(t *testing.T) {
-		rendered := FormatUserAchievementListMarkdown(UserAchievementListOutput{
+		assertRendered(t, FormatUserAchievementListMarkdown(UserAchievementListOutput{
 			UserAchievements: []UserAchievement{fullUserAchievement, bareUserAchievement},
 			Pagination:       toolutil.GraphQLPaginationOutput{HasPreviousPage: true, StartCursor: "cursor000"},
-		})
-		assertContains(t, rendered,
-			"## Awards (2)",
-			toolutil.HintPreserveLinks,
-			"| 88 | 1 | 2 | 1 | Yes | 26 May 2025 09:00 UTC | Shipped the first release |",
-			"| 89 | 1 | 5 | - | No | - | - |",
-			"prev page cursor: `cursor000`")
+		}),
+			"## Awards (2)\n\n"+
+				awardTableHeader+fullAwardRow+bareAwardRow+
+				"\nShowing 2 items | prev page cursor: `cursor000`\n"+
+				"\n---\n💡 **Next steps:**\n"+
+				"- Use action 'achievement.recipients' to see who holds this achievement\n"+
+				"- Pass the `end_cursor` above as `after` to fetch the next page\n")
 	})
 	t.Run("empty", func(t *testing.T) {
-		rendered := FormatUserAchievementListMarkdown(UserAchievementListOutput{})
-		assertContains(t, rendered, "## Awards (0)", "No awards found", "gitlab_achievement_award")
+		assertRendered(t, FormatUserAchievementListMarkdown(UserAchievementListOutput{}),
+			"No awards found.\n"+
+				"\n---\n💡 **Next steps:**\n"+
+				"- Use action 'achievement.award' to hand an achievement to a user\n")
 	})
 }
 
-// TestFormatReorderOutputMarkdown verifies the reordered set renders with its
-// new priorities, and that an empty payload still says so.
+// TestFormatReorderOutputMarkdown verifies the reordered set renders as the card
+// of the reorder with the awards as its nested collection, and that an empty
+// payload says so in the server's own words.
 func TestFormatReorderOutputMarkdown(t *testing.T) {
 	t.Run("with awards", func(t *testing.T) {
-		rendered := FormatReorderOutputMarkdown(ReorderOutput{
+		assertRendered(t, FormatReorderOutputMarkdown(ReorderOutput{
 			Status:           "success",
 			Message:          "Successfully reordered the awards, highest priority first.",
 			UserAchievements: []UserAchievement{fullUserAchievement},
-		})
-		assertContains(t, rendered, "## Awards Reordered (1)", "highest priority first", "| 88 | 1 | 2 | 1 | Yes |")
+		}),
+			"## Awards Reordered\n\n"+
+				"- **Result**: Successfully reordered the awards, highest priority first.\n"+
+				"- **Awards**: 1\n\n"+
+				"### Awards\n\n"+
+				awardTableHeader+fullAwardRow+
+				"\n---\n💡 **Next steps:**\n"+
+				"- Use action 'achievement.user_list' to see every award one user holds\n")
 	})
 	t.Run("empty", func(t *testing.T) {
-		rendered := FormatReorderOutputMarkdown(ReorderOutput{Status: "success", Message: "Nothing to reorder."})
-		assertContains(t, rendered, "## Awards Reordered (0)", "No awards were returned")
+		assertRendered(t, FormatReorderOutputMarkdown(ReorderOutput{Status: "success", Message: "Nothing to reorder."}),
+			"## Awards Reordered\n\n"+
+				"- **Result**: Nothing to reorder.\n\n"+
+				"GitLab returned no awards for this reorder.\n"+
+				"\n---\n💡 **Next steps:**\n"+
+				"- Use action 'achievement.user_list' to see every award one user holds\n")
 	})
 }
 
 // TestFormatUniqueUsersMarkdown verifies distinct holders render as linked
-// profiles, that a user without a web URL degrades to a plain name, and that a
-// nil entry is skipped rather than printed as a blank row.
+// profiles, that a user without a web URL degrades to a plain handle, and that
+// a nil entry is skipped rather than counted in the heading.
 func TestFormatUniqueUsersMarkdown(t *testing.T) {
 	t.Run("with users", func(t *testing.T) {
-		rendered := FormatUniqueUsersMarkdown(UniqueUsersOutput{
+		assertRendered(t, FormatUniqueUsersMarkdown(UniqueUsersOutput{
 			Users: []*toolutil.BasicUserOutput{
 				{ID: 2, Username: "octocat", Name: "Octo Cat", State: "active", WebURL: "https://example.com/octocat"},
 				{ID: 3, Username: "hubot", Name: "Hubot", State: "active"},
 				nil,
 			},
-			Pagination: toolutil.GraphQLPaginationOutput{},
-		})
-		assertContains(t, rendered,
-			"## Achievement Recipients (3)",
-			toolutil.HintPreserveLinks,
-			"| 2 | [octocat](https://example.com/octocat) | Octo Cat | active |",
-			"| 3 | hubot | Hubot | active |",
-			"no more pages")
-		if strings.Count(rendered, "| active |") != 2 {
-			t.Errorf("rendered %d user rows, want the nil entry skipped\n---\n%s", strings.Count(rendered, "| active |"), rendered)
-		}
+		}),
+			"## Achievement Recipients (2)\n\n"+
+				"| ID | Username | Name | State |\n"+
+				"| --- | --- | --- | --- |\n"+
+				"| 2 | [@octocat](https://example.com/octocat) | Octo Cat | active |\n"+
+				"| 3 | @hubot | Hubot | active |\n"+
+				"\nShowing 2 items | no more pages\n"+
+				"\n---\n💡 **Next steps:**\n"+
+				"- "+toolutil.HintPreserveLinks+"\n"+
+				"- Use action 'achievement.recipients' to see who holds this achievement\n"+
+				"- Pass the `end_cursor` above as `after` to fetch the next page\n")
 	})
 	t.Run("empty", func(t *testing.T) {
-		rendered := FormatUniqueUsersMarkdown(UniqueUsersOutput{})
-		assertContains(t, rendered, "## Achievement Recipients (0)", "No users hold this achievement", "gitlab_achievement_award")
+		assertRendered(t, FormatUniqueUsersMarkdown(UniqueUsersOutput{}),
+			"No recipients of this achievement found.\n"+
+				"\n---\n💡 **Next steps:**\n"+
+				"- Use action 'achievement.award' to hand this achievement to a user\n")
 	})
 }
 
@@ -239,25 +298,22 @@ func TestFormatUniqueUsersMarkdown(t *testing.T) {
 // runtime. A formatter written but not registered renders as raw JSON.
 func TestFormattersAreRegistered(t *testing.T) {
 	cases := []struct {
-		name   string
-		output any
-		want   string
+		name     string
+		output   any
+		rendered string
 	}{
-		{name: "Output", output: Output{Achievement: fullAchievement}, want: "## Achievement: First Commit"},
-		{name: "DeleteOutput", output: DeleteOutput{Achievement: fullAchievement}, want: "## Achievement Deleted"},
-		{name: "UserAchievementOutput", output: UserAchievementOutput{UserAchievement: fullUserAchievement}, want: "## Award 88"},
-		{name: "UserAchievementMutationOutput", output: UserAchievementMutationOutput{UserAchievement: fullUserAchievement}, want: "## Award 88"},
-		{name: "ListOutput", output: ListOutput{Achievements: []Achievement{fullAchievement}}, want: "## Achievements (1)"},
-		{name: "UserAchievementListOutput", output: UserAchievementListOutput{UserAchievements: []UserAchievement{fullUserAchievement}}, want: "## Awards (1)"},
-		{name: "ReorderOutput", output: ReorderOutput{UserAchievements: []UserAchievement{fullUserAchievement}}, want: "## Awards Reordered (1)"},
-		{name: "UniqueUsersOutput", output: UniqueUsersOutput{Users: []*toolutil.BasicUserOutput{{ID: 2, Username: "octocat"}}}, want: "## Achievement Recipients (1)"},
+		{name: "Output", output: Output{Achievement: fullAchievement}, rendered: FormatOutputMarkdown(Output{Achievement: fullAchievement})},
+		{name: "DeleteOutput", output: DeleteOutput{Achievement: fullAchievement}, rendered: FormatDeleteOutputMarkdown(DeleteOutput{Achievement: fullAchievement})},
+		{name: "UserAchievementOutput", output: UserAchievementOutput{UserAchievement: fullUserAchievement}, rendered: FormatUserAchievementOutputMarkdown(UserAchievementOutput{UserAchievement: fullUserAchievement})},
+		{name: "UserAchievementMutationOutput", output: UserAchievementMutationOutput{UserAchievement: fullUserAchievement}, rendered: FormatUserAchievementMutationOutputMarkdown(UserAchievementMutationOutput{UserAchievement: fullUserAchievement})},
+		{name: "ListOutput", output: ListOutput{Achievements: []Achievement{fullAchievement}}, rendered: FormatListMarkdown(ListOutput{Achievements: []Achievement{fullAchievement}})},
+		{name: "UserAchievementListOutput", output: UserAchievementListOutput{UserAchievements: []UserAchievement{fullUserAchievement}}, rendered: FormatUserAchievementListMarkdown(UserAchievementListOutput{UserAchievements: []UserAchievement{fullUserAchievement}})},
+		{name: "ReorderOutput", output: ReorderOutput{UserAchievements: []UserAchievement{fullUserAchievement}}, rendered: FormatReorderOutputMarkdown(ReorderOutput{UserAchievements: []UserAchievement{fullUserAchievement}})},
+		{name: "UniqueUsersOutput", output: UniqueUsersOutput{Users: []*toolutil.BasicUserOutput{{ID: 2, Username: "octocat"}}}, rendered: FormatUniqueUsersMarkdown(UniqueUsersOutput{Users: []*toolutil.BasicUserOutput{{ID: 2, Username: "octocat"}}})},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			rendered := markdownText(t, toolutil.MarkdownForResult(tc.output))
-			if !strings.Contains(rendered, tc.want) {
-				t.Errorf("MarkdownForResult(%s) = %q, want it to contain %q", tc.name, rendered, tc.want)
-			}
+			assertRendered(t, markdownText(t, toolutil.MarkdownForResult(tc.output)), tc.rendered)
 		})
 	}
 }
@@ -339,13 +395,36 @@ func TestMarkdownFormatters_PipeAndNewlineInText_StayInOneCell(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			assertTableRowsWellFormed(t, tc.rendered)
-			if !strings.Contains(tc.rendered, "&#124;") {
-				t.Errorf("rendered Markdown does not escape the pipe\n---\n%s", tc.rendered)
-			}
-			if strings.Contains(tc.rendered, "It\nsecond line") {
-				t.Errorf("rendered Markdown keeps the newline inside a cell\n---\n%s", tc.rendered)
-			}
+			assertHostileTextContained(t, tc.rendered)
 		})
+	}
+}
+
+// assertHostileTextContained fails when the pipe a person typed reaches a line
+// that is neither a quote nor an escaped value.
+//
+// There are three shapes and the formatter picks by position: a value written
+// into a card row or a table cell has its pipe written as &#124;, a multi-line
+// body is quoted, where a pipe is literal text and can break nothing, and a
+// heading carries the pipe as it is, since a heading has no cells to end.
+// Requiring the entity everywhere would fail the quote, which is the stronger
+// containment of the three.
+func assertHostileTextContained(t *testing.T, rendered string) {
+	t.Helper()
+	for line := range strings.SplitSeq(rendered, "\n") {
+		if !strings.Contains(line, "Ship") {
+			continue
+		}
+		trimmed := strings.TrimLeft(line, " ")
+		contained := strings.HasPrefix(trimmed, ">") ||
+			strings.HasPrefix(trimmed, "#") ||
+			strings.Contains(line, "&#124;")
+		if !contained {
+			t.Errorf("line %q carries the raw pipe outside a quote or a heading\n---\n%s", line, rendered)
+		}
+	}
+	if strings.Contains(rendered, "It\nsecond line") {
+		t.Errorf("rendered Markdown keeps the newline inside a cell\n---\n%s", rendered)
 	}
 }
 
@@ -357,7 +436,9 @@ func TestMarkdownFormatters_PipeAndNewlineInText_StayInOneCell(t *testing.T) {
 // or open raw HTML a rendering client would obey.
 func TestFormatOutputMarkdown_HostileName_DoesNotEscapeTheHeading(t *testing.T) {
 	rendered := FormatOutputMarkdown(Output{Achievement: Achievement{Name: "# <b>Boom\nsecond"}})
-	if !strings.HasPrefix(rendered, "## Achievement: &lt;b>Boom second") {
+	// The '#' survives because it is no longer at the start of the line: the
+	// formatter composes "Achievement: # <b>Boom", and a hash mid-line is text.
+	if !strings.HasPrefix(rendered, "## Achievement: # &lt;b>Boom second\n") {
 		t.Errorf("heading = %q, want the name neutralized and kept on one line", strings.SplitN(rendered, "\n", 2)[0])
 	}
 }

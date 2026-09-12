@@ -1,58 +1,59 @@
 package ffuserlists
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatUserListMarkdown formats a single feature flag user list as markdown.
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionGet    = "feature_flags.ff_user_list_get"
+	actionCreate = "feature_flags.ff_user_list_create"
+	actionUpdate = "feature_flags.ff_user_list_update"
+	actionDelete = "feature_flags.ff_user_list_delete"
+)
+
+// FormatUserListMarkdown renders one feature flag user list as the card of one
+// object.
 func FormatUserListMarkdown(out Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Feature Flag User List: %s\n\n", toolutil.EscapeMdHeading(out.Name))
-	fmt.Fprintf(&b, "- **ID**: %d (IID: %d)\n", out.ID, out.IID)
-	if out.UserXIDs != "" {
-		// The external user ids are a comma-separated list a person supplies.
-		fmt.Fprintf(&b, "- **User XIDs**: %s\n", toolutil.EscapeMdTableCell(out.UserXIDs))
-	}
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
-	}
-	if out.UpdatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdUpdated, toolutil.FormatTime(out.UpdatedAt))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'ff_user_list_update' to modify user XIDs",
-		"Use action 'ff_user_list_delete' to remove this user list",
+	c := toolutil.NewCard(&b, "Feature Flag User List: "+out.Name)
+	c.Int("ID", out.ID)
+	c.Int("IID", out.IID)
+	c.Count("Project ID", out.ProjectID)
+	c.Field("Name", out.Name)
+	// The external user ids are a comma-separated list a person supplies.
+	c.Field("User XIDs", out.UserXIDs)
+	c.Time("Created", out.CreatedAt)
+	c.Time("Updated", out.UpdatedAt)
+	c.End(
+		toolutil.HintAction(actionUpdate, "modify the user XIDs on this list"),
+		toolutil.HintAction(actionDelete, "remove this user list"),
 	)
 	return b.String()
 }
 
-// FormatListUserListsMarkdown formats a list of feature flag user lists as markdown.
+// FormatListUserListsMarkdown renders a page of feature flag user lists as a
+// Markdown table: a collection of objects that share columns.
 func FormatListUserListsMarkdown(out ListOutput) string {
-	var b strings.Builder
-	b.WriteString("## Feature Flag User Lists\n\n")
-	toolutil.WriteListSummary(&b, len(out.UserLists), out.Pagination)
 	if len(out.UserLists) == 0 {
-		b.WriteString("No feature flag user lists found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("feature flag user lists")
 	}
-	b.WriteString("| IID | Name | User XIDs |\n|---|---|---|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Feature Flag User Lists", len(out.UserLists), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Name", "User XIDs"))
 	for _, l := range out.UserLists {
-		fmt.Fprintf(
-			&b, "| %d | %s | %s |\n",
-			l.IID,
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(l.IID, 10),
 			toolutil.EscapeMdTableCell(l.Name),
 			toolutil.EscapeMdTableCell(l.UserXIDs),
-		)
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use action 'ff_user_list_get' with user_list_iid for full details",
-		"Use action 'ff_user_list_create' to add a new user list",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionGet, "read one list by its user_list_iid"),
+		toolutil.HintAction(actionCreate, "add a new user list"),
 	)
 	return b.String()
 }

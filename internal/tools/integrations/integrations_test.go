@@ -10,15 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
 const (
-	// errExpNonNilResult identifies the err exp non nil result constant used by this package.
-	errExpNonNilResult = "expected non-nil result"
 	// errExpUnsupportedSlug identifies the err exp unsupported slug constant used by this package.
 	errExpUnsupportedSlug = "expected error for unsupported slug"
 	// fmtUnexpErr identifies the fmt unexp err constant used by this package.
@@ -27,8 +24,6 @@ const (
 	fmtExpSlugJira = "expected slug 'jira', got %q"
 	// testSlugJira identifies the test slug jira constant used by this package.
 	testSlugJira = "jira"
-	// testTitleJira identifies the test title jira constant used by this package.
-	testTitleJira = "Jira"
 )
 
 // matchIntegrationPath checks if the URL path ends with a given suffix
@@ -36,24 +31,6 @@ const (
 func matchIntegrationPath(path, suffix string) bool {
 	return strings.HasSuffix(path, "/services/"+suffix) ||
 		strings.HasSuffix(path, "/integrations/"+suffix)
-}
-
-// firstMarkdownText returns the text of the first TextContent in a
-// CallToolResult. Used by markdown formatter tests to assert on the
-// rendered output without re-implementing the content extraction
-// inline in every test.
-func firstMarkdownText(t *testing.T, r *mcp.CallToolResult) string {
-	t.Helper()
-	if r == nil {
-		t.Fatal("CallToolResult is nil")
-	}
-	for _, c := range r.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			return tc.Text
-		}
-	}
-	t.Fatal("no TextContent in CallToolResult")
-	return ""
 }
 
 // List.
@@ -470,44 +447,7 @@ func TestSetJira_Error(t *testing.T) {
 	}
 }
 
-// Markdown Formatters.
-
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown_Empty(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-}
-
-// TestFormatListMarkdown_WithData verifies the ListMarkdown_WithData Markdown formatter for a representative list_withdata input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown_WithData(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{
-		Integrations: []IntegrationItem{
-			{ID: 1, Title: testTitleJira, Slug: testSlugJira, Active: true},
-			{ID: 2, Title: "Slack", Slug: "slack", Active: false},
-		},
-	})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-}
-
-// TestFormatGetMarkdown verifies the GetMarkdown Markdown formatter for a representative get input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatGetMarkdown(t *testing.T) {
-	result := FormatGetMarkdown(GetOutput{
-		Integration: IntegrationItem{ID: 1, Title: testTitleJira, Slug: testSlugJira, Active: true, CreatedAt: "2026-01-01"},
-	})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-}
+// The Markdown formatters are asserted whole in markdown_test.go.
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
@@ -731,41 +671,6 @@ func TestSetJira_APIError400(t *testing.T) {
 // Formatters — additional branches
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_Inactive verifies the GetMarkdown_Inactive Markdown formatter for a representative get_inactive input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatGetMarkdown_Inactive(t *testing.T) {
-	result := FormatGetMarkdown(GetOutput{
-		Integration: IntegrationItem{ID: 2, Title: "Slack", Slug: "slack", Active: false},
-	})
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "No") {
-		t.Errorf("expected 'No' for inactive, got %q", text)
-	}
-}
-
-// TestFormatGetMarkdown_WithUpdatedAt verifies the GetMarkdown_WithUpdatedAt Markdown formatter for a representative get_withupdatedat input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatGetMarkdown_WithUpdatedAt(t *testing.T) {
-	result := FormatGetMarkdown(GetOutput{
-		Integration: IntegrationItem{
-			ID: 1, Title: "Jira", Slug: "jira", Active: true,
-			CreatedAt: "2026-01-01", UpdatedAt: "2026-06-01",
-		},
-	})
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "Updated") {
-		t.Errorf("expected 'Updated' in output, got %q", text)
-	}
-}
-
 // TestGet_WithTimestamps verifies the Get_WithTimestamps handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -892,20 +797,6 @@ func TestIntegrationFromService_Branches(t *testing.T) {
 			}
 			if !errors.Is(gotErr, sentinelErr) {
 				t.Fatalf("expected error %v, got %v", sentinelErr, gotErr)
-			}
-		})
-	}
-}
-
-// TestFormatSetJiraMarkdown_RendersUpdateAndHints verifies the Jira upsert
-// formatter renders the integration item plus the write-only credentials
-// hint through the shared Markdown registry.
-func TestFormatSetJiraMarkdown_RendersUpdateAndHints(t *testing.T) {
-	md := formatSetJiraMarkdownString(SetJiraOutput{Integration: IntegrationItem{Slug: "jira", Active: true}})
-	for _, want := range []string{"Jira Integration Updated", "write-only"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("formatSetJiraMarkdownString missing %q in:\n%s", want, md)
 			}
 		})
 	}

@@ -11,7 +11,6 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const (
@@ -236,83 +235,7 @@ func TestDeleteUserList_MissingParams(t *testing.T) {
 
 // -- Formatters --.
 
-// TestFormatUserListMarkdown verifies the UserListMarkdown Markdown formatter for a representative userlist input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatUserListMarkdown(t *testing.T) {
-	out := Output{ID: 1, IID: 10, ProjectID: 42, Name: testListName, UserXIDs: "user1,user2"}
-	md := FormatUserListMarkdown(out)
-	if !strings.Contains(md, testListName) {
-		t.Error("expected markdown to contain name")
-	}
-	if !strings.Contains(md, "user1,user2") {
-		t.Error("expected markdown to contain user_xids")
-	}
-}
-
-// TestFormatUserListMarkdown_NameInHeading verifies the UserListMarkdown_NameInHeading Markdown formatter for a representative userlist_nameinheading input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatUserListMarkdown_NameInHeading(t *testing.T) {
-	out := Output{ID: 5, IID: 3, ProjectID: 10, Name: "my-list", UserXIDs: "x1"}
-	md := FormatUserListMarkdown(out)
-	if !strings.Contains(md, "## Feature Flag User List: my-list") {
-		t.Error("expected name in heading")
-	}
-	if !strings.Contains(md, "ID**: 5 (IID: 3)") {
-		t.Error("expected combined ID/IID bullet")
-	}
-	if strings.Contains(md, "| Project ID |") {
-		t.Error("detail formatter should not show raw Project ID row")
-	}
-}
-
-// TestFormatListUserListsMarkdown_NoIDColumn verifies the ListUserListsMarkdown_NoIDColumn Markdown formatter for a representative listuserlists_noidcolumn input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListUserListsMarkdown_NoIDColumn(t *testing.T) {
-	out := ListOutput{
-		UserLists: []Output{
-			{ID: 1, IID: 10, Name: "a-list", UserXIDs: "u1"},
-		},
-		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1},
-	}
-	md := FormatListUserListsMarkdown(out)
-	if strings.Contains(md, "| 1 | 10 |") {
-		t.Error("list table should not have a separate ID column")
-	}
-	if !strings.Contains(md, "| 10 | a-list |") {
-		t.Error("expected IID followed by Name in table row")
-	}
-}
-
-// TestFormatListUserListsMarkdown verifies the ListUserListsMarkdown Markdown formatter for a representative listuserlists input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListUserListsMarkdown(t *testing.T) {
-	out := ListOutput{
-		UserLists: []Output{
-			{ID: 1, IID: 10, Name: "list-1", UserXIDs: "u1"},
-			{ID: 2, IID: 20, Name: "list-2", UserXIDs: "u2"},
-		},
-		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1},
-	}
-	md := FormatListUserListsMarkdown(out)
-	if !strings.Contains(md, "list-1") || !strings.Contains(md, "list-2") {
-		t.Error("expected markdown to contain both list names")
-	}
-}
-
-// TestFormatListUserListsMarkdown_Empty verifies the ListUserListsMarkdown_Empty Markdown formatter for a representative listuserlists_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListUserListsMarkdown_Empty(t *testing.T) {
-	out := ListOutput{UserLists: []Output{}}
-	md := FormatListUserListsMarkdown(out)
-	if !strings.Contains(md, "No feature flag user lists found") {
-		t.Error("expected empty message")
-	}
-}
+// The Markdown formatters are asserted whole in markdown_test.go.
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
@@ -589,21 +512,4 @@ func TestUserLists_UnreadableCapturedPath(t *testing.T) {
 	})
 }
 
-// TestFormatUserListMarkdown_WithDates verifies the UserListMarkdown_WithDates Markdown formatter for a representative userlist_withdates input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatUserListMarkdown_WithDates(t *testing.T) {
-	out := Output{
-		ID: 1, IID: 10, ProjectID: 42,
-		Name: "cov-list", UserXIDs: "a,b",
-		CreatedAt: "2026-06-01T12:00:00Z",
-		UpdatedAt: "2026-06-02T12:00:00Z",
-	}
-	md := FormatUserListMarkdown(out)
-	if !strings.Contains(md, "1 Jun 2026 12:00 UTC") {
-		t.Error("expected CreatedAt in markdown")
-	}
-	if !strings.Contains(md, "2 Jun 2026 12:00 UTC") {
-		t.Error("expected UpdatedAt in markdown")
-	}
-}
+// The Markdown formatters are asserted whole in markdown_test.go.

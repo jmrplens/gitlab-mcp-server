@@ -6,7 +6,6 @@ package clusteragents
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -186,26 +185,6 @@ func TestRevokeAgentToken(t *testing.T) {
 	err := RevokeAgentToken(t.Context(), client, RevokeAgentTokenInput{ProjectID: "1", AgentID: 5, TokenID: 1})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
-	}
-}
-
-// TestFormatAgentsListMarkdown verifies the AgentsListMarkdown Markdown formatter for a representative agentslist input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatAgentsListMarkdown(t *testing.T) {
-	md := FormatAgentsListMarkdown(ListAgentsOutput{Agents: []AgentItem{{ID: 1, Name: "a"}}})
-	if md == "" {
-		t.Error("expected non-empty markdown")
-	}
-}
-
-// TestFormatTokensListMarkdown verifies the TokensListMarkdown Markdown formatter for a representative tokenslist input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatTokensListMarkdown(t *testing.T) {
-	md := FormatTokensListMarkdown(ListAgentTokensOutput{Tokens: []AgentTokenItem{{ID: 1, Name: "t", Status: "active"}}})
-	if md == "" {
-		t.Error("expected non-empty markdown")
 	}
 }
 
@@ -599,91 +578,6 @@ func TestListAgentTokens_KeysetAndOrdering(t *testing.T) {
 // Formatters — empty lists
 // ---------------------------------------------------------------------------.
 
-// TestFormatAgentsListMarkdown_Empty verifies the AgentsListMarkdown_Empty Markdown formatter for a representative agentslist_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatAgentsListMarkdown_Empty(t *testing.T) {
-	md := FormatAgentsListMarkdown(ListAgentsOutput{})
-	if !strings.Contains(md, "No cluster agents found.") {
-		t.Errorf("expected empty message, got: %s", md)
-	}
-}
-
-// TestFormatTokensListMarkdown_Empty verifies the TokensListMarkdown_Empty Markdown formatter for a representative tokenslist_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatTokensListMarkdown_Empty(t *testing.T) {
-	md := FormatTokensListMarkdown(ListAgentTokensOutput{})
-	if !strings.Contains(md, "No agent tokens found.") {
-		t.Errorf("expected empty message, got: %s", md)
-	}
-}
-
-// TestFormatAgentMarkdown_Content verifies the AgentMarkdown_Content Markdown formatter for a representative agent_content input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatAgentMarkdown_Content(t *testing.T) {
-	md := FormatAgentMarkdown(AgentItem{
-		ID:              5,
-		Name:            "test-agent",
-		CreatedAt:       "2024-01-02T03:04:05Z",
-		CreatedByUserID: 10,
-		ConfigProject:   ConfigProjectOutput{ID: 99, Name: "cfg", PathWithNamespace: "grp/cfg"},
-	})
-	for _, want := range []string{"test-agent", "2024-01-02T03:04:05Z", "grp/cfg", "Created By User ID"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("expected %q in markdown, got: %s", want, md)
-			}
-		})
-	}
-}
-
-// TestFormatAgentMarkdown_ConfigProjectNameFallback verifies the config project
-// label falls back to Name when PathWithNamespace is empty.
-func TestFormatAgentMarkdown_ConfigProjectNameFallback(t *testing.T) {
-	md := FormatAgentMarkdown(AgentItem{ID: 5, Name: "a", ConfigProject: ConfigProjectOutput{ID: 7, Name: "fallback"}})
-	if !strings.Contains(md, "fallback") {
-		t.Errorf("expected fallback name, got: %s", md)
-	}
-}
-
-// TestFormatTokenMarkdown_AllFields verifies the token detail formatter renders
-// description, created_at, and last_used_at when present.
-func TestFormatTokenMarkdown_AllFields(t *testing.T) {
-	md := FormatTokenMarkdown(AgentTokenItem{
-		ID: 1, Name: "tok", Status: "active",
-		Description: "desc", CreatedAt: "2024-02-03T04:05:06Z", LastUsedAt: "2024-03-04T05:06:07Z",
-	})
-	for _, want := range []string{"desc", "2024-02-03T04:05:06Z", "2024-03-04T05:06:07Z"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("expected %q in markdown, got: %s", want, md)
-			}
-		})
-	}
-}
-
-// TestFormatTokenMarkdown_WithToken verifies the TokenMarkdown_WithToken Markdown formatter for a representative token_withtoken input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatTokenMarkdown_WithToken(t *testing.T) {
-	md := FormatTokenMarkdown(AgentTokenItem{ID: 1, Name: "tok", Status: "active", Token: "s3cr3t"})
-	if !strings.Contains(md, "s3cr3t") {
-		t.Errorf("expected token value, got: %s", md)
-	}
-}
-
-// TestFormatTokenMarkdown_WithoutToken verifies the TokenMarkdown_WithoutToken Markdown formatter for a representative token_withouttoken input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatTokenMarkdown_WithoutToken(t *testing.T) {
-	md := FormatTokenMarkdown(AgentTokenItem{ID: 1, Name: "tok", Status: "active"})
-	if strings.Contains(md, "Token") && strings.Contains(md, "s3cr3t") {
-		t.Error("should not contain token secret when empty")
-	}
-}
-
 // ---------------------------------------------------------------------------
 // ActionSpecs — metadata
 // ---------------------------------------------------------------------------.
@@ -921,21 +815,6 @@ func clusterAgentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[stri
 		byTool[toolName] = spec
 	}
 	return byTool
-}
-
-// TestFormatAgentMarkdown_Receptive verifies that an agent GitLab reports as
-// receptive says so in the rendered Markdown, and that an ordinary agent does
-// not. The flag is read off the captured response because the SDK does not
-// model it, and it decides which way the connection is made.
-func TestFormatAgentMarkdown_Receptive(t *testing.T) {
-	receptive := FormatAgentMarkdown(AgentItem{ID: 1, Name: "prod", IsReceptive: true})
-	if !strings.Contains(receptive, "**Receptive**: yes") {
-		t.Errorf("markdown missing the receptive line:\n%s", receptive)
-	}
-	ordinary := FormatAgentMarkdown(AgentItem{ID: 1, Name: "prod"})
-	if strings.Contains(ordinary, "**Receptive**") {
-		t.Errorf("markdown calls an ordinary agent receptive:\n%s", ordinary)
-	}
 }
 
 // TestClusterAgents_UnreadableCapturedIsReceptive verifies that every agent

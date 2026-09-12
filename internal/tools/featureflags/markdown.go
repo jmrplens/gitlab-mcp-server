@@ -2,72 +2,93 @@ package featureflags
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatFeatureFlagMarkdown formats a single feature flag as markdown.
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionGet     = "feature_flags.feature_flag_get"
+	actionCreate  = "feature_flags.feature_flag_create"
+	actionUpdate  = "feature_flags.feature_flag_update"
+	actionDelete  = "feature_flags.feature_flag_delete"
+	actionUseList = "feature_flags.ff_user_list_get"
+)
+
+// strategyTargetCell names the user list a gitlabUserList strategy targets.
+// Without it the strategy row said "gitlabUserList" and nothing about which
+// list, which is the whole of what that strategy does.
+func strategyTargetCell(list *StrategyUserListOutput) string {
+	if list == nil {
+		return "-"
+	}
+	return fmt.Sprintf("%s (IID %d)", toolutil.EscapeMdTableCell(list.Name), list.IID)
+}
+
+// writeStrategies writes the flag's activation strategies as the nested
+// collection they are, under a heading of their own.
+func writeStrategies(c *toolutil.Card, strategies []StrategyOutput) {
+	if len(strategies) == 0 {
+		return
+	}
+	table := c.Table("Strategies", "ID", "Name", "Parameters", "Target", "Scopes")
+	for _, s := range strategies {
+		table.Row(
+			strconv.FormatInt(s.ID, 10),
+			toolutil.EscapeMdTableCell(s.Name),
+			toolutil.EscapeMdTableCell(formatParameters(s.Parameters)),
+			strategyTargetCell(s.UserList),
+			toolutil.EscapeMdTableCell(formatScopes(s.Scopes)),
+		)
+	}
+}
+
+// FormatFeatureFlagMarkdown renders one feature flag as the card of one
+// object, with its strategies as a nested collection.
 func FormatFeatureFlagMarkdown(out Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Feature Flag: %s\n\n", toolutil.EscapeMdTableCell(out.Name))
-	b.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
-	fmt.Fprintf(&b, "| Active | %t |\n", out.Active)
-	fmt.Fprintf(&b, "| Version | %s |\n", toolutil.EscapeMdTableCell(out.Version))
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, "| Created | %s |\n", toolutil.FormatTime(out.CreatedAt))
-	}
-	if out.UpdatedAt != "" {
-		fmt.Fprintf(&b, "| Updated | %s |\n", toolutil.FormatTime(out.UpdatedAt))
-	}
+	c := toolutil.NewCard(&b, "Feature Flag: "+out.Name)
+	c.Field("Name", out.Name)
+	// The description is whatever a maintainer typed against the flag.
+	c.Text("Description", out.Description)
+	c.Bool("Active", out.Active)
+	c.Field("Version", out.Version)
+	c.Time("Created", out.CreatedAt)
+	c.Time("Updated", out.UpdatedAt)
 	if len(out.Scopes) > 0 {
-		fmt.Fprintf(&b, "| Scopes | %s |\n", toolutil.EscapeMdTableCell(formatScopes(out.Scopes)))
+		c.Field("Scopes", formatScopes(out.Scopes))
 	}
-	if len(out.Strategies) > 0 {
-		b.WriteString("\n### Strategies\n\n")
-		b.WriteString("| ID | Name | Parameters | Scopes |\n|---|---|---|---|\n")
-		for _, s := range out.Strategies {
-			params := formatParameters(s.Parameters)
-			scopes := formatScopes(s.Scopes)
-			fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
-				s.ID,
-				toolutil.EscapeMdTableCell(s.Name),
-				toolutil.EscapeMdTableCell(params),
-				toolutil.EscapeMdTableCell(scopes))
-		}
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'feature_flag_update' to toggle active/inactive",
-		"Use action 'feature_flag_delete' to remove this feature flag",
+	writeStrategies(c, out.Strategies)
+	c.End(
+		toolutil.HintAction(actionUpdate, "toggle this flag active or inactive"),
+		toolutil.HintAction(actionDelete, "remove this feature flag"),
+		toolutil.HintAction(actionUseList, "read a user list a strategy targets"),
 	)
 	return b.String()
 }
 
-// FormatListFeatureFlagsMarkdown formats a list of feature flags as markdown.
+// FormatListFeatureFlagsMarkdown renders a page of feature flags as a Markdown
+// table: a collection of objects that share columns.
 func FormatListFeatureFlagsMarkdown(out ListOutput) string {
-	var b strings.Builder
-	b.WriteString("## Feature Flags\n\n")
-	toolutil.WriteListSummary(&b, len(out.FeatureFlags), out.Pagination)
 	if len(out.FeatureFlags) == 0 {
-		b.WriteString("No feature flags found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("feature flags")
 	}
-	b.WriteString("| Name | Active | Version | Strategies |\n|---|---|---|---|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Feature Flags", len(out.FeatureFlags), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Name", "Active", "Version", "Strategies"))
 	for _, f := range out.FeatureFlags {
-		fmt.Fprintf(&b, "| %s | %t | %s | %d |\n",
+		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(f.Name),
-			f.Active,
+			toolutil.BoolEmoji(f.Active),
 			toolutil.EscapeMdTableCell(f.Version),
-			len(f.Strategies))
+			strconv.Itoa(len(f.Strategies)),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use action 'feature_flag_get' with name for full flag details and strategies",
-		"Use action 'feature_flag_create' to add a new feature flag",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionGet, "read one flag with its strategies and scopes"),
+		toolutil.HintAction(actionCreate, "add a new feature flag"),
 	)
 	return b.String()
 }
