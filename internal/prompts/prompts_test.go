@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -21,6 +22,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Test endpoint paths and reusable format strings shared across prompt tests.
@@ -562,7 +564,9 @@ func TestMRRiskAssessmentPrompt_Success(t *testing.T) {
 	if !strings.Contains(text, "Risk Assessment") {
 		t.Errorf("expected risk assessment heading")
 	}
-	if !strings.Contains(text, "Has conflicts**: true") {
+	// The flag is rendered by toolutil.BoolEmoji, like every other boolean this
+	// server shows a reader, rather than as the Go word "true".
+	if !strings.Contains(text, "Has conflicts**: "+toolutil.EmojiSuccess) {
 		t.Errorf("expected conflict flag in output")
 	}
 	if !strings.Contains(text, "Sensitive files touched") {
@@ -2599,4 +2603,108 @@ func TestRegisterAll_ContextBoundClient_RequestReachesBoundInstance(t *testing.T
 			}
 		})
 	}
+}
+
+// TestWriteDiffRefs_WritesTheShasOnlyWhenTheMergeRequestHasThem verifies the
+// review_mr instruction that tells a model which SHAs a positioned draft note
+// needs.
+//
+// GitLab omits diff_refs on a merge request whose diff it cannot resolve — a
+// closed MR whose source branch is gone, one still being prepared — and the
+// line used to be written from that absence, reading "use base_sha=“". That is
+// an instruction to send a position GitLab refuses; saying the refs are absent
+// is what lets the model take the other half of this prompt's advice and draft
+// the note without one.
+func TestWriteDiffRefs_WritesTheShasOnlyWhenTheMergeRequestHasThem(t *testing.T) {
+	const absent = "   This MR carries no diff refs, so an inline position cannot be built from it: " +
+		"read base_sha, start_sha and head_sha from the merge request before drafting a positioned note, " +
+		"or leave the position out.\n"
+
+	tests := []struct {
+		name string
+		refs gl.MergeRequestDiffRefs
+		want string
+	}{
+		{
+			name: "all three present",
+			refs: gl.MergeRequestDiffRefs{BaseSha: "aaa", StartSha: "bbb", HeadSha: "ccc"},
+			want: "   Use base_sha=`aaa`, start_sha=`bbb`, head_sha=`ccc` from this MR.\n",
+		},
+		{name: "none present", refs: gl.MergeRequestDiffRefs{}, want: absent},
+		{
+			name: "head missing",
+			refs: gl.MergeRequestDiffRefs{BaseSha: "aaa", StartSha: "bbb"},
+			want: absent,
+		},
+		{
+			name: "start missing",
+			refs: gl.MergeRequestDiffRefs{BaseSha: "aaa", HeadSha: "ccc"},
+			want: absent,
+		},
+		{
+			name: "base missing",
+			refs: gl.MergeRequestDiffRefs{StartSha: "bbb", HeadSha: "ccc"},
+			want: absent,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var b strings.Builder
+			writeDiffRefs(&b, tt.refs)
+			if got := b.String(); got != tt.want {
+				t.Errorf("writeDiffRefs() wrote %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSummarizeOpenMRs_LongDescription_IsCutOnARuneBoundary verifies that the
+// description excerpt in the open-MR list is still UTF-8 after it is shortened.
+//
+// The excerpt was a byte slice at a fixed offset, so a multi-byte character
+// spanning it was split and its orphaned bytes went into the prompt message:
+// the escapers pass them through, being neither control bytes nor Markdown, and
+// the client renders a replacement glyph. A description is prose somebody
+// typed, so a character at the cut is as likely to be an accent or an emoji as
+// an ASCII letter.
+func TestSummarizeOpenMRs_LongDescription_IsCutOnARuneBoundary(t *testing.T) {
+	// 199 ASCII bytes then a two-byte character, so the 200-byte cut lands
+	// inside it.
+	description := strings.Repeat("a", 199) + "é" + strings.Repeat("b", 50)
+	created := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathMRs, func(w http.ResponseWriter, _ *http.Request) {
+		mrs := []*gl.BasicMergeRequest{{
+			IID:         1,
+			Title:       "Long one",
+			Description: description,
+			CreatedAt:   timePtr(t, created),
+		}}
+		data, _ := json.Marshal(mrs)
+		respondJSON(w, http.StatusOK, string(data))
+	})
+
+	text := getPromptText(t, mux, "summarize_open_mrs", map[string]string{"project_id": "42"})
+
+	if !utf8.ValidString(text) {
+		t.Errorf("the prompt message is not valid UTF-8 after the description was cut:\n%q", text)
+	}
+	want := "- **Description**: " + strings.Repeat("a", 199) + "...\n"
+	if !strings.Contains(text, want) {
+		t.Errorf("the excerpt does not stop before the split character:\nwant %q\ngot\n%s", want, text)
+	}
+	if strings.Contains(text, "�") {
+		t.Errorf("the message carries a replacement character, so a rune was split:\n%s", text)
+	}
+}
+
+// timePtr parses an RFC 3339 stamp for a fixture and returns a pointer to it.
+func timePtr(t *testing.T, stamp string) *time.Time {
+	t.Helper()
+	parsed, err := time.Parse(time.RFC3339, stamp)
+	if err != nil {
+		t.Fatalf("fixture timestamp %q does not parse: %v", stamp, err)
+	}
+	return &parsed
 }

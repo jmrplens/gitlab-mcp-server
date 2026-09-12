@@ -120,6 +120,27 @@ func TestFormatMutateMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatMutateMarkdown_HostileMessage_ReachesTheNoteAsText checks the whole
+// confirmation for a sentence carrying a raw anchor: the sentence reaches the
+// formatter as a field of the result, so it is escaped like any other value
+// read off an output and the note opens no link.
+func TestFormatMutateMarkdown_HostileMessage_ReachesTheNoteAsText(t *testing.T) {
+	want := "## Saved View: My open tasks\n\n" +
+		"- **ID**: 7\n" +
+		"- **Private**: ❌\n" +
+		"- **Subscribed**: ❌\n" +
+		"- **Sort**: CREATED_DESC\n" +
+		"\nSuccessfully created &lt;a href=\"http://attacker.invalid\">a view&lt;/a>.\n"
+	got := FormatMutateMarkdown(MutateOutput{
+		Status:    "success",
+		Message:   "Successfully created <a href=\"http://attacker.invalid\">a view</a>.",
+		SavedView: Item{ID: 7, Name: "My open tasks", Sort: "CREATED_DESC"},
+	})
+	if got != want {
+		t.Errorf("FormatMutateMarkdown()\n got %q\nwant %q", got, want)
+	}
+}
+
 // TestFormatListMarkdown_HostileName checks that a view name carrying a table
 // row, a heading and the server's guidance heading changes no structure: the
 // name is one cell, and the guidance heading it forged is shown as text.

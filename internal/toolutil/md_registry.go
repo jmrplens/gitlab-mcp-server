@@ -40,18 +40,23 @@ func init() {
 	RegisterMarkdown(formatVoidOutput)
 }
 
-// formatDeleteOutput renders a DeleteOutput confirmation as a success string.
-// The message is the handler's own sentence built from the identifier the
-// caller passed, so it is written as prose with only the control bytes
-// dropped; it is one line and can add no structure.
+// formatDeleteOutput renders a DeleteOutput confirmation as a success string:
+// one line of the server's own sentence, through the inline escaper a card row
+// uses.
+//
+// Dropping the control bytes was not containment enough. The sentence is built
+// around an identifier the caller passed and a name GitLab holds, so a value
+// carrying a line break ended the confirmation and wrote whatever followed at
+// column zero — a heading, a list item, or the server's own guidance section —
+// and one carrying a tag reached the page as raw HTML.
 func formatDeleteOutput(v DeleteOutput) string {
-	return EmojiSuccess + " " + StripControlBytes(v.Message)
+	return EmojiSuccess + " " + cardInline(v.Message)
 }
 
 // formatVoidOutput renders a VoidOutput confirmation as a success string, on
 // the same terms as [formatDeleteOutput].
 func formatVoidOutput(v VoidOutput) string {
-	return EmojiSuccess + " " + StripControlBytes(v.Message)
+	return EmojiSuccess + " " + cardInline(v.Message)
 }
 
 // RegisterMarkdown registers a Markdown string formatter for type T.

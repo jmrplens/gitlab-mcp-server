@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"time"
+	"unicode/utf8"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -257,9 +258,33 @@ func metricDefinitionsOutput(reader io.Reader) (MetricDefinitionsOutput, error) 
 	// the way a truncated job trace does.
 	truncated := len(data) > maxMetricDefinitionsBytes
 	if truncated {
-		data = data[:maxMetricDefinitionsBytes]
+		data = truncateAtRuneBoundary(data, maxMetricDefinitionsBytes)
 	}
 	return MetricDefinitionsOutput{YAML: string(data), Truncated: truncated}, nil
+}
+
+// truncateAtRuneBoundary cuts data to at most limit bytes without splitting the
+// character the limit falls inside.
+//
+// A byte count is the only ceiling a reader can be bounded by, and it lands
+// wherever it lands: cutting at it directly leaves the leading bytes of a
+// multi-byte character at the end of the document, which every consumer renders
+// as U+FFFD and a strict UTF-8 decoder rejects outright. At most
+// [utf8.UTFMax]-1 bytes are given back, so a document whose tail is genuinely
+// not UTF-8 is shortened by no more than a character's worth rather than eaten
+// back to the last valid one.
+func truncateAtRuneBoundary(data []byte, limit int) []byte {
+	if len(data) <= limit {
+		return data
+	}
+	data = data[:limit]
+	for range utf8.UTFMax - 1 {
+		if r, size := utf8.DecodeLastRune(data); r != utf8.RuneError || size != 1 {
+			break
+		}
+		data = data[:len(data)-1]
+	}
+	return data
 }
 
 // ---------------------------------------------------------------------------

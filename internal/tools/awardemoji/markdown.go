@@ -20,8 +20,14 @@ type awardEmojiNotFoundOutput struct {
 	VerifyHint string `json:"verify_hint"`
 }
 
+// formatAwardEmojiNotFound renders the not-found card. The two hints are
+// sentences this package wrote, but they reach the formatter as fields of the
+// result rather than as literals, so they are escaped like any other value
+// read off an output: a hint is a list item, and the inline escaper is what a
+// list item's value takes.
 func formatAwardEmojiNotFound(out awardEmojiNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult(awardEmojiResourceName, out.Identifier, out.ListHint, out.VerifyHint)
+	return toolutil.NotFoundResult(awardEmojiResourceName, out.Identifier,
+		toolutil.EscapeMdTableCell(out.ListHint), toolutil.EscapeMdTableCell(out.VerifyHint))
 }
 
 // FormatListMarkdown formats award emoji list as a Markdown CallToolResult.

@@ -63,23 +63,24 @@ func CancelledResult(message string) *mcp.CallToolResult {
 	return elicitation.CancelledResult(message)
 }
 
-// UnsupportedResult returns a structured error tool result when the
-// MCP client does not support elicitation. Suggests alternative
-// non-elicitation tools.
+// UnsupportedResult returns the refusal a wizard answers with when the MCP
+// client does not support elicitation, naming the tools that do the same work
+// without it.
+//
+// It is prose in the one refusal envelope [toolutil.ErrorResult] writes, which
+// is what gives it the normalization and the annotation every other refusal
+// carries. The alternatives used to be introduced by a bolded label, which is
+// the shape of a card row and is not one: this result is about no GitLab
+// object, so it has no rows.
 func UnsupportedResult(toolName string) *mcp.CallToolResult {
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: fmt.Sprintf(
-				"Tool %q requires the MCP elicitation capability. "+
-					"Your MCP client does not support elicitation. "+
-					"Check your client's MCP documentation for elicitation support.\n\n"+
-					"**Alternatives**: Use the standard gitlab_issue action 'create' / "+
-					"gitlab_merge_request action 'create' / etc. tools instead.",
-				toolName,
-			)},
-		},
-		IsError: true,
-	}
+	return toolutil.ErrorResult(fmt.Sprintf(
+		"Tool %q requires the MCP elicitation capability. "+
+			"Your MCP client does not support elicitation. "+
+			"Check your client's MCP documentation for elicitation support.\n\n"+
+			"Alternatives: use the standard gitlab_issue action 'create', "+
+			"gitlab_merge_request action 'create' or the equivalent tool for the object.",
+		toolName,
+	))
 }
 
 // summaryExcerptRunes is how much of a description a consent dialog shows.

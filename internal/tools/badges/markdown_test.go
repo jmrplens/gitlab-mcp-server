@@ -137,6 +137,26 @@ func TestFormatBadgePreview(t *testing.T) {
 	})
 }
 
+// TestFormatBadgeNotFound_HostileResourceAndHints_ReachThePageAsText verifies
+// the whole not-found card for a result whose label and hints carry a raw
+// anchor. Both are words this package wrote, but both reach the formatter as
+// fields of the result rather than as literals, so the sentence and the
+// guidance lines show the tag as text and the card opens no link.
+func TestFormatBadgeNotFound_HostileResourceAndHints_ReachThePageAsText(t *testing.T) {
+	got := badgeText(t, formatBadgeNotFound(badgeNotFoundOutput{
+		Resource:   "Project <a href=\"http://attacker.invalid\">Badge</a>",
+		Identifier: "7",
+		Hints:      []string{"<a href=\"http://attacker.invalid\">List</a> the badges", "Check the badge ID"},
+	}))
+
+	want := "## " + toolutil.EmojiQuestion + " Project &lt;a href=\"http://attacker.invalid\">Badge&lt;/a> Not Found\n\n" +
+		"The project &lt;a href=\"http://attacker.invalid\">badge&lt;/a> **7** does not exist or is not accessible with your current permissions.\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- &lt;a href=\"http://attacker.invalid\">List&lt;/a> the badges\n" +
+		"- Check the badge ID\n"
+	assertRendered(t, got, want)
+}
+
 // TestMarkdownRegistry_BadgeOutputTypes verifies every badge output type is
 // registered with the Markdown registry and routes to the expected formatter.
 func TestMarkdownRegistry_BadgeOutputTypes(t *testing.T) {

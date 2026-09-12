@@ -63,12 +63,16 @@ func FormatListMarkdown(out ListOutput) string {
 
 // FormatMutateMarkdown renders the confirmation shared by create, update,
 // subscribe, and unsubscribe as the card of the view that changed: the heading
-// names the view, and GitLab's own message sits under it as the server's note.
+// names the view, and the confirmation sentence sits under it as the note.
+//
+// The sentence is one this package composed, but it reaches the formatter as a
+// field of the result rather than as a literal, so it is escaped like any
+// other value read off an output: a note is one line of inline content.
 func FormatMutateMarkdown(out MutateOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Saved View: "+out.SavedView.Name)
 	writeViewDetails(c, out.SavedView)
-	c.Note(out.Message)
+	c.Note(toolutil.EscapeMdTableCell(out.Message))
 	c.End()
 	return b.String()
 }

@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -259,10 +261,106 @@ func sortedKeys[V any](m map[string]V) []string {
 // written as three backticks is closed by the first run of three any of them
 // contains, and the rest of the prompt renders as Markdown from there, so the
 // diagram is assembled first and [toolutil.MarkdownFencedBlock] measures it.
+//
+// The fence contains the diagram; [mermaidQuoted] contains each value inside
+// it. The two are separate containments because they answer separate readers:
+// the fence keeps the diagram out of the Markdown around it, and the quoting
+// keeps a value out of the diagram's own syntax.
 func writeMermaidChart(b *strings.Builder, diagram func(*strings.Builder)) {
 	var chart strings.Builder
 	diagram(&chart)
 	b.WriteString(toolutil.MarkdownFencedBlock("mermaid", chart.String()))
+}
+
+// mermaidQuoted renders a GitLab-authored value as a quoted Mermaid string,
+// quotation marks included.
+//
+// Mermaid has no backslash escape. A '"' inside a quoted label ends the label,
+// and what follows is read as diagram syntax, so a label or contributor name
+// carrying one could add entries and titles to a chart the server wrote. Go's
+// %q, which the two pie charts used, produces exactly that: it writes a
+// backslash Mermaid does not read, and leaves the quote that closes the string.
+//
+// What Mermaid does have is an entity form, '#' then a name or a number then
+// ';'. The '#' is therefore encoded first: a value that already spelled
+// "#quot;" would otherwise decode to a quotation mark it never contained. Line
+// breaks become spaces and control bytes are dropped, because an entry is one
+// line of the diagram.
+func mermaidQuoted(s string) string {
+	var out strings.Builder
+	out.WriteByte('"')
+	for _, r := range s {
+		switch {
+		case r == '#':
+			out.WriteString("#35;")
+		case r == '"':
+			out.WriteString("#quot;")
+		case r == '\n' || r == '\r' || r == '\t':
+			out.WriteByte(' ')
+		case unicode.IsControl(r):
+			// Dropped: a control byte renders as nothing and can move a cursor.
+		default:
+			out.WriteRune(r)
+		}
+	}
+	out.WriteByte('"')
+	return out.String()
+}
+
+// truncateRunes cuts s to at most limit bytes, on a rune boundary.
+//
+// Slicing a GitLab-authored string at a byte offset splits whatever character
+// spans it, and what reaches the message is then not UTF-8 at all: the escapers
+// pass the orphaned bytes through, since they are neither control bytes nor
+// Markdown, and the client renders a replacement glyph or drops the line. Every
+// description this package shortens is prose somebody typed, so the character
+// at the cut is as likely to be an accent or an emoji as an ASCII letter.
+func truncateRunes(s string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	if len(s) <= limit {
+		return s
+	}
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut]
+}
+
+// endBlock leaves the builder ending in exactly one blank line, adding only
+// what is missing. It is the rule [toolutil.Card] applies before each of its
+// own block writes, in the one place this package needs it.
+func endBlock(b *strings.Builder) {
+	s := b.String()
+	switch {
+	case s == "", strings.HasSuffix(s, "\n\n"):
+		return
+	case strings.HasSuffix(s, "\n"):
+		b.WriteString("\n")
+	default:
+		b.WriteString("\n\n")
+	}
+}
+
+// writeClosingRule writes the thematic break that separates a prompt's body
+// from the instruction it closes with, and then that instruction.
+//
+// The break needs a blank line in front of it. A "---" written directly under a
+// line of text is a setext heading in CommonMark: it draws no rule at all and
+// turns the sentence above it into an H2. Four prompts closed that way whenever
+// their last section was a sentence rather than a table, so exactly the reports
+// with nothing to report ("All open items have assignees", "No stale items
+// found") were the ones whose closing instruction lost its separator and whose
+// last sentence was promoted to a heading.
+func writeClosingRule(b *strings.Builder, instruction string) {
+	endBlock(b)
+	b.WriteString("---\n")
+	b.WriteString(instruction)
+	if !strings.HasSuffix(instruction, "\n") {
+		b.WriteString("\n")
+	}
 }
 
 // writeMRTable writes a Markdown table of merge requests with standard columns.
@@ -464,17 +562,29 @@ func progressBar(done, total int) string {
 		pct)
 }
 
-// deduplicateMRs merges two MR slices and removes duplicates by IID+ProjectID.
+// mrIdentity names one merge request across projects.
+//
+// An IID is unique inside a project and nowhere else, so a set keyed on it
+// alone treats MR !1 of every project as the same merge request. That is only
+// visible in the cross-project prompts, which is where it went unnoticed.
+type mrIdentity struct {
+	projectID int64
+	iid       int64
+}
+
+// identifyMR returns the identity of a merge request, which is its project and
+// its IID together.
+func identifyMR(mr *gl.BasicMergeRequest) mrIdentity {
+	return mrIdentity{projectID: mr.ProjectID, iid: mr.IID}
+}
+
+// deduplicateMRs merges two MR slices and removes duplicates by identity.
 func deduplicateMRs(a, b []*gl.BasicMergeRequest) []*gl.BasicMergeRequest {
-	type mrKey struct {
-		projectID int64
-		iid       int64
-	}
-	seen := make(map[mrKey]bool)
+	seen := make(map[mrIdentity]bool)
 	var result []*gl.BasicMergeRequest
 	for _, mrs := range [][]*gl.BasicMergeRequest{a, b} {
 		for _, mr := range mrs {
-			k := mrKey{projectID: mr.ProjectID, iid: mr.IID}
+			k := identifyMR(mr)
 			if !seen[k] {
 				seen[k] = true
 				result = append(result, mr)

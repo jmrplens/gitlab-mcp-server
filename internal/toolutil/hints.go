@@ -166,8 +166,25 @@ func DefuseHintsHeading(s string) string {
 // when the classifier follows those shapes: it fails the gate as stale the
 // moment nothing needs it.
 //
+// A blank hint is dropped, and a call whose every hint is blank writes no
+// section at all. A hint reaches a formatter as a field of its result as often
+// as it does as a literal, and a result built from a zero value carries those
+// fields empty: written out, each became a bare "- " and the first of them,
+// landing directly under the sentence above it, turned that sentence into a
+// setext heading. Guidance with no text in it is not guidance, so the shape
+// that damages the document is the one that gets dropped rather than each
+// caller having to remember to check.
+//
 //gitlab:allow-unescaped StripControlBytes(h): a hint is the server's own sentence; every hint a domain passes classifies safe, and the ten that do not are this package's plumbing of them through options, constructors and receivers the classifier does not follow.
 func WriteHints(b *strings.Builder, hints ...string) {
+	kept := hints[:0:0]
+	for _, h := range hints {
+		if !blank(h) {
+			kept = append(kept, h)
+		}
+	}
+	hints = kept
+
 	written := b.String()
 	content := DefuseHintsHeading(written)
 	if len(hints) > 0 {

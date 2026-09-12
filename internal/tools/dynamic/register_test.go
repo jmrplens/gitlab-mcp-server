@@ -201,8 +201,8 @@ func TestSearch_ReturnsNextStep(t *testing.T) {
 		t.Fatalf("NextStep = %q, want schema-aware execution guidance", output.NextStep)
 	}
 	markdown := textContent(result)
-	if !strings.Contains(markdown, "Next step:") {
-		t.Fatalf("Search() markdown = %q, want next step guidance", markdown)
+	if hints := toolutil.ExtractHints(markdown); !slices.Contains(hints, output.NextStep) {
+		t.Fatalf("Search() hints = %q, want the computed next step %q", hints, output.NextStep)
 	}
 	if strings.Contains(markdown, "extra discovery") {
 		t.Fatalf("Search() markdown still forces extra discovery: %s", markdown)
@@ -958,7 +958,7 @@ func TestDescribe_MetaCatalogSchemas(t *testing.T) {
 			}
 		})
 	}
-	if !strings.Contains(markdown, "**Input schema**") || !strings.Contains(markdown, "```json") || !strings.Contains(markdown, "properties") {
+	if !strings.Contains(markdown, "#### Input schema") || !strings.Contains(markdown, "```json") || !strings.Contains(markdown, "properties") {
 		t.Fatalf("Describe() markdown missing compact input schema: %s", markdown)
 	}
 
@@ -1162,17 +1162,18 @@ func TestFind_MarkdownGuidesImmediateExecuteAndConfirm(t *testing.T) {
 		t.Fatalf("top result = %+v, want project.delete", output.Results)
 	}
 	markdown := textContent(result)
-	for _, want := range []string{
-		"Immediate next step: choose one row and call `gitlab_execute_action` now",
-		"Next step: choose one row and call `gitlab_execute_action`",
-		"before starting another catalog operation",
-		"top-level `confirm:true`",
-	} {
+	hints := toolutil.ExtractHints(markdown)
+	for _, want := range []string{wantExecuteNowHint, dynamicExecuteEnvelopeHint, wantStructuredResultsHint} {
 		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(markdown, want) {
-				t.Fatalf("Find() markdown = %q, want %q", markdown, want)
+			if !slices.Contains(hints, want) {
+				t.Fatalf("Find() hints = %q, want %q", hints, want)
 			}
 		})
+	}
+	// The confirmation a destructive action needs stays in the table text for
+	// a model that reads the rows and not the guidance.
+	if !strings.Contains(markdown, wantDestructiveConfirmCell) {
+		t.Fatalf("Find() markdown = %q, want the confirm guidance in the row", markdown)
 	}
 }
 
@@ -6452,32 +6453,41 @@ func TestNormalization_FormattingBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("format empty outputs", func(t *testing.T) {
-		searchText := formatSearchOutput(SearchOutput{Query: "zzzz"})
-		if !strings.Contains(searchText, "No catalog actions matched") {
-			t.Fatalf("formatSearchOutput(empty) = %q, want no-match message", searchText)
-		}
-		findText := formatFindOutput(FindOutput{Query: "zzzz"})
-		if !strings.Contains(findText, "No catalog actions matched") {
-			t.Fatalf("formatFindOutput(empty) = %q, want no-match message", findText)
+	t.Run("an empty search names the query and what to try instead", func(t *testing.T) {
+		want := "## GitLab Catalog: no matching action\n\n" +
+			"- **Query**: `zzzz`\n" +
+			wantHintsBlock(wantBroaderTermsHint)
+		if got := formatSearchOutput(SearchOutput{Query: "zzzz"}); got != want {
+			t.Fatalf("formatSearchOutput(empty) = %q, want %q", got, want)
 		}
 	})
 
-	t.Run("format find output explains execute params envelope", func(t *testing.T) {
-		findText := formatFindOutput(FindOutput{
+	t.Run("an empty find names the query and what to try instead", func(t *testing.T) {
+		want := "## GitLab Catalog: no matching action\n\n" +
+			"- **Query**: `zzzz`\n" +
+			wantHintsBlock(wantBroaderTermsHint)
+		if got := formatFindOutput(FindOutput{Query: "zzzz"}, nil); got != want {
+			t.Fatalf("formatFindOutput(empty) = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("find closes with the execute envelope the caller has to send", func(t *testing.T) {
+		want := "## GitLab Catalog: 1 matching action\n\n" +
+			"- **Query**: `release link create package asset`\n\n" +
+			"| Action ID | Score | Destructive | Required Params |\n" +
+			"| --- | --- | --- | --- |\n" +
+			"| `release.link_create_batch` | 0 | - | `project_id`, `tag_name`, `links` |\n" +
+			wantHintsBlock(wantExecuteNowHint, dynamicExecuteEnvelopeHint, wantStructuredResultsHint)
+		got := formatFindOutput(FindOutput{
 			Query: "release link create package asset",
 			Count: 1,
 			Results: []FindResult{{
 				ID:             "release.link_create_batch",
 				RequiredParams: []string{"project_id", "tag_name", "links"},
 			}},
-		})
-		for _, want := range []string{"top-level `action`", "one `params` object", "Required Params key below belongs inside `params`"} {
-			t.Run(want, func(t *testing.T) {
-				if !strings.Contains(findText, want) {
-					t.Fatalf("formatFindOutput() = %q, want %q", findText, want)
-				}
-			})
+		}, nil)
+		if got != want {
+			t.Fatalf("formatFindOutput() = %q, want %q", got, want)
 		}
 	})
 }
@@ -8049,62 +8059,91 @@ func TestScoreSearchProjectsIntent_PositiveCase(t *testing.T) {
 	}
 }
 
-// TestFormatSearchOutput_EmptyWithSuggestions verifies that an empty search
-// result emits a Try: suggestion line (instead of the default broader-terms
-// hint) and that the rest of the empty-result path renders the
-// gitlab_find_action fallback in subsequent calls.
+// The guidance lines the three catalog discovery cards end with, spelled out
+// here so that a whole-output expectation reads as the document a model
+// receives and a change to any of them is a visible change to this file.
+const (
+	wantBroaderTermsHint       = "Try broader terms such as project, issue, merge request, pipeline, branch, or user."
+	wantFullSchemaHint         = "Use `gitlab_find_action` when the chosen action's full schema is still needed."
+	wantExecuteNowHint         = "Choose one row and call `gitlab_execute_action` with that row's schema and example now, before starting another catalog operation; do not call `gitlab_find_action` again until that execute call returns."
+	wantStructuredResultsHint  = "Structured results carry the exact `input_schema` and a `gitlab_execute_action` example for every action listed."
+	wantDescribeExecuteHint    = "Call `gitlab_execute_action` with the action ID this card names and the params its input schema requires."
+	wantDestructiveConfirmCell = "Execute destructive actions with top-level `confirm:true`."
+)
+
+// wantHintsBlock renders the guidance section a card ends with, so a
+// whole-output expectation can be written as the document rather than as a
+// run of escape sequences. It is the shape toolutil.WriteHints produces after
+// a body that ends in a newline: one blank line, the rule, the heading, and
+// one bullet per hint.
+func wantHintsBlock(hints ...string) string {
+	var b strings.Builder
+	b.WriteString("\n---\n\U0001F4A1 **Next steps:**\n")
+	for _, hint := range hints {
+		b.WriteString("- " + hint + "\n")
+	}
+	return b.String()
+}
+
+// TestFormatSearchOutput_EmptyWithSuggestions verifies the whole document an
+// empty search answers with when the registry found nearby tokens: the
+// heading says nothing matched, the query is echoed as a code span, no table
+// is opened, and the suggestions are the guidance, since a suggestion is a
+// next step rather than a remark.
 func TestFormatSearchOutput_EmptyWithSuggestions(t *testing.T) {
-	out := formatSearchOutput(SearchOutput{
+	want := "## GitLab Catalog: no matching action\n\n" +
+		"- **Query**: `nonsenseonlyzz`\n" +
+		wantHintsBlock("Try: `project`, `issue`.")
+	got := formatSearchOutput(SearchOutput{
 		Query:       "nonsenseonlyzz",
 		Count:       0,
 		Suggestions: []string{"project", "issue"},
 	})
-	if !strings.Contains(out, "Try: `project`, `issue`") {
-		t.Fatalf("formatSearchOutput() = %q, want Try: suggestions", out)
-	}
-	if !strings.Contains(out, "No catalog actions matched") {
-		t.Fatalf("formatSearchOutput() = %q, want no-match message", out)
+	if got != want {
+		t.Fatalf("formatSearchOutput() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatSearchOutput_NextStepFallback verifies that the explicit
-// NextStep override suppresses the default gitlab_find_action hint and that
-// a populated result without NextStep falls back to the default hint.
+// TestFormatSearchOutput_NextStepFallback verifies that the schema-aware next
+// step the registry computed is what the card ends with, and that a result
+// set carrying none falls back to the find_action hint. Both are guidance
+// rather than prose, so ExtractHints lifts whichever one was written.
 func TestFormatSearchOutput_NextStepFallback(t *testing.T) {
-	withNext := formatSearchOutput(SearchOutput{
-		Query:    "with next",
-		Count:    1,
-		NextStep: "Use its exact parameter schema before executing",
-		Results: []SearchResult{{
-			ID:             "project.get",
-			Destructive:    false,
-			RequiredParams: []string{"project_id"},
-		}},
-	})
-	if !strings.Contains(withNext, "Use its exact parameter schema before executing") {
-		t.Fatalf("formatSearchOutput(next) = %q, want explicit NextStep", withNext)
-	}
-	if strings.Contains(withNext, "Use `gitlab_find_action`") {
-		t.Fatalf("formatSearchOutput(next) = %q, want no default hint when NextStep set", withNext)
+	result := SearchResult{ID: "project.get", Score: 120, RequiredParams: []string{"project_id"}}
+	body := func(query string) string {
+		return "## GitLab Catalog: 1 matching action\n\n" +
+			"- **Query**: `" + query + "`\n\n" +
+			"| Action ID | Score | Destructive | Required Params |\n" +
+			"| --- | --- | --- | --- |\n" +
+			"| `project.get` | 120 | - | `project_id` |\n"
 	}
 
-	// Populated result without NextStep falls back to the default hint.
-	withHint := formatSearchOutput(SearchOutput{
-		Query: "without next",
-		Count: 1,
-		Results: []SearchResult{{
-			ID:             "project.get",
-			Destructive:    false,
-			RequiredParams: []string{"project_id"},
-		}},
+	t.Run("the computed next step replaces the fallback", func(t *testing.T) {
+		want := body("with next") + wantHintsBlock("Use its exact parameter schema before executing", dynamicExecuteEnvelopeHint)
+		got := formatSearchOutput(SearchOutput{
+			Query:    "with next",
+			Count:    1,
+			NextStep: "Use its exact parameter schema before executing",
+			Results:  []SearchResult{result},
+		})
+		if got != want {
+			t.Fatalf("formatSearchOutput(next) = %q, want %q", got, want)
+		}
 	})
-	if !strings.Contains(withHint, "Use `gitlab_find_action`") {
-		t.Fatalf("formatSearchOutput(no next) = %q, want default find_action hint", withHint)
-	}
+
+	t.Run("no next step falls back to the schema hint", func(t *testing.T) {
+		want := body("without next") + wantHintsBlock(wantFullSchemaHint, dynamicExecuteEnvelopeHint)
+		got := formatSearchOutput(SearchOutput{Query: "without next", Count: 1, Results: []SearchResult{result}})
+		if got != want {
+			t.Fatalf("formatSearchOutput(no next) = %q, want %q", got, want)
+		}
+	})
 }
 
-// TestFormatFindOutput_AllTableShapes verifies every header/row branch in
-// formatFindOutput: default, with guidance, with explanations, and with both.
+// TestFormatFindOutput_AllTableShapes verifies the whole document each of the
+// four column shapes produces: neither optional column, guidance alone,
+// explanations alone, and both. The header and the row are filtered from one
+// column order, so the shape is the only thing that varies between them.
 func TestFormatFindOutput_AllTableShapes(t *testing.T) {
 	canonicalReason := MatchReason{
 		Field:        searchFieldCanonicalID,
@@ -8117,26 +8156,33 @@ func TestFormatFindOutput_AllTableShapes(t *testing.T) {
 		MatchedTerms: 2,
 		Reasons:      []MatchReason{canonicalReason},
 	}
+	const (
+		why      = `canonical_id matched "project.get"`
+		guidance = "destructive project action " + wantDestructiveConfirmCell
+	)
+	head := "## GitLab Catalog: 1 matching action\n\n- **Query**: `project get`\n\n"
+	hints := wantHintsBlock(wantExecuteNowHint, dynamicExecuteEnvelopeHint, wantStructuredResultsHint)
 
 	cases := []struct {
-		name        string
-		result      FindResult
-		wantColumns []string
-		denyColumns []string
+		name   string
+		result FindResult
+		want   string
 	}{
 		{
-			name: "default shape omits guidance and why columns",
+			name: "neither optional column is opened",
 			result: FindResult{
 				ID:             "project.get",
 				Score:          200,
 				Destructive:    false,
 				RequiredParams: []string{"project_id"},
 			},
-			wantColumns: []string{"| Score |"},
-			denyColumns: []string{"| Why |", "| Guidance |"},
+			want: head +
+				"| Action ID | Score | Destructive | Required Params |\n" +
+				"| --- | --- | --- | --- |\n" +
+				"| `project.get` | 200 | - | `project_id` |\n" + hints,
 		},
 		{
-			name: "guidance only adds Guidance column",
+			name: "a usage note and a destructive flag open the guidance column",
 			result: FindResult{
 				ID:             "project.get",
 				Score:          200,
@@ -8144,11 +8190,13 @@ func TestFormatFindOutput_AllTableShapes(t *testing.T) {
 				RequiredParams: []string{"project_id"},
 				Usage:          "destructive project action",
 			},
-			wantColumns: []string{"| Guidance |", "Execute destructive actions with top-level `confirm:true`."},
-			denyColumns: []string{"| Why |"},
+			want: head +
+				"| Action ID | Score | Destructive | Required Params | Guidance |\n" +
+				"| --- | --- | --- | --- | --- |\n" +
+				"| `project.get` | 200 | " + toolutil.EmojiWarning + " yes | `project_id` | " + guidance + " |\n" + hints,
 		},
 		{
-			name: "explanations only adds Why column",
+			name: "an explanation opens the why column",
 			result: FindResult{
 				ID:             "project.get",
 				Score:          200,
@@ -8156,11 +8204,13 @@ func TestFormatFindOutput_AllTableShapes(t *testing.T) {
 				RequiredParams: []string{"project_id"},
 				Explanation:    canonicalExplanation,
 			},
-			wantColumns: []string{"| Why |", "canonical_id matched"},
-			denyColumns: []string{"| Guidance |"},
+			want: head +
+				"| Action ID | Score | Destructive | Required Params | Why |\n" +
+				"| --- | --- | --- | --- | --- |\n" +
+				"| `project.get` | 200 | - | `project_id` | " + why + " |\n" + hints,
 		},
 		{
-			name: "explanations and guidance render both columns",
+			name: "both optional columns are opened together",
 			result: FindResult{
 				ID:             "project.get",
 				Score:          200,
@@ -8169,26 +8219,22 @@ func TestFormatFindOutput_AllTableShapes(t *testing.T) {
 				Usage:          "destructive project action",
 				Explanation:    canonicalExplanation,
 			},
-			wantColumns: []string{"| Why |", "| Guidance |", "canonical_id matched", "Execute destructive actions with top-level `confirm:true`."},
+			want: head +
+				"| Action ID | Score | Destructive | Required Params | Guidance | Why |\n" +
+				"| --- | --- | --- | --- | --- | --- |\n" +
+				"| `project.get` | 200 | " + toolutil.EmojiWarning + " yes | `project_id` | " + guidance + " | " + why + " |\n" + hints,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			out := formatFindOutput(FindOutput{
+			got := formatFindOutput(FindOutput{
 				Query:   "project get",
 				Count:   1,
 				Results: []FindResult{tc.result},
-			})
-			for _, want := range tc.wantColumns {
-				if !strings.Contains(out, want) {
-					t.Fatalf("formatFindOutput() = %q, want column/text %q", out, want)
-				}
-			}
-			for _, deny := range tc.denyColumns {
-				if strings.Contains(out, deny) {
-					t.Fatalf("formatFindOutput() = %q, want no column %q", out, deny)
-				}
+			}, nil)
+			if got != tc.want {
+				t.Fatalf("formatFindOutput() = %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -9509,49 +9555,54 @@ func TestActionNameClassifiers_EachKeywordStandsAlone(t *testing.T) {
 // over nothing: an empty "Try:" line, a disambiguation line naming no action,
 // or a Required Params cell that reads as if the action took none.
 func TestFormatSearchOutput_OmittedSectionsAndEmptyCells(t *testing.T) {
+	const header = "| Action ID | Score | Destructive | Required Params |\n| --- | --- | --- | --- |\n"
+
 	t.Run("no suggestions falls back to the broader-terms hint", func(t *testing.T) {
-		out := formatSearchOutput(SearchOutput{Query: "zzzz"})
-		if !strings.Contains(out, "Try broader terms such as project") {
-			t.Fatalf("formatSearchOutput() = %q, want the broader-terms hint", out)
-		}
-		if strings.Contains(out, "Try: ") {
-			t.Fatalf("formatSearchOutput() = %q, want no suggestion list", out)
+		want := "## GitLab Catalog: no matching action\n\n- **Query**: `zzzz`\n" + wantHintsBlock(wantBroaderTermsHint)
+		if got := formatSearchOutput(SearchOutput{Query: "zzzz"}); got != want {
+			t.Fatalf("formatSearchOutput() = %q, want %q", got, want)
 		}
 	})
 
-	t.Run("unambiguous results print no disambiguation line", func(t *testing.T) {
-		out := formatSearchOutput(SearchOutput{
+	t.Run("unambiguous results carry no disambiguation hint", func(t *testing.T) {
+		want := "## GitLab Catalog: 1 matching action\n\n- **Query**: `project get`\n\n" + header +
+			"| `project.get` | 0 | - | `project_id` |\n" +
+			wantHintsBlock(wantFullSchemaHint, dynamicExecuteEnvelopeHint)
+		got := formatSearchOutput(SearchOutput{
 			Query:   "project get",
 			Count:   1,
 			Results: []SearchResult{{ID: "project.get", RequiredParams: []string{"project_id"}}},
 		})
-		if strings.Contains(out, "Use one canonical action ID explicitly") {
-			t.Fatalf("formatSearchOutput() = %q, want no disambiguation line", out)
-		}
-		if !strings.Contains(out, "| `project.get` | false | project_id |") {
-			t.Fatalf("formatSearchOutput() = %q, want the required params in the row", out)
+		if got != want {
+			t.Fatalf("formatSearchOutput() = %q, want %q", got, want)
 		}
 	})
 
 	t.Run("ambiguous results name the targets", func(t *testing.T) {
-		out := formatSearchOutput(SearchOutput{
+		want := "## GitLab Catalog: 1 matching action\n\n- **Query**: `list`\n\n" + header +
+			"| `project.list` | 0 | - | - |\n" +
+			wantHintsBlock("Use one canonical action ID explicitly: `group.list`.", wantFullSchemaHint, dynamicExecuteEnvelopeHint)
+		got := formatSearchOutput(SearchOutput{
 			Query:   "list",
 			Count:   1,
 			Results: []SearchResult{{ID: "project.list", AmbiguousWith: []string{"group.list"}}},
 		})
-		if !strings.Contains(out, "Use one canonical action ID explicitly: `group.list`.") {
-			t.Fatalf("formatSearchOutput() = %q, want the ambiguous targets named", out)
+		if got != want {
+			t.Fatalf("formatSearchOutput() = %q, want %q", got, want)
 		}
 	})
 
 	t.Run("an action with no required params shows a dash", func(t *testing.T) {
-		out := formatSearchOutput(SearchOutput{
+		want := "## GitLab Catalog: 1 matching action\n\n- **Query**: `current user`\n\n" + header +
+			"| `user.current` | 0 | - | - |\n" +
+			wantHintsBlock(wantFullSchemaHint, dynamicExecuteEnvelopeHint)
+		got := formatSearchOutput(SearchOutput{
 			Query:   "current user",
 			Count:   1,
 			Results: []SearchResult{{ID: "user.current"}},
 		})
-		if !strings.Contains(out, "| `user.current` | false | - |") {
-			t.Fatalf("formatSearchOutput() = %q, want a dash in the required params cell", out)
+		if got != want {
+			t.Fatalf("formatSearchOutput() = %q, want %q", got, want)
 		}
 	})
 }
@@ -9562,45 +9613,79 @@ func TestFormatSearchOutput_OmittedSectionsAndEmptyCells(t *testing.T) {
 // description is what a model reads before its first call, and an empty
 // "Required params" line reads as an action that takes none.
 func TestFormatDescribeOutput_OptionalSections(t *testing.T) {
+	hints := wantHintsBlock(wantDescribeExecuteHint, dynamicExecuteEnvelopeHint)
+
 	t.Run("everything the action carries is rendered", func(t *testing.T) {
-		out := formatDescribeOutput(DescribeOutput{Count: 1, Actions: []ActionDescription{{
+		want := "## GitLab Catalog: 1 action described\n\n" +
+			"### project.create\n\n" +
+			"- **Tool**: `gitlab_project`\n" +
+			"- **Action**: `create`\n" +
+			"- **Usage**: creates a project in a namespace\n" +
+			"- **Required params**: `name`, `path`\n" +
+			"- **Related actions**: `project.get`\n" +
+			"- **Parameter guidance**: `path`: the URL slug.\n" +
+			"- **Schema URI**: `gitlab://tools/project.create`\n\n" +
+			"#### Input schema\n\n" +
+			"```json\n{\"type\":\"object\"}\n```\n\n" +
+			"#### Example call\n\n" +
+			"```json\n{\"tool\":\"gitlab_execute_action\",\"arguments\":{\"action\":\"project.create\",\"params\":{\"name\":\"demo\"}}}\n```\n" +
+			hints
+		got := formatDescribeOutput(DescribeOutput{Count: 1, Actions: []ActionDescription{{
 			ID:             "project.create",
 			Tool:           "gitlab_project",
 			Action:         "create",
 			Destructive:    false,
+			Usage:          "creates a project in a namespace",
 			RequiredParams: []string{"name", "path"},
 			RelatedActions: []string{"project.get"},
+			ParamGuidance:  map[string]toolutil.ParameterGuidance{"path": {ValueSource: "the URL slug"}},
 			SchemaURI:      "gitlab://tools/project.create",
 			InputSchema:    map[string]any{"type": "object"},
+			Example: ActionExample{
+				Tool:      "gitlab_execute_action",
+				Arguments: map[string]any{"action": "project.create", "params": map[string]any{"name": "demo"}},
+			},
 		}}})
-		for _, want := range []string{
-			"### `project.create`",
-			"- **Required params**: `name`, `path`\n",
-			"- **Related actions**: `project.get`\n",
-			"- **Schema URI**: `gitlab://tools/project.create`\n",
-			"```json\n{\"type\":\"object\"}\n```",
-		} {
-			t.Run(want, func(t *testing.T) {
-				if !strings.Contains(out, want) {
-					t.Fatalf("formatDescribeOutput() = %q, want %q", out, want)
-				}
-			})
+		if got != want {
+			t.Fatalf("formatDescribeOutput() = %q, want %q", got, want)
 		}
 	})
 
 	t.Run("what the action does not carry is left out", func(t *testing.T) {
-		out := formatDescribeOutput(DescribeOutput{Count: 1, Actions: []ActionDescription{{
+		want := "## GitLab Catalog: 1 action described\n\n" +
+			"### user.current\n\n" +
+			"- **Tool**: `gitlab_user`\n" +
+			"- **Action**: `current`\n" +
+			"- **Schema URI**: `gitlab://tools/user.current`\n" +
+			hints
+		got := formatDescribeOutput(DescribeOutput{Count: 1, Actions: []ActionDescription{{
 			ID:        "user.current",
 			Tool:      "gitlab_user",
 			Action:    "current",
 			SchemaURI: "gitlab://tools/user.current",
 		}}})
-		for _, deny := range []string{"Required params", "Related actions", "Input schema", "```json"} {
-			t.Run(deny, func(t *testing.T) {
-				if strings.Contains(out, deny) {
-					t.Fatalf("formatDescribeOutput() = %q, want no %q section", out, deny)
-				}
-			})
+		if got != want {
+			t.Fatalf("formatDescribeOutput() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("a destructive action is marked with the warning sign", func(t *testing.T) {
+		want := "## GitLab Catalog: 1 action described\n\n" +
+			"### project.delete\n\n" +
+			"- **Tool**: `gitlab_project`\n" +
+			"- **Action**: `delete`\n" +
+			"- " + toolutil.EmojiWarning + " **Destructive**\n" +
+			"- **Schema URI**: `gitlab://tools/project.delete`\n" +
+			hints
+		got := formatDescribeOutput(DescribeOutput{Count: 1, Actions: []ActionDescription{{
+			ID:          "project.delete",
+			Tool:        "gitlab_project",
+			Action:      "delete",
+			Destructive: true,
+			SchemaURI:   "gitlab://tools/project.delete",
+		}}})
+		if got != want {
+			t.Fatalf("formatDescribeOutput() = %q, want %q", got, want)
 		}
 	})
 }
@@ -9611,35 +9696,123 @@ func TestFormatDescribeOutput_OptionalSections(t *testing.T) {
 // missing value rather than as "none needed", and the row beside it is what a
 // model copies its first call from.
 func TestFormatFindOutput_RequiredParamsCell(t *testing.T) {
+	const header = "| Action ID | Score | Destructive | Required Params |\n| --- | --- | --- | --- |\n"
+	hints := wantHintsBlock(wantExecuteNowHint, dynamicExecuteEnvelopeHint, wantStructuredResultsHint)
+
 	t.Run("no required params", func(t *testing.T) {
-		out := formatFindOutput(FindOutput{
+		want := "## GitLab Catalog: 1 matching action\n\n- **Query**: `current user`\n\n" + header +
+			"| `user.current` | 10 | - | - |\n" + hints
+		got := formatFindOutput(FindOutput{
 			Query:   "current user",
 			Count:   1,
 			Results: []FindResult{{ID: "user.current", Score: 10}},
-		})
-		if !strings.Contains(out, "| `user.current` | 10 | false | - |") {
-			t.Fatalf("formatFindOutput() = %q, want a dash in the required params cell", out)
+		}, nil)
+		if got != want {
+			t.Fatalf("formatFindOutput() = %q, want %q", got, want)
 		}
 	})
 
 	t.Run("required params are listed", func(t *testing.T) {
-		out := formatFindOutput(FindOutput{
+		want := "## GitLab Catalog: 1 matching action\n\n- **Query**: `project get`\n\n" + header +
+			"| `project.get` | 10 | - | `project_id` |\n" + hints
+		got := formatFindOutput(FindOutput{
 			Query:   "project get",
 			Count:   1,
 			Results: []FindResult{{ID: "project.get", Score: 10, RequiredParams: []string{"project_id"}}},
-		})
-		if !strings.Contains(out, "| `project.get` | 10 | false | project_id |") {
-			t.Fatalf("formatFindOutput() = %q, want the required params in the row", out)
+		}, nil)
+		if got != want {
+			t.Fatalf("formatFindOutput() = %q, want %q", got, want)
 		}
 	})
 }
 
-// TestFormatFindOutput_EveryRowHasAsManyCellsAsTheHeader verifies that the row
-// written for a result matches the header the table opened with. The header and
-// the row pick their shape from the same two flags in two separate switches and
-// nothing compares the two, so they can disagree: a row carrying a cell the
-// header never declared renders as a broken table, and every Markdown reader
-// that lays a table out by its header drops the extra value on the floor.
+// TestFormatFindOutput_LowConfidenceAndAmbiguityAreSaidOutLoud verifies that a
+// finder telling the model to execute the top row now also says when that row
+// is a guess. The registry computes LowConfidence and AmbiguousWith and the
+// table shows neither, so without these two hints the card's first sentence
+// sends the model to act on a match the server already knows is uncertain.
+func TestFormatFindOutput_LowConfidenceAndAmbiguityAreSaidOutLoud(t *testing.T) {
+	const header = "| Action ID | Score | Destructive | Required Params |\n| --- | --- | --- | --- |\n"
+
+	t.Run("a low-confidence top result is named", func(t *testing.T) {
+		want := "## GitLab Catalog: 1 matching action\n\n- **Query**: `list`\n\n" + header +
+			"| `project.list` | 10 | - | - |\n" +
+			wantHintsBlock(
+				wantExecuteNowHint,
+				"Top result `project.list` is low confidence: read the rows and pick the intended action rather than taking the first.",
+				dynamicExecuteEnvelopeHint,
+				wantStructuredResultsHint,
+			)
+		got := formatFindOutput(FindOutput{
+			Query:   "list",
+			Count:   1,
+			Results: []FindResult{{ID: "project.list", Score: 10, LowConfidence: true}},
+		}, nil)
+		if got != want {
+			t.Fatalf("formatFindOutput() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("an ambiguous alias names the actions it resolves to", func(t *testing.T) {
+		want := "## GitLab Catalog: 1 matching action\n\n- **Query**: `list`\n\n" + header +
+			"| `project.list` | 10 | - | - |\n" +
+			wantHintsBlock(
+				wantExecuteNowHint,
+				"Use one canonical action ID explicitly: `group.list`, `project.list`.",
+				dynamicExecuteEnvelopeHint,
+				wantStructuredResultsHint,
+			)
+		got := formatFindOutput(FindOutput{
+			Query:   "list",
+			Count:   1,
+			Results: []FindResult{{ID: "project.list", Score: 10, AmbiguousWith: []string{"project.list", "group.list"}}},
+		}, nil)
+		if got != want {
+			t.Fatalf("formatFindOutput() = %q, want %q", got, want)
+		}
+	})
+}
+
+// TestSelectColumns_HeaderAndRowAreFilteredIdentically verifies the one
+// mechanism that keeps a row from carrying a cell its header never declared:
+// both go through selectColumns with the same flags, over one column order.
+// A row with an extra cell renders as a broken table, and a reader that lays
+// a table out by its header drops the extra value on the floor.
+func TestSelectColumns_HeaderAndRowAreFilteredIdentically(t *testing.T) {
+	row := actionRow{id: "project.get", score: 10, requiredParams: []string{"project_id"}, guidance: "g", why: "w"}
+	cases := []struct {
+		name string
+		cols actionColumns
+		want []string
+	}{
+		{name: "neither", cols: actionColumns{}, want: []string{"Action ID", "Score", "Destructive", "Required Params"}},
+		{name: "guidance", cols: actionColumns{guidance: true}, want: []string{"Action ID", "Score", "Destructive", "Required Params", "Guidance"}},
+		{name: "why", cols: actionColumns{why: true}, want: []string{"Action ID", "Score", "Destructive", "Required Params", "Why"}},
+		{name: "both", cols: actionColumns{guidance: true, why: true}, want: actionMatchColumns},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			header := selectColumns(actionMatchColumns, tc.cols)
+			if !slices.Equal(header, tc.want) {
+				t.Fatalf("selectColumns(header) = %v, want %v", header, tc.want)
+			}
+			if cells := actionRowCells(row, tc.cols); len(cells) != len(header) {
+				t.Fatalf("actionRowCells() = %v cells, want the header's %d", cells, len(header))
+			}
+		})
+	}
+
+	t.Run("every column has a keep decision", func(t *testing.T) {
+		if got, want := len(actionColumns{}.kept()), len(actionMatchColumns); got != want {
+			t.Fatalf("kept() = %d decisions, want one per column (%d)", got, want)
+		}
+	})
+}
+
+// TestFormatFindOutput_EveryRowHasAsManyCellsAsTheHeader verifies the same
+// invariant end to end, on the document the finder writes: whatever the
+// result carries, the rendered row has the cells the rendered header
+// declared.
 func TestFormatFindOutput_EveryRowHasAsManyCellsAsTheHeader(t *testing.T) {
 	explanation := &ScoringExplanation{
 		TotalScore:   200,
@@ -9664,7 +9837,7 @@ func TestFormatFindOutput_EveryRowHasAsManyCellsAsTheHeader(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			out := formatFindOutput(FindOutput{Query: "project", Count: 1, Results: []FindResult{tc.result}})
+			out := formatFindOutput(FindOutput{Query: "project", Count: 1, Results: []FindResult{tc.result}}, nil)
 
 			headerCells := 0
 			for line := range strings.SplitSeq(out, "\n") {

@@ -2829,6 +2829,16 @@ func TestMarkdownRegistry_HostileValues_ChangeNoStructure(t *testing.T) {
 // name says it holds an address. An address field keeps its fixture URL,
 // because a payload in a destination is a destination and not an injection,
 // and the rule asks whether a value that is not an address can open a link.
+//
+// The payload carries the field's own benign sentinel, so that two fields
+// stay as different from each other under the hostile render as they are
+// under the benign one. Handing every field one identical payload made them
+// equal, and a card that prints a field only when it says something the card
+// does not already say then dropped the row: a commit message equal to its
+// title, a detailed status equal to its status, a tag's target equal to its
+// commit id. That reported 28 findings against four output types, in which
+// nothing was lost and nothing was injected, and it would have gone on hiding
+// a real item loss on those same cards behind a rule nobody could read.
 func mdGateHostileText(exempt map[string]bool, payload string) func(string) string {
 	return func(path string) string {
 		for _, name := range mdGateFieldNames(path) {
@@ -2836,7 +2846,7 @@ func mdGateHostileText(exempt map[string]bool, payload string) func(string) stri
 				return testutil.FixtureText(path)
 			}
 		}
-		return payload
+		return payload + testutil.FixtureText(path)
 	}
 }
 

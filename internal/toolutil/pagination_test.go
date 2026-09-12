@@ -249,6 +249,44 @@ func TestVoidResult(t *testing.T) {
 	}
 }
 
+// TestDeleteResult_HostileResource_StaysInsideTheConfirmation verifies that
+// the resource a handler names cannot end the confirmation sentence the two
+// result builders write, whole output for each.
+//
+// The resource is composed from what the caller sent and what GitLab holds, so
+// a branch called "x\n## injected" used to write a heading of the response
+// under a successful delete, and one holding a tag reached the page as raw
+// HTML. [VoidResult] writes the same sentence without the bold, and is held to
+// the same containment.
+func TestDeleteResult_HostileResource_StaysInsideTheConfirmation(t *testing.T) {
+	const hostile = "branch x\n## injected"
+	const escaped = "branch x ## injected"
+
+	result, out, err := DeleteResult(hostile)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "Successfully deleted " + hostile + "."; out.Message != want {
+		t.Errorf("Message = %q, want %q", out.Message, want)
+	}
+	text := result.Content[0].(*mcp.TextContent).Text
+	if want := EmojiSuccess + " Successfully deleted **" + escaped + "**."; text != want {
+		t.Errorf("delete markdown = %q, want %q", text, want)
+	}
+
+	voidResult, voidOut, err := VoidResult(hostile)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if voidOut.Message != hostile {
+		t.Errorf("Message = %q, want %q", voidOut.Message, hostile)
+	}
+	voidText := voidResult.Content[0].(*mcp.TextContent).Text
+	if want := EmojiSuccess + " " + escaped; voidText != want {
+		t.Errorf("void markdown = %q, want %q", voidText, want)
+	}
+}
+
 // TestApplyListOptions_SetsOffsetAndKeyset verifies ApplyListOptions copies only
 // the supplied offset and keyset pagination values onto a gl.ListOptions and
 // leaves unset fields at their zero value.

@@ -82,6 +82,14 @@ const (
 // [SafeModePreview], so the dispatcher surfaces render the preview through
 // it, and [SafeModePreviewResult] is what the individual surface answers
 // with.
+//
+// The hint is escaped, unlike every other hint this server writes. [WriteHints]
+// writes a hint as it is given because a hint is the server's own sentence
+// composed at the call site, and one of them, [HintPreserveLinks], is a link;
+// here the hint is a field of a struct the formatter is handed, so it is data
+// on the same terms as the status and the mode. Unescaped it could end its own
+// bullet and open a heading, a list item or a second guidance section below
+// the card, which took the real hint out of next_steps with it.
 func FormatSafeModePreviewMarkdown(p SafeModePreview) string {
 	var b strings.Builder
 	c := NewCard(&b, safeModeHeadingPrefix+p.Tool)
@@ -92,7 +100,7 @@ func FormatSafeModePreviewMarkdown(p SafeModePreview) string {
 	if p.Hint == "" {
 		c.End()
 	} else {
-		c.End(p.Hint)
+		c.End(cardInline(p.Hint))
 	}
 	return b.String()
 }

@@ -464,4 +464,45 @@ func TestMyActivitySummary_MRListAPIErrors_StillRendersSummary(t *testing.T) {
 	}
 }
 
+// TestMyOpenMRs_SameIIDInTwoProjects_CountsThemApart verifies that the
+// author/assignee split counts merge requests by project and IID together.
+//
+// An IID is unique inside a project and nowhere else, and this prompt spans
+// every project the caller can see. Keyed on the IID alone, an MR merely
+// assigned to the caller counted as authored by them whenever some project they
+// do author in happened to have an MR with the same number — which, since IIDs
+// start at 1 in every project, is most of them.
+func TestMyOpenMRs_SameIIDInTwoProjects_CountsThemApart(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"id":7,"username":"alice"}`)
+	})
+	mux.HandleFunc("GET /api/v4/merge_requests", func(w http.ResponseWriter, r *http.Request) {
+		// !1 of project 1 is authored by the caller; !1 of project 2 is only
+		// assigned to them, and the two share nothing but their number.
+		if r.URL.Query().Get("author_id") != "" {
+			respondJSON(w, http.StatusOK, `[{"iid":1,"project_id":1,"title":"Authored","references":{"full":"group/one!1"}}]`)
+			return
+		}
+		respondJSON(w, http.StatusOK, `[{"iid":1,"project_id":2,"title":"Assigned","references":{"full":"group/two!1"}}]`)
+	})
+
+	text := getPromptText(t, mux, "my_open_mrs", nil)
+
+	for _, want := range []string{
+		"| Total open MRs | 2 |",
+		"| As author | 1 |",
+		"| As assignee (not author) | 1 |",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("summary is missing %q:\n%s", want, text)
+			}
+		})
+	}
+	if strings.Contains(text, "| As author | 2 |") {
+		t.Errorf("an assigned MR was counted as authored because the IIDs matched:\n%s", text)
+	}
+}
+
 // prompt_analytics.go error branches.

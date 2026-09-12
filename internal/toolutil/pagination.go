@@ -113,13 +113,18 @@ type DeleteOutput struct {
 
 // DeleteResult builds a DeleteOutput and its Markdown representation for
 // a successful destructive operation. The resource parameter describes what
-// was affected (e.g., "project 42", "branch feature/x").
+// was affected (e.g., "project 42", "branch feature/x"), and reaches the
+// Markdown through the inline escaper a card row uses, since the branch,
+// package or file name inside it is the caller's and GitLab's rather than the
+// server's: unescaped, a name carrying a line break wrote structure of its own
+// under the confirmation, and one carrying a tag reached the page as raw HTML.
+// The structured message keeps the sentence as it reads.
 func DeleteResult(resource string) (*mcp.CallToolResult, DeleteOutput, error) {
 	out := DeleteOutput{
 		Status:  "success",
 		Message: fmt.Sprintf("Successfully deleted %s.", resource),
 	}
-	md := fmt.Sprintf(EmojiSuccess+" Successfully deleted **%s**.", resource)
+	md := fmt.Sprintf(EmojiSuccess+" Successfully deleted **%s**.", cardInline(resource))
 	return ToolResultAnnotated(md, ContentMutate), out, nil
 }
 
@@ -132,12 +137,14 @@ type VoidOutput struct {
 }
 
 // VoidResult builds a VoidOutput and its Markdown representation for a
-// successful void operation. The message describes what happened.
+// successful void operation. The message describes what happened, and reaches
+// the Markdown through the same escaper [DeleteResult] uses and for the same
+// reason.
 func VoidResult(message string) (*mcp.CallToolResult, VoidOutput, error) {
 	out := VoidOutput{
 		Status:  "success",
 		Message: message,
 	}
-	md := fmt.Sprintf(EmojiSuccess+" %s", message)
+	md := EmojiSuccess + " " + cardInline(message)
 	return ToolResultAnnotated(md, ContentMutate), out, nil
 }

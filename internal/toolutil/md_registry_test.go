@@ -323,6 +323,45 @@ func TestFormatVoidOutput_ReturnsEmojiPlusMessage(t *testing.T) {
 	}
 }
 
+// TestFormatDeleteOutput_HostileMessage_WritesNoStructureOfItsOwn verifies
+// that the identifier carried in a confirmation sentence stays on the
+// confirmation's one line.
+//
+// The message is built by the handler around a name the caller passed and
+// GitLab holds — a branch, a package file, a project path. Written with the
+// control bytes dropped and nothing else, a name carrying a line break ended
+// the sentence and wrote whatever followed at column zero: a heading, an item
+// of a list of the server's own, or a second guidance section that took the
+// real one out of next_steps. A name carrying a tag reached the page as raw
+// HTML.
+func TestFormatDeleteOutput_HostileMessage_WritesNoStructureOfItsOwn(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "plain message is unchanged", in: "branch deleted", want: "branch deleted"},
+		{name: "heading cannot open", in: "deleted x\n## injected", want: "deleted x ## injected"},
+		{name: "list item cannot open", in: "deleted x\n- injected", want: "deleted x - injected"},
+		{name: "tag is an entity", in: `deleted <a href="http://attacker.invalid">x</a>`, want: `deleted &lt;a href="http://attacker.invalid">x&lt;/a>`},
+		{name: "link cannot open", in: "deleted [x](http://attacker.invalid/y)", want: "deleted &#91;x](http://attacker.invalid/y)"},
+		{name: "pipe is an entity", in: "deleted a|b", want: "deleted a&#124;b"},
+		{name: "guidance heading is defused", in: "deleted " + hintsHeading, want: "deleted " + defusedHintsHeading},
+		{name: "control byte is dropped", in: "deleted a\x1b(b", want: "deleted a(b"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := formatDeleteOutput(DeleteOutput{Status: "success", Message: tt.in}); got != EmojiSuccess+" "+tt.want {
+				t.Errorf("formatDeleteOutput(%q) = %q, want %q", tt.in, got, EmojiSuccess+" "+tt.want)
+			}
+			if got := formatVoidOutput(VoidOutput{Status: "success", Message: tt.in}); got != EmojiSuccess+" "+tt.want {
+				t.Errorf("formatVoidOutput(%q) = %q, want %q", tt.in, got, EmojiSuccess+" "+tt.want)
+			}
+		})
+	}
+}
+
 // TestRegisterMarkdownPair_RegistersBothTypes verifies that RegisterMarkdownPair
 // registers two distinct string formatters and MarkdownForResult dispatches
 // each to the correct renderer.

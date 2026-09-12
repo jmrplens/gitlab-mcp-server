@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,27 +14,6 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
-
-// accessLevelNames maps GitLab's numeric access level values to their
-// human-readable names from GitLab's permission model. Used by
-// [accessLevelName] and the audit prompts to render role badges.
-var accessLevelNames = map[gl.AccessLevelValue]string{
-	10: "Guest",
-	20: "Reporter",
-	30: "Developer",
-	40: "Maintainer",
-	50: "Owner",
-}
-
-// accessLevelName returns the human-readable name for a GitLab access
-// level. When level is not in [accessLevelNames] it returns a
-// "Unknown(<value>)" placeholder so the audit output always renders.
-func accessLevelName(level gl.AccessLevelValue) string {
-	if name, ok := accessLevelNames[level]; ok {
-		return name
-	}
-	return fmt.Sprintf("Unknown(%d)", level)
-}
 
 // settingValueTableHeader is the common Markdown table header for
 // "Setting | Value" tables in the audit prompts.
@@ -161,9 +141,9 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 		b.WriteString("\n")
 	}
 
-	b.WriteString("---\nPlease analyze this project's configuration, identify potential security risks, " +
-		"deviations from best practices, and provide specific recommendations for improvement. " +
-		"Focus on merge settings, CI/CD configuration, and push rule enforcement.\n")
+	writeClosingRule(&b, "Please analyze this project's configuration, identify potential security risks, "+
+		"deviations from best practices, and provide specific recommendations for improvement. "+
+		"Focus on merge settings, CI/CD configuration, and push rule enforcement.")
 
 	return promptResult(b.String()), nil
 }
@@ -208,9 +188,9 @@ func handleAuditBranchProtection(ctx context.Context, client *gitlabclient.Clien
 		}
 	}
 
-	b.WriteString("---\nPlease analyze the branch protection configuration, identify security gaps " +
-		"(unprotected default branch, overly permissive push/merge access, missing code owner approvals), " +
-		"and recommend improvements aligned with GitLab security best practices.\n")
+	writeClosingRule(&b, "Please analyze the branch protection configuration, identify security gaps "+
+		"(unprotected default branch, overly permissive push/merge access, missing code owner approvals), "+
+		"and recommend improvements aligned with GitLab security best practices.")
 
 	return promptResult(b.String()), nil
 }
@@ -248,7 +228,7 @@ func writeAccessLevelLine(b *strings.Builder, label string, levels []*gl.BranchA
 
 // formatBranchAccessLevel formats a BranchAccessDescription for display.
 func formatBranchAccessLevel(al *gl.BranchAccessDescription) string {
-	name := accessLevelName(al.AccessLevel)
+	name := toolutil.AccessLevelDescription(al.AccessLevel)
 	if al.UserID != 0 {
 		return fmt.Sprintf("User #%d (%s)", al.UserID, name)
 	}
@@ -303,7 +283,7 @@ func writeSharedGroups(b *strings.Builder, groups []gl.ProjectSharedWithGroup) {
 		}
 		fmt.Fprintf(b, "| %s (#%d) | %s | %s |\n",
 			mdInline(sg.GroupName), sg.GroupID,
-			accessLevelName(gl.AccessLevelValue(sg.GroupAccessLevel)),
+			toolutil.AccessLevelDescription(gl.AccessLevelValue(sg.GroupAccessLevel)),
 			expires)
 	}
 	b.WriteString("\n")
@@ -368,9 +348,9 @@ func handleAuditProjectAccess(ctx context.Context, client *gitlabclient.Client, 
 
 	writeSharedGroups(&b, project.SharedWithGroups)
 
-	b.WriteString("---\nPlease analyze the access configuration, identify security concerns " +
-		"(too many maintainers/owners, blocked accounts still listed, overly broad group sharing), " +
-		"and recommend access policy improvements following the principle of least privilege.\n")
+	writeClosingRule(&b, "Please analyze the access configuration, identify security concerns "+
+		"(too many maintainers/owners, blocked accounts still listed, overly broad group sharing), "+
+		"and recommend access policy improvements following the principle of least privilege.")
 
 	return promptResult(b.String()), nil
 }
@@ -387,7 +367,7 @@ func writeMemberTable(b *strings.Builder, members []*gl.ProjectMember) {
 		//gitlab:allow-unescaped m.Username: a GitLab namespace path, which the instance holds to letters, digits, underscore, dash and dot.
 		//gitlab:allow-unescaped m.State: a membership state GitLab picks from a fixed set (active, blocked, awaiting and the rest).
 		fmt.Fprintf(b, "| @%s | %s | %s | %s |\n",
-			m.Username, mdInline(m.Name), accessLevelName(m.AccessLevel), m.State)
+			m.Username, mdInline(m.Name), toolutil.AccessLevelDescription(m.AccessLevel), m.State)
 	}
 	b.WriteString("\n")
 }
@@ -458,9 +438,9 @@ func handleAuditProjectWorkflow(ctx context.Context, client *gitlabclient.Client
 	}
 	writeTemplatesAudit(&b, issueTemplates, mrTemplates)
 
-	b.WriteString("---\nPlease analyze the workflow configuration, identify gaps (labels without descriptions, " +
-		"milestones without due dates, missing templates, missing priority/severity labels), " +
-		"and suggest improvements for better project organization and contributor experience.\n")
+	writeClosingRule(&b, "Please analyze the workflow configuration, identify gaps (labels without descriptions, "+
+		"milestones without due dates, missing templates, missing priority/severity labels), "+
+		"and suggest improvements for better project organization and contributor experience.")
 
 	return promptResult(b.String()), nil
 }
@@ -584,92 +564,149 @@ func handleAuditProjectFull(ctx context.Context, client *gitlabclient.Client, re
 		return nil, fmt.Errorf("audit_project_full: failed to get project: %w", err)
 	}
 
-	protectedBranches, _, _ := client.GL().ProtectedBranches.ListProtectedBranches(projectID, &gl.ListProtectedBranchesOptions{
+	s := scorecardData{project: project}
+
+	s.branches, _, s.branchesErr = client.GL().ProtectedBranches.ListProtectedBranches(projectID, &gl.ListProtectedBranchesOptions{
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
-	members, _, _ := client.GL().ProjectMembers.ListAllProjectMembers(projectID, &gl.ListProjectMembersOptions{
+	s.members, _, s.membersErr = client.GL().ProjectMembers.ListAllProjectMembers(projectID, &gl.ListProjectMembersOptions{
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
-	labels, _, _ := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{
+	s.labels, _, s.labelsErr = client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
-	activeMilestones, _, _ := client.GL().Milestones.ListMilestones(projectID, &gl.ListMilestonesOptions{
+	s.milestones, _, s.milestonesErr = client.GL().Milestones.ListMilestones(projectID, &gl.ListMilestonesOptions{
 		State:   new("active"),
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
-	issueTemplates, _, _ := client.GL().ProjectTemplates.ListTemplates(projectID, "issues", &gl.ListProjectTemplatesOptions{
+	s.issueTPL, _, s.issueTPLErr = client.GL().ProjectTemplates.ListTemplates(projectID, "issues", &gl.ListProjectTemplatesOptions{
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
-	mrTemplates, _, _ := client.GL().ProjectTemplates.ListTemplates(projectID, "merge_requests", &gl.ListProjectTemplatesOptions{
+	s.mrTPL, _, s.mrTPLErr = client.GL().ProjectTemplates.ListTemplates(projectID, "merge_requests", &gl.ListProjectTemplatesOptions{
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
-	pushRule, _, _ := client.GL().Projects.GetProjectPushRules(projectID, gl.WithContext(ctx))
+	s.pushRule, _, s.pushRuleErr = client.GL().Projects.GetProjectPushRules(projectID, gl.WithContext(ctx))
 
-	webhooks, _, _ := client.GL().Projects.ListProjectHooks(projectID, &gl.ListProjectHooksOptions{
+	s.webhooks, _, s.webhooksErr = client.GL().Projects.ListProjectHooks(projectID, &gl.ListProjectHooksOptions{
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
+
+	logUnreadAuditSections(ctx, s)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Full Project Audit: %s\n\n", mdHeading(project.PathWithNamespace))
 
-	writeFullScorecard(&b, scorecardData{
-		project:    project,
-		branches:   protectedBranches,
-		pushRule:   pushRule,
-		labels:     labels,
-		milestones: activeMilestones,
-		issueTPL:   issueTemplates,
-		mrTPL:      mrTemplates,
-		webhooks:   webhooks,
-	})
+	writeFullScorecard(&b, s)
 	writeFullSettingsSection(&b, project)
-	writeFullBranchSection(&b, protectedBranches)
-	writeFullAccessSection(&b, members, project.SharedWithGroups)
-	writeFullLabelsSection(&b, labels)
-	writeFullMilestonesSection(&b, activeMilestones)
-	writeFullTemplatesSection(&b, issueTemplates, mrTemplates)
-	writeFullWebhooksSection(&b, webhooks)
-	writeFullPushRulesSection(&b, pushRule)
+	writeFullBranchSection(&b, s.branches, s.branchesErr)
+	writeFullAccessSection(&b, s.members, project.SharedWithGroups, s.membersErr)
+	writeFullLabelsSection(&b, s.labels, s.labelsErr)
+	writeFullMilestonesSection(&b, s.milestones, s.milestonesErr)
+	writeFullTemplatesSection(&b, s.issueTPL, s.mrTPL, s.issueTPLErr, s.mrTPLErr)
+	writeFullWebhooksSection(&b, s.webhooks, s.webhooksErr)
+	writeFullPushRulesSection(&b, s.pushRule, s.pushRuleErr)
 
-	b.WriteString("---\nPlease provide a comprehensive assessment of this project's configuration health. " +
-		"For each section, identify issues ranked by severity (critical/important/suggestion) and provide " +
-		"specific, actionable recommendations. Focus on security, compliance, and developer experience.\n")
+	writeClosingRule(&b, "Please provide a comprehensive assessment of this project's configuration health. "+
+		"For each section, identify issues ranked by severity (critical/important/suggestion) and provide "+
+		"specific, actionable recommendations. Focus on security, compliance, and developer experience. "+
+		"A section marked \"could not be read\" was not audited: say so rather than scoring it.")
 
 	return promptResult(b.String()), nil
 }
 
-// scorecardData holds all data needed to render the quick scorecard section.
+// scorecardData holds every section's data for the full audit, and the error,
+// if any, that stopped it being read.
+//
+// The errors are carried because this report asks eight questions of GitLab and
+// answers all eight whatever comes back. Each list used to be taken with its
+// error discarded, so a call that failed produced an empty slice and the empty
+// slice produced a verdict: a project whose protected branches could not be
+// read scored "default branch not protected", one whose labels could not be
+// read reported no label missing a description, and a push-rules call refused
+// for want of a license read as a project with no push rules. Every one of
+// those is a finding about the project, taken from an answer nobody got.
 type scorecardData struct {
-	project    *gl.Project
-	branches   []*gl.ProtectedBranch
-	pushRule   *gl.ProjectPushRules
-	labels     []*gl.Label
-	milestones []*gl.Milestone
-	issueTPL   []*gl.ProjectTemplate
-	mrTPL      []*gl.ProjectTemplate
-	webhooks   []*gl.ProjectHook
+	project *gl.Project
+
+	branches    []*gl.ProtectedBranch
+	branchesErr error
+
+	members    []*gl.ProjectMember
+	membersErr error
+
+	pushRule    *gl.ProjectPushRules
+	pushRuleErr error
+
+	labels    []*gl.Label
+	labelsErr error
+
+	milestones    []*gl.Milestone
+	milestonesErr error
+
+	issueTPL    []*gl.ProjectTemplate
+	issueTPLErr error
+
+	mrTPL    []*gl.ProjectTemplate
+	mrTPLErr error
+
+	webhooks    []*gl.ProjectHook
+	webhooksErr error
+}
+
+// unreadSection is what a scorecard row and a section heading say instead of a
+// verdict when the call behind them failed.
+const unreadSection = toolutil.EmojiQuestion + " could not be read"
+
+// logUnreadAuditSections records, once per failed call, why a section of the
+// full audit carries no verdict. The message says so; the cause belongs in the
+// log rather than in a prompt a model reads as instructions.
+func logUnreadAuditSections(ctx context.Context, s scorecardData) {
+	for section, err := range map[string]error{
+		"protected branches":      s.branchesErr,
+		"members":                 s.membersErr,
+		"push rules":              s.pushRuleErr,
+		"labels":                  s.labelsErr,
+		"milestones":              s.milestonesErr,
+		"issue templates":         s.issueTPLErr,
+		"merge request templates": s.mrTPLErr,
+		"webhooks":                s.webhooksErr,
+	} {
+		if err != nil {
+			slog.DebugContext(ctx, "full audit section not available", "section", section, "error", err)
+		}
+	}
+}
+
+// auditVerdict renders a scorecard verdict, or [unreadSection] when the call
+// that would have answered it failed. An empty answer to a question nobody got
+// to ask is not a "no".
+func auditVerdict(ok bool, err error) string {
+	if err != nil {
+		return unreadSection
+	}
+	return toolutil.BoolEmoji(ok)
 }
 
 // writeFullScorecard writes the quick scorecard section of the full audit.
 func writeFullScorecard(b *strings.Builder, s scorecardData) {
 	b.WriteString("## Quick Scorecard\n\n")
 	b.WriteString("| Area | Status |\n|------|--------|\n")
-	fmt.Fprintf(b, "| Default branch protected | %s |\n", toolutil.BoolEmoji(isDefaultBranchProtected(s.branches, s.project.DefaultBranch)))
+	fmt.Fprintf(b, "| Default branch protected | %s |\n", auditVerdict(isDefaultBranchProtected(s.branches, s.project.DefaultBranch), s.branchesErr))
 	fmt.Fprintf(b, "| Pipeline required for merge | %s |\n", toolutil.BoolEmoji(s.project.OnlyAllowMergeIfPipelineSucceeds))
 	fmt.Fprintf(b, "| Discussions must be resolved | %s |\n", toolutil.BoolEmoji(s.project.OnlyAllowMergeIfAllDiscussionsAreResolved))
 	hasPushRules := s.pushRule != nil && (s.pushRule.CommitMessageRegex != "" || s.pushRule.PreventSecrets || s.pushRule.MemberCheck)
-	fmt.Fprintf(b, "| Push rules configured | %s |\n", toolutil.BoolEmoji(hasPushRules))
-	fmt.Fprintf(b, "| Labels configured | %s |\n", toolutil.BoolEmoji(len(s.labels) > 0))
-	fmt.Fprintf(b, "| Active milestones | %s |\n", toolutil.BoolEmoji(len(s.milestones) > 0))
-	fmt.Fprintf(b, "| Issue templates | %s |\n", toolutil.BoolEmoji(len(s.issueTPL) > 0))
-	fmt.Fprintf(b, "| MR templates | %s |\n", toolutil.BoolEmoji(len(s.mrTPL) > 0))
-	fmt.Fprintf(b, "| Webhooks configured | %s |\n", toolutil.BoolEmoji(len(s.webhooks) > 0))
+	fmt.Fprintf(b, "| Push rules configured | %s |\n", auditVerdict(hasPushRules, s.pushRuleErr))
+	fmt.Fprintf(b, "| Labels configured | %s |\n", auditVerdict(len(s.labels) > 0, s.labelsErr))
+	fmt.Fprintf(b, "| Active milestones | %s |\n", auditVerdict(len(s.milestones) > 0, s.milestonesErr))
+	fmt.Fprintf(b, "| Issue templates | %s |\n", auditVerdict(len(s.issueTPL) > 0, s.issueTPLErr))
+	fmt.Fprintf(b, "| MR templates | %s |\n", auditVerdict(len(s.mrTPL) > 0, s.mrTPLErr))
+	fmt.Fprintf(b, "| Webhooks configured | %s |\n", auditVerdict(len(s.webhooks) > 0, s.webhooksErr))
 	b.WriteString("\n")
 }
 
@@ -689,8 +726,12 @@ func writeFullSettingsSection(b *strings.Builder, project *gl.Project) {
 }
 
 // writeFullBranchSection writes the branch protection section of the full audit.
-func writeFullBranchSection(b *strings.Builder, branches []*gl.ProtectedBranch) {
+func writeFullBranchSection(b *strings.Builder, branches []*gl.ProtectedBranch, fetchErr error) {
 	b.WriteString("## 2. Branch Protection\n\n")
+	if fetchErr != nil {
+		b.WriteString(unreadSection + ".\n\n")
+		return
+	}
 	fmt.Fprintf(b, "**Protected branches:** %d\n\n", len(branches))
 	if len(branches) == 0 {
 		return
@@ -707,13 +748,17 @@ func writeFullBranchSection(b *strings.Builder, branches []*gl.ProtectedBranch) 
 }
 
 // writeFullAccessSection writes the access & members section of the full audit.
-func writeFullAccessSection(b *strings.Builder, members []*gl.ProjectMember, groups []gl.ProjectSharedWithGroup) {
+func writeFullAccessSection(b *strings.Builder, members []*gl.ProjectMember, groups []gl.ProjectSharedWithGroup, fetchErr error) {
 	b.WriteString("## 3. Access & Members\n\n")
-	fmt.Fprintf(b, "**Total members:** %d\n\n", len(members))
-	if len(members) > 0 {
+	if fetchErr != nil {
+		b.WriteString("**Members:** " + unreadSection + ".\n\n")
+	} else {
+		fmt.Fprintf(b, "**Total members:** %d\n\n", len(members))
+	}
+	if fetchErr == nil && len(members) > 0 {
 		accessCounts := make(map[string]int)
 		for _, m := range members {
-			accessCounts[accessLevelName(m.AccessLevel)]++
+			accessCounts[toolutil.AccessLevelDescription(m.AccessLevel)]++
 		}
 		b.WriteString("| Access Level | Count |\n|-------------|-------|\n")
 		for _, level := range []string{"Owner", "Maintainer", "Developer", "Reporter", "Guest"} {
@@ -727,15 +772,19 @@ func writeFullAccessSection(b *strings.Builder, members []*gl.ProjectMember, gro
 		fmt.Fprintf(b, "**Shared with %d group(s):** ", len(groups))
 		groupNames := make([]string, 0, len(groups))
 		for _, sg := range groups {
-			groupNames = append(groupNames, fmt.Sprintf("%s (%s)", sg.GroupName, accessLevelName(gl.AccessLevelValue(sg.GroupAccessLevel))))
+			groupNames = append(groupNames, fmt.Sprintf("%s (%s)", mdInline(sg.GroupName), toolutil.AccessLevelDescription(gl.AccessLevelValue(sg.GroupAccessLevel))))
 		}
 		b.WriteString(strings.Join(groupNames, ", ") + "\n\n")
 	}
 }
 
 // writeFullLabelsSection writes the labels section of the full audit.
-func writeFullLabelsSection(b *strings.Builder, labels []*gl.Label) {
+func writeFullLabelsSection(b *strings.Builder, labels []*gl.Label, fetchErr error) {
 	b.WriteString("## 4. Labels\n\n")
+	if fetchErr != nil {
+		b.WriteString(unreadSection + ".\n\n")
+		return
+	}
 	fmt.Fprintf(b, "**Total:** %d\n", len(labels))
 	if len(labels) > 0 {
 		noDesc := 0
@@ -752,8 +801,12 @@ func writeFullLabelsSection(b *strings.Builder, labels []*gl.Label) {
 }
 
 // writeFullMilestonesSection writes the milestones section of the full audit.
-func writeFullMilestonesSection(b *strings.Builder, active []*gl.Milestone) {
+func writeFullMilestonesSection(b *strings.Builder, active []*gl.Milestone, fetchErr error) {
 	b.WriteString("## 5. Milestones\n\n")
+	if fetchErr != nil {
+		b.WriteString(unreadSection + ".\n\n")
+		return
+	}
 	fmt.Fprintf(b, "**Active:** %d\n", len(active))
 	for _, m := range active {
 		due := "no due date"
@@ -766,14 +819,30 @@ func writeFullMilestonesSection(b *strings.Builder, active []*gl.Milestone) {
 }
 
 // writeFullTemplatesSection writes the templates section of the full audit.
-func writeFullTemplatesSection(b *strings.Builder, issueTPL, mrTPL []*gl.ProjectTemplate) {
+// The two template kinds are separate calls, so one can be readable while the
+// other is not and the section says which.
+func writeFullTemplatesSection(b *strings.Builder, issueTPL, mrTPL []*gl.ProjectTemplate, issueErr, mrErr error) {
 	b.WriteString("## 6. Templates\n\n")
-	fmt.Fprintf(b, "**Issue templates:** %d | **MR templates:** %d\n\n", len(issueTPL), len(mrTPL))
+	fmt.Fprintf(b, "**Issue templates:** %s | **MR templates:** %s\n\n",
+		templateCount(issueTPL, issueErr), templateCount(mrTPL, mrErr))
+}
+
+// templateCount renders how many templates of one kind there are, or that the
+// call asking never answered.
+func templateCount(templates []*gl.ProjectTemplate, fetchErr error) string {
+	if fetchErr != nil {
+		return unreadSection
+	}
+	return strconv.Itoa(len(templates))
 }
 
 // writeFullWebhooksSection writes the webhooks section of the full audit.
-func writeFullWebhooksSection(b *strings.Builder, webhooks []*gl.ProjectHook) {
+func writeFullWebhooksSection(b *strings.Builder, webhooks []*gl.ProjectHook, fetchErr error) {
 	b.WriteString("## 7. Webhooks\n\n")
+	if fetchErr != nil {
+		b.WriteString(unreadSection + ".\n\n")
+		return
+	}
 	fmt.Fprintf(b, "**Configured:** %d\n", len(webhooks))
 	if len(webhooks) > 0 {
 		b.WriteString("\n| URL | Push | MR | Issues | SSL |\n|-----|------|-----|--------|-----|\n")
@@ -788,8 +857,18 @@ func writeFullWebhooksSection(b *strings.Builder, webhooks []*gl.ProjectHook) {
 }
 
 // writeFullPushRulesSection writes the push rules section of the full audit.
-func writeFullPushRulesSection(b *strings.Builder, pushRule *gl.ProjectPushRules) {
+//
+// A refused call and a project with no push rules are different answers and
+// read differently here: the first says the section was not audited, the second
+// that there is nothing to audit. GitLab answers this endpoint with a 404 on a
+// project that has none and with a 403 where the license does not cover them,
+// so the distinction is exactly the one a reader needs.
+func writeFullPushRulesSection(b *strings.Builder, pushRule *gl.ProjectPushRules, fetchErr error) {
 	b.WriteString("## 8. Push Rules\n\n")
+	if fetchErr != nil {
+		b.WriteString(unreadSection + " (push rules may require GitLab Premium).\n\n")
+		return
+	}
 	if pushRule == nil {
 		b.WriteString("Push rules not configured (may require GitLab Premium).\n\n")
 		return
@@ -810,7 +889,7 @@ func formatAccessLevels(levels []*gl.BranchAccessDescription) string {
 	}
 	var parts []string
 	for _, al := range levels {
-		parts = append(parts, accessLevelName(al.AccessLevel))
+		parts = append(parts, toolutil.AccessLevelDescription(al.AccessLevel))
 	}
 	return strings.Join(parts, ", ")
 }

@@ -65,7 +65,6 @@ const (
 	FmtMdTarget      = "- **Target**: %s\n"
 	FmtMdCreated     = "- **Created**: %s\n"
 	FmtMdUpdated     = "- **Updated**: %s\n"
-	fmtMdURLLine     = "- **URL**: %s\n"
 	FmtMdAuthorAt    = "- **Author**: @%s\n"
 	FmtMdAuthor      = "- **Author**: %s\n"
 	FmtMdSectionText = "\n%s\n"
@@ -134,29 +133,6 @@ const (
 	EmojiNew          = "\U0001F195" // 🆕
 	EmojiHand         = "✋"          // ✋
 )
-
-// WriteMdURL appends the "- **URL**: ..." line, rendering url as a link whose
-// label and destination are the same address.
-//
-// It replaces a pair of format constants that read "- **URL**: [%[1]s](%[1]s)"
-// and were used at 31 call sites. One value filling both halves of a link is a
-// shape no argument can be escaped into safely, so each of those call sites
-// hand-wrote a link with nothing in front of it, and the audit flagged every
-// one of them twice. Escaping belongs here, once, rather than in a decision
-// each of 22 packages makes for itself.
-//
-// [Card.URL] is the same row on a card, and writes nothing for an empty
-// address where this writes a bare label.
-func WriteMdURL(b *strings.Builder, url string) {
-	fmt.Fprintf(b, fmtMdURLLine, MdTitleLink(url, url))
-}
-
-// WriteMdURLNewline appends the same line as [WriteMdURL], preceded by a blank
-// line, for a formatter that closes a section with it.
-func WriteMdURLNewline(b *strings.Builder, url string) {
-	b.WriteString("\n")
-	WriteMdURL(b, url)
-}
 
 // WritePagination appends the pagination footer after a blank line, whatever
 // the builder ends with, so the footer opens a paragraph of its own rather
@@ -812,6 +788,14 @@ type discussionListMarkdownOptions struct {
 // list heading, one H3 per thread with its notes quoted under their authors,
 // the pagination the call used, and the hints. The threads carry no link, so
 // the footer carries no instruction to keep them.
+//
+// The thread id goes through the heading escaper rather than being declared
+// safe for its shape. It is a digest in every response GitLab sends today, and
+// the declaration said so, which made the containment of the four discussion
+// domains a fact about GitLab's ids rather than about this renderer: a thread
+// id that was ever anything else wrote its own heading, its own list item or
+// the server's guidance section into the list, and reached the page as raw
+// HTML. The escaper costs nothing on a digest and renders it unchanged.
 func formatDiscussionListMarkdown(discussions []DiscussionMarkdown, opts discussionListMarkdownOptions) string {
 	if len(discussions) == 0 {
 		return emptyResult(opts.EmptyMessage)
@@ -826,8 +810,7 @@ func formatDiscussionListMarkdown(discussions []DiscussionMarkdown, opts discuss
 		WriteListHeading(&b, opts.Title, len(discussions), PaginationOutput{})
 	}
 	for _, discussion := range discussions {
-		//gitlab:allow-unescaped discussion.ID: a discussion thread id, hexadecimal digits from the REST digest or from the numeric half of a GraphQL global id.
-		fmt.Fprintf(&b, "### Discussion %s\n", discussion.ID)
+		fmt.Fprintf(&b, "### Discussion %s\n", EscapeMdHeading(discussion.ID))
 		writeDiscussionNotes(&b, discussion.Notes)
 		b.WriteString("\n")
 	}
@@ -851,12 +834,21 @@ func FormatRESTDiscussionListMarkdown[T any](discussions []T, pagination Paginat
 	})
 }
 
-// FormatDiscussionMarkdown renders a single discussion thread as Markdown.
+// FormatDiscussionMarkdown renders a single discussion thread as the card of
+// one thread: the heading the card writer escapes, the thread's notes quoted
+// under their authors, and the hints last. The notes are a collection the
+// reader reads rather than a table of columns, so they keep the shape
+// [writeDiscussionNotes] gives them.
+//
+// The thread id reaches this renderer as a field of the result rather than as
+// a literal the server wrote, and a heading is the one line where a value that
+// is not a digest would open a tag, so the card's heading escaper is what
+// contains it.
 func FormatDiscussionMarkdown(discussion DiscussionMarkdown, hints ...string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Discussion %s\n\n", discussion.ID)
+	c := NewCard(&b, "Discussion "+discussion.ID)
 	writeDiscussionNotes(&b, discussion.Notes)
-	WriteHints(&b, hints...)
+	c.End(hints...)
 	return b.String()
 }
 
@@ -869,10 +861,21 @@ func FormatDiscussionMarkdown(discussion DiscussionMarkdown, hints ...string) st
 // can comment on the issue or merge request, and printed raw at column 0 it
 // could add list items of its own, impersonate a system note, open a heading,
 // or forge the server's guidance section.
+//
+// A body that is one line is escaped before it is quoted, which is the split
+// [Card.Text] makes: the quote contains a body's structure and contains
+// nothing at all about a raw tag, which a client renders as a live anchor
+// wherever it sits, so a one-line body is a value and gets the inline
+// escaper. A body that spans lines keeps its own markup inside the quote, as
+// every description in the tree does.
 func writeDiscussionNotes(b *strings.Builder, notes []NoteMarkdown) {
 	for _, note := range notes {
 		fmt.Fprintf(b, "- **@%s** (%s, note %d):\n", EscapeMdTableCell(note.Author), FormatTime(note.CreatedAt), note.ID)
-		quoted := WrapGFMBody(note.Body)
+		body := note.Body
+		if !strings.ContainsAny(body, "\r\n") {
+			body = cardInline(body)
+		}
+		quoted := WrapGFMBody(body)
 		if quoted == "" {
 			continue
 		}
@@ -975,32 +978,6 @@ func MarkdownCodeFence(content string) string {
 	}
 	fenceLength := max(3, longestRun+1)
 	return strings.Repeat("`", fenceLength)
-}
-
-// WriteDescription writes a GitLab-authored description field.
-//
-// A description is prose somebody typed into GitLab, and the "- **Description**:
-// %s" line it used to be interpolated into puts it at column zero after a list
-// bullet: its second line is no longer part of the item, so an embedded heading
-// is a heading of the response and an embedded bullet is an item of the
-// server's own list. A one-line description keeps the compact form with the
-// cell escaping applied and the guidance heading defused, the containment a
-// card row has; anything longer becomes a blockquote, which is what the merge
-// request, wiki and release renderers already do.
-//
-// [Card.Text] is the same row on a card, with the quote indented under the
-// label so it stays inside the item.
-func WriteDescription(b *strings.Builder, description string) {
-	if description == "" {
-		return
-	}
-	if !strings.ContainsAny(description, "\n\r") {
-		fmt.Fprintf(b, FmtMdDescription, cardInline(description))
-		return
-	}
-	b.WriteString("- **Description**:\n\n")
-	b.WriteString(WrapGFMBody(description))
-	b.WriteString("\n")
 }
 
 // MarkdownFencedBlock renders content as a complete fenced code block: a fence

@@ -31,6 +31,48 @@ func TestWriteHints_MultipleHints(t *testing.T) {
 	}
 }
 
+// TestWriteHints_BlankHints_WriteNoItemAndNoSection verifies whole output for
+// the two shapes a blank hint arrives in: beside a real one, where only the
+// real one is written, and alone, where the section does not open at all.
+//
+// A hint reaches a formatter as a field of its result as often as it does as a
+// literal, and a result built from a zero value carries those fields empty.
+// Written out, each became a bare "- ", and the first of them, landing directly
+// under the sentence above it, turned that sentence into a setext heading and
+// took the whole guidance section out of what ExtractHints could read. The card
+// of an award emoji that does not exist was in exactly that state.
+func TestWriteHints_BlankHints_WriteNoItemAndNoSection(t *testing.T) {
+	t.Run("a blank hint beside a real one is dropped", func(t *testing.T) {
+		var b strings.Builder
+		b.WriteString("## Title\n\nThe project **7** does not exist.\n")
+		WriteHints(&b, "", "Use 'list' to see all items", "   ")
+
+		want := "## Title\n\nThe project **7** does not exist." +
+			"\n\n---\n\U0001F4A1 **Next steps:**\n" +
+			"- Use 'list' to see all items\n"
+		if got := b.String(); got != want {
+			t.Errorf("hints:\n got %q\nwant %q", got, want)
+		}
+		if hints := ExtractHints(b.String()); len(hints) != 1 || hints[0] != "Use 'list' to see all items" {
+			t.Errorf("ExtractHints = %q, want the one hint that had text", hints)
+		}
+	})
+
+	t.Run("hints that are all blank open no section", func(t *testing.T) {
+		var b strings.Builder
+		b.WriteString("## Title\n\nThe award emoji **7** does not exist.\n")
+		WriteHints(&b, "", "")
+
+		want := "## Title\n\nThe award emoji **7** does not exist.\n"
+		if got := b.String(); got != want {
+			t.Errorf("hints:\n got %q\nwant %q", got, want)
+		}
+		if hints := ExtractHints(b.String()); len(hints) != 0 {
+			t.Errorf("ExtractHints = %q, want none", hints)
+		}
+	})
+}
+
 // TestWriteHints_NoHints verifies that WriteHints writes nothing when called
 // with no hint arguments.
 func TestWriteHints_NoHints(t *testing.T) {

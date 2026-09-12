@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -912,7 +913,7 @@ func TestWriteFullAccessSection(t *testing.T) {
 			{AccessLevel: 40}, // Maintainer
 			{AccessLevel: 30}, // Developer
 		}
-		writeFullAccessSection(&b, members, nil)
+		writeFullAccessSection(&b, members, nil, nil)
 		out := b.String()
 		if !strings.Contains(out, "**Total members:** 3") {
 			t.Errorf("expected total count, got: %s", out)
@@ -930,7 +931,7 @@ func TestWriteFullAccessSection(t *testing.T) {
 		groups := []gl.ProjectSharedWithGroup{
 			{GroupName: "team-a", GroupAccessLevel: 30},
 		}
-		writeFullAccessSection(&b, nil, groups)
+		writeFullAccessSection(&b, nil, groups, nil)
 		out := b.String()
 		if !strings.Contains(out, "team-a") {
 			t.Errorf("expected group name, got: %s", out)
@@ -942,7 +943,7 @@ func TestWriteFullAccessSection(t *testing.T) {
 
 	t.Run("empty_members_and_groups", func(t *testing.T) {
 		var b strings.Builder
-		writeFullAccessSection(&b, nil, nil)
+		writeFullAccessSection(&b, nil, nil, nil)
 		out := b.String()
 		if !strings.Contains(out, "**Total members:** 0") {
 			t.Errorf("expected zero members, got: %s", out)
@@ -959,7 +960,7 @@ func TestWriteFullLabelsSection(t *testing.T) {
 			{Name: "bug", Description: "Bug reports"},
 			{Name: "todo", Description: ""},
 		}
-		writeFullLabelsSection(&b, labels)
+		writeFullLabelsSection(&b, labels, nil)
 		out := b.String()
 		if !strings.Contains(out, "**Total:** 2") {
 			t.Errorf("expected label count, got: %s", out)
@@ -974,7 +975,7 @@ func TestWriteFullLabelsSection(t *testing.T) {
 		labels := []*gl.Label{
 			{Name: "bug", Description: "Bug reports"},
 		}
-		writeFullLabelsSection(&b, labels)
+		writeFullLabelsSection(&b, labels, nil)
 		out := b.String()
 		if strings.Contains(out, "without description") {
 			t.Errorf("should not warn when all have descriptions, got: %s", out)
@@ -983,7 +984,7 @@ func TestWriteFullLabelsSection(t *testing.T) {
 
 	t.Run("no_labels", func(t *testing.T) {
 		var b strings.Builder
-		writeFullLabelsSection(&b, nil)
+		writeFullLabelsSection(&b, nil, nil)
 		out := b.String()
 		if !strings.Contains(out, "**Total:** 0") {
 			t.Errorf("expected zero count, got: %s", out)
@@ -999,7 +1000,7 @@ func TestWriteFullMilestonesSection(t *testing.T) {
 		due := gl.ISOTime(time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC))
 		writeFullMilestonesSection(&b, []*gl.Milestone{
 			{Title: "v1.0", DueDate: &due},
-		})
+		}, nil)
 		out := b.String()
 		if !strings.Contains(out, "**Active:** 1") {
 			t.Errorf("expected active count, got: %s", out)
@@ -1013,7 +1014,7 @@ func TestWriteFullMilestonesSection(t *testing.T) {
 		var b strings.Builder
 		writeFullMilestonesSection(&b, []*gl.Milestone{
 			{Title: "backlog"},
-		})
+		}, nil)
 		out := b.String()
 		if !strings.Contains(out, "no due date") {
 			t.Errorf("expected 'no due date', got: %s", out)
@@ -1026,7 +1027,7 @@ func TestWriteFullMilestonesSection(t *testing.T) {
 func TestWriteFullPushRulesSection(t *testing.T) {
 	t.Run("nil_push_rules", func(t *testing.T) {
 		var b strings.Builder
-		writeFullPushRulesSection(&b, nil)
+		writeFullPushRulesSection(&b, nil, nil)
 		out := b.String()
 		if !strings.Contains(out, "Push rules not configured") {
 			t.Errorf("expected nil-rules message, got: %s", out)
@@ -1041,7 +1042,7 @@ func TestWriteFullPushRulesSection(t *testing.T) {
 			CommitMessageRegex: "^(feat|fix):",
 			BranchNameRegex:    "^(feature|fix)/",
 			AuthorEmailRegex:   "@example.com$",
-		})
+		}, nil)
 		out := b.String()
 		if !strings.Contains(out, "Prevent secrets") {
 			t.Errorf("expected push rule rows, got: %s", out)
@@ -1057,34 +1058,11 @@ func TestWriteFullPushRulesSection(t *testing.T) {
 	})
 }
 
-// TestFormatAccessLevels verifies access level formatting for protected branches.
-func TestFormatAccessLevels(t *testing.T) {
-	t.Run("empty_levels", func(t *testing.T) {
-		if got := formatAccessLevels(nil); got != "-" {
-			t.Errorf("formatAccessLevels(nil) = %q, want %q", got, "-")
-		}
-	})
-
-	t.Run("multiple_levels", func(t *testing.T) {
-		levels := []*gl.BranchAccessDescription{
-			{AccessLevel: 40},
-			{AccessLevel: 30},
-		}
-		got := formatAccessLevels(levels)
-		if !strings.Contains(got, "Maintainer") {
-			t.Errorf("expected Maintainer, got: %s", got)
-		}
-		if !strings.Contains(got, "Developer") {
-			t.Errorf("expected Developer, got: %s", got)
-		}
-	})
-}
-
 // TestWriteFullBranchSection verifies branch protection section in full audit.
 func TestWriteFullBranchSection(t *testing.T) {
 	t.Run("no_branches", func(t *testing.T) {
 		var b strings.Builder
-		writeFullBranchSection(&b, nil)
+		writeFullBranchSection(&b, nil, nil)
 		out := b.String()
 		if !strings.Contains(out, "**Protected branches:** 0") {
 			t.Errorf("expected zero count, got: %s", out)
@@ -1100,7 +1078,7 @@ func TestWriteFullBranchSection(t *testing.T) {
 				PushAccessLevels: []*gl.BranchAccessDescription{{AccessLevel: 40}},
 			},
 		}
-		writeFullBranchSection(&b, branches)
+		writeFullBranchSection(&b, branches, nil)
 		out := b.String()
 		if !strings.Contains(out, "**Protected branches:** 1") {
 			t.Errorf("expected one branch, got: %s", out)
@@ -1279,6 +1257,193 @@ func TestStateArg_PerResourceVocabulary(t *testing.T) {
 			}
 			if !strings.Contains(tt.arg.Description, "default: opened") {
 				t.Errorf("%s description = %q, want the default named", tt.name, tt.arg.Description)
+			}
+		})
+	}
+}
+
+// TestMermaidQuoted_ContainsAValueInsideTheDiagram verifies that a
+// GitLab-authored value rendered into a Mermaid chart cannot leave the string
+// it sits in.
+//
+// Mermaid has no backslash escape, so the %q these charts used to be built with
+// wrote a backslash Mermaid renders literally and left the quotation mark that
+// ends the label. A label or a contributor name is whatever somebody typed, so
+// the quote is reachable: past it, the rest of the name is diagram syntax and
+// can add entries or a title to a chart the server wrote.
+func TestMermaidQuoted_ContainsAValueInsideTheDiagram(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "plain label", in: "bug", want: `"bug"`},
+		{name: "empty label", in: "", want: `""`},
+		{name: "spaces survive", in: "needs triage", want: `"needs triage"`},
+		{name: "quote becomes the entity form", in: `a"b`, want: `"a#quot;b"`},
+		{
+			name: "a forged entry cannot start one",
+			in:   "x\" : 1\n    \"y",
+			want: `"x#quot; : 1     #quot;y"`,
+		},
+		{name: "hash is encoded first", in: "#quot;", want: `"#35;quot;"`},
+		{name: "newline becomes a space", in: "a\nb", want: `"a b"`},
+		{name: "carriage return becomes a space", in: "a\rb", want: `"a b"`},
+		{name: "tab becomes a space", in: "a\tb", want: `"a b"`},
+		{name: "control byte is dropped", in: "a\x00b", want: `"ab"`},
+		{name: "non-ASCII is kept as itself", in: "café", want: "\"café\""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := mermaidQuoted(tt.in); got != tt.want {
+				t.Errorf("mermaidQuoted(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestTruncateRunes_CutsOnARuneBoundary verifies that shortening a
+// GitLab-authored string never splits a character.
+//
+// A byte slice at a fixed offset leaves the orphaned bytes of whatever
+// character spanned it in the message, and that is no longer UTF-8: the
+// escapers pass them through, being neither control bytes nor Markdown, and the
+// client renders a replacement glyph. Prose people type is exactly where a
+// multi-byte character at the cut is likely.
+func TestTruncateRunes_CutsOnARuneBoundary(t *testing.T) {
+	tests := []struct {
+		name  string
+		in    string
+		limit int
+		want  string
+	}{
+		{name: "shorter than the limit is untouched", in: "abc", limit: 10, want: "abc"},
+		{name: "exactly the limit is untouched", in: "abc", limit: 3, want: "abc"},
+		{name: "ascii cuts at the limit", in: "abcdef", limit: 3, want: "abc"},
+		{name: "zero limit is empty", in: "abc", limit: 0, want: ""},
+		{name: "negative limit is empty", in: "abc", limit: -1, want: ""},
+		// U+00E9 is two bytes: a limit of 2 lands mid-character and must give
+		// back the character before it rather than half of this one.
+		{name: "two-byte rune is never split", in: "aéb", limit: 2, want: "a"},
+		{name: "two-byte rune is kept when it fits", in: "aéb", limit: 3, want: "aé"},
+		// U+1F600 is four bytes.
+		{name: "four-byte rune is never split", in: "a\U0001F600b", limit: 4, want: "a"},
+		{name: "four-byte rune is kept when it fits", in: "a\U0001F600b", limit: 5, want: "a\U0001F600"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := truncateRunes(tt.in, tt.limit)
+			if got != tt.want {
+				t.Errorf("truncateRunes(%q, %d) = %q, want %q", tt.in, tt.limit, got, tt.want)
+			}
+			if !utf8.ValidString(got) {
+				t.Errorf("truncateRunes(%q, %d) = %q, which is not valid UTF-8", tt.in, tt.limit, got)
+			}
+		})
+	}
+}
+
+// TestWriteClosingRule_SeparatesTheRuleFromWhateverCameBefore verifies that a
+// prompt's closing thematic break always follows a blank line.
+//
+// A "---" written directly under a line of text is a setext heading in
+// CommonMark: no rule is drawn, and the sentence above it becomes an H2. The
+// reports that closed that way were the ones with nothing to report, whose last
+// section is a sentence rather than a table, so the message a reader most needs
+// to end cleanly was the one that did not.
+func TestWriteClosingRule_SeparatesTheRuleFromWhateverCameBefore(t *testing.T) {
+	tests := []struct {
+		name        string
+		before      string
+		instruction string
+		want        string
+	}{
+		{
+			name:        "empty builder",
+			before:      "",
+			instruction: "Please analyze.",
+			want:        "---\nPlease analyze.\n",
+		},
+		{
+			name:        "after a sentence the rule gains its blank line",
+			before:      "No stale items found.\n",
+			instruction: "Please analyze.",
+			want:        "No stale items found.\n\n---\nPlease analyze.\n",
+		},
+		{
+			name:        "after a blank line nothing is added",
+			before:      "| a | 1 |\n\n",
+			instruction: "Please analyze.",
+			want:        "| a | 1 |\n\n---\nPlease analyze.\n",
+		},
+		{
+			name:        "several blank lines are left alone",
+			before:      "x\n\n\n",
+			instruction: "Please analyze.",
+			want:        "x\n\n\n---\nPlease analyze.\n",
+		},
+		{
+			name:        "mid-line text gets a line ending and a blank line",
+			before:      "trailing text",
+			instruction: "Please analyze.",
+			want:        "trailing text\n\n---\nPlease analyze.\n",
+		},
+		{
+			name:        "an instruction that ends in a newline gains no second one",
+			before:      "x\n\n",
+			instruction: "Please analyze.\n",
+			want:        "x\n\n---\nPlease analyze.\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var b strings.Builder
+			b.WriteString(tt.before)
+			writeClosingRule(&b, tt.instruction)
+			if got := b.String(); got != tt.want {
+				t.Errorf("writeClosingRule() wrote %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDeduplicateMRs_TellsTwoProjectsApart verifies that merge requests are
+// identified by project and IID together.
+//
+// An IID is unique inside a project and nowhere else, so !1 of one project and
+// !1 of another are two merge requests. Both cross-project counters read this
+// identity now; the authored set used to key on the IID alone.
+func TestDeduplicateMRs_TellsTwoProjectsApart(t *testing.T) {
+	tests := []struct {
+		name      string
+		a         []*gl.BasicMergeRequest
+		b         []*gl.BasicMergeRequest
+		wantCount int
+	}{
+		{name: "both empty", a: nil, b: nil, wantCount: 0},
+		{
+			name:      "the same MR twice is one",
+			a:         []*gl.BasicMergeRequest{{ProjectID: 1, IID: 1}},
+			b:         []*gl.BasicMergeRequest{{ProjectID: 1, IID: 1}},
+			wantCount: 1,
+		},
+		{
+			name:      "the same IID in two projects is two",
+			a:         []*gl.BasicMergeRequest{{ProjectID: 1, IID: 1}},
+			b:         []*gl.BasicMergeRequest{{ProjectID: 2, IID: 1}},
+			wantCount: 2,
+		},
+		{
+			name:      "two IIDs in one project are two",
+			a:         []*gl.BasicMergeRequest{{ProjectID: 1, IID: 1}, {ProjectID: 1, IID: 2}},
+			b:         nil,
+			wantCount: 2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := len(deduplicateMRs(tt.a, tt.b)); got != tt.wantCount {
+				t.Errorf("deduplicateMRs() returned %d merge request(s), want %d", got, tt.wantCount)
 			}
 		})
 	}

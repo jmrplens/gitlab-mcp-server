@@ -5,10 +5,12 @@ package usagedata
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -322,9 +324,15 @@ func TestMetricDefinitionsOutput_DocumentSizes_AreTruncatedAndFlagged(t *testing
 // means the rest was never read. Without a distinct line the model cannot tell
 // a complete answer from a partial one.
 func TestFormatMetricDefinitionsMarkdown_Truncated(t *testing.T) {
-	truncated := FormatMetricDefinitionsMarkdown(MetricDefinitionsOutput{YAML: "metrics: []", Truncated: true})
-	if !strings.Contains(truncated, "Truncated") {
-		t.Errorf("markdown for a truncated document = %q, want it to say so", truncated)
+	want := "## Metric Definitions (YAML)\n\n" +
+		"- " + toolutil.EmojiWarning + " **Truncated**\n\n" +
+		"```yaml\nmetrics: []\n```\n\n" +
+		"The document exceeded the size this action returns, so it was cut short. Read the remainder from GitLab directly (GET /usage_data/metric_definitions).\n" +
+		definitionsHints
+
+	got := FormatMetricDefinitionsMarkdown(MetricDefinitionsOutput{YAML: "metrics: []", Truncated: true})
+	if got != want {
+		t.Errorf("FormatMetricDefinitionsMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 	whole := FormatMetricDefinitionsMarkdown(MetricDefinitionsOutput{YAML: "metrics: []"})
 	if strings.Contains(whole, "Truncated") {
@@ -409,84 +417,189 @@ func TestTrackEvents(t *testing.T) {
 
 // Formatter tests.
 
-// TestFormatServicePingMarkdown verifies FormatServicePingMarkdown.
-func TestFormatServicePingMarkdown(t *testing.T) {
+// servicePingHints is the guidance section the Service Ping card closes with.
+const servicePingHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'admin.usage_data_non_sql_metrics' to read the non-SQL half of the same report\n" +
+	"- Use action 'admin.usage_data_metric_definitions' to look a metric key up in the definitions\n"
+
+// queriesHints is the guidance section the Service Ping queries card closes
+// with.
+const queriesHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'admin.usage_data_service_ping' to read the counts these queries produce\n" +
+	"- Use action 'admin.usage_data_metric_definitions' to look a metric key up in the definitions\n"
+
+// definitionsHints is the guidance section the metric definitions card closes
+// with.
+const definitionsHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'admin.usage_data_service_ping' to read the values these metrics are reported with\n"
+
+// TestFormatServicePingMarkdown_LicenseAndCounts_RendersTheWholeCard verifies
+// that the report renders as a card whose two keyed collections are tables
+// under their own headings, with the recording time in the display form.
+func TestFormatServicePingMarkdown_LicenseAndCounts_RendersTheWholeCard(t *testing.T) {
 	out := GetServicePingOutput{
 		RecordedAt: "2026-01-15T10:00:00Z",
 		License:    map[string]string{"plan": "premium"},
 		Counts:     map[string]int64{"users": 100},
 	}
-	md := FormatServicePingMarkdown(out)
-	if !strings.Contains(md, "Service Ping Data") {
-		t.Error("missing header")
-	}
-	if !strings.Contains(md, "15 Jan 2026 10:00 UTC") {
-		t.Error("missing recorded_at")
-	}
-	if !strings.Contains(md, "premium") {
-		t.Error("missing license plan")
-	}
-	if !strings.Contains(md, "100") {
-		t.Error("missing counts")
+
+	want := "## Service Ping Data\n\n" +
+		"- **Recorded At**: 15 Jan 2026 10:00 UTC\n\n" +
+		"### License\n\n" +
+		"| Key | Value |\n| --- | --- |\n" +
+		"| plan | premium |\n\n" +
+		"### Counts\n\n" +
+		"| Metric | Count |\n| --- | --- |\n" +
+		"| users | 100 |\n" +
+		servicePingHints
+
+	if got := FormatServicePingMarkdown(out); got != want {
+		t.Errorf("FormatServicePingMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatNonSQLMetricsMarkdown verifies FormatNonSQLMetricsMarkdown.
-func TestFormatNonSQLMetricsMarkdown(t *testing.T) {
+// TestFormatNonSQLMetricsMarkdown_RendersTheWholeCard verifies that the
+// non-SQL half of the report renders as card rows rather than as a
+// "| Property | Value |" table, and that the two counters are written at zero:
+// an instance with no active user is an answer.
+func TestFormatNonSQLMetricsMarkdown_RendersTheWholeCard(t *testing.T) {
 	out := NonSQLMetricsOutput{
 		UUID:     "abc-123",
 		Hostname: "gitlab.example.com",
 		Version:  "16.8.0",
 		Edition:  "EE",
 	}
-	md := FormatNonSQLMetricsMarkdown(out)
-	if !strings.Contains(md, "Non-SQL Metrics") {
-		t.Error("missing header")
-	}
-	if !strings.Contains(md, "abc-123") {
-		t.Error("missing UUID")
+
+	want := "## Non-SQL Metrics\n\n" +
+		"- **UUID**: abc-123\n" +
+		"- **Hostname**: gitlab.example.com\n" +
+		"- **Version**: 16.8.0\n" +
+		"- **Edition**: EE\n" +
+		"- **Active Users**: 0\n" +
+		"- **Historical Max Users**: 0\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'admin.usage_data_service_ping' to read the full Service Ping report\n"
+
+	if got := FormatNonSQLMetricsMarkdown(out); got != want {
+		t.Errorf("FormatNonSQLMetricsMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatMetricDefinitionsMarkdown verifies FormatMetricDefinitionsMarkdown.
-func TestFormatMetricDefinitionsMarkdown(t *testing.T) {
-	out := MetricDefinitionsOutput{YAML: "key: value"}
-	md := FormatMetricDefinitionsMarkdown(out)
-	if !strings.Contains(md, "```yaml") {
-		t.Error("missing yaml code block")
-	}
-	if !strings.Contains(md, "key: value") {
-		t.Error("missing yaml content")
+// TestFormatMetricDefinitionsMarkdown_ShortDocument_RendersOneFence verifies
+// that a document that fits renders inside one fence with no notice of any
+// kind, since neither cut happened.
+func TestFormatMetricDefinitionsMarkdown_ShortDocument_RendersOneFence(t *testing.T) {
+	want := "## Metric Definitions (YAML)\n\n" +
+		"```yaml\nkey: value\n```\n" +
+		definitionsHints
+
+	if got := FormatMetricDefinitionsMarkdown(MetricDefinitionsOutput{YAML: "key: value"}); got != want {
+		t.Errorf("FormatMetricDefinitionsMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatMetricDefinitionsMarkdown_Truncation verifies FormatMetricDefinitionsMarkdown when truncation.
-func TestFormatMetricDefinitionsMarkdown_Truncation(t *testing.T) {
-	longYAML := strings.Repeat("a", 15000)
-	out := MetricDefinitionsOutput{YAML: longYAML}
-	md := FormatMetricDefinitionsMarkdown(out)
-	if !strings.Contains(md, "truncated") {
-		t.Error("expected truncation notice")
+// TestFormatMetricDefinitionsMarkdown_LongDocument_SaysTheCardShortenedIt
+// verifies that a document longer than the card shows is cut for display and
+// says so, without claiming the action stopped reading.
+func TestFormatMetricDefinitionsMarkdown_LongDocument_SaysTheCardShortenedIt(t *testing.T) {
+	want := "## Metric Definitions (YAML)\n\n" +
+		"```yaml\n" + strings.Repeat("a", maxRenderedYAMLBytes) + "\n```\n\n" +
+		"The card shows the first 10000 bytes of the document; the whole of what this action read is in the structured result.\n" +
+		definitionsHints
+
+	got := FormatMetricDefinitionsMarkdown(MetricDefinitionsOutput{YAML: strings.Repeat("a", 15000)})
+	if got != want {
+		t.Errorf("FormatMetricDefinitionsMarkdown() = %d bytes, want %d bytes; first difference at %d",
+			len(got), len(want), firstDifference(got, want))
 	}
 }
 
-// TestFormatTrackEventMarkdown verifies FormatTrackEventMarkdown.
-func TestFormatTrackEventMarkdown(t *testing.T) {
-	md := FormatTrackEventMarkdown(TrackEventOutput{Status: "accepted"})
-	if !strings.Contains(md, "accepted") {
-		t.Error("missing status")
+// TestDisplayYAML_MultiByteDocument_CutsOnARuneBoundary verifies that the
+// display cut never leaves half a character at the end of the fence.
+//
+// The ceiling is a byte count and lands wherever it lands: cutting at it
+// directly through a multi-byte character leaves the leading bytes of one
+// behind, which every client renders as a replacement glyph.
+func TestDisplayYAML_MultiByteDocument_CutsOnARuneBoundary(t *testing.T) {
+	// One character short of the ceiling, then a three-byte character that
+	// straddles it.
+	document := strings.Repeat("a", maxRenderedYAMLBytes-1) + "€" + "tail"
+
+	got, shortened := displayYAML(document)
+	if !shortened {
+		t.Fatal("displayYAML() shortened = false, want true for a document over the ceiling")
+	}
+	if want := strings.Repeat("a", maxRenderedYAMLBytes-1); got != want {
+		t.Errorf("displayYAML() kept %d bytes ending %q, want the %d bytes before the split character",
+			len(got), got[max(0, len(got)-4):], len(want))
+	}
+	if !utf8.ValidString(got) {
+		t.Error("displayYAML() left an incomplete character at the cut")
 	}
 }
 
-// TestFormatTrackEventsMarkdown verifies FormatTrackEventsMarkdown.
-func TestFormatTrackEventsMarkdown(t *testing.T) {
-	md := FormatTrackEventsMarkdown(TrackEventsOutput{Status: "accepted", Count: 3})
-	if !strings.Contains(md, "accepted") {
-		t.Error("missing status")
+// TestTruncateAtRuneBoundary_Tails_AreCutWhole verifies the boundary rule the
+// read ceiling and the display cut share.
+func TestTruncateAtRuneBoundary_Tails_AreCutWhole(t *testing.T) {
+	tests := []struct {
+		name  string
+		data  string
+		limit int
+		want  string
+	}{
+		{name: "nothing to cut", data: "abc", limit: 3, want: "abc"},
+		{name: "cut between ASCII characters", data: "abcd", limit: 2, want: "ab"},
+		{name: "cut inside a two-byte character", data: "abé", limit: 3, want: "ab"},
+		{name: "cut inside a three-byte character", data: "ab€", limit: 4, want: "ab"},
+		{name: "cut after a whole character", data: "ab€c", limit: 5, want: "ab€"},
+		{name: "tail that is not UTF-8 at all", data: "ab\xff\xff\xff\xffz", limit: 6, want: "ab\xff"},
 	}
-	if !strings.Contains(md, "3") {
-		t.Error("missing count")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := string(truncateAtRuneBoundary([]byte(tt.data), tt.limit)); got != tt.want {
+				t.Errorf("truncateAtRuneBoundary(%q, %d) = %q, want %q", tt.data, tt.limit, got, tt.want)
+			}
+		})
 	}
+}
+
+// TestFormatTrackEventMarkdown_RendersTheWholeCard verifies that the answer to
+// one tracked event is a card row rather than a bold run-on line.
+func TestFormatTrackEventMarkdown_RendersTheWholeCard(t *testing.T) {
+	want := "## Track Event\n\n" +
+		"- **Status**: accepted\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'admin.usage_data_track_events' to send a batch of events in one call\n"
+
+	if got := FormatTrackEventMarkdown(TrackEventOutput{Status: "accepted"}); got != want {
+		t.Errorf("FormatTrackEventMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatTrackEventsMarkdown_RendersTheWholeCard verifies that a batch
+// answers with the status and the count as two rows.
+func TestFormatTrackEventsMarkdown_RendersTheWholeCard(t *testing.T) {
+	want := "## Track Events\n\n" +
+		"- **Status**: accepted\n" +
+		"- **Events**: 3\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'admin.usage_data_metric_definitions' to review the metrics these events feed\n"
+
+	if got := FormatTrackEventsMarkdown(TrackEventsOutput{Status: "accepted", Count: 3}); got != want {
+		t.Errorf("FormatTrackEventsMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// firstDifference reports the index of the first byte at which a and b differ,
+// or -1 when one is a prefix of the other and they differ only in length.
+func firstDifference(a, b string) int {
+	for i := range min(len(a), len(b)) {
+		if a[i] != b[i] {
+			return i
+		}
+	}
+	return -1
 }
 
 // ---------- Tests consolidated from coverage_test.go ----------.
@@ -545,11 +658,14 @@ func TestTrackEvents_APIError(t *testing.T) {
 // Formatters — empty service ping
 // ---------------------------------------------------------------------------.
 
-// TestFormatServicePingMarkdown_Empty verifies FormatServicePingMarkdown when empty.
-func TestFormatServicePingMarkdown_Empty(t *testing.T) {
-	md := FormatServicePingMarkdown(GetServicePingOutput{})
-	if !strings.Contains(md, "Service Ping Data") {
-		t.Error("missing header")
+// TestFormatServicePingMarkdown_NothingReported_IsTheHeadingAndTheHints
+// verifies that a report carrying nothing writes no empty table and no row with
+// nothing after it.
+func TestFormatServicePingMarkdown_NothingReported_IsTheHeadingAndTheHints(t *testing.T) {
+	want := "## Service Ping Data\n" + servicePingHints
+
+	if got := FormatServicePingMarkdown(GetServicePingOutput{}); got != want {
+		t.Errorf("FormatServicePingMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -557,19 +673,57 @@ func TestFormatServicePingMarkdown_Empty(t *testing.T) {
 // Formatters — queries with many counts
 // ---------------------------------------------------------------------------.
 
-// TestFormatQueriesMarkdown verifies FormatQueriesMarkdown.
-func TestFormatQueriesMarkdown(t *testing.T) {
-	counts := make(map[string]string)
+// TestFormatQueriesMarkdown_MoreThanTheCardShows_SaysHowManyItLeftOut verifies
+// that the queries card writes its three identity rows as rows, shows the first
+// twenty queries, and says how much of the map it left in the structured
+// result.
+func TestFormatQueriesMarkdown_MoreThanTheCardShows_SaysHowManyItLeftOut(t *testing.T) {
+	counts := make(map[string]string, 25)
 	for i := range 25 {
 		counts["metric_"+string(rune('a'+i))] = "SELECT 1"
 	}
-	md := FormatQueriesMarkdown(QueriesOutput{
-		Version: "16.8.0",
-		Edition: "EE",
-		Counts:  counts,
-	})
-	if !strings.Contains(md, "more queries") {
-		t.Error("expected truncation notice for >20 queries")
+
+	var rows strings.Builder
+	for i := range maxRenderedMetrics {
+		rows.WriteString("| metric_" + string(rune('a'+i)) + " | SELECT 1 |\n")
+	}
+
+	want := "## Service Ping Queries\n\n" +
+		"- **Version**: 16.8.0\n" +
+		"- **Edition**: EE\n\n" +
+		"### SQL Queries\n\n" +
+		"| Metric | Query |\n| --- | --- |\n" +
+		rows.String() + "\n" +
+		"Showing the first 20 of 25 queries; the rest are in the structured result.\n" +
+		queriesHints
+
+	got := FormatQueriesMarkdown(QueriesOutput{Version: "16.8.0", Edition: "EE", Counts: counts})
+	if got != want {
+		t.Errorf("FormatQueriesMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatQueriesMarkdown_HostileIdentity_StaysInsideItsRows verifies that
+// the instance version, edition and recording time cannot leave their rows.
+//
+// All three used to share one line with no list marker and no escaping, so a
+// value carrying a tag, a pipe or a line break wrote whatever it liked into the
+// response. Each is a row of its own now, escaped at the write.
+func TestFormatQueriesMarkdown_HostileIdentity_StaysInsideItsRows(t *testing.T) {
+	out := QueriesOutput{
+		Version:    "16.8.0|x",
+		Edition:    `<a href="http://attacker.invalid">x</a>`,
+		RecordedAt: "2026-01-15T10:00:00Z",
+	}
+
+	want := "## Service Ping Queries\n\n" +
+		"- **Version**: 16.8.0&#124;x\n" +
+		"- **Edition**: &lt;a href=\"http://attacker.invalid\">x&lt;/a>\n" +
+		"- **Recorded At**: 15 Jan 2026 10:00 UTC\n" +
+		queriesHints
+
+	if got := FormatQueriesMarkdown(out); got != want {
+		t.Errorf("FormatQueriesMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -577,18 +731,34 @@ func TestFormatQueriesMarkdown(t *testing.T) {
 // Formatters — service ping with many counts
 // ---------------------------------------------------------------------------.
 
-// TestFormatServicePingMarkdown_ManyCounts verifies FormatServicePingMarkdown when many counts.
-func TestFormatServicePingMarkdown_ManyCounts(t *testing.T) {
-	counts := make(map[string]int64)
+// TestFormatServicePingMarkdown_ManyCounts_SaysHowManyItLeftOut verifies that
+// the counts table stops at the twenty rows the card shows and says how many
+// metrics the response carries.
+func TestFormatServicePingMarkdown_ManyCounts_SaysHowManyItLeftOut(t *testing.T) {
+	counts := make(map[string]int64, 25)
 	for i := range 25 {
 		counts["metric_"+string(rune('a'+i))] = int64(i)
 	}
-	md := FormatServicePingMarkdown(GetServicePingOutput{
+
+	var rows strings.Builder
+	for i := range maxRenderedMetrics {
+		fmt.Fprintf(&rows, "| metric_%c | %d |\n", rune('a'+i), i)
+	}
+
+	want := "## Service Ping Data\n\n" +
+		"- **Recorded At**: 15 Jan 2026 10:00 UTC\n\n" +
+		"### Counts\n\n" +
+		"| Metric | Count |\n| --- | --- |\n" +
+		rows.String() + "\n" +
+		"Showing the first 20 of 25 metrics; the rest are in the structured result.\n" +
+		servicePingHints
+
+	got := FormatServicePingMarkdown(GetServicePingOutput{
 		RecordedAt: "2026-01-15T10:00:00Z",
 		Counts:     counts,
 	})
-	if !strings.Contains(md, "more metrics") {
-		t.Error("expected truncation notice for >20 counts")
+	if got != want {
+		t.Errorf("FormatServicePingMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
 
