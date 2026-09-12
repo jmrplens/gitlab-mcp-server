@@ -1,7 +1,7 @@
 {
   "version": "3.0.0",
   "tools": {
-    "free": 866,
+    "free": 865,
     "premium": 1019,
     "ultimate_self_managed": 1085,
     "gitlab_com": 1091
@@ -13,7 +13,7 @@
   },
   "dynamic": 2,
   "catalog_actions": {
-    "free": 870,
+    "free": 869,
     "self_managed_enterprise": 1089,
     "gitlab_com": 1095
   },

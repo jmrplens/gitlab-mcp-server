@@ -30,7 +30,7 @@
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | By instance tier: ~866 Free/CE; ~1019 Premium; ~1085 Ultimate (self-managed) / ~1091 on GitLab.com Ultimate with Orbit |
+| MCP Tools (individual)    | By instance tier: ~865 Free/CE; ~1019 Premium; ~1085 Ultimate (self-managed) / ~1091 on GitLab.com Ultimate with Orbit |
 | Catalog groups            | By instance tier: 29 Free/CE; 35 Premium; 46 Ultimate                                                       |
 | Meta-mode tools           | 34 base (Free/CE) / 40 Premium / 51 self-managed Ultimate / 52 GitLab.com Ultimate (Orbit); `gitlab_server` is served on every one of them and is counted here |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
@@ -737,7 +737,7 @@ ADRs document key decisions in `docs/development/adr`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (179 `internal/tools` packages; tools by tier: ~866 Free/CE, ~1019 Premium, ~1085 Ultimate self-managed, ~1091 GitLab.com Ultimate) |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (179 `internal/tools` packages; tools by tier: ~865 Free/CE, ~1019 Premium, ~1085 Ultimate self-managed, ~1091 GitLab.com Ultimate) |
 | ADR-0005 | Meta-tool consolidation into a compact domain catalog          | Accepted (refines ADR-0004; its runtime mechanics are superseded by the catalog-first architecture of ADR-0014) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |

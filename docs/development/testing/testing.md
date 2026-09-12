@@ -18,13 +18,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,221 |
-| Unit test functions                                   | 15,330 |
-| E2E test functions                                    |    891 |
-| cmd test functions                                    |  3,163 |
+| Total test functions                                  | 16,255 |
+| Unit test functions                                   | 15,339 |
+| E2E test functions                                    |    916 |
+| cmd test functions                                    |  3,170 |
 | Test files (internal/)                                |    555 |
 | Test files (cmd/)                                     |    221 |
-| Test files (test/e2e/)                                |    290 |
+| Test files (test/e2e/)                                |    312 |
 | Tool sub-packages tested                              |    178 |
 | Core packages tested                                  |     23 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  98.3% |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,466 | 76.9% |
-| `TestFunc` (no underscore)             |    944 |  5.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,811 | 17.3% |
+| `TestFunc_Scenario` (2-part)           | 12,397 | 76.3% |
+| `TestFunc` (no underscore)             |    943 |  5.8% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,915 | 17.9% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,707 |        160 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (178) |          9,094 |        379 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            891 |        290 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          3,163 |        221 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,221** |  **1,066** |                                                                                                 |
+| Tool sub-packages (178) |          9,096 |        379 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |            916 |        312 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| cmd packages            |          3,170 |        221 | server entry point and developer command utilities                                              |
+| **Total**               |     **16,255** |  **1,088** |                                                                                                 |
 
 ### Core Packages
 
@@ -107,7 +107,7 @@
 | groupmembers      |    94 |   100.0% |    10 |
 | pipelineschedules |    94 |    99.0% |    11 |
 | groupmilestones   |    90 |    99.7% |     8 |
-| mrapprovals       |    85 |    99.4% |     7 |
+| mrapprovals       |    86 |    99.4% |     7 |
 | files             |    84 |   100.0% |     8 |
 | integrations      |    79 |    99.5% |    12 |
 
@@ -180,7 +180,7 @@
 | geo                     |        75 |          3 |    98.3% |         8 |
 | gitignoretemplates      |        15 |          1 |   100.0% |         2 |
 | groupanalytics          |         8 |          2 |   100.0% |         3 |
-| groupboards             |        65 |          2 |    99.4% |        10 |
+| groupboards             |        66 |          2 |    99.4% |        10 |
 | groupcredentials        |        43 |          3 |   100.0% |         4 |
 | groupepicboards         |        15 |          3 |    98.4% |         2 |
 | groupimportexport       |        23 |          2 |   100.0% |         3 |
@@ -229,7 +229,7 @@
 | metadata                |         8 |          1 |   100.0% |         1 |
 | milestones              |        71 |          1 |    99.7% |         7 |
 | modelregistry           |         7 |          3 |   100.0% |         1 |
-| mrapprovals             |        85 |          3 |    99.4% |         7 |
+| mrapprovals             |        86 |          3 |    99.4% |         7 |
 | mrapprovalsettings      |         9 |          2 |   100.0% |         4 |
 | mrchanges               |        38 |          1 |    98.4% |         4 |
 | mrcontextcommits        |        23 |          1 |   100.0% |         3 |
@@ -296,7 +296,7 @@
 | wikis                   |        63 |          2 |    99.5% |         6 |
 | workitems               |       116 |          3 |    99.5% |         6 |
 | workitemsavedviews      |        55 |          4 |   100.0% |         7 |
-| **Total**               | **9,094** |    **379** |          | **1,187** |
+| **Total**               | **9,096** |    **379** |          | **1,187** |
 
 </details>
 
@@ -311,7 +311,7 @@
 | cmd/audit_1to1/internal/enums                  |    99.7% |
 | cmd/audit_1to1/internal/merge                  |   100.0% |
 | cmd/audit_1to1/internal/metadata               |   100.0% |
-| cmd/audit_1to1/internal/paths                  |    99.5% |
+| cmd/audit_1to1/internal/paths                  |    98.0% |
 | cmd/audit_1to1/internal/sdk                    |   100.0% |
 | cmd/audit_1to1/internal/shared                 |   100.0% |
 | cmd/audit_1to1/internal/structs                |   100.0% |
@@ -320,7 +320,7 @@
 | cmd/audit_doc_coverage                         |    91.6% |
 | cmd/audit_doc_tool_names                       |    94.2% |
 | cmd/audit_dynamic_aliases                      |    77.4% |
-| cmd/audit_e2e_coverage                         |    95.7% |
+| cmd/audit_e2e_coverage                         |    95.9% |
 | cmd/audit_e2e_gaps                             |    92.9% |
 | cmd/audit_edition_tier                         |    86.9% |
 | cmd/audit_gateway_chars                        |    87.5% |
@@ -366,7 +366,7 @@
 | cmd/internal/provenance                        |   100.0% |
 | cmd/internal/requestinventory                  |   100.0% |
 | cmd/internal/testsource                        |   100.0% |
-| cmd/server                                     |    99.8% |
+| cmd/server                                     |    99.9% |
 
 ### Core Packages
 

@@ -797,7 +797,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1091 tools, one per operation
 - gitlab_group_add_push_rule: Add push rules to a GitLab group.
 - gitlab_group_archive: Archive a GitLab group, making it and its projects read-only in GitLab.
 - gitlab_group_board_create: Create a new group issue board (Premium/Ultimate).
-- gitlab_group_board_delete: Delete a group issue board permanently.
+- gitlab_group_board_delete: Delete a group issue board permanently (Premium/Ultimate).
 - gitlab_group_board_get: Get a single group issue board by ID.
 - gitlab_group_board_list: List all issue boards in a group with pagination.
 - gitlab_group_board_list_create: Create a new list (column) on a group issue board from a group label.
