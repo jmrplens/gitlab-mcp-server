@@ -1019,6 +1019,18 @@ func TestMdTitleLink_NonHTTPDestination_IsNotLinked(t *testing.T) {
 			url:   "https://gitlab.example.com/someone",
 			want:  "[Some One](https://gitlab.example.com/someone)",
 		},
+		{
+			name:  "a title that is the address is written once",
+			title: "wss://kas.example.com",
+			url:   "wss://kas.example.com",
+			want:  "`wss://kas.example.com`",
+		},
+		{
+			name:  "a blank title is written as the address alone",
+			title: "",
+			url:   "/uploads/abc/diagram.png",
+			want:  "`/uploads/abc/diagram.png`",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

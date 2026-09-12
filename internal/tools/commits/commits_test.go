@@ -2140,11 +2140,11 @@ func TestFormatDetailMarkdown(t *testing.T) {
 // TestFormatDetailMarkdown_Minimal pins that a commit with no parents, no
 // stats and a message that repeats its title writes none of the three.
 func TestFormatDetailMarkdown_Minimal(t *testing.T) {
-	got := FormatDetailMarkdown(DetailOutput{ShortID: "x", Title: "t", Message: "t", WebURL: "u"})
+	got := FormatDetailMarkdown(DetailOutput{ShortID: "x", Title: "t", Message: "t", WebURL: "https://gitlab.example.com/c/x"})
 
 	want := "## Commit x\n\n" +
 		"- **Title**: t\n" +
-		"- **URL**: [u](u)\n" +
+		"- **URL**: [https://gitlab.example.com/c/x](https://gitlab.example.com/c/x)\n" +
 		commitDetailHints
 
 	if got != want {

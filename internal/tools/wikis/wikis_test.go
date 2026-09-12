@@ -683,6 +683,11 @@ const (
 // TestFormatAttachmentMarkdownString pins the whole card of an uploaded
 // attachment, the snippet GitLab built for it included: it is meant to be
 // copied into a page verbatim, so it is a code span rather than a live image.
+//
+// The URL GitLab returns for a wiki attachment is a path relative to the
+// wiki, with no host, and it is written as a code span rather than as a
+// link on purpose: only an http or https address is linked, and a link to a
+// bare path pointed a client nowhere in the first place.
 func TestFormatAttachmentMarkdownString(t *testing.T) {
 	got := FormatAttachmentMarkdownString(AttachmentOutput{
 		FileName: "diagram.png",
@@ -696,7 +701,7 @@ func TestFormatAttachmentMarkdownString(t *testing.T) {
 		"- **File Name**: diagram.png\n" +
 		"- **File Path**: uploads/abc/diagram.png\n" +
 		"- **Branch**: main\n" +
-		"- **URL**: [/uploads/abc/diagram.png](/uploads/abc/diagram.png)\n" +
+		"- **URL**: `/uploads/abc/diagram.png`\n" +
 		"- **Markdown**: `![diagram](uploads/abc/diagram.png)`\n" +
 		wikiAttachmentHints
 
@@ -956,12 +961,12 @@ func TestFormatListMarkdown_NonNil(t *testing.T) {
 // TestFormatAttachmentMarkdownString_NoBranch pins that an upload GitLab
 // answered with no branch writes no branch row at all.
 func TestFormatAttachmentMarkdownString_NoBranch(t *testing.T) {
-	got := FormatAttachmentMarkdownString(AttachmentOutput{FileName: "f", FilePath: "p", URL: "u", Markdown: "m"})
+	got := FormatAttachmentMarkdownString(AttachmentOutput{FileName: "f", FilePath: "p", URL: "/uploads/u", Markdown: "m"})
 
 	want := "## Wiki Attachment Uploaded\n\n" +
 		"- **File Name**: f\n" +
 		"- **File Path**: p\n" +
-		"- **URL**: [u](u)\n" +
+		"- **URL**: `/uploads/u`\n" +
 		"- **Markdown**: `m`\n" +
 		wikiAttachmentHints
 

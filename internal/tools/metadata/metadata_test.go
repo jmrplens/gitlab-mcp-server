@@ -69,6 +69,12 @@ const metadataHints = "\n---\n💡 **Next steps:**\n" +
 // TestFormatGetMarkdown verifies the whole card, with the agent server as a
 // nested object: its version is KAS's rather than GitLab's, and a flat list
 // showed the same label twice.
+//
+// The agent server's address is a websocket endpoint, and it is written as a
+// code span rather than as a link on purpose: only an http or https address
+// is linked, since a link's scheme is what decides what a client does on a
+// click, and a wss address is one no browser opens anyway. The reader keeps
+// the address as GitLab sent it.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{
 		Version:    "16.8.0",
@@ -84,7 +90,7 @@ func TestFormatGetMarkdown(t *testing.T) {
 		"- **KAS**:\n" +
 		"  - **Enabled**: ✅\n" +
 		"  - **Version**: 16.8.0-rc1\n" +
-		"  - **External URL**: [wss://kas](wss://kas)\n" +
+		"  - **External URL**: `wss://kas`\n" +
 		metadataHints
 	if got != want {
 		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)

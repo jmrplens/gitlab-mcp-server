@@ -207,14 +207,20 @@ func LinkableDestination(url string) bool {
 // otherwise returns the escaped title. Suitable for table cells. Both halves
 // are escaped, so neither the title nor the URL can end the link they are in,
 // and a destination that is not an http or https address is not linked at
-// all: the title is written as text with the address beside it in a code
-// span, so the reader keeps what GitLab sent and nothing in it is live.
+// all: the address is written in a code span, after the title when the title
+// says something else, so the reader keeps what GitLab sent and nothing in it
+// is live. A websocket endpoint or a wiki attachment's relative path lands
+// here as well as a hostile value, and a code span is the honest rendering of
+// an address a client could not have opened anyway.
 func MdTitleLink(title, url string) string {
 	escaped := EscapeMdTableCell(title)
 	if url == "" {
 		return escaped
 	}
 	if !LinkableDestination(url) {
+		if blank(title) || title == url {
+			return MdCodeSpanCell(url)
+		}
 		return escaped + " " + MdCodeSpanCell(url)
 	}
 	return fmt.Sprintf("[%s](%s)", EscapeMdLinkLabel(escaped), EscapeMdLinkDestination(url))
