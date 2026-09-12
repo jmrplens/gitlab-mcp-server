@@ -310,6 +310,21 @@ func (s *Session) ResourceTemplates() []string { return slices.Clone(s.conn.serv
 // Prompts returns the prompt names the session listed.
 func (s *Session) Prompts() []string { return slices.Clone(s.conn.served.prompts) }
 
+// PromptSpecs returns each served prompt with the arguments it declares, so a
+// sweep can bind the required ones and skip a prompt it cannot satisfy. The
+// slices are copied, so a caller cannot change what the session listed.
+func (s *Session) PromptSpecs() []PromptSpec {
+	specs := make([]PromptSpec, len(s.conn.served.promptSpecs))
+	for i, spec := range s.conn.served.promptSpecs {
+		specs[i] = PromptSpec{
+			Name:     spec.Name,
+			Required: slices.Clone(spec.Required),
+			Optional: slices.Clone(spec.Optional),
+		}
+	}
+	return specs
+}
+
 // Serves reports whether this session can reach the given action at all.
 //
 // It answers from the catalog the server built rather than from the base

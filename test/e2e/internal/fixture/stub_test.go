@@ -38,6 +38,11 @@ type stubObject struct {
 	Name   string
 	Path   string
 	Marked bool
+	// permanentRemoveUnsupported makes the object refuse a permanent-remove
+	// with the message GitLab returns for a top-level group on an instance
+	// with delayed deletion, which can only be marked, never purged, through
+	// the API.
+	permanentRemoveUnsupported bool
 }
 
 // stubGitLab is the in-memory instance one test drives.
@@ -130,6 +135,14 @@ func (s *stubGitLab) addGroup(id int64, name, path string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.groups[id] = &stubObject{ID: id, Name: name, Path: path}
+}
+
+// addTopLevelGroup registers a group whose permanent removal GitLab refuses,
+// as it does for a top-level group on an instance with delayed deletion.
+func (s *stubGitLab) addTopLevelGroup(id int64, name, path string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.groups[id] = &stubObject{ID: id, Name: name, Path: path, permanentRemoveUnsupported: true}
 }
 
 // addUser registers a user with the stub.
@@ -300,6 +313,10 @@ func (s *stubGitLab) object(w http.ResponseWriter, r *http.Request, kind string,
 		obj.Marked = true
 		obj.Path += deletionSuffix + strconv.FormatInt(id, 10)
 		writeJSON(w, http.StatusAccepted, map[string]string{"message": "202 Accepted"})
+		return
+	}
+	if obj.permanentRemoveUnsupported {
+		writeError(w, http.StatusBadRequest, "`permanently_remove` option is only available for subgroups.")
 		return
 	}
 	if !obj.Marked {

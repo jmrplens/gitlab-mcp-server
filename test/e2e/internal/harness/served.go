@@ -47,9 +47,25 @@ type servedSets struct {
 	templates []string
 	// prompts are the prompt names.
 	prompts []string
+	// promptSpecs pairs each served prompt with the arguments it declares, so
+	// a sweep can bind the required ones from the World and skip a prompt it
+	// cannot satisfy rather than watch it error.
+	promptSpecs []PromptSpec
 	// actions are the catalog actions this session can reach, which is not a
 	// listing: it comes from the catalog the assemblers built.
 	actions map[ActionID]struct{}
+}
+
+// PromptSpec is one served prompt and the arguments it declares, split into
+// the ones a call must carry and the ones it may.
+type PromptSpec struct {
+	// Name is the prompt name a prompts/get call names.
+	Name string
+	// Required are the argument names the prompt refuses to render without.
+	Required []string
+	// Optional are the argument names it reads when given and does without
+	// otherwise.
+	Optional []string
 }
 
 // listServed reads the four listings a session publishes.
@@ -83,13 +99,33 @@ func listServed(ctx context.Context, session *mcp.ClientSession) (servedSets, er
 			return served, fmt.Errorf("prompts/list: %w", err)
 		}
 		served.prompts = append(served.prompts, prompt.Name)
+		served.promptSpecs = append(served.promptSpecs, promptSpecOf(prompt))
 	}
 
 	slices.Sort(served.tools)
 	slices.Sort(served.resources)
 	slices.Sort(served.templates)
 	slices.Sort(served.prompts)
+	slices.SortFunc(served.promptSpecs, func(a, b PromptSpec) int { return strings.Compare(a.Name, b.Name) })
 	return served, nil
+}
+
+// promptSpecOf splits a listed prompt's arguments into required and optional.
+func promptSpecOf(prompt *mcp.Prompt) PromptSpec {
+	spec := PromptSpec{Name: prompt.Name}
+	for _, arg := range prompt.Arguments {
+		if arg == nil {
+			continue
+		}
+		if arg.Required {
+			spec.Required = append(spec.Required, arg.Name)
+			continue
+		}
+		spec.Optional = append(spec.Optional, arg.Name)
+	}
+	slices.Sort(spec.Required)
+	slices.Sort(spec.Optional)
+	return spec
 }
 
 // surfaceExpectation is what one configuration should serve: the catalog-backed

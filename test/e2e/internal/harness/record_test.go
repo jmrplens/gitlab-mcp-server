@@ -431,6 +431,43 @@ func TestExpectDispatch_DeclaresTheRouteTheCallWillRun(t *testing.T) {
 	}
 }
 
+// TestAssertDispatch_RewriteFailsAScenarioButNotASweep checks the one
+// exemption the dispatch assertion makes: a scenario call whose server span
+// names another route fails, and a sweep call in the same shape does not.
+//
+// A sweep probes what a session serves with a non-constant id and is credited
+// to the action the server said it ran, so a rewrite under it is credited
+// correctly and asserts nothing false; failing it would only make a broad
+// probe brittle against a rewrite it never claimed anything about.
+func TestAssertDispatch_RewriteFailsAScenarioButNotASweep(t *testing.T) {
+	ran := dispatchRecord{action: "environment.protected_get"}
+
+	cases := []struct {
+		purpose  Purpose
+		wantFail bool
+	}{
+		{purpose: PurposeTest, wantFail: true},
+		{purpose: PurposeSweep, wantFail: false},
+	}
+	for _, testCase := range cases {
+		t.Run(string(testCase.purpose), func(t *testing.T) {
+			reporter := &capturedReporter{}
+			call := &pendingCall{line: &e2ecalls.Call{
+				Action:  "environment.get",
+				Surface: string(SurfaceMeta),
+				Purpose: string(testCase.purpose),
+			}}
+
+			assertDispatch(reporter, call, ran)
+
+			if failed := reporter.count() > 0; failed != testCase.wantFail {
+				t.Errorf("assertDispatch reported %d failures (%q), want a failure = %t",
+					reporter.count(), reporter.reported(), testCase.wantFail)
+			}
+		})
+	}
+}
+
 // TestNewTraceParent_IsAFreshSampledTraceEveryTime checks the value the server
 // reads the trace off.
 //
@@ -628,6 +665,39 @@ func TestSubscriberIndex_RecordsEveryWatcherAndForgetsTheReleasedOne(t *testing.
 	releaseFirst()
 	if watchers := index.recordersFor("gitlab://project/7"); len(watchers) != 0 {
 		t.Errorf("the last watcher was not dropped: %d left", len(watchers))
+	}
+}
+
+// TestRecordSubscribe_CreditsTheSubscribeToItsTest checks that the verb's own
+// record names the resource and the test, since the sending middleware cannot:
+// the SDK opens the subscription on a background context under the current
+// protocol, so the attribution never reaches it.
+func TestRecordSubscribe_CreditsTheSubscribeToItsTest(t *testing.T) {
+	env := newEnv(t, offlineInstance())
+	conn := &sessionConn{
+		label: "dynamic-default-full",
+		inst:  env.inst,
+		cfg:   ServerConfig{Surface: SurfaceDynamic, Mode: ModeDefault, Capabilities: CapabilitiesFull},
+	}
+
+	conn.recordSubscribe(env.recorder, "gitlab://project/7")
+
+	lines := env.recorder.finish(&capturedReporter{}, e2ecalls.StatusPassed)
+	var found *e2ecalls.Call
+	for _, line := range lines {
+		if record, isCall := line.(*e2ecalls.Call); isCall {
+			found = record
+		}
+	}
+	if found == nil {
+		t.Fatalf("recordSubscribe wrote no call line; %d lines written", len(lines))
+	}
+	if found.Method != methodSubscribe || found.Target != "gitlab://project/7" {
+		t.Errorf("subscribe line = method %q target %q, want %q and gitlab://project/7", found.Method, found.Target, methodSubscribe)
+	}
+	if found.Test != env.T.Name() || found.Outcome != e2ecalls.OutcomeOK || found.TestStatus != e2ecalls.StatusPassed {
+		t.Errorf("subscribe line credited test %q outcome %q status %q, want this test, ok, passed",
+			found.Test, found.Outcome, found.TestStatus)
 	}
 }
 

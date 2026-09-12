@@ -152,6 +152,11 @@ func (s *Session) Subscribe(uri string) *Subscription {
 		s.env.T.Fatalf("resources/subscribe %s: %v%s", uri, err, s.conn.failureContext())
 		return nil
 	}
+	// Recorded here rather than by the sending middleware: the SDK's Subscribe
+	// opens the subscription on a background context under protocol 2026-07-28,
+	// so the attribution on subscribeCtx never reaches the middleware and the
+	// subscribe would be credited to no test. See [sessionConn.recordSubscribe].
+	s.conn.recordSubscribe(s.env.recorder, uri)
 	s.env.T.Cleanup(func() {
 		// A background context, because the test's own is cancelled by the
 		// time cleanups run and an unsubscribe that never reached the server

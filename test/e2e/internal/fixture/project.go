@@ -302,6 +302,16 @@ func deletePermanently(ctx context.Context, kind string, id int64, path string, 
 	}
 
 	if removeErr := steps.remove(ctx, path); removeErr != nil && !IsStatus(removeErr, http.StatusNotFound) {
+		if toolutil.ContainsAny(removeErr, "only available for subgroups") {
+			// A top-level group on an instance with delayed deletion cannot be
+			// permanently removed through the API, only marked; the mark step
+			// above already scheduled it, which is as gone as the API allows
+			// and is what the teardown asked for. A subgroup takes the
+			// permanent removal, so this tolerance never hides a real failure
+			// there. GitLab CE 18 with delayed deletion is where this bites,
+			// on the World's own top-level group.
+			return nil
+		}
 		return fmt.Errorf("permanently deleting %s %d (%s): %w", kind, id, path, removeErr)
 	}
 	return nil
