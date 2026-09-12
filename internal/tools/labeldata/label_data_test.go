@@ -64,11 +64,32 @@ func assertGroupListOptions(t *testing.T, group *gl.ListGroupLabelsOptions) {
 }
 
 // TestToMarkdown verifies shared output maps to the markdown formatter model
-// without dropping label counts, priority, or subscription state.
+// without dropping label counts, priority, subscription state or the archive
+// flag, which the view model carried nowhere until the card started showing it.
 func TestToMarkdown(t *testing.T) {
-	got := ToMarkdown(Output{ID: 1, Name: "bug", Color: "#d9534f", Description: "Bug", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1, Priority: 3, PrioritySpecified: true, IsProjectLabel: true, Subscribed: true})
-	if got.ID != 1 || got.Name != "bug" || got.Priority != 3 || !got.PrioritySpecified || !got.IsProjectLabel || !got.Subscribed {
-		t.Fatalf("ToMarkdown() = %+v, want all shared fields", got)
+	in := Output{ID: 1, Name: "bug", Color: "#d9534f", Description: "Bug", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1, Priority: 3, PrioritySpecified: true, IsProjectLabel: true, Subscribed: true, Archived: true}
+
+	got := ToMarkdown(in)
+
+	want := toolutil.LabelMarkdown{
+		ID: 1, Name: "bug", Color: "#d9534f", Description: "Bug",
+		OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1,
+		Priority: 3, PrioritySpecified: true, IsProjectLabel: true, Subscribed: true, Archived: true,
+	}
+	if got != want {
+		t.Fatalf("ToMarkdown() = %+v, want %+v", got, want)
+	}
+}
+
+// TestMarkdownOptionsFor verifies the copy is chosen from the label's own
+// scope: both label packages alias this one output type, so the formatter that
+// wins the registry has to answer for a project label and a group one alike.
+func TestMarkdownOptionsFor(t *testing.T) {
+	if got := MarkdownOptionsFor(Output{IsProjectLabel: true}); got.DetailTitle != ProjectMarkdownOptions.DetailTitle {
+		t.Errorf("MarkdownOptionsFor(project).DetailTitle = %q, want %q", got.DetailTitle, ProjectMarkdownOptions.DetailTitle)
+	}
+	if got := MarkdownOptionsFor(Output{}); got.DetailTitle != GroupMarkdownOptions.DetailTitle {
+		t.Errorf("MarkdownOptionsFor(group).DetailTitle = %q, want %q", got.DetailTitle, GroupMarkdownOptions.DetailTitle)
 	}
 }
 

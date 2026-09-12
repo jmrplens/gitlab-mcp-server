@@ -728,14 +728,24 @@ func TestScheduleAll_ContextCanceled(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown validates that FormatOutputMarkdown produces
-// correct Markdown for moves with and without project/createdAt data.
+// assertMarkdown compares a whole rendered response with what the formatter is
+// meant to write, byte for byte. A substring assertion is what let a card open
+// a table it never filled and still pass, so nothing here asserts a fragment.
+func assertMarkdown(t *testing.T, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("markdown mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+// TestFormatOutputMarkdown validates the whole card FormatOutputMarkdown
+// writes, for a move with a project and a creation time and for one with
+// neither.
 func TestFormatOutputMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    Output
-		wantAll  []string
-		wantNone []string
+		name  string
+		input Output
+		want  string
 	}{
 		{
 			name: "full output with project and created_at",
@@ -751,16 +761,16 @@ func TestFormatOutputMarkdown(t *testing.T) {
 					PathWithNamespace: "group/my-project",
 				},
 			},
-			wantAll: []string{
-				"## Project Storage Move #1",
-				"| ID | 1 |",
-				"| State | finished |",
-				"| Source Storage | default |",
-				"| Destination Storage | storage2 |",
-				"| Created At |",
-				"2026-01-15",
-				"| Project | group/my-project (ID: 42) |",
-			},
+			want: "## Project Storage Move #1\n\n" +
+				"- **ID**: 1\n" +
+				"- **State**: finished\n" +
+				"- **Source**: default\n" +
+				"- **Destination**: storage2\n" +
+				"- **Created**: 15 Jan 2026 10:30 UTC\n" +
+				"- **Project**: group/my-project (ID: 42)\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use action 'storage_move.retrieve_all_project' to see every project storage move on the instance\n" +
+				"- Use action 'storage_move.schedule_project' to schedule another move for this project\n",
 		},
 		{
 			name: "output without project or created_at",
@@ -770,42 +780,31 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				SourceStorageName:      "default",
 				DestinationStorageName: "storage3",
 			},
-			wantAll: []string{
-				"## Project Storage Move #2",
-				"| State | scheduled |",
-			},
-			wantNone: []string{
-				"| Project |",
-				"| Created At |",
-			},
+			want: "## Project Storage Move #2\n\n" +
+				"- **ID**: 2\n" +
+				"- **State**: scheduled\n" +
+				"- **Source**: default\n" +
+				"- **Destination**: storage3\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use action 'storage_move.retrieve_all_project' to see every project storage move on the instance\n" +
+				"- Use action 'storage_move.schedule_project' to schedule another move for this project\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatOutputMarkdown(tt.input)
-			for _, want := range tt.wantAll {
-				if !strings.Contains(got, want) {
-					t.Errorf("output missing %q\ngot:\n%s", want, got)
-				}
-			}
-			for _, absent := range tt.wantNone {
-				if strings.Contains(got, absent) {
-					t.Errorf("output should not contain %q\ngot:\n%s", absent, got)
-				}
-			}
+			assertMarkdown(t, FormatOutputMarkdown(tt.input), tt.want)
 		})
 	}
 }
 
-// TestFormatListMarkdown validates that FormatListMarkdown produces correct
-// Markdown tables for lists with moves, empty lists, and pagination info.
+// TestFormatListMarkdown validates the whole table FormatListMarkdown writes,
+// with moves and pagination, and the one sentence an empty page renders.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    ListOutput
-		wantAll  []string
-		wantNone []string
+		name  string
+		input ListOutput
+		want  string
 	}{
 		{
 			name: "list with moves and pagination",
@@ -829,64 +828,35 @@ func TestFormatListMarkdown(t *testing.T) {
 				},
 				Pagination: toolutil.PaginationOutput{Page: 1},
 			},
-			wantAll: []string{
-				"## Project Storage Moves",
-				"| ID | State | Source | Destination | Project |",
-				"| 1 | finished | default | storage2 | group/my-project |",
-				"| 2 | scheduled | default | storage3 |  |",
-				"_Page 1, 2 moves shown._",
-			},
+			want: "## Project Storage Moves (2)\n\n" +
+				"| ID | State | Source | Destination | Project | Created |\n" +
+				"| --- | --- | --- | --- | --- | --- |\n" +
+				"| 1 | finished | default | storage2 | group/my-project |  |\n" +
+				"| 2 | scheduled | default | storage3 |  |  |\n" +
+				"\nPage 1 | no more pages\n",
 		},
 		{
-			name: "empty list no pagination line",
-			input: ListOutput{
-				Moves: []Output{},
-			},
-			wantAll: []string{
-				"## Project Storage Moves",
-				"| ID | State | Source | Destination | Project |",
-			},
-			wantNone: []string{
-				"_Page",
-			},
+			name:  "empty list renders the one sentence",
+			input: ListOutput{Moves: []Output{}},
+			want:  "No project storage moves found.\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatListMarkdown(tt.input)
-			for _, want := range tt.wantAll {
-				if !strings.Contains(got, want) {
-					t.Errorf("output missing %q\ngot:\n%s", want, got)
-				}
-			}
-			for _, absent := range tt.wantNone {
-				if strings.Contains(got, absent) {
-					t.Errorf("output should not contain %q\ngot:\n%s", absent, got)
-				}
-			}
+			assertMarkdown(t, FormatListMarkdown(tt.input), tt.want)
 		})
 	}
 }
 
-// TestFormatScheduleAllMarkdown validates that FormatScheduleAllMarkdown
-// produces correct Markdown with the confirmation message.
+// TestFormatScheduleAllMarkdown validates the whole card the bulk schedule
+// confirmation writes.
 func TestFormatScheduleAllMarkdown(t *testing.T) {
-	out := ScheduleAllOutput{Message: "All project repository storage moves have been scheduled"}
-	got := FormatScheduleAllMarkdown(out)
-
-	wantAll := []string{
-		"## Schedule All Project Storage Moves",
-		"All project repository storage moves have been scheduled",
-		"gitlab_retrieve_all_project_storage_moves",
-	}
-	for _, want := range wantAll {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(got, want) {
-				t.Errorf("output missing %q\ngot:\n%s", want, got)
-			}
-		})
-	}
+	got := FormatScheduleAllMarkdown(ScheduleAllOutput{Message: "All project repository storage moves have been scheduled"})
+	assertMarkdown(t, got, "## Schedule All Project Storage Moves\n\n"+
+		"- **Result**: All project repository storage moves have been scheduled\n"+
+		"\n---\n💡 **Next steps:**\n"+
+		"- Use action 'storage_move.retrieve_all_project' to watch the scheduled moves progress\n")
 }
 
 // TestProjectStorageMoves_UnreadableCapturedErrorMessage verifies that every

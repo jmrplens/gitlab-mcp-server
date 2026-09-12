@@ -208,27 +208,7 @@ func TestDeleteClientKey_InvalidKeyID(t *testing.T) {
 	}
 }
 
-// TestFormatSettingsMarkdown verifies the SettingsMarkdown Markdown formatter for a representative settings input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatSettingsMarkdown(t *testing.T) {
-	out := SettingsOutput{Active: true, ProjectName: "test", SentryExternalURL: "https://sentry.io", Integrated: false}
-	md := FormatSettingsMarkdown(out)
-	if md == "" {
-		t.Error("expected non-empty markdown")
-	}
-}
-
-// TestFormatListKeysMarkdown verifies the ListKeysMarkdown Markdown formatter for a representative listkeys input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListKeysMarkdown(t *testing.T) {
-	out := ListClientKeysOutput{Keys: []ClientKeyItem{{ID: 1, Active: true, PublicKey: "pk", SentryDsn: "dsn"}}}
-	md := FormatListKeysMarkdown(out)
-	if md == "" {
-		t.Error("expected non-empty markdown")
-	}
-}
+// The Markdown formatters are asserted whole in markdown_test.go.
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
@@ -327,82 +307,4 @@ func TestListClientKeys_WithKeyset(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// FormatKeyMarkdown
-// ---------------------------------------------------------------------------.
-
-// TestFormatKeyMarkdown verifies the KeyMarkdown Markdown formatter for a representative key input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatKeyMarkdown(t *testing.T) {
-	md := FormatKeyMarkdown(ClientKeyItem{ID: 42, Active: true, PublicKey: "pk-123", SentryDsn: "https://dsn.example.com"})
-	for _, want := range []string{
-		"## Error Tracking Client Key",
-		"**ID**: 42",
-		"**Active**: true",
-		"**Public Key**: pk-123",
-		"**Sentry DSN**: https://dsn.example.com",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-}
-
-// TestFormatKeyMarkdown_Inactive verifies the KeyMarkdown_Inactive Markdown formatter for a representative key_inactive input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatKeyMarkdown_Inactive(t *testing.T) {
-	md := FormatKeyMarkdown(ClientKeyItem{ID: 7, Active: false, PublicKey: "pk-xyz", SentryDsn: "dsn2"})
-	if !strings.Contains(md, "**Active**: false") {
-		t.Errorf("expected Active=false in markdown:\n%s", md)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FormatListKeysMarkdown — empty keys branch
-// ---------------------------------------------------------------------------.
-
-// TestFormatListKeysMarkdown_Empty verifies the ListKeysMarkdown_Empty Markdown formatter for a representative listkeys_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListKeysMarkdown_Empty(t *testing.T) {
-	md := FormatListKeysMarkdown(ListClientKeysOutput{Keys: []ClientKeyItem{}})
-	if !strings.Contains(md, "No client keys found") {
-		t.Errorf("expected empty-keys message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
-	}
-}
-
-// TestFormatListKeysMarkdown_NilKeys verifies the ListKeysMarkdown_NilKeys Markdown formatter for a representative listkeys_nilkeys input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListKeysMarkdown_NilKeys(t *testing.T) {
-	md := FormatListKeysMarkdown(ListClientKeysOutput{})
-	if !strings.Contains(md, "No client keys found") {
-		t.Errorf("expected empty-keys message:\n%s", md)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FormatSettingsMarkdown — minimal fields (no ProjectName, no SentryExternalURL)
-// ---------------------------------------------------------------------------.
-
-// TestFormatSettingsMarkdown_MinimalFields verifies the SettingsMarkdown_MinimalFields Markdown formatter for a representative settings_minimalfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatSettingsMarkdown_MinimalFields(t *testing.T) {
-	md := FormatSettingsMarkdown(SettingsOutput{Active: false, Integrated: true})
-	if !strings.Contains(md, "**Active**: false") {
-		t.Errorf("missing Active:\n%s", md)
-	}
-	if strings.Contains(md, "**Project Name**") {
-		t.Error("should not contain Project Name when empty")
-	}
-	if strings.Contains(md, "**Sentry URL**") {
-		t.Error("should not contain Sentry URL when empty")
-	}
-}
+// The Markdown formatters are asserted whole in markdown_test.go.

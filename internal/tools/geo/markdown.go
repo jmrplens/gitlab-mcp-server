@@ -2,103 +2,160 @@ package geo
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown formats a single Geo site as a Markdown table.
+// Canonical catalog action IDs the hints name, the one form every surface
+// resolves.
+const (
+	actionGet        = "geo.get"
+	actionEdit       = "geo.edit"
+	actionRepair     = "geo.repair"
+	actionGetStatus  = "geo.get_status"
+	actionListSites  = "geo.list"
+	actionListStatus = "geo.list_status"
+)
+
+// FormatOutputMarkdown renders one Geo site as a card.
+//
+// A Geo site's name and both URLs are typed by an administrator, and this
+// server's own geo.create and geo.edit set them; GitLab validates that a URL
+// parses, not which characters its path holds. Every value below therefore
+// goes through the card, which escapes each one for the row it writes.
 func FormatOutputMarkdown(o Output) string {
-	var sb strings.Builder
-	// A Geo site's name and both URLs are typed by an administrator, and this
-	// server's own geo.create and geo.edit set them; GitLab validates that a
-	// URL parses, not which characters its path holds.
-	fmt.Fprintf(&sb, "## Geo Site: %s\n\n", toolutil.EscapeMdHeading(o.Name))
-	sb.WriteString(toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, "| ID | %d |\n", o.ID)
-	fmt.Fprintf(&sb, "| Name | %s |\n", toolutil.EscapeMdTableCell(o.Name))
-	fmt.Fprintf(&sb, "| URL | %s |\n", toolutil.EscapeMdTableCell(o.URL))
-	if o.InternalURL != "" {
-		fmt.Fprintf(&sb, "| Internal URL | %s |\n", toolutil.EscapeMdTableCell(o.InternalURL))
-	}
-	fmt.Fprintf(&sb, "| Primary | %t |\n", o.Primary)
-	fmt.Fprintf(&sb, "| Enabled | %t |\n", o.Enabled)
-	fmt.Fprintf(&sb, "| Current | %t |\n", o.Current)
-	fmt.Fprintf(&sb, "| Files Max Capacity | %d |\n", o.FilesMaxCapacity)
-	fmt.Fprintf(&sb, "| Repos Max Capacity | %d |\n", o.ReposMaxCapacity)
-	fmt.Fprintf(&sb, "| Verification Max Capacity | %d |\n", o.VerificationMaxCapacity)
-	fmt.Fprintf(&sb, "| Blob Download Timeout | %ds |\n", o.BlobDownloadTimeout)
-	fmt.Fprintf(&sb, "| Checksum Mismatch Report Threshold | %d |\n", o.ChecksumMismatchReportThreshold)
-	fmt.Fprintf(&sb, "| Checksum Mismatch Self-Heal Cooldown | %d min |\n", o.ChecksumMismatchSelfHealCooldownMinutes)
-	fmt.Fprintf(&sb, "| Sync Object Storage | %t |\n", o.SyncObjectStorage)
-	if o.SelectiveSyncType != "" {
-		//gitlab:allow-unescaped o.SelectiveSyncType: one of the two values GitLab validates this field against, namespaces or shards.
-		fmt.Fprintf(&sb, "| Selective Sync Type | %s |\n", o.SelectiveSyncType)
-	}
-	if o.WebEditURL != "" {
-		fmt.Fprintf(&sb, "| Web Edit URL | %s |\n", toolutil.MdTitleLink("Edit", o.WebEditURL))
-	}
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Geo Site: "+o.Name)
+	c.Int("ID", o.ID)
+	c.Field("Name", o.Name)
+	c.URL(o.URL)
+	c.Link("Internal URL", "", o.InternalURL)
+	c.Bool("Primary", o.Primary)
+	c.Bool("Enabled", o.Enabled)
+	c.Bool("Current", o.Current)
+	c.Int("Files Max Capacity", o.FilesMaxCapacity)
+	c.Int("Repos Max Capacity", o.ReposMaxCapacity)
+	c.Int("Verification Max Capacity", o.VerificationMaxCapacity)
+	c.Field("Blob Download Timeout", secondsValue(o.BlobDownloadTimeout))
+	c.Int("Checksum Mismatch Report Threshold", o.ChecksumMismatchReportThreshold)
+	c.Field("Checksum Mismatch Self-Heal Cooldown", strconv.FormatInt(o.ChecksumMismatchSelfHealCooldownMinutes, 10)+" min")
+	c.Bool("Sync Object Storage", o.SyncObjectStorage)
+	c.Field("Selective Sync Type", o.SelectiveSyncType)
+	// The scope the selective sync applies to. Without it the type alone says
+	// that the site syncs a subset and never which subset.
+	c.Field("Selective Sync Shards", strings.Join(o.SelectiveSyncShards, ", "))
+	c.Field("Selective Sync Namespace IDs", joinIDs(o.SelectiveSyncNamespaceIDs))
+	c.Link("Web Edit URL", "", o.WebEditURL)
+	c.Link("Replication Details", "", o.WebGeoReplicationDetailsURL)
+	c.End(
+		toolutil.HintAction(actionGetStatus, "read this site's replication status"),
+		toolutil.HintAction(actionEdit, "change this site's capacities or selective sync"),
+		toolutil.HintAction(actionListSites, "see every Geo site on the instance"),
+	)
+	return b.String()
 }
 
-// FormatListMarkdown formats a list of Geo sites as a Markdown table.
+// FormatListMarkdown renders a page of Geo sites as a Markdown table: a
+// collection of objects that share columns.
 func FormatListMarkdown(o ListOutput) string {
-	var sb strings.Builder
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	sb.WriteString("## Geo Sites\n\n")
-	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "URL", "Primary", "Enabled"))
+	if len(o.Sites) == 0 {
+		return toolutil.EmptyMessage("Geo sites")
+	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Geo Sites", len(o.Sites), o.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "URL", "Primary", "Enabled"))
 	for _, s := range o.Sites {
-		fmt.Fprintf(&sb, "| %d | %s | %s | %t | %t |\n",
-			s.ID, toolutil.EscapeMdTableCell(s.Name), toolutil.EscapeMdTableCell(s.URL), s.Primary, s.Enabled)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(s.ID, 10),
+			toolutil.EscapeMdTableCell(s.Name),
+			toolutil.MdTitleLink(s.URL, s.URL),
+			toolutil.BoolEmoji(s.Primary),
+			toolutil.BoolEmoji(s.Enabled),
+		))
 	}
-	if o.Pagination.Page != 0 {
-		fmt.Fprintf(&sb, "\n_Page %d, %d sites shown._\n", o.Pagination.Page, len(o.Sites))
-	}
-	return sb.String()
+	toolutil.WriteListFooter(&b, o.Pagination, true,
+		toolutil.HintAction(actionGet, "read one site in full"),
+		toolutil.HintAction(actionListStatus, "see the replication status of every site"),
+	)
+	return b.String()
 }
 
-// FormatStatusMarkdown formats a single Geo site status as a Markdown table.
+// FormatStatusMarkdown renders one Geo site's replication status as a card.
 func FormatStatusMarkdown(o StatusOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Geo Site Status (Node ID: %d)\n\n", o.GeoNodeID)
-	sb.WriteString(toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, "| Healthy | %t |\n", o.Healthy)
-	//gitlab:allow-unescaped o.HealthStatus: the state GitLab derives from the health check, Healthy or Unhealthy, never the message itself.
-	fmt.Fprintf(&sb, "| Health Status | %s |\n", o.HealthStatus)
-	if o.Health != "" {
-		// This is the health check's own output, which GitLab's troubleshooting
-		// docs say carries the exception message, so an unhealthy secondary
-		// alone puts a newline in this cell.
-		fmt.Fprintf(&sb, "| Health | %s |\n", toolutil.EscapeMdTableCell(o.Health))
-	}
-	fmt.Fprintf(&sb, "| DB Replication Lag | %ds |\n", o.DBReplicationLagSeconds)
-	fmt.Fprintf(&sb, "| Missing OAuth App | %t |\n", o.MissingOAuthApplication)
-	fmt.Fprintf(&sb, "| Projects Count | %d |\n", o.ProjectsCount)
-	fmt.Fprintf(&sb, "| Repositories Count | %d |\n", o.RepositoriesCount)
-	if len(o.Replicables) > 0 {
-		fmt.Fprintf(&sb, "| Replicables Tracked | %d |\n", len(o.Replicables))
-	}
-	if len(o.StorageShards) > 0 {
-		fmt.Fprintf(&sb, "| Storage Shards | %s |\n", toolutil.EscapeMdTableCell(storageShardNames(o.StorageShards)))
-	}
-	//gitlab:allow-unescaped o.LFSObjectsSyncedInPercentage: a percentage GitLab formatted for display, of the shape "100.00%".
-	fmt.Fprintf(&sb, "| LFS Synced | %s |\n", o.LFSObjectsSyncedInPercentage)
-	//gitlab:allow-unescaped o.JobArtifactsSyncedInPercentage: a percentage GitLab formatted for display, of the shape "100.00%".
-	fmt.Fprintf(&sb, "| Job Artifacts Synced | %s |\n", o.JobArtifactsSyncedInPercentage)
-	//gitlab:allow-unescaped o.UploadsSyncedInPercentage: a percentage GitLab formatted for display, of the shape "100.00%".
-	fmt.Fprintf(&sb, "| Uploads Synced | %s |\n", o.UploadsSyncedInPercentage)
-	//gitlab:allow-unescaped o.Version: the GitLab version the site runs, compiled into that instance rather than typed by anyone.
-	fmt.Fprintf(&sb, "| Version | %s |\n", o.Version)
-	//gitlab:allow-unescaped o.Revision: the short Git revision of the site's build, hexadecimal digits.
-	fmt.Fprintf(&sb, "| Revision | %s |\n", o.Revision)
-	fmt.Fprintf(&sb, "| Storage Shards Match | %t |\n", o.StorageShardsMatch)
-	if !o.UpdatedAt.IsZero() {
-		fmt.Fprintf(&sb, "| Updated At | %s |\n", o.UpdatedAt.Format("2006-01-02 15:04:05"))
-	}
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, fmt.Sprintf("Geo Site Status (Node ID: %d)", o.GeoNodeID))
+	c.Bool("Healthy", o.Healthy)
+	c.Field("Health Status", o.HealthStatus)
+	// This is the health check's own output, which GitLab's troubleshooting
+	// docs say carries the exception message, so an unhealthy secondary alone
+	// puts a newline in it; Text quotes a body that has one.
+	c.Text("Health", o.Health)
+	c.Field("DB Replication Lag", secondsValue(o.DBReplicationLagSeconds))
+	c.Warn("Missing OAuth Application", o.MissingOAuthApplication)
+	c.Int("Projects Count", o.ProjectsCount)
+	c.Int("Repositories Count", o.RepositoriesCount)
+	c.Count("Replicables Tracked", int64(len(o.Replicables)))
+	c.Field("Storage Shards", storageShardNames(o.StorageShards))
+	c.Field("LFS Synced", o.LFSObjectsSyncedInPercentage)
+	c.Field("Job Artifacts Synced", o.JobArtifactsSyncedInPercentage)
+	c.Field("Uploads Synced", o.UploadsSyncedInPercentage)
+	c.Field("Version", o.Version)
+	c.Field("Revision", o.Revision)
+	c.Bool("Storage Shards Match", o.StorageShardsMatch)
+	c.Time("Updated", toolutil.RFC3339(o.UpdatedAt))
+	c.End(
+		toolutil.HintAction(actionGet, "read the site this status belongs to"),
+		toolutil.HintAction(actionRepair, "repair the site's OAuth application"),
+	)
+	return b.String()
 }
 
-// storageShardNames joins the shard names for the one cell that reports them,
+// FormatListStatusMarkdown renders a page of Geo site statuses as a Markdown
+// table.
+func FormatListStatusMarkdown(o ListStatusOutput) string {
+	if len(o.Statuses) == 0 {
+		return toolutil.EmptyMessage("Geo site statuses")
+	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Geo Site Statuses", len(o.Statuses), o.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Node ID", "Healthy", "Health Status", "DB Lag (s)", "Projects", "Version"))
+	for _, s := range o.Statuses {
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(s.GeoNodeID, 10),
+			toolutil.BoolEmoji(s.Healthy),
+			toolutil.EscapeMdTableCell(s.HealthStatus),
+			strconv.FormatInt(s.DBReplicationLagSeconds, 10),
+			strconv.FormatInt(s.ProjectsCount, 10),
+			toolutil.EscapeMdTableCell(s.Version),
+		))
+	}
+	toolutil.WriteListFooter(&b, o.Pagination, false,
+		toolutil.HintAction(actionGetStatus, "read one site's status in full"),
+	)
+	return b.String()
+}
+
+// secondsValue renders a duration GitLab counts in whole seconds.
+func secondsValue(seconds int64) string {
+	return strconv.FormatInt(seconds, 10) + "s"
+}
+
+// joinIDs renders a list of numeric IDs as one comma-separated value, for the
+// selective-sync scope that is a set of namespace IDs.
+func joinIDs(ids []int64) string {
+	if len(ids) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(ids))
+	for _, id := range ids {
+		parts = append(parts, strconv.FormatInt(id, 10))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// storageShardNames joins the shard names for the one row that reports them,
 // the whole shard object being a name and nothing else.
 func storageShardNames(shards []StorageShard) string {
 	names := make([]string, 0, len(shards))
@@ -106,24 +163,6 @@ func storageShardNames(shards []StorageShard) string {
 		names = append(names, shard.Name)
 	}
 	return strings.Join(names, ", ")
-}
-
-// FormatListStatusMarkdown formats a list of Geo site statuses as a Markdown table.
-func FormatListStatusMarkdown(o ListStatusOutput) string {
-	var sb strings.Builder
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	sb.WriteString("## Geo Site Statuses\n\n")
-	sb.WriteString(toolutil.MarkdownTableHeader("Node ID", "Healthy", "Health Status", "DB Lag (s)", "Projects", "Version"))
-	for _, s := range o.Statuses {
-		fmt.Fprintf(&sb, "| %d | %t | %s | %d | %d | %s |\n",
-			//gitlab:allow-unescaped s.HealthStatus: the state GitLab derives from the health check, Healthy or Unhealthy, never the message itself.
-			//gitlab:allow-unescaped s.Version: the GitLab version the site runs, compiled into that instance rather than typed by anyone.
-			s.GeoNodeID, s.Healthy, s.HealthStatus, s.DBReplicationLagSeconds, s.ProjectsCount, s.Version)
-	}
-	if o.Pagination.Page != 0 {
-		fmt.Fprintf(&sb, "\n_Page %d, %d statuses shown._\n", o.Pagination.Page, len(o.Statuses))
-	}
-	return sb.String()
 }
 
 func init() {

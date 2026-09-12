@@ -4,6 +4,7 @@
 package license
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -145,22 +146,82 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatLicenseMarkdown verifies FormatLicenseMarkdown.
+// licenseHints is the guidance section every license card ends with.
+const licenseHints = "\n---\n💡 **Next steps:**\n" +
+	"- Check license expiry date and plan for renewal if needed\n"
+
+// markdownText returns the one text block a formatter's result carries.
+func markdownText(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
+	if len(result.Content) == 0 {
+		t.Fatal("the formatter returned no content at all")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] is %T, want *mcp.TextContent", result.Content[0])
+	}
+	return text.Text
+}
+
+// TestFormatLicenseMarkdown verifies the whole card of a valid license: the
+// licensee is a nested object rather than a "%s (%s) - %s" line, and a license
+// that has not expired carries no warning row.
 func TestFormatLicenseMarkdown(t *testing.T) {
-	result := FormatLicenseMarkdown(Item{
+	got := markdownText(t, FormatLicenseMarkdown(Item{
 		ID:          1,
 		Plan:        "premium",
 		ActiveUsers: 42,
 		UserLimit:   100,
 		Expired:     false,
 		Licensee:    LicenseeItem{Name: "John", Company: "Acme", Email: "john@acme.com"},
-	})
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "premium") {
-		t.Errorf("expected premium in output, got: %s", text)
+	}))
+	want := "## License #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Plan**: premium\n" +
+		"- **Active Users**: 42\n" +
+		"- **User Limit**: 100\n" +
+		"- **Maximum User Count**: 0\n" +
+		"- **Historical Max**: 0\n" +
+		"- **Overage**: 0\n" +
+		"- **Licensee**:\n" +
+		"  - **Name**: John\n" +
+		"  - **Company**: Acme\n" +
+		"  - **Email**: john@acme.com\n" +
+		licenseHints
+	if got != want {
+		t.Errorf("FormatLicenseMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
-	if !strings.Contains(text, "John") {
-		t.Errorf("expected John in output, got: %s", text)
+}
+
+// TestFormatLicenseMarkdown_AddOns verifies that the add-on seats reach the
+// card, which used to publish them in its JSON and drop them from the Markdown
+// entirely, and that an add-on with no seats is left out rather than shown as
+// licensed for zero.
+func TestFormatLicenseMarkdown_AddOns(t *testing.T) {
+	got := markdownText(t, FormatLicenseMarkdown(Item{
+		ID:   1,
+		Plan: "ultimate",
+		AddOns: AddOnsItem{
+			GitLabAuditorUser: 1,
+			GitLabFileLocks:   2,
+			GitLabServiceDesk: 3,
+		},
+	}))
+	want := "## License #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Plan**: ultimate\n" +
+		"- **Active Users**: 0\n" +
+		"- **User Limit**: 0\n" +
+		"- **Maximum User Count**: 0\n" +
+		"- **Historical Max**: 0\n" +
+		"- **Overage**: 0\n" +
+		"- **Add-ons**:\n" +
+		"  - **Auditor User**: 1\n" +
+		"  - **File Locks**: 2\n" +
+		"  - **Service Desk**: 3\n" +
+		licenseHints
+	if got != want {
+		t.Errorf("FormatLicenseMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -201,14 +262,26 @@ func TestFormatLicenseMarkdown_WithDates(t *testing.T) {
 		Expired:          true,
 		Licensee:         LicenseeItem{Name: "Jane", Company: "Corp", Email: "jane@corp.com"},
 	}
-	result := FormatLicenseMarkdown(item)
-	text := result.Content[0].(*mcp.TextContent).Text
-	for _, want := range []string{"ultimate", "1 Jan 2026", "31 Dec 2026", "Jane", "Corp", "true"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(text, want) {
-				t.Errorf("missing %q in markdown", want)
-			}
-		})
+	got := markdownText(t, FormatLicenseMarkdown(item))
+	want := "## License #2\n\n" +
+		"- **ID**: 2\n" +
+		"- **Plan**: ultimate\n" +
+		"- ⚠️ **Expired**\n" +
+		"- **Active Users**: 100\n" +
+		"- **User Limit**: 200\n" +
+		"- **Maximum User Count**: 150\n" +
+		"- **Historical Max**: 120\n" +
+		"- **Overage**: 5\n" +
+		"- **Starts At**: 1 Jan 2026\n" +
+		"- **Expires At**: 31 Dec 2026\n" +
+		"- **Created At**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Licensee**:\n" +
+		"  - **Name**: Jane\n" +
+		"  - **Company**: Corp\n" +
+		"  - **Email**: jane@corp.com\n" +
+		licenseHints
+	if got != want {
+		t.Errorf("FormatLicenseMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -216,23 +289,76 @@ func TestFormatLicenseMarkdown_WithDates(t *testing.T) {
 // FormatGetMarkdown / FormatAddMarkdown — wrappers
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_Coverage verifies FormatGetMarkdown when coverage.
+// licenseCard renders the card a license with an id, a plan and a licensee
+// produces, so the two wrapper tests state the whole answer.
+func licenseCard(id int64, plan, name, company, email string) string {
+	return fmt.Sprintf("## License #%d\n\n- **ID**: %d\n", id, id) +
+		"- **Plan**: " + plan + "\n" +
+		"- **Active Users**: 0\n" +
+		"- **User Limit**: 0\n" +
+		"- **Maximum User Count**: 0\n" +
+		"- **Historical Max**: 0\n" +
+		"- **Overage**: 0\n" +
+		"- **Licensee**:\n" +
+		"  - **Name**: " + name + "\n" +
+		"  - **Company**: " + company + "\n" +
+		"  - **Email**: " + email + "\n" +
+		licenseHints
+}
+
+// TestFormatGetMarkdown_Coverage verifies the read wrapper renders the card of
+// the license it was handed.
 func TestFormatGetMarkdown_Coverage(t *testing.T) {
 	out := GetOutput{License: Item{ID: 1, Plan: "premium", Licensee: LicenseeItem{Name: "A", Company: "B", Email: "c@d.com"}}}
-	result := FormatGetMarkdown(out)
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "premium") {
-		t.Error("missing plan in output")
+	got := markdownText(t, FormatGetMarkdown(out))
+	want := licenseCard(1, "premium", "A", "B", "c@d.com")
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatAddMarkdown_Coverage verifies FormatAddMarkdown when coverage.
+// TestFormatAddMarkdown_Coverage verifies the install wrapper renders the card
+// of the license GitLab answered with.
 func TestFormatAddMarkdown_Coverage(t *testing.T) {
 	out := AddOutput{License: Item{ID: 3, Plan: "gold", Licensee: LicenseeItem{Name: "X", Company: "Y", Email: "x@y.com"}}}
-	result := FormatAddMarkdown(out)
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "gold") {
-		t.Error("missing plan in output")
+	got := markdownText(t, FormatAddMarkdown(out))
+	want := licenseCard(3, "gold", "X", "Y", "x@y.com")
+	if got != want {
+		t.Errorf("FormatAddMarkdown() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestGet_NoLicenseInstalled verifies that an answer carrying no license is an
+// error naming what happened rather than a card reading "License #0" with a
+// blank plan, which is what a zero Item rendered as. GitLab answers this way
+// on an instance with none installed, and reading the fields off the nil
+// pointer would crash the handler.
+func TestGet_NoLicenseInstalled(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `null`)
+	}))
+	_, err := Get(t.Context(), client, GetInput{})
+	if err == nil {
+		t.Fatal("Get() with no license installed returned no error")
+	}
+	if !strings.Contains(err.Error(), "this instance has none installed") {
+		t.Errorf("Get() error = %v, want it to say no license is installed", err)
+	}
+}
+
+// TestAdd_NoLicenseReturned verifies the same guard on the install path: an
+// accepted request that answers with no license is reported rather than
+// dereferenced.
+func TestAdd_NoLicenseReturned(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `null`)
+	}))
+	_, err := Add(t.Context(), client, AddInput{License: "base64encodedlicense"})
+	if err == nil {
+		t.Fatal("Add() with no license in the answer returned no error")
+	}
+	if !strings.Contains(err.Error(), "this instance has none installed") {
+		t.Errorf("Add() error = %v, want it to say no license is installed", err)
 	}
 }
 

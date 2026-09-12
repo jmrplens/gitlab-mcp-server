@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const sampleEmojiNode = `{
@@ -622,82 +621,4 @@ func TestDelete_ServerError(t *testing.T) {
 	}
 }
 
-// Markdown formatter tests.
-
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No custom emoji found") {
-		t.Error("empty output should contain 'No custom emoji found'")
-	}
-}
-
-// TestFormatListMarkdown_WithEmoji verifies the ListMarkdown_WithEmoji Markdown formatter for a representative list_withemoji input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown_WithEmoji(t *testing.T) {
-	out := ListOutput{
-		Emoji: []Item{
-			{
-				ID:        "gid://gitlab/CustomEmoji/1",
-				Name:      "party_parrot",
-				URL:       "https://example.com/party_parrot.gif",
-				External:  false,
-				CreatedAt: "2026-06-01T10:00:00Z",
-			},
-			{
-				ID:        "gid://gitlab/CustomEmoji/2",
-				Name:      "shipit",
-				URL:       "https://example.com/shipit.png",
-				External:  true,
-				CreatedAt: "2026-06-15T14:30:00Z",
-			},
-		},
-		Pagination: toolutil.GraphQLPaginationOutput{HasNextPage: false},
-	}
-
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, ":party_parrot:") {
-		t.Error("should contain ':party_parrot:'")
-	}
-	if !strings.Contains(md, ":shipit:") {
-		t.Error("should contain ':shipit:'")
-	}
-	if !strings.Contains(md, "Yes") {
-		t.Error("should contain 'Yes' for external emoji")
-	}
-	if !strings.Contains(md, "2026-06-01") {
-		t.Error("should contain created date")
-	}
-}
-
-// TestFormatCreateMarkdown verifies the CreateMarkdown Markdown formatter for a representative create input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatCreateMarkdown(t *testing.T) {
-	out := CreateOutput{
-		Emoji: Item{
-			ID:        "gid://gitlab/CustomEmoji/1",
-			Name:      "party_parrot",
-			URL:       "https://example.com/party_parrot.gif",
-			External:  false,
-			CreatedAt: "2026-06-01T10:00:00Z",
-		},
-	}
-
-	md := FormatCreateMarkdown(out)
-	if !strings.Contains(md, "Custom emoji created") {
-		t.Error("should contain success message")
-	}
-	if !strings.Contains(md, "party_parrot") {
-		t.Error("should contain emoji name")
-	}
-	if !strings.Contains(md, "gid://gitlab/CustomEmoji/1") {
-		t.Error("should contain emoji ID")
-	}
-	if !strings.Contains(md, "https://example.com/party_parrot.gif") {
-		t.Error("should contain emoji URL")
-	}
-}
+// The Markdown formatters are asserted whole in markdown_test.go.

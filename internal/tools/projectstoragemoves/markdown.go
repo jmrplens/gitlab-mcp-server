@@ -1,68 +1,62 @@
 package projectstoragemoves
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown formats a single project storage move as Markdown.
+// Canonical catalog action IDs the hints name. The catalog domain is
+// storage_move, the group all three storage-move packages register under, which
+// is not this package's name.
+const (
+	hintActionRetrieveAll = "storage_move.retrieve_all_project"
+	hintActionSchedule    = "storage_move.schedule_project"
+)
+
+// FormatOutputMarkdown renders one project storage move as a card, through the
+// renderer the group and snippet storage-move packages already share.
+//
+// It used to keep a hand copy of that renderer, which opened a "| Field |
+// Value |" table, printed the creation time in a zone-less layout no other
+// formatter uses, and wrote the project as escaped text where the shared cell
+// builds a link.
 func FormatOutputMarkdown(o Output) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Project Storage Move #%d\n\n", o.ID)
-	sb.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| ID | %d |\n", o.ID)
-	//gitlab:allow-unescaped o.State: a storage move state GitLab picks from a fixed set (initial, scheduled, started, finished, failed and the rest).
-	fmt.Fprintf(&sb, "| State | %s |\n", o.State)
-	// A storage shard name is an identifier the instance operator chooses in
-	// gitlab.rb, so it is not a set this server can know.
-	fmt.Fprintf(&sb, "| Source Storage | %s |\n", toolutil.EscapeMdTableCell(o.SourceStorageName))
-	fmt.Fprintf(&sb, "| Destination Storage | %s |\n", toolutil.EscapeMdTableCell(o.DestinationStorageName))
-	if !o.CreatedAt.IsZero() {
-		fmt.Fprintf(&sb, "| Created At | %s |\n", o.CreatedAt.Format("2006-01-02 15:04:05"))
-	}
-	if o.Project != nil {
-		fmt.Fprintf(&sb, "| Project | %s (ID: %d) |\n", toolutil.EscapeMdTableCell(o.Project.PathWithNamespace), o.Project.ID)
-	}
-	toolutil.WriteHints(
-		&sb,
-		"Use `gitlab_retrieve_all_project_storage_moves` to view all moves",
+	return toolutil.FormatStorageMoveDetailMarkdown(
+		storageMoveMarkdown(o), "Project Storage Move",
+		toolutil.HintAction(hintActionRetrieveAll, "see every project storage move on the instance"),
+		toolutil.HintAction(hintActionSchedule, "schedule another move for this project"),
 	)
-	return sb.String()
 }
 
-// FormatListMarkdown formats a list of project storage moves as Markdown.
+// FormatListMarkdown renders a page of project storage moves as the shared
+// table: a collection of objects that share columns.
 func FormatListMarkdown(o ListOutput) string {
-	var sb strings.Builder
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	sb.WriteString("## Project Storage Moves\n\n")
-	sb.WriteString("| ID | State | Source | Destination | Project |\n|---|---|---|---|---|\n")
-	for _, m := range o.Moves {
-		project := ""
-		if m.Project != nil {
-			project = m.Project.PathWithNamespace
-		}
-		//gitlab:allow-unescaped m.State: a storage move state GitLab picks from a fixed set (initial, scheduled, started, finished, failed and the rest).
-		fmt.Fprintf(&sb, "| %d | %s | %s | %s | %s |\n",
-			m.ID, m.State, toolutil.EscapeMdTableCell(m.SourceStorageName),
-			toolutil.EscapeMdTableCell(m.DestinationStorageName), toolutil.EscapeMdTableCell(project))
-	}
-	if o.Pagination.Page != 0 {
-		fmt.Fprintf(&sb, "\n_Page %d, %d moves shown._\n", o.Pagination.Page, len(o.Moves))
-	}
-	return sb.String()
+	return toolutil.FormatStorageMoveCollectionMarkdown(o.Moves, o.Pagination, storageMoveMarkdown,
+		"Project Storage Moves", toolutil.EmptyMessage("project storage moves"), "Project")
 }
 
-// FormatScheduleAllMarkdown formats the schedule-all result as Markdown.
+// FormatScheduleAllMarkdown renders the bulk schedule confirmation as a card.
 func FormatScheduleAllMarkdown(o ScheduleAllOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Schedule All Project Storage Moves\n\n%s\n", o.Message)
-	toolutil.WriteHints(
-		&sb,
-		"Use `gitlab_retrieve_all_project_storage_moves` to monitor progress",
-	)
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Schedule All Project Storage Moves")
+	c.Field("Result", o.Message)
+	c.End(toolutil.HintAction(hintActionRetrieveAll, "watch the scheduled moves progress"))
+	return b.String()
+}
+
+// storageMoveMarkdown maps one move onto the shared view model.
+func storageMoveMarkdown(o Output) toolutil.StorageMoveMarkdown {
+	return toolutil.NewStorageMoveMarkdown(o.ID, o.State, o.SourceStorageName, o.DestinationStorageName, o.CreatedAt, projectStorageMoveEntity(o.Project))
+}
+
+// projectStorageMoveEntity names the moved project. ProjectOutput carries no
+// web URL, so the entity links to nothing and renders as its escaped path.
+func projectStorageMoveEntity(project *ProjectOutput) *toolutil.StorageMoveEntityMarkdown {
+	if project == nil {
+		return nil
+	}
+	return toolutil.NewStorageMoveEntityMarkdown("Project", project.PathWithNamespace, "", project.ID)
 }
 
 func init() {

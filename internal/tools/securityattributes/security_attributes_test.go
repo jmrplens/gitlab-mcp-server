@@ -816,75 +816,139 @@ func TestBulkUpdateSecurityAttributes_ValidatesOptions(t *testing.T) {
 	}
 }
 
-// TestMarkdown_EscapesTableCells_PreservesLinkHint verifies security attribute
-// markdown escapes table separators and preserves link guidance.
-//
-// The test renders values containing pipe characters through create and detail
-// formatters, then asserts escaped cells, editable-state output, and the
-// preserve-link hint used by catalog responses.
-func TestMarkdown_EscapesTableCells_PreservesLinkHint(t *testing.T) {
-	attribute := Output{
-		ID:               9,
-		Name:             "High | Risk",
-		Color:            "#FF|0000",
-		Description:      "Needs | review",
-		EditableState:    "EDITABLE",
-		SecurityCategory: &CategorySummary{Name: "Business | Impact"},
-	}
-	createMarkdown := FormatCreateMarkdown(CreateOutput{Attributes: []Output{attribute}})
-	if !strings.Contains(createMarkdown, "High &#124; Risk") || !strings.Contains(createMarkdown, "#FF&#124;0000") || !strings.Contains(createMarkdown, "Business &#124; Impact") {
-		t.Fatalf("FormatCreateMarkdown() did not escape table cells:\n%s", createMarkdown)
-	}
-	if !strings.Contains(createMarkdown, "clickable [text](url) links") {
-		t.Fatalf("FormatCreateMarkdown() missing preserve-link hint:\n%s", createMarkdown)
-	}
+// testAttribute is the attribute the Markdown tests render. Every
+// GitLab-authored value carries a pipe, so a comparison of the whole render
+// pins the escaping as well as the layout.
+var testAttribute = Output{
+	ID:            9,
+	Name:          "High | Risk",
+	Color:         "#FF|0000",
+	Description:   "Needs | review",
+	EditableState: "EDITABLE",
+	SecurityCategory: &CategorySummary{
+		ID:                3,
+		Name:              "Business | Impact",
+		MultipleSelection: true,
+		EditableState:     "EDITABLE",
+		TemplateType:      "CUSTOM",
+	},
+}
 
-	outputMarkdown := FormatOutputMarkdown(attribute)
-	for _, want := range []string{"#FF&#124;0000", "Needs &#124; review", "| Editable state | `EDITABLE` |"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(outputMarkdown, want) {
-				t.Fatalf("FormatOutputMarkdown() missing %q:\n%s", want, outputMarkdown)
-			}
-		})
+// TestFormatOutputMarkdown_RendersTheCard verifies that one security attribute
+// renders as a card: one list item per field, the category as a nested object
+// under its own label, and every GitLab-authored value escaped. The whole
+// render is compared, since a substring assertion passes on a row that landed
+// outside the block it was meant for.
+func TestFormatOutputMarkdown_RendersTheCard(t *testing.T) {
+	want := "## Security Attribute: High | Risk\n\n" +
+		"- **ID**: 9\n" +
+		"- **Name**: High &#124; Risk\n" +
+		"- **Color**: `#FF|0000`\n" +
+		"- **Description**: Needs &#124; review\n" +
+		"- **Editable state**: `EDITABLE`\n" +
+		"- **Category**:\n" +
+		"  - **ID**: 3\n" +
+		"  - **Name**: Business &#124; Impact\n" +
+		"  - **Multiple selection**: ✅\n" +
+		"  - **Editable state**: `EDITABLE`\n" +
+		"  - **Template type**: `CUSTOM`\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'security_attribute.update' to rename, re-describe or recolor this attribute\n" +
+		"- Use action 'security_attribute.project_update' to apply this attribute to a project\n" +
+		"- Use action 'security_attribute.bulk_update' to apply it to many groups or projects at once\n"
+
+	if got := FormatOutputMarkdown(testAttribute); got != want {
+		t.Errorf("FormatOutputMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatCreateMarkdown_Empty verifies that FormatCreateMarkdown reports an
-// empty creation response clearly.
-//
-// The test passes a zero-value CreateOutput and expects the fallback message
-// rather than an empty table, which keeps generated tool output understandable.
+// TestFormatOutputMarkdown_LockedAttributeIsNotOfferedAnEdit verifies that a
+// template-provided attribute is not offered a call GitLab refuses.
+func TestFormatOutputMarkdown_LockedAttributeIsNotOfferedAnEdit(t *testing.T) {
+	md := FormatOutputMarkdown(Output{ID: 9, Name: "High", EditableState: "LOCKED"})
+
+	want := "## Security Attribute: High\n\n" +
+		"- **ID**: 9\n" +
+		"- **Name**: High\n" +
+		"- **Editable state**: `LOCKED`\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'security_attribute.project_update' to apply this attribute to a project\n" +
+		"- Use action 'security_attribute.bulk_update' to apply it to many groups or projects at once\n"
+
+	if md != want {
+		t.Errorf("FormatOutputMarkdown() =\n%s\nwant:\n%s", md, want)
+	}
+}
+
+// TestFormatCreateMarkdown_RendersTheCollection verifies that the attributes
+// one request created render as a table of objects sharing columns, with the
+// count in the heading and no instruction to preserve links a table without
+// links cannot honor.
+func TestFormatCreateMarkdown_RendersTheCollection(t *testing.T) {
+	want := "## Security Attributes Created (1)\n\n" +
+		"| ID | Name | Color | Description | Category | Editable state |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 9 | High &#124; Risk | `#FF\\|0000` | Needs &#124; review | Business &#124; Impact | `EDITABLE` |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'security_attribute.project_update' to apply these attributes to a project\n" +
+		"- Use action 'security_attribute.bulk_update' to apply them to many groups or projects at once\n"
+
+	got := FormatCreateMarkdown(CreateOutput{Attributes: []Output{testAttribute}})
+	if got != want {
+		t.Errorf("FormatCreateMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+	if strings.Contains(got, "clickable [text](url) links") {
+		t.Error("FormatCreateMarkdown() tells the model to keep links a table without links cannot have")
+	}
+}
+
+// TestFormatCreateMarkdown_Empty verifies that a creation response carrying no
+// attributes renders the one empty-list sentence rather than a heading
+// counting zero above an empty table.
 func TestFormatCreateMarkdown_Empty(t *testing.T) {
-	md := FormatCreateMarkdown(CreateOutput{})
-	if !strings.Contains(md, "No security attributes returned.") {
-		t.Fatalf("FormatCreateMarkdown() =\n%s", md)
+	if got, want := FormatCreateMarkdown(CreateOutput{}), "No security attributes found.\n"; got != want {
+		t.Errorf("FormatCreateMarkdown() = %q, want %q", got, want)
 	}
 }
 
-// TestMarkdownFormatsProjectAndBulkUpdates verifies the project and bulk update
-// markdown formatters expose their operational counts and selections.
-//
-// The test checks added and removed project counts, bulk mode, attribute IDs,
-// group IDs, and project IDs so regressions in compact mutation summaries are
-// caught by unit tests.
-func TestMarkdownFormatsProjectAndBulkUpdates(t *testing.T) {
-	projectMarkdown := FormatProjectUpdateMarkdown(ProjectUpdateOutput{AddedCount: 2, RemovedCount: 1})
-	if !strings.Contains(projectMarkdown, "| Added | `2` |") || !strings.Contains(projectMarkdown, "| Removed | `1` |") {
-		t.Fatalf("FormatProjectUpdateMarkdown() =\n%s", projectMarkdown)
-	}
+// TestFormatProjectUpdateMarkdown_RendersBothCounts verifies that the project
+// update result renders as a card carrying both counts, zero included: nothing
+// added is the answer to a request that asked for a removal.
+func TestFormatProjectUpdateMarkdown_RendersBothCounts(t *testing.T) {
+	want := "## Project Security Attributes Updated\n\n" +
+		"- **Added**: 2\n" +
+		"- **Removed**: 1\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'security_attribute.bulk_update' to apply the same change to many groups or projects at once\n" +
+		"- Use action 'security_attribute.project_update' to change this project's attributes again\n"
 
-	bulkMarkdown := FormatBulkUpdateMarkdown(BulkUpdateOutput{
+	if got := FormatProjectUpdateMarkdown(ProjectUpdateOutput{AddedCount: 2, RemovedCount: 1}); got != want {
+		t.Errorf("FormatProjectUpdateMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatBulkUpdateMarkdown_RendersIDsAsALists verifies that the bulk
+// update result renders every identifier list as the comma-separated numbers a
+// reader can act on, rather than as Go's "[9 10]" container syntax, and that
+// an empty list writes no row at all.
+func TestFormatBulkUpdateMarkdown_RendersIDsAsALists(t *testing.T) {
+	want := "## Security Attributes Updated in Bulk\n\n" +
+		"- **Status**: success\n" +
+		"- **Mode**: REPLACE\n" +
+		"- **Attributes**: 9, 10\n" +
+		"- **Groups**: 5\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'security_attribute.project_update' to change one project's attributes instead\n" +
+		"- Use action 'security_category.create' to add a category to classify further\n"
+
+	got := FormatBulkUpdateMarkdown(BulkUpdateOutput{
+		Status:       "success",
 		Mode:         BulkUpdateModeReplace,
 		GroupIDs:     []int64{5},
-		ProjectIDs:   []int64{42},
 		AttributeIDs: []int64{9, 10},
 	})
-	for _, want := range []string{"| Mode | `REPLACE` |", "| Attributes | `[9 10]` |", "| Groups | `[5]` |", "| Projects | `[42]` |"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(bulkMarkdown, want) {
-				t.Fatalf("FormatBulkUpdateMarkdown() missing %q:\n%s", want, bulkMarkdown)
-			}
-		})
+	if got != want {
+		t.Errorf("FormatBulkUpdateMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
 }
 

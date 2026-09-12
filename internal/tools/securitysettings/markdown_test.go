@@ -7,14 +7,27 @@ import (
 	"testing"
 )
 
+// projectHints is the guidance section both project renders close with.
+const projectHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'project.security_settings_update' to turn secret push protection on or off for this project\n" +
+	"- Use action 'group.security_settings_update' to set it for every project in a group at once\n"
+
+// groupHints is the guidance section every group render closes with, preceded
+// by the sentence that keeps the flag from reading as a per-project outcome.
+const groupHints = "\n" + groupScopeNote + "\n\n---\n💡 **Next steps:**\n" +
+	"- Use action 'group.security_settings_update' to change the setting for the group again, excluding the projects that failed\n" +
+	"- Use action 'project.security_settings_get' to read one project's settings to see what it carries now\n"
+
 // TestFormatProjectMarkdown_AllFields validates the Markdown renderer for
-// project security settings when all fields are populated, including the
-// optional UpdatedAt timestamp.
+// project security settings when all fields are populated, including the two
+// timestamps. The whole render is compared: a substring assertion cannot see a
+// row that landed outside the block it was meant for, which is the defect
+// class this migration closes.
 func TestFormatProjectMarkdown_AllFields(t *testing.T) {
 	out := ProjectOutput{
 		ProjectID:                           42,
 		CreatedAt:                           "2026-01-01T00:00:00Z",
-		UpdatedAt:                           "2026-01-02T00:00:00Z",
+		UpdatedAt:                           "2026-01-02T09:30:00Z",
 		AutoFixContainerScanning:            true,
 		AutoFixDAST:                         false,
 		AutoFixDependencyScanning:           true,
@@ -24,43 +37,50 @@ func TestFormatProjectMarkdown_AllFields(t *testing.T) {
 		SecretPushProtectionEnabled:         true,
 	}
 
-	md := FormatProjectMarkdown(out)
+	want := "## Project Security Settings (Project 42)\n\n" +
+		"- **Project ID**: 42\n" +
+		"- **Secret Push Protection**: ✅\n" +
+		"- **Continuous Vulnerability Scans**: ✅\n" +
+		"- **Container Scanning for Registry**: ❌\n" +
+		"- **Auto-fix SAST**: ❌\n" +
+		"- **Auto-fix DAST**: ❌\n" +
+		"- **Auto-fix Dependency Scanning**: ✅\n" +
+		"- **Auto-fix Container Scanning**: ✅\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Updated**: 2 Jan 2026 09:30 UTC\n" +
+		projectHints
 
-	expectations := []string{
-		"## Project Security Settings (Project 42)",
-		"| Secret Push Protection | true |",
-		"| Continuous Vulnerability Scans | true |",
-		"| Container Scanning for Registry | false |",
-		"| Auto-fix SAST | false |",
-		"| Auto-fix DAST | false |",
-		"| Auto-fix Dependency Scanning | true |",
-		"| Auto-fix Container Scanning | true |",
-		"**Updated**: 2026-01-02T00:00:00Z",
-	}
-	for _, exp := range expectations {
-		t.Run(exp, func(t *testing.T) {
-			if !strings.Contains(md, exp) {
-				t.Errorf("expected markdown to contain %q, got:\n%s", exp, md)
-			}
-		})
+	if got := FormatProjectMarkdown(out); got != want {
+		t.Errorf("FormatProjectMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatProjectMarkdown_NoUpdatedAt validates the renderer omits the
-// Updated line when UpdatedAt is empty.
-func TestFormatProjectMarkdown_NoUpdatedAt(t *testing.T) {
+// TestFormatProjectMarkdown_NoTimestamps validates that a settings record
+// GitLab sent no timestamps for writes neither time row: an absent value is
+// never a label with nothing after it.
+func TestFormatProjectMarkdown_NoTimestamps(t *testing.T) {
 	out := ProjectOutput{
 		ProjectID:                   10,
 		SecretPushProtectionEnabled: false,
 	}
 
-	md := FormatProjectMarkdown(out)
+	want := "## Project Security Settings (Project 10)\n\n" +
+		"- **Project ID**: 10\n" +
+		"- **Secret Push Protection**: ❌\n" +
+		"- **Continuous Vulnerability Scans**: ❌\n" +
+		"- **Container Scanning for Registry**: ❌\n" +
+		"- **Auto-fix SAST**: ❌\n" +
+		"- **Auto-fix DAST**: ❌\n" +
+		"- **Auto-fix Dependency Scanning**: ❌\n" +
+		"- **Auto-fix Container Scanning**: ❌\n" +
+		projectHints
 
-	if !strings.Contains(md, "## Project Security Settings (Project 10)") {
-		t.Error("expected project header in markdown")
+	got := FormatProjectMarkdown(out)
+	if got != want {
+		t.Errorf("FormatProjectMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
-	if strings.Contains(md, "**Updated**") {
-		t.Error("expected no Updated line when UpdatedAt is empty")
+	if strings.Contains(got, "Created") || strings.Contains(got, "Updated") {
+		t.Error("expected no time row when GitLab sent no timestamp")
 	}
 }
 
@@ -76,57 +96,82 @@ func TestFormatProjectMarkdown_ZeroProjectID(t *testing.T) {
 	}
 }
 
-// TestFormatGroupMarkdown_NoErrors validates the group Markdown renderer
-// with secret push protection enabled and no errors.
+// TestFormatGroupMarkdown_NoErrors validates the group Markdown renderer with
+// secret push protection enabled and no errors: no error table, no refusal
+// count, and the scope sentence still written.
 func TestFormatGroupMarkdown_NoErrors(t *testing.T) {
 	out := GroupOutput{
 		SecretPushProtectionEnabled: true,
 	}
 
-	md := FormatGroupMarkdown(out)
+	want := "## Group Security Settings\n\n" +
+		"- **Secret Push Protection**: ✅\n" +
+		groupHints
 
-	if !strings.Contains(md, "## Group Security Settings") {
-		t.Error("expected group header in markdown")
-	}
-	if !strings.Contains(md, "**Secret Push Protection**: true") {
-		t.Error("expected secret push protection true in markdown")
-	}
-	if strings.Contains(md, "**Errors**") {
-		t.Error("expected no errors section when Errors is empty")
+	if got := FormatGroupMarkdown(out); got != want {
+		t.Errorf("FormatGroupMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatGroupMarkdown_Disabled validates the group Markdown renderer
-// when secret push protection is disabled.
+// TestFormatGroupMarkdown_Disabled validates the group Markdown renderer when
+// secret push protection is disabled: the flag is a cross rather than the word
+// "false", and the count of refusals stays absent.
 func TestFormatGroupMarkdown_Disabled(t *testing.T) {
 	out := GroupOutput{
 		SecretPushProtectionEnabled: false,
 	}
 
-	md := FormatGroupMarkdown(out)
+	want := "## Group Security Settings\n\n" +
+		"- **Secret Push Protection**: ❌\n" +
+		groupHints
 
-	if !strings.Contains(md, "**Secret Push Protection**: false") {
-		t.Error("expected secret push protection false in markdown")
+	if got := FormatGroupMarkdown(out); got != want {
+		t.Errorf("FormatGroupMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatGroupMarkdown_WithErrors validates the group Markdown renderer
-// includes the errors section when the API response contains errors.
+// TestFormatGroupMarkdown_WithErrors validates that the projects GitLab
+// refused are counted on the card and listed as a collection under their own
+// heading, so a reader can tell the group setting from its per-project result.
 func TestFormatGroupMarkdown_WithErrors(t *testing.T) {
 	out := GroupOutput{
 		SecretPushProtectionEnabled: true,
 		Errors:                      []string{"project 10 not found", "project 20 is archived"},
 	}
 
-	md := FormatGroupMarkdown(out)
+	want := "## Group Security Settings\n\n" +
+		"- **Secret Push Protection**: ✅\n" +
+		"- **Projects GitLab could not update**: 2\n\n" +
+		"### Errors\n\n" +
+		"| Error |\n| --- |\n" +
+		"| project 10 not found |\n" +
+		"| project 20 is archived |\n" +
+		groupHints
 
-	if !strings.Contains(md, "**Errors**") {
-		t.Error("expected errors section in markdown")
+	if got := FormatGroupMarkdown(out); got != want {
+		t.Errorf("FormatGroupMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
-	if !strings.Contains(md, "- project 10 not found") {
-		t.Error("expected first error in markdown")
+}
+
+// TestFormatGroupMarkdown_HostileError validates that a refusal message
+// carrying Markdown cannot open a heading or a list item of its own: the cell
+// escaper neutralizes the pipe, the tag and the bracket, and the card writes
+// one table row whatever the message holds.
+func TestFormatGroupMarkdown_HostileError(t *testing.T) {
+	out := GroupOutput{
+		SecretPushProtectionEnabled: true,
+		Errors:                      []string{"a|b\n## injected\n- **State**: closed"},
 	}
-	if !strings.Contains(md, "- project 20 is archived") {
-		t.Error("expected second error in markdown")
+
+	want := "## Group Security Settings\n\n" +
+		"- **Secret Push Protection**: ✅\n" +
+		"- **Projects GitLab could not update**: 1\n\n" +
+		"### Errors\n\n" +
+		"| Error |\n| --- |\n" +
+		"| a&#124;b ## injected - **State**: closed |\n" +
+		groupHints
+
+	if got := FormatGroupMarkdown(out); got != want {
+		t.Errorf("FormatGroupMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
 }

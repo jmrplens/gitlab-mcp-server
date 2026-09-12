@@ -586,12 +586,14 @@ func TestDelete_ValidatesInputBeforeRequest(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_WithAttributes_RendersTable verifies security
-// category markdown escapes table cells and includes nested attributes.
+// TestFormatOutputMarkdown_WithAttributes_RendersTable verifies that a
+// security category renders as one card whose attributes are the only table on
+// the page, with every GitLab-authored value escaped.
 //
-// The rendered output contains pipe characters in category and attribute names.
-// The test expects escaped table cells plus multiple-selection, template type,
-// and attribute rows so pkgsite-visible examples remain stable.
+// The whole render is compared rather than a set of substrings: a substring
+// assertion passes on a row that landed outside the block it was meant for,
+// which is the defect class this migration closes. The category and attribute
+// names carry pipes, so the comparison also pins the escaping.
 func TestFormatOutputMarkdown_WithAttributes_RendersTable(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:                7,
@@ -604,15 +606,101 @@ func TestFormatOutputMarkdown_WithAttributes_RendersTable(t *testing.T) {
 			ID:            9,
 			Name:          "High | Risk",
 			Color:         "#FF0000",
+			Description:   "Loss of revenue",
 			EditableState: "EDITABLE",
 		}},
 	})
-	for _, want := range []string{"Business &#124; impact", "Business &#124; labels", "| Multiple selection | true |", "| Template type | `CUSTOM` |", "High &#124; Risk"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Fatalf("FormatOutputMarkdown() missing %q:\n%s", want, md)
+
+	want := "## Security Category: Business | impact\n\n" +
+		"- **ID**: 7\n" +
+		"- **Name**: Business &#124; impact\n" +
+		"- **Description**: Business &#124; labels\n" +
+		"- **Multiple selection**: ✅\n" +
+		"- **Editable state**: `EDITABLE`\n" +
+		"- **Template type**: `CUSTOM`\n\n" +
+		"### Attributes\n\n" +
+		"| ID | Name | Color | Description | Editable state |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 9 | High &#124; Risk | `#FF0000` | Loss of revenue | `EDITABLE` |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'security_attribute.create' to add an attribute under this category\n" +
+		"- Use action 'security_category.update' to rename this category or change its description\n" +
+		"- Use action 'security_attribute.project_update' to apply this category's attributes to a project\n"
+
+	if md != want {
+		t.Errorf("FormatOutputMarkdown() =\n%s\nwant:\n%s", md, want)
+	}
+}
+
+// TestFormatOutputMarkdown_EditableStateDecidesTheHints verifies that the card
+// offers only the next steps the category's editable state allows: a locked
+// category can neither be renamed nor gain an attribute, and one whose
+// attributes alone are editable can gain an attribute but not be renamed.
+// Offering a call GitLab refuses is the defect this closes.
+func TestFormatOutputMarkdown_EditableStateDecidesTheHints(t *testing.T) {
+	const (
+		addAttribute   = "- Use action 'security_attribute.create' to add an attribute under this category\n"
+		renameCategory = "- Use action 'security_category.update' to rename this category or change its description\n"
+		applyToProject = "- Use action 'security_attribute.project_update' to apply this category's attributes to a project\n"
+	)
+
+	tests := []struct {
+		name  string
+		state string
+		want  string
+	}{
+		{name: "locked offers neither", state: "LOCKED", want: applyToProject},
+		{name: "editable attributes offers the attribute", state: "EDITABLE_ATTRIBUTES", want: addAttribute + applyToProject},
+		{name: "editable offers both", state: "EDITABLE", want: addAttribute + renameCategory + applyToProject},
+		{name: "unset offers both and lets GitLab refuse", state: "", want: addAttribute + renameCategory + applyToProject},
+		{name: "unknown offers both and lets GitLab refuse", state: "SOMETHING_NEW", want: addAttribute + renameCategory + applyToProject},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			head := "## Security Category: Impact\n\n- **ID**: 1\n- **Name**: Impact\n- **Multiple selection**: ❌\n"
+			if tt.state != "" {
+				head += "- **Editable state**: `" + tt.state + "`\n"
+			}
+			want := head + "\n---\n💡 **Next steps:**\n" + tt.want
+			got := FormatOutputMarkdown(Output{ID: 1, Name: "Impact", EditableState: tt.state})
+			if got != want {
+				t.Errorf("FormatOutputMarkdown(%q) =\n%s\nwant:\n%s", tt.state, got, want)
 			}
 		})
+	}
+}
+
+// TestFormatOutputMarkdown_HostileName verifies that a category name cannot
+// open a heading, a list item or a link of its own: the heading escaper
+// neutralizes the bracket and the tag, the row escaper neutralizes the pipe,
+// and the card's structure is the same as with a benign name.
+func TestFormatOutputMarkdown_HostileName(t *testing.T) {
+	md := FormatOutputMarkdown(Output{
+		ID:   1,
+		Name: "x\n## injected\n- **State**: closed",
+	})
+
+	want := "## Security Category: x ## injected - **State**: closed\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: x ## injected - **State**: closed\n" +
+		"- **Multiple selection**: ❌\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'security_attribute.create' to add an attribute under this category\n" +
+		"- Use action 'security_category.update' to rename this category or change its description\n" +
+		"- Use action 'security_attribute.project_update' to apply this category's attributes to a project\n"
+
+	if md != want {
+		t.Errorf("FormatOutputMarkdown() =\n%s\nwant:\n%s", md, want)
+	}
+}
+
+// TestFormatOutputMarkdown_NoName verifies that a category GitLab sent no name
+// for opens the generic heading rather than one ending in a colon.
+func TestFormatOutputMarkdown_NoName(t *testing.T) {
+	md := FormatOutputMarkdown(Output{ID: 3})
+	if !strings.HasPrefix(md, "## Security Category\n\n- **ID**: 3\n") {
+		t.Errorf("FormatOutputMarkdown() =\n%s", md)
 	}
 }
 

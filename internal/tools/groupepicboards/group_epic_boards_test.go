@@ -463,104 +463,113 @@ func TestGet_VersionTolerantOmittedFields(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown pins the whole epic board card in three states:
+// a populated board with its columns as a nested table, a board GitLab sent
+// nothing optional for, and a board whose name carries a pipe, which must not
+// reach the page as table syntax.
 func TestFormatOutputMarkdown(t *testing.T) {
+	collapsed := true
 	tests := []struct {
-		name     string
-		input    Output
-		contains []string
-		excludes []string
+		name  string
+		input Output
+		want  string
 	}{
 		{
 			name: "renders board with labels and lists",
 			input: Output{
-				ID:     1,
-				Name:   "Sprint Board",
-				Group:  &GroupRefOutput{ID: 7, Name: "My Group", WebURL: "https://x"},
-				Labels: []*LabelDetailsOutput{{ID: 10, Name: "Priority"}, {ID: 11, Name: "Bug"}},
+				ID:              1,
+				Name:            "Sprint Board",
+				Group:           &GroupRefOutput{ID: 7, Name: "My Group", WebURL: "https://gitlab.example.com/groups/my-group"},
+				Labels:          []*LabelDetailsOutput{{ID: 10, Name: "Priority"}, nil, {ID: 11, Name: "Bug"}},
+				HideBacklogList: true,
 				Lists: []BoardListOutput{
-					{ID: 100, Label: &ListLabelOutput{ID: 10, Name: "Priority"}, Position: 0},
-					{ID: 101, Label: &ListLabelOutput{ID: 11, Name: "Bug"}, Position: 1},
+					{ID: 100, Label: &ListLabelOutput{ID: 10, Name: "Priority"}, Position: 0, ListType: "label"},
+					{ID: 101, Position: 1, ListType: "backlog", Collapsed: &collapsed},
 				},
 			},
-			contains: []string{
-				"## Epic Board #1: Sprint Board",
-				"**Labels**: Priority, Bug",
-				"### Board Lists",
-				"| 100 | Priority | 0 |",
-				"| 101 | Bug | 1 |",
-			},
+			want: "## Epic Board #1: Sprint Board\n\n" +
+				"- **ID**: 1\n" +
+				"- **Group**: [My Group](https://gitlab.example.com/groups/my-group)\n" +
+				"- **Labels**: Priority, Bug\n" +
+				"- **Hide Backlog**: " + toolutil.EmojiSuccess + "\n" +
+				"- **Hide Closed**: " + toolutil.EmojiCross + "\n\n" +
+				"### Board Lists\n\n" +
+				"| ID | Scope | Type | Position | Collapsed |\n" +
+				"| --- | --- | --- | --- | --- |\n" +
+				"| 100 | Priority | label | 0 |  |\n" +
+				"| 101 | backlog | backlog | 1 | " + toolutil.EmojiSuccess + " |\n\n" +
+				"---\n\U0001F4A1 **Next steps:**\n" +
+				"- Use action 'group.epic_board_list' to see every epic board in the group\n",
 		},
 		{
-			name: "renders board without labels or lists",
-			input: Output{
-				ID:   2,
-				Name: "Empty Board",
-			},
-			contains: []string{"## Epic Board #2: Empty Board"},
-			excludes: []string{"**Labels**", "### Board Lists"},
+			name:  "renders board without labels or lists",
+			input: Output{ID: 2, Name: "Empty Board"},
+			want: "## Epic Board #2: Empty Board\n\n" +
+				"- **ID**: 2\n" +
+				"- **Hide Backlog**: " + toolutil.EmojiCross + "\n" +
+				"- **Hide Closed**: " + toolutil.EmojiCross + "\n\n" +
+				"---\n\U0001F4A1 **Next steps:**\n" +
+				"- Use action 'group.epic_board_list' to see every epic board in the group\n",
 		},
 		{
-			name: "escapes pipe characters in name",
-			input: Output{
-				ID:   3,
-				Name: "Foo | Bar",
-			},
-			contains: []string{"## Epic Board #3"},
+			// A pipe is text in a heading, which is not a table row; the card
+			// escaper neutralizes it wherever it would be one.
+			name:  "keeps a pipe in the name as text",
+			input: Output{ID: 3, Name: "Foo | Bar"},
+			want: "## Epic Board #3: Foo | Bar\n\n" +
+				"- **ID**: 3\n" +
+				"- **Hide Backlog**: " + toolutil.EmojiCross + "\n" +
+				"- **Hide Closed**: " + toolutil.EmojiCross + "\n\n" +
+				"---\n\U0001F4A1 **Next steps:**\n" +
+				"- Use action 'group.epic_board_list' to see every epic board in the group\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatOutputMarkdown(tt.input)
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("output missing %q", s)
-				}
-			}
-			for _, s := range tt.excludes {
-				if strings.Contains(got, s) {
-					t.Errorf("output should not contain %q", s)
-				}
+			if got := FormatOutputMarkdown(tt.input); got != tt.want {
+				t.Errorf("FormatOutputMarkdown()\n got %q\nwant %q", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown pins the whole epic board list in three states: a
+// page of boards, a group with none, and a page under a larger total.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    ListOutput
-		contains []string
+		name  string
+		input ListOutput
+		want  string
 	}{
 		{
 			name: "renders board list table",
 			input: ListOutput{
 				Boards: []Output{
-					{ID: 1, Name: "Sprint", Labels: []*LabelDetailsOutput{{ID: 1, Name: "P1"}}, Lists: []BoardListOutput{{ID: 10}}},
+					{
+						ID: 1, Name: "Sprint",
+						Group:  &GroupRefOutput{ID: 7, Name: "My Group", WebURL: "https://gitlab.example.com/groups/my-group"},
+						Labels: []*LabelDetailsOutput{{ID: 1, Name: "P1"}},
+						Lists:  []BoardListOutput{{ID: 10}},
+					},
 					{ID: 2, Name: "Backlog"},
 				},
 				Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 			},
-			contains: []string{
-				"## Group Epic Boards (2)",
-				"| 1 | Sprint | P1 | 1 |",
-				"| 2 | Backlog |  | 0 |",
-			},
+			want: "## Group Epic Boards (2)\n\n" +
+				"| ID | Name | Group | Labels | Lists |\n" +
+				"| --- | --- | --- | --- | --- |\n" +
+				"| 1 | Sprint | [My Group](https://gitlab.example.com/groups/my-group) | P1 | 1 |\n" +
+				"| 2 | Backlog |  |  | 0 |\n\n" +
+				"Page 1 of 1 | 2 items total | 20 per page\n\n" +
+				"---\n\U0001F4A1 **Next steps:**\n" +
+				"- " + toolutil.HintPreserveLinks + "\n" +
+				"- Use action 'group.epic_board_get' to read one board with its columns\n",
 		},
 		{
-			name: "renders empty state",
-			input: ListOutput{
-				Pagination: toolutil.PaginationOutput{TotalItems: 0},
-			},
-			contains: []string{
-				"No epic boards found.",
-			},
+			name:  "renders empty state",
+			input: ListOutput{Pagination: toolutil.PaginationOutput{TotalItems: 0}},
+			want:  "No epic boards found.\n",
 		},
 		{
 			name: "shows pagination when multiple pages",
@@ -570,20 +579,22 @@ func TestFormatListMarkdown(t *testing.T) {
 					TotalItems: 50, Page: 1, PerPage: 20, TotalPages: 3, NextPage: 2,
 				},
 			},
-			contains: []string{
-				"## Group Epic Boards (50)",
-				"Page 1 of 3",
-			},
+			want: "## Group Epic Boards (50)\n\n" +
+				"Showing 1 of 50 results (page 1 of 3)\n\n" +
+				"| ID | Name | Group | Labels | Lists |\n" +
+				"| --- | --- | --- | --- | --- |\n" +
+				"| 1 | B |  |  | 0 |\n\n" +
+				"Page 1 of 3 | 50 items total | 20 per page\n\n" +
+				"---\n\U0001F4A1 **Next steps:**\n" +
+				"- " + toolutil.HintPreserveLinks + "\n" +
+				"- Use action 'group.epic_board_get' to read one board with its columns\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatListMarkdown(tt.input)
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("output missing %q\ngot:\n%s", s, got)
-				}
+			if got := FormatListMarkdown(tt.input); got != tt.want {
+				t.Errorf("FormatListMarkdown()\n got %q\nwant %q", got, tt.want)
 			}
 		})
 	}

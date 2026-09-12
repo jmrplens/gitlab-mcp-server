@@ -3,25 +3,42 @@
 package groupsshcerts
 
 import (
-	"strings"
 	"testing"
 )
 
-// TestFormatOutputMarkdown validates the Markdown formatter for a single SSH certificate.
-// Covers: zero ID (empty string), short key, long key truncation, optional CreatedAt,
-// and hints footer.
+// The guidance section each SSH certificate formatter closes with.
+const (
+	certCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.ssh_cert_delete' to revoke this certificate\n" +
+		"- Use action 'group.ssh_cert_list' to see the group's other certificates\n"
+	certListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.ssh_cert_create' to add another certificate\n"
+	certTableHead = "| ID | Title | Created |\n| --- | --- | --- |\n"
+)
+
+// assertCertMarkdown compares a whole rendered response with what the
+// formatter is meant to write, byte for byte.
+func assertCertMarkdown(t *testing.T, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("markdown mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+// TestFormatOutputMarkdown validates the whole card one SSH CA certificate
+// renders: a certificate GitLab sent nothing for renders nothing, a key longer
+// than the card shows is truncated, and the creation time is in the display
+// form rather than the wire form it arrives in.
 func TestFormatOutputMarkdown(t *testing.T) {
 	tests := []struct {
-		name      string
-		input     Output
-		wantParts []string
-		dontWant  []string
-		wantEmpty bool
+		name  string
+		input Output
+		want  string
 	}{
 		{
-			name:      "zero ID returns empty string",
-			input:     Output{},
-			wantEmpty: true,
+			name:  "zero ID returns empty string",
+			input: Output{},
+			want:  "",
 		},
 		{
 			name: "all fields with short key",
@@ -31,14 +48,12 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				Key:       "ssh-rsa AAAA1234",
 				CreatedAt: "2026-01-15T10:30:00Z",
 			},
-			wantParts: []string{
-				"## SSH Certificate #1",
-				"**Title**: deploy-key",
-				"**Key**: `ssh-rsa AAAA1234`",
-				"**Created**: 2026-01-15T10:30:00Z",
-				"gitlab_delete_group_ssh_certificate",
-				"gitlab_list_group_ssh_certificates",
-			},
+			want: "## SSH Certificate #1\n\n" +
+				"- **ID**: 1\n" +
+				"- **Title**: deploy-key\n" +
+				"- **Key**: `ssh-rsa AAAA1234`\n" +
+				"- **Created**: 15 Jan 2026 10:30 UTC\n" +
+				certCardHints,
 		},
 		{
 			name: "long key gets truncated at 60 chars",
@@ -47,99 +62,65 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				Title: "long-key-cert",
 				Key:   "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7QbpPnVFGkYLlWxyz1234567890abcdefghij",
 			},
-			wantParts: []string{
-				"## SSH Certificate #2",
-				"**Title**: long-key-cert",
-				"...",
-			},
-			dontWant: []string{
-				"**Created**",
-			},
+			want: "## SSH Certificate #2\n\n" +
+				"- **ID**: 2\n" +
+				"- **Title**: long-key-cert\n" +
+				"- **Key**: `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7QbpPnVFGkYLlWxyz1...`\n" +
+				certCardHints,
 		},
 		{
-			name: "exactly 60 char key is not truncated",
+			name: "a key at the boundary is not truncated",
 			input: Output{
 				ID:    3,
 				Title: "exact-key",
 				Key:   "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7QbpPnVFGkYLlWx",
 			},
-			wantParts: []string{
-				"`ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7QbpPnVFGkYLlWx`",
-			},
-			dontWant: []string{
-				"...",
-			},
+			want: "## SSH Certificate #3\n\n" +
+				"- **ID**: 3\n" +
+				"- **Title**: exact-key\n" +
+				"- **Key**: `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7QbpPnVFGkYLlWx`\n" +
+				certCardHints,
 		},
 		{
-			name: "missing created_at omits line",
+			name: "missing created_at omits the row",
 			input: Output{
 				ID:    4,
 				Title: "no-date-cert",
 				Key:   "ssh-ed25519 AAAA",
 			},
-			wantParts: []string{
-				"## SSH Certificate #4",
-				"**Title**: no-date-cert",
-				"**Key**: `ssh-ed25519 AAAA`",
-			},
-			dontWant: []string{
-				"**Created**",
-			},
+			want: "## SSH Certificate #4\n\n" +
+				"- **ID**: 4\n" +
+				"- **Title**: no-date-cert\n" +
+				"- **Key**: `ssh-ed25519 AAAA`\n" +
+				certCardHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatOutputMarkdown(tt.input)
-			if tt.wantEmpty {
-				if got != "" {
-					t.Errorf("expected empty string, got:\n%s", got)
-				}
-				return
-			}
-			if got == "" {
-				t.Fatal("expected non-empty markdown output, got empty string")
-			}
-			for _, part := range tt.wantParts {
-				if !strings.Contains(got, part) {
-					t.Errorf("output missing %q\ngot:\n%s", part, got)
-				}
-			}
-			for _, part := range tt.dontWant {
-				if strings.Contains(got, part) {
-					t.Errorf("output should not contain %q\ngot:\n%s", part, got)
-				}
-			}
+			assertCertMarkdown(t, FormatOutputMarkdown(tt.input), tt.want)
 		})
 	}
 }
 
-// TestFormatListMarkdown validates the Markdown formatter for a list of SSH certificates.
-// Covers: empty list (no certificates message), single certificate, multiple certificates
-// with correct table structure including ID, Title, and Created columns.
+// TestFormatListMarkdown validates the whole table a group's SSH certificates
+// render: an empty list is the one sentence alone, and a title carrying a pipe
+// is neutralized rather than splitting its row.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
-		name      string
-		input     ListOutput
-		wantParts []string
-		dontWant  []string
+		name  string
+		input ListOutput
+		want  string
 	}{
 		{
 			name:  "empty list returns no certificates message",
 			input: ListOutput{Certificates: []Output{}},
-			wantParts: []string{
-				"No SSH certificates found.",
-			},
-			dontWant: []string{
-				"| ID",
-			},
+			want:  "No SSH certificates found.\n",
 		},
 		{
 			name:  "nil certificates returns no certificates message",
 			input: ListOutput{},
-			wantParts: []string{
-				"No SSH certificates found.",
-			},
+			want:  "No SSH certificates found.\n",
 		},
 		{
 			name: "single certificate renders table",
@@ -148,12 +129,10 @@ func TestFormatListMarkdown(t *testing.T) {
 					{ID: 1, Title: "cert-one", CreatedAt: "2026-03-01T00:00:00Z"},
 				},
 			},
-			wantParts: []string{
-				"## SSH Certificates (1)",
-				"| ID | Title | Created |",
-				"| 1 | cert-one | 2026-03-01T00:00:00Z |",
-				"gitlab_create_group_ssh_certificate",
-			},
+			want: "## SSH Certificates (1)\n\n" +
+				certTableHead +
+				"| 1 | cert-one | 1 Mar 2026 00:00 UTC |\n" +
+				certListHints,
 		},
 		{
 			name: "multiple certificates renders all rows",
@@ -164,12 +143,12 @@ func TestFormatListMarkdown(t *testing.T) {
 					{ID: 30, Title: "backup-key", CreatedAt: ""},
 				},
 			},
-			wantParts: []string{
-				"## SSH Certificates (3)",
-				"| 10 | deploy-key |",
-				"| 20 | ci-bot |",
-				"| 30 | backup-key |",
-			},
+			want: "## SSH Certificates (3)\n\n" +
+				certTableHead +
+				"| 10 | deploy-key | 1 Jan 2026 00:00 UTC |\n" +
+				"| 20 | ci-bot | 15 Jun 2026 12:00 UTC |\n" +
+				"| 30 | backup-key |  |\n" +
+				certListHints,
 		},
 		{
 			name: "title with pipe character is escaped",
@@ -178,31 +157,16 @@ func TestFormatListMarkdown(t *testing.T) {
 					{ID: 5, Title: "key|with|pipes", CreatedAt: "2026-01-01T00:00:00Z"},
 				},
 			},
-			wantParts: []string{
-				"## SSH Certificates (1)",
-			},
-			dontWant: []string{
-				"| key|with|pipes |",
-			},
+			want: "## SSH Certificates (1)\n\n" +
+				certTableHead +
+				"| 5 | key&#124;with&#124;pipes | 1 Jan 2026 00:00 UTC |\n" +
+				certListHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatListMarkdown(tt.input)
-			if got == "" {
-				t.Fatal("expected non-empty markdown output, got empty string")
-			}
-			for _, part := range tt.wantParts {
-				if !strings.Contains(got, part) {
-					t.Errorf("output missing %q\ngot:\n%s", part, got)
-				}
-			}
-			for _, part := range tt.dontWant {
-				if strings.Contains(got, part) {
-					t.Errorf("output should not contain %q\ngot:\n%s", part, got)
-				}
-			}
+			assertCertMarkdown(t, FormatListMarkdown(tt.input), tt.want)
 		})
 	}
 }

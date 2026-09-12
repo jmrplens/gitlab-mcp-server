@@ -7,43 +7,42 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatListMarkdown renders a paginated list of security findings as Markdown.
+// FormatListMarkdown renders a page of pipeline security findings as a
+// Markdown table: a collection of objects that share columns. The severity is
+// the badge every security domain here shares, so a finding and the
+// vulnerability it becomes read the same way.
 func FormatListMarkdown(out ListOutput) string {
-	var sb strings.Builder
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	sb.WriteString("## Security Report Findings\n\n")
-
 	if len(out.Findings) == 0 {
-		sb.WriteString("No security findings found.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("security findings")
 	}
-
-	sb.WriteString("| Severity | Title | Report Type | Scanner | Location | State |\n")
-	sb.WriteString("|----------|-------|-------------|---------|----------|-------|\n")
-
+	var b strings.Builder
+	// A cursor-paginated connection sends no total, so the heading counts what
+	// is shown and says whether more follows, which is all the response knows.
+	toolutil.WriteListHeading(&b, "Security Report Findings", len(out.Findings),
+		toolutil.PaginationOutput{HasMore: out.Pagination.HasNextPage})
+	b.WriteString(toolutil.MarkdownTableHeader("Severity", "Title", "Report Type", "Scanner", "Location", "State"))
 	for _, f := range out.Findings {
 		scanner := ""
 		if f.Scanner != nil {
 			scanner = f.Scanner.Name
 		}
-		loc := formatLocation(f.Location)
-
-		fmt.Fprintf(
-			&sb, "| %s | %s | %s | %s | %s | %s |\n",
-			//gitlab:allow-unescaped severityBadge(f.Severity): most answers are constants written here, and the fallback is a severity enum token GitLab spells as one bare word.
-			severityBadge(f.Severity),
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.SeverityBadge(f.Severity),
 			toolutil.EscapeMdTableCell(f.Title),
 			toolutil.EscapeMdTableCell(f.ReportType),
 			toolutil.EscapeMdTableCell(scanner),
-			toolutil.EscapeMdTableCell(loc),
+			toolutil.EscapeMdTableCell(formatLocation(f.Location)),
 			toolutil.EscapeMdTableCell(f.State),
-		)
+		))
 	}
-
-	sb.WriteString("\n")
-	sb.WriteString(toolutil.FormatGraphQLPagination(out.Pagination, len(out.Findings)))
-	sb.WriteString("\n")
-	return sb.String()
+	toolutil.WriteGraphQLPagination(&b, out.Pagination, len(out.Findings))
+	// The table carries no link, so the footer carries no instruction to keep
+	// the links of a table that has none.
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(actionVulnList, "read the project's vulnerabilities, which is what a confirmed finding becomes"),
+		toolutil.HintAction(actionVulnPipelineSummary, "see how many findings each scanner reported in this pipeline"),
+	)
+	return b.String()
 }
 
 // formatLocation renders a security finding's file location as a
@@ -64,23 +63,4 @@ func formatLocation(loc *LocationItem) string {
 
 func init() {
 	toolutil.RegisterMarkdown(FormatListMarkdown)
-}
-
-// severityBadge returns an emoji-prefixed severity label for use in
-// Markdown output (e.g., "🔴 CRITICAL", "🟠 HIGH").
-func severityBadge(severity string) string {
-	switch strings.ToUpper(severity) {
-	case "CRITICAL":
-		return "\U0001F534 CRITICAL"
-	case "HIGH":
-		return "\U0001F7E0 HIGH"
-	case "MEDIUM":
-		return "\U0001F7E1 MEDIUM"
-	case "LOW":
-		return "\U0001F535 LOW"
-	case "INFO":
-		return "\u2139\uFE0F INFO"
-	default:
-		return severity
-	}
 }

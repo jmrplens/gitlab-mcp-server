@@ -151,32 +151,43 @@ func TestActionSpecs_SuccessPaths(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_FailuresAndStatusHints verifies the GetMarkdown_FailuresAndStatusHints Markdown formatter for a representative get_failuresandstatushints input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatGetMarkdown_FailuresAndStatusHints verifies the whole card a
+// running migration with failures renders: the failure hint and the cancel
+// hint are both added, and a migration that is merely created keeps the cancel
+// hint and drops the failure one.
 func TestFormatGetMarkdown_FailuresAndStatusHints(t *testing.T) {
-	got := FormatGetMarkdown(MigrationSummary{ID: 1, Status: "started", HasFailures: true})
-	if !strings.Contains(got, "Failures detected") {
-		t.Errorf("expected failures hint; got %q", got)
-	}
-	if !strings.Contains(got, "gitlab_cancel_bulk_import") {
-		t.Errorf("expected cancel hint for in-progress migration; got %q", got)
-	}
+	assertBulkImportMarkdown(t, FormatGetMarkdown(MigrationSummary{ID: 1, Status: "started", HasFailures: true}),
+		"## Bulk Import Migration #1\n\n"+
+			"- **ID**: 1\n"+
+			"- **Status**: started\n"+
+			"- **Has Failures**: ✅\n"+
+			"\n---\n\U0001F4A1 **Next steps:**\n"+
+			"- Use action 'admin.bulk_import_entity_list' to inspect the entities this migration moved\n"+
+			"- Use action 'admin.bulk_import_entity_failures' to read the failure diagnostics\n"+
+			"- Use action 'admin.bulk_import_cancel' to abort this migration while it runs\n")
 
-	got = FormatGetMarkdown(MigrationSummary{ID: 2, Status: "created"})
-	if !strings.Contains(got, "gitlab_cancel_bulk_import") {
-		t.Errorf("expected cancel hint for created status; got %q", got)
-	}
+	assertBulkImportMarkdown(t, FormatGetMarkdown(MigrationSummary{ID: 2, Status: "created"}),
+		"## Bulk Import Migration #2\n\n"+
+			"- **ID**: 2\n"+
+			"- **Status**: created\n"+
+			"- **Has Failures**: ❌\n"+
+			"\n---\n\U0001F4A1 **Next steps:**\n"+
+			"- Use action 'admin.bulk_import_entity_list' to inspect the entities this migration moved\n"+
+			"- Use action 'admin.bulk_import_cancel' to abort this migration while it runs\n")
 }
 
-// TestFormatGetEntityMarkdown_HasFailures verifies the GetEntityMarkdown_HasFailures Markdown formatter for a representative getentity_hasfailures input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatGetEntityMarkdown_HasFailures verifies that an entity with
+// failures is given the diagnostics hint in place of the sibling listing one.
 func TestFormatGetEntityMarkdown_HasFailures(t *testing.T) {
-	got := FormatGetEntityMarkdown(EntitySummary{ID: 1, BulkImportID: 2, HasFailures: true})
-	if !strings.Contains(got, "Failures detected") {
-		t.Errorf("expected failures hint; got %q", got)
-	}
+	assertBulkImportMarkdown(t, FormatGetEntityMarkdown(EntitySummary{ID: 1, BulkImportID: 2, HasFailures: true}),
+		"## Bulk Import Entity #1\n\n"+
+			"- **ID**: 1\n"+
+			"- **Bulk Import ID**: 2\n"+
+			"- **Migrate Projects**: ❌\n"+
+			"- **Migrate Memberships**: ❌\n"+
+			"- **Has Failures**: ✅\n"+
+			"\n---\n\U0001F4A1 **Next steps:**\n"+
+			"- Use action 'admin.bulk_import_entity_failures' to read the failure diagnostics\n")
 }
 
 // TestListEntities_StatusFilter verifies the ListEntities_StatusFilter handler.
@@ -305,32 +316,20 @@ func TestToEntitySummary_Nil(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_Empty verifies that an empty page renders the one
+// sentence and nothing else: no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	got := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(got, "_No migrations found._") {
-		t.Errorf("expected empty placeholder; got %q", got)
-	}
+	assertBulkImportMarkdown(t, FormatListMarkdown(ListOutput{}), "No bulk import migrations found.\n")
 }
 
-// TestFormatListEntitiesMarkdown_Empty verifies the ListEntitiesMarkdown_Empty Markdown formatter for a representative listentities_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListEntitiesMarkdown_Empty verifies that an empty entity page
+// renders the one sentence and nothing else.
 func TestFormatListEntitiesMarkdown_Empty(t *testing.T) {
-	got := FormatListEntitiesMarkdown(ListEntitiesOutput{})
-	if !strings.Contains(got, "_No entities found._") {
-		t.Errorf("expected empty placeholder; got %q", got)
-	}
+	assertBulkImportMarkdown(t, FormatListEntitiesMarkdown(ListEntitiesOutput{}), "No bulk import entities found.\n")
 }
 
-// TestFormatEntityFailuresMarkdown_Empty verifies the EntityFailuresMarkdown_Empty Markdown formatter for a representative entityfailures_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatEntityFailuresMarkdown_Empty verifies that an entity with no
+// failures renders the one sentence and nothing else.
 func TestFormatEntityFailuresMarkdown_Empty(t *testing.T) {
-	got := FormatEntityFailuresMarkdown(ListEntityFailuresOutput{BulkImportID: 1, EntityID: 2})
-	if !strings.Contains(got, "_No failures recorded._") {
-		t.Errorf("expected empty placeholder; got %q", got)
-	}
+	assertBulkImportMarkdown(t, FormatEntityFailuresMarkdown(ListEntityFailuresOutput{BulkImportID: 1, EntityID: 2}), "No bulk import failures found.\n")
 }

@@ -168,56 +168,81 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// The guidance sections the three formatters end with.
+const (
+	listHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use `gitlab_set_feature_flag` to toggle a specific feature\n"
+	definitionsHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use `gitlab_set_feature_flag` to enable or disable a feature\n"
+	featureHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use `gitlab_set_feature_flag` to toggle this feature\n"
+)
+
+// markdownText returns the one text block a formatter's result carries.
+func markdownText(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
+	if len(result.Content) == 0 {
+		t.Fatal("the formatter returned no content at all")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] is %T, want *mcp.TextContent", result.Content[0])
+	}
+	return text.Text
+}
+
+// TestFormatListMarkdown verifies the whole table, heading and footer
+// included. The heading counts the flags GitLab sent, which the endpoint
+// returns in one unpaged answer.
 func TestFormatListMarkdown(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{
+	got := markdownText(t, FormatListMarkdown(ListOutput{
 		Features: []FeatureItem{
 			{Name: "flag1", State: "on", Gates: []GateItem{{Key: "boolean", Value: true}}},
 			{Name: "flag2", State: "conditional", Gates: []GateItem{{Key: "percentage_of_time", Value: 50}}},
 		},
-	})
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "flag1") || !strings.Contains(text, "flag2") {
-		t.Errorf("expected flags in output, got: %s", text)
-	}
-	if !strings.Contains(text, "boolean=true") {
-		t.Errorf("expected gate info, got: %s", text)
+	}))
+	want := "## Feature Flags (2)\n\n" +
+		"| Name | State | Gates |\n| --- | --- | --- |\n" +
+		"| flag1 | on | boolean=true |\n" +
+		"| flag2 | conditional | percentage_of_time=50 |\n" +
+		listHints
+	if got != want {
+		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_Empty verifies an instance with no flags renders the
+// one sentence and nothing else: no heading counting zero above it and no
+// table header.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{})
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "No feature flags found") {
-		t.Errorf("expected empty message, got: %s", text)
+	got := markdownText(t, FormatListMarkdown(ListOutput{}))
+	want := "No feature flags found.\n"
+	if got != want {
+		t.Errorf("FormatListMarkdown() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatListDefinitionsMarkdown verifies the ListDefinitionsMarkdown Markdown formatter for a representative listdefinitions input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListDefinitionsMarkdown verifies the whole definitions table, with
+// the default-enabled column as a glyph rather than the word "true".
 func TestFormatListDefinitionsMarkdown(t *testing.T) {
-	result := FormatListDefinitionsMarkdown(ListDefinitionsOutput{
+	got := markdownText(t, FormatListDefinitionsMarkdown(ListDefinitionsOutput{
 		Definitions: []DefinitionItem{
 			{Name: "def1", Type: "development", Group: "group::ide", Milestone: "15.0", DefaultEnabled: true},
 		},
-	})
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "def1") || !strings.Contains(text, "development") {
-		t.Errorf("expected definition info, got: %s", text)
+	}))
+	want := "## Feature Definitions (1)\n\n" +
+		"| Name | Type | Group | Milestone | Default Enabled |\n| --- | --- | --- | --- | --- |\n" +
+		"| def1 | development | group::ide | 15.0 | ✅ |\n" +
+		definitionsHints
+	if got != want {
+		t.Errorf("FormatListDefinitionsMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatFeatureMarkdown verifies the FeatureMarkdown Markdown formatter for a representative feature input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatFeatureMarkdown verifies the whole card of one flag, with the
+// definition GitLab ships for it as a nested object.
 func TestFormatFeatureMarkdown(t *testing.T) {
-	result := FormatFeatureMarkdown(SetOutput{
+	got := markdownText(t, FormatFeatureMarkdown(SetOutput{
 		Feature: FeatureItem{
 			Name:  "my_flag",
 			State: "on",
@@ -228,10 +253,61 @@ func TestFormatFeatureMarkdown(t *testing.T) {
 				DefaultEnabled: false,
 			},
 		},
-	})
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "my_flag") || !strings.Contains(text, "development") {
-		t.Errorf("expected feature info, got: %s", text)
+	}))
+	want := "## Feature Flag: my_flag\n\n" +
+		"- **State**: on\n" +
+		"- **Gates**: boolean=true\n" +
+		"- **Definition**:\n" +
+		"  - **Type**: development\n" +
+		"  - **Group**: group::ide\n" +
+		"  - **Default Enabled**: ❌\n" +
+		"  - **Log State Changes**: ❌\n" +
+		featureHints
+	if got != want {
+		t.Errorf("FormatFeatureMarkdown() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestFormatFeatureMarkdown_FullDefinition verifies that every field of the
+// definition reaches the card, the three tracking links included: GitLab ships
+// them in the definition file and this server publishes them, and the card
+// used to render three of the nine.
+func TestFormatFeatureMarkdown_FullDefinition(t *testing.T) {
+	got := markdownText(t, FormatFeatureMarkdown(SetOutput{
+		Feature: FeatureItem{
+			Name:  "my_flag",
+			State: "conditional",
+			Gates: []GateItem{{Key: "percentage_of_time", Value: 50}},
+			Definition: &DefinitionItem{
+				Name:                "my_flag",
+				IntroducedByURL:     "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/1",
+				RolloutIssueURL:     "https://gitlab.com/gitlab-org/gitlab/-/issues/2",
+				Milestone:           "16.0",
+				LogStateChanges:     true,
+				Type:                "development",
+				Group:               "group::ide",
+				DefaultEnabled:      true,
+				FeatureIssueURL:     "https://gitlab.com/gitlab-org/gitlab/-/issues/3",
+				IntendedToRolloutBy: "16.5",
+			},
+		},
+	}))
+	want := "## Feature Flag: my_flag\n\n" +
+		"- **State**: conditional\n" +
+		"- **Gates**: percentage_of_time=50\n" +
+		"- **Definition**:\n" +
+		"  - **Type**: development\n" +
+		"  - **Group**: group::ide\n" +
+		"  - **Milestone**: 16.0\n" +
+		"  - **Default Enabled**: ✅\n" +
+		"  - **Log State Changes**: ✅\n" +
+		"  - **Introduced By**: [https://gitlab.com/gitlab-org/gitlab/-/merge_requests/1](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/1)\n" +
+		"  - **Rollout Issue**: [https://gitlab.com/gitlab-org/gitlab/-/issues/2](https://gitlab.com/gitlab-org/gitlab/-/issues/2)\n" +
+		"  - **Feature Issue**: [https://gitlab.com/gitlab-org/gitlab/-/issues/3](https://gitlab.com/gitlab-org/gitlab/-/issues/3)\n" +
+		"  - **Intended To Roll Out By**: 16.5\n" +
+		featureHints
+	if got != want {
+		t.Errorf("FormatFeatureMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -314,10 +390,10 @@ func TestListDefinitions_APIError(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListDefinitionsMarkdown_Empty(t *testing.T) {
-	result := FormatListDefinitionsMarkdown(ListDefinitionsOutput{})
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "No feature definitions found") {
-		t.Errorf("expected empty message, got: %s", text)
+	got := markdownText(t, FormatListDefinitionsMarkdown(ListDefinitionsOutput{}))
+	want := "No feature definitions found.\n"
+	if got != want {
+		t.Errorf("FormatListDefinitionsMarkdown() = %q, want %q", got, want)
 	}
 }
 
@@ -329,19 +405,19 @@ func TestFormatListDefinitionsMarkdown_Empty(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatFeatureMarkdown_NoDefinition(t *testing.T) {
-	result := FormatFeatureMarkdown(SetOutput{
+	got := markdownText(t, FormatFeatureMarkdown(SetOutput{
 		Feature: FeatureItem{
 			Name:  "simple_flag",
 			State: "on",
 			Gates: []GateItem{},
 		},
-	})
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "simple_flag") {
-		t.Errorf("expected flag name, got: %s", text)
-	}
-	if strings.Contains(text, "Type") {
-		t.Errorf("should not contain Type when no definition: %s", text)
+	}))
+	want := "## Feature Flag: simple_flag\n\n" +
+		"- **State**: on\n" +
+		"- **Gates**: -\n" +
+		featureHints
+	if got != want {
+		t.Errorf("FormatFeatureMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 

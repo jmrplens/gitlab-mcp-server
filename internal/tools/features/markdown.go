@@ -1,7 +1,6 @@
 package features
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -9,70 +8,86 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatListMarkdown formats a list of features as markdown.
+// FormatListMarkdown renders the instance's feature flags as a Markdown table:
+// a collection of objects that share columns.
 func FormatListMarkdown(output ListOutput) *mcp.CallToolResult {
 	if len(output.Features) == 0 {
-		return toolutil.ToolResultWithMarkdown("No feature flags found.\n")
+		return toolutil.ToolResultWithMarkdown(toolutil.EmptyMessage("feature flags"))
 	}
 
 	var sb strings.Builder
-	sb.WriteString("## Feature Flags\n\n")
-	sb.WriteString("| Name | State | Gates |\n")
-	sb.WriteString("|------|-------|-------|\n")
+	// The endpoint pages nothing, so the heading counts what GitLab sent.
+	toolutil.WriteListHeading(&sb, "Feature Flags", len(output.Features), toolutil.PaginationOutput{})
+	sb.WriteString(toolutil.MarkdownTableHeader("Name", "State", "Gates"))
 	for _, f := range output.Features {
-		gates := formatGates(f.Gates)
-		fmt.Fprintf(&sb, "| %s | %s | %s |\n",
+		sb.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(f.Name),
 			toolutil.EscapeMdTableCell(f.State),
-			toolutil.EscapeMdTableCell(gates))
+			toolutil.EscapeMdTableCell(formatGates(f.Gates)),
+		))
 	}
-	toolutil.WriteHints(&sb, "Use `gitlab_set_feature_flag` to toggle a specific feature")
+	toolutil.WriteListFooter(&sb, toolutil.PaginationOutput{}, false,
+		"Use `gitlab_set_feature_flag` to toggle a specific feature")
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
-// FormatListDefinitionsMarkdown formats a list of feature definitions as markdown.
+// FormatListDefinitionsMarkdown renders the feature definitions GitLab ships
+// as a Markdown table.
 func FormatListDefinitionsMarkdown(output ListDefinitionsOutput) *mcp.CallToolResult {
 	if len(output.Definitions) == 0 {
-		return toolutil.ToolResultWithMarkdown("No feature definitions found.\n")
+		return toolutil.ToolResultWithMarkdown(toolutil.EmptyMessage("feature definitions"))
 	}
 
 	var sb strings.Builder
-	sb.WriteString("## Feature Definitions\n\n")
-	sb.WriteString("| Name | Type | Group | Milestone | Default Enabled |\n")
-	sb.WriteString("|------|------|-------|-----------|----------------|\n")
+	toolutil.WriteListHeading(&sb, "Feature Definitions", len(output.Definitions), toolutil.PaginationOutput{})
+	sb.WriteString(toolutil.MarkdownTableHeader("Name", "Type", "Group", "Milestone", "Default Enabled"))
 	for _, d := range output.Definitions {
-		fmt.Fprintf(&sb, "| %s | %s | %s | %s | %v |\n",
+		sb.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(d.Name),
 			toolutil.EscapeMdTableCell(d.Type),
 			toolutil.EscapeMdTableCell(d.Group),
 			toolutil.EscapeMdTableCell(d.Milestone),
-			d.DefaultEnabled)
+			toolutil.BoolEmoji(d.DefaultEnabled),
+		))
 	}
-	toolutil.WriteHints(&sb, "Use `gitlab_set_feature_flag` to enable or disable a feature")
+	toolutil.WriteListFooter(&sb, toolutil.PaginationOutput{}, false,
+		"Use `gitlab_set_feature_flag` to enable or disable a feature")
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
-// FormatFeatureMarkdown formats a single feature as markdown.
+// FormatFeatureMarkdown renders one feature flag as the card of one object,
+// with the definition GitLab ships for it as a nested object.
 func FormatFeatureMarkdown(output SetOutput) *mcp.CallToolResult {
 	f := output.Feature
-	var sb strings.Builder
+	var b strings.Builder
 	// A feature flag name is the string the caller of feature.set supplied,
 	// which GitLab creates on demand rather than validating against a list.
-	fmt.Fprintf(&sb, "## Feature Flag: %s\n\n", toolutil.EscapeMdHeading(f.Name))
-	sb.WriteString("| Property | Value |\n")
-	sb.WriteString("|----------|-------|\n")
-	//gitlab:allow-unescaped f.State: a feature flag state GitLab picks from a fixed set (on, off, conditional).
-	fmt.Fprintf(&sb, "| State | %s |\n", f.State)
-	fmt.Fprintf(&sb, "| Gates | %s |\n", toolutil.EscapeMdTableCell(formatGates(f.Gates)))
-	if f.Definition != nil {
-		// Both are read out of the flag's definition file in GitLab's own
-		// source tree, so neither is a set this server can know.
-		fmt.Fprintf(&sb, "| Type | %s |\n", toolutil.EscapeMdTableCell(f.Definition.Type))
-		fmt.Fprintf(&sb, "| Group | %s |\n", toolutil.EscapeMdTableCell(f.Definition.Group))
-		fmt.Fprintf(&sb, "| Default Enabled | %v |\n", f.Definition.DefaultEnabled)
+	c := toolutil.NewCard(&b, "Feature Flag: "+f.Name)
+	c.Field("State", f.State)
+	c.Field("Gates", formatGates(f.Gates))
+	writeDefinition(c, f.Definition)
+	c.End("Use `gitlab_set_feature_flag` to toggle this feature")
+	return toolutil.ToolResultWithMarkdown(b.String())
+}
+
+// writeDefinition writes the flag's definition as a nested object, and writes
+// nothing when GitLab shipped none. Everything under it is read out of the
+// definition file in GitLab's own source tree, so no value here is from a set
+// this server can know.
+func writeDefinition(c *toolutil.Card, d *DefinitionItem) {
+	if d == nil {
+		return
 	}
-	toolutil.WriteHints(&sb, "Use `gitlab_set_feature_flag` to toggle this feature")
-	return toolutil.ToolResultWithMarkdown(sb.String())
+	def := c.Sub("Definition")
+	def.Field("Type", d.Type)
+	def.Field("Group", d.Group)
+	def.Field("Milestone", d.Milestone)
+	def.Bool("Default Enabled", d.DefaultEnabled)
+	def.Bool("Log State Changes", d.LogStateChanges)
+	def.Link("Introduced By", d.IntroducedByURL, d.IntroducedByURL)
+	def.Link("Rollout Issue", d.RolloutIssueURL, d.RolloutIssueURL)
+	def.Link("Feature Issue", d.FeatureIssueURL, d.FeatureIssueURL)
+	def.Field("Intended To Roll Out By", d.IntendedToRolloutBy)
 }
 
 func init() {

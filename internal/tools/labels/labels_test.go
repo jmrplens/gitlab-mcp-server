@@ -940,60 +940,110 @@ func TestPromote_CancelledContext(t *testing.T) {
 // Formatters — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_AllFields verifies FormatMarkdown when all fields.
+// TestFormatMarkdown_AllFields pins the whole project label card, the archive
+// flag included: GitLab archives a label rather than deleting it, and the card
+// used to show an archived label exactly as it shows a live one.
 func TestFormatMarkdown_AllFields(t *testing.T) {
 	o := Output{
 		ID: 1, Name: "bug", Color: "#d9534f", Description: "Bug report",
-		Priority: 3, IsProjectLabel: true, Subscribed: true,
+		Priority: 3, IsProjectLabel: true, Subscribed: true, Archived: true,
 		OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1,
 	}
+
 	md := FormatMarkdown(o)
-	for _, want := range []string{"bug", "#d9534f", "Bug report", "Priority", "3", "Issues", "5 open", "2 closed", "Open MRs", "1"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatMarkdown missing %q in:\n%s", want, md)
-			}
-		})
+
+	want := "## Label: bug\n\n" +
+		"- **ID**: 1\n" +
+		"- **Color**: #d9534f\n" +
+		"- **Description**: Bug report\n" +
+		"- **Priority**: 3\n" +
+		"- **Project label**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Subscribed**: " + toolutil.EmojiSuccess + "\n" +
+		"- " + toolutil.EmojiArchived + " **Archived**\n" +
+		"- **Issues**: 5 open, 2 closed\n" +
+		"- **Open MRs**: 1\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'label_update' to change label name, color, or description\n" +
+		"- Use action 'label_delete' to remove this label\n"
+	if md != want {
+		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatMarkdown_Minimal verifies FormatMarkdown when minimal.
+// TestFormatMarkdown_Minimal pins the whole card of a label GitLab sent
+// nothing optional for: no priority, counter or archive row is written.
 func TestFormatMarkdown_Minimal(t *testing.T) {
-	o := Output{ID: 2, Name: "wontfix", Color: "#000"}
-	md := FormatMarkdown(o)
-	if strings.Contains(md, "Priority") {
-		t.Error("minimal label should not show Priority")
-	}
-	if strings.Contains(md, "Issues") {
-		t.Error("minimal label should not show Issues section")
-	}
-	if !strings.Contains(md, "wontfix") {
-		t.Error("missing label name")
+	md := FormatMarkdown(Output{ID: 2, Name: "wontfix", Color: "#000", IsProjectLabel: true})
+
+	want := "## Label: wontfix\n\n" +
+		"- **ID**: 2\n" +
+		"- **Color**: #000\n" +
+		"- **Project label**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Subscribed**: " + toolutil.EmojiCross + "\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'label_update' to change label name, color, or description\n" +
+		"- Use action 'label_delete' to remove this label\n"
+	if md != want {
+		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
+// TestFormatMarkdown_InheritedGroupLabelKeepsItsScope pins the scope rule: a
+// project's label list carries the group labels the project inherits, and a
+// card for one of those must not name the project actions that cannot touch
+// it. Both label packages register this same rendering for the one output type
+// they share.
+func TestFormatMarkdown_InheritedGroupLabelKeepsItsScope(t *testing.T) {
+	md := FormatMarkdown(Output{ID: 9, Name: "inherited", Color: "#abcdef"})
+
+	want := "## Group Label: inherited\n\n" +
+		"- **ID**: 9\n" +
+		"- **Color**: #abcdef\n" +
+		"- **Project label**: " + toolutil.EmojiCross + "\n" +
+		"- **Subscribed**: " + toolutil.EmojiCross + "\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- If the workflow asks to fetch/get before update or delete, use the selected tool surface's group-label get action with the same group_id and this label_id next\n" +
+		"- Use the selected tool surface's group-label update action with the same group_id and this label_id to modify this label\n" +
+		"- Use the selected tool surface's group-label delete action with the same group_id, this label_id, and explicit confirm=true to remove this label\n" +
+		"- Use the selected tool surface's group-label subscribe or unsubscribe actions with the same group_id and this label_id to follow or unfollow\n"
+	if md != want {
+		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatListMarkdownString_Empty pins the whole render of a project with
+// no labels: one sentence and nothing else.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
-	md := FormatListMarkdownString(ListOutput{})
-	if !strings.Contains(md, "No labels found") {
-		t.Errorf("expected 'No labels found', got:\n%s", md)
+	if got, want := FormatListMarkdownString(ListOutput{}), "No labels found.\n"; got != want {
+		t.Errorf("FormatListMarkdownString() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatListMarkdownString_WithLabels verifies FormatListMarkdownString when with labels.
+// TestFormatListMarkdownString_WithLabels pins the whole label table, an
+// archived label's glyph included, and the scope column that tells a project's
+// own labels from the ones it inherits.
 func TestFormatListMarkdownString_WithLabels(t *testing.T) {
 	out := ListOutput{
 		Labels: []Output{
-			{ID: 1, Name: "bug", Color: "#d9534f", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1},
+			{ID: 1, Name: "bug", Color: "#d9534f", IsProjectLabel: true, OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1},
+			{ID: 2, Name: "stale", Color: "#cccccc", Archived: true},
 		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1},
+		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	}
+
 	md := FormatListMarkdownString(out)
-	if !strings.Contains(md, "bug") {
-		t.Errorf("missing label in table:\n%s", md)
-	}
-	if !strings.Contains(md, "| Name |") {
-		t.Errorf("missing table header:\n%s", md)
+
+	want := "## Labels (2)\n\n" +
+		"| Name | Color | Scope | Open Issues | Closed Issues | Open MRs |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| bug | #d9534f | project | 5 | 2 | 1 |\n" +
+		"| " + toolutil.EmojiArchived + " stale | #cccccc | group | 0 | 0 | 0 |\n" +
+		"\n2 items total\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'label_get' with a label_id to see label details\n" +
+		"- Use action 'label_create' to create a new label\n"
+	if md != want {
+		t.Errorf("FormatListMarkdownString()\n got %q\nwant %q", md, want)
 	}
 }
 

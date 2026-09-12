@@ -1,77 +1,82 @@
 package customemoji
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionList   = "custom_emoji.list"
+	actionCreate = "custom_emoji.create"
+	actionDelete = "custom_emoji.delete"
+)
+
+// emojiCell renders a custom emoji's name the way GitLab shows it, ":name:",
+// with the name escaped for a cell.
+func emojiCell(name string) string {
+	if name == "" {
+		return ""
+	}
+	return ":" + toolutil.EscapeMdTableCell(name) + ":"
+}
+
 // FormatListMarkdown renders a paginated list of custom emoji as Markdown.
+//
+// The ID column carries the global ID the delete action takes: without it the
+// list named every emoji and gave a reader no value to act on.
 func FormatListMarkdown(out ListOutput) string {
-	var sb strings.Builder
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	sb.WriteString("## Custom Emoji\n\n")
-
 	if len(out.Emoji) == 0 {
-		sb.WriteString("No custom emoji found.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("custom emoji")
 	}
-
-	sb.WriteString("| Name | External | Created |\n")
-	sb.WriteString("|------|----------|---------|\n")
-
+	var sb strings.Builder
+	toolutil.WriteListHeading(&sb, "Custom Emoji", len(out.Emoji), toolutil.PaginationOutput{})
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "External", "Created"))
+	linked := false
 	for _, e := range out.Emoji {
-		external := "No"
-		if e.External {
-			external = "Yes"
-		}
-		created := "-"
-		if e.CreatedAt != "" {
-			created = toolutil.EscapeMdTableCell(e.CreatedAt)
-		}
-
-		fmt.Fprintf(
-			&sb, "| :%s: | %s | %s |\n",
-			toolutil.EscapeMdTableCell(e.Name),
-			external,
-			created,
-		)
+		linked = linked || e.URL != ""
+		sb.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdCodeSpanCell(e.ID),
+			nameCell(e),
+			toolutil.BoolEmoji(e.External),
+			toolutil.FormatTime(e.CreatedAt),
+		))
 	}
-
-	sb.WriteString("\n")
-	sb.WriteString(toolutil.FormatGraphQLPagination(out.Pagination, len(out.Emoji)))
-	sb.WriteString("\n")
+	toolutil.WriteGraphQLPagination(&sb, out.Pagination, len(out.Emoji))
+	toolutil.WriteListFooter(&sb, toolutil.PaginationOutput{}, linked,
+		toolutil.HintAction(actionCreate, "add another emoji to the group"),
+		toolutil.HintAction(actionDelete, "remove one by the ID in the first column"),
+	)
 	return sb.String()
 }
 
-// FormatCreateMarkdown renders a single created custom emoji as Markdown.
+// nameCell renders the emoji as its ":name:" form linked to the image GitLab
+// serves for it, or as the bare form when GitLab sent no URL.
+func nameCell(e Item) string {
+	cell := emojiCell(e.Name)
+	if cell == "" || e.URL == "" {
+		return cell
+	}
+	return toolutil.MdTitleLink(cell, e.URL)
+}
+
+// FormatCreateMarkdown renders a created custom emoji as the card of one
+// object. The global ID is a code span because it is the value the delete
+// action takes and a reader has to copy it exactly.
 func FormatCreateMarkdown(out CreateOutput) string {
-	var sb strings.Builder
-	sb.WriteString(toolutil.EmojiSuccess + " Custom emoji created.\n\n")
-	sb.WriteString("| Field | Value |\n")
-	sb.WriteString("|-------|-------|\n")
-	//gitlab:allow-unescaped out.Emoji.ID: a GraphQL global id GitLab mints, gid://gitlab/CustomEmoji/ and a number.
-	fmt.Fprintf(&sb, "| ID | `%s` |\n", out.Emoji.ID)
-	fmt.Fprintf(&sb, "| Name | :%s: |\n", toolutil.EscapeMdTableCell(out.Emoji.Name))
-	fmt.Fprintf(&sb, "| URL | %s |\n", toolutil.MdTitleLink(out.Emoji.Name, out.Emoji.URL))
-
-	external := "No"
-	if out.Emoji.External {
-		external = "Yes"
-	}
-	fmt.Fprintf(&sb, "| External | %s |\n", external)
-
-	if out.Emoji.CreatedAt != "" {
-		fmt.Fprintf(&sb, "| Created | %s |\n", toolutil.EscapeMdTableCell(out.Emoji.CreatedAt))
-	}
-	toolutil.WriteHints(
-		&sb,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_list_custom_emoji` to view all custom emoji",
-		"Use `gitlab_delete_custom_emoji` to remove this emoji",
+	var b strings.Builder
+	c := toolutil.NewCard(&b, toolutil.EmojiSuccess+" Custom Emoji Created")
+	c.Code("ID", out.Emoji.ID)
+	c.Markdown("Name", emojiCell(out.Emoji.Name))
+	c.URL(out.Emoji.URL)
+	c.Bool("External", out.Emoji.External)
+	c.Time("Created", out.Emoji.CreatedAt)
+	c.End(
+		toolutil.HintAction(actionList, "see every custom emoji in the group"),
+		toolutil.HintAction(actionDelete, "remove this emoji"),
 	)
-	return sb.String()
+	return b.String()
 }
 
 func init() {

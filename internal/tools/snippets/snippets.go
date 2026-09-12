@@ -261,16 +261,24 @@ func snippetsHaveProject(snippets []Output) bool {
 	return false
 }
 
-// writeProjectSnippetTable writes project snippet table to disk.
+// writeProjectSnippetTable writes the snippet rows a page of project snippets
+// renders as, through the shared table writers rather than as hand-written
+// pipes, and with the author's handle through [toolutil.MdUserHandle], which
+// renders nothing for a snippet GitLab sent no author for instead of a bare
+// "@".
 func writeProjectSnippetTable(b *strings.Builder, snippets []Output) {
-	b.WriteString("| ID | Title | Project | Visibility | Author | Files |\n")
-	b.WriteString("|---|---|---|---|---|---|\n")
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Title", "Project", "Visibility", "Author", "Files"))
 	for _, s := range snippets {
 		proj := resolveProjectLabel(s)
 		//gitlab:allow-unescaped s.Visibility: a snippet visibility GitLab answers as private, internal or public.
-		fmt.Fprintf(b, "| %d | %s | %s | %s | @%s | %d |\n",
-			s.ID, toolutil.MdTitleLink(s.Title, s.WebURL), toolutil.EscapeMdTableCell(proj), s.Visibility,
-			toolutil.EscapeMdTableCell(authorUsername(s.Author)), len(s.Files))
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(s.ID, 10),
+			toolutil.MdTitleLink(s.Title, s.WebURL),
+			toolutil.EscapeMdTableCell(proj),
+			s.Visibility,
+			toolutil.MdUserHandle(authorUsername(s.Author)),
+			strconv.Itoa(len(s.Files)),
+		))
 	}
 }
 
@@ -285,14 +293,19 @@ func resolveProjectLabel(s Output) string {
 	return strconv.FormatInt(s.ProjectID, 10)
 }
 
-// writeSimpleSnippetTable writes simple snippet table to disk.
+// writeSimpleSnippetTable writes the rows a page of personal snippets renders
+// as, on the same terms as [writeProjectSnippetTable] without the project
+// column.
 func writeSimpleSnippetTable(b *strings.Builder, snippets []Output) {
-	b.WriteString("| ID | Title | Visibility | Author | Files |\n")
-	b.WriteString("|---|---|---|---|---|\n")
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Title", "Visibility", "Author", "Files"))
 	for _, s := range snippets {
-		fmt.Fprintf(b, "| %d | %s | %s | @%s | %d |\n",
-			s.ID, toolutil.MdTitleLink(s.Title, s.WebURL), s.Visibility,
-			toolutil.EscapeMdTableCell(authorUsername(s.Author)), len(s.Files))
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(s.ID, 10),
+			toolutil.MdTitleLink(s.Title, s.WebURL),
+			s.Visibility,
+			toolutil.MdUserHandle(authorUsername(s.Author)),
+			strconv.Itoa(len(s.Files)),
+		))
 	}
 }
 

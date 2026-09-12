@@ -2,44 +2,76 @@ package alertmanagement
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatListMarkdown formats metric images as markdown.
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionList   = "admin.alert_metric_image_list"
+	actionUpload = "admin.alert_metric_image_upload"
+	actionUpdate = "admin.alert_metric_image_update"
+)
+
+// metricLinkCell renders the image's address as the link a reader follows,
+// labeled with the caption whoever uploaded it typed and with the address
+// itself when they typed none. The label used to be the file name, which said
+// nothing the Filename column had not already said and lost the caption
+// entirely.
+func metricLinkCell(img MetricImageItem) string {
+	if img.URL == "" {
+		return ""
+	}
+	label := img.URLText
+	if label == "" {
+		label = img.URL
+	}
+	return toolutil.MdTitleLink(label, img.URL)
+}
+
+// FormatListMarkdown renders a page of alert metric images as a Markdown
+// table: a collection of objects that share columns.
 func FormatListMarkdown(out ListMetricImagesOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Alert Metric Images\n\n")
-	toolutil.WriteListSummary(&sb, len(out.Images), out.Pagination)
 	if len(out.Images) == 0 {
-		sb.WriteString("No metric images found.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("metric images")
 	}
-	sb.WriteString("| ID | Filename | URL |\n|----|----------|-----|\n")
+	var sb strings.Builder
+	toolutil.WriteListHeading(&sb, "Alert Metric Images", len(out.Images), out.Pagination)
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Filename", "File Path", "Metric Link"))
+	linked := false
 	for _, img := range out.Images {
-		fmt.Fprintf(&sb, "| %d | %s | %s |\n", img.ID, toolutil.EscapeMdTableCell(img.Filename), toolutil.MdTitleLink(img.Filename, img.URL))
+		linked = linked || img.URL != ""
+		sb.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(img.ID, 10),
+			// Both the file name and the path are chosen by whoever uploaded
+			// the image.
+			toolutil.EscapeMdTableCell(img.Filename),
+			toolutil.EscapeMdTableCell(img.FilePath),
+			metricLinkCell(img),
+		))
 	}
-	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(
-		&sb,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_upload_alert_metric_image` to add a new metric image",
+	toolutil.WriteListFooter(&sb, out.Pagination, linked,
+		toolutil.HintAction(actionUpload, "add another metric image to the alert"),
 	)
 	return sb.String()
 }
 
-// FormatImageMarkdown formats a single metric image as markdown.
+// FormatImageMarkdown renders a single metric image as the card of one object.
 func FormatImageMarkdown(img MetricImageItem) string {
 	var b strings.Builder
+	c := toolutil.NewCard(&b, fmt.Sprintf("Metric Image #%d", img.ID))
+	c.Int("ID", img.ID)
 	// Both are chosen by whoever uploaded the image.
-	fmt.Fprintf(&b, "## Metric Image\n\n- **ID**: %d\n- **Filename**: %s\n", img.ID, toolutil.EscapeMdTableCell(img.Filename))
-	toolutil.WriteMdURL(&b, img.URL)
-	fmt.Fprintf(&b, "- **URL Text**: %s\n", toolutil.EscapeMdTableCell(img.URLText))
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_list_alert_metric_images` to see all metric images for an alert",
+	c.Field("Filename", img.Filename)
+	c.Field("File Path", img.FilePath)
+	c.Markdown("Metric Link", metricLinkCell(img))
+	c.Field("URL Text", img.URLText)
+	c.Time("Created", img.CreatedAt)
+	c.End(
+		toolutil.HintAction(actionList, "see every metric image on this alert"),
+		toolutil.HintAction(actionUpdate, "change this image's caption or link"),
 	)
 	return b.String()
 }

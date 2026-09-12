@@ -3,91 +3,115 @@ package auditevents
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatMarkdown renders a single audit event as Markdown.
+// FormatMarkdown renders a single audit event as the card of one object.
+//
+// Every field the details carry is written, not just the five the card used to
+// show: what a particular audit event says about itself lives in the singular
+// detail fields (with, as, add, remove, change, from, to, the custom message,
+// the failed login), and dropping them left a reader with an event name and
+// nothing about what changed.
 func FormatMarkdown(e Output) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Audit Event #%d\n\n", e.ID)
-	sb.WriteString("| Field | Value |\n|-------|-------|\n")
-	fmt.Fprintf(&sb, "| ID | %d |\n", e.ID)
-	fmt.Fprintf(&sb, "| Author ID | %d |\n", e.AuthorID)
-	fmt.Fprintf(&sb, "| Entity ID | %d |\n", e.EntityID)
-	fmt.Fprintf(&sb, "| Entity Type | %s |\n", toolutil.EscapeMdTableCell(e.EntityType))
-	fmt.Fprintf(&sb, "| Event Name | %s |\n", toolutil.EscapeMdTableCell(e.EventName))
-	//gitlab:allow-unescaped e.CreatedAt: a timestamp this package formatted itself from the time client-go parsed.
-	fmt.Fprintf(&sb, "| Created At | %s |\n", e.CreatedAt)
-	if e.Details.AuthorName != "" {
-		fmt.Fprintf(&sb, "| Author Name | %s |\n", toolutil.EscapeMdTableCell(e.Details.AuthorName))
-	}
-	if e.Details.TargetType != "" {
-		fmt.Fprintf(&sb, "| Target Type | %s |\n", toolutil.EscapeMdTableCell(e.Details.TargetType))
-	}
-	if e.Details.TargetDetails != "" {
-		fmt.Fprintf(&sb, "| Target Details | %s |\n", toolutil.EscapeMdTableCell(e.Details.TargetDetails))
-	}
-	if e.Details.IPAddress != "" {
-		//gitlab:allow-unescaped e.Details.IPAddress: GitLab records the address the request arrived from, so it is an IP literal.
-		fmt.Fprintf(&sb, "| IP Address | %s |\n", e.Details.IPAddress)
-	}
-	if e.Details.EntityPath != "" {
-		fmt.Fprintf(&sb, "| Entity Path | %s |\n", toolutil.EscapeMdTableCell(e.Details.EntityPath))
-	}
-	if len(e.Details.Changes) > 0 {
-		sb.WriteString("\n### Changes\n\n")
-		sb.WriteString("| Change | From | To |\n|--------|------|----|\n")
-		for _, c := range e.Details.Changes {
-			fmt.Fprintf(
-				&sb, "| %s | %s | %s |\n",
-				toolutil.EscapeMdTableCell(c.Change),
-				toolutil.EscapeMdTableCell(c.From),
-				toolutil.EscapeMdTableCell(c.To),
-			)
-		}
-	}
-	if e.Details.ChangeObject != nil {
-		if raw, err := json.Marshal(e.Details.ChangeObject); err == nil {
-			// The change object echoes whatever the audited change carried, and
-			// JSON escaping leaves a backtick alone, so the fence is sized to
-			// the document rather than written as three.
-			sb.WriteString("\n### Change (object)\n\n")
-			sb.WriteString(toolutil.MarkdownFencedBlock("json", string(raw)))
-		}
-	}
-	toolutil.WriteHints(
-		&sb,
-		"Use `gitlab_list_project_audit_events` or `gitlab_list_group_audit_events` to browse more events",
+	var b strings.Builder
+	c := toolutil.NewCard(&b, fmt.Sprintf("Audit Event #%d", e.ID))
+	c.Int("ID", e.ID)
+	c.Field("Event Name", e.EventName)
+	c.Field("Detail Event Name", e.Details.EventName)
+	c.Field("Entity Type", e.EntityType)
+	c.Int("Entity ID", e.EntityID)
+	c.Field("Entity Path", e.Details.EntityPath)
+	c.Time("Created", e.CreatedAt)
+	c.Int("Author ID", e.AuthorID)
+	c.Field("Author Name", e.Details.AuthorName)
+	c.Field("Author Email", e.Details.AuthorEmail)
+	c.Field("Author Class", e.Details.AuthorClass)
+	c.Field("Target Type", e.Details.TargetType)
+	c.Field("Target ID", e.Details.TargetID)
+	c.Field("Target Details", e.Details.TargetDetails)
+	// GitLab records the address the request arrived from, so it is an IP
+	// literal, and a code span is where a value a reader copies belongs.
+	c.Code("IP Address", e.Details.IPAddress)
+	c.Field("Failed Login", e.Details.FailedLogin)
+	c.Field("With", e.Details.With)
+	c.Field("As", e.Details.As)
+	c.Field("Add", e.Details.Add)
+	c.Field("Remove", e.Details.Remove)
+	c.Field("Change", e.Details.Change)
+	c.Field("From", e.Details.From)
+	c.Field("To", e.Details.To)
+	c.Text("Custom Message", e.Details.CustomMessage)
+	writeChanges(c, e.Details.Changes)
+	writeChangeObject(c, e.Details.ChangeObject)
+	c.End(
+		toolutil.HintAction(actionListProject, "browse a project's audit events"),
+		toolutil.HintAction(actionListGroup, "browse a group's audit events"),
+		toolutil.HintAction(actionListInstance, "browse the instance's audit events"),
 	)
-	return sb.String()
+	return b.String()
 }
 
-// FormatListMarkdown renders a paginated list of audit events as Markdown.
-func FormatListMarkdown(out ListOutput) string {
-	var sb strings.Builder
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	sb.WriteString("## Audit Events\n\n")
-	if len(out.AuditEvents) == 0 {
-		sb.WriteString("No audit events found.\n")
-		return sb.String()
+// writeChanges renders the plural changes array as the nested collection it
+// is, and nothing when the event carries none.
+func writeChanges(c *toolutil.Card, changes []ChangeEntry) {
+	if len(changes) == 0 {
+		return
 	}
-	sb.WriteString("| ID | Event Name | Entity Type | Entity ID | Author ID | Created At |\n")
-	sb.WriteString("|-----|------------|-------------|-----------|-----------|------------|\n")
-	for _, e := range out.AuditEvents {
-		fmt.Fprintf(
-			&sb, "| %d | %s | %s | %d | %d | %s |\n",
-			e.ID,
-			toolutil.EscapeMdTableCell(e.EventName),
-			toolutil.EscapeMdTableCell(e.EntityType),
-			e.EntityID,
-			e.AuthorID,
-			e.CreatedAt,
+	table := c.Table("Changes", "Change", "From", "To")
+	for _, change := range changes {
+		table.Row(
+			toolutil.EscapeMdTableCell(change.Change),
+			toolutil.EscapeMdTableCell(change.From),
+			toolutil.EscapeMdTableCell(change.To),
 		)
 	}
-	toolutil.WriteListSummary(&sb, len(out.AuditEvents), out.Pagination)
-	return sb.String()
+}
+
+// writeChangeObject renders an object-valued change as JSON inside a fence
+// sized to the document: the object echoes whatever the audited change
+// carried, and JSON escaping leaves a backtick alone.
+func writeChangeObject(c *toolutil.Card, object any) {
+	if object == nil {
+		return
+	}
+	raw, err := json.Marshal(object)
+	if err != nil {
+		return
+	}
+	c.Fence("Change (object)", "json", string(raw))
+}
+
+// FormatListMarkdown renders a page of audit events as a Markdown table: a
+// collection of objects that share columns.
+func FormatListMarkdown(out ListOutput) string {
+	if len(out.AuditEvents) == 0 {
+		return toolutil.EmptyMessage("audit events")
+	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Audit Events", len(out.AuditEvents), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Event Name", "Entity Type", "Entity ID", "Author ID", "Created"))
+	for _, e := range out.AuditEvents {
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(e.ID, 10),
+			toolutil.EscapeMdTableCell(e.EventName),
+			toolutil.EscapeMdTableCell(e.EntityType),
+			strconv.FormatInt(e.EntityID, 10),
+			strconv.FormatInt(e.AuthorID, 10),
+			toolutil.FormatTime(e.CreatedAt),
+		))
+	}
+	// The table carries no link, so the footer carries no instruction to keep
+	// the links of a table that has none.
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionGetProject, "read one project event in full, details included"),
+		toolutil.HintAction(actionGetGroup, "read one group event in full"),
+		toolutil.HintAction(actionGetInstance, "read one instance event in full"),
+	)
+	return b.String()
 }
 
 func init() {

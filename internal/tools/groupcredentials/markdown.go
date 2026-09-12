@@ -2,105 +2,120 @@ package groupcredentials
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// The three timestamps below are written by this package's own converters with
-// a constant layout, so nothing a person typed survives into them. Both the
-// token and the SSH key formatter name their parameter out, and one
-// declaration covers a package, so each is declared once here rather than six
-// times below.
-//
-//gitlab:allow-unescaped out.CreatedAt: a timestamp toPATOutput or toSSHKeyOutput wrote in the wire form through toolutil.RFC3339Ptr.
-//gitlab:allow-unescaped out.LastUsedAt: a timestamp toPATOutput or toSSHKeyOutput wrote in the wire form through toolutil.RFC3339Ptr.
-//gitlab:allow-unescaped out.ExpiresAt: a date rendered with a constant layout, gl.ISOTime.String for a token and toolutil.RFC3339Ptr for an SSH key.
+// Canonical catalog action IDs the hints name. The credential actions are
+// routes on the group catalog group, so their domain is "group".
+const (
+	actionListPATs     = "group.credential_list_pats"
+	actionRevokePAT    = "group.credential_revoke_pat"
+	actionListSSHKeys  = "group.credential_list_ssh_keys"
+	actionDeleteSSHKey = "group.credential_delete_ssh_key"
 
-// FormatPATMarkdown formats a single personal access token as Markdown.
+	// The two labels a card row and a table column both carry.
+	labelUserID    = "User ID"
+	labelExpiresAt = "Expires At"
+)
+
+// FormatPATMarkdown renders one enterprise personal access token as a card.
+//
+// Revoked is written as a warning rather than as a flag: a tick against
+// "Revoked" reads as success, which is the opposite of what it says.
 func FormatPATMarkdown(out PATOutput) string {
-	var sb strings.Builder
+	var b strings.Builder
 	// A token name is free text whoever created the token typed.
-	fmt.Fprintf(&sb, "## Personal Access Token: %s (ID: %d)\n\n", toolutil.EscapeMdHeading(out.Name), out.ID)
-	sb.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| **User ID** | %d |\n", out.UserID)
-	fmt.Fprintf(&sb, "| **Active** | %t |\n", out.Active)
-	fmt.Fprintf(&sb, "| **Revoked** | %t |\n", out.Revoked)
-	if len(out.Scopes) > 0 {
-		//gitlab:allow-unescaped strings.Join(out.Scopes, ", "): token scopes, which GitLab refuses to store outside its own fixed set.
-		fmt.Fprintf(&sb, "| **Scopes** | %s |\n", strings.Join(out.Scopes, ", "))
-	}
-	if out.ExpiresAt != "" {
-		fmt.Fprintf(&sb, "| **Expires At** | %s |\n", out.ExpiresAt)
-	}
-	fmt.Fprintf(&sb, "| **Created At** | %s |\n", out.CreatedAt)
-	if out.LastUsedAt != "" {
-		fmt.Fprintf(&sb, "| **Last Used At** | %s |\n", out.LastUsedAt)
-	}
-	return sb.String()
+	c := toolutil.NewCard(&b, fmt.Sprintf("Personal Access Token: %s (ID: %d)", out.Name, out.ID))
+	c.Int("ID", out.ID)
+	c.Int(labelUserID, out.UserID)
+	c.Field("Description", out.Description)
+	c.Bool("Active", out.Active)
+	c.Warn("Revoked", out.Revoked)
+	c.Field("Scopes", strings.Join(out.Scopes, ", "))
+	c.Time(labelExpiresAt, out.ExpiresAt)
+	c.Time("Created", out.CreatedAt)
+	c.Time("Last Used", out.LastUsedAt)
+	c.End(
+		toolutil.HintAction(actionListPATs, "see the group's other tokens"),
+		toolutil.HintAction(actionRevokePAT, "revoke this token"),
+	)
+	return b.String()
 }
 
-// FormatPATListMarkdown formats a list of personal access tokens as Markdown.
+// FormatPATListMarkdown renders a page of enterprise personal access tokens as
+// a Markdown table.
+//
+// The hints used to be written between the heading and the table header, which
+// left the header lazily continuing the guidance list: no table rendered at
+// all, and ExtractHints found no section to read.
 func FormatPATListMarkdown(out PATListOutput) string {
 	if len(out.Tokens) == 0 {
-		return "No personal access tokens found."
+		return toolutil.EmptyMessage("personal access tokens")
 	}
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Personal Access Tokens (%d)\n\n", len(out.Tokens))
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	sb.WriteString("| ID | Name | User ID | Active | Revoked | Scopes | Expires At |\n")
-	sb.WriteString("|---|---|---|---|---|---|---|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Personal Access Tokens", len(out.Tokens), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", labelUserID, "Active", "Revoked", "Scopes", labelExpiresAt))
 	for _, t := range out.Tokens {
-		scopes := strings.Join(t.Scopes, ", ")
-		fmt.Fprintf(&sb, "| %d | %s | %d | %t | %t | %s | %s |\n",
-			//gitlab:allow-unescaped scopes: the same token scopes, joined for one row of the list.
-			//gitlab:allow-unescaped t.ExpiresAt: a date gl.ISOTime rendered as YYYY-MM-DD.
-			t.ID, toolutil.EscapeMdTableCell(t.Name), t.UserID, t.Active, t.Revoked, scopes, t.ExpiresAt)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(t.ID, 10),
+			toolutil.EscapeMdTableCell(t.Name),
+			strconv.FormatInt(t.UserID, 10),
+			toolutil.BoolEmoji(t.Active),
+			toolutil.BoolEmoji(t.Revoked),
+			toolutil.EscapeMdTableCell(strings.Join(t.Scopes, ", ")),
+			toolutil.FormatTime(t.ExpiresAt),
+		))
 	}
-	toolutil.WritePagination(&sb, out.Pagination)
-	return sb.String()
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionRevokePAT, "revoke one of these tokens"),
+	)
+	return b.String()
 }
 
-// FormatSSHKeyMarkdown formats a single SSH key as Markdown.
+// FormatSSHKeyMarkdown renders one enterprise SSH key as a card.
 func FormatSSHKeyMarkdown(out SSHKeyOutput) string {
-	var sb strings.Builder
+	var b strings.Builder
 	// An SSH key title is the name its owner gave it, with GitLab falling back
 	// to the key's own comment field, which the owner also wrote.
-	fmt.Fprintf(&sb, "## SSH Key: %s (ID: %d)\n\n", toolutil.EscapeMdHeading(out.Title), out.ID)
-	sb.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| **User ID** | %d |\n", out.UserID)
-	if out.UsageType != "" {
-		//gitlab:allow-unescaped out.UsageType: an SSH key usage GitLab picks from a fixed set (auth, signing, auth_and_signing).
-		fmt.Fprintf(&sb, "| **Usage Type** | %s |\n", out.UsageType)
-	}
-	fmt.Fprintf(&sb, "| **Created At** | %s |\n", out.CreatedAt)
-	if out.ExpiresAt != "" {
-		fmt.Fprintf(&sb, "| **Expires At** | %s |\n", out.ExpiresAt)
-	}
-	if out.LastUsedAt != "" {
-		fmt.Fprintf(&sb, "| **Last Used At** | %s |\n", out.LastUsedAt)
-	}
-	return sb.String()
+	c := toolutil.NewCard(&b, fmt.Sprintf("SSH Key: %s (ID: %d)", out.Title, out.ID))
+	c.Int("ID", out.ID)
+	c.Int(labelUserID, out.UserID)
+	c.Field("Usage Type", out.UsageType)
+	c.Time("Created", out.CreatedAt)
+	c.Time(labelExpiresAt, out.ExpiresAt)
+	c.Time("Last Used", out.LastUsedAt)
+	c.End(
+		toolutil.HintAction(actionListSSHKeys, "see the group's other keys"),
+		toolutil.HintAction(actionDeleteSSHKey, "delete this key"),
+	)
+	return b.String()
 }
 
-// FormatSSHKeyListMarkdown formats a list of SSH keys as Markdown.
+// FormatSSHKeyListMarkdown renders a page of enterprise SSH keys as a Markdown
+// table.
 func FormatSSHKeyListMarkdown(out SSHKeyListOutput) string {
 	if len(out.Keys) == 0 {
-		return "No SSH keys found."
+		return toolutil.EmptyMessage("SSH keys")
 	}
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## SSH Keys (%d)\n\n", len(out.Keys))
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	sb.WriteString("| ID | Title | User ID | Created At | Expires At |\n")
-	sb.WriteString("|---|---|---|---|---|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "SSH Keys", len(out.Keys), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Title", labelUserID, "Created", labelExpiresAt))
 	for _, k := range out.Keys {
-		fmt.Fprintf(&sb, "| %d | %s | %d | %s | %s |\n",
-			//gitlab:allow-unescaped k.CreatedAt: a timestamp toSSHKeyOutput wrote in the wire form through toolutil.RFC3339Ptr.
-			//gitlab:allow-unescaped k.ExpiresAt: a timestamp toSSHKeyOutput wrote in the wire form through toolutil.RFC3339Ptr.
-			k.ID, toolutil.EscapeMdTableCell(k.Title), k.UserID, k.CreatedAt, k.ExpiresAt)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(k.ID, 10),
+			toolutil.EscapeMdTableCell(k.Title),
+			strconv.FormatInt(k.UserID, 10),
+			toolutil.FormatTime(k.CreatedAt),
+			toolutil.FormatTime(k.ExpiresAt),
+		))
 	}
-	toolutil.WritePagination(&sb, out.Pagination)
-	return sb.String()
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionDeleteSSHKey, "delete one of these keys"),
+	)
+	return b.String()
 }
 
 func init() {

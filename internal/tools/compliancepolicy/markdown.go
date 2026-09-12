@@ -1,29 +1,38 @@
 package compliancepolicy
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown formats compliance policy settings as Markdown.
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionUpdate   = "compliance_policy.update"
+	actionGroupGet = "group.get"
+)
+
+// cspNotSet is what the card shows when no namespace hosts the centralized
+// compliance security policy project. It is an answer rather than a missing
+// value, so it is written instead of the ID and not beside it.
+const cspNotSet = "not set"
+
+// FormatOutputMarkdown renders the instance compliance policy settings as the
+// card of one object: the namespace that hosts the centralized compliance
+// security policy (CSP) project, or the statement that none does.
 func FormatOutputMarkdown(out Output) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Compliance Policy Settings\n\n")
-	fmt.Fprintf(&sb, "| Field | Value |\n")
-	fmt.Fprintf(&sb, "|-------|-------|\n")
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Compliance Policy Settings")
 	if out.CSPNamespaceID != nil {
-		fmt.Fprintf(&sb, "| CSP Namespace ID | %d |\n", *out.CSPNamespaceID)
+		c.Int("CSP Namespace ID", *out.CSPNamespaceID)
 	} else {
-		fmt.Fprintf(&sb, "| CSP Namespace ID | _not set_ |\n")
+		c.Field("CSP Namespace ID", cspNotSet)
 	}
-	sb.WriteString("\n")
-	toolutil.WriteHints(
-		&sb,
-		"Use `gitlab_update_compliance_policy_settings` to modify these settings",
+	c.End(
+		toolutil.HintAction(actionUpdate, "bind the compliance security policy project to a top-level group"),
+		toolutil.HintAction(actionGroupGet, "read the group this namespace ID names"),
 	)
-	return sb.String()
+	return b.String()
 }
 
 func init() {

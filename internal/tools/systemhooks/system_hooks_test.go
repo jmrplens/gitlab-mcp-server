@@ -12,11 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // fmtUnexpPath identifies the fmt unexp path constant used by this package.
@@ -437,68 +434,7 @@ func TestURLVariable_APIErrors(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
-func TestFormatListMarkdown(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{
-		Hooks: []HookItem{
-			{ID: 1, URL: testHookURL, Name: "My Hook", PushEvents: true, EnableSSLVerification: true},
-		},
-	})
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "example.com") {
-		t.Errorf("expected URL in output, got: %s", text)
-	}
-	if !strings.Contains(text, "My Hook") {
-		t.Errorf("expected name in output, got: %s", text)
-	}
-}
-
-// TestFormatHookMarkdown verifies FormatHookMarkdown.
-func TestFormatHookMarkdown(t *testing.T) {
-	result := FormatHookMarkdown(HookItem{ID: 1, URL: testHookURL, Name: "My Hook", Description: "A test hook", PushEvents: true})
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "System Hook #1") {
-		t.Errorf("expected hook header, got: %s", text)
-	}
-	if !strings.Contains(text, "My Hook") {
-		t.Errorf("expected name in output, got: %s", text)
-	}
-	if !strings.Contains(text, "A test hook") {
-		t.Errorf("expected description in output, got: %s", text)
-	}
-}
-
-// TestFormatHookMarkdown_URLVariablesRedacted verifies system hook markdown
-// includes URL variable names while redacting their values.
-//
-// The formatter receives a hook with token metadata and one URL variable. The
-// expected output includes hook details plus REDACTED variable text, preserving
-// operational context without leaking webhook secrets.
-func TestFormatHookMarkdown_URLVariablesRedacted(t *testing.T) {
-	result := FormatHookMarkdown(HookItem{
-		ID:           1,
-		URL:          testHookURL,
-		URLVariables: []HookURLVariable{{Key: "token"}},
-	})
-	text := result.Content[0].(*mcp.TextContent).Text
-
-	for _, want := range []string{"URL Variables", "token", "REDACTED"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(text, want) {
-				t.Errorf("FormatHookMarkdown missing %q: %s", want, text)
-			}
-		})
-	}
-}
-
-// TestFormatTestMarkdown verifies FormatTestMarkdown.
-func TestFormatTestMarkdown(t *testing.T) {
-	result := FormatTestMarkdown(TestOutput{Event: HookEventItem{EventName: "project_create", Name: "test", ProjectID: 42}})
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "project_create") {
-		t.Errorf("expected event name, got: %s", text)
-	}
-}
+// The Markdown formatters are asserted whole in markdown_test.go.
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
@@ -603,54 +539,6 @@ func TestTest_APIError(t *testing.T) {
 	_, err := Test(context.Background(), client, TestInput{ID: 999})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Formatters — empty list
-// ---------------------------------------------------------------------------.
-
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
-func TestFormatListMarkdown_Empty(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{})
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "No system hooks found") {
-		t.Errorf("expected empty message, got: %s", text)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Formatters — hook with created_at
-// ---------------------------------------------------------------------------.
-
-// TestFormatHookMarkdown_WithCreatedAt verifies FormatHookMarkdown when with created at.
-func TestFormatHookMarkdown_WithCreatedAt(t *testing.T) {
-	result := FormatHookMarkdown(HookItem{
-		ID:        1,
-		URL:       "https://example.com/hook",
-		CreatedAt: "2026-01-01T00:00:00Z",
-	})
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "1 Jan 2026 00:00 UTC") {
-		t.Errorf("expected created_at in output, got: %s", text)
-	}
-}
-
-// TestFormatDelegatorMarkdown_GetAddEdit verifies the thin get/add/edit
-// formatter delegators produce the shared hook Markdown (non-empty result
-// with text content), covering their delegation bodies.
-func TestFormatDelegatorMarkdown_GetAddEdit(t *testing.T) {
-	hook := HookItem{ID: 7, URL: "https://example.com/hook"}
-	for name, result := range map[string]*mcp.CallToolResult{
-		"get":  FormatGetMarkdown(GetOutput{Hook: hook}),
-		"add":  FormatAddMarkdown(AddOutput{Hook: hook}),
-		"edit": FormatEditMarkdown(EditOutput{Hook: hook}),
-	} {
-		t.Run(name, func(t *testing.T) {
-			if result == nil || len(result.Content) == 0 {
-				t.Errorf("%s delegator returned empty result", name)
-			}
-		})
 	}
 }
 
@@ -838,51 +726,6 @@ func TestSystemHooks_UnreadableCapturedFields(t *testing.T) {
 		}})
 	}
 	testutil.AssertCapturedDecodeFailures(t, cases)
-}
-
-// TestFormatHookMarkdown_SentFields verifies the hook Markdown names the
-// fields read off the captured response, and leaves each of them out of a
-// hook that carries none.
-func TestFormatHookMarkdown_SentFields(t *testing.T) {
-	full := FormatHookMarkdown(HookItem{
-		ID:                     1,
-		URL:                    testHookURL,
-		PushEventsBranchFilter: "release/*",
-		BranchFilterStrategy:   "wildcard",
-		AlertStatus:            "temporarily_disabled",
-		DisabledUntil:          "2026-02-03T04:05:06Z",
-		CustomWebhookTemplate:  `{"event":"push"}`,
-		CustomHeaders:          []HookCustomHeader{{Key: "X-Env"}},
-		OrganizationID:         7,
-	}).Content[0].(*mcp.TextContent).Text
-	for _, want := range []string{
-		"Push Events Branch Filter", "release/*",
-		"Branch Filter Strategy", "wildcard",
-		"Alert Status", "temporarily_disabled",
-		"Disabled Until", "3 Feb 2026 04:05 UTC",
-		"Custom Webhook Template",
-		"Custom Headers", "X-Env", toolutil.RedactedSecretValue,
-		"Organization ID", "| 7 |",
-	} {
-		t.Run("shows "+want, func(t *testing.T) {
-			if !strings.Contains(full, want) {
-				t.Errorf("FormatHookMarkdown missing %q: %s", want, full)
-			}
-		})
-	}
-
-	bare := FormatHookMarkdown(HookItem{ID: 1, URL: testHookURL}).Content[0].(*mcp.TextContent).Text
-	for _, unwanted := range []string{
-		"Push Events Branch Filter", "Branch Filter Strategy", "Alert Status",
-		"Disabled Until", "Custom Webhook Template", "Custom Headers", "Organization ID",
-		"URL Variables",
-	} {
-		t.Run("omits "+unwanted, func(t *testing.T) {
-			if strings.Contains(bare, unwanted) {
-				t.Errorf("FormatHookMarkdown shows %q for a hook that has none: %s", unwanted, bare)
-			}
-		})
-	}
 }
 
 // TestFormatHookMarkdown_CustomHeaderValuesRedacted verifies the custom header

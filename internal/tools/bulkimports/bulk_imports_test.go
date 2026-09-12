@@ -6,10 +6,10 @@ package bulkimports
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestStartMigration verifies the StartMigration handler.
@@ -84,9 +84,22 @@ func TestStartMigration_Error(t *testing.T) {
 	}
 }
 
-// TestFormatStartMigrationMarkdown verifies the StartMigrationMarkdown Markdown formatter for a representative startmigration input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// assertBulkImportMarkdown compares a whole rendered response with what the
+// formatter is meant to write, byte for byte.
+func assertBulkImportMarkdown(t *testing.T, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("markdown mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+// startMigrationHints is the guidance section the start card closes with.
+const startMigrationHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'admin.bulk_import_get' to watch the migration's progress\n"
+
+// TestFormatStartMigrationMarkdown verifies the whole card a started migration
+// renders: the source URL as a link, the dates in the display form, and the
+// failure flag as a glyph rather than as the word false.
 func TestFormatStartMigrationMarkdown(t *testing.T) {
 	out := MigrationOutput{
 		ID:          1,
@@ -97,13 +110,16 @@ func TestFormatStartMigrationMarkdown(t *testing.T) {
 		UpdatedAt:   "2026-01-01",
 		HasFailures: false,
 	}
-	md := FormatStartMigrationMarkdown(out)
-	if !strings.Contains(md, "Bulk Import") {
-		t.Error("missing title")
-	}
-	if !strings.Contains(md, "created") {
-		t.Error("missing status")
-	}
+
+	assertBulkImportMarkdown(t, FormatStartMigrationMarkdown(out), "## Bulk Import Migration Started\n\n"+
+		"- **ID**: 1\n"+
+		"- **Status**: created\n"+
+		"- **Source Type**: gitlab\n"+
+		"- **Source URL**: [https://src.example.com](https://src.example.com)\n"+
+		"- **Created**: 1 Jan 2026\n"+
+		"- **Updated**: 1 Jan 2026\n"+
+		"- **Has Failures**: ❌\n"+
+		startMigrationHints)
 }
 
 // ---------- Tests consolidated from coverage_test.go ----------.
@@ -163,9 +179,9 @@ func TestStartMigration_WithOptionalFields(t *testing.T) {
 // FormatStartMigrationMarkdown — with failures
 // ---------------------------------------------------------------------------.
 
-// TestFormatStartMigrationMarkdown_WithFailures verifies the StartMigrationMarkdown_WithFailures Markdown formatter for a representative startmigration_withfailures input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatStartMigrationMarkdown_WithFailures verifies the whole card a
+// failed migration renders, and that a source URL carrying a pipe is
+// neutralized in both halves of the link it becomes.
 func TestFormatStartMigrationMarkdown_WithFailures(t *testing.T) {
 	out := MigrationOutput{
 		ID:          2,
@@ -176,13 +192,16 @@ func TestFormatStartMigrationMarkdown_WithFailures(t *testing.T) {
 		UpdatedAt:   "2026-06-02",
 		HasFailures: true,
 	}
-	md := FormatStartMigrationMarkdown(out)
-	if !strings.Contains(md, "failed") {
-		t.Error("missing status")
-	}
-	if !strings.Contains(md, "true") {
-		t.Error("missing has_failures=true")
-	}
+
+	assertBulkImportMarkdown(t, FormatStartMigrationMarkdown(out), "## Bulk Import Migration Started\n\n"+
+		"- **ID**: 2\n"+
+		"- **Status**: failed\n"+
+		"- **Source Type**: gitlab\n"+
+		"- **Source URL**: [https://src&#124;pipe.example.com](https://src%7Cpipe.example.com)\n"+
+		"- **Created**: 1 Jun 2026\n"+
+		"- **Updated**: 2 Jun 2026\n"+
+		"- **Has Failures**: ✅\n"+
+		startMigrationHints)
 }
 
 // ---------------------------------------------------------------------------
@@ -527,26 +546,108 @@ func TestListEntityFailures_SkipsNilEntries(t *testing.T) {
 	}
 }
 
-// TestFormatters_Smoke verifies the ters_Smoke Markdown formatter for a representative ters_smoke input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatters_Smoke(t *testing.T) {
-	listOut := ListOutput{Migrations: []MigrationSummary{{ID: 1, Status: "started", SourceType: "gitlab", SourceURL: "https://src"}}}
-	if md := FormatListMarkdown(listOut); !strings.Contains(md, "started") {
-		t.Error("list markdown missing status")
+// TestFormatMigrationList verifies the whole table a page of migrations
+// renders, the source URL linked so the reader can reach the source instance.
+func TestFormatMigrationList(t *testing.T) {
+	out := ListOutput{Migrations: []MigrationSummary{{ID: 1, Status: "started", SourceType: "gitlab", SourceURL: "https://src"}}}
+
+	assertBulkImportMarkdown(t, FormatListMarkdown(out), "## Bulk Import Migrations (1)\n\n"+
+		"| ID | Status | Source Type | Source URL | Has Failures | Created |\n"+
+		"| --- | --- | --- | --- | --- | --- |\n"+
+		"| 1 | started | gitlab | [https://src](https://src) | ❌ |  |\n"+
+		"\n---\n\U0001F4A1 **Next steps:**\n"+
+		"- "+toolutil.HintPreserveLinks+"\n"+
+		"- Use action 'admin.bulk_import_get' to read one migration in full\n"+
+		"- Use action 'admin.bulk_import_entity_list' to inspect the entities of a migration\n")
+}
+
+// TestFormatGetMarkdown verifies the whole card one finished migration
+// renders: no cancel hint for a migration that is over, and no failure hint
+// for one that had none.
+func TestFormatGetMarkdown(t *testing.T) {
+	assertBulkImportMarkdown(t, FormatGetMarkdown(MigrationSummary{ID: 5, Status: "finished"}), "## Bulk Import Migration #5\n\n"+
+		"- **ID**: 5\n"+
+		"- **Status**: finished\n"+
+		"- **Has Failures**: ❌\n"+
+		"\n---\n\U0001F4A1 **Next steps:**\n"+
+		"- Use action 'admin.bulk_import_entity_list' to inspect the entities this migration moved\n")
+}
+
+// TestFormatListEntitiesMarkdown verifies the whole table a page of entities
+// renders. The table carries no link column, so nothing instructs the model to
+// preserve links it does not have.
+func TestFormatListEntitiesMarkdown(t *testing.T) {
+	out := ListEntitiesOutput{Entities: []EntitySummary{{ID: 7, BulkImportID: 3, EntityType: "group_entity", Status: "finished", SourceFullPath: "a", DestinationFullPath: "b"}}}
+
+	assertBulkImportMarkdown(t, FormatListEntitiesMarkdown(out), "## Bulk Import Entities (1)\n\n"+
+		"| ID | Bulk Import | Type | Status | Source | Destination | Failures |\n"+
+		"| --- | --- | --- | --- | --- | --- | --- |\n"+
+		"| 7 | 3 | group_entity | finished | a | b | ❌ |\n"+
+		"\n---\n\U0001F4A1 **Next steps:**\n"+
+		"- Use action 'admin.bulk_import_entity_get' to read one entity in full\n"+
+		"- Use action 'admin.bulk_import_entity_failures' to read the failure diagnostics\n")
+}
+
+// TestFormatGetEntityMarkdown_NoStatsReported verifies that an entity whose
+// stats object names no relation opens no Stats collection: GitLab sends a key
+// per relation it processed, and three zeros used to claim that nothing was
+// imported where the truth is that nothing was said.
+func TestFormatGetEntityMarkdown_NoStatsReported(t *testing.T) {
+	got := FormatGetEntityMarkdown(EntitySummary{ID: 9, EntityType: "project_entity", Status: "finished"})
+
+	assertBulkImportMarkdown(t, got, "## Bulk Import Entity #9\n\n"+
+		"- **ID**: 9\n"+
+		"- **Bulk Import ID**: 0\n"+
+		"- **Status**: finished\n"+
+		"- **Entity Type**: project_entity\n"+
+		"- **Migrate Projects**: ❌\n"+
+		"- **Migrate Memberships**: ❌\n"+
+		"- **Has Failures**: ❌\n"+
+		"\n---\n\U0001F4A1 **Next steps:**\n"+
+		"- Use action 'admin.bulk_import_entity_list' to see the migration's other entities\n")
+}
+
+// TestFormatGetEntityMarkdown_ReportedStats verifies that only the relations
+// the migration reported become rows of the nested Stats collection.
+func TestFormatGetEntityMarkdown_ReportedStats(t *testing.T) {
+	got := FormatGetEntityMarkdown(EntitySummary{
+		ID:           9,
+		BulkImportID: 3,
+		Status:       "finished",
+		EntityType:   "group_entity",
+		Stats:        EntityStats{Labels: EntityStatItem{Source: 4, Fetched: 4, Imported: 3}},
+	})
+
+	assertBulkImportMarkdown(t, got, "## Bulk Import Entity #9\n\n"+
+		"- **ID**: 9\n"+
+		"- **Bulk Import ID**: 3\n"+
+		"- **Status**: finished\n"+
+		"- **Entity Type**: group_entity\n"+
+		"- **Migrate Projects**: ❌\n"+
+		"- **Migrate Memberships**: ❌\n"+
+		"- **Has Failures**: ❌\n"+
+		"\n### Stats\n\n"+
+		"| Relation | Source | Fetched | Imported |\n"+
+		"| --- | --- | --- | --- |\n"+
+		"| Labels | 4 | 4 | 3 |\n"+
+		"\n---\n\U0001F4A1 **Next steps:**\n"+
+		"- Use action 'admin.bulk_import_entity_list' to see the migration's other entities\n")
+}
+
+// TestFormatEntityFailuresMarkdown verifies the whole table an entity's
+// failures render.
+func TestFormatEntityFailuresMarkdown(t *testing.T) {
+	out := ListEntityFailuresOutput{
+		BulkImportID: 1,
+		EntityID:     2,
+		Failures:     []EntityFailure{{Relation: "labels", ExceptionClass: "Boom", ExceptionMessage: "x"}},
 	}
-	if md := FormatGetMarkdown(MigrationSummary{ID: 5, Status: "finished"}); !strings.Contains(md, "finished") {
-		t.Error("get markdown missing status")
-	}
-	entOut := ListEntitiesOutput{Entities: []EntitySummary{{ID: 7, BulkImportID: 3, EntityType: "group_entity", Status: "finished", SourceFullPath: "a", DestinationFullPath: "b"}}}
-	if md := FormatListEntitiesMarkdown(entOut); !strings.Contains(md, "group_entity") {
-		t.Error("entities markdown missing type")
-	}
-	if md := FormatGetEntityMarkdown(EntitySummary{ID: 9, EntityType: "project_entity", Status: "finished"}); !strings.Contains(md, "project_entity") {
-		t.Error("get entity markdown missing type")
-	}
-	failOut := ListEntityFailuresOutput{Failures: []EntityFailure{{Relation: "labels", ExceptionClass: "Boom", ExceptionMessage: "x"}}}
-	if md := FormatEntityFailuresMarkdown(failOut); !strings.Contains(md, "labels") {
-		t.Error("failures markdown missing relation")
-	}
+
+	assertBulkImportMarkdown(t, FormatEntityFailuresMarkdown(out), "## Bulk Import Failures (import #1, entity #2) (1)\n\n"+
+		"| Relation | Step | Pipeline | Class | Message | Source | Created |\n"+
+		"| --- | --- | --- | --- | --- | --- | --- |\n"+
+		"| labels |  |  | Boom | x |  |  |\n"+
+		"\n---\n\U0001F4A1 **Next steps:**\n"+
+		"- "+toolutil.HintPreserveLinks+"\n"+
+		"- Use action 'admin.bulk_import_entity_get' to read the entity these failures belong to\n")
 }

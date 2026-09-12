@@ -4,9 +4,9 @@ import (
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
-)
 
-const timestampLayout = "2006-01-02T15:04:05Z"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
 
 // Output represents a GitLab iteration shared by project and group tools.
 type Output struct {
@@ -112,12 +112,11 @@ func outputFromFields(fields iterationFields) Output {
 	if fields.DueDate != nil {
 		out.DueDate = fields.DueDate.String()
 	}
-	if fields.CreatedAt != nil {
-		out.CreatedAt = fields.CreatedAt.Format(timestampLayout)
-	}
-	if fields.UpdatedAt != nil {
-		out.UpdatedAt = fields.UpdatedAt.Format(timestampLayout)
-	}
+	// The wire form is RFC 3339 in UTC. The layout this used to format with
+	// ended in a literal Z, which stamped whatever wall clock the value carried
+	// with a zone it may not have been in.
+	out.CreatedAt = toolutil.RFC3339Ptr(fields.CreatedAt)
+	out.UpdatedAt = toolutil.RFC3339Ptr(fields.UpdatedAt)
 	return out
 }
 

@@ -86,19 +86,31 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// TestFormatListMarkdown verifies the whole list render: the heading counts
+// what the page shows, the popular column is the flag glyph rather than the
+// word "true", and one hint closes the page.
 func TestFormatListMarkdown(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Licenses: []LicenseItem{{Key: "mit", Name: "MIT", Popular: true}}})
-	if !strings.Contains(md, "MIT") {
-		t.Error("missing")
+	want := "## License Templates (1)\n\n" +
+		"| Key | Name | Popular |\n| --- | --- | --- |\n" +
+		"| mit | MIT | " + toolutil.EmojiSuccess + " |\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n- Use `gitlab_get_license_template` to view a specific template\n"
+	if md != want {
+		t.Errorf("license list:\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatGetMarkdown verifies FormatGetMarkdown.
+// TestFormatGetMarkdown verifies the whole card of one license template,
+// including the key row the formatter used to drop.
 func TestFormatGetMarkdown(t *testing.T) {
-	md := FormatGetMarkdown(GetOutput{Name: "MIT", Content: "text", Permissions: []string{"use"}})
-	if !strings.Contains(md, "MIT") || !strings.Contains(md, "use") {
-		t.Error("missing content")
+	md := FormatGetMarkdown(GetOutput{Name: "MIT", Key: "mit", Content: "text", Permissions: []string{"use"}})
+	want := "## License: MIT\n\n" +
+		"- **Key**: mit\n" +
+		"- **Permissions**: use\n" +
+		"\n```\ntext\n```\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n- Copy this template to your LICENSE file and customize it\n"
+	if md != want {
+		t.Errorf("license card:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -111,11 +123,12 @@ const fmtUnexpErr = "unexpected error: %v"
 // FormatListMarkdown — empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies that an empty page is the one sentence
+// and nothing else: no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Licenses: nil})
-	if !strings.Contains(md, "No license templates found") {
-		t.Error("expected 'No license templates found' for empty list")
+	if want := "No license templates found.\n"; md != want {
+		t.Errorf("empty license list:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -149,19 +162,17 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 // FormatGetMarkdown — minimal fields (no description, no conditions, no content)
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_MinimalFields verifies FormatGetMarkdown when minimal fields.
+// TestFormatGetMarkdown_MinimalFields verifies that a template GitLab answered
+// with nothing but a name renders the heading and the hints and no absent
+// value at all: no empty description row and no empty fence.
 func TestFormatGetMarkdown_MinimalFields(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{
 		Name: "Minimal",
 	})
-	if !strings.Contains(md, "Minimal") {
-		t.Error("expected license name")
-	}
-	if strings.Contains(md, "Description") {
-		t.Error("should not contain Description when empty")
-	}
-	if strings.Contains(md, "```") {
-		t.Error("should not contain code block when content is empty")
+	want := "## License: Minimal\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n- Copy this template to your LICENSE file and customize it\n"
+	if md != want {
+		t.Errorf("minimal license card:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -410,37 +421,23 @@ func TestActionSpecs_CallRouteErrors(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// boolString — false branch
-// ---------------------------------------------------------------------------
-
-// TestBoolString_TrueAndFalse verifies the boolString helper returns the
-// expected string literal for both boolean states used by the featured
-// column in FormatListMarkdown.
-func TestBoolString_TrueAndFalse(t *testing.T) {
-	if got := boolString(true); got != "true" {
-		t.Errorf("boolString(true) = %q, want %q", got, "true")
-	}
-	if got := boolString(false); got != "false" {
-		t.Errorf("boolString(false) = %q, want %q", got, "false")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // FormatListMarkdown — unpopular license
 // ---------------------------------------------------------------------------
 
 // TestFormatListMarkdown_UnpopularLicense verifies that a template GitLab does
-// not list among the popular ones renders the literal "false" attribute string
-// via boolString.
+// not list among the popular ones renders the cross glyph, not the word
+// "false", which is what the column showed before the flag went through
+// BoolEmoji.
 func TestFormatListMarkdown_UnpopularLicense(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Licenses: []LicenseItem{
 		{Key: "gpl-3.0", Name: "GPL 3.0", Popular: false},
 	}})
-	if !strings.Contains(md, "gpl-3.0") {
-		t.Errorf("missing license key in markdown: %s", md)
-	}
-	if !strings.Contains(md, "false") {
-		t.Errorf("expected boolString(false) output in markdown: %s", md)
+	want := "## License Templates (1)\n\n" +
+		"| Key | Name | Popular |\n| --- | --- | --- |\n" +
+		"| gpl-3.0 | GPL 3.0 | " + toolutil.EmojiCross + " |\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n- Use `gitlab_get_license_template` to view a specific template\n"
+	if md != want {
+		t.Errorf("license list:\n got %q\nwant %q", md, want)
 	}
 }
 

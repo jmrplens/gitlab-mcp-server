@@ -472,9 +472,9 @@ func TestUnsubscribe_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown verifies the Markdown Markdown formatter for a representative  input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdown pins the whole card of a group label, archive flag
+// included: GitLab archives a label rather than deleting it, and the card used
+// to show an archived label exactly as it shows a live one.
 func TestFormatMarkdown(t *testing.T) {
 	out := Output{
 		ID:          1,
@@ -483,10 +483,26 @@ func TestFormatMarkdown(t *testing.T) {
 		Description: "Bug report",
 		Priority:    1,
 		Subscribed:  true,
+		Archived:    true,
 	}
+
 	md := FormatMarkdown(out)
-	if md == "" {
-		t.Fatal("FormatMarkdown returned empty string")
+
+	want := "## Group Label: bug\n\n" +
+		"- **ID**: 1\n" +
+		"- **Color**: #d9534f\n" +
+		"- **Description**: Bug report\n" +
+		"- **Priority**: 1\n" +
+		"- **Project label**: " + toolutil.EmojiCross + "\n" +
+		"- **Subscribed**: " + toolutil.EmojiSuccess + "\n" +
+		"- " + toolutil.EmojiArchived + " **Archived**\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- If the workflow asks to fetch/get before update or delete, use the selected tool surface's group-label get action with the same group_id and this label_id next\n" +
+		"- Use the selected tool surface's group-label update action with the same group_id and this label_id to modify this label\n" +
+		"- Use the selected tool surface's group-label delete action with the same group_id, this label_id, and explicit confirm=true to remove this label\n" +
+		"- Use the selected tool surface's group-label subscribe or unsubscribe actions with the same group_id and this label_id to follow or unfollow\n"
+	if md != want {
+		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -918,36 +934,37 @@ func TestFormatMarkdown_MinimalFields(t *testing.T) {
 		Color: "#0e8a16",
 	})
 
-	if !strings.Contains(md, "## Group Label: docs") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	if !strings.Contains(md, "- **Color**: #0e8a16") {
-		t.Errorf("missing color:\n%s", md)
-	}
-	for _, absent := range []string{
-		"**Description**",
-		"**Priority**",
-		"**Issues**",
-		"**Open MRs**",
-	} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-			}
-		})
+	want := "## Group Label: docs\n\n" +
+		"- **ID**: 3\n" +
+		"- **Color**: #0e8a16\n" +
+		"- **Project label**: " + toolutil.EmojiCross + "\n" +
+		"- **Subscribed**: " + toolutil.EmojiCross + "\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- If the workflow asks to fetch/get before update or delete, use the selected tool surface's group-label get action with the same group_id and this label_id next\n" +
+		"- Use the selected tool surface's group-label update action with the same group_id and this label_id to modify this label\n" +
+		"- Use the selected tool surface's group-label delete action with the same group_id, this label_id, and explicit confirm=true to remove this label\n" +
+		"- Use the selected tool surface's group-label subscribe or unsubscribe actions with the same group_id and this label_id to follow or unfollow\n"
+	if md != want {
+		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatMarkdown_Empty verifies the Markdown_Empty Markdown formatter for a representative _empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdown_Empty pins the whole card of a zero-valued label: the two
+// flags GitLab always sends and nothing else.
 func TestFormatMarkdown_Empty(t *testing.T) {
 	md := FormatMarkdown(Output{})
-	if md == "" {
-		t.Fatal("FormatMarkdown returned empty string for zero-valued Output")
-	}
-	if !strings.Contains(md, "## Group Label:") {
-		t.Errorf("missing header:\n%s", md)
+
+	want := "## Group Label: \n\n" +
+		"- **ID**: 0\n" +
+		"- **Project label**: " + toolutil.EmojiCross + "\n" +
+		"- **Subscribed**: " + toolutil.EmojiCross + "\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- If the workflow asks to fetch/get before update or delete, use the selected tool surface's group-label get action with the same group_id and this label_id next\n" +
+		"- Use the selected tool surface's group-label update action with the same group_id and this label_id to modify this label\n" +
+		"- Use the selected tool surface's group-label delete action with the same group_id, this label_id, and explicit confirm=true to remove this label\n" +
+		"- Use the selected tool surface's group-label subscribe or unsubscribe actions with the same group_id and this label_id to follow or unfollow\n"
+	if md != want {
+		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -962,7 +979,7 @@ func TestFormatListMarkdownString_WithData(t *testing.T) {
 	out := ListOutput{
 		Labels: []Output{
 			{ID: 1, Name: "bug", Color: "#d9534f", OpenIssuesCount: 5, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1},
-			{ID: 2, Name: "feature", Color: "#428bca", OpenIssuesCount: 3, ClosedIssuesCount: 0, OpenMergeRequestsCount: 2},
+			{ID: 2, Name: "feature", Color: "#428bca", OpenIssuesCount: 3, ClosedIssuesCount: 0, OpenMergeRequestsCount: 2, Archived: true},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -972,7 +989,7 @@ func TestFormatListMarkdownString_WithData(t *testing.T) {
 		"| Name | Color | Scope | Open Issues | Closed Issues | Open MRs |\n" +
 		"| --- | --- | --- | --- | --- | --- |\n" +
 		"| bug | #d9534f | group | 5 | 2 | 1 |\n" +
-		"| feature | #428bca | group | 3 | 0 | 2 |\n" +
+		"| " + toolutil.EmojiArchived + " feature | #428bca | group | 3 | 0 | 2 |\n" +
 		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
 		"\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use the selected tool surface's group-label get action with the same group_id and label_id for full details before update/delete workflows\n" +
@@ -986,12 +1003,25 @@ func TestFormatListMarkdownString_WithData(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
-	md := FormatListMarkdownString(ListOutput{})
-	if !strings.Contains(md, "No group labels found") {
-		t.Errorf("expected empty message:\n%s", md)
+	if got, want := FormatListMarkdownString(ListOutput{}), "No group labels found.\n"; got != want {
+		t.Errorf("FormatListMarkdownString() = %q, want %q", got, want)
 	}
-	if strings.Contains(md, "| Name |") {
-		t.Error("should not contain table header when empty")
+}
+
+// TestFormatMarkdown_ScopeDecidesTheCopy pins what the two label packages
+// share: they alias one output type, so the Markdown registry keys them
+// together and keeps whichever init ran first. Both render through the same
+// scope-aware formatter now, so a group label reads as a group label whichever
+// package's registration answered.
+func TestFormatMarkdown_ScopeDecidesTheCopy(t *testing.T) {
+	group := Output{ID: 4, Name: "shared", Color: "#111111"}
+	project := Output{ID: 5, Name: "owned", Color: "#222222", IsProjectLabel: true}
+
+	if got := FormatMarkdown(group); !strings.HasPrefix(got, "## Group Label: shared\n") {
+		t.Errorf("group label card:\n got %q\nwant a Group Label heading", got)
+	}
+	if got := FormatMarkdown(project); !strings.HasPrefix(got, "## Label: owned\n") {
+		t.Errorf("project label card:\n got %q\nwant a Label heading", got)
 	}
 }
 

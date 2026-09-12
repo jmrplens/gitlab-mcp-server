@@ -6,7 +6,6 @@ package pages
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -645,7 +644,28 @@ func TestDeleteDomain_ValidationMissingDomain(t *testing.T) {
 // Formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatPagesMarkdown verifies FormatPagesMarkdown.
+// assertPagesMarkdown compares a whole rendered response with what the
+// formatter is meant to write, byte for byte.
+func assertPagesMarkdown(t *testing.T, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("markdown mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+// The guidance sections the Pages formatters close with.
+const (
+	pagesSettingsHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'project.pages_domain_list' to see the project's custom Pages domains\n"
+	pagesDomainHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'project.pages_domain_update' to change this domain's auto-SSL flag or certificate\n" +
+		"- Use action 'project.pages_get' to read the project's Pages settings\n"
+	pagesDomainTableHead = "| Domain | URL | Verified | Auto SSL | Project ID |\n" +
+		"| --- | --- | --- | --- | --- |\n"
+)
+
+// TestFormatPagesMarkdown verifies the whole card a project's Pages settings
+// render, the deployments as a nested collection under a heading of their own.
 func TestFormatPagesMarkdown(t *testing.T) {
 	md := FormatPagesMarkdown(Output{
 		URL:        testPagesURL,
@@ -654,94 +674,118 @@ func TestFormatPagesMarkdown(t *testing.T) {
 			{URL: testPagesURL, CreatedAt: "2026-01-15T10:00:00Z", PathPrefix: "", RootDirectory: "public"},
 		},
 	})
-	if !strings.Contains(md, testPagesURL) {
-		t.Error("expected URL in output")
-	}
-	if !strings.Contains(md, "Deployments") {
-		t.Error("expected Deployments section")
-	}
+
+	assertPagesMarkdown(t, md, "## Pages Settings\n\n"+
+		"- **URL**: ["+testPagesURL+"]("+testPagesURL+")\n"+
+		"- **Unique Domain**: ❌\n"+
+		"- **Force HTTPS**: ✅\n"+
+		"\n### Deployments\n\n"+
+		"| URL | Created | Path Prefix | Root Dir |\n"+
+		"| --- | --- | --- | --- |\n"+
+		"| ["+testPagesURL+"]("+testPagesURL+") | 15 Jan 2026 10:00 UTC |  | public |\n"+
+		pagesSettingsHints)
 }
 
-// TestFormatPagesMarkdown_NoDeployments verifies FormatPagesMarkdown when no deployments.
+// TestFormatPagesMarkdown_NoDeployments verifies that a project with no
+// deployments opens no collection heading.
 func TestFormatPagesMarkdown_NoDeployments(t *testing.T) {
-	md := FormatPagesMarkdown(Output{URL: testPagesURL})
-	if strings.Contains(md, "Deployments") {
-		t.Error("should not contain Deployments section when empty")
-	}
+	assertPagesMarkdown(t, FormatPagesMarkdown(Output{URL: testPagesURL}), "## Pages Settings\n\n"+
+		"- **URL**: ["+testPagesURL+"]("+testPagesURL+")\n"+
+		"- **Unique Domain**: ❌\n"+
+		"- **Force HTTPS**: ❌\n"+
+		pagesSettingsHints)
 }
 
-// TestFormatDomainMarkdown_WithOptionalFields verifies FormatDomainMarkdown when with optional fields.
+// TestFormatDomainMarkdown_WithOptionalFields verifies the whole card a
+// verified domain with a certificate renders: the certificate is a nested
+// object, and a verified domain shows no verification code.
 func TestFormatDomainMarkdown_WithOptionalFields(t *testing.T) {
 	md := FormatDomainMarkdown(DomainOutput{
-		Domain:       testDomain,
-		URL:          testExampleURL,
-		Verified:     true,
-		EnabledUntil: "2026-01-01T00:00:00Z",
-		Certificate:  CertificateOutput{Subject: testDomain, Expired: false},
+		Domain:           testDomain,
+		URL:              testExampleURL,
+		Verified:         true,
+		VerificationCode: "abc123",
+		EnabledUntil:     "2026-01-01T00:00:00Z",
+		Certificate:      CertificateOutput{Subject: testDomain, Expired: false},
 	})
-	if !strings.Contains(md, "Enabled Until") {
-		t.Error("expected EnabledUntil in output")
-	}
-	if !strings.Contains(md, "Cert Subject") {
-		t.Error("expected certificate subject in output")
-	}
+
+	assertPagesMarkdown(t, md, "## Pages Domain: "+testDomain+"\n\n"+
+		"- **URL**: ["+testExampleURL+"]("+testExampleURL+")\n"+
+		"- **Verified**: ✅\n"+
+		"- **Auto SSL**: ❌\n"+
+		"- **Enabled Until**: 1 Jan 2026 00:00 UTC\n"+
+		"- **Certificate**:\n"+
+		"  - **Subject**: "+testDomain+"\n"+
+		pagesDomainHints)
 }
 
-// TestFormatDomainListMarkdown_Empty verifies FormatDomainListMarkdown when empty.
+// TestFormatDomainMarkdown_Unverified verifies that the verification code is
+// shown while the domain is unverified, which is the one moment a reader needs
+// it, and that an expired certificate is marked with a warning rather than
+// with the tick a true flag would print.
+func TestFormatDomainMarkdown_Unverified(t *testing.T) {
+	md := FormatDomainMarkdown(DomainOutput{
+		Domain:           testDomain,
+		URL:              testExampleURL,
+		Verified:         false,
+		VerificationCode: "abc123",
+		Certificate:      CertificateOutput{Subject: testDomain, Expired: true},
+	})
+
+	assertPagesMarkdown(t, md, "## Pages Domain: "+testDomain+"\n\n"+
+		"- **URL**: ["+testExampleURL+"]("+testExampleURL+")\n"+
+		"- **Verified**: ❌\n"+
+		"- **Verification Code**: `abc123`\n"+
+		"- **Auto SSL**: ❌\n"+
+		"- **Certificate**:\n"+
+		"  - **Subject**: "+testDomain+"\n"+
+		"  - ⚠️ **Expired**\n"+
+		pagesDomainHints)
+}
+
+// TestFormatDomainListMarkdown_Empty verifies that an empty page renders the
+// one sentence and nothing else.
 func TestFormatDomainListMarkdown_Empty(t *testing.T) {
-	md := FormatDomainListMarkdown(ListDomainsOutput{})
-	if !strings.Contains(md, "No Pages domains found") {
-		t.Error("expected empty message")
-	}
+	assertPagesMarkdown(t, FormatDomainListMarkdown(ListDomainsOutput{}), "No Pages domains found.\n")
 }
 
-// TestFormatAllDomainsMarkdown_Empty verifies FormatAllDomainsMarkdown when empty.
+// TestFormatAllDomainsMarkdown_Empty verifies that an empty instance-wide page
+// renders the one sentence and nothing else.
 func TestFormatAllDomainsMarkdown_Empty(t *testing.T) {
-	md := FormatAllDomainsMarkdown(ListAllDomainsOutput{})
-	if !strings.Contains(md, "No Pages domains found") {
-		t.Error("expected empty message")
-	}
+	assertPagesMarkdown(t, FormatAllDomainsMarkdown(ListAllDomainsOutput{}), "No Pages domains found.\n")
 }
 
-// TestFormatAllDomainsMarkdown_NonEmpty verifies FormatAllDomainsMarkdown when non empty.
+// TestFormatAllDomainsMarkdown_NonEmpty verifies the whole table the
+// instance-wide listing renders.
 func TestFormatAllDomainsMarkdown_NonEmpty(t *testing.T) {
 	md := FormatAllDomainsMarkdown(ListAllDomainsOutput{
 		Domains: []DomainOutput{{Domain: testDomainA, URL: testDomainAURL, ProjectID: 1}},
 	})
-	if !strings.Contains(md, testDomainA) {
-		t.Error("expected domain in output")
-	}
-}
 
-// TestFormatDeleteMarkdown verifies FormatDeleteMarkdown.
-func TestFormatDeleteMarkdown(t *testing.T) {
-	md := FormatDeleteMarkdown(testDomain)
-	if !strings.Contains(md, testDomain) {
-		t.Error("expected domain in delete message")
-	}
-}
-
-// TestFormatUnpublishMarkdown verifies FormatUnpublishMarkdown.
-func TestFormatUnpublishMarkdown(t *testing.T) {
-	md := FormatUnpublishMarkdown()
-	if !strings.Contains(md, "unpublished") {
-		t.Error("expected unpublished in message")
-	}
+	assertPagesMarkdown(t, md, "## All Pages Domains (1)\n\n"+
+		pagesDomainTableHead+
+		"| "+testDomainA+" | ["+testDomainAURL+"]("+testDomainAURL+") | ❌ | ❌ | 1 |\n"+
+		"\n---\n\U0001F4A1 **Next steps:**\n"+
+		"- "+toolutil.HintPreserveLinks+"\n"+
+		"- Use action 'project.pages_domain_get' to read one domain in full\n"+
+		"- Use action 'project.pages_domain_list_all' to list every Pages domain on the instance again\n")
 }
 
 // ---------------------------------------------------------------------------
 // Markdown formatters -- project display
 // ---------------------------------------------------------------------------.
 
-// TestProjectDisplay covers ProjectDisplay with table-driven subtests.
+// TestProjectDisplay covers projectDisplay with table-driven subtests. The
+// zero case is every project-scoped call: GitLab answers those with the domain
+// alone and no project, and "#0" named a project that does not exist.
 func TestProjectDisplay(t *testing.T) {
 	tests := []struct {
 		name string
 		id   int64
 		want string
 	}{
-		{"numeric id", 42, "#42"},
-		{"zero id", 0, "#0"},
+		{"numeric id", 42, "42"},
+		{"zero id renders nothing", 0, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -753,7 +797,8 @@ func TestProjectDisplay(t *testing.T) {
 	}
 }
 
-// TestFormatDomainMarkdown_NumericProject verifies FormatDomainMarkdown renders the numeric project ID.
+// TestFormatDomainMarkdown_NumericProject verifies the whole card an
+// instance-wide domain renders, its project named by its ID.
 func TestFormatDomainMarkdown_NumericProject(t *testing.T) {
 	md := FormatDomainMarkdown(DomainOutput{
 		Domain:    testDomain,
@@ -761,12 +806,34 @@ func TestFormatDomainMarkdown_NumericProject(t *testing.T) {
 		ProjectID: 99,
 		Verified:  true,
 	})
-	if !strings.Contains(md, "#99") {
-		t.Error("expected #99 numeric project ID in output")
-	}
+
+	assertPagesMarkdown(t, md, "## Pages Domain: "+testDomain+"\n\n"+
+		"- **URL**: ["+testExampleURL+"]("+testExampleURL+")\n"+
+		"- **Project ID**: 99\n"+
+		"- **Verified**: ✅\n"+
+		"- **Auto SSL**: ❌\n"+
+		pagesDomainHints)
 }
 
-// TestFormatDomainListMarkdown_NumericProject verifies FormatDomainListMarkdown renders numeric project IDs.
+// TestFormatDomainMarkdown_ProjectScoped verifies that a domain GitLab
+// answered a project-scoped call with, which carries no project object, writes
+// no project row at all.
+func TestFormatDomainMarkdown_ProjectScoped(t *testing.T) {
+	md := FormatDomainMarkdown(DomainOutput{
+		Domain:   testDomain,
+		URL:      testExampleURL,
+		Verified: true,
+	})
+
+	assertPagesMarkdown(t, md, "## Pages Domain: "+testDomain+"\n\n"+
+		"- **URL**: ["+testExampleURL+"]("+testExampleURL+")\n"+
+		"- **Verified**: ✅\n"+
+		"- **Auto SSL**: ❌\n"+
+		pagesDomainHints)
+}
+
+// TestFormatDomainListMarkdown_NumericProject verifies the whole table a
+// project's domain listing renders, each project named by its ID.
 func TestFormatDomainListMarkdown_NumericProject(t *testing.T) {
 	md := FormatDomainListMarkdown(ListDomainsOutput{
 		Domains: []DomainOutput{
@@ -774,24 +841,14 @@ func TestFormatDomainListMarkdown_NumericProject(t *testing.T) {
 			{Domain: "b.com", URL: "https://b.com", ProjectID: 2},
 		},
 	})
-	if !strings.Contains(md, "#1") {
-		t.Error("expected numeric project ID for first domain")
-	}
-	if !strings.Contains(md, "#2") {
-		t.Error("expected numeric project ID for second domain")
-	}
-}
 
-// TestFormatAllDomainsMarkdown_NumericProject verifies FormatAllDomainsMarkdown renders numeric project IDs.
-func TestFormatAllDomainsMarkdown_NumericProject(t *testing.T) {
-	md := FormatAllDomainsMarkdown(ListAllDomainsOutput{
-		Domains: []DomainOutput{
-			{Domain: testDomainA, URL: testDomainAURL, ProjectID: 10},
-		},
-	})
-	if !strings.Contains(md, "#10") {
-		t.Error("expected numeric project ID in all-domains output")
-	}
+	assertPagesMarkdown(t, md, "## Pages Domains (2)\n\n"+
+		pagesDomainTableHead+
+		"| "+testDomainA+" | ["+testDomainAURL+"]("+testDomainAURL+") | ❌ | ❌ | 1 |\n"+
+		"| b.com | [https://b.com](https://b.com) | ❌ | ❌ | 2 |\n"+
+		"\n---\n\U0001F4A1 **Next steps:**\n"+
+		"- "+toolutil.HintPreserveLinks+"\n"+
+		"- Use action 'project.pages_domain_get' to read one domain in full\n")
 }
 
 // TestConverters_EdgeCases verifies Pages converter nil and optional date branches.

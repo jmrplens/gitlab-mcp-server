@@ -274,52 +274,99 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// The table header and the two guidance sections the formatters write.
+const (
+	listTableHeader = "| ID | Message | Type | Active | Starts | Ends |\n| --- | --- | --- | --- | --- | --- |\n"
+	listHints       = "\n---\n💡 **Next steps:**\n" +
+		"- Use `gitlab_get_broadcast_message` to view details of a specific message\n"
+	messageHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use `gitlab_update_broadcast_message` to modify this message\n"
+)
+
+// markdownText returns the one text block a formatter's result carries.
+func markdownText(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
+	if len(result.Content) == 0 {
+		t.Fatal("the formatter returned no content at all")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] is %T, want *mcp.TextContent", result.Content[0])
+	}
+	return text.Text
+}
+
+// TestFormatListMarkdown verifies the whole table, and that the two instants
+// are shown in the display form rather than as the RFC 3339 toItem stored, and
+// the active flag as a glyph rather than as "true".
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Messages: []MessageItem{
-			{ID: 1, Message: testMessage, BroadcastType: testBannerType, Active: true},
+			{
+				ID: 1, Message: testMessage, BroadcastType: testBannerType, Active: true,
+				StartsAt: "2026-01-01T00:00:00Z", EndsAt: "2026-01-02T06:30:00Z",
+			},
 		},
 	}
-	result := FormatListMarkdown(out)
-	content := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(content, "Broadcast Messages") {
-		t.Error("expected 'Broadcast Messages' header")
-	}
-	if !strings.Contains(content, testBannerType) {
-		t.Error("expected broadcast type in markdown")
+	got := markdownText(t, FormatListMarkdown(out))
+	want := "## Broadcast Messages (1)\n\n" + listTableHeader +
+		"| 1 | " + testMessage + " | " + testBannerType + " | ✅ | 1 Jan 2026 00:00 UTC | 2 Jan 2026 06:30 UTC |\n" +
+		listHints
+	if got != want {
+		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_Empty verifies an empty page is the one sentence and
+// nothing else: no heading counting zero above it and no table header.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	out := ListOutput{Messages: []MessageItem{}}
-	result := FormatListMarkdown(out)
-	content := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(content, "No broadcast messages") {
-		t.Error("expected empty state message")
+	got := markdownText(t, FormatListMarkdown(ListOutput{Messages: []MessageItem{}}))
+	want := "No broadcast messages found.\n"
+	if got != want {
+		t.Errorf("FormatListMarkdown() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatMessageMarkdown verifies the MessageMarkdown Markdown formatter for a representative message input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMessageMarkdown verifies the whole card of one message.
 func TestFormatMessageMarkdown(t *testing.T) {
 	item := MessageItem{
 		ID: 1, Message: testMessage, BroadcastType: testBannerType,
 		Active: true, Theme: "indigo", StartsAt: "2026-01-01T00:00:00Z",
 	}
-	result := FormatMessageMarkdown(item)
-	content := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(content, "#1") {
-		t.Error("expected message ID in header")
+	got := markdownText(t, FormatMessageMarkdown(item))
+	want := "## Broadcast Message #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Message**: " + testMessage + "\n" +
+		"- **Type**: " + testBannerType + "\n" +
+		"- **Active**: ✅\n" +
+		"- **Dismissable**: ❌\n" +
+		"- **Starts At**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Theme**: indigo\n" +
+		messageHints
+	if got != want {
+		t.Errorf("FormatMessageMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
-	if !strings.Contains(content, "indigo") {
-		t.Error("expected theme in markdown")
+}
+
+// TestFormatMessageMarkdown_TargetAccessLevels verifies that the roles GitLab
+// shows a message to reach the card, named as GitLab names them. The card used
+// to drop them, so a message shown to maintainers alone read as one shown to
+// everybody.
+func TestFormatMessageMarkdown_TargetAccessLevels(t *testing.T) {
+	got := markdownText(t, FormatMessageMarkdown(MessageItem{
+		ID:                 3,
+		Message:            testMessage,
+		TargetAccessLevels: []int64{30, 40, 77},
+	}))
+	want := "## Broadcast Message #3\n\n" +
+		"- **ID**: 3\n" +
+		"- **Message**: " + testMessage + "\n" +
+		"- **Active**: ❌\n" +
+		"- **Dismissable**: ❌\n" +
+		"- **Target Access Levels**: Developer, Maintainer, Level 77\n" +
+		messageHints
+	if got != want {
+		t.Errorf("FormatMessageMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -577,13 +624,20 @@ func TestFormatMessageMarkdown_WithOptionalFields(t *testing.T) {
 		Theme:         "blue",
 		TargetPath:    "/admin",
 	}
-	result := FormatMessageMarkdown(item)
-	content := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(content, "/admin") {
-		t.Errorf("expected target_path in markdown, got: %s", content)
-	}
-	if !strings.Contains(content, "blue") {
-		t.Errorf("expected theme in markdown, got: %s", content)
+	got := markdownText(t, FormatMessageMarkdown(item))
+	want := "## Broadcast Message #2\n\n" +
+		"- **ID**: 2\n" +
+		"- **Message**: Maintenance\n" +
+		"- **Type**: notification\n" +
+		"- **Active**: ✅\n" +
+		"- **Dismissable**: ✅\n" +
+		"- **Starts At**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Ends At**: 2 Jan 2026 00:00 UTC\n" +
+		"- **Theme**: blue\n" +
+		"- **Target Path**: /admin\n" +
+		messageHints
+	if got != want {
+		t.Errorf("FormatMessageMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -601,20 +655,22 @@ func TestMarkdownRegistry_MessageOutputTypes(t *testing.T) {
 		{name: "update", output: UpdateOutput{Message: message}},
 	}
 
+	want := "## Broadcast Message #7\n\n" +
+		"- **ID**: 7\n" +
+		"- **Message**: Registry check\n" +
+		"- **Type**: " + testBannerType + "\n" +
+		"- **Active**: ✅\n" +
+		"- **Dismissable**: ❌\n" +
+		messageHints
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := toolutil.MarkdownForResult(tt.output)
 			if result == nil {
 				t.Fatal("expected non-nil markdown result")
 			}
-			content, ok := result.Content[0].(*mcp.TextContent)
-			if !ok {
-				t.Fatalf("content type = %T, want TextContent", result.Content[0])
-			}
-			for _, want := range []string{"Broadcast Message #7", "Registry check", testBannerType} {
-				if !strings.Contains(content.Text, want) {
-					t.Fatalf("markdown missing %q:\n%s", want, content.Text)
-				}
+			if got := markdownText(t, result); got != want {
+				t.Errorf("MarkdownForResult(%s) =\n%q\nwant:\n%q", tt.name, got, want)
 			}
 		})
 	}
@@ -742,14 +798,20 @@ func broadcastMessageSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[
 }
 
 // TestFormatMessageMarkdown_Color verifies the color reaches the rendered
-// table. It is the one broadcast message field the SDK does not model and the
+// card. It is the one broadcast message field the SDK does not model and the
 // handler reads off the captured response, so a formatter that dropped it would
 // leave that read with nothing to show for itself.
 func TestFormatMessageMarkdown_Color(t *testing.T) {
-	result := FormatMessageMarkdown(MessageItem{ID: 1, Message: "hello", Color: "#e75e40"})
-	content := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(content, "| Color | #e75e40 |") {
-		t.Errorf("markdown missing the color row:\n%s", content)
+	got := markdownText(t, FormatMessageMarkdown(MessageItem{ID: 1, Message: "hello", Color: "#e75e40"}))
+	want := "## Broadcast Message #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Message**: hello\n" +
+		"- **Active**: ❌\n" +
+		"- **Dismissable**: ❌\n" +
+		"- **Color**: #e75e40\n" +
+		messageHints
+	if got != want {
+		t.Errorf("FormatMessageMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 

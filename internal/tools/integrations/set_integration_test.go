@@ -382,67 +382,7 @@ func TestDeleteGroupIntegrationOutput_Error(t *testing.T) {
 	}
 }
 
-// Markdown formatters.
-
-// TestFormatSetIntegrationMarkdown verifies the generic project upsert formatter.
-func TestFormatSetIntegrationMarkdown(t *testing.T) {
-	result := FormatSetIntegrationMarkdown(SetIntegrationOutput{
-		Integration: IntegrationItem{ID: 1, Title: "Slack", Slug: "slack", Active: true, CreatedAt: "2026-01-01", UpdatedAt: "2026-02-01"},
-	})
-	text := firstMarkdownText(t, result)
-	for _, want := range []string{"Integration Updated", "Slack", "Slug", "Created", "Updated"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(text, want) {
-				t.Errorf("markdown should contain %q, got: %s", want, text)
-			}
-		})
-	}
-}
-
-// TestFormatSetIntegrationMarkdown_TitleFallback verifies the slug fallback when Title is empty.
-func TestFormatSetIntegrationMarkdown_TitleFallback(t *testing.T) {
-	result := FormatSetIntegrationMarkdown(SetIntegrationOutput{
-		Integration: IntegrationItem{ID: 1, Slug: "harbor", Active: false},
-	})
-	text := firstMarkdownText(t, result)
-	if !strings.Contains(text, "harbor") {
-		t.Errorf("expected slug fallback in heading, got: %s", text)
-	}
-}
-
-// TestFormatListGroupIntegrationsMarkdown verifies the group list formatter (with data and empty).
-func TestFormatListGroupIntegrationsMarkdown(t *testing.T) {
-	withData := FormatListGroupIntegrationsMarkdown(ListGroupIntegrationsOutput{
-		Integrations: []IntegrationItem{{ID: 1, Title: "Slack", Slug: "slack", Active: true}},
-	})
-	if !strings.Contains(firstMarkdownText(t, withData), "Group Integrations (1)") {
-		t.Error("expected group integrations table heading")
-	}
-	empty := FormatListGroupIntegrationsMarkdown(ListGroupIntegrationsOutput{})
-	if !strings.Contains(firstMarkdownText(t, empty), "No active integrations") {
-		t.Error("expected empty-list message")
-	}
-}
-
-// TestFormatGetGroupIntegrationMarkdown verifies the group get formatter.
-func TestFormatGetGroupIntegrationMarkdown(t *testing.T) {
-	result := FormatGetGroupIntegrationMarkdown(GetGroupIntegrationOutput{
-		Integration: IntegrationItem{ID: 2, Title: "Jira", Slug: "jira", Active: true},
-	})
-	if !strings.Contains(firstMarkdownText(t, result), "Group Integration") {
-		t.Error("expected group integration heading")
-	}
-}
-
-// TestFormatSetGroupIntegrationMarkdown verifies the group upsert formatter.
-func TestFormatSetGroupIntegrationMarkdown(t *testing.T) {
-	result := FormatSetGroupIntegrationMarkdown(SetGroupIntegrationOutput{
-		Integration: IntegrationItem{ID: 2, Title: "Jira", Slug: "jira", Active: true},
-	})
-	if !strings.Contains(firstMarkdownText(t, result), "Group Integration Updated") {
-		t.Error("expected group integration update heading")
-	}
-}
+// The Markdown formatters are asserted whole in markdown_test.go.
 
 // ActionSpec coverage.
 

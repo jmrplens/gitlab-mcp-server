@@ -2,6 +2,7 @@ package systemhooks
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -9,105 +10,154 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatListMarkdown formats a list of system hooks.
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionGet    = "admin.system_hook_get"
+	actionList   = "admin.system_hook_list"
+	actionAdd    = "admin.system_hook_add"
+	actionEdit   = "admin.system_hook_edit"
+	actionTest   = "admin.system_hook_test"
+	actionDelete = "admin.system_hook_delete"
+)
+
+// hookStatusCell says whether GitLab is still delivering to the hook. GitLab
+// disables a hook that keeps failing, temporarily or permanently, and the list
+// used to show only the event flags — so a hook that had been switched off
+// looked exactly like a healthy one.
+func hookStatusCell(h HookItem) string {
+	if h.AlertStatus == "" {
+		// An instance older than the field sends nothing; a dash says the
+		// response did not say rather than leaving the cell to read as empty.
+		return "-"
+	}
+	status := toolutil.EscapeMdTableCell(h.AlertStatus)
+	if h.DisabledUntil == "" {
+		return status
+	}
+	return status + " until " + toolutil.FormatTime(h.DisabledUntil)
+}
+
+// FormatListMarkdown renders the instance's system hooks as a Markdown table:
+// a collection of objects that share columns.
 func FormatListMarkdown(output ListOutput) *mcp.CallToolResult {
 	if len(output.Hooks) == 0 {
-		return toolutil.ToolResultWithMarkdown("No system hooks found.\n")
+		return toolutil.ToolResultWithMarkdown(toolutil.EmptyMessage("system hooks"))
 	}
 	var sb strings.Builder
-	sb.WriteString("## System Hooks\n\n")
-	sb.WriteString("| ID | Name | URL | Push | Tag Push | MR | Repo Update | SSL |\n")
-	sb.WriteString("|----|------|-----|------|----------|----|-------------|-----|\n")
+	toolutil.WriteListHeading(&sb, "System Hooks", len(output.Hooks), toolutil.PaginationOutput{})
+	sb.WriteString(toolutil.MarkdownTableHeader(
+		"ID", "Name", "URL", "Status", "Push", "Tag Push", "MR", "Repo Update", "SSL",
+	))
 	for _, h := range output.Hooks {
-		fmt.Fprintf(&sb, "| %d | %s | %s | %v | %v | %v | %v | %v |\n",
-			h.ID,
+		sb.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(h.ID, 10),
 			toolutil.EscapeMdTableCell(h.Name),
 			toolutil.EscapeMdTableCell(h.URL),
-			h.PushEvents,
-			h.TagPushEvents,
-			h.MergeRequestsEvents,
-			h.RepositoryUpdateEvents,
-			h.EnableSSLVerification)
+			hookStatusCell(h),
+			toolutil.BoolEmoji(h.PushEvents),
+			toolutil.BoolEmoji(h.TagPushEvents),
+			toolutil.BoolEmoji(h.MergeRequestsEvents),
+			toolutil.BoolEmoji(h.RepositoryUpdateEvents),
+			toolutil.BoolEmoji(h.EnableSSLVerification),
+		))
 	}
-	toolutil.WriteHints(&sb, "Use `gitlab_get_system_hook` to view details of a specific hook")
+	toolutil.WriteListFooter(&sb, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(actionGet, "read one hook with its filters and headers"),
+		toolutil.HintAction(actionAdd, "register another system hook"),
+	)
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
-// FormatHookMarkdown formats a single system hook.
+// FormatHookMarkdown renders a single system hook as the card of one object,
+// with its URL variables and custom headers as the nested collections they
+// are. Both carry keys only: GitLab never sends either value back.
 func FormatHookMarkdown(item HookItem) *mcp.CallToolResult {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## System Hook #%d\n\n", item.ID)
-	sb.WriteString("| Property | Value |\n")
-	sb.WriteString("|----------|-------|\n")
-	if item.Name != "" {
-		fmt.Fprintf(&sb, "| Name | %s |\n", toolutil.EscapeMdTableCell(item.Name))
-	}
-	if item.Description != "" {
-		fmt.Fprintf(&sb, "| Description | %s |\n", toolutil.EscapeMdTableCell(item.Description))
-	}
-	fmt.Fprintf(&sb, "| URL | %s |\n", toolutil.EscapeMdTableCell(item.URL))
-	fmt.Fprintf(&sb, "| Push Events | %v |\n", item.PushEvents)
-	if item.PushEventsBranchFilter != "" {
-		fmt.Fprintf(&sb, "| Push Events Branch Filter | %s |\n", toolutil.EscapeMdTableCell(item.PushEventsBranchFilter))
-	}
-	if item.BranchFilterStrategy != "" {
-		fmt.Fprintf(&sb, "| Branch Filter Strategy | %s |\n", toolutil.EscapeMdTableCell(item.BranchFilterStrategy))
-	}
-	fmt.Fprintf(&sb, "| Tag Push Events | %v |\n", item.TagPushEvents)
-	fmt.Fprintf(&sb, "| MR Events | %v |\n", item.MergeRequestsEvents)
-	fmt.Fprintf(&sb, "| Repo Update Events | %v |\n", item.RepositoryUpdateEvents)
-	fmt.Fprintf(&sb, "| SSL Verification | %v |\n", item.EnableSSLVerification)
-	if item.AlertStatus != "" {
-		fmt.Fprintf(&sb, "| Alert Status | %s |\n", toolutil.EscapeMdTableCell(item.AlertStatus))
-	}
-	if item.DisabledUntil != "" {
-		fmt.Fprintf(&sb, "| Disabled Until | %s |\n", toolutil.FormatTime(item.DisabledUntil))
-	}
-	if item.CustomWebhookTemplate != "" {
-		fmt.Fprintf(&sb, "| Custom Webhook Template | %s |\n", toolutil.EscapeMdTableCell(item.CustomWebhookTemplate))
-	}
-	if item.OrganizationID != 0 {
-		fmt.Fprintf(&sb, "| Organization ID | %d |\n", item.OrganizationID)
-	}
-	fmt.Fprintf(&sb, "| Token Present | %v |\n", item.TokenPresent)
-	fmt.Fprintf(&sb, "| Signing Token Present | %v |\n", item.SigningTokenPresent)
-	if item.CreatedAt != "" {
-		fmt.Fprintf(&sb, "| Created At | %s |\n", toolutil.FormatTime(item.CreatedAt))
-	}
-	if len(item.URLVariables) > 0 {
-		sb.WriteString("\n### URL Variables\n\n")
-		sb.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
-		for _, variable := range item.URLVariables {
-			sb.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(variable.Key), toolutil.RedactedSecretValue))
-		}
-	}
-	if len(item.CustomHeaders) > 0 {
-		sb.WriteString("\n### Custom Headers\n\n")
-		sb.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
-		for _, header := range item.CustomHeaders {
-			sb.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(header.Key), toolutil.RedactedSecretValue))
-		}
-	}
-	toolutil.WriteHints(&sb, "Use `gitlab_test_system_hook` to verify this hook is working")
+	c := toolutil.NewCard(&sb, fmt.Sprintf("System Hook #%d", item.ID))
+	c.Int("ID", item.ID)
+	c.Field("Name", item.Name)
+	// The description is whatever the administrator who registered the hook
+	// typed against it.
+	c.Text("Description", item.Description)
+	c.Field("URL", item.URL)
+	c.Field("Alert Status", item.AlertStatus)
+	c.Time("Disabled Until", item.DisabledUntil)
+	c.Bool("Push Events", item.PushEvents)
+	c.Field("Push Events Branch Filter", item.PushEventsBranchFilter)
+	c.Field("Branch Filter Strategy", item.BranchFilterStrategy)
+	c.Bool("Tag Push Events", item.TagPushEvents)
+	c.Bool("MR Events", item.MergeRequestsEvents)
+	c.Bool("Repo Update Events", item.RepositoryUpdateEvents)
+	c.Bool("SSL Verification", item.EnableSSLVerification)
+	c.Field("Custom Webhook Template", item.CustomWebhookTemplate)
+	c.Count("Organization ID", item.OrganizationID)
+	c.Bool("Token Present", item.TokenPresent)
+	c.Bool("Signing Token Present", item.SigningTokenPresent)
+	c.Time("Created At", item.CreatedAt)
+	writeRedactedKeys(c, "URL Variables", urlVariableKeys(item.URLVariables))
+	writeRedactedKeys(c, "Custom Headers", customHeaderKeys(item.CustomHeaders))
+	c.End(
+		toolutil.HintAction(actionTest, "send GitLab's sample payload to this hook"),
+		toolutil.HintAction(actionEdit, "change its URL or the events it fires on"),
+		toolutil.HintAction(actionDelete, "remove it"),
+	)
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
-// FormatTestMarkdown formats a hook test event result.
+// writeRedactedKeys writes one nested collection of configured keys, every
+// value redacted.
+func writeRedactedKeys(c *toolutil.Card, title string, keys []string) {
+	if len(keys) == 0 {
+		return
+	}
+	table := c.Table(title, "Key", "Value")
+	for _, key := range keys {
+		table.Row(toolutil.EscapeMdTableCell(key), toolutil.RedactedSecretValue)
+	}
+}
+
+func urlVariableKeys(variables []HookURLVariable) []string {
+	keys := make([]string, 0, len(variables))
+	for _, variable := range variables {
+		keys = append(keys, variable.Key)
+	}
+	return keys
+}
+
+func customHeaderKeys(headers []HookCustomHeader) []string {
+	keys := make([]string, 0, len(headers))
+	for _, header := range headers {
+		keys = append(keys, header.Key)
+	}
+	return keys
+}
+
+// FormatTestMarkdown renders the result of asking GitLab to deliver a test
+// event to a system hook.
+//
+// It reports what was sent and never how it was received. GitLab's test
+// endpoint fires its own fixed sample payload — a project_create event about a
+// stand-in project — and answers with that payload, not with the receiver's
+// response, so the previous "Hook Test Event" heading over a table of the
+// sample's fields read as a delivery outcome the response does not carry.
 func FormatTestMarkdown(output TestOutput) *mcp.CallToolResult {
 	e := output.Event
 	var sb strings.Builder
-	sb.WriteString("## Hook Test Event\n\n")
-	sb.WriteString("| Property | Value |\n")
-	sb.WriteString("|----------|-------|\n")
+	c := toolutil.NewCard(&sb, "Test Delivery Triggered")
+	section := c.Section("Sample Payload GitLab Sent")
 	// A system hook event carries the name and path of whatever it fired about,
 	// both of which a person chose.
-	fmt.Fprintf(&sb, "| Event Name | %s |\n", toolutil.EscapeMdTableCell(e.EventName))
-	fmt.Fprintf(&sb, "| Name | %s |\n", toolutil.EscapeMdTableCell(e.Name))
-	fmt.Fprintf(&sb, "| Path | %s |\n", toolutil.EscapeMdTableCell(e.Path))
-	fmt.Fprintf(&sb, "| Project ID | %d |\n", e.ProjectID)
-	fmt.Fprintf(&sb, "| Owner | %s (%s) |\n",
-		toolutil.EscapeMdTableCell(e.OwnerName), toolutil.EscapeMdTableCell(e.OwnerEmail))
-	toolutil.WriteHints(&sb, "Verify the hook is receiving events correctly")
+	section.Field("Event Name", e.EventName)
+	section.Field("Name", e.Name)
+	section.Field("Path", e.Path)
+	section.Count("Project ID", e.ProjectID)
+	section.Field("Owner Name", e.OwnerName)
+	section.Field("Owner Email", e.OwnerEmail)
+	c.Note("GitLab sent its own fixed sample payload to the hook URL. This response carries that payload, not the receiver's status code, so it does not say whether the delivery arrived.")
+	c.End(
+		toolutil.HintAction(actionGet, "read the hook's alert status, which does record repeated delivery failures"),
+		toolutil.HintAction(actionList, "see every system hook on the instance"),
+	)
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 

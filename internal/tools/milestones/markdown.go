@@ -10,6 +10,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionGet           = "milestone.get"
+	actionCreate        = "milestone.create"
+	actionUpdate        = "milestone.update"
+	actionIssues        = "milestone.issues"
+	actionMergeRequests = "milestone.merge_requests"
+	actionIssueGet      = "issue.get"
+	actionMRGet         = "merge_request.get"
+)
+
 type milestoneNotFoundOutput struct {
 	Identifier string
 }
@@ -22,40 +33,31 @@ func formatMilestoneNotFound(out milestoneNotFoundOutput) *mcp.CallToolResult {
 	)
 }
 
-// FormatListMarkdownString renders a ListOutput as a Markdown table string.
+// FormatListMarkdownString renders a page of milestones as a Markdown table: a
+// collection of objects that share columns.
 func FormatListMarkdownString(v ListOutput) string {
-	var b strings.Builder
 	if len(v.Milestones) == 0 {
-		b.WriteString("No milestones found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("milestones")
 	}
-	b.WriteString("| IID | Title | State | Due Date | Expired |\n")
-	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Milestones", len(v.Milestones), v.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Due Date", "Expired"))
 	for _, m := range v.Milestones {
 		due := "-"
 		if m.DueDate != "" {
 			due = toolutil.FormatTime(m.DueDate)
 		}
-		expired := "No"
-		if m.Expired {
-			expired = "Yes"
-		}
-		fmt.Fprintf(
-			&b, "| %s | %s | %s | %s | %s |\n",
+		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.MdTitleLink(strconv.FormatInt(m.IID, 10), m.WebURL),
 			toolutil.EscapeMdTableCell(m.Title),
-			//gitlab:allow-unescaped m.State: a milestone state, which GitLab returns as active or closed.
-			m.State,
+			toolutil.EscapeMdTableCell(m.State),
 			due,
-			expired,
-		)
+			toolutil.BoolEmoji(m.Expired),
+		))
 	}
-	toolutil.WritePagination(&b, v.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use action 'milestone_get' with milestone_iid to see details",
-		"Use action 'milestone_create' to create a new milestone",
+	toolutil.WriteListFooter(&b, v.Pagination, true,
+		toolutil.HintAction(actionGet, "read one milestone by its IID"),
+		toolutil.HintAction(actionCreate, "add a new milestone to the project"),
 	)
 	return b.String()
 }
@@ -65,72 +67,66 @@ func FormatListMarkdown(v ListOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatListMarkdownString(v))
 }
 
-// FormatMarkdown renders a single milestone as a Markdown string.
+// FormatMarkdown renders one milestone as the card of one object.
+//
+// The expiry used to print as the word "true", which reads as a value GitLab
+// stored rather than as a warning; an expired milestone is now marked with the
+// warning sign and an unexpired one says nothing at all, since a tick on
+// "Expired" reads as success.
 func FormatMarkdown(v Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Milestone: %s\n\n", toolutil.EscapeMdHeading(v.Title))
-	fmt.Fprintf(&b, "- **ID**: %d (IID: %d)\n", v.ID, v.IID)
-	//gitlab:allow-unescaped v.State: a milestone state, which GitLab returns as active or closed.
-	fmt.Fprintf(&b, toolutil.FmtMdState, v.State)
-	if v.Description != "" {
-		toolutil.WriteDescription(&b, v.Description)
-	}
-	if v.StartDate != "" {
-		fmt.Fprintf(&b, "- **Start Date**: %s\n", toolutil.FormatTime(v.StartDate))
-	}
-	if v.DueDate != "" {
-		fmt.Fprintf(&b, "- **Due Date**: %s\n", toolutil.FormatTime(v.DueDate))
-	}
-	fmt.Fprintf(&b, "- **Expired**: %v\n", v.Expired)
-	if v.WebURL != "" {
-		toolutil.WriteMdURL(&b, v.WebURL)
-	}
-	if v.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(v.CreatedAt))
-	}
-	if v.UpdatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdUpdated, toolutil.FormatTime(v.UpdatedAt))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'milestone_issues' to list issues in this milestone",
-		"Use action 'milestone_merge_requests' to list MRs in this milestone",
+	c := toolutil.NewCard(&b, fmt.Sprintf("Milestone #%d: %s", v.IID, v.Title))
+	c.Int("ID", v.ID)
+	c.Int("IID", v.IID)
+	c.Count("Project ID", v.ProjectID)
+	c.Count("Group ID", v.GroupID)
+	c.Field("State", v.State)
+	c.Time("Start Date", v.StartDate)
+	c.Time("Due Date", v.DueDate)
+	c.Warn("Expired", v.Expired)
+	c.URL(v.WebURL)
+	c.Time("Created", v.CreatedAt)
+	c.Time("Updated", v.UpdatedAt)
+	c.Text("Description", v.Description)
+	c.End(
+		toolutil.HintAction(actionIssues, "list the issues in this milestone"),
+		toolutil.HintAction(actionMergeRequests, "list the merge requests in this milestone"),
+		toolutil.HintAction(actionUpdate, "change this milestone's dates or state"),
 	)
 	return b.String()
 }
 
-// FormatIssuesMarkdownString renders milestone issues as a Markdown table string.
+// FormatIssuesMarkdownString renders a page of a milestone's issues as a
+// Markdown table.
 func FormatIssuesMarkdownString(v MilestoneIssuesOutput) string {
-	var b strings.Builder
 	if len(v.Issues) == 0 {
-		b.WriteString("No issues found for this milestone.\n")
-		return b.String()
+		return toolutil.EmptyMessage("milestone issues")
 	}
-	b.WriteString("| IID | Title | State | Created |\n")
-	b.WriteString("| --- | --- | --- | --- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Milestone Issues", len(v.Issues), v.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Created"))
 	for _, issue := range v.Issues {
-		created := "-"
-		if issue.CreatedAt != "" {
-			created = issue.CreatedAt
-		}
-		fmt.Fprintf(
-			&b, "| %s | %s | %s | %s |\n",
+		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.MdTitleLink(fmt.Sprintf("#%d", issue.IID), issue.WebURL),
 			toolutil.EscapeMdTableCell(issue.Title),
-			//gitlab:allow-unescaped issue.State: an issue state, which GitLab returns as opened or closed.
-			issue.State,
-			//gitlab:allow-unescaped created: a creation timestamp formatted from a time.Time as RFC 3339, or the literal dash, in this table and in the merge request one below.
-			created,
-		)
+			stateCell(toolutil.IssueStateEmoji(issue.State), issue.State),
+			toolutil.FormatTime(issue.CreatedAt),
+		))
 	}
-	toolutil.WritePagination(&b, v.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use gitlab_issue action 'get' with issue IID for full details",
-		"Use action 'milestone_merge_requests' to view MRs in this milestone",
+	toolutil.WriteListFooter(&b, v.Pagination, true,
+		toolutil.HintAction(actionIssueGet, "read one of these issues in full"),
+		toolutil.HintAction(actionMergeRequests, "see the merge requests in this milestone instead"),
 	)
 	return b.String()
+}
+
+// stateCell renders a state word with the glyph its domain gives it, and
+// nothing at all when GitLab sent no state.
+func stateCell(emoji, state string) string {
+	if state == "" {
+		return ""
+	}
+	return emoji + " " + toolutil.EscapeMdTableCell(state)
 }
 
 // FormatIssuesMarkdown returns a Markdown MCP tool result for milestone issues.
@@ -138,37 +134,30 @@ func FormatIssuesMarkdown(v MilestoneIssuesOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatIssuesMarkdownString(v))
 }
 
-// FormatMergeRequestsMarkdownString renders milestone merge requests as a Markdown table string.
+// FormatMergeRequestsMarkdownString renders a page of a milestone's merge
+// requests as a Markdown table.
 func FormatMergeRequestsMarkdownString(v MilestoneMergeRequestsOutput) string {
-	var b strings.Builder
 	if len(v.MergeRequests) == 0 {
-		b.WriteString("No merge requests found for this milestone.\n")
-		return b.String()
+		return toolutil.EmptyMessage("milestone merge requests")
 	}
-	b.WriteString("| IID | Title | State | Source | Target | Created |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Milestone Merge Requests", len(v.MergeRequests), v.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Source", "Target", "Created"))
 	for _, mr := range v.MergeRequests {
-		created := "-"
-		if mr.CreatedAt != "" {
-			created = mr.CreatedAt
-		}
-		fmt.Fprintf(
-			&b, "| %s | %s | %s | %s | %s | %s |\n",
+		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.MdTitleLink(fmt.Sprintf("!%d", mr.IID), mr.WebURL),
 			toolutil.EscapeMdTableCell(mr.Title),
-			//gitlab:allow-unescaped mr.State: a merge request state, which GitLab returns as opened, closed, locked or merged.
-			mr.State,
+			stateCell(toolutil.MRStateEmoji(mr.State), mr.State),
+			// A branch name is not an identifier: git check-ref-format permits
+			// '|', '<' and '>'.
 			toolutil.EscapeMdTableCell(mr.SourceBranch),
 			toolutil.EscapeMdTableCell(mr.TargetBranch),
-			created,
-		)
+			toolutil.FormatTime(mr.CreatedAt),
+		))
 	}
-	toolutil.WritePagination(&b, v.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use gitlab_merge_request action 'get' with MR IID for full details",
-		"Use action 'milestone_issues' to view issues in this milestone",
+	toolutil.WriteListFooter(&b, v.Pagination, true,
+		toolutil.HintAction(actionMRGet, "read one of these merge requests in full"),
+		toolutil.HintAction(actionIssues, "see the issues in this milestone instead"),
 	)
 	return b.String()
 }

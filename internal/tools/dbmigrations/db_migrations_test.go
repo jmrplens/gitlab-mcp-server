@@ -79,16 +79,38 @@ func TestMark_VersionValidation(t *testing.T) {
 	}
 }
 
-// TestFormatMarkMarkdown verifies the MarkMarkdown Markdown formatter for a representative mark input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// markHints is the guidance section the card ends with.
+const markHints = "\n---\n💡 **Next steps:**\n" +
+	"- Verify overall migration state in the GitLab admin area (no list action is exposed here)\n"
+
+// TestFormatMarkMarkdown verifies the whole card: two rows and the hint, where
+// the formatter used to write one paragraph of "**Status**: x | **Version**: 1".
 func TestFormatMarkMarkdown(t *testing.T) {
-	md := FormatMarkMarkdown(MarkOutput{Status: "marked", Version: 20240115100000})
-	if !strings.Contains(md, "marked") {
-		t.Error("missing status")
+	got := FormatMarkMarkdown(MarkOutput{Status: "marked", Version: 20240115100000})
+	want := "## Mark Migration\n\n" +
+		"- **Status**: marked\n" +
+		"- **Version**: 20240115100000\n" +
+		markHints
+	if got != want {
+		t.Errorf("FormatMarkMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
-	if !strings.Contains(md, "20240115100000") {
-		t.Error("missing version")
+}
+
+// TestFormatMarkMarkdown_HostileStatus verifies that a status carrying markup
+// and line breaks changes no structure: it used to be written into a bare
+// paragraph with no escaper in front of it, so a tag reached the page as
+// markup and a line break added a heading of its own.
+func TestFormatMarkMarkdown_HostileStatus(t *testing.T) {
+	got := FormatMarkMarkdown(MarkOutput{
+		Status:  "<a href=\"http://attacker.invalid\">x</a>\n## Injected",
+		Version: 7,
+	})
+	want := "## Mark Migration\n\n" +
+		"- **Status**: &lt;a href=\"http://attacker.invalid\">x&lt;/a> ## Injected\n" +
+		"- **Version**: 7\n" +
+		markHints
+	if got != want {
+		t.Errorf("FormatMarkMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 

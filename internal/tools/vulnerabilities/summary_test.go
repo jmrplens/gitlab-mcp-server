@@ -403,60 +403,86 @@ func TestPipelineSecuritySummary_ServerError(t *testing.T) {
 
 // Markdown formatter tests.
 
-// TestFormatSeverityCountMarkdown_WithCounts verifies that formatting severity
-// counts produces a Markdown block with the total and per-severity breakdown.
+// severityCountHints is the guidance section every severity-count card closes
+// with.
+const severityCountHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'vulnerability.list' to read the vulnerabilities behind these counts\n" +
+	"- Use action 'vulnerability.pipeline_security_summary' to see what one pipeline's scanners reported\n"
+
+// TestFormatSeverityCountMarkdown_WithCounts verifies that the severity counts
+// render as the card of one object, each row labeled with the badge the
+// security domains share — the UNKNOWN level included, which the package's own
+// severity table had no answer for.
 func TestFormatSeverityCountMarkdown_WithCounts(t *testing.T) {
 	out := SeverityCountOutput{
 		Critical: 5, High: 12, Medium: 23, Low: 8, Info: 3, Unknown: 1, Total: 52,
 	}
-	md := FormatSeverityCountMarkdown(out)
-	if !strings.Contains(md, "Severity Counts") {
-		t.Error("expected heading in markdown")
-	}
-	if !strings.Contains(md, "CRITICAL") {
-		t.Error("expected CRITICAL label")
-	}
-	if !strings.Contains(md, "**52**") {
-		t.Error("expected total count 52 in bold")
+
+	want := "## Vulnerability Severity Counts\n\n" +
+		"- **🔴 CRITICAL**: 5\n" +
+		"- **🟠 HIGH**: 12\n" +
+		"- **🟡 MEDIUM**: 23\n" +
+		"- **🔵 LOW**: 8\n" +
+		"- **ℹ️ INFO**: 3\n" +
+		"- **❓ UNKNOWN**: 1\n" +
+		"- **Total**: 52\n" +
+		severityCountHints
+
+	if got := FormatSeverityCountMarkdown(out); got != want {
+		t.Errorf("FormatSeverityCountMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatSeverityCountMarkdown_AllZero verifies that formatting severity
-// counts with all zeros produces the expected clean-state Markdown message.
+// TestFormatSeverityCountMarkdown_AllZero verifies that a clean project still
+// renders every row: zero is the answer a reader came for, so it is written
+// rather than left out as an absent value would be.
 func TestFormatSeverityCountMarkdown_AllZero(t *testing.T) {
-	out := SeverityCountOutput{}
-	md := FormatSeverityCountMarkdown(out)
-	if !strings.Contains(md, "**0**") {
-		t.Error("expected total 0 in bold")
+	want := "## Vulnerability Severity Counts\n\n" +
+		"- **🔴 CRITICAL**: 0\n" +
+		"- **🟠 HIGH**: 0\n" +
+		"- **🟡 MEDIUM**: 0\n" +
+		"- **🔵 LOW**: 0\n" +
+		"- **ℹ️ INFO**: 0\n" +
+		"- **❓ UNKNOWN**: 0\n" +
+		"- **Total**: 0\n" +
+		severityCountHints
+
+	if got := FormatSeverityCountMarkdown(SeverityCountOutput{}); got != want {
+		t.Errorf("FormatSeverityCountMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatPipelineSecuritySummaryMarkdown_WithScanners verifies that formatting
-// a pipeline security summary produces a Markdown table with scanner details.
+// TestFormatPipelineSecuritySummaryMarkdown_WithScanners verifies that the
+// scanners that ran render as one table — a collection of objects that share
+// columns — with the total below it and the hints last.
 func TestFormatPipelineSecuritySummaryMarkdown_WithScanners(t *testing.T) {
 	out := PipelineSecuritySummaryOutput{
 		Sast:                 &ScannerSummaryItem{VulnerabilitiesCount: 10, ScannedResourcesCount: 150},
 		Dast:                 &ScannerSummaryItem{VulnerabilitiesCount: 3, ScannedResourcesCount: 50},
 		TotalVulnerabilities: 13,
 	}
-	md := FormatPipelineSecuritySummaryMarkdown(out)
-	if !strings.Contains(md, "SAST") {
-		t.Error("expected SAST row")
-	}
-	if !strings.Contains(md, "DAST") {
-		t.Error("expected DAST row")
-	}
-	if !strings.Contains(md, "13") {
-		t.Error("expected total 13")
+
+	want := "## Pipeline Security Report Summary\n\n" +
+		"| Scanner | Vulnerabilities | Scanned Resources |\n" +
+		"| --- | --- | --- |\n" +
+		"| SAST | 10 | 150 |\n" +
+		"| DAST | 3 | 50 |\n\n" +
+		"**Total Vulnerabilities: 13**\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'security_finding.list' to read the findings these scanners reported\n" +
+		"- Use action 'vulnerability.severity_count' to see the project's counts by severity\n"
+
+	if got := FormatPipelineSecuritySummaryMarkdown(out); got != want {
+		t.Errorf("FormatPipelineSecuritySummaryMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatPipelineSecuritySummaryMarkdown_Empty verifies that formatting
-// an empty pipeline security summary produces the expected no-scanners Markdown.
+// TestFormatPipelineSecuritySummaryMarkdown_Empty verifies that a pipeline
+// with no security scan renders the sentence saying so rather than an empty
+// table.
 func TestFormatPipelineSecuritySummaryMarkdown_Empty(t *testing.T) {
-	out := PipelineSecuritySummaryOutput{}
-	md := FormatPipelineSecuritySummaryMarkdown(out)
-	if !strings.Contains(md, "No security scans") {
-		t.Error("expected empty message")
+	want := "## Pipeline Security Report Summary\n\nNo security scans ran in this pipeline.\n"
+	if got := FormatPipelineSecuritySummaryMarkdown(PipelineSecuritySummaryOutput{}); got != want {
+		t.Errorf("FormatPipelineSecuritySummaryMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
 }

@@ -98,24 +98,6 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestFormatCreateMarkdown_ExternalEmoji verifies that FormatCreateMarkdown
-// correctly shows "Yes" for the External field when the emoji is external.
-func TestFormatCreateMarkdown_ExternalEmoji(t *testing.T) {
-	out := CreateOutput{
-		Emoji: Item{
-			ID:        "gid://gitlab/CustomEmoji/2",
-			Name:      "shipit",
-			URL:       "https://example.com/shipit.png",
-			External:  true,
-			CreatedAt: "2026-06-15T14:30:00Z",
-		},
-	}
-	md := FormatCreateMarkdown(out)
-	if !strings.Contains(md, "| External | Yes |") {
-		t.Errorf("expected External=Yes in markdown, got:\n%s", md)
-	}
-}
-
 // TestActionSpecs_DeleteError validates the DeleteError route through the catalog surface.
 // The test exercises the POST path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.

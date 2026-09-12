@@ -1,41 +1,49 @@
 package snippetstoragemoves
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown formats a single snippet storage move as a Markdown table.
+// Canonical catalog action IDs the hints name. The catalog domain is
+// storage_move, the group all three storage-move packages register under.
+const (
+	hintActionRetrieveAll = "storage_move.retrieve_all_snippet"
+	hintActionSchedule    = "storage_move.schedule_snippet"
+)
+
+// FormatOutputMarkdown renders one snippet storage move as the shared card.
 func FormatOutputMarkdown(o Output) string {
 	return toolutil.FormatStorageMoveDetailMarkdown(
 		storageMoveMarkdown(o), "Snippet Storage Move",
-		"Use `gitlab_retrieve_all_snippet_storage_moves` to view all moves",
+		toolutil.HintAction(hintActionRetrieveAll, "see every snippet storage move on the instance"),
+		toolutil.HintAction(hintActionSchedule, "schedule another move for this snippet"),
 	)
 }
 
-// FormatListMarkdown formats a paginated list of snippet storage moves as a Markdown table.
+// FormatListMarkdown renders a page of snippet storage moves as the shared
+// table.
 func FormatListMarkdown(o ListOutput) string {
 	return toolutil.FormatStorageMoveCollectionMarkdown(o.Moves, o.Pagination, storageMoveMarkdown,
-		"Snippet Storage Moves", "No snippet storage moves found.", "Snippet")
+		"Snippet Storage Moves", toolutil.EmptyMessage("snippet storage moves"), "Snippet")
 }
 
-// FormatScheduleAllMarkdown formats the schedule-all result.
+// FormatScheduleAllMarkdown renders the bulk schedule confirmation as a card.
 func FormatScheduleAllMarkdown(o ScheduleAllOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Schedule All Snippet Storage Moves\n\n%s\n", o.Message)
-	toolutil.WriteHints(
-		&sb,
-		"Use `gitlab_retrieve_all_snippet_storage_moves` to monitor progress",
-	)
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Schedule All Snippet Storage Moves")
+	c.Field("Result", o.Message)
+	c.End(toolutil.HintAction(hintActionRetrieveAll, "watch the scheduled moves progress"))
+	return b.String()
 }
 
+// storageMoveMarkdown maps one move onto the shared view model.
 func storageMoveMarkdown(o Output) toolutil.StorageMoveMarkdown {
 	return toolutil.NewStorageMoveMarkdown(o.ID, o.State, o.SourceStorageName, o.DestinationStorageName, o.CreatedAt, snippetStorageMoveEntity(o.Snippet))
 }
 
+// snippetStorageMoveEntity names the moved snippet, linked to its page.
 func snippetStorageMoveEntity(snippet *SnippetOutput) *toolutil.StorageMoveEntityMarkdown {
 	if snippet != nil {
 		return toolutil.NewStorageMoveEntityMarkdown("Snippet", snippet.Title, snippet.WebURL, snippet.ID)

@@ -2,126 +2,158 @@ package vulnerabilities
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatListMarkdown renders a paginated list of vulnerabilities as Markdown.
+// The states GitLab's VulnerabilityState enum takes. They decide which
+// transitions a reader can still make, which is why the hints read them: a
+// dismissed vulnerability cannot be dismissed again, and a detected one has
+// nothing to revert to.
+const (
+	stateDetected  = "DETECTED"
+	stateConfirmed = "CONFIRMED"
+	stateDismissed = "DISMISSED"
+	stateResolved  = "RESOLVED"
+)
+
+// FormatListMarkdown renders a page of vulnerabilities as a Markdown table: a
+// collection of objects that share columns. The ID is a column because it is
+// what every other vulnerability action takes, and the list used to be a page
+// a model could read and not act on.
 func FormatListMarkdown(out ListOutput) string {
-	var sb strings.Builder
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	sb.WriteString("## Vulnerabilities\n\n")
-
 	if len(out.Vulnerabilities) == 0 {
-		sb.WriteString("No vulnerabilities found.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("vulnerabilities")
 	}
-
-	sb.WriteString("| Severity | Title | State | Scanner | Report Type | Detected |\n")
-	sb.WriteString("|----------|-------|-------|---------|-------------|----------|\n")
-
+	var b strings.Builder
+	// A cursor-paginated connection sends no total, so the heading counts what
+	// is shown and says whether more follows, which is all the response knows.
+	toolutil.WriteListHeading(&b, "Vulnerabilities", len(out.Vulnerabilities),
+		toolutil.PaginationOutput{HasMore: out.Pagination.HasNextPage})
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Severity", "Title", "State", "Scanner", "Report Type", "Detected"))
 	for _, v := range out.Vulnerabilities {
-		scanner := ""
-		if v.Scanner != nil {
-			scanner = v.Scanner.Name
-		}
-		primaryID := ""
-		if v.PrimaryID != nil {
-			primaryID = v.PrimaryID.Name
-		}
-		title := v.Title
-		if primaryID != "" && primaryID != v.Title {
-			title = fmt.Sprintf("%s (%s)", v.Title, primaryID)
-		}
-		fmt.Fprintf(
-			&sb, "| %s | %s | %s | %s | %s | %s |\n",
-			severityBadge(v.Severity),
-			toolutil.EscapeMdTableCell(title),
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdCodeSpanCell(v.ID),
+			toolutil.SeverityBadge(v.Severity),
+			toolutil.EscapeMdTableCell(listTitle(v)),
 			toolutil.EscapeMdTableCell(v.State),
-			toolutil.EscapeMdTableCell(scanner),
+			toolutil.EscapeMdTableCell(scannerName(v.Scanner)),
 			toolutil.EscapeMdTableCell(v.ReportType),
-			formatDate(v.DetectedAt),
-		)
+			toolutil.FormatTime(v.DetectedAt),
+		))
 	}
-
-	sb.WriteString("\n")
-	sb.WriteString(toolutil.FormatGraphQLPagination(out.Pagination, len(out.Vulnerabilities)))
-	sb.WriteString("\n")
-	return sb.String()
+	toolutil.WriteGraphQLPagination(&b, out.Pagination, len(out.Vulnerabilities))
+	// The table carries no link, so the footer carries no instruction to keep
+	// the links of a table that has none.
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(actionVulnGet, "read one vulnerability in full, naming the ID above"),
+		toolutil.HintAction(actionVulnSeverityCount, "see how many vulnerabilities the project has at each severity"),
+		toolutil.HintAction(actionSecurityFindingList, "read the findings one pipeline's scanners reported"),
+	)
+	return b.String()
 }
 
-// FormatGetMarkdown renders a single vulnerability detail as Markdown.
+// listTitle names a vulnerability in a list row: its title, and the primary
+// identifier beside it when GitLab sent one that is not the title itself.
+func listTitle(v Item) string {
+	if v.PrimaryID == nil || v.PrimaryID.Name == "" || v.PrimaryID.Name == v.Title {
+		return v.Title
+	}
+	return fmt.Sprintf("%s (%s)", v.Title, v.PrimaryID.Name)
+}
+
+// scannerName is the scanner's name, or "" when GitLab sent no scanner.
+func scannerName(s *ScannerItem) string {
+	if s == nil {
+		return ""
+	}
+	return s.Name
+}
+
+// FormatGetMarkdown renders one vulnerability as the card of one object: what
+// it is, where it was found, what has happened to it, its identifiers as a
+// nested collection, and the scanner's own prose as quoted text.
 func FormatGetMarkdown(out GetOutput) string {
 	v := out.Vulnerability
-	var sb strings.Builder
-
+	var b strings.Builder
 	// The title comes out of the security report artifact, which a repository's
 	// own CI job writes.
-	fmt.Fprintf(&sb, "## Vulnerability: %s\n\n", toolutil.EscapeMdHeading(v.Title))
-	writeVulnerabilitySummary(&sb, v)
-	writeVulnerabilityIdentifiers(&sb, v.Identifiers)
-	writeVulnerabilityDescription(&sb, v.Description)
-
-	toolutil.WriteHints(
-		&sb,
-		"Use `gitlab_dismiss_vulnerability` to dismiss this finding",
-		"Use `gitlab_confirm_vulnerability` to confirm this finding",
-		"Use `gitlab_resolve_vulnerability` to mark as resolved",
-	)
-	return sb.String()
+	c := toolutil.NewCard(&b, vulnerabilityHeading(v.Title))
+	writeVulnerabilityRows(c, v)
+	writeVulnerabilityIdentifiers(c, v.Identifiers)
+	c.End(append(
+		stateTransitionHints(v.State),
+		toolutil.HintAction(actionVulnList, "see the project's other vulnerabilities"),
+	)...)
+	return b.String()
 }
 
-func writeVulnerabilitySummary(sb *strings.Builder, v Item) {
-	sb.WriteString("| Field | Value |\n|-------|-------|\n")
-	fmt.Fprintf(sb, "| ID | %s |\n", toolutil.EscapeMdTableCell(v.ID))
-	fmt.Fprintf(sb, "| Severity | %s |\n", severityBadge(v.Severity))
-	fmt.Fprintf(sb, "| State | %s |\n", toolutil.EscapeMdTableCell(v.State))
-	fmt.Fprintf(sb, "| Report Type | %s |\n", toolutil.EscapeMdTableCell(v.ReportType))
-
-	if v.Scanner != nil {
-		scanner := v.Scanner.Name
-		if v.Scanner.Vendor != "" {
-			scanner += " (" + v.Scanner.Vendor + ")"
-		}
-		fmt.Fprintf(sb, "| Scanner | %s |\n", toolutil.EscapeMdTableCell(scanner))
-	}
-
+// writeVulnerabilityRows writes the rows one vulnerability renders with, so
+// the detail view and the mutation confirmation cannot drift apart.
+func writeVulnerabilityRows(c *toolutil.Card, v Item) {
+	c.Code("ID", v.ID)
+	c.Field("Title", v.Title)
+	c.Field("Severity", toolutil.SeverityBadge(v.Severity))
+	c.Field("State", v.State)
+	c.Field("Report Type", v.ReportType)
+	c.Field("Scanner", scannerLabel(v.Scanner))
 	if v.PrimaryID != nil {
 		// Both halves come out of the report's identifier object, so the name
 		// can close the label and the URL can close the destination.
-		fmt.Fprintf(sb, "| Primary Identifier | %s |\n",
-			toolutil.MdTitleLink(v.PrimaryID.Name, v.PrimaryID.URL))
+		c.Link("Primary Identifier", v.PrimaryID.Name, v.PrimaryID.URL)
 	}
-
 	if v.Location != nil {
-		fmt.Fprintf(sb, "| Location | %s |\n", toolutil.EscapeMdTableCell(formatVulnerabilityLocation(v.Location)))
+		c.Code("Location", formatVulnerabilityLocation(v.Location))
 	}
-
-	fmt.Fprintf(sb, "| Detected | %s |\n", formatDate(v.DetectedAt))
-	if v.DismissedAt != "" {
-		fmt.Fprintf(sb, "| Dismissed | %s |\n", formatDate(v.DismissedAt))
+	c.Time("Detected", v.DetectedAt)
+	c.Time("Confirmed", v.ConfirmedAt)
+	c.Time("Dismissed", v.DismissedAt)
+	c.Time("Resolved", v.ResolvedAt)
+	c.Field("Dismissal Reason", v.DismissalReason)
+	c.Bool("Has Issues", v.HasIssues)
+	c.Bool("Has Merge Request", v.HasMR)
+	c.Bool("Has Remediations", v.HasRemediations)
+	// The nested label is opened only when something goes under it: a Sub
+	// writes its row whatever its card writes, and a label with nothing after
+	// it is what the card rule exists to prevent.
+	if p := v.Project; p != nil && (p.ID != "" || p.Name != "" || p.FullPath != "") {
+		project := c.Sub("Project")
+		project.Code("ID", p.ID)
+		project.Field("Name", p.Name)
+		project.Field("Full Path", p.FullPath)
 	}
-	if v.ConfirmedAt != "" {
-		fmt.Fprintf(sb, "| Confirmed | %s |\n", formatDate(v.ConfirmedAt))
-	}
-	if v.ResolvedAt != "" {
-		fmt.Fprintf(sb, "| Resolved | %s |\n", formatDate(v.ResolvedAt))
-	}
-	if v.DismissalReason != "" {
-		fmt.Fprintf(sb, "| Dismissal Reason | %s |\n", toolutil.EscapeMdTableCell(v.DismissalReason))
-	}
-	if v.Solution != "" {
-		fmt.Fprintf(sb, "| Solution | %s |\n", toolutil.EscapeMdTableCell(v.Solution))
-	}
-	fmt.Fprintf(sb, "| Has Issues | %v |\n", v.HasIssues)
-	fmt.Fprintf(sb, "| Has MR | %v |\n", v.HasMR)
-
-	if v.Project != nil {
-		fmt.Fprintf(sb, "| Project | %s |\n", toolutil.EscapeMdTableCell(v.Project.FullPath))
-	}
+	c.URL(v.WebURL)
+	// The solution and the description are the scanner's own prose, which a
+	// repository's CI job produced: quoted under their labels, they can open no
+	// heading, no list item and no guidance section of the response.
+	c.Text("Solution", v.Solution)
+	c.Text("Description", v.Description)
 }
 
+// scannerLabel names the scanner and, when GitLab sent one, its vendor.
+func scannerLabel(s *ScannerItem) string {
+	if s == nil {
+		return ""
+	}
+	if s.Vendor == "" {
+		return s.Name
+	}
+	return s.Name + " (" + s.Vendor + ")"
+}
+
+// vulnerabilityHeading names the vulnerability in the card's heading, or opens
+// the generic one when the report carried no title.
+func vulnerabilityHeading(title string) string {
+	if strings.TrimSpace(title) == "" {
+		return "Vulnerability"
+	}
+	return "Vulnerability: " + title
+}
+
+// formatVulnerabilityLocation renders where the scanner found the finding, as
+// the file and the line range the report named.
 func formatVulnerabilityLocation(location *LocationItem) string {
 	loc := location.File
 	if location.StartLine > 0 {
@@ -133,157 +165,136 @@ func formatVulnerabilityLocation(location *LocationItem) string {
 	return loc
 }
 
-func writeVulnerabilityIdentifiers(sb *strings.Builder, identifiers []IdentifierItem) {
+// writeVulnerabilityIdentifiers renders the report's identifiers as the nested
+// collection they are, and nothing when it carried none.
+func writeVulnerabilityIdentifiers(c *toolutil.Card, identifiers []IdentifierItem) {
 	if len(identifiers) == 0 {
 		return
 	}
-	sb.WriteString("\n### Identifiers\n\n")
-	sb.WriteString("| Name | Type | External ID | URL |\n")
-	sb.WriteString("|------|------|-------------|-----|\n")
+	table := c.Table("Identifiers", "Name", "Type", "External ID", "URL")
 	for _, id := range identifiers {
-		writeVulnerabilityIdentifier(sb, id)
+		// The cell escaper neutralizes the pipe and the angle bracket and leaves
+		// ']' alone, so an identifier named "CWE-89](http://attacker.invalid/x)"
+		// closed the label and retargeted the link. MdTitleLink escapes both halves.
+		table.Row(
+			toolutil.MdTitleLink(id.Name, id.URL),
+			toolutil.EscapeMdTableCell(id.ExternalType),
+			toolutil.EscapeMdTableCell(id.ExternalID),
+			toolutil.EscapeMdTableCell(id.URL),
+		)
 	}
 }
 
-func writeVulnerabilityIdentifier(sb *strings.Builder, id IdentifierItem) {
-	// The cell escaper neutralizes the pipe and the angle bracket and leaves
-	// ']' alone, so an identifier named "CWE-89](http://attacker.invalid/x)"
-	// closed the label and retargeted the link. MdTitleLink escapes both halves.
-	fmt.Fprintf(
-		sb, "| %s | %s | %s | %s |\n",
-		toolutil.MdTitleLink(id.Name, id.URL),
-		toolutil.EscapeMdTableCell(id.ExternalType),
-		toolutil.EscapeMdTableCell(id.ExternalID),
-		toolutil.EscapeMdTableCell(id.URL),
-	)
-}
-
-func writeVulnerabilityDescription(sb *strings.Builder, description string) {
-	if description != "" {
-		sb.WriteString("\n### Description\n\n")
-		sb.WriteString(description)
-		sb.WriteString("\n")
+// stateTransitionHints returns the transitions the vulnerability's current
+// state still allows. Offering to dismiss a dismissed vulnerability, or to
+// revert a detected one, names a call GitLab refuses; a state this server has
+// not heard of offers all four and lets GitLab answer.
+func stateTransitionHints(state string) []string {
+	current := strings.ToUpper(strings.TrimSpace(state))
+	var hints []string
+	if current != stateDismissed {
+		hints = append(hints, toolutil.HintAction(actionVulnDismiss, "dismiss it as an acceptable risk or a false positive"))
 	}
+	if current != stateConfirmed {
+		hints = append(hints, toolutil.HintAction(actionVulnConfirm, "confirm it as a real vulnerability"))
+	}
+	if current != stateResolved {
+		hints = append(hints, toolutil.HintAction(actionVulnResolve, "mark it resolved"))
+	}
+	if current != stateDetected {
+		hints = append(hints, toolutil.HintAction(actionVulnRevert, "revert it to detected"))
+	}
+	return hints
 }
 
-// FormatMutationMarkdown renders a vulnerability state mutation result as Markdown.
+// FormatMutationMarkdown renders the vulnerability a state change answered
+// with, as the card of one object. The action names what GitLab did, and the
+// hints name what its new state still allows.
 func FormatMutationMarkdown(out MutationOutput, action string) string {
 	v := out.Vulnerability
-	var sb strings.Builder
-
-	fmt.Fprintf(&sb, "## Vulnerability %s\n\n", action)
-	sb.WriteString("| Field | Value |\n|-------|-------|\n")
-	fmt.Fprintf(&sb, "| ID | %s |\n", toolutil.EscapeMdTableCell(v.ID))
-	fmt.Fprintf(&sb, "| Title | %s |\n", toolutil.EscapeMdTableCell(v.Title))
-	fmt.Fprintf(&sb, "| Severity | %s |\n", severityBadge(v.Severity))
-	fmt.Fprintf(&sb, "| State | %s |\n", toolutil.EscapeMdTableCell(v.State))
-	fmt.Fprintf(&sb, "| Report Type | %s |\n", toolutil.EscapeMdTableCell(v.ReportType))
-
-	if v.PrimaryID != nil {
-		fmt.Fprintf(&sb, "| Primary ID | %s |\n", toolutil.EscapeMdTableCell(v.PrimaryID.Name))
-	}
-	if v.DismissalReason != "" {
-		fmt.Fprintf(&sb, "| Dismissal Reason | %s |\n", toolutil.EscapeMdTableCell(v.DismissalReason))
-	}
-
-	toolutil.WriteHints(
-		&sb,
-		"Use `gitlab_get_vulnerability` to view the full vulnerability details",
-		"Use `gitlab_list_vulnerabilities` to view all project vulnerabilities",
-	)
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Vulnerability "+action)
+	writeVulnerabilityRows(c, v)
+	c.End(append(
+		stateTransitionHints(v.State),
+		toolutil.HintAction(actionVulnList, "see the project's other vulnerabilities"),
+	)...)
+	return b.String()
 }
 
-// severityBadge returns an emoji + text badge for vulnerability severity.
-//
-//gitlab:allow-unescaped severityBadge(v.Severity): five of the six answers are constants written here, and the sixth is a VulnerabilitySeverity enum token, which GitLab spells as one bare word.
-func severityBadge(severity string) string {
-	switch strings.ToUpper(severity) {
-	case "CRITICAL":
-		return "\U0001F534 CRITICAL"
-	case "HIGH":
-		return "\U0001F7E0 HIGH"
-	case "MEDIUM":
-		return "\U0001F7E1 MEDIUM"
-	case "LOW":
-		return "\U0001F535 LOW"
-	case "INFO":
-		return "\u2139\uFE0F INFO"
-	default:
-		return severity
-	}
-}
-
-// formatDate trims the time portion from ISO 8601 timestamps for display.
-// Slicing the first ten bytes shortens the value without saying anything about
-// what is in them, so the result is escaped: what arrives here is a GraphQL
-// field this package copies verbatim, and a cell is where it lands.
-func formatDate(ts string) string {
-	if len(ts) > 10 {
-		return toolutil.EscapeMdTableCell(ts[:10])
-	}
-	return toolutil.EscapeMdTableCell(ts)
-}
-
-// FormatSeverityCountMarkdown renders vulnerability severity counts as Markdown.
+// FormatSeverityCountMarkdown renders the project's vulnerability counts as
+// the card of one object: one row per severity, each labeled with the badge
+// the security domains share, and the total last. Every count is written, zero
+// included: "no criticals" is the answer a reader came for.
 func FormatSeverityCountMarkdown(out SeverityCountOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Vulnerability Severity Counts\n\n")
-	sb.WriteString("| Severity | Count |\n")
-	sb.WriteString("|----------|-------|\n")
-	fmt.Fprintf(&sb, "| \U0001F534 CRITICAL | %d |\n", out.Critical)
-	fmt.Fprintf(&sb, "| \U0001F7E0 HIGH | %d |\n", out.High)
-	fmt.Fprintf(&sb, "| \U0001F7E1 MEDIUM | %d |\n", out.Medium)
-	fmt.Fprintf(&sb, "| \U0001F535 LOW | %d |\n", out.Low)
-	fmt.Fprintf(&sb, "| \u2139\uFE0F INFO | %d |\n", out.Info)
-	fmt.Fprintf(&sb, "| \u2753 UNKNOWN | %d |\n", out.Unknown)
-	fmt.Fprintf(&sb, "| **Total** | **%d** |\n", out.Total)
-	toolutil.WriteHints(
-		&sb,
-		"Use `gitlab_list_vulnerabilities` to view individual findings",
-		"Use `gitlab_pipeline_security_summary` for pipeline-specific scan results",
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Vulnerability Severity Counts")
+	c.Int(toolutil.SeverityBadge("CRITICAL"), int64(out.Critical))
+	c.Int(toolutil.SeverityBadge("HIGH"), int64(out.High))
+	c.Int(toolutil.SeverityBadge("MEDIUM"), int64(out.Medium))
+	c.Int(toolutil.SeverityBadge("LOW"), int64(out.Low))
+	c.Int(toolutil.SeverityBadge("INFO"), int64(out.Info))
+	c.Int(toolutil.SeverityBadge("UNKNOWN"), int64(out.Unknown))
+	c.Int("Total", int64(out.Total))
+	c.End(
+		toolutil.HintAction(actionVulnList, "read the vulnerabilities behind these counts"),
+		toolutil.HintAction(actionVulnPipelineSummary, "see what one pipeline's scanners reported"),
 	)
-	return sb.String()
+	return b.String()
 }
 
-// FormatPipelineSecuritySummaryMarkdown renders a pipeline security summary as Markdown.
+// FormatPipelineSecuritySummaryMarkdown renders one pipeline's security report
+// summary as a table of the scanners that ran: a collection of objects that
+// share columns.
 func FormatPipelineSecuritySummaryMarkdown(out PipelineSecuritySummaryOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Pipeline Security Report Summary\n\n")
+	var b strings.Builder
+	b.WriteString("## Pipeline Security Report Summary\n\n")
 
-	if out.TotalVulnerabilities == 0 && out.Sast == nil && out.Dast == nil &&
-		out.DependencyScanning == nil && out.ContainerScanning == nil &&
-		out.SecretDetection == nil && out.CoverageFuzzing == nil &&
-		out.APIFuzzing == nil && out.ClusterImageScanning == nil {
-		sb.WriteString("No security scans ran in this pipeline.\n")
-		return sb.String()
+	scanners := []struct {
+		name    string
+		summary *ScannerSummaryItem
+	}{
+		{"SAST", out.Sast},
+		{"DAST", out.Dast},
+		{"Dependency Scanning", out.DependencyScanning},
+		{"Container Scanning", out.ContainerScanning},
+		{"Secret Detection", out.SecretDetection},
+		{"Coverage Fuzzing", out.CoverageFuzzing},
+		{"API Fuzzing", out.APIFuzzing},
+		{"Cluster Image Scanning", out.ClusterImageScanning},
 	}
 
-	sb.WriteString("| Scanner | Vulnerabilities | Scanned Resources |\n")
-	sb.WriteString("|---------|----------------:|-------------------:|\n")
-
-	writeScannerRow := func(name string, s *ScannerSummaryItem) {
-		if s != nil {
-			fmt.Fprintf(&sb, "| %s | %d | %d |\n", name, s.VulnerabilitiesCount, s.ScannedResourcesCount)
+	ran := 0
+	for _, s := range scanners {
+		if s.summary != nil {
+			ran++
 		}
 	}
+	if ran == 0 && out.TotalVulnerabilities == 0 {
+		b.WriteString("No security scans ran in this pipeline.\n")
+		return b.String()
+	}
 
-	writeScannerRow("SAST", out.Sast)
-	writeScannerRow("DAST", out.Dast)
-	writeScannerRow("Dependency Scanning", out.DependencyScanning)
-	writeScannerRow("Container Scanning", out.ContainerScanning)
-	writeScannerRow("Secret Detection", out.SecretDetection)
-	writeScannerRow("Coverage Fuzzing", out.CoverageFuzzing)
-	writeScannerRow("API Fuzzing", out.APIFuzzing)
-	writeScannerRow("Cluster Image Scanning", out.ClusterImageScanning)
+	b.WriteString(toolutil.MarkdownTableHeader("Scanner", "Vulnerabilities", "Scanned Resources"))
+	for _, s := range scanners {
+		if s.summary == nil {
+			continue
+		}
+		b.WriteString(toolutil.MarkdownTableRow(
+			s.name,
+			strconv.Itoa(s.summary.VulnerabilitiesCount),
+			strconv.Itoa(s.summary.ScannedResourcesCount),
+		))
+	}
 
-	fmt.Fprintf(&sb, "\n**Total Vulnerabilities: %d**\n", out.TotalVulnerabilities)
-	toolutil.WriteHints(
-		&sb,
-		"Use `gitlab_list_vulnerabilities` to view individual findings",
-		"Use `gitlab_vulnerability_severity_count` for severity breakdown",
+	fmt.Fprintf(&b, "\n**Total Vulnerabilities: %d**\n", out.TotalVulnerabilities)
+	// The table carries no link, so the footer carries no instruction to keep
+	// the links of a table that has none.
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(actionSecurityFindingList, "read the findings these scanners reported"),
+		toolutil.HintAction(actionVulnSeverityCount, "see the project's counts by severity"),
 	)
-	return sb.String()
+	return b.String()
 }
 
 func init() {

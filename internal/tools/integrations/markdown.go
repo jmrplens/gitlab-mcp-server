@@ -2,108 +2,33 @@ package integrations
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Group Datadog markdown format primitives. These format strings are shared
-// between the read and set/mutate markdown formatters so the rendering stays
-// consistent and the format literals are defined once.
+// Canonical action IDs the hints name, the one form every surface resolves.
 const (
-	groupDatadogDefaultTitle  = "datadog"
-	groupDatadogHeaderFmt     = "## Group Datadog Integration%s: %s\n\n"
-	groupDatadogSlugLineFmt   = "- **Slug**: %s\n"
-	groupDatadogActiveLineFmt = "- **Active**: %s\n"
-	groupDatadogLabelValueFmt = "- **%s**: %s\n"
-	groupDatadogBoolLineFmt   = "- **%s**: %t\n"
+	actionGet               = "project.integration_get"
+	actionSet               = "project.integration_set"
+	actionDelete            = "project.integration_delete"
+	actionGetGroup          = "project.integration_get_group"
+	actionSetGroup          = "project.integration_set_group"
+	actionDeleteGroup       = "project.integration_delete_group"
+	actionSetGroupDatadog   = "project.integration_set_group_datadog"
+	actionDelGroupDatadog   = "project.integration_delete_group_datadog"
+	actionListGroup         = "project.integration_list_group"
+	groupDatadogDefaultName = "datadog"
 )
 
-// writeGroupDatadogActiveLine emits the Active badge for a Datadog
-// integration as a single Markdown line.
-func writeGroupDatadogActiveLine(sb *strings.Builder, active bool) {
-	fmt.Fprintf(sb, groupDatadogActiveLineFmt, yesNo(active))
-}
+// hintWhatAReadReturns says what a read of an integration does and does not
+// return. It used to promise "the stored configuration", which the get output
+// does not carry: GitLab answers with the integration's identity and whether
+// it is active, and never with the properties a caller set.
+const hintWhatAReadReturns = "A read returns the integration's identity and whether it is active, not the values configured on it; credentials are write-only and are never returned"
 
-// writeGroupDatadogSlugLine emits the Slug line for a Datadog integration,
-// using the supplied default when the Slug is empty.
-//
-//gitlab:allow-unescaped fallback(slug, groupDatadogDefaultTitle): the same type-derived slug as i.Slug, here always the literal datadog, with a compiled-in default when the response omits it.
-func writeGroupDatadogSlugLine(sb *strings.Builder, slug string) {
-	fmt.Fprintf(sb, groupDatadogSlugLineFmt, fallback(slug, groupDatadogDefaultTitle))
-}
-
-// writeGroupDatadogStringField emits a single label-value line when the
-// value is non-empty.
-func writeGroupDatadogStringField(sb *strings.Builder, label, value string) {
-	if value == "" {
-		return
-	}
-	// Every caller passes a Datadog configuration string, which this server's
-	// own set action sends and GitLab stores verbatim.
-	fmt.Fprintf(sb, groupDatadogLabelValueFmt, label, toolutil.EscapeMdTableCell(value))
-}
-
-// writeGroupDatadogBoolField emits a single label-bool line when the
-// pointer is non-nil.
-func writeGroupDatadogBoolField(sb *strings.Builder, label string, value bool) {
-	fmt.Fprintf(sb, groupDatadogBoolLineFmt, label, value)
-}
-
-// writeGroupDatadogTimestamp emits a Created/Updated-style line when the
-// timestamp is non-empty, formatting the value through toolutil.FormatTime.
-func writeGroupDatadogTimestamp(sb *strings.Builder, label, value string) {
-	if value == "" {
-		return
-	}
-	fmt.Fprintf(sb, groupDatadogLabelValueFmt, label, toolutil.FormatTime(value))
-}
-
-// writeGroupDatadogHeader emits the top-level "## Group Datadog Integration"
-// heading. headingSuffix lets the mutate formatter reuse the same body.
-func writeGroupDatadogHeader(sb *strings.Builder, i GroupDatadogItem, headingSuffix string) {
-	fmt.Fprintf(sb, groupDatadogHeaderFmt, headingSuffix, toolutil.EscapeMdHeading(fallback(i.Title, groupDatadogDefaultTitle)))
-}
-
-// formatGroupDatadogItem renders the common body of a group-level Datadog
-// integration: heading, ID, slug/active badge, per-field lines (skipped when
-// empty), and the Created/Updated timestamps. The headingSuffix is appended
-// to the heading (e.g. " Updated" for the mutate formatter) and the
-// includeTimestamps flag controls whether Created/Updated are rendered
-// (the read formatter includes them; the mutate formatter omits them).
-func formatGroupDatadogItem(i GroupDatadogItem, headingSuffix string, includeTimestamps bool) string {
-	var sb strings.Builder
-	writeGroupDatadogHeader(&sb, i, headingSuffix)
-	fmt.Fprintf(&sb, toolutil.FmtMdID, i.ID)
-	writeGroupDatadogSlugLine(&sb, i.Slug)
-	writeGroupDatadogActiveLine(&sb, i.Active)
-	if p := i.Properties; p != nil {
-		writeGroupDatadogStringField(&sb, "API URL", p.APIURL)
-		writeGroupDatadogStringField(&sb, "Datadog Env", p.DatadogEnv)
-		writeGroupDatadogStringField(&sb, "Datadog Service", p.DatadogService)
-		writeGroupDatadogStringField(&sb, "Datadog Site", p.DatadogSite)
-		writeGroupDatadogStringField(&sb, "Datadog Tags", p.DatadogTags)
-		writeGroupDatadogBoolField(&sb, "Datadog CI Visibility", p.DatadogCIVisibility)
-		writeGroupDatadogBoolField(&sb, "Archive Trace Events", p.ArchiveTraceEvents)
-	}
-	if includeTimestamps {
-		writeGroupDatadogTimestamp(&sb, "Created", i.CreatedAt)
-		writeGroupDatadogTimestamp(&sb, "Updated", i.UpdatedAt)
-	}
-	return sb.String()
-}
-
-// yesNo renders a Go bool as the strings "Yes" or "No" used by the
-// markdown formatters' Active badge.
-func yesNo(b bool) string {
-	if b {
-		return "Yes"
-	}
-	return "No"
-}
-
+// fallback returns def when s is empty.
 func fallback(s, def string) string {
 	if s == "" {
 		return def
@@ -111,165 +36,180 @@ func fallback(s, def string) string {
 	return s
 }
 
-// formatListMarkdownString renders a ListOutput as a Markdown table string.
-func formatListMarkdownString(out ListOutput) string {
-	if len(out.Integrations) == 0 {
-		return "No integrations found for this project.\n"
+// writeIntegrationRows writes the rows every integration card shares: the
+// identity GitLab keys the integration by, whether it is active, and when it
+// was configured.
+func writeIntegrationRows(c *toolutil.Card, id int64, slug string, active bool, createdAt, updatedAt string) {
+	c.Int("ID", id)
+	// The slug is derived from the integration type rather than from anything a
+	// person writes, and every value it takes is a URL path segment such as
+	// "jira"; it is a code span because it is what the get and set actions take.
+	c.Code("Slug", slug)
+	c.Bool("Active", active)
+	c.Time("Created", createdAt)
+	c.Time("Updated", updatedAt)
+}
+
+// integrationRowCells renders one integration as the cells of an integration
+// table.
+func integrationRowCells(i IntegrationItem) []string {
+	return []string{
+		strconv.FormatInt(i.ID, 10),
+		// The title is a locale-dependent display name GitLab returns, and
+		// older self-managed instances let a person fill it in.
+		toolutil.EscapeMdTableCell(i.Title),
+		toolutil.MdCodeSpanCell(i.Slug),
+		toolutil.BoolEmoji(i.Active),
+	}
+}
+
+// writeIntegrationList renders a page of integrations as a Markdown table: a
+// collection of objects that share columns.
+func writeIntegrationList(items []IntegrationItem, title, emptyResource string, hints ...string) string {
+	if len(items) == 0 {
+		return toolutil.EmptyMessage(emptyResource)
 	}
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Project Integrations (%d)\n\n", len(out.Integrations))
-	sb.WriteString("| ID | Title | Slug | Active |\n")
-	sb.WriteString("|----|-------|------|--------|\n")
-	for _, i := range out.Integrations {
-		//gitlab:allow-unescaped i.Slug: GitLab derives an integration's slug from the integration type rather than from anything a person writes, and every value it takes is a URL path segment such as jira.
-		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", i.ID, toolutil.EscapeMdTableCell(i.Title), i.Slug, yesNo(i.Active))
+	toolutil.WriteListHeading(&sb, title, len(items), toolutil.PaginationOutput{})
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Title", "Slug", "Active"))
+	for _, i := range items {
+		sb.WriteString(toolutil.MarkdownTableRow(integrationRowCells(i)...))
 	}
-	toolutil.WriteHints(&sb, "Use `gitlab_get_integration` to view details of a specific integration")
+	toolutil.WriteListFooter(&sb, toolutil.PaginationOutput{}, false, hints...)
 	return sb.String()
 }
 
-// formatGetMarkdownString renders a single integration as a Markdown string.
-func formatGetMarkdownString(out GetOutput) string {
-	i := out.Integration
+// formatListMarkdownString renders the active project integrations.
+//
+// The empty sentence names the scope: "No integrations found." over a project
+// read as an instance with no integrations at all, which is a different
+// answer from the one GitLab gave.
+func formatListMarkdownString(out ListOutput) string {
+	return writeIntegrationList(out.Integrations, "Project Integrations", "active project integrations",
+		toolutil.HintAction(actionGet, "read one project integration by its slug"),
+		toolutil.HintAction(actionSet, "configure one"),
+	)
+}
+
+// formatGroupIntegrationListString renders the active group integrations.
+func formatGroupIntegrationListString(out ListGroupIntegrationsOutput) string {
+	return writeIntegrationList(out.Integrations, "Group Integrations", "active group integrations",
+		toolutil.HintAction(actionGetGroup, "read one group integration by its slug"),
+		toolutil.HintAction(actionSetGroup, "configure one"),
+	)
+}
+
+// formatIntegrationItemString renders one integration as the card of one
+// object, under the heading the caller names.
+func formatIntegrationItemString(heading string, i IntegrationItem, hints ...string) string {
 	var sb strings.Builder
 	// The title is a locale-dependent display name GitLab returns, and older
-	// self-managed instances let a person fill it in for some integrations;
-	// this file's own tables escape the same field.
-	fmt.Fprintf(&sb, "## Integration: %s\n\n", toolutil.EscapeMdHeading(i.Title))
-	fmt.Fprintf(&sb, toolutil.FmtMdID, i.ID)
-	fmt.Fprintf(&sb, "- **Slug**: %s\n", i.Slug)
-	writeGroupDatadogActiveLine(&sb, i.Active)
-	writeGroupDatadogTimestamp(&sb, "Created", i.CreatedAt)
-	writeGroupDatadogTimestamp(&sb, "Updated", i.UpdatedAt)
-	toolutil.WriteHints(&sb, "Use `gitlab_set_integration` to modify this integration's settings")
+	// self-managed instances let a person fill it in for some integrations.
+	c := toolutil.NewCard(&sb, heading+": "+fallback(i.Title, i.Slug))
+	writeIntegrationRows(c, i.ID, i.Slug, i.Active, i.CreatedAt, i.UpdatedAt)
+	c.End(hints...)
 	return sb.String()
 }
 
-// formatGetGroupDatadogMarkdownString renders the read output for the
-// group-level Datadog integration as a Markdown string.
-func formatGetGroupDatadogMarkdownString(out GetGroupDatadogOutput) string {
-	body := formatGroupDatadogItem(out.Integration, "", true)
-	// Append the standard hints footer to the rendered body.
-	var sb strings.Builder
-	sb.WriteString(body)
-	toolutil.WriteHints(&sb, "Use `gitlab_set_group_datadog_integration` to update fields; use `gitlab_delete_group_datadog_integration` to remove the configuration")
-	return sb.String()
-}
-
-// formatSetGroupDatadogMarkdownString renders the mutate output for the
-// group-level Datadog integration as a Markdown string. The set response
-// does not include created/updated timestamps, so the include flag is false.
-func formatSetGroupDatadogMarkdownString(out SetGroupDatadogOutput) string {
-	body := formatGroupDatadogItem(out.Integration, " Updated", false)
-	var sb strings.Builder
-	sb.WriteString(body)
-	toolutil.WriteHints(&sb, "Note: the `api_key` value is write-only and is never returned by the read endpoint; rotate the key in Datadog if you need to replace it on the group")
-	return sb.String()
-}
-
-// formatIntegrationItemString renders a single IntegrationItem as a Markdown
-// string with the given heading. Shared by the generic project and group
-// integration set/get formatters.
-func formatIntegrationItemString(heading string, i IntegrationItem) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## %s: %s\n\n", heading, toolutil.EscapeMdHeading(fallback(i.Title, i.Slug)))
-	fmt.Fprintf(&sb, toolutil.FmtMdID, i.ID)
-	fmt.Fprintf(&sb, "- **Slug**: %s\n", i.Slug)
-	writeGroupDatadogActiveLine(&sb, i.Active)
-	writeGroupDatadogTimestamp(&sb, "Created", i.CreatedAt)
-	writeGroupDatadogTimestamp(&sb, "Updated", i.UpdatedAt)
-	return sb.String()
+// formatGetMarkdownString renders a single project integration.
+func formatGetMarkdownString(out GetOutput) string {
+	return formatIntegrationItemString("Integration", out.Integration,
+		toolutil.HintAction(actionSet, "change this integration's configuration"),
+		toolutil.HintAction(actionDelete, "disable it"),
+		hintWhatAReadReturns,
+	)
 }
 
 // formatSetIntegrationMarkdownString renders the generic project integration
 // upsert response.
 func formatSetIntegrationMarkdownString(out SetIntegrationOutput) string {
-	var sb strings.Builder
-	sb.WriteString(formatIntegrationItemString("Integration Updated", out.Integration))
-	toolutil.WriteHints(&sb, "Use `gitlab_get_integration` to read the stored configuration; secrets such as tokens and passwords are write-only and never returned")
-	return sb.String()
+	return formatIntegrationItemString("Integration Updated", out.Integration,
+		toolutil.HintAction(actionGet, "read the integration back"),
+		hintWhatAReadReturns,
+	)
 }
 
 // formatSetJiraMarkdownString renders the Jira integration upsert response.
 func formatSetJiraMarkdownString(out SetJiraOutput) string {
-	var sb strings.Builder
-	sb.WriteString(formatIntegrationItemString("Jira Integration Updated", out.Integration))
-	toolutil.WriteHints(&sb, "Use `gitlab_get_integration` to read the stored configuration; Jira credentials (username/password or API token) are write-only and never returned")
-	return sb.String()
+	return formatIntegrationItemString("Jira Integration Updated", out.Integration,
+		toolutil.HintAction(actionGet, "read the integration back"),
+		"Jira credentials (username and password, or the API token) are write-only and are never returned",
+	)
 }
 
-// formatGroupIntegrationListString renders a ListGroupIntegrationsOutput as a
-// Markdown table string.
-func formatGroupIntegrationListString(out ListGroupIntegrationsOutput) string {
-	if len(out.Integrations) == 0 {
-		return "No active integrations found for this group.\n"
-	}
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Group Integrations (%d)\n\n", len(out.Integrations))
-	sb.WriteString("| ID | Title | Slug | Active |\n")
-	sb.WriteString("|----|-------|------|--------|\n")
-	for _, i := range out.Integrations {
-		//gitlab:allow-unescaped i.Slug: GitLab derives an integration's slug from the integration type rather than from anything a person writes, and every value it takes is a URL path segment such as jira.
-		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", i.ID, toolutil.EscapeMdTableCell(i.Title), i.Slug, yesNo(i.Active))
-	}
-	toolutil.WriteHints(&sb, "Use `gitlab_get_group_integration` to view details of a specific group integration")
-	return sb.String()
-}
-
-// formatGetGroupIntegrationString renders a single group integration read response.
+// formatGetGroupIntegrationString renders a single group integration.
 func formatGetGroupIntegrationString(out GetGroupIntegrationOutput) string {
-	var sb strings.Builder
-	sb.WriteString(formatIntegrationItemString("Group Integration", out.Integration))
-	toolutil.WriteHints(&sb, "Use `gitlab_set_group_integration` to update fields; use `gitlab_delete_group_integration` to disable it")
-	return sb.String()
+	return formatIntegrationItemString("Group Integration", out.Integration,
+		toolutil.HintAction(actionSetGroup, "change this integration's configuration"),
+		toolutil.HintAction(actionDeleteGroup, "disable it"),
+		hintWhatAReadReturns,
+	)
 }
 
-// formatSetGroupIntegrationString renders the generic group integration upsert response.
+// formatSetGroupIntegrationString renders the generic group integration upsert
+// response.
 func formatSetGroupIntegrationString(out SetGroupIntegrationOutput) string {
+	return formatIntegrationItemString("Group Integration Updated", out.Integration,
+		toolutil.HintAction(actionGetGroup, "read the integration back"),
+		hintWhatAReadReturns,
+	)
+}
+
+// writeGroupDatadogCard renders the common body of a group-level Datadog
+// integration as the card of one object: the identity rows, the Datadog
+// configuration as a nested object, and the timestamps the read response
+// carries and the set response does not.
+func writeGroupDatadogCard(sb *strings.Builder, i GroupDatadogItem, headingSuffix string, includeTimestamps bool) *toolutil.Card {
+	heading := fmt.Sprintf("Group Datadog Integration%s: %s", headingSuffix, fallback(i.Title, groupDatadogDefaultName))
+	c := toolutil.NewCard(sb, heading)
+	c.Int("ID", i.ID)
+	// The slug is the same type-derived value as every other integration's,
+	// here always the literal "datadog", with a compiled-in default when the
+	// response omits it.
+	c.Code("Slug", fallback(i.Slug, groupDatadogDefaultName))
+	c.Bool("Active", i.Active)
+	if p := i.Properties; p != nil {
+		// Every value here is a Datadog configuration string this server's own
+		// set action sends and GitLab stores verbatim.
+		properties := c.Sub("Datadog Configuration")
+		properties.Field("API URL", p.APIURL)
+		properties.Field("Datadog Env", p.DatadogEnv)
+		properties.Field("Datadog Service", p.DatadogService)
+		properties.Field("Datadog Site", p.DatadogSite)
+		properties.Field("Datadog Tags", p.DatadogTags)
+		properties.Bool("Datadog CI Visibility", p.DatadogCIVisibility)
+		properties.Bool("Archive Trace Events", p.ArchiveTraceEvents)
+	}
+	if includeTimestamps {
+		c.Time("Created", i.CreatedAt)
+		c.Time("Updated", i.UpdatedAt)
+	}
+	return c
+}
+
+// formatGetGroupDatadogMarkdownString renders the read output for the
+// group-level Datadog integration.
+func formatGetGroupDatadogMarkdownString(out GetGroupDatadogOutput) string {
 	var sb strings.Builder
-	sb.WriteString(formatIntegrationItemString("Group Integration Updated", out.Integration))
-	toolutil.WriteHints(&sb, "Use `gitlab_get_group_integration` to read the stored configuration; secrets such as tokens and passwords are write-only and never returned")
+	c := writeGroupDatadogCard(&sb, out.Integration, "", true)
+	c.End(
+		toolutil.HintAction(actionSetGroupDatadog, "update the Datadog configuration"),
+		toolutil.HintAction(actionDelGroupDatadog, "remove it from the group"),
+	)
 	return sb.String()
 }
 
-// FormatSetIntegrationMarkdown formats the generic project integration upsert response.
-func FormatSetIntegrationMarkdown(out SetIntegrationOutput) *mcp.CallToolResult {
-	return toolutil.ToolResultWithMarkdown(formatSetIntegrationMarkdownString(out))
-}
-
-// FormatListGroupIntegrationsMarkdown formats a list of group integrations.
-func FormatListGroupIntegrationsMarkdown(out ListGroupIntegrationsOutput) *mcp.CallToolResult {
-	return toolutil.ToolResultWithMarkdown(formatGroupIntegrationListString(out))
-}
-
-// FormatGetGroupIntegrationMarkdown formats a single group integration.
-func FormatGetGroupIntegrationMarkdown(out GetGroupIntegrationOutput) *mcp.CallToolResult {
-	return toolutil.ToolResultWithMarkdown(formatGetGroupIntegrationString(out))
-}
-
-// FormatSetGroupIntegrationMarkdown formats the generic group integration upsert response.
-func FormatSetGroupIntegrationMarkdown(out SetGroupIntegrationOutput) *mcp.CallToolResult {
-	return toolutil.ToolResultWithMarkdown(formatSetGroupIntegrationString(out))
-}
-
-// FormatListMarkdown formats a list of integrations.
-func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
-	return toolutil.ToolResultWithMarkdown(formatListMarkdownString(out))
-}
-
-// FormatGetMarkdown formats a single integration.
-func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
-	return toolutil.ToolResultWithMarkdown(formatGetMarkdownString(out))
-}
-
-// FormatGetGroupDatadogMarkdown renders the read output for the group-level Datadog integration.
-func FormatGetGroupDatadogMarkdown(out GetGroupDatadogOutput) *mcp.CallToolResult {
-	return toolutil.ToolResultWithMarkdown(formatGetGroupDatadogMarkdownString(out))
-}
-
-// FormatSetGroupDatadogMarkdown renders the mutate output for the group-level Datadog integration.
-func FormatSetGroupDatadogMarkdown(out SetGroupDatadogOutput) *mcp.CallToolResult {
-	return toolutil.ToolResultWithMarkdown(formatSetGroupDatadogMarkdownString(out))
+// formatSetGroupDatadogMarkdownString renders the mutate output for the
+// group-level Datadog integration. The set response does not include
+// created/updated timestamps, so the include flag is false.
+func formatSetGroupDatadogMarkdownString(out SetGroupDatadogOutput) string {
+	var sb strings.Builder
+	c := writeGroupDatadogCard(&sb, out.Integration, " Updated", false)
+	c.End(
+		toolutil.HintAction(actionListGroup, "see every integration configured on the group"),
+		"The api_key value is write-only and is never returned by the read endpoint; rotate the key in Datadog if you need to replace it on the group",
+	)
+	return sb.String()
 }
 
 func init() {

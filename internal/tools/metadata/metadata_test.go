@@ -62,7 +62,13 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies FormatGetMarkdown.
+// metadataHints is the guidance section the card ends with.
+const metadataHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use version information to verify API compatibility\n"
+
+// TestFormatGetMarkdown verifies the whole card, with the agent server as a
+// nested object: its version is KAS's rather than GitLab's, and a flat list
+// showed the same label twice.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{
 		Version:    "16.8.0",
@@ -70,15 +76,18 @@ func TestFormatGetMarkdown(t *testing.T) {
 		Enterprise: true,
 		KAS:        KASInfo{Enabled: true, Version: "16.8.0-rc1", ExternalURL: "wss://kas"},
 	}
-	md := FormatGetMarkdown(out)
-	if !strings.Contains(md, "16.8.0") {
-		t.Error("missing version")
-	}
-	if !strings.Contains(md, "abc123") {
-		t.Error("missing revision")
-	}
-	if !strings.Contains(md, "KAS Enabled") {
-		t.Error("missing KAS enabled")
+	got := FormatGetMarkdown(out)
+	want := "## GitLab Metadata\n\n" +
+		"- **Version**: 16.8.0\n" +
+		"- **Revision**: abc123\n" +
+		"- **Enterprise**: ✅\n" +
+		"- **KAS**:\n" +
+		"  - **Enabled**: ✅\n" +
+		"  - **Version**: 16.8.0-rc1\n" +
+		"  - **External URL**: [wss://kas](wss://kas)\n" +
+		metadataHints
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -113,29 +122,49 @@ func TestGet_Success_Coverage(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_Full_Coverage verifies full metadata Markdown output.
+// TestFormatGetMarkdown_Full_Coverage verifies the whole card for a response
+// carrying every field, the Kubernetes proxy address included: the endpoint
+// sends it and this server publishes it, and the card used to drop it.
 func TestFormatGetMarkdown_Full_Coverage(t *testing.T) {
 	out := GetOutput{
 		Version:    "17.0.0",
 		Revision:   "abc123",
 		Enterprise: true,
 		KAS: KASInfo{
-			Enabled:     true,
-			Version:     "17.0.0",
-			ExternalURL: "https://kas.example.com",
+			Enabled:             true,
+			Version:             "17.0.0",
+			ExternalURL:         "https://kas.example.com",
+			ExternalK8SProxyURL: "https://k8s.example.com",
 		},
 	}
-	md := FormatGetMarkdown(out)
-	if !strings.Contains(md, "17.0.0") || !strings.Contains(md, "abc123") || !strings.Contains(md, "kas.example.com") {
-		t.Error("expected metadata in markdown")
+	got := FormatGetMarkdown(out)
+	want := "## GitLab Metadata\n\n" +
+		"- **Version**: 17.0.0\n" +
+		"- **Revision**: abc123\n" +
+		"- **Enterprise**: ✅\n" +
+		"- **KAS**:\n" +
+		"  - **Enabled**: ✅\n" +
+		"  - **Version**: 17.0.0\n" +
+		"  - **External URL**: [https://kas.example.com](https://kas.example.com)\n" +
+		"  - **Kubernetes Proxy URL**: [https://k8s.example.com](https://k8s.example.com)\n" +
+		metadataHints
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatGetMarkdown_NoKAS_Coverage verifies FormatGetMarkdown when no kas coverage.
+// TestFormatGetMarkdown_NoKAS_Coverage verifies that an instance running no
+// agent server renders the flag and no label with nothing after it.
 func TestFormatGetMarkdown_NoKAS_Coverage(t *testing.T) {
-	md := FormatGetMarkdown(GetOutput{Version: "17.0.0"})
-	if strings.Contains(md, "KAS Version") || strings.Contains(md, "KAS URL") {
-		t.Error("should not show KAS details when empty")
+	got := FormatGetMarkdown(GetOutput{Version: "17.0.0"})
+	want := "## GitLab Metadata\n\n" +
+		"- **Version**: 17.0.0\n" +
+		"- **Enterprise**: ❌\n" +
+		"- **KAS**:\n" +
+		"  - **Enabled**: ❌\n" +
+		metadataHints
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 

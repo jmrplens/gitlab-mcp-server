@@ -247,9 +247,14 @@ func TestCheck_CancelledContext(t *testing.T) {
 // FormatMarkdownString — healthy
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_Healthy verifies the MarkdownString_Healthy Markdown formatter for a representative string_healthy input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// healthHints is the guidance section every health card ends with.
+const healthHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use gitlab_project action 'list' to explore available projects\n" +
+	"- Use gitlab_user action 'me' to see current user details\n"
+
+// TestFormatMarkdownString_Healthy verifies the whole card a reachable,
+// authenticated instance renders as: every field the check filled, the flag as
+// a glyph rather than the word "true", and no Error row.
 func TestFormatMarkdownString_Healthy(t *testing.T) {
 	out := Output{
 		Status:           "healthy",
@@ -265,40 +270,29 @@ func TestFormatMarkdownString_Healthy(t *testing.T) {
 		UserID:           42,
 		ResponseTimeMS:   15,
 	}
-	md := FormatMarkdownString(out)
-
-	checks := []struct {
-		name, want string
-	}{
-		{"status emoji", "\u2705"},
-		{"status text", "healthy"},
-		{"mcp version", "1.0.0"},
-		{"author", "Test Author"},
-		{"department", "Test Dept"},
-		{"repository", "https://example.com/repo"},
-		{"url", "https://gitlab.example.com"},
-		{"version", "17.5.0"},
-		{"revision", "abc123"},
-		{"auth", "true"},
-		{"username", "alice"},
-		{"user id", "42"},
-		{"response time", "15 ms"},
-	}
-	for _, c := range checks {
-		t.Run(c.name, func(t *testing.T) {
-			if !strings.Contains(md, c.want) {
-				t.Errorf("FormatMarkdownString healthy missing %s: want substring %q", c.name, c.want)
-			}
-		})
-	}
-	if strings.Contains(md, "Error") {
-		t.Error("healthy status should not contain Error section")
+	got := FormatMarkdownString(out)
+	want := "## \u2705 GitLab Server Status: healthy\n\n" +
+		"- **MCP Server Version**: 1.0.0\n" +
+		"- **Author**: Test Author\n" +
+		"- **Department**: Test Dept\n" +
+		"- **Repository**: https://example.com/repo\n" +
+		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **Version**: 17.5.0\n" +
+		"- **Revision**: abc123\n" +
+		"- **Authenticated**: \u2705\n" +
+		"- **User**: @alice\n" +
+		"- **User ID**: 42\n" +
+		"- **Response Time**: 15 ms\n" +
+		healthHints
+	if got != want {
+		t.Errorf("FormatMarkdownString() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatMarkdownString_WithMetadata verifies the MarkdownString_WithMetadata Markdown formatter for a representative string_withmetadata input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString_WithMetadata verifies the whole card when the
+// binary was registered with its build metadata and GitLab has not answered
+// yet: the four rows about this server, and nothing about the instance beyond
+// its address.
 func TestFormatMarkdownString_WithMetadata(t *testing.T) {
 	out := Output{
 		Status:           "healthy",
@@ -308,43 +302,37 @@ func TestFormatMarkdownString_WithMetadata(t *testing.T) {
 		Repository:       "https://github.com/jmrplens/gitlab-mcp-server",
 		GitLabURL:        "https://gitlab.example.com",
 	}
-	md := FormatMarkdownString(out)
-
-	for _, want := range []string{
-		"**MCP Server Version**: 2.3.4",
-		"**Author**: Test Author",
-		"**Department**: Test Department",
-		"**Repository**: https://github.com/jmrplens/gitlab-mcp-server",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("missing %q in markdown", want)
-			}
-		})
+	got := FormatMarkdownString(out)
+	want := "## ✅ GitLab Server Status: healthy\n\n" +
+		"- **MCP Server Version**: 2.3.4\n" +
+		"- **Author**: Test Author\n" +
+		"- **Department**: Test Department\n" +
+		"- **Repository**: https://github.com/jmrplens/gitlab-mcp-server\n" +
+		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **Authenticated**: ❌\n" +
+		"- **Response Time**: 0 ms\n" +
+		healthHints
+	if got != want {
+		t.Errorf("FormatMarkdownString() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatMarkdownString_WithoutMetadata verifies the MarkdownString_WithoutMetadata Markdown formatter for a representative string_withoutmetadata input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString_WithoutMetadata verifies the whole card when the
+// binary carries no build metadata: no label stands with an empty value after
+// it.
 func TestFormatMarkdownString_WithoutMetadata(t *testing.T) {
 	out := Output{
 		Status:    "healthy",
 		GitLabURL: "https://gitlab.example.com",
 	}
-	md := FormatMarkdownString(out)
-
-	for _, unwanted := range []string{
-		"MCP Server Version",
-		"**Author**",
-		"**Department**",
-		"**Repository**",
-	} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(md, unwanted) {
-				t.Errorf("should not contain %q when field is empty", unwanted)
-			}
-		})
+	got := FormatMarkdownString(out)
+	want := "## ✅ GitLab Server Status: healthy\n\n" +
+		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **Authenticated**: ❌\n" +
+		"- **Response Time**: 0 ms\n" +
+		healthHints
+	if got != want {
+		t.Errorf("FormatMarkdownString() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -362,21 +350,41 @@ func TestFormatMarkdownString_Unhealthy(t *testing.T) {
 		ResponseTimeMS: 100,
 		Error:          "connectivity check failed: connection refused",
 	}
-	md := FormatMarkdownString(out)
-	if !strings.Contains(md, "\u274c") {
-		t.Error("unhealthy should have cross mark emoji")
+	got := FormatMarkdownString(out)
+	want := "## \u274c GitLab Server Status: unhealthy\n\n" +
+		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **Authenticated**: \u274c\n" +
+		"- **Response Time**: 100 ms\n" +
+		"- **Error**: connectivity check failed: connection refused\n" +
+		healthHints
+	if got != want {
+		t.Errorf("FormatMarkdownString() =\n%q\nwant:\n%q", got, want)
 	}
-	if !strings.Contains(md, "unhealthy") {
-		t.Error("missing 'unhealthy' status text")
+}
+
+// TestFormatMarkdownString_UnhealthyHTMLError verifies that an error carrying
+// a proxy's HTML page changes no structure. client-go puts the whole response
+// body in its message when the body is not the JSON it expected, so the tags
+// and the line breaks arrive here intact, and a body with a line break in it
+// is quoted rather than left to open blocks of its own.
+func TestFormatMarkdownString_UnhealthyHTMLError(t *testing.T) {
+	out := Output{
+		Status:    "unhealthy",
+		GitLabURL: "https://gitlab.example.com",
+		Error:     "<html>\n## Gateway Timeout\n</html>",
 	}
-	if !strings.Contains(md, "connectivity check failed") {
-		t.Error("missing error message")
-	}
-	if strings.Contains(md, "Version") {
-		t.Error("unhealthy should not show version")
-	}
-	if strings.Contains(md, "User") {
-		t.Error("unhealthy should not show user")
+	got := FormatMarkdownString(out)
+	want := "## \u274c GitLab Server Status: unhealthy\n\n" +
+		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **Authenticated**: \u274c\n" +
+		"- **Response Time**: 0 ms\n" +
+		"- **Error**:\n" +
+		"  > <html>\n" +
+		"  > ## Gateway Timeout\n" +
+		"  > </html>\n" +
+		healthHints
+	if got != want {
+		t.Errorf("FormatMarkdownString() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -397,15 +405,17 @@ func TestFormatMarkdownString_Degraded(t *testing.T) {
 		ResponseTimeMS: 50,
 		Error:          "user retrieval failed",
 	}
-	md := FormatMarkdownString(out)
-	if !strings.Contains(md, "\u26a0\ufe0f") {
-		t.Error("degraded should have warning emoji")
-	}
-	if !strings.Contains(md, "degraded") {
-		t.Error("missing 'degraded' status text")
-	}
-	if !strings.Contains(md, "user retrieval failed") {
-		t.Error("missing error message")
+	got := FormatMarkdownString(out)
+	want := "## \u26a0\ufe0f GitLab Server Status: degraded\n\n" +
+		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **Version**: 17.5.0\n" +
+		"- **Revision**: abc123\n" +
+		"- **Authenticated**: \u274c\n" +
+		"- **Response Time**: 50 ms\n" +
+		"- **Error**: user retrieval failed\n" +
+		healthHints
+	if got != want {
+		t.Errorf("FormatMarkdownString() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -413,17 +423,23 @@ func TestFormatMarkdownString_Degraded(t *testing.T) {
 // FormatMarkdownString — no username (empty)
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_NoUsername verifies the MarkdownString_NoUsername Markdown formatter for a representative string_nousername input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString_NoUsername verifies that a check that identified
+// nobody writes neither the handle row nor the id row, where a bare "@" and an
+// id of zero would both read as an identity.
 func TestFormatMarkdownString_NoUsername(t *testing.T) {
 	out := Output{
-		Status:    "healthy",
-		GitLabURL: "https://gitlab.example.com",
+		Status:        "healthy",
+		GitLabURL:     "https://gitlab.example.com",
+		Authenticated: true,
 	}
-	md := FormatMarkdownString(out)
-	if strings.Contains(md, "**User**") {
-		t.Error("should not show User when username is empty")
+	got := FormatMarkdownString(out)
+	want := "## ✅ GitLab Server Status: healthy\n\n" +
+		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **Authenticated**: ✅\n" +
+		"- **Response Time**: 0 ms\n" +
+		healthHints
+	if got != want {
+		t.Errorf("FormatMarkdownString() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -431,18 +447,40 @@ func TestFormatMarkdownString_NoUsername(t *testing.T) {
 // FormatMarkdownString — no version (empty)
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_NoVersion verifies the MarkdownString_NoVersion Markdown formatter for a representative string_noversion input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString_NoVersion verifies that a version GitLab sent with
+// no revision beside it renders as one row, where the two joined as
+// "%s (revision: %s)" printed an empty parenthesis, and that a check that
+// learned no version at all writes neither row.
 func TestFormatMarkdownString_NoVersion(t *testing.T) {
-	out := Output{
+	got := FormatMarkdownString(Output{
 		Status:    "unhealthy",
 		GitLabURL: "https://gitlab.example.com",
 		Error:     "failed",
+	})
+	want := "## ❌ GitLab Server Status: unhealthy\n\n" +
+		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **Authenticated**: ❌\n" +
+		"- **Response Time**: 0 ms\n" +
+		"- **Error**: failed\n" +
+		healthHints
+	if got != want {
+		t.Errorf("FormatMarkdownString() =\n%q\nwant:\n%q", got, want)
 	}
-	md := FormatMarkdownString(out)
-	if strings.Contains(md, "**Version**") {
-		t.Error("should not show Version when empty")
+
+	got = FormatMarkdownString(Output{
+		Status:        "healthy",
+		GitLabURL:     "https://gitlab.example.com",
+		GitLabVersion: "17.5.0",
+		Authenticated: true,
+	})
+	want = "## ✅ GitLab Server Status: healthy\n\n" +
+		"- **GitLab URL**: https://gitlab.example.com\n" +
+		"- **Version**: 17.5.0\n" +
+		"- **Authenticated**: ✅\n" +
+		"- **Response Time**: 0 ms\n" +
+		healthHints
+	if got != want {
+		t.Errorf("FormatMarkdownString() =\n%q\nwant:\n%q", got, want)
 	}
 }
 

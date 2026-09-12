@@ -5,7 +5,6 @@ package snippetstoragemoves
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -623,8 +622,10 @@ func TestFormatOutputMarkdown_WithSnippet(t *testing.T) {
 }
 
 // snippetMoveCardHints is the guidance section every snippet storage move
-// card ends with.
-const snippetMoveCardHints = "\n---\n\U0001F4A1 **Next steps:**\n- Use `gitlab_retrieve_all_snippet_storage_moves` to view all moves\n"
+// card ends with, the same two actions its project and group siblings name.
+const snippetMoveCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'storage_move.retrieve_all_snippet' to see every snippet storage move on the instance\n" +
+	"- Use action 'storage_move.schedule_snippet' to schedule another move for this snippet\n"
 
 // TestFormatOutputMarkdown_WithoutSnippet verifies that FormatOutputMarkdown
 // renders the card without the Snippet row when snippet data is nil.
@@ -648,12 +649,12 @@ func TestFormatOutputMarkdown_WithoutSnippet(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies that FormatListMarkdown renders
-// a "no moves found" message when the list is empty.
+// TestFormatListMarkdown_Empty verifies that an empty page renders the one
+// sentence and nothing else: no heading counting zero, no table header.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No snippet storage moves found.") {
-		t.Errorf("expected empty message, got:\n%s", md)
+	if want := "No snippet storage moves found.\n"; md != want {
+		t.Errorf("empty list:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -701,20 +702,19 @@ func TestFormatListMarkdown_WithMoves(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_NoPagination verifies that FormatListMarkdown omits
-// the pagination footer when Page is zero.
+// TestFormatListMarkdown_NoPagination verifies the whole table a page with no
+// pagination metadata renders: no footer line, and no link hint over a table
+// whose only linkable column is empty.
 func TestFormatListMarkdown_NoPagination(t *testing.T) {
-	o := ListOutput{
-		Moves: []Output{
-			{
-				ID:    3,
-				State: "scheduled",
-			},
-		},
-	}
-	md := FormatListMarkdown(o)
-	if strings.Contains(md, "_Page") {
-		t.Errorf("should not contain pagination footer when page=0:\n%s", md)
+	md := FormatListMarkdown(ListOutput{
+		Moves: []Output{{ID: 3, State: "scheduled"}},
+	})
+	want := "## Snippet Storage Moves (1)\n\n" +
+		"| ID | State | Source | Destination | Snippet | Created |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 3 | scheduled |  |  |  |  |\n"
+	if md != want {
+		t.Errorf("storage move list:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -866,20 +866,16 @@ func TestSnippetStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
 	})
 }
 
-// TestFormatScheduleAllMarkdown verifies the schedule-all confirmation message
-// rendering.
+// TestFormatScheduleAllMarkdown verifies the whole card the bulk schedule
+// confirmation writes: the message reaches the reader through a card row, so a
+// value carrying markup renders as the text it is rather than as structure.
 func TestFormatScheduleAllMarkdown(t *testing.T) {
-	o := ScheduleAllOutput{Message: "All snippet repository storage moves have been scheduled"}
-	md := FormatScheduleAllMarkdown(o)
-	for _, want := range []string{
-		"## Schedule All Snippet Storage Moves",
-		"All snippet repository storage moves have been scheduled",
-		"gitlab_retrieve_all_snippet_storage_moves",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("output missing %q\ngot:\n%s", want, md)
-			}
-		})
+	md := FormatScheduleAllMarkdown(ScheduleAllOutput{Message: "All snippet repository storage moves have been scheduled"})
+	want := "## Schedule All Snippet Storage Moves\n\n" +
+		"- **Result**: All snippet repository storage moves have been scheduled\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'storage_move.retrieve_all_snippet' to watch the scheduled moves progress\n"
+	if md != want {
+		t.Errorf("schedule-all card:\n got %q\nwant %q", md, want)
 	}
 }

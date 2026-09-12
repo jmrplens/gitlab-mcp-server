@@ -5,7 +5,6 @@ package groupstoragemoves
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -584,9 +583,14 @@ func mustParseTime(s string) time.Time {
 	return tt
 }
 
-// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// storageMoveCardHints is the guidance section every group storage move card
+// closes with, the same two actions its project and snippet siblings name.
+const storageMoveCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'storage_move.retrieve_all_group' to see every group storage move on the instance\n" +
+	"- Use action 'storage_move.schedule_group' to schedule another move for this group\n"
+
+// TestFormatOutputMarkdown verifies the whole card FormatOutputMarkdown writes,
+// for a move with a group and a creation time and for one with neither.
 func TestFormatOutputMarkdown(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -613,7 +617,8 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **Source**: default\n" +
 				"- **Destination**: storage2\n" +
 				"- **Created**: 15 Jan 2026 10:30 UTC\n" +
-				"- **Group**: [my-group](https://gitlab.example.com/groups/my-group) (ID: 10)\n",
+				"- **Group**: [my-group](https://gitlab.example.com/groups/my-group) (ID: 10)\n" +
+				storageMoveCardHints,
 		},
 		{
 			name: "output without group",
@@ -627,7 +632,8 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **ID**: 2\n" +
 				"- **State**: scheduled\n" +
 				"- **Source**: default\n" +
-				"- **Destination**: storage3\n",
+				"- **Destination**: storage3\n" +
+				storageMoveCardHints,
 		},
 	}
 
@@ -718,23 +724,17 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatScheduleAllMarkdown verifies the ScheduleAllMarkdown Markdown formatter for a representative scheduleall input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatScheduleAllMarkdown verifies the whole card the bulk schedule
+// confirmation writes: the message reaches the reader through a card row, so a
+// value carrying markup renders as the text it is rather than as structure.
 func TestFormatScheduleAllMarkdown(t *testing.T) {
-	out := ScheduleAllOutput{Message: "All group repository storage moves have been scheduled"}
-	got := FormatScheduleAllMarkdown(out)
-
-	wantAll := []string{
-		"## Schedule All Group Storage Moves",
-		"All group repository storage moves have been scheduled",
-	}
-	for _, want := range wantAll {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(got, want) {
-				t.Errorf("output missing %q\ngot:\n%s", want, got)
-			}
-		})
+	got := FormatScheduleAllMarkdown(ScheduleAllOutput{Message: "All group repository storage moves have been scheduled"})
+	want := "## Schedule All Group Storage Moves\n\n" +
+		"- **Result**: All group repository storage moves have been scheduled\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'storage_move.retrieve_all_group' to watch the scheduled moves progress\n"
+	if got != want {
+		t.Errorf("schedule-all card:\n got %q\nwant %q", got, want)
 	}
 }
 

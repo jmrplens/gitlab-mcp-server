@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -24,20 +23,6 @@ const (
 	testAPIURL      = "https://api.datadoghq.com"
 	testDatadogSite = "datadoghq.com"
 )
-
-// fullDatadogProperties is the configuration object with every field set,
-// which the markdown tests use to reach each rendered line.
-func fullDatadogProperties() *GroupDatadogProperties {
-	return &GroupDatadogProperties{
-		APIURL:              testAPIURL,
-		DatadogEnv:          "prod",
-		DatadogService:      "gitlab",
-		DatadogSite:         testDatadogSite,
-		DatadogTags:         "team:platform",
-		DatadogCIVisibility: true,
-		ArchiveTraceEvents:  true,
-	}
-}
 
 // matchGroupDatadogPath checks if the request URL targets the group Datadog
 // integration endpoint.
@@ -526,125 +511,7 @@ func TestGroupDatadogToItem_NilTimestamps(t *testing.T) {
 	}
 }
 
-// Markdown formatters.
-
-// TestFormatGetGroupDatadogMarkdown_Minimal verifies the GetGroupDatadogMarkdown_Minimal Markdown formatter for a representative getgroupdatadog_minimal input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatGetGroupDatadogMarkdown_Minimal(t *testing.T) {
-	result := FormatGetGroupDatadogMarkdown(GetGroupDatadogOutput{Integration: GroupDatadogItem{ID: 1, Active: true}})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	for _, c := range result.Content {
-		tc, ok := c.(*mcp.TextContent)
-		if !ok {
-			continue
-		}
-		if !strings.Contains(tc.Text, "Group Datadog Integration") {
-			t.Errorf("markdown should mention the heading, got: %s", tc.Text)
-		}
-	}
-}
-
-// TestFormatGetGroupDatadogMarkdown_Full verifies the GetGroupDatadogMarkdown_Full Markdown formatter for a representative getgroupdatadog_full input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatGetGroupDatadogMarkdown_Full(t *testing.T) {
-	result := FormatGetGroupDatadogMarkdown(GetGroupDatadogOutput{
-		Integration: GroupDatadogItem{
-			ID:         1,
-			Title:      "Datadog Production",
-			Slug:       "datadog",
-			Active:     true,
-			CreatedAt:  "2026-01-02T03:04:05.000Z",
-			UpdatedAt:  "2026-06-08T11:12:13.000Z",
-			Properties: fullDatadogProperties(),
-		},
-	})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	// Every populated field should make it into the rendered markdown.
-	text := firstMarkdownText(t, result)
-	wantSubs := []string{
-		"Datadog Production",    // fallback non-default for Title
-		"Slug",                  // fallback non-default for Slug
-		"API URL",               // i.APIURL != "" branch
-		"Datadog Env",           // i.DatadogEnv != "" branch
-		"Datadog Service",       // i.DatadogService != "" branch
-		"Datadog Site",          // i.DatadogSite != "" branch
-		"Datadog Tags",          // i.DatadogTags != "" branch
-		"Datadog CI Visibility", // i.DatadogCIVisibility != nil branch
-		"Archive Trace Events",  // i.ArchiveTraceEvents != nil branch
-		"Created",               // i.CreatedAt != "" branch
-		"Updated",               // i.UpdatedAt != "" branch
-	}
-	for _, want := range wantSubs {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(text, want) {
-				t.Errorf("markdown should contain %q, got: %s", want, text)
-			}
-		})
-	}
-}
-
-// TestFormatSetGroupDatadogMarkdown verifies the SetGroupDatadogMarkdown Markdown formatter for a representative setgroupdatadog input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatSetGroupDatadogMarkdown(t *testing.T) {
-	result := FormatSetGroupDatadogMarkdown(SetGroupDatadogOutput{
-		Integration: GroupDatadogItem{ID: 1, Active: true, Properties: &GroupDatadogProperties{DatadogSite: testDatadogSite}},
-	})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	for _, c := range result.Content {
-		tc, ok := c.(*mcp.TextContent)
-		if !ok {
-			continue
-		}
-		if !strings.Contains(tc.Text, "Group Datadog Integration Updated") {
-			t.Errorf("markdown should mention the update heading, got: %s", tc.Text)
-		}
-	}
-}
-
-// TestFormatSetGroupDatadogMarkdown_Full verifies the SetGroupDatadogMarkdown_Full Markdown formatter for a representative setgroupdatadog_full input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatSetGroupDatadogMarkdown_Full(t *testing.T) {
-	result := FormatSetGroupDatadogMarkdown(SetGroupDatadogOutput{
-		Integration: GroupDatadogItem{
-			ID:         1,
-			Title:      "Datadog Production",
-			Slug:       "datadog",
-			Active:     true,
-			Properties: fullDatadogProperties(),
-		},
-	})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := firstMarkdownText(t, result)
-	wantSubs := []string{
-		"Datadog Production",    // fallback non-default for Title
-		"API URL",               // i.APIURL != "" branch
-		"Datadog Env",           // i.DatadogEnv != "" branch
-		"Datadog Service",       // i.DatadogService != "" branch
-		"Datadog Site",          // i.DatadogSite != "" branch
-		"Datadog Tags",          // i.DatadogTags != "" branch
-		"Datadog CI Visibility", // i.DatadogCIVisibility != nil branch
-		"Archive Trace Events",  // i.ArchiveTraceEvents != nil branch
-	}
-	for _, want := range wantSubs {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(text, want) {
-				t.Errorf("markdown should contain %q, got: %s", want, text)
-			}
-		})
-	}
-}
+// The Markdown formatters are asserted whole in markdown_test.go.
 
 // TestDeleteGroupDatadogOutput_Success covers the destructive output
 // wrapper used by the action-spec route. It calls DeleteGroupDatadog

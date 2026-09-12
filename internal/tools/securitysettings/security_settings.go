@@ -64,12 +64,11 @@ func toProjectOutput(s *gl.ProjectSecuritySettings) ProjectOutput {
 		ContainerScanningForRegistryEnabled: s.ContainerScanningForRegistryEnabled,
 		SecretPushProtectionEnabled:         s.SecretPushProtectionEnabled,
 	}
-	if s.CreatedAt != nil {
-		o.CreatedAt = s.CreatedAt.Format("2006-01-02T15:04:05Z")
-	}
-	if s.UpdatedAt != nil {
-		o.UpdatedAt = s.UpdatedAt.Format("2006-01-02T15:04:05Z")
-	}
+	// The wire form is written by the one helper that converts to UTC first: a
+	// layout ending in a literal Z stamps whatever wall clock the value carries
+	// with a zone it may not be in, and the card parses what this writes.
+	o.CreatedAt = toolutil.RFC3339Ptr(s.CreatedAt)
+	o.UpdatedAt = toolutil.RFC3339Ptr(s.UpdatedAt)
 	return o
 }
 

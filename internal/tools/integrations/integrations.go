@@ -266,12 +266,12 @@ func integrationToItem(s *gl.Integration) IntegrationItem {
 		CommentOnEventEnabled:    s.CommentOnEventEnabled,
 		Inherited:                s.Inherited,
 	}
-	if s.CreatedAt != nil {
-		item.CreatedAt = s.CreatedAt.String()
-	}
-	if s.UpdatedAt != nil {
-		item.UpdatedAt = s.UpdatedAt.String()
-	}
+	// RFC 3339, the one wire form every other package publishes and the only
+	// one toolutil.FormatTime can read back: time.Time.String() writes Go's
+	// own "2006-01-02 15:04:05 -0700 MST" layout, which the display helper
+	// cannot parse, so the card fell back to printing the raw instant.
+	item.CreatedAt = toolutil.RFC3339Ptr(s.CreatedAt)
+	item.UpdatedAt = toolutil.RFC3339Ptr(s.UpdatedAt)
 	return item
 }
 

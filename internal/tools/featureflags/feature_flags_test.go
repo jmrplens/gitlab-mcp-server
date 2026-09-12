@@ -353,95 +353,7 @@ func TestDeleteFeatureFlag_MissingParams(t *testing.T) {
 
 // -- Formatters --.
 
-// TestFormatFeatureFlagMarkdown verifies the FeatureFlagMarkdown Markdown formatter for a representative featureflag input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatFeatureFlagMarkdown(t *testing.T) {
-	out := Output{
-		Name:        "my-flag",
-		Description: "Test feature flag",
-		Active:      true,
-		Version:     "new_version_flag",
-		CreatedAt:   "2026-01-01T00:00:00Z",
-		UpdatedAt:   "2026-01-02T00:00:00Z",
-		Scopes: []ScopeOutput{
-			{ID: 7, EnvironmentScope: "production"},
-		},
-		Strategies: []StrategyOutput{
-			{
-				ID:   1,
-				Name: "gradualRolloutUserId",
-				Parameters: &StrategyParameterOutput{
-					Percentage: "50",
-					GroupID:    "default",
-					Stickiness: "default",
-				},
-				Scopes: []ScopeOutput{
-					{ID: 10, EnvironmentScope: "production"},
-				},
-			},
-		},
-	}
-	md := FormatFeatureFlagMarkdown(out)
-	if md == "" {
-		t.Fatal("expected non-empty markdown")
-	}
-	if !contains(md, "my-flag") {
-		t.Error("expected markdown to contain flag name")
-	}
-	if !contains(md, "gradualRolloutUserId") {
-		t.Error("expected markdown to contain strategy name")
-	}
-	if !contains(md, "| Scopes | production |") {
-		t.Error("expected markdown to contain top-level Scopes row")
-	}
-}
-
-// TestFormatListFeatureFlagsMarkdown verifies the ListFeatureFlagsMarkdown Markdown formatter for a representative listfeatureflags input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListFeatureFlagsMarkdown(t *testing.T) {
-	out := ListOutput{
-		FeatureFlags: []Output{
-			{Name: "flag-1", Active: true, Version: "new_version_flag"},
-			{Name: "flag-2", Active: false, Version: "legacy_flag"},
-		},
-		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1},
-	}
-	md := FormatListFeatureFlagsMarkdown(out)
-	if md == "" {
-		t.Fatal("expected non-empty markdown")
-	}
-	if !contains(md, "flag-1") || !contains(md, "flag-2") {
-		t.Error("expected markdown to contain both flag names")
-	}
-}
-
-// TestFormatListFeatureFlagsMarkdown_Empty verifies the ListFeatureFlagsMarkdown_Empty Markdown formatter for a representative listfeatureflags_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListFeatureFlagsMarkdown_Empty(t *testing.T) {
-	out := ListOutput{FeatureFlags: []Output{}}
-	md := FormatListFeatureFlagsMarkdown(out)
-	if !contains(md, "No feature flags found") {
-		t.Error("expected 'No feature flags found' message")
-	}
-}
-
-// contains reports whether contains.
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(s) > 0 && containsStr(s, sub))
-}
-
-// containsStr reports whether contains str.
-func containsStr(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
-}
+// The Markdown formatters are asserted whole in markdown_test.go.
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
@@ -773,50 +685,6 @@ func TestFormatScopes_Multiple(t *testing.T) {
 // ---------------------------------------------------------------------------
 // FormatFeatureFlagMarkdown — no strategies, no dates
 // ---------------------------------------------------------------------------.
-
-// TestFormatFeatureFlagMarkdown_Minimal verifies the FeatureFlagMarkdown_Minimal Markdown formatter for a representative featureflag_minimal input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatFeatureFlagMarkdown_Minimal(t *testing.T) {
-	out := Output{
-		Name:    "bare-flag",
-		Active:  false,
-		Version: "legacy_flag",
-	}
-	md := FormatFeatureFlagMarkdown(out)
-	if !strings.Contains(md, "bare-flag") {
-		t.Error("expected flag name in markdown")
-	}
-	if strings.Contains(md, "### Strategies") {
-		t.Error("should not contain Strategies section for empty strategies")
-	}
-	if strings.Contains(md, "Created") {
-		t.Error("should not contain Created row when empty")
-	}
-	if strings.Contains(md, "Updated") {
-		t.Error("should not contain Updated row when empty")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FormatListFeatureFlagsMarkdown — with pagination
-// ---------------------------------------------------------------------------.
-
-// TestFormatListFeatureFlagsMarkdown_WithPagination verifies the ListFeatureFlagsMarkdown_WithPagination Markdown formatter for a representative listfeatureflags_withpagination input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
-func TestFormatListFeatureFlagsMarkdown_WithPagination(t *testing.T) {
-	out := ListOutput{
-		FeatureFlags: []Output{
-			{Name: "f1", Active: true, Version: "v1", Strategies: []StrategyOutput{{ID: 1}}},
-		},
-		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 3, TotalItems: 50, PerPage: 20},
-	}
-	md := FormatListFeatureFlagsMarkdown(out)
-	if !strings.Contains(md, "f1") {
-		t.Error("missing flag name")
-	}
-}
 
 // ---------------------------------------------------------------------------
 // ActionSpecs metadata
