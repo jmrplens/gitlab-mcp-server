@@ -16,10 +16,11 @@ import (
 // line type with every dispatch joined to its call.
 //
 // One directory is one runtime. No call, session or skip line carries the
-// runtime, only the run line does, and e2ecalls.Read merges the files of a
-// directory without saying which line came from which, so the directory is
-// the unit a runtime can be recovered at: a Docker target writes into one, and
-// every run line in it agrees.
+// runtime, only the run line does, so the directory is the unit a runtime can
+// be recovered at: a Docker target writes into one, and every run line in it
+// agrees. One shard is one package: a process writes one file and one run
+// line, so the run line beside a call is the package that made it, which is
+// the only place that attribution exists and why the shards are read apart.
 type runtimeRecords struct {
 	// dir is the directory the records were read from.
 	dir string
@@ -38,6 +39,11 @@ type runtimeRecords struct {
 	// calls are the call lines, each with Dispatched filled from its dispatch
 	// line when the call was flushed before the span arrived.
 	calls []*e2ecalls.Call
+	// packages names the package each call was recorded by, read off the run
+	// line of the shard the call sits in. A call from a shard with no run
+	// line, or with more than one, has no entry: its package is unknown and
+	// is never guessed.
+	packages map[*e2ecalls.Call]string
 	// skips are the skip lines.
 	skips []*e2ecalls.Skip
 	// dispatches is how many dispatch lines the shards carried, kept for the
@@ -54,7 +60,7 @@ type runtimeRecords struct {
 // A directory holding a shard is one runtime, its subdirectories included; a
 // directory holding none is read as one runtime per child directory, which is
 // the layout dist/e2e-calls/<target> produces. Anything else is the error
-// e2ecalls.Read gives for a directory without shards.
+// e2ecalls.ReadShards gives for a directory without shards.
 func readRuntimes(dir string) ([]*runtimeRecords, error) {
 	holds, err := holdsShard(dir)
 	if err != nil {
@@ -138,11 +144,11 @@ var errNoRunLine = errors.New("no run line: the package never wrote its exit rec
 
 // readRuntime reads one directory as one runtime.
 func readRuntime(dir string) (*runtimeRecords, error) {
-	records, err := e2ecalls.Read(dir)
+	shards, err := e2ecalls.ReadShards(dir)
 	if err != nil {
 		return nil, err
 	}
-	rt, err := foldRecords(records)
+	rt, err := foldShards(shards)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", dir, err)
 	}
@@ -150,24 +156,43 @@ func readRuntime(dir string) (*runtimeRecords, error) {
 	return rt, nil
 }
 
-// foldRecords sorts records by line type, joins dispatches to calls and
-// settles the runtime the run lines name.
+// foldRecords is [foldShards] over lines with no file boundary, for a
+// caller that holds records rather than shards: every call is placed in no
+// package, as a shard without a run line would place it.
 func foldRecords(records []e2ecalls.Record) (*runtimeRecords, error) {
-	rt := &runtimeRecords{}
+	return foldShards([]e2ecalls.Shard{{Records: records}})
+}
+
+// foldShards sorts records by line type, places every call in the package
+// of its shard, joins dispatches to calls and settles the runtime the run
+// lines name.
+func foldShards(shards []e2ecalls.Shard) (*runtimeRecords, error) {
+	rt := &runtimeRecords{packages: map[*e2ecalls.Call]string{}}
 	dispatches := map[string]*e2ecalls.Dispatch{}
-	for _, record := range records {
-		switch record.Type {
-		case e2ecalls.TypeRun:
-			rt.runs = append(rt.runs, record.Run)
-		case e2ecalls.TypeSession:
-			rt.sessions = append(rt.sessions, record.Session)
-		case e2ecalls.TypeCall:
-			rt.calls = append(rt.calls, record.Call)
-		case e2ecalls.TypeDispatch:
-			rt.dispatches++
-			dispatches[record.Dispatch.TraceID] = record.Dispatch
-		case e2ecalls.TypeSkip:
-			rt.skips = append(rt.skips, record.Skip)
+	for _, shard := range shards {
+		var calls []*e2ecalls.Call
+		var runs []*e2ecalls.Run
+		for _, record := range shard.Records {
+			switch record.Type {
+			case e2ecalls.TypeRun:
+				runs = append(runs, record.Run)
+			case e2ecalls.TypeSession:
+				rt.sessions = append(rt.sessions, record.Session)
+			case e2ecalls.TypeCall:
+				calls = append(calls, record.Call)
+			case e2ecalls.TypeDispatch:
+				rt.dispatches++
+				dispatches[record.Dispatch.TraceID] = record.Dispatch
+			case e2ecalls.TypeSkip:
+				rt.skips = append(rt.skips, record.Skip)
+			}
+		}
+		rt.runs = append(rt.runs, runs...)
+		rt.calls = append(rt.calls, calls...)
+		if len(runs) == 1 && runs[0].Package != "" {
+			for _, call := range calls {
+				rt.packages[call] = runs[0].Package
+			}
 		}
 	}
 	rt.joinDispatches(dispatches)

@@ -75,6 +75,47 @@ func TestRead_MergesEveryShardUnderTheDirectory(t *testing.T) {
 	}
 }
 
+// TestReadShards_KeepsTheFileBoundaries verifies that ReadShards hands back
+// one entry per shard file, each with its path and its own lines in file
+// order, so a reader can join every line to the run line of the process that
+// wrote it. Read is the same walk with the boundaries dropped, and the two
+// must agree on what was read.
+func TestReadShards_KeepsTheFileBoundaries(t *testing.T) {
+	root := t.TempDir()
+	common := writeShard(t, root, "calls-common.jsonl",
+		`{"schema":1,"type":"call","call":{"test":"TestIssue_List","purpose":"test","expectation":"ok","session":"d","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","action":"issue.list","outcome":"ok","test_status":"passed"}}`,
+		`{"schema":1,"type":"run","run":{"package":"common","requirement":"any","edition":"community","tier":"free","run_id":"r","status":"started"}}`,
+	)
+	ee := writeShard(t, filepath.Join(root, "ee"), "calls-ee.jsonl",
+		`{"schema":1,"type":"run","run":{"package":"ee","requirement":"enterprise","edition":"enterprise","tier":"ultimate","run_id":"r","status":"started"}}`,
+	)
+
+	shards, err := ReadShards(root)
+	if err != nil {
+		t.Fatalf("ReadShards error = %v", err)
+	}
+	if len(shards) != 2 {
+		t.Fatalf("shards = %d, want 2: %+v", len(shards), shards)
+	}
+	if shards[0].Path != common || shards[1].Path != ee {
+		t.Errorf("paths = %q, %q; want %q then %q in walk order", shards[0].Path, shards[1].Path, common, ee)
+	}
+	if len(shards[0].Records) != 2 || shards[0].Records[0].Type != TypeCall || shards[0].Records[1].Type != TypeRun {
+		t.Errorf("common shard = %+v, want its call then its run line", shards[0].Records)
+	}
+	if len(shards[1].Records) != 1 || shards[1].Records[0].Run == nil || shards[1].Records[0].Run.Package != "ee" {
+		t.Errorf("ee shard = %+v, want the one run line naming ee", shards[1].Records)
+	}
+
+	merged, err := Read(root)
+	if err != nil {
+		t.Fatalf("Read error = %v", err)
+	}
+	if len(merged) != 3 {
+		t.Errorf("Read = %d records, want the 3 the shards hold together", len(merged))
+	}
+}
+
 // TestRead_RefusesADirectoryHoldingNoShard verifies that an empty directory is
 // an error naming the switch, rather than an empty result.
 //

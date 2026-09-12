@@ -1,6 +1,7 @@
 package main
 
 import (
+	"maps"
 	"sort"
 	"strings"
 
@@ -237,6 +238,22 @@ func (c *cell) add(earned credit, test string) {
 	if earned > c.best {
 		c.best = earned
 	}
+}
+
+// copyFrom makes this cell say what another does, with maps of its own.
+//
+// The maps are copied rather than shared because a cell derived from another
+// is read after the source may have moved on: applyStatic adds a skipped
+// credit to an action cell after the flow cell was derived from it, and a
+// flow cell sharing that map would carry a credit its own state never
+// accounted for.
+func (c *cell) copyFrom(source *cell) {
+	c.best, c.state, c.reason = source.best, source.state, source.reason
+	c.tests = make(map[credit]map[string]bool, len(source.tests))
+	for earned, tests := range source.tests {
+		c.tests[earned] = maps.Clone(tests)
+	}
+	c.counts = maps.Clone(source.counts)
 }
 
 // bestTests names the tests behind the cell's best credit, sorted.
@@ -652,11 +669,16 @@ func (c *classification) settle(found *cell, unservable string) state {
 
 // reasonFor spells the reason a skipped cell carries: the skip line's reason
 // of the test that skipped, when there is one.
+//
+// The tests are read in name order, so that two skipped tests giving two
+// reasons for one cell settle on the same one every run: the report is a CI
+// artifact, and a reason that changed between two runs of one shard set
+// would read as a change in the suite.
 func (c *classification) reasonFor(found *cell) string {
 	if found.best != creditSkipped {
 		return ""
 	}
-	for test := range found.tests[creditSkipped] {
+	for _, test := range sortedKeys(found.tests[creditSkipped]) {
 		if reason, known := c.skipReasons[test]; known {
 			return reason
 		}
@@ -756,6 +778,10 @@ func sampleURI(template string) string {
 
 // fillElicitationCells derives one cell per elicitation flow from the
 // interactive actions' cells, marking whether the flow elicited.
+//
+// It derives rather than shares, and runs again after applyStatic: the flow
+// is the interactive action seen as a capability, so whatever the source
+// later says of the action (skipped, unasserted) the flow says too.
 func (c *classification) fillElicitationCells() {
 	for key, found := range c.cells {
 		action, known := c.catalog.actions[key.action]
@@ -763,7 +789,7 @@ func (c *classification) fillElicitationCells() {
 			continue
 		}
 		flow := c.capabilityCellFor(capabilityElicitation, key)
-		flow.best, flow.tests, flow.counts, flow.state, flow.reason = found.best, found.tests, found.counts, found.state, found.reason
+		flow.copyFrom(found)
 		if flow.state == stateAsserted && !c.anyElicited(found.tests[creditAsserted]) {
 			// The tool answered and nothing was asked of the client: the
 			// flow ran its cancelled or unsupported branch rather than
@@ -855,6 +881,9 @@ func (c *classification) applyStatic(sr *staticResult) {
 			}
 		}
 	}
+	// The flows were derived from the interactive actions' cells before any
+	// of this ran, so they are derived again from what those cells say now.
+	c.fillElicitationCells()
 }
 
 // sortedKeys returns a set's names in order.

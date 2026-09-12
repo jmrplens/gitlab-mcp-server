@@ -17,18 +17,25 @@ type checkResult struct {
 // checkRuntime applies the floors to one runtime.
 //
 // Three of them answer the critic's release gate that passes with zero tests:
-// a runtime whose packages recorded no test call covered nothing, and a
-// package that refused to run covered nothing either, whatever the others
-// did. The fourth is the ratchet on the asserted count, read from
-// [assertedFloors] under every selector the runtime matches.
+// a runtime whose packages recorded no test call covered nothing, a package
+// that refused to run covered nothing either, whatever the others did, and a
+// package that ran under a -run filter covered only what the filter selected.
+// The run line records the filter for exactly this reason: a partial run is
+// not a coverage claim about the rest, and a floor its selected tests happen
+// to clear says nothing about the tests it left out. The last is the ratchet
+// on the asserted count, read from [assertedFloors] under every selector the
+// runtime matches.
 func checkRuntime(rep *report, selectors []string) *checkResult {
 	result := &checkResult{Passed: true}
 	if rep.Summary.TestCalls == 0 {
 		result.failf("no test call was recorded on %s", rep.Runtime)
 	}
 	for _, run := range rep.Runs {
-		if run.Status == e2ecalls.RunRefused {
+		switch {
+		case run.Status == e2ecalls.RunRefused:
 			result.failf("package %s refused to run: %s", run.Package, run.Reason)
+		case run.Filter != "":
+			result.failf("package %s ran under the filter %q: a partial run is not a coverage claim", run.Package, run.Filter)
 		}
 	}
 	for _, selector := range floorSelectors(rep.Runtime, selectors) {

@@ -7,9 +7,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 )
 
-// TestCheckRuntime_Floors_Applied verifies the four floors: a runtime with no test
-// call, a package that refused, an asserted count below its floor, and a
-// runtime that passes all of them.
+// TestCheckRuntime_Floors_Applied verifies the five floors: a runtime with no
+// test call, a package that refused, a package that ran under a -run filter,
+// an asserted count below its floor, and a runtime that passes all of them.
 func TestCheckRuntime_Floors_Applied(t *testing.T) {
 	t.Cleanup(func() { assertedFloors = map[string]int{} })
 	assertedFloors = map[string]int{"ce": 5, "community/free": 3}
@@ -28,6 +28,24 @@ func TestCheckRuntime_Floors_Applied(t *testing.T) {
 			name: "a package refused",
 			rep: &report{Runtime: "community/free", Summary: summary{TestCalls: 1, L1: 9}, Runs: []runRow{
 				{Package: "ee", Status: e2ecalls.RunRefused, Reason: "needs a license"},
+			}},
+			want: []string{"package ee refused to run: needs a license"},
+		},
+		{
+			// The filtered package clears every floor on its own, which is
+			// exactly the run the check must not mistake for the suite.
+			name: "a package ran under a filter",
+			rep: &report{Runtime: "community/free", Summary: summary{TestCalls: 1, L1: 9}, Runs: []runRow{
+				{Package: "common", Status: e2ecalls.RunStarted, Filter: "^TestIssue"},
+				{Package: "ce", Status: e2ecalls.RunStarted},
+			}},
+			want: []string{`package common ran under the filter "^TestIssue": a partial run is not a coverage claim`},
+		},
+		{
+			// A refused run is one finding, whatever filter it was given.
+			name: "a refused package with a filter is reported once",
+			rep: &report{Runtime: "community/free", Summary: summary{TestCalls: 1, L1: 9}, Runs: []runRow{
+				{Package: "ee", Status: e2ecalls.RunRefused, Reason: "needs a license", Filter: "^TestEpic"},
 			}},
 			want: []string{"package ee refused to run: needs a license"},
 		},

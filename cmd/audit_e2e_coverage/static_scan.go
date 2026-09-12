@@ -75,15 +75,17 @@ func moduleDir(harness *packages.Package) string {
 
 // funcScan is what one function declaration holds.
 type funcScan struct {
-	// name is the function's name.
+	// name is the function's key, as [declName] spells it.
 	name string
 	// isTest is whether the test binary runs it as a test.
 	isTest bool
 	// ids are the constant ids named inside it.
 	ids map[string]bool
-	// declaresUltimate is whether it calls Tier(edition.Ultimate) itself.
+	// declaresUltimate is whether it passes Tier(edition.Ultimate) to Needs
+	// itself.
 	declaresUltimate bool
-	// refs names the same-package functions it references.
+	// refs names the same-package functions and methods it references, keyed
+	// as [declName] keys them.
 	refs map[string]bool
 }
 
@@ -103,6 +105,9 @@ type packageScan struct {
 	discardedSites map[string]int
 	// funcs holds every function declaration by name.
 	funcs map[string]*funcScan
+	// reach memoizes, per function, every function it reaches through its
+	// references at any depth.
+	reach map[string]map[string]bool
 }
 
 // scan reads one package.
@@ -141,12 +146,47 @@ func (s *packageScanner) declarations(pkg *packages.Package, scan *packageScan) 
 
 // declName names a declaration uniquely within its package: a method by its
 // receiver type and name, so it never collides with a function of the same
-// name.
+// name. A pointer receiver and a value receiver on one type spell the same
+// key, since a reference resolves to the method and not to how it was
+// declared, and [methodKey] must produce the same string from the type
+// checker's side.
 func declName(fn *ast.FuncDecl) string {
 	if fn.Recv == nil || len(fn.Recv.List) == 0 {
 		return fn.Name.Name
 	}
-	return types.ExprString(fn.Recv.List[0].Type) + "." + fn.Name.Name
+	return receiverTypeName(fn.Recv.List[0].Type) + "." + fn.Name.Name
+}
+
+// receiverTypeName reads the type name out of a receiver expression, through
+// the pointer and the type parameters a receiver may carry.
+func receiverTypeName(expr ast.Expr) string {
+	for {
+		switch e := expr.(type) {
+		case *ast.StarExpr:
+			expr = e.X
+		case *ast.ParenExpr:
+			expr = e.X
+		case *ast.IndexExpr:
+			expr = e.X
+		case *ast.IndexListExpr:
+			expr = e.X
+		case *ast.Ident:
+			return e.Name
+		default:
+			return types.ExprString(expr)
+		}
+	}
+}
+
+// methodKey spells a function object the way [declName] spells its
+// declaration: Type.Method for a method, the bare name otherwise.
+func methodKey(fn *types.Func) string {
+	if recv := fn.Signature().Recv(); recv != nil {
+		if named := receiverNamed(recv.Type()); named != nil {
+			return named.Obj().Name() + "." + fn.Name()
+		}
+	}
+	return fn.Name()
 }
 
 // collectSites reads every constant of the ActionID type off the type
@@ -224,8 +264,8 @@ func (s *packageScanner) noteCall(pkg *packages.Package, scan *packageScan, fn *
 	if callee == "" {
 		return
 	}
-	if callee == tierFuncName {
-		if len(call.Args) == 1 && isUltimate(pkg.TypesInfo.Types[call.Args[0]]) {
+	if callee == needsFuncName {
+		if s.needsUltimate(pkg, call) {
 			fn.declaresUltimate = true
 		}
 		return
@@ -245,6 +285,27 @@ func (s *packageScanner) noteCall(pkg *packages.Package, scan *packageScan, fn *
 	if verb.resultBearing && tv.Value.Kind() == constant.String {
 		scan.resultSites[constant.StringVal(tv.Value)]++
 	}
+}
+
+// needsUltimate reports whether a Needs call takes Tier(edition.Ultimate)
+// among its arguments.
+//
+// The declaration is the argument and not the Tier call on its own: a Need
+// only means something once Needs hands it to New, so a Tier(edition.Ultimate)
+// assigned to a blank or passed anywhere else declares nothing, and reading
+// it as a declaration would let a test name an Ultimate action while
+// requiring nothing of the runtime.
+func (s *packageScanner) needsUltimate(pkg *packages.Package, needs *ast.CallExpr) bool {
+	for _, arg := range needs.Args {
+		tier, isCall := arg.(*ast.CallExpr)
+		if !isCall || s.harnessCallee(pkg, tier) != tierFuncName {
+			continue
+		}
+		if len(tier.Args) == 1 && isUltimate(pkg.TypesInfo.Types[tier.Args[0]]) {
+			return true
+		}
+	}
+	return false
 }
 
 // isUltimate reports whether a constant expression is edition.Ultimate.
@@ -297,14 +358,18 @@ func unwrapCallee(fun ast.Expr) ast.Expr {
 	}
 }
 
-// noteReference records a use of a same-package function, which is how a
-// helper's ids and declarations are attributed to the tests that call it.
+// noteReference records a use of a same-package function or method, which is
+// how a helper's ids and declarations are attributed to the tests that call
+// it. The reference is keyed as the declaration is, so a method reached
+// through a value or a pointer finds the declaration [declName] indexed.
 func (s *packageScanner) noteReference(pkg *packages.Package, fn *funcScan, ident *ast.Ident) {
 	obj, isFunc := pkg.TypesInfo.Uses[ident].(*types.Func)
-	if !isFunc || obj.Pkg() != pkg.Types || obj.Name() == fn.name {
+	if !isFunc || obj.Pkg() != pkg.Types {
 		return
 	}
-	fn.refs[obj.Name()] = true
+	if key := methodKey(obj); key != fn.name {
+		fn.refs[key] = true
+	}
 }
 
 // noteAssignment records a result-bearing call whose every value is assigned
@@ -348,10 +413,46 @@ func (s *packageScanner) noteDiscard(pkg *packages.Package, scan *packageScan, c
 	})
 }
 
+// reachable names every same-package function a function reaches through
+// its references, at any depth, each visited once so a cycle ends the walk
+// rather than the program. The function itself is in the set only when a
+// cycle leads back to it.
+//
+// The walk is transitive because a helper chain is the ordinary shape of a
+// test package: a test calls the helper that opens its session, which calls
+// the helper that declares the tier, and an id or a declaration two calls
+// away is exactly as much the test's as one call away. A one-level walk
+// answered "no test reaches this" for the second helper, which read as a
+// clean gate and was a silence.
+func (p *packageScan) reachable(name string) map[string]bool {
+	if seen, done := p.reach[name]; done {
+		return seen
+	}
+	seen := map[string]bool{}
+	stack := []string{name}
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		fn, known := p.funcs[current]
+		if !known {
+			continue
+		}
+		for ref := range fn.refs {
+			if !seen[ref] {
+				seen[ref] = true
+				stack = append(stack, ref)
+			}
+		}
+	}
+	if p.reach == nil {
+		p.reach = map[string]map[string]bool{}
+	}
+	p.reach[name] = seen
+	return seen
+}
+
 // testsReaching names the Test functions a site is reached from: the test
-// it is in, or every test that references the helper it is in. A helper
-// only helpers call is out of reach, which the one-level attribution states
-// rather than hides.
+// it is in, or every test that reaches the helper it is in, at any depth.
 func (p *packageScan) testsReaching(site idSite) []string {
 	fn, known := p.funcs[site.Func]
 	if !known {
@@ -362,7 +463,7 @@ func (p *packageScan) testsReaching(site idSite) []string {
 	}
 	var tests []string
 	for name, other := range p.funcs {
-		if other.isTest && other.refs[fn.name] {
+		if other.isTest && p.reachable(name)[fn.name] {
 			tests = append(tests, name)
 		}
 	}
@@ -371,7 +472,7 @@ func (p *packageScan) testsReaching(site idSite) []string {
 }
 
 // declaresUltimate reports whether a test declares the Ultimate tier, itself
-// or through a helper it references.
+// or through any helper it reaches.
 func (p *packageScan) declaresUltimate(test string) bool {
 	fn, known := p.funcs[test]
 	if !known {
@@ -380,7 +481,7 @@ func (p *packageScan) declaresUltimate(test string) bool {
 	if fn.declaresUltimate {
 		return true
 	}
-	for helper := range fn.refs {
+	for helper := range p.reachable(test) {
 		if other, exists := p.funcs[helper]; exists && other.declaresUltimate {
 			return true
 		}
@@ -389,7 +490,7 @@ func (p *packageScan) declaresUltimate(test string) bool {
 }
 
 // testIDs maps each Test function to the ids it names, itself or through
-// the helpers it references.
+// any helper it reaches.
 func (p *packageScan) testIDs() map[string]map[string]bool {
 	byTest := map[string]map[string]bool{}
 	for name, fn := range p.funcs {
@@ -400,7 +501,7 @@ func (p *packageScan) testIDs() map[string]map[string]bool {
 		for id := range fn.ids {
 			ids[id] = true
 		}
-		for helper := range fn.refs {
+		for helper := range p.reachable(name) {
 			other, exists := p.funcs[helper]
 			if !exists {
 				continue

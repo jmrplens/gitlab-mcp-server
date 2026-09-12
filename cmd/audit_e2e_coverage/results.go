@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -34,12 +35,37 @@ type testResult struct {
 	// Elapsed is the test's own duration in seconds, which is how a test that
 	// passed without doing anything gives itself away.
 	Elapsed float64
-	// Package is the package the test ran in.
+	// Package is the import path the test ran in, as the stream spells it.
 	Package string
 }
 
-// testResults is every test's final verdict, keyed by the full test name.
-type testResults map[string]testResult
+// resultKey names one test of one package.
+//
+// The package is part of the key because the stream carries every package of
+// the run and nothing stops two of them from declaring a test of the same
+// name: keyed by name alone, the later verdict would overwrite the earlier
+// and be applied to the other package's calls.
+type resultKey struct {
+	// pkg is the package as [packageName] spells it.
+	pkg string
+	// test is the full test name, subtests included.
+	test string
+}
+
+// testResults is every test's final verdict, keyed by package and test.
+type testResults map[resultKey]testResult
+
+// packageName reduces a stream's import path to the name a run line carries.
+//
+// The harness names its package after the directory the test binary runs in,
+// which go test makes the package directory, so the last element of the
+// import path is the same name.
+func packageName(importPath string) string {
+	if importPath == "" {
+		return ""
+	}
+	return path.Base(importPath)
+}
 
 // maxEventLine bounds one event line. An output event carries one line of
 // test output, which is short; the cap exists so that a stray multi-megabyte
@@ -52,9 +78,9 @@ const maxEventLine = 1 << 20
 // only one that exists for a test that ran once. Lines that are not JSON are
 // refused rather than skipped: gotestsum writes nothing else to that file, so
 // one means the file is not what -results was told it was.
-func readResults(path string) (testResults, error) {
+func readResults(name string) (testResults, error) {
 	// #nosec G304 -- the path is the one the caller named on the command line.
-	file, err := os.Open(filepath.Clean(path))
+	file, err := os.Open(filepath.Clean(name))
 	if err != nil {
 		return nil, fmt.Errorf("open results: %w", err)
 	}
@@ -85,7 +111,8 @@ func parseResults(reader io.Reader) (testResults, error) {
 		if !verdict {
 			continue
 		}
-		results[event.Test] = testResult{Status: status, Elapsed: event.Elapsed, Package: event.Package}
+		key := resultKey{pkg: packageName(event.Package), test: event.Test}
+		results[key] = testResult{Status: status, Elapsed: event.Elapsed, Package: event.Package}
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("read results: %w", err)
@@ -111,6 +138,15 @@ func verdictStatus(action string) (string, bool) {
 	}
 }
 
+// packages names every package the stream holds a verdict for.
+func (results testResults) packages() map[string]bool {
+	known := map[string]bool{}
+	for key := range results {
+		known[key.pkg] = true
+	}
+	return known
+}
+
 // resultsJoin is what joining the results stream to the calls found.
 type resultsJoin struct {
 	// Tests is how many tests the stream holds a verdict for.
@@ -133,6 +169,7 @@ type resultsJoin struct {
 
 // idleTest is a test that passed and made no recorded call.
 type idleTest struct {
+	Package string  `json:"package,omitempty"`
 	Test    string  `json:"test"`
 	Elapsed float64 `json:"elapsed_seconds"`
 }
@@ -140,15 +177,23 @@ type idleTest struct {
 // joinResults settles every call's test status from the stream and reports
 // what the join found.
 //
-// A call is matched on its full test name first, then on its top-level test:
-// a subtest that reported no verdict of its own still ended with its parent.
+// A call is matched in the package its shard names first, on its full test
+// name and then on its top-level test: a subtest that reported no verdict of
+// its own still ended with its parent. A call whose package is unknown, or
+// whose package the stream never reported under that name, is matched by
+// test name alone, and only when one package reports it.
 func joinResults(rt *runtimeRecords, results testResults) resultsJoin {
 	join := resultsJoin{Tests: len(results)}
-	called := map[string]bool{}
+	known := results.packages()
+	called := map[resultKey]bool{}
 	for _, call := range rt.calls {
-		called[call.Test] = true
-		called[topLevelTest(call.Test)] = true
-		result, found := lookupResult(results, call.Test)
+		key, result, found := lookupResult(results, known, rt.packages[call], call.Test)
+		// Every ancestor of the call's test made this call too, as far as a
+		// verdict is concerned: a passed parent whose child called is not a
+		// test that called nothing.
+		for _, name := range ancestorTests(call.Test) {
+			called[resultKey{pkg: key.pkg, test: name}] = true
+		}
 		if !found {
 			join.Unmatched++
 			continue
@@ -163,25 +208,79 @@ func joinResults(rt *runtimeRecords, results testResults) resultsJoin {
 		}
 		call.TestStatus = result.Status
 	}
-	for name, result := range results {
-		if result.Status == e2ecalls.StatusPassed && !called[name] {
-			join.TestsWithoutCalls = append(join.TestsWithoutCalls, idleTest{Test: name, Elapsed: result.Elapsed})
+	for key, result := range results {
+		if result.Status == e2ecalls.StatusPassed && !called[key] {
+			join.TestsWithoutCalls = append(join.TestsWithoutCalls, idleTest{Package: key.pkg, Test: key.test, Elapsed: result.Elapsed})
 		}
 	}
 	sort.Slice(join.TestsWithoutCalls, func(i, j int) bool {
+		if join.TestsWithoutCalls[i].Package != join.TestsWithoutCalls[j].Package {
+			return join.TestsWithoutCalls[i].Package < join.TestsWithoutCalls[j].Package
+		}
 		return join.TestsWithoutCalls[i].Test < join.TestsWithoutCalls[j].Test
 	})
 	return join
 }
 
-// lookupResult finds the verdict for a test, falling back to its top-level
-// test.
-func lookupResult(results testResults, test string) (testResult, bool) {
-	if result, found := results[test]; found {
-		return result, true
+// lookupResult finds the verdict for a test of a package, falling back to its
+// top-level test, and to a match by name alone when the package is unknown
+// or the stream holds nothing under it.
+//
+// The key returned is the one the verdict was found under, so a caller can
+// mark it; when nothing was found it names the package the call was placed
+// in, which the stream does not hold.
+func lookupResult(results testResults, known map[string]bool, pkg, test string) (resultKey, testResult, bool) {
+	names := []string{test}
+	if top := topLevelTest(test); top != test {
+		names = append(names, top)
 	}
-	result, found := results[topLevelTest(test)]
-	return result, found
+	if known[pkg] {
+		for _, name := range names {
+			key := resultKey{pkg: pkg, test: name}
+			if result, found := results[key]; found {
+				return key, result, true
+			}
+		}
+		return resultKey{pkg: pkg, test: test}, testResult{}, false
+	}
+	for _, name := range names {
+		if key, result, found := results.byName(name); found {
+			return key, result, true
+		}
+	}
+	return resultKey{pkg: pkg, test: test}, testResult{}, false
+}
+
+// byName finds the one verdict a test name has across every package, and
+// reports false when no package or more than one reports it: two answers
+// are no answer, since either could be the wrong package's.
+func (results testResults) byName(test string) (resultKey, testResult, bool) {
+	var (
+		matched resultKey
+		verdict testResult
+		matches int
+	)
+	for key, result := range results {
+		if key.test == test {
+			matched, verdict = key, result
+			matches++
+		}
+	}
+	return matched, verdict, matches == 1
+}
+
+// ancestorTests names a test and every test it sits under, from the full
+// name up to the Test function.
+func ancestorTests(name string) []string {
+	names := []string{name}
+	for {
+		slash := strings.LastIndex(name, "/")
+		if slash < 0 {
+			return names
+		}
+		name = name[:slash]
+		names = append(names, name)
+	}
 }
 
 // topLevelTest returns the Test function a subtest name belongs to.

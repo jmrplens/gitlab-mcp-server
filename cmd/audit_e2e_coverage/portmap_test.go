@@ -23,10 +23,39 @@ var fixtureDrops = map[string]dropDeclaration{
 	"TestBoth":        {Category: dropSuperseded, Reason: "also replaced"},
 }
 
+// TestIsTestFunc_Names_GoTestRule verifies the name rule against go test's
+// own: Test alone and Test followed by anything but a lowercase letter run,
+// and a helper named Testhelper does not.
+func TestIsTestFunc_Names_GoTestRule(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{name: "Test", want: true},
+		{name: "TestMain", want: true},
+		{name: "TestIssue_List", want: true},
+		{name: "Test_underscore", want: true},
+		{name: "Test1", want: true},
+		{name: "Testhelper", want: false},
+		{name: "testIssue", want: false},
+		{name: "Benchmark", want: false},
+		{name: "helper", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isTestFunc(tc.name); got != tc.want {
+				t.Errorf("isTestFunc(%q) = %t, want %t", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestBuildPortMap_Fixtures_ResolvedAndUnresolved verifies the whole map over the
 // fixture trees: the old Test functions found flat, the Replaces lines read
 // off the new tests only, a subtest reference resolving to its parent, the
-// drops applied, and every way the map can be wrong reported.
+// drops applied, and every way the map can be wrong reported. Both trees
+// hold a Testhelper: the old one must not be on the map, and the new one's
+// Replaces line must retire nothing.
 func TestBuildPortMap_Fixtures_ResolvedAndUnresolved(t *testing.T) {
 	oldDir, newDir := portMapFixtures()
 	oldTests, err := testFunctions(oldDir)

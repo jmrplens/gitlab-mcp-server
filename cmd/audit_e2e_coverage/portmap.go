@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // replacesPrefix starts the comment line a new test carries to name the old
@@ -170,8 +172,21 @@ func testFunctions(dir string) ([]string, error) {
 // isTestFunc reports whether a function name is one the test binary runs as
 // a test, TestMain included, since the old suite's TestMain is on the port
 // map too.
+//
+// The rule is go test's own: Test, followed by nothing or by a character
+// that is not a lowercase letter. Testhelper is a helper and not a test, and
+// a prefix check alone would put it on the port map, credit its ids to a
+// test nothing runs, and let a Replaces line on it retire a real one.
 func isTestFunc(name string) bool {
-	return strings.HasPrefix(name, "Test")
+	if !strings.HasPrefix(name, "Test") {
+		return false
+	}
+	rest := strings.TrimPrefix(name, "Test")
+	if rest == "" {
+		return true
+	}
+	first, _ := utf8.DecodeRuneInString(rest)
+	return !unicode.IsLower(first)
 }
 
 // replacesLines reads every Replaces line off the Test functions under dir,

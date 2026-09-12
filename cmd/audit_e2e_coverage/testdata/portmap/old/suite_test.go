@@ -34,6 +34,13 @@ func helperNotATest(t *testing.T) {
 	_ = t
 }
 
+// Testhelper starts with Test and is still not a test, since go test runs
+// nothing whose name continues with a lowercase letter; it is not on the map
+// either.
+func Testhelper(t *testing.T) {
+	_ = t
+}
+
 // TestBoth is both replaced and dropped, which the map reports.
 func TestBoth(t *testing.T) {
 	_ = t

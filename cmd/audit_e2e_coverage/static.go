@@ -25,6 +25,9 @@ const (
 	actionIDTypeName = "ActionID"
 	// tierFuncName is the harness constructor of the tier requirement.
 	tierFuncName = "Tier"
+	// needsFuncName is the harness option that hands requirements to New,
+	// which is the only place a Tier requirement means anything.
+	needsFuncName = "Needs"
 	// e2eBuildTag is the constraint every e2e file carries.
 	e2eBuildTag = "e2e"
 )

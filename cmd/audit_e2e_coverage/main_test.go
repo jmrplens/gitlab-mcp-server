@@ -255,6 +255,38 @@ func TestRun_Summary_WrittenToFile(t *testing.T) {
 	}
 }
 
+// TestRun_SummaryOnStdout_OwnsTheStream verifies that -summary - with no -o
+// puts the Markdown on stdout in place of the JSON, rather than after it: a
+// stream holding both is a document nothing parses and nobody reads. With -o
+// the JSON goes to the file and stdout still carries only the summary and
+// the line naming that file.
+func TestRun_SummaryOnStdout_OwnsTheStream(t *testing.T) {
+	opts := fixtureOptions(t)
+	opts.summary = summaryToStdout
+	code, stdout, stderr := runFixture(t, opts)
+	if code != exitOK || stderr != "" {
+		t.Fatalf("run() = %d, stderr %q; want 0 and nothing on stderr", code, stderr)
+	}
+	if !strings.HasPrefix(stdout, "## E2E coverage\n") {
+		t.Errorf("stdout does not start with the summary:\n%s", stdout)
+	}
+	if strings.Contains(stdout, `"runtime"`) {
+		t.Errorf("stdout carries the JSON report beside the summary:\n%s", stdout)
+	}
+
+	opts.output = filepath.Join(t.TempDir(), "report.json")
+	code, stdout, _ = runFixture(t, opts)
+	if code != exitOK {
+		t.Fatalf("run() with -o = %d, want 0", code)
+	}
+	if !strings.Contains(stdout, "## E2E coverage\n") || !strings.Contains(stdout, "written to "+opts.output) {
+		t.Errorf("stdout with -o lacks the summary or the file line:\n%s", stdout)
+	}
+	if _, err := os.Stat(opts.output); err != nil {
+		t.Errorf("the JSON report was not written beside the summary: %v", err)
+	}
+}
+
 // TestRun_Calls_Refusals verifies the refusals on the way in: a directory
 // with no shard, a directory naming two runtimes, and a catalog that cannot
 // be built.
@@ -301,7 +333,7 @@ func TestRun_Static_OverTheFixtureModule(t *testing.T) {
 	for _, want := range []string{
 		"static: note: harness export Unused is used by nothing yet",
 		"non-constant id tc.id",
-		"static: 19 id sites in 3 packages, 2 non-constant sites, 5 unused harness exports, 8 findings",
+		"static: 22 id sites in 3 packages, 2 non-constant sites, 4 unused harness exports, 11 findings",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(stdout, want) {

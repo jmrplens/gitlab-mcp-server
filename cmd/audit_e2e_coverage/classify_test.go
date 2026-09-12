@@ -182,6 +182,18 @@ func stateOf(c *classification, shape shapeKey, action string) state {
 	return found.state
 }
 
+// mustCell reads one action cell, failing the test when the classification
+// holds no such cell: reported as a missing cell rather than left to a nil
+// dereference, which would abort every subtest after it.
+func mustCell(t *testing.T, c *classification, shape shapeKey, action string) *cell {
+	t.Helper()
+	found, exists := c.cells[cellKey{shape: shape, action: action}]
+	if !exists {
+		t.Fatalf("no cell for %s/%s %s", shape.surface, shape.mode, action)
+	}
+	return found
+}
+
 // TestClassify_States_EachCellGetsOne walks every state the classification
 // can assign and the cell in the fixture that shows it, which is the table
 // the whole report is read through.
@@ -244,11 +256,35 @@ func TestClassify_Reasons_Explain(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			found := c.cells[cellKey{shape: tc.shape, action: tc.action}]
-			if found == nil || found.reason != tc.want {
+			found := mustCell(t, c, tc.shape, tc.action)
+			if found.reason != tc.want {
 				t.Errorf("reason = %q, want %q", found.reason, tc.want)
 			}
 		})
+	}
+}
+
+// TestClassify_SkipReason_SettledByName verifies that a cell two skipped
+// tests reached, each with a reason of its own, carries the same reason on
+// every run: the first test in name order. The classification is run many
+// times because the defect this pins was an iteration over a map, which
+// settles the reason differently from one run to the next.
+func TestClassify_SkipReason_SettledByName(t *testing.T) {
+	rt := fixtureRuntime()
+	rt.calls = nil
+	rt.skips = []*e2ecalls.Skip{
+		{Test: "TestSkipB", Reason: "no bitbucket fixture"},
+		{Test: "TestSkipA", Reason: "no runner"},
+	}
+	rt.calls = append(rt.calls,
+		fixtureCall(callSpec{test: "TestSkipB", action: "project.list", dispatched: "project.list", status: e2ecalls.StatusSkipped, shape: dynamicDefault}),
+		fixtureCall(callSpec{test: "TestSkipA", action: "project.list", dispatched: "project.list", status: e2ecalls.StatusSkipped, shape: dynamicDefault}),
+	)
+	for range 64 {
+		found := mustCell(t, classify(rt, fixtureCatalog()), dynamicDefault, "project.list")
+		if found.state != stateSkipped || found.reason != "no runner" {
+			t.Fatalf("project.list = %s (%q), want skipped with TestSkipA's reason on every run", found.state, found.reason)
+		}
 	}
 }
 
@@ -263,7 +299,7 @@ func TestClassify_Precedence_BestCreditWins(t *testing.T) {
 	)
 	c := classify(rt, fixtureCatalog())
 
-	found := c.cells[cellKey{shape: dynamicDefault, action: "issue.list"}]
+	found := mustCell(t, c, dynamicDefault, "issue.list")
 	if found.state != stateAsserted {
 		t.Errorf("state = %s, want asserted", found.state)
 	}
@@ -413,11 +449,53 @@ func TestClassify_ApplyStatic_UnassertedAndSkipped(t *testing.T) {
 	}
 	for _, shape := range []shapeKey{dynamicDefault, metaDefault, individualDefault} {
 		t.Run(shape.surface, func(t *testing.T) {
-			found := c.cells[cellKey{shape: shape, action: "project.list"}]
+			found := mustCell(t, c, shape, "project.list")
 			if found.state != stateSkipped || found.reason != "no runner" {
 				t.Errorf("project.list on %s/%s = %s (%q), want skipped (no runner)", shape.surface, shape.mode, found.state, found.reason)
 			}
 		})
+	}
+}
+
+// TestClassify_ElicitationCells_OwnTheirCredit verifies that a flow cell is
+// derived from its interactive action's cell and does not share its maps: a
+// credit added to the action cell afterwards changes nothing on the flow,
+// and applyStatic's skip attribution reaches the flow by derivation, with
+// the reason, rather than by aliasing a map it never accounted for.
+func TestClassify_ElicitationCells_OwnTheirCredit(t *testing.T) {
+	rt := fixtureRuntime()
+	rt.skips = append(rt.skips, &e2ecalls.Skip{Test: "TestInteractiveSkipped", Reason: "no elicitation client"})
+	c := classify(rt, fixtureCatalog())
+	key := cellKey{shape: metaDefault, action: "interactive.issue_create"}
+	action, flow := c.cells[key], c.capabilities[capabilityElicitation][key]
+	if action == nil || flow == nil {
+		t.Fatalf("cells = action %v, flow %v; want both for the elicited flow", action, flow)
+	}
+	if flow.state != stateAsserted || flow.counts[creditAsserted] != 1 {
+		t.Fatalf("flow = %s with %d asserted calls, want asserted with 1", flow.state, flow.counts[creditAsserted])
+	}
+
+	action.add(creditCleanup, "TestLater")
+	if flow.counts[creditCleanup] != 0 || flow.tests[creditCleanup] != nil {
+		t.Errorf("flow counts = %v after the action cell changed, want its own maps untouched", flow.counts)
+	}
+
+	// The individual shape has no call to the flow, so its action cell is
+	// absent until the skip lands on it, and the flow must follow.
+	c.applyStatic(&staticResult{
+		unassertedIDs: map[string]bool{},
+		testIDs:       map[string]map[string]bool{"TestInteractiveSkipped": {"interactive.issue_create": true}},
+	})
+	skippedKey := cellKey{shape: individualDefault, action: "interactive.issue_create"}
+	skippedAction, skippedFlow := c.cells[skippedKey], c.capabilities[capabilityElicitation][skippedKey]
+	if skippedAction == nil || skippedFlow == nil {
+		t.Fatalf("cells = action %v, flow %v; want both on individual", skippedAction, skippedFlow)
+	}
+	if skippedAction.state != stateSkipped || skippedFlow.state != stateSkipped || skippedFlow.reason != "no elicitation client" {
+		t.Errorf("after applyStatic: action %s, flow %s (%q); want both skipped with the reason", skippedAction.state, skippedFlow.state, skippedFlow.reason)
+	}
+	if skippedFlow.counts[creditSkipped] != 1 || !skippedFlow.tests[creditSkipped]["TestInteractiveSkipped"] {
+		t.Errorf("flow credit = %v, want the one skipped call derived from the action cell", skippedFlow.counts)
 	}
 }
 
@@ -454,11 +532,11 @@ func TestClassify_Edges_RecordOddities(t *testing.T) {
 	if got := capabilityState(c, capabilitySubscriptions, dynamicDefault, "gitlab://project/1/branches"); got != stateAsserted {
 		t.Errorf("a subscription the server would refuse = %s under its URI, want asserted as recorded", got)
 	}
-	skipped := c.cells[cellKey{shape: dynamicDefault, action: "project.list"}]
+	skipped := mustCell(t, c, dynamicDefault, "project.list")
 	if skipped.state != stateSkipped || skipped.reason != "no runner" {
 		t.Errorf("a skipped subtest = %s (%q), want skipped with its parent's reason", skipped.state, skipped.reason)
 	}
-	if noLine := c.cells[cellKey{shape: dynamicDefault, action: "merge_train.list"}]; noLine.state != stateSkipped || noLine.reason != "" {
+	if noLine := mustCell(t, c, dynamicDefault, "merge_train.list"); noLine.state != stateSkipped || noLine.reason != "" {
 		t.Errorf("a skipped test without a skip line = %s (%q), want skipped with no reason", noLine.state, noLine.reason)
 	}
 	if len(c.unresolved) != 1 {

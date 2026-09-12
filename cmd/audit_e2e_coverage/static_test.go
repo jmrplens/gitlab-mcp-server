@@ -1,6 +1,7 @@
 package main
 
 import (
+	"go/parser"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -81,7 +82,11 @@ func findingLines(result *staticResult, kind string) []string {
 // produces exactly the findings its planted defects call for, kind by kind,
 // and that the clean shapes beside them produce none: a typed constant, a
 // constant through a helper parameter, a table of constants, a declaration
-// made through a helper, a Premium id in ee.
+// made through one helper and through two, a helper cycle, a Premium id in
+// ee. The Ultimate findings cover the three ways a test can reach an id
+// without declaring the tier: through one helper, through two, and through
+// a pointer-receiver method, and the one way a Tier call declares nothing,
+// which is outside Needs.
 func TestRunStatic_PlantedDefects_EachReported(t *testing.T) {
 	result := runFakeStatic(t, fakeStaticConfig(t))
 
@@ -103,6 +108,9 @@ func TestRunStatic_PlantedDefects_EachReported(t *testing.T) {
 		}},
 		{kind: findingUltimateUndeclared, want: []string{
 			"test/e2e/gitlab/ee/planted_test.go vulnerability.get is Ultimate and TestPlanted_HelperReachedWithoutNeeds_Reported does not declare Needs(Tier(edition.Ultimate))",
+			"test/e2e/gitlab/ee/planted_test.go vulnerability.get is Ultimate and TestPlanted_PointerMethodWithoutNeeds_Reported does not declare Needs(Tier(edition.Ultimate))",
+			"test/e2e/gitlab/ee/planted_test.go vulnerability.get is Ultimate and TestPlanted_TwoLevelHelperWithoutNeeds_Reported does not declare Needs(Tier(edition.Ultimate))",
+			"test/e2e/gitlab/ee/planted_test.go vulnerability.list is Ultimate and TestPlanted_TierOutsideNeeds_Reported does not declare Needs(Tier(edition.Ultimate))",
 			"test/e2e/gitlab/ee/planted_test.go vulnerability.list is Ultimate and TestPlanted_UltimateWithoutNeeds_Reported does not declare Needs(Tier(edition.Ultimate))",
 		}},
 		{kind: findingDeadExport, want: nil},
@@ -145,6 +153,8 @@ func TestRunStatic_Sites_ReadThroughHelpersAndTables(t *testing.T) {
 		{fn: "TestPlanted_TableConstants_Resolved", want: []string{"issue.list", "server.status"}},
 		{fn: "readVulnerability", want: []string{"vulnerability.get"}},
 		{fn: "reader.list", want: []string{"issue.list"}},
+		{fn: "reader.get", want: []string{"vulnerability.get"}},
+		{fn: "cycleB", want: []string{"vulnerability.get"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.fn, func(t *testing.T) {
@@ -185,12 +195,13 @@ func TestRunStatic_NonConstantSites_Listed(t *testing.T) {
 
 // TestRunStatic_DeadExports_ListedNotFailedUntilRatchet verifies both halves
 // of the dead-export rule: the unused symbols are named, a type used only
-// through what hands it out is not among them, and without the ratchet they
-// are a note rather than a finding.
+// through what hands it out is not among them, a field set by keyed literal
+// is used while the alias sharing its name is not, and without the ratchet
+// they are a note rather than a finding.
 func TestRunStatic_DeadExports_ListedNotFailedUntilRatchet(t *testing.T) {
 	result := runFakeStatic(t, fakeStaticConfig(t))
 
-	want := []string{"Env.Label", "Failure.String", "Label", "Session.Close", "Unused"}
+	want := []string{"Failure.String", "Label", "Session.Close", "Unused"}
 	if !reflect.DeepEqual(result.DeadExports, want) {
 		t.Errorf("DeadExports = %q, want %q", result.DeadExports, want)
 	}
@@ -225,7 +236,6 @@ func TestRunStatic_Ratchet_UnexercisedAndStaleExemptions(t *testing.T) {
 			"issue.list is exempted and a package that can run it names it",
 		}},
 		{kind: findingDeadExport, want: []string{
-			"Env.Label is exported by the harness and used by nothing",
 			"Failure.String is exported by the harness and used by nothing",
 			"Label is exported by the harness and used by nothing",
 			"Session.Close is exported by the harness and used by nothing",
@@ -268,7 +278,7 @@ func TestRunStatic_Ratchet_UnexercisedAction_Reported(t *testing.T) {
 // TestRunStatic_UnassertedAndTestIDs_Derived verifies the two things the
 // classification reads off the static result: the ids whose every
 // result-bearing site discards the answer, and the ids each test names,
-// helpers included.
+// through one helper, through two, through a method and through a cycle.
 func TestRunStatic_UnassertedAndTestIDs_Derived(t *testing.T) {
 	result := runFakeStatic(t, fakeStaticConfig(t))
 
@@ -281,6 +291,10 @@ func TestRunStatic_UnassertedAndTestIDs_Derived(t *testing.T) {
 	}{
 		{test: "TestPlanted_HelperConstant_Resolved", want: []string{"project.get"}},
 		{test: "TestPlanted_UltimateViaHelper_Clean", want: []string{"vulnerability.get"}},
+		{test: "TestPlanted_UltimateViaTwoHelpers_Clean", want: []string{"vulnerability.get"}},
+		{test: "TestPlanted_HelperCycle_Terminates", want: []string{"vulnerability.get"}},
+		{test: "TestPlanted_MethodSite_Listed", want: []string{"issue.list"}},
+		{test: "TestPlanted_PointerMethodWithoutNeeds_Reported", want: []string{"vulnerability.get"}},
 		{test: "TestPlanted_KeptResult_Clean", want: []string{"issue.list"}},
 	}
 	for _, tc := range cases {
@@ -378,6 +392,70 @@ func TestCanRun_TiersAndPlacements_Decided(t *testing.T) {
 				t.Errorf("canRun(%s, %v) = %t, want %t", tc.tier, tc.placements, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestReceiverTypeName_Receivers_Normalized verifies that a receiver spells
+// its type name the same way whatever wraps it: a pointer, parentheses, type
+// parameters, or nothing, and that an expression that is none of these is
+// spelled as written.
+func TestReceiverTypeName_Receivers_Normalized(t *testing.T) {
+	cases := []struct {
+		src  string
+		want string
+	}{
+		{src: "reader", want: "reader"},
+		{src: "*reader", want: "reader"},
+		{src: "(*reader)", want: "reader"},
+		{src: "*box[T]", want: "box"},
+		{src: "pair[K, V]", want: "pair"},
+		{src: "pkg.T", want: "pkg.T"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.src, func(t *testing.T) {
+			expr, err := parser.ParseExpr(tc.src)
+			if err != nil {
+				t.Fatalf("parse %q: %v", tc.src, err)
+			}
+			if got := receiverTypeName(expr); got != tc.want {
+				t.Errorf("receiverTypeName(%s) = %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPackageScan_Reachable_ClosureWithCycles verifies the walk the three
+// attributions share: every function at any depth is reached, a cycle is
+// walked once and brings the starting function into its own set, a function
+// nothing declares is passed over, and the answer is memoized.
+func TestPackageScan_Reachable_ClosureWithCycles(t *testing.T) {
+	scan := &packageScan{funcs: map[string]*funcScan{
+		"TestA":   {name: "TestA", isTest: true, refs: map[string]bool{"a": true}},
+		"a":       {name: "a", refs: map[string]bool{"b": true, "ghost": true}},
+		"b":       {name: "b", refs: map[string]bool{"a": true, "c": true}},
+		"c":       {name: "c", refs: map[string]bool{}},
+		"TestNil": {name: "TestNil", isTest: true, refs: map[string]bool{}},
+	}}
+	if got, want := sortedKeys(scan.reachable("TestA")), []string{"a", "b", "c", "ghost"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("reachable(TestA) = %q, want %q", got, want)
+	}
+	if got, want := sortedKeys(scan.reachable("a")), []string{"a", "b", "c", "ghost"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("reachable(a) = %q, want the cycle to bring a into its own set: %q", got, want)
+	}
+	if got := scan.reachable("TestNil"); len(got) != 0 {
+		t.Errorf("reachable(TestNil) = %q, want nothing", sortedKeys(got))
+	}
+	if got := scan.reachable("absent"); len(got) != 0 {
+		t.Errorf("reachable(absent) = %q, want nothing for a function the package does not declare", sortedKeys(got))
+	}
+	if scan.declaresUltimate("absent") {
+		t.Error("declaresUltimate(absent) = true for a test the package does not declare")
+	}
+	if got := scan.testsReaching(idSite{Func: "c"}); !reflect.DeepEqual(got, []string{"TestA"}) {
+		t.Errorf("testsReaching(c) = %q, want TestA through a and b", got)
+	}
+	if got := scan.testsReaching(idSite{Func: "absent"}); got != nil {
+		t.Errorf("testsReaching(absent) = %q, want nil", got)
 	}
 }
 

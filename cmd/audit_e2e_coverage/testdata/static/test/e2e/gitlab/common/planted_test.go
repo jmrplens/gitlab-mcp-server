@@ -54,6 +54,17 @@ func TestPlanted_KeptResult_Clean(t *testing.T) {
 	_ = harness.ExpectToolError(s, listIssues, nil, "not found")
 }
 
+// TestPlanted_KeyedLiteral_UsesTheField builds an Env by keyed literal, which
+// is a use of the Env.Label field and not of the Label alias that shares its
+// name: the type checker records a keyed field under the bare name, and the
+// gate must put it back under its type.
+func TestPlanted_KeyedLiteral_UsesTheField(t *testing.T) {
+	env := harness.Env{T: t, Label: "keyed"}
+	if env.Session() == nil {
+		t.Fatal("no session")
+	}
+}
+
 // TestPlanted_HelperConstant_Resolved passes its id through a helper's
 // ActionID parameter, which the gate must read as the constant it is.
 func TestPlanted_HelperConstant_Resolved(t *testing.T) {

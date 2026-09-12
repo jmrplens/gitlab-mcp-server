@@ -38,8 +38,9 @@
 // # The gates
 //
 // -check fails when an expected runtime left no run line, when no test call
-// was recorded, when a package refused to run, and when the asserted count
-// falls below the floor exemptions.go records. -baseline compares two shard
+// was recorded, when a package refused to run, when a package ran under a
+// -run filter (a partial run is not a coverage claim about the rest), and
+// when the asserted count falls below the floor exemptions.go records. -baseline compares two shard
 // directories and fails on any runtime x surface x mode x action x credit the
 // old suite reached in a passing test and the new one does not. -port-map
 // reads the "// Replaces:" lines of the new suite against every Test function

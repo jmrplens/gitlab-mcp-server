@@ -76,10 +76,10 @@ func main() {
 	flag.StringVar(&opts.baseline, "baseline", "", "shard directory of the old suite; fails on any credit it reached that -calls does not")
 	flag.BoolVar(&opts.portMap, "port-map", false, "check that every old Test function has a Replaces: successor or a declared drop")
 	flag.BoolVar(&opts.static, "static", false, "run the push-time gate over the typed action ids of test/e2e/gitlab, without GitLab")
-	flag.BoolVar(&opts.check, "check", false, "apply the floors: expected runtimes present, test calls recorded, no package refused, asserted count at or above its floor")
+	flag.BoolVar(&opts.check, "check", false, "apply the floors: expected runtimes present, test calls recorded, no package refused or filtered with -run, asserted count at or above its floor")
 	flag.BoolVar(&opts.report, "report", false, "print the gap work list as TSV instead of the JSON report")
 	flag.StringVar(&opts.output, "o", "", "write the JSON report to this path instead of stdout")
-	flag.StringVar(&opts.summary, "summary", "", "write a Markdown summary to this path, or - for stdout")
+	flag.StringVar(&opts.summary, "summary", "", "write a Markdown summary to this path, or - for stdout, which then carries the summary in place of the JSON")
 	flag.StringVar(&opts.oldSuite, "old-suite", "test/e2e/suite", "the old suite the port map reads Test functions from")
 	flag.StringVar(&opts.newSuite, "new-suite", gitlabTestDir, "the new suite the port map reads Replaces: lines from")
 	flag.Parse()
@@ -332,11 +332,17 @@ func writeOutputs(opts options, reports []*report, stdout io.Writer) error {
 	return writeSummary(opts, reports, stdout)
 }
 
-// writeReportJSON writes the JSON report to -o, or to stdout when neither -o
-// nor -report was given.
+// writeReportJSON writes the JSON report to -o, or to stdout when nothing
+// else claimed stdout: neither -report nor -summary - was given.
+//
+// The JSON is what a reader parses and the other two are what a reader
+// reads, and one stream cannot be both. A summary on stdout after a JSON
+// document is a document nothing parses, so the JSON stays on stdout only
+// while it is the only thing there; a caller who wants both names a file
+// for the JSON with -o.
 func writeReportJSON(opts options, reports []*report, stdout io.Writer) error {
 	if opts.output == "" {
-		if opts.report {
+		if opts.report || opts.summary == summaryToStdout {
 			return nil
 		}
 		return writeJSON(stdout, reports)
@@ -356,6 +362,9 @@ func writeReportJSON(opts options, reports []*report, stdout io.Writer) error {
 	return nil
 }
 
+// summaryToStdout is the -summary value that puts the Markdown on stdout.
+const summaryToStdout = "-"
+
 // writeSummary writes the Markdown summary to -summary.
 //
 // The file is appended to rather than replaced: the path a CI step passes is
@@ -365,7 +374,7 @@ func writeSummary(opts options, reports []*report, stdout io.Writer) error {
 	switch opts.summary {
 	case "":
 		return nil
-	case "-":
+	case summaryToStdout:
 		writeMarkdownSummary(stdout, reports)
 		return nil
 	}

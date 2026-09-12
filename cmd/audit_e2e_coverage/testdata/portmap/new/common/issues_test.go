@@ -29,3 +29,10 @@ func TestIssue_Both(t *testing.T) {
 func helper(t *testing.T) {
 	_ = t
 }
+
+// Testhelper carries the same claim under a name go test does not run, which
+// counts for nothing on the same terms.
+// Replaces: TestMeta_Unresolved
+func Testhelper(t *testing.T) {
+	_ = t
+}

@@ -18,12 +18,13 @@ import (
 // whether the suite it exists for calls it.
 func deadExports(harness *packages.Package, selected []*packages.Package, harnessPath string) []string {
 	exported := exportedSymbols(harness.Types)
+	owners := fieldOwners(harness.Types)
 	used := map[string]bool{}
 	for _, pkg := range selected {
 		if strings.TrimSuffix(pkg.PkgPath, "_test") == harnessPath {
 			continue
 		}
-		markUses(pkg, harnessPath, used)
+		markUses(pkg, harnessPath, owners, used)
 	}
 	closeOverTypes(harness.Types, used)
 	var dead []string
@@ -185,13 +186,48 @@ func exportedMembers(typeName *types.TypeName) []string {
 	return names
 }
 
+// fieldOwners maps every field of the package's named struct types to the
+// Type.Field key [exportedSymbols] lists it under.
+//
+// A field has no owner of its own in go/types, and the one place it is
+// recorded without a receiver is a keyed composite literal: Env{Label: v}
+// puts the field Var in Uses under the bare key Label, which is also the key
+// of any package-level Label. The owner is recovered from the struct that
+// declares the field, so the literal is read as a use of Env.Label and not
+// of whatever else shares the name.
+func fieldOwners(pkg *types.Package) map[*types.Var]string {
+	owners := map[*types.Var]string{}
+	scope := pkg.Scope()
+	for _, name := range scope.Names() {
+		typeName, isType := scope.Lookup(name).(*types.TypeName)
+		if !isType {
+			continue
+		}
+		named, isNamed := typeName.Type().(*types.Named)
+		if !isNamed {
+			continue
+		}
+		structType, isStruct := named.Underlying().(*types.Struct)
+		if !isStruct {
+			continue
+		}
+		for field := range structType.Fields() {
+			owners[field] = name + "." + field.Name()
+		}
+	}
+	return owners
+}
+
 // markUses records every harness symbol a package uses.
-func markUses(pkg *packages.Package, harnessPath string, used map[string]bool) {
+func markUses(pkg *packages.Package, harnessPath string, owners map[*types.Var]string, used map[string]bool) {
 	for _, obj := range pkg.TypesInfo.Uses {
 		if obj.Pkg() == nil || obj.Pkg().Path() != harnessPath {
 			continue
 		}
-		used[symbolKey(obj)] = true
+		key, keyed := symbolKey(obj, owners)
+		if keyed {
+			used[key] = true
+		}
 	}
 	for _, selection := range pkg.TypesInfo.Selections {
 		obj := selection.Obj()
@@ -205,16 +241,24 @@ func markUses(pkg *packages.Package, harnessPath string, used map[string]bool) {
 }
 
 // symbolKey spells an object the way [exportedSymbols] does: a method as
-// Type.Method, anything else by its name.
-func symbolKey(obj types.Object) string {
-	if fn, isFunc := obj.(*types.Func); isFunc {
-		if recv := fn.Signature().Recv(); recv != nil {
+// Type.Method, a field as Type.Field, anything else by its name. A field of
+// a type the owner map does not hold has no key at all, since its bare name
+// is not the field's and would be credited to whatever else carries it.
+func symbolKey(obj types.Object, owners map[*types.Var]string) (string, bool) {
+	switch o := obj.(type) {
+	case *types.Func:
+		if recv := o.Signature().Recv(); recv != nil {
 			if named := receiverNamed(recv.Type()); named != nil {
-				return named.Obj().Name() + "." + fn.Name()
+				return named.Obj().Name() + "." + o.Name(), true
 			}
 		}
+	case *types.Var:
+		if o.IsField() {
+			owner, known := owners[o]
+			return owner, known
+		}
 	}
-	return obj.Name()
+	return obj.Name(), true
 }
 
 // receiverNamed returns the named type behind a receiver or selection
