@@ -6,6 +6,7 @@ package fixture
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -73,6 +74,23 @@ func TestDeleteGroup_TopLevelOnDelayedDeletion_MarksAndToleratesTheRefusal(t *te
 	}
 	if got := stub.recordedDeletes(); strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("deletes = %q, want the mark then the refused permanent-remove %q", got, want)
+	}
+}
+
+// TestDeleteGroup_RefusalUnderAnotherStatus_IsAnError checks the tolerance
+// above reads the status and not only the words: the same message under a
+// 503 is an answer GitLab does not give for a top-level group, and swallowing
+// it would report a teardown that left the group behind.
+func TestDeleteGroup_RefusalUnderAnotherStatus_IsAnError(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.addTopLevelGroupRefusing(7, "e2e-world-group", "e2e-world-group", http.StatusServiceUnavailable)
+
+	err := DeleteGroup(context.Background(), client, 7, "e2e-world-group")
+	if err == nil {
+		t.Fatal("DeleteGroup() error = nil, want the refusal reported when it is not the 400 GitLab answers with")
+	}
+	if !IsStatus(err, http.StatusServiceUnavailable) {
+		t.Errorf("DeleteGroup() error = %v, want the 503 the stub answered", err)
 	}
 }
 
