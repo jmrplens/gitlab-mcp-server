@@ -180,10 +180,18 @@ const (
 	toolResultsCSI = rune(0x9b)
 )
 
-// toolResultsStrippedBio is what the bio below must look like once the control
-// bytes are gone: dropping the escape leaves the "[2J" that followed it, which
-// says plainly that the content tried something.
-const toolResultsStrippedBio = "Reset[2Jscreenbellcsi"
+// toolResultsStrippedBio is what the bio below must look like by the time a
+// client reads it, which is the product of two independent defenses and is
+// written out here rather than composed, so that either one weakening shows up
+// as this constant no longer matching.
+//
+// The control bytes are gone because the result builder drops them, and
+// dropping the escape leaves the "[2J" that followed it, which says plainly
+// that the content tried something. That bracket then reaches the page as
+// "&#91;" because the bio is a value the user formatter writes through
+// [toolutil.EscapeMdTableCell], which encodes an opening bracket: a value
+// carrying one would otherwise open a link label around whatever followed it.
+const toolResultsStrippedBio = "Reset&#91;2Jscreenbellcsi"
 
 // toolResultsHostileUser builds what GitLab answers with when somebody has put
 // terminal escape sequences in their own profile.
