@@ -949,6 +949,20 @@ jobs:
         env:
           GITLAB_MCP_TEST_SNAPSHOT_PARITY: ${{ env.FRESHNESS }}
         run: bash .github/scripts/go-test-crash-aware.sh test-results/unit-suite -count=1 -timeout=30m ./cmd/... ./internal/...
+      # The go test -json streams the runner read its verdict from, kept only
+      # when the leg failed. The log shows what gotestsum chose to print, and
+      # for a package whose binary stopped mid-run that is fourteen test names
+      # marked unknown and nothing else; the stream carries every output line
+      # the process managed to write before it went, which is the evidence a
+      # reader needs to tell a runner crash from a regression.
+      - name: Upload the unit-suite streams
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: unit-suite-stream-${{ matrix.os }}
+          path: test-results/unit-suite
+          retention-days: 7
+          if-no-files-found: ignore
       # The two transport modules need neither GitLab nor a credential, and
       # they are why this is not a build-only check: they start the real binary
       # and drive it the way a client does, over pipes and sockets, which is

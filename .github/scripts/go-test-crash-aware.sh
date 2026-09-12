@@ -11,13 +11,25 @@
 #
 # The first run is `gotestsum --jsonfile <json-dir>/first.json -- <args>`.
 # Its go test -json stream is then read back. A package whose output carries
-# one of the signatures below is a crashed package; a package with a fail
-# event and no signature is a failing package, whether a test failed, the
-# build broke or TestMain gave up. Failing packages fail the run, as they
-# always did, and are listed with their failing tests. Crashed packages are
-# run once more, alone: one that passes is reported as a runtime crash in
-# the log and in the job summary and does not fail the run, one that crashes
-# or fails again does.
+# one of the signatures below is a crashed package. A package with a fail
+# event, no signature, and no test of its own that failed is a dead package:
+# its binary stopped before its tests could finish, and it left no message
+# saying why. A package with a fail event and a failing test, a panic, or a
+# build or setup failure is a failing package. Failing packages fail the run,
+# as they always did, and are listed with their failing tests. Crashed and
+# dead packages are run once more, alone: one that passes is reported as a
+# runtime crash in the log and in the job summary and does not fail the run,
+# one that crashes, dies or fails again does.
+#
+# The dead class exists because the crash does not always leave its message.
+# On 2026-09-12 the Windows leg lost two packages in one run: cmd/server with
+# the usual "fatal error: unexpected signal during runtime execution", and
+# internal/toolutil, which stopped after 721 ms with fourteen tests still
+# running, no fail event for any of them and no output at all, which is a
+# process the kernel ended before the runtime could write a word. The first
+# was recognized; the second was counted as a failing package, and a failing
+# package stops the rerun, so the crash that was recognized was not rerun
+# either and the leg failed on a runner bug with nothing to fix.
 #
 # Why. The Windows leg of the cross-platform matrix dies inside the Go
 # runtime now and then (issue 467). golang/go#81238 explains it: on hosts with
@@ -97,6 +109,43 @@ without() {
     $1 != "" && !($1 in c)' <<< "$1"
 }
 
+# EXPLAINED_MARK matches an output line that says why a package failed
+# without a test of its own failing: a runtime message of either kind, a
+# panic (a test timeout is one, "panic: test timed out"), or a package that
+# never ran. A package carrying one of these is a failing package and is not
+# rerun.
+EXPLAINED_MARK='^(fatal error: |panic: )|\[(build|setup) failed\]'
+
+# dead_packages lists the packages with a package-level fail event, no
+# test-level fail event, and no line explaining the failure: a binary that
+# stopped mid-run and said nothing.
+dead_packages() {
+  local failed tested explained
+  failed=$(failed_packages "$1")
+  tested=$(jq -r 'select(.Action == "fail" and .Test != null) | .Package' "$1" | sort -u)
+  explained=$(jq -r --arg mark "$EXPLAINED_MARK" \
+    'select(.Action == "output" and (.Output | test($mark))) | .Package' "$1" | sort -u)
+  without "$(without "$failed" "$tested")" "$explained"
+}
+
+# dead_lines lists "package<TAB>description" per dead package, in the shape
+# crash_lines uses, so the two classes share every report below.
+dead_lines() {
+  local pkg
+  while IFS= read -r pkg; do
+    [ -n "$pkg" ] && printf '%s\t%s\n' "$pkg" "stopped mid-run with no failing test and no message"
+  done <<< "$(dead_packages "$1")"
+}
+
+# rerun_candidates lists the crashed and the dead packages of one stream,
+# and rerun_lines their "package<TAB>line" rows, each set sorted by package.
+rerun_candidates() {
+  printf '%s\n%s\n' "$(crashed_packages "$1")" "$(dead_packages "$1")" | sed '/^$/d' | sort -u
+}
+rerun_lines() {
+  printf '%s\n%s\n' "$(crash_lines "$1")" "$(dead_lines "$1")" | sed '/^$/d' | sort -u -k1,1
+}
+
 # summary appends to the job summary when there is one, and always to stdout.
 summary() {
   printf '%s\n' "$@"
@@ -113,7 +162,7 @@ if [ ! -s "$first" ]; then
   exit "${first_status:-1}"
 fi
 
-crashed=$(crashed_packages "$first")
+crashed=$(rerun_candidates "$first")
 failing=$(without "$(failed_packages "$first")" "$crashed")
 
 if [ -n "$failing" ]; then
@@ -125,8 +174,8 @@ if [ -n "$failing" ]; then
     done <<< "$(failed_tests "$first")"
   done <<< "$failing"
   if [ -n "$crashed" ]; then
-    summary "" "Also crashed inside the Go runtime, not rerun because the failures above decide the run:"
-    while IFS=$'\t' read -r p line; do summary "- \`$p\`: $line"; done <<< "$(crash_lines "$first")"
+    summary "" "Also crashed inside the Go runtime or stopped without a word, not rerun because the failures above decide the run:"
+    while IFS=$'\t' read -r p line; do summary "- \`$p\`: $line"; done <<< "$(rerun_lines "$first")"
   fi
   exit 1
 fi
@@ -136,8 +185,8 @@ if [ -z "$crashed" ]; then
 fi
 
 echo
-echo "The Go runtime crashed in the following package(s); rerunning them alone once (issue 467, golang/go#81238):"
-while IFS=$'\t' read -r p line; do echo "  $p: $line"; done <<< "$(crash_lines "$first")"
+echo "The Go runtime crashed in the following package(s), or their binary stopped without a word; rerunning them alone once (issue 467, golang/go#81238):"
+while IFS=$'\t' read -r p line; do echo "  $p: $line"; done <<< "$(rerun_lines "$first")"
 echo
 
 rerun="$JSON_DIR/rerun.json"
@@ -145,18 +194,18 @@ rerun="$JSON_DIR/rerun.json"
 gotestsum --jsonfile "$rerun" -- "${flags[@]}" $crashed
 rerun_status=$?
 
-crashed_again=$(crashed_packages "$rerun")
+crashed_again=$(rerun_candidates "$rerun")
 failed_again=$(failed_packages "$rerun")
 
 summary "### Test suite: Go runtime crash" "" \
-  "The first run crashed inside the Go runtime (issue 467, golang/go#81238) and the crashed packages were run once more on their own." "" \
+  "The first run crashed inside the Go runtime, or a test binary stopped without a word (issue 467, golang/go#81238), and those packages were run once more on their own." "" \
   "| Package | First run | Rerun |" "| --- | --- | --- |"
 while IFS=$'\t' read -r p line; do
   outcome="passed"
   if grep -qxF "$p" <<< "$crashed_again"; then outcome="crashed again"
   elif grep -qxF "$p" <<< "$failed_again"; then outcome="failed"; fi
   summary "| \`$p\` | \`$line\` | $outcome |"
-done <<< "$(crash_lines "$first")"
+done <<< "$(rerun_lines "$first")"
 
 if [ -n "$crashed_again" ] || [ -n "$failed_again" ] || [ "$rerun_status" -ne 0 ]; then
   summary "" "The rerun did not pass, so the run fails."
