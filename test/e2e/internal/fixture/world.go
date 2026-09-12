@@ -184,6 +184,14 @@ const worldTeardownBudget = 3 * time.Minute
 // deletes it. It fails on a difference and on a deletion that did not
 // happen, and does both halves whatever the first found: a changed World is
 // still deleted, and a World that could not be read is still torn down.
+//
+// The project is purged before the group rather than left to the group's
+// cascade: the World's group is top-level, and an instance with delayed
+// deletion can only mark a top-level group, never purge it through the API
+// (DeleteGroup tolerates that refusal). A project the API can purge, so
+// removing it explicitly keeps it from lingering as a pending-delete leftover
+// under a group that will not go away, which is what the run-scoped sweep would
+// otherwise trip on.
 func teardownWorld(client *gitlabclient.Client, world *World) error {
 	ctx, cancel := context.WithTimeout(context.Background(), worldTeardownBudget)
 	defer cancel()
@@ -192,6 +200,11 @@ func teardownWorld(client *gitlabclient.Client, world *World) error {
 	if world.digest != "" {
 		if err := verifyWorld(ctx, client, world); err != nil {
 			failures = append(failures, err)
+		}
+	}
+	if world.Project.ID != 0 {
+		if err := DeleteProject(ctx, client, world.Project.ID, world.Project.Path); err != nil {
+			failures = append(failures, fmt.Errorf("tearing down the World project: %w", err))
 		}
 	}
 	if world.Group.ID != 0 {
@@ -424,6 +437,7 @@ func (w *World) Bindings() map[string]any {
 		"file_path":         w.Commit.FilePath,
 		"label_id":          w.Label.ID,
 		"milestone_id":      w.Milestone.ID,
+		"milestone_iid":     w.Milestone.IID,
 		"user_id":           w.UserID,
 		"username":          w.Username,
 	}
@@ -433,5 +447,36 @@ func (w *World) Bindings() map[string]any {
 // one.
 func (w *World) Bind(param string) (any, bool) {
 	value, ok := w.Bindings()[param]
+	return value, ok
+}
+
+// PromptBindings returns the World's value for every prompt argument it can
+// supply, as the string a prompts/get call carries.
+//
+// It is kept apart from [World.Bindings] because a prompt argument is always a
+// string and a few of them (a ref pair, a milestone title, a target branch)
+// are named differently from any catalog parameter. A prompt sweep binds the
+// required arguments from this table and skips a prompt whose required
+// argument the World cannot supply, naming it.
+func (w *World) PromptBindings() map[string]string {
+	return map[string]string{
+		"project_id":        strconv.FormatInt(w.Project.ID, 10),
+		"group_id":          strconv.FormatInt(w.Group.ID, 10),
+		"merge_request_iid": strconv.FormatInt(w.MergeRequest.IID, 10),
+		"issue_iid":         strconv.FormatInt(w.Issue.IID, 10),
+		"username":          w.Username,
+		"from":              w.Project.DefaultBranch,
+		"to":                w.Branch.Name,
+		"branch":            w.Branch.Name,
+		"ref":               w.Project.DefaultBranch,
+		"target_branch":     w.Project.DefaultBranch,
+		"milestone":         w.Milestone.Title,
+	}
+}
+
+// BindPromptArgument returns the value a prompt argument takes, and whether
+// the World can supply one.
+func (w *World) BindPromptArgument(argument string) (string, bool) {
+	value, ok := w.PromptBindings()[argument]
 	return value, ok
 }

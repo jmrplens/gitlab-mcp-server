@@ -111,7 +111,7 @@ func TestWorldBindings_Parameters_ComeFromTheObjects(t *testing.T) {
 		MergeRequest: MergeRequest{IID: 3},
 		Issue:        Issue{IID: 4, ID: 40},
 		Label:        Label{ID: 5},
-		Milestone:    Milestone{ID: 6},
+		Milestone:    Milestone{ID: 6, IID: 8, Title: "world-milestone"},
 		Username:     "e2e",
 		UserID:       7,
 	}
@@ -135,6 +135,7 @@ func TestWorldBindings_Parameters_ComeFromTheObjects(t *testing.T) {
 		{param: "file_path", want: "docs/world.md"},
 		{param: "label_id", want: int64(5)},
 		{param: "milestone_id", want: int64(6)},
+		{param: "milestone_iid", want: int64(8)},
 		{param: "user_id", want: int64(7)},
 		{param: "username", want: "e2e"},
 	}
@@ -151,6 +152,51 @@ func TestWorldBindings_Parameters_ComeFromTheObjects(t *testing.T) {
 	}
 	if got, want := len(world.Bindings()), len(cases); got != want {
 		t.Errorf("Bindings() has %d entries, want the %d this test names", got, want)
+	}
+}
+
+// TestWorldPromptBindings_Arguments_ComeFromTheObjects checks every prompt
+// argument the World can supply maps to the object it names as a string, and
+// that BindPromptArgument says no for an argument the World does not carry.
+func TestWorldPromptBindings_Arguments_ComeFromTheObjects(t *testing.T) {
+	world := &World{
+		Group:        Group{ID: 1},
+		Project:      Project{ID: 2, DefaultBranch: "main"},
+		Branch:       Branch{Name: "feature/world"},
+		MergeRequest: MergeRequest{IID: 3},
+		Issue:        Issue{IID: 4},
+		Milestone:    Milestone{Title: "world-milestone"},
+		Username:     "e2e",
+	}
+	cases := []struct {
+		argument string
+		want     string
+	}{
+		{argument: "project_id", want: "2"},
+		{argument: "group_id", want: "1"},
+		{argument: "merge_request_iid", want: "3"},
+		{argument: "issue_iid", want: "4"},
+		{argument: "username", want: "e2e"},
+		{argument: "from", want: "main"},
+		{argument: "to", want: "feature/world"},
+		{argument: "branch", want: "feature/world"},
+		{argument: "ref", want: "main"},
+		{argument: "target_branch", want: "main"},
+		{argument: "milestone", want: "world-milestone"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.argument, func(t *testing.T) {
+			got, ok := world.BindPromptArgument(testCase.argument)
+			if !ok || got != testCase.want {
+				t.Errorf("BindPromptArgument(%q) = (%q, %t), want (%q, true)", testCase.argument, got, ok, testCase.want)
+			}
+		})
+	}
+	if _, ok := world.BindPromptArgument("days"); ok {
+		t.Errorf("BindPromptArgument(days) = true, want false for an argument the World does not carry")
+	}
+	if got, want := len(world.PromptBindings()), len(cases); got != want {
+		t.Errorf("PromptBindings() has %d entries, want the %d this test names", got, want)
 	}
 }
 

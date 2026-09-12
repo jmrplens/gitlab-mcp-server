@@ -55,6 +55,14 @@ const (
 	methodComplete        = "completion/complete"
 	methodElicit          = "elicitation/create"
 	methodResourceUpdated = "notifications/resources/updated"
+	// methodSubscribe is the logical resources/subscribe the [Session.Subscribe]
+	// verb represents. It is recorded by the verb rather than by the sending
+	// middleware: over protocol 2026-07-28 the SDK opens the subscription on a
+	// background context of its own, so the middleware never sees the caller's
+	// attribution and would record nothing. The audit routes it to the
+	// subscription capability whether the wire carried resources/subscribe or
+	// its 2026-07-28 replacement, subscriptions/listen.
+	methodSubscribe = "resources/subscribe"
 )
 
 // traceParentKey is the _meta key W3C trace context travels in.
@@ -377,8 +385,15 @@ func dispatchFor(call *pendingCall) (dispatchRecord, bool) {
 // issue.list and ran issue.get proves nothing about issue.list, and the suite
 // would otherwise report it as covered. A test that knows its call is
 // rewritten declares the route with ExpectDispatch and is held to that instead.
+//
+// A sweep is the one exemption. It probes what a session serves rather than
+// asserting one route, walks it with a non-constant id, and is credited to the
+// action the server said it ran ([creditOf] reads the dispatched action). A
+// route the server rewrites under a sweep is therefore credited correctly and
+// asserts nothing false, so failing the sweep on the rewrite would only make a
+// broad probe brittle against a rewrite it never claimed anything about.
 func assertDispatch(reporter e2ecalls.Reporter, call *pendingCall, record dispatchRecord) {
-	if call.line.Action == "" || record.action == "" {
+	if call.line.Action == "" || record.action == "" || call.line.Purpose == e2ecalls.PurposeSweep {
 		return
 	}
 	want := string(call.wantDispatch)
@@ -546,6 +561,30 @@ func (c *sessionConn) recordReceiving() mcp.Middleware {
 			return next(ctx, method, req)
 		}
 	}
+}
+
+// recordSubscribe records one subscribe against the test that made it.
+//
+// The sending middleware cannot: over protocol 2026-07-28 the SDK's Subscribe
+// opens the listen stream on a background context, dropping the attribution the
+// caller put on its own, so the one call the middleware would see carries no
+// test to file it under. The verb records it here instead, as an accepted
+// subscribe; the resource-updated notification that may follow is recorded by
+// [sessionConn.recordResourceUpdate], which is the delivery half.
+func (c *sessionConn) recordSubscribe(rec *envRecorder, uri string) {
+	if rec == nil {
+		return
+	}
+	line := &e2ecalls.Call{
+		Test:        rec.env.T.Name(),
+		Purpose:     string(PurposeTest),
+		Expectation: e2ecalls.ExpectationOK,
+		Method:      methodSubscribe,
+		Target:      uri,
+		Outcome:     e2ecalls.OutcomeOK,
+	}
+	c.describeSession(line)
+	rec.record(&pendingCall{line: line, conn: c})
 }
 
 // recordElicitation records one elicitation request against the test whose

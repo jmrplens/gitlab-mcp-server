@@ -51,6 +51,31 @@ func TestDeleteGroup_AlreadyMarked_StillRemovesIt(t *testing.T) {
 	}
 }
 
+// TestDeleteGroup_TopLevelOnDelayedDeletion_MarksAndToleratesTheRefusal checks
+// the teardown of the World's own top-level group on an instance with delayed
+// deletion: the mark step schedules it, the permanent-remove step is refused
+// because that option is subgroups-only, and DeleteGroup treats the refusal as
+// success because the group is as gone as the API allows.
+//
+// It pins the fix for the failure the first World teardown hit on GitLab CE 18:
+// DELETE /groups/<id>?permanently_remove=true answering 400 "`permanently_remove`
+// option is only available for subgroups."
+func TestDeleteGroup_TopLevelOnDelayedDeletion_MarksAndToleratesTheRefusal(t *testing.T) {
+	stub, client := newStubGitLab(t)
+	stub.addTopLevelGroup(6, "e2e-world-group", "e2e-world-group")
+
+	if err := DeleteGroup(context.Background(), client, 6, "e2e-world-group"); err != nil {
+		t.Fatalf("DeleteGroup() error = %v, want nil for a marked top-level group the API cannot purge", err)
+	}
+	want := []string{
+		"group 6 ",
+		"group 6 full_path=e2e-world-group-deletion_scheduled-6&permanently_remove=true",
+	}
+	if got := stub.recordedDeletes(); strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("deletes = %q, want the mark then the refused permanent-remove %q", got, want)
+	}
+}
+
 // TestDeleteGroup_Gone_IsNotAnError checks that a group nothing can find
 // counts as deleted.
 func TestDeleteGroup_Gone_IsNotAnError(t *testing.T) {
