@@ -200,6 +200,20 @@ func (r Record) validate() error {
 	if !present(r) {
 		return fmt.Errorf("line type %q carries no payload", r.Type)
 	}
+	// Exactly one payload is the envelope's contract, and the type naming one
+	// says nothing about the other four: a line carrying a call and a
+	// dispatch together is two claims under one type, and a reader that took
+	// the named half would compute coverage over a record it had only half
+	// read. Machine-written or not, that is a shard to refuse.
+	carried := 0
+	for _, has := range payloadPresent {
+		if has(r) {
+			carried++
+		}
+	}
+	if carried != 1 {
+		return fmt.Errorf("line type %q carries %d payloads, want exactly one", r.Type, carried)
+	}
 	return nil
 }
 

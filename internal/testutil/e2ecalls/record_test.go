@@ -114,6 +114,25 @@ func TestRecordValidate_RefusesALineItCannotRead(t *testing.T) {
 			record:  Record{Schema: SchemaVersion, Type: TypeSkip},
 			wantErr: "carries no payload",
 		},
+		// The named payload is there and so is another: the envelope holds
+		// exactly one, and a reader that took the named half would have read
+		// half a record. The three shapes below are the ones a stale or
+		// hand-edited shard could plausibly hold.
+		{
+			name:    "call carrying a dispatch as well",
+			record:  Record{Schema: SchemaVersion, Type: TypeCall, Call: &Call{}, Dispatch: &Dispatch{}},
+			wantErr: "carries 2 payloads, want exactly one",
+		},
+		{
+			name:    "run carrying a session as well",
+			record:  Record{Schema: SchemaVersion, Type: TypeRun, Run: &Run{}, Session: &Session{}},
+			wantErr: "carries 2 payloads, want exactly one",
+		},
+		{
+			name:    "skip carrying every payload",
+			record:  Record{Schema: SchemaVersion, Type: TypeSkip, Run: &Run{}, Session: &Session{}, Call: &Call{}, Dispatch: &Dispatch{}, Skip: &Skip{}},
+			wantErr: "carries 5 payloads, want exactly one",
+		},
 	}
 
 	for _, testCase := range cases {
