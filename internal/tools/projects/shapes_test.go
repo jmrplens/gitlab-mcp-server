@@ -93,7 +93,10 @@ func TestShapeConverters_NilElements(t *testing.T) {
 // the SDK fields to the local mirror with full fidelity, using DeepEqual against
 // the complete expected output so every field is checked.
 func TestShapeConverters_SingleObjects(t *testing.T) {
-	now := time.Now()
+	// The converters render timestamps in UTC; a local clock would make the
+	// expected string carry the host's offset and fail on any machine that is
+	// not on UTC.
+	now := time.Now().UTC()
 	rfc := now.Format(time.RFC3339)
 
 	checkEqual(t, "namespaceOutput",
@@ -135,7 +138,7 @@ func TestShapeConverters_SingleObjects(t *testing.T) {
 // TestShapeConverters_Collections verifies the slice converters map elements
 // and skip nil entries, using DeepEqual against the complete expected output.
 func TestShapeConverters_Collections(t *testing.T) {
-	now := time.Now()
+	now := time.Now().UTC()
 	iso := gl.ISOTime(now)
 	isoDate := time.Time(iso).Format("2006-01-02")
 
@@ -195,7 +198,7 @@ func TestUserGroupNames_NilElements(t *testing.T) {
 // TestToOutput_NestedObjects verifies ToOutput populates the full nested-object
 // keys from a richly-populated gl.Project, plus the deprecated additive fields.
 func TestToOutput_NestedObjects(t *testing.T) {
-	now := time.Now()
+	now := time.Now().UTC()
 	delAt := gl.ISOTime(now)
 	p := &gl.Project{
 		ID:                        1,

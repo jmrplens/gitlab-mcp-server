@@ -43,6 +43,10 @@ type stubObject struct {
 	// with delayed deletion, which can only be marked, never purged, through
 	// the API.
 	permanentRemoveUnsupported bool
+	// permanentRemoveStatus is the status that refusal carries; zero means
+	// the 400 GitLab answers with, and a test sets another to prove the
+	// tolerance reads the status and not only the words.
+	permanentRemoveStatus int
 }
 
 // stubGitLab is the in-memory instance one test drives.
@@ -140,9 +144,15 @@ func (s *stubGitLab) addGroup(id int64, name, path string) {
 // addTopLevelGroup registers a group whose permanent removal GitLab refuses,
 // as it does for a top-level group on an instance with delayed deletion.
 func (s *stubGitLab) addTopLevelGroup(id int64, name, path string) {
+	s.addTopLevelGroupRefusing(id, name, path, http.StatusBadRequest)
+}
+
+// addTopLevelGroupRefusing is addTopLevelGroup with the refusal carried under
+// the given status rather than GitLab's 400.
+func (s *stubGitLab) addTopLevelGroupRefusing(id int64, name, path string, status int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.groups[id] = &stubObject{ID: id, Name: name, Path: path, permanentRemoveUnsupported: true}
+	s.groups[id] = &stubObject{ID: id, Name: name, Path: path, permanentRemoveUnsupported: true, permanentRemoveStatus: status}
 }
 
 // addUser registers a user with the stub.
@@ -316,7 +326,11 @@ func (s *stubGitLab) object(w http.ResponseWriter, r *http.Request, kind string,
 		return
 	}
 	if obj.permanentRemoveUnsupported {
-		writeError(w, http.StatusBadRequest, "`permanently_remove` option is only available for subgroups.")
+		status := obj.permanentRemoveStatus
+		if status == 0 {
+			status = http.StatusBadRequest
+		}
+		writeError(w, status, "`permanently_remove` option is only available for subgroups.")
 		return
 	}
 	if !obj.Marked {

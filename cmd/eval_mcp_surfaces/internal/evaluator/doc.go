@@ -25,14 +25,13 @@
 // they produce is what tells a model that a withheld write exists and is not
 // available, rather than that the server cannot do it at all.
 //
-// The catalog is what this mirrors, and only the catalog. cmd/server runs one
-// further pass after registration, over the tools registered outside the
-// catalog: in read-only mode it removes every registered tool without a
-// read-only hint, and in safe mode it wraps the rest with previews. The meta
-// surface registers the gitlab_interactive_* creation flows that way, so in a
-// read-only or safe-mode meta evaluation those flows keep their real handlers
-// here while the product would have withdrawn or previewed them. Closing that
-// means the pass moving out of cmd/server, not a second copy of it here.
+// The pass cmd/server runs after registration is shared the same way:
+// toolvisibility.Apply, over the tools registered outside the catalog, which
+// on the meta surface are the gitlab_interactive_* creation flows. Read-only
+// mode withdraws them and safe mode previews them here exactly as the binary
+// does, so a protective meta evaluation sees what a client of the binary sees.
+// While the pass lived in cmd/server alone, those flows kept their real
+// handlers here and a read-only evaluation could create an issue.
 //
 // # Public API
 //

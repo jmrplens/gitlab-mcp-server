@@ -25,6 +25,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamiccatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/toolvisibility"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -483,6 +484,13 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface, serverMode st
 	default:
 		return nil, nil, nil, nil, fmt.Errorf("unsupported tool surface %q", toolSurface)
 	}
+	// The pass cmd/server runs after registration, over the tools registered
+	// outside the catalog: on the meta surface those are the
+	// gitlab_interactive_* flows, which read-only mode withdraws and safe
+	// mode previews. Without it a protective meta evaluation scored a surface
+	// on which the flows kept their real handlers, and a model could create
+	// the issue the product would have refused.
+	toolvisibility.Apply(context.Background(), server, cfg, toolSurface, surfaceCatalog)
 	toolutil.LockdownInputSchemas(server)
 	toolutil.EnrichPaginationConstraints(server)
 	mcpTools, err = inspectEvalTools(server)

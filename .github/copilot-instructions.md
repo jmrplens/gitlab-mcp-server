@@ -68,6 +68,7 @@ gitlab-mcp-server/
 │   │   ├── register_meta.go # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
 │   │   ├── dynamic/        # Low-token dynamic find/execute surface
 │   │   ├── dynamiccatalog/ # Build(): the dynamic catalog assembled the way the server assembles it
+│   │   ├── toolvisibility/ # Apply(): the post-registration pass over the tools outside the catalog, shared by cmd/server and the evaluator
 │   │   ├── branches/       # Branch & protected branch tools
 │   │   ├── commits/        # Commit tools
 │   │   ├── issues/         # Issue CRUD tools

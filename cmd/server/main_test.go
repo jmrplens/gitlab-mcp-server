@@ -2899,30 +2899,6 @@ func inspectionFailures(t *testing.T, forced error) []struct {
 	}
 }
 
-// TestRemoveExcludedTools_InMemoryFailures_RemoveNothing covers the
-// exclusion pass unable to list the server's tools: it removes nothing and
-// says why, because guessing at names to remove would be worse than
-// leaving an exclusion unapplied and reported.
-func TestRemoveExcludedTools_InMemoryFailures_RemoveNothing(t *testing.T) {
-	forced := errors.New("forced inspection failure")
-	for _, tc := range inspectionFailures(t, forced) {
-		t.Run(tc.name, func(t *testing.T) {
-			logged := testutil.CaptureSlog(t)
-			tc.arrange(t)
-			server := mcp.NewServer(&mcp.Implementation{Name: "exclusions", Version: "0"}, nil)
-
-			removed := removeExcludedTools(t.Context(), server, []string{"gitlab_issue_list"})
-
-			if removed != 0 {
-				t.Errorf("removeExcludedTools() = %d, want 0 when the listing failed", removed)
-			}
-			if !strings.Contains(logged.String(), "removeExcludedTools: "+tc.name+" failed") {
-				t.Errorf("log = %q, want the %s failure reported", logged.String(), tc.name)
-			}
-		})
-	}
-}
-
 // TestBuildServerCard_InMemoryFailures_AreWrapped covers the card builder's
 // session failing at each of its six steps, each named in the error so the
 // 503 the endpoint answers with can be traced to the listing that failed.
@@ -8726,20 +8702,6 @@ func TestDoToolSearch_AnEmptyQuery_IsNotAnError(t *testing.T) {
 	}
 }
 
-// TestRemoveExcludedTools_WithNothingToExclude_TouchesNothing covers the early
-// exit that keeps startup free of an in-memory MCP round trip nobody asked for.
-//
-// The filter works by listing the registered tools through an ephemeral
-// session, which is real work on a surface with a thousand tools; a deployment
-// that excludes nothing must not pay for it.
-func TestRemoveExcludedTools_WithNothingToExclude_TouchesNothing(t *testing.T) {
-	t.Parallel()
-
-	if got := removeExcludedTools(t.Context(), nil, nil); got != 0 {
-		t.Errorf("removeExcludedTools with no patterns = %d, want 0 (and no server call)", got)
-	}
-}
-
 // TestResolveToolSurfaceForTelemetry_ReadsTheInputsEachModeReallyUses covers
 // how telemetry learns which surface this process will serve.
 //
@@ -9427,72 +9389,6 @@ func TestBuildServerCard_AnUnusableInstanceURL_IsReportedNotServed(t *testing.T)
 	}
 	if card != nil {
 		t.Errorf("card = %s, want nothing published", card)
-	}
-}
-
-// TestRemoveExcludedTools_RemovesOnlyTheNamedTools covers the filter an
-// operator uses to take a tool off the surface.
-//
-// The count is what the startup line reports, and the tools left behind are the
-// deployment's actual surface, so an over-broad match would silently remove
-// capability an operator still expects to have.
-func TestRemoveExcludedTools_RemovesOnlyTheNamedTools(t *testing.T) {
-	t.Parallel()
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	for _, name := range []string{"gitlab_issue", "gitlab_runner", "gitlab_project"} {
-		mcp.AddTool(server, &mcp.Tool{Name: name, Description: name},
-			func(context.Context, *mcp.CallToolRequest, map[string]any) (*mcp.CallToolResult, any, error) {
-				return &mcp.CallToolResult{}, nil, nil
-			})
-	}
-
-	removed := removeExcludedTools(t.Context(), server, []string{"gitlab_runner", "gitlab_absent"})
-
-	if removed != 1 {
-		t.Errorf("removeExcludedTools = %d, want the one tool that was actually registered", removed)
-	}
-	tools, err := listRegisteredTools(server, "test")
-	if err != nil {
-		t.Fatalf("listRegisteredTools: %v", err)
-	}
-	for _, tool := range tools {
-		if tool.Name == "gitlab_runner" {
-			t.Error("the excluded tool is still registered")
-		}
-	}
-	if len(tools) != 2 {
-		t.Errorf("registered tools = %d, want the other two left alone", len(tools))
-	}
-}
-
-// TestCatalogBackedToolNames_WithoutACatalog_ExemptsNothing covers the safe-mode
-// exemption set when there is no catalog to read.
-//
-// Exempting a tool means safe mode does not wrap it, on the grounds that the
-// catalog already previews each of its actions. With no catalog that reasoning
-// does not hold, so nothing may be exempt: the alternative is a mutating tool
-// executing for real in a deployment that asked for previews.
-func TestCatalogBackedToolNames_WithoutACatalog_ExemptsNothing(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		surface string
-		catalog *actioncatalog.Catalog
-	}{
-		{name: "the individual surface exempts nothing by design", surface: config.ToolSurfaceIndividual, catalog: actioncatalog.NewCatalog()},
-		{name: "no catalog to read", surface: config.ToolSurfaceMeta, catalog: nil},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := catalogBackedToolNames(tt.catalog, tt.surface); len(got) != 0 {
-				t.Errorf("catalogBackedToolNames = %v, want nothing exempt from safe mode", got)
-			}
-		})
 	}
 }
 

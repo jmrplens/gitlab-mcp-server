@@ -193,7 +193,7 @@ After ALL domains are migrated:
 
 ### Step 5: Update Entry Point
 
-Verify `cmd/server/main.go` needs no change for the moved domain: it builds the catalog through `internal/tools` (`gitlabtools.RegisterAll(server, client, tier)` for the individual surface, `BuildActionCatalog` plus the `dynamiccatalog` / `dynamic` packages for the default surface) and imports only the surface-level packages (`internal/tools`, `internal/tools/actioncatalog`, `internal/tools/dynamic`, `internal/tools/dynamiccatalog`) plus `internal/tools/health` for the server's own health probe; no GitLab API domain package is imported there:
+Verify `cmd/server/main.go` needs no change for the moved domain: it builds the catalog through `internal/tools` (`gitlabtools.RegisterAll(server, client, tier)` for the individual surface, `BuildActionCatalog` plus the `dynamiccatalog` / `dynamic` packages for the default surface) and imports only the surface-level packages (`internal/tools`, `internal/tools/actioncatalog`, `internal/tools/dynamic`, `internal/tools/dynamiccatalog`, `internal/tools/toolvisibility`) plus `internal/tools/health` for the server's own health probe; no GitLab API domain package is imported there:
 
 ```go
 import gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"

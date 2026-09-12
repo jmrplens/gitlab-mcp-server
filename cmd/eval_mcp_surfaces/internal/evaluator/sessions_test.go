@@ -7,8 +7,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -753,4 +755,151 @@ func hasEvalRoute(routes map[string]toolutil.ActionMap, actionID string) bool {
 		}
 	}
 	return false
+}
+
+// interactiveEvalTools are the four creation flows the meta surface registers
+// outside the catalog, which the catalog filter cannot reach and only the
+// post-registration pass narrows.
+var interactiveEvalTools = []string{
+	"gitlab_interactive_issue_create",
+	"gitlab_interactive_mr_create",
+	"gitlab_interactive_project_create",
+	"gitlab_interactive_release_create",
+}
+
+// newWriteCountingEvalClient returns a client against a mock GitLab that
+// counts every request that is not a GET, so a test can assert a protective
+// session wrote nothing whatever the session answered.
+func newWriteCountingEvalClient(t *testing.T) (*gitlabclient.Client, *atomic.Int64) {
+	t.Helper()
+	var writes atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writes.Add(1)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
+	}))
+	t.Cleanup(srv.Close)
+	client, err := gitlabclient.NewClient(&config.Config{
+		GitLabURL:       srv.URL,
+		GitLabToken:     "eval-token",
+		Tier:            edition.Free,
+		TierExplicit:    true,
+		MetaParamSchema: config.DefaultMetaParamSchema,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	return client, &writes
+}
+
+// evalSessionToolNames lists the tools a session serves, over the wire, which
+// is what the evaluated model is shown.
+func evalSessionToolNames(t *testing.T, session *mcp.ClientSession) []string {
+	t.Helper()
+	listed, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools() error = %v", err)
+	}
+	names := make([]string, 0, len(listed.Tools))
+	for _, tool := range listed.Tools {
+		names = append(names, tool.Name)
+	}
+	return names
+}
+
+// TestBuildCatalogSession_ReadOnlyMeta_WithdrawsTheInteractiveFlows verifies
+// a read-only meta evaluation serves what a client of the binary is served:
+// the four gitlab_interactive_* flows are gone from tools/list and from the
+// catalog the model is scored against, while the default session still
+// carries them, so the comparison means something.
+//
+// The flows are registered outside the catalog, so the catalog filter that
+// removes issue.create cannot reach them. Until the post-registration pass was
+// shared with cmd/server, this session kept them with their real handlers and
+// a read-only evaluation could create the issue the product would have
+// refused (issue 617).
+func TestBuildCatalogSession_ReadOnlyMeta_WithdrawsTheInteractiveFlows(t *testing.T) {
+	client := newEvalTestClient(t, false)
+
+	defaultSession, closeDefault, _, _, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeDefault)
+	if err != nil {
+		t.Fatalf("buildCatalogSession(meta, default) error = %v", err)
+	}
+	defer closeDefault()
+	defaultNames := evalSessionToolNames(t, defaultSession)
+
+	readOnlySession, closeReadOnly, readOnlyTools, _, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeReadOnly)
+	if err != nil {
+		t.Fatalf("buildCatalogSession(meta, read-only) error = %v", err)
+	}
+	defer closeReadOnly()
+	readOnlyNames := evalSessionToolNames(t, readOnlySession)
+
+	catalogNames := func(list []*mcp.Tool) []string {
+		names := make([]string, 0, len(list))
+		for _, tool := range list {
+			names = append(names, tool.Name)
+		}
+		return names
+	}
+	for _, flow := range interactiveEvalTools {
+		t.Run(flow, func(t *testing.T) {
+			if !slices.Contains(defaultNames, flow) {
+				t.Fatalf("the default meta session does not serve %s; the read-only comparison below is meaningless", flow)
+			}
+			if slices.Contains(readOnlyNames, flow) {
+				t.Errorf("the read-only meta session still serves %s over the wire", flow)
+			}
+			if slices.Contains(catalogNames(readOnlyTools), flow) {
+				t.Errorf("the read-only evaluated catalog still lists %s", flow)
+			}
+		})
+	}
+	if !slices.Contains(readOnlyNames, "gitlab_issue") {
+		t.Errorf("read-only tools = %v, want the catalog dispatchers kept for the reads they serve", readOnlyNames)
+	}
+	if len(readOnlyTools) != len(readOnlyNames) {
+		t.Errorf("the evaluated catalog lists %d tools and the session serves %d; the model is scored against a surface it is not shown", len(readOnlyTools), len(readOnlyNames))
+	}
+}
+
+// TestBuildCatalogSession_SafeModeMeta_PreviewsTheInteractiveFlows verifies a
+// safe-mode meta evaluation answers each gitlab_interactive_* flow with a
+// preview naming the flow, elicits nothing, and writes nothing to GitLab: the
+// flows stay listed so the model can attempt them, as the binary keeps them,
+// and what it gets back is the card the product would have shown.
+func TestBuildCatalogSession_SafeModeMeta_PreviewsTheInteractiveFlows(t *testing.T) {
+	client, writes := newWriteCountingEvalClient(t)
+
+	session, closeSession, _, _, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeSafe)
+	if err != nil {
+		t.Fatalf("buildCatalogSession(meta, safe-mode) error = %v", err)
+	}
+	defer closeSession()
+	names := evalSessionToolNames(t, session)
+
+	for _, flow := range interactiveEvalTools {
+		t.Run(flow, func(t *testing.T) {
+			if !slices.Contains(names, flow) {
+				t.Fatalf("the safe-mode meta session does not serve %s; safe mode keeps a write listed so the model can attempt it", flow)
+			}
+			result, callErr := session.CallTool(t.Context(), &mcp.CallToolParams{Name: flow, Arguments: map[string]any{}})
+			if callErr != nil {
+				t.Fatalf("CallTool(%s) error = %v", flow, callErr)
+			}
+			preview, isPreview := toolutil.ParseSafeModePreview(callToolResultText(result))
+			if !isPreview {
+				t.Fatalf("CallTool(%s) = %q, want a safe-mode preview", flow, callToolResultText(result))
+			}
+			if preview.Tool != flow || preview.Status != "blocked" || preview.Hint == "" {
+				t.Errorf("preview of %s = %+v, want it blocked under its own name with the hint for turning safe mode off", flow, preview)
+			}
+		})
+	}
+	if writes.Load() != 0 {
+		t.Errorf("the mock GitLab received %d write(s) from a safe-mode session, want none", writes.Load())
+	}
 }

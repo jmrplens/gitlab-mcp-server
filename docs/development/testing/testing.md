@@ -18,26 +18,26 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,204 |
-| Unit test functions                                   | 15,324 |
-| E2E test functions                                    |    880 |
-| cmd test functions                                    |  3,165 |
-| Test files (internal/)                                |    554 |
+| Total test functions                                  | 16,221 |
+| Unit test functions                                   | 15,330 |
+| E2E test functions                                    |    891 |
+| cmd test functions                                    |  3,163 |
+| Test files (internal/)                                |    555 |
 | Test files (cmd/)                                     |    221 |
-| Test files (test/e2e/)                                |    284 |
-| Tool sub-packages tested                              |    177 |
+| Test files (test/e2e/)                                |    290 |
+| Tool sub-packages tested                              |    178 |
 | Core packages tested                                  |     23 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.4% |
-| Overall coverage (`go test ./internal/...`)           |  98.6% |
-| Average package coverage                              |  98.7% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.3% |
+| Overall coverage (`go test ./internal/...`)           |  98.5% |
+| Average package coverage                              |  98.5% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,458 | 76.9% |
+| `TestFunc_Scenario` (2-part)           | 12,466 | 76.9% |
 | `TestFunc` (no underscore)             |    944 |  5.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,802 | 17.3% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,811 | 17.3% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,707 |        160 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (177) |          9,086 |        378 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            880 |        284 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          3,165 |        221 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,204** |  **1,059** |                                                                                                 |
+| Tool sub-packages (178) |          9,094 |        379 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |            891 |        290 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| cmd packages            |          3,163 |        221 | server entry point and developer command utilities                                              |
+| **Total**               |     **16,221** |  **1,066** |                                                                                                 |
 
 ### Core Packages
 
@@ -76,8 +76,8 @@
 | serverpool        |       122 |   100.0% | Package serverpool manages a pool of credential entries keyed by GitLab token and URL.                                                                                                                                                                             |
 | subscriptions     |        99 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry         |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
-| testutil          |       116 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
-| testutil/e2ecalls |        24 |      n/a | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                         |
+| testutil          |       116 |    99.6% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
+| testutil/e2ecalls |        24 |   100.0% | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                         |
 | toolutil          |     1,021 |    98.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
 | **Subtotal**      | **2,707** |          |                                                                                                                                                                                                                                                                    |
 
@@ -87,91 +87,91 @@
 | ----------------- | ----: | -------: | ----: |
 | projects          |   392 |   100.0% |    57 |
 | groups            |   281 |   100.0% |    37 |
-| dynamic           |   269 |   100.0% |     2 |
-| mergerequests     |   262 |   100.0% |    30 |
-| issues            |   241 |   100.0% |    21 |
-| users             |   227 |    99.2% |    38 |
-| jobs              |   154 |   100.0% |    17 |
+| dynamic           |   269 |    99.8% |     2 |
+| mergerequests     |   262 |    99.8% |    30 |
+| issues            |   241 |    99.9% |    21 |
+| users             |   227 |    99.3% |    38 |
+| jobs              |   154 |    99.9% |    17 |
 | packages          |   150 |    99.0% |     9 |
 | search            |   128 |   100.0% |    10 |
-| pipelines         |   121 |   100.0% |    12 |
-| resourceevents    |   120 |   100.0% |    17 |
-| commits           |   119 |    99.8% |    13 |
-| runners           |   117 |   100.0% |    19 |
-| workitems         |   116 |   100.0% |     6 |
-| awardemoji        |   115 |   100.0% |    24 |
-| snippets          |   107 |    99.6% |    15 |
-| containerregistry |   102 |   100.0% |    16 |
+| pipelines         |   121 |    99.8% |    12 |
+| resourceevents    |   120 |    99.3% |    17 |
+| commits           |   119 |    99.0% |    13 |
+| runners           |   117 |    99.7% |    19 |
+| workitems         |   116 |    99.5% |     6 |
+| awardemoji        |   115 |    98.6% |    24 |
+| snippets          |   107 |    99.1% |    15 |
+| containerregistry |   102 |    99.4% |    16 |
 | accesstokens      |   100 |   100.0% |    18 |
 | branches          |    98 |   100.0% |    10 |
 | groupmembers      |    94 |   100.0% |    10 |
-| pipelineschedules |    94 |    99.7% |    11 |
-| groupmilestones   |    90 |   100.0% |     8 |
-| mrapprovals       |    85 |   100.0% |     7 |
+| pipelineschedules |    94 |    99.0% |    11 |
+| groupmilestones   |    90 |    99.7% |     8 |
+| mrapprovals       |    85 |    99.4% |     7 |
 | files             |    84 |   100.0% |     8 |
-| integrations      |    79 |    99.6% |    12 |
+| integrations      |    79 |    99.5% |    12 |
 
 ### Complete Tool Sub-Package Test Counts
 
 <details>
-<summary>All 177 tested sub-packages (click to expand)</summary>
+<summary>All 178 tested sub-packages (click to expand)</summary>
 
 | Sub-package             |     Tests | Test Files | Coverage |     Tools |
 | ----------------------- | --------: | ---------: | -------: | --------: |
 | accessrequests          |        50 |          2 |   100.0% |         8 |
 | accesstokens            |       100 |          2 |   100.0% |        18 |
-| achievements            |        58 |          3 |   100.0% |        12 |
+| achievements            |        58 |          3 |    99.8% |        12 |
 | actioncatalog           |        44 |          5 |    99.1% |         0 |
 | actioncompat            |        44 |          2 |   100.0% |         1 |
 | adminspecs              |         6 |          1 |   100.0% |        92 |
 | alertmanagement         |        29 |          3 |   100.0% |         4 |
 | appearance              |        14 |          1 |   100.0% |         2 |
 | applications            |        21 |          1 |   100.0% |         4 |
-| appstatistics           |        10 |          1 |    97.1% |         1 |
+| appstatistics           |        10 |          1 |    98.0% |         1 |
 | attestations            |        18 |          2 |   100.0% |         2 |
-| auditevents             |        49 |          2 |   100.0% |         6 |
+| auditevents             |        49 |          2 |    99.6% |         6 |
 | avatar                  |        10 |          1 |   100.0% |         1 |
-| awardemoji              |       115 |          1 |   100.0% |        24 |
+| awardemoji              |       115 |          1 |    98.6% |        24 |
 | badges                  |        55 |          2 |   100.0% |        12 |
-| boards                  |        68 |          2 |    99.3% |        10 |
+| boards                  |        68 |          2 |    98.7% |        10 |
 | branches                |        98 |          1 |   100.0% |        10 |
 | branchrules             |        18 |          1 |   100.0% |         1 |
 | broadcastmessages       |        33 |          2 |   100.0% |         5 |
 | bulkimports             |        40 |          2 |   100.0% |         7 |
-| cicatalog               |        29 |          1 |   100.0% |         2 |
+| cicatalog               |        29 |          1 |    99.6% |         2 |
 | cilint                  |        29 |          1 |   100.0% |         2 |
 | civariables             |        46 |          2 |   100.0% |         5 |
 | ciyamltemplates         |        23 |          1 |   100.0% |         2 |
 | clusteragents           |        40 |          2 |   100.0% |         8 |
-| commitdiscussions       |        42 |          3 |   100.0% |         6 |
-| commits                 |       119 |          1 |    99.8% |        13 |
+| commitdiscussions       |        42 |          3 |    98.9% |         6 |
+| commits                 |       119 |          1 |    99.0% |        13 |
 | compliancepolicy        |         6 |          1 |   100.0% |         2 |
-| containerregistry       |       102 |          4 |   100.0% |        16 |
+| containerregistry       |       102 |          4 |    99.4% |        16 |
 | customattributes        |        33 |          1 |   100.0% |         4 |
-| customemoji             |        28 |          3 |   100.0% |         3 |
+| customemoji             |        28 |          3 |    98.5% |         3 |
 | dbmigrations            |         8 |          1 |   100.0% |         1 |
 | dependencies            |        18 |          3 |   100.0% |         4 |
 | dependencyfirewall      |        19 |          3 |   100.0% |         1 |
 | dependencyproxy         |         5 |          1 |   100.0% |         1 |
 | deploykeys              |        76 |          2 |   100.0% |         9 |
-| deploymentmergerequests |        31 |          1 |   100.0% |         1 |
-| deployments             |        68 |          2 |   100.0% |         6 |
+| deploymentmergerequests |        31 |          1 |    99.1% |         1 |
+| deployments             |        68 |          2 |    99.1% |         6 |
 | deploytokens            |        68 |          2 |   100.0% |         9 |
 | dockerfiletemplates     |        15 |          1 |   100.0% |         2 |
 | dorametrics             |        11 |          2 |   100.0% |         2 |
-| dynamic                 |       269 |          8 |   100.0% |         2 |
+| dynamic                 |       269 |          8 |    99.8% |         2 |
 | dynamiccatalog          |         7 |          1 |   100.0% |         0 |
 | elicitationtools        |        65 |          2 |    98.7% |         4 |
 | enterpriseusers         |        39 |          3 |    99.5% |         4 |
-| environments            |        62 |          2 |   100.0% |         6 |
+| environments            |        62 |          2 |    99.7% |         6 |
 | epicdiscussions         |        21 |          2 |   100.0% |         6 |
-| epicissues              |        19 |          2 |   100.0% |         4 |
+| epicissues              |        19 |          2 |    99.5% |         4 |
 | epicnotes               |        15 |          2 |   100.0% |         5 |
-| epics                   |        72 |          2 |   100.0% |         6 |
+| epics                   |        72 |          2 |    99.7% |         6 |
 | epicworkitems           |         3 |          1 |   100.0% |         0 |
 | errortracking           |        22 |          3 |   100.0% |         5 |
-| events                  |        59 |          2 |   100.0% |         2 |
-| externalstatuschecks    |        52 |          3 |   100.0% |         8 |
+| events                  |        59 |          2 |    98.9% |         2 |
+| externalstatuschecks    |        52 |          3 |    99.5% |         8 |
 | featureflags            |        43 |          3 |   100.0% |         5 |
 | features                |        25 |          2 |    98.2% |         4 |
 | ffuserlists             |        31 |          3 |   100.0% |         5 |
@@ -180,7 +180,7 @@
 | geo                     |        75 |          3 |    98.3% |         8 |
 | gitignoretemplates      |        15 |          1 |   100.0% |         2 |
 | groupanalytics          |         8 |          2 |   100.0% |         3 |
-| groupboards             |        65 |          2 |   100.0% |        10 |
+| groupboards             |        65 |          2 |    99.4% |        10 |
 | groupcredentials        |        43 |          3 |   100.0% |         4 |
 | groupepicboards         |        15 |          3 |    98.4% |         2 |
 | groupimportexport       |        23 |          2 |   100.0% |         3 |
@@ -189,7 +189,7 @@
 | groupldap               |        14 |          2 |   100.0% |         5 |
 | groupmarkdownuploads    |        31 |          3 |   100.0% |         3 |
 | groupmembers            |        94 |          3 |   100.0% |        10 |
-| groupmilestones         |        90 |          2 |   100.0% |         8 |
+| groupmilestones         |        90 |          2 |    99.7% |         8 |
 | groupprotectedbranches  |        19 |          2 |   100.0% |         5 |
 | groupprotectedenvs      |        21 |          2 |   100.0% |         5 |
 | grouprelationsexport    |        24 |          3 |   100.0% |         2 |
@@ -206,48 +206,48 @@
 | impersonationtokens     |        43 |          2 |   100.0% |         5 |
 | importservice           |        31 |          1 |   100.0% |         5 |
 | instancevariables       |        44 |          2 |   100.0% |         5 |
-| integrations            |        79 |          5 |    99.6% |        12 |
+| integrations            |        79 |          5 |    99.5% |        12 |
 | invites                 |        49 |          1 |   100.0% |         4 |
 | issuediscussions        |        45 |          2 |   100.0% |         6 |
-| issuelinks              |        73 |          4 |   100.0% |         4 |
+| issuelinks              |        73 |          4 |    99.4% |         4 |
 | issuenotes              |        49 |          2 |   100.0% |         5 |
-| issues                  |       241 |          2 |   100.0% |        21 |
+| issues                  |       241 |          2 |    99.9% |        21 |
 | issuestatistics         |        43 |          1 |   100.0% |         3 |
-| iterationdata           |         8 |          1 |   100.0% |         0 |
-| jobs                    |       154 |          4 |   100.0% |        17 |
+| iterationdata           |         8 |          1 |    98.8% |         0 |
+| jobs                    |       154 |          4 |    99.9% |        17 |
 | jobtokenscope           |        50 |          2 |   100.0% |         8 |
 | keys                    |        25 |          1 |   100.0% |         2 |
-| labeldata               |         7 |          1 |   100.0% |         0 |
+| labeldata               |         7 |          1 |    97.5% |         0 |
 | labels                  |        63 |          1 |   100.0% |         8 |
 | license                 |        21 |          2 |   100.0% |         3 |
 | licensetemplates        |        21 |          1 |   100.0% |         2 |
 | markdown                |         9 |          1 |   100.0% |         1 |
 | memberroles             |        53 |          4 |   100.0% |         6 |
 | members                 |        63 |          2 |   100.0% |         6 |
-| mergerequests           |       262 |          3 |   100.0% |        30 |
-| mergetrains             |        16 |          2 |   100.0% |         4 |
+| mergerequests           |       262 |          3 |    99.8% |        30 |
+| mergetrains             |        16 |          2 |    98.6% |         4 |
 | metadata                |         8 |          1 |   100.0% |         1 |
-| milestones              |        71 |          1 |   100.0% |         7 |
+| milestones              |        71 |          1 |    99.7% |         7 |
 | modelregistry           |         7 |          3 |   100.0% |         1 |
-| mrapprovals             |        85 |          3 |   100.0% |         7 |
+| mrapprovals             |        85 |          3 |    99.4% |         7 |
 | mrapprovalsettings      |         9 |          2 |   100.0% |         4 |
-| mrchanges               |        38 |          1 |   100.0% |         4 |
+| mrchanges               |        38 |          1 |    98.4% |         4 |
 | mrcontextcommits        |        23 |          1 |   100.0% |         3 |
 | mrdiscussions           |        60 |          1 |   100.0% |         7 |
 | mrdraftnotes            |        73 |          2 |   100.0% |         7 |
 | mrnotes                 |        50 |          2 |   100.0% |         5 |
-| namespaces              |        46 |          1 |    99.4% |         4 |
+| namespaces              |        46 |          1 |    99.5% |         4 |
 | notifications           |        26 |          1 |   100.0% |         6 |
 | orbit                   |        69 |          4 |   100.0% |         6 |
 | packages                |       150 |          6 |    99.0% |         9 |
 | pages                   |        54 |          2 |   100.0% |         9 |
-| pipelines               |       121 |          4 |   100.0% |        12 |
-| pipelineschedules       |        94 |          2 |    99.7% |        11 |
+| pipelines               |       121 |          4 |    99.8% |        12 |
+| pipelineschedules       |        94 |          2 |    99.0% |        11 |
 | pipelinetriggers        |        65 |          2 |   100.0% |         6 |
 | planlimits              |        12 |          2 |   100.0% |         2 |
 | projectaliases          |        28 |          2 |   100.0% |         4 |
 | projectdiscovery        |        21 |          1 |   100.0% |         1 |
-| projectimportexport     |        43 |          1 |    99.6% |         5 |
+| projectimportexport     |        43 |          1 |    99.5% |         5 |
 | projectiterations       |        16 |          1 |   100.0% |         1 |
 | projectmirrors          |        67 |          2 |   100.0% |         7 |
 | projects                |       392 |          6 |   100.0% |        57 |
@@ -255,47 +255,48 @@
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
 | projectstoragemoves     |        20 |          2 |   100.0% |         6 |
 | projecttemplates        |        19 |          1 |   100.0% |         2 |
-| protectedenvs           |        44 |          2 |   100.0% |         5 |
+| protectedenvs           |        44 |          2 |    99.5% |         5 |
 | protectedpackages       |        34 |          2 |   100.0% |         4 |
 | releaselinks            |        61 |          2 |   100.0% |         6 |
-| releases                |        68 |          1 |   100.0% |         6 |
+| releases                |        68 |          1 |    99.2% |         6 |
 | repository              |        71 |          1 |   100.0% |         9 |
 | repositorysubmodules    |        56 |          4 |   100.0% |         3 |
-| resourceevents          |       120 |          3 |   100.0% |        17 |
-| resourcegroups          |        16 |          1 |   100.0% |         4 |
+| resourceevents          |       120 |          3 |    99.3% |        17 |
+| resourcegroups          |        16 |          1 |    98.8% |         4 |
 | runnercontrollers       |        33 |          2 |   100.0% |         5 |
 | runnercontrollerscopes  |        35 |          2 |   100.0% |         5 |
 | runnercontrollertokens  |        43 |          2 |   100.0% |         5 |
-| runners                 |       117 |          2 |   100.0% |        19 |
+| runners                 |       117 |          2 |    99.7% |        19 |
 | search                  |       128 |          1 |   100.0% |        10 |
-| securefiles             |        31 |          2 |   100.0% |         4 |
-| securityattributes      |        27 |          1 |   100.0% |         5 |
+| securefiles             |        31 |          2 |    98.3% |         4 |
+| securityattributes      |        27 |          1 |    99.7% |         5 |
 | securitycategories      |        19 |          1 |   100.0% |         3 |
 | securityfindings        |        24 |          1 |   100.0% |         1 |
 | securityscanprofiles    |        19 |          1 |   100.0% |         3 |
 | securitysettings        |        33 |          3 |   100.0% |         3 |
-| settings                |        21 |          1 |    94.4% |         2 |
+| settings                |        21 |          1 |    95.9% |         2 |
 | sidekiq                 |        19 |          2 |   100.0% |         4 |
 | snippetdiscussions      |        37 |          2 |   100.0% |         6 |
 | snippetnotes            |        49 |          2 |   100.0% |         5 |
-| snippets                |       107 |          3 |    99.6% |        15 |
+| snippets                |       107 |          3 |    99.1% |        15 |
 | snippetstoragemoves     |        42 |          2 |   100.0% |         6 |
-| systemhooks             |        39 |          3 |   100.0% |         8 |
+| systemhooks             |        39 |          3 |    99.6% |         8 |
 | tags                    |        79 |          2 |   100.0% |         9 |
-| terraformstates         |        19 |          1 |   100.0% |         6 |
-| todos                   |        38 |          2 |   100.0% |         3 |
+| terraformstates         |        19 |          1 |    98.7% |         6 |
+| todos                   |        38 |          2 |    98.8% |         3 |
+| toolvisibility          |         8 |          1 |   100.0% |         0 |
 | topics                  |        31 |          3 |   100.0% |         5 |
 | uploads                 |        49 |          2 |   100.0% |         4 |
 | usagedata               |        34 |          1 |   100.0% |         6 |
 | useremails              |        25 |          2 |   100.0% |         6 |
 | usergpgkeys             |        46 |          2 |   100.0% |         8 |
-| users                   |       227 |          7 |    99.2% |        38 |
-| vulnerabilities         |        67 |          3 |   100.0% |         8 |
+| users                   |       227 |          7 |    99.3% |        38 |
+| vulnerabilities         |        67 |          3 |    99.7% |         8 |
 | waitpoll                |        13 |          1 |    99.2% |         0 |
-| wikis                   |        63 |          2 |   100.0% |         6 |
-| workitems               |       116 |          3 |   100.0% |         6 |
+| wikis                   |        63 |          2 |    99.5% |         6 |
+| workitems               |       116 |          3 |    99.5% |         6 |
 | workitemsavedviews      |        55 |          4 |   100.0% |         7 |
-| **Total**               | **9,086** |    **378** |          | **1,187** |
+| **Total**               | **9,094** |    **379** |          | **1,187** |
 
 </details>
 
@@ -310,7 +311,7 @@
 | cmd/audit_1to1/internal/enums                  |    99.7% |
 | cmd/audit_1to1/internal/merge                  |   100.0% |
 | cmd/audit_1to1/internal/metadata               |   100.0% |
-| cmd/audit_1to1/internal/paths                  |    99.7% |
+| cmd/audit_1to1/internal/paths                  |    99.5% |
 | cmd/audit_1to1/internal/sdk                    |   100.0% |
 | cmd/audit_1to1/internal/shared                 |   100.0% |
 | cmd/audit_1to1/internal/structs                |   100.0% |
@@ -319,7 +320,7 @@
 | cmd/audit_doc_coverage                         |    91.6% |
 | cmd/audit_doc_tool_names                       |    94.2% |
 | cmd/audit_dynamic_aliases                      |    77.4% |
-| cmd/audit_e2e_coverage                         |      n/a |
+| cmd/audit_e2e_coverage                         |    95.7% |
 | cmd/audit_e2e_gaps                             |    92.9% |
 | cmd/audit_edition_tier                         |    86.9% |
 | cmd/audit_gateway_chars                        |    87.5% |
@@ -331,8 +332,8 @@
 | cmd/audit_metrics                              |    97.6% |
 | cmd/audit_readonly_graphql                     |    98.5% |
 | cmd/audit_supply_chain                         |    98.0% |
-| cmd/audit_surface_quality                      |    94.6% |
-| cmd/audit_test_goroutines                      |    95.3% |
+| cmd/audit_surface_quality                      |    94.4% |
+| cmd/audit_test_goroutines                      |    94.6% |
 | cmd/audit_test_names                           |    91.1% |
 | cmd/audit_test_subtests                        |    99.7% |
 | cmd/audit_tokens                               |    98.0% |
@@ -365,7 +366,7 @@
 | cmd/internal/provenance                        |   100.0% |
 | cmd/internal/requestinventory                  |   100.0% |
 | cmd/internal/testsource                        |   100.0% |
-| cmd/server                                     |    99.9% |
+| cmd/server                                     |    99.8% |
 
 ### Core Packages
 
@@ -391,8 +392,8 @@
 | serverpool        |   100.0% |
 | subscriptions     |   100.0% |
 | telemetry         |    93.1% |
-| testutil          |   100.0% |
-| testutil/e2ecalls |      n/a |
+| testutil          |    99.6% |
+| testutil/e2ecalls |   100.0% |
 | toolutil          |    98.7% |
 
 ### Tool Sub-Packages
@@ -402,58 +403,58 @@
 | tools (orch.)           |   100.0% |
 | accessrequests          |   100.0% |
 | accesstokens            |   100.0% |
-| achievements            |   100.0% |
+| achievements            |    99.8% |
 | actioncatalog           |    99.1% |
 | actioncompat            |   100.0% |
 | adminspecs              |   100.0% |
 | alertmanagement         |   100.0% |
 | appearance              |   100.0% |
 | applications            |   100.0% |
-| appstatistics           |    97.1% |
+| appstatistics           |    98.0% |
 | attestations            |   100.0% |
-| auditevents             |   100.0% |
+| auditevents             |    99.6% |
 | avatar                  |   100.0% |
-| awardemoji              |   100.0% |
+| awardemoji              |    98.6% |
 | badges                  |   100.0% |
-| boards                  |    99.3% |
+| boards                  |    98.7% |
 | branches                |   100.0% |
 | branchrules             |   100.0% |
 | broadcastmessages       |   100.0% |
 | bulkimports             |   100.0% |
-| cicatalog               |   100.0% |
+| cicatalog               |    99.6% |
 | cilint                  |   100.0% |
 | civariables             |   100.0% |
 | ciyamltemplates         |   100.0% |
 | clusteragents           |   100.0% |
-| commitdiscussions       |   100.0% |
-| commits                 |    99.8% |
+| commitdiscussions       |    98.9% |
+| commits                 |    99.0% |
 | compliancepolicy        |   100.0% |
-| containerregistry       |   100.0% |
+| containerregistry       |    99.4% |
 | customattributes        |   100.0% |
-| customemoji             |   100.0% |
+| customemoji             |    98.5% |
 | dbmigrations            |   100.0% |
 | dependencies            |   100.0% |
 | dependencyfirewall      |   100.0% |
 | dependencyproxy         |   100.0% |
 | deploykeys              |   100.0% |
-| deploymentmergerequests |   100.0% |
-| deployments             |   100.0% |
+| deploymentmergerequests |    99.1% |
+| deployments             |    99.1% |
 | deploytokens            |   100.0% |
 | dockerfiletemplates     |   100.0% |
 | dorametrics             |   100.0% |
-| dynamic                 |   100.0% |
+| dynamic                 |    99.8% |
 | dynamiccatalog          |   100.0% |
 | elicitationtools        |    98.7% |
 | enterpriseusers         |    99.5% |
-| environments            |   100.0% |
+| environments            |    99.7% |
 | epicdiscussions         |   100.0% |
-| epicissues              |   100.0% |
+| epicissues              |    99.5% |
 | epicnotes               |   100.0% |
-| epics                   |   100.0% |
+| epics                   |    99.7% |
 | epicworkitems           |   100.0% |
 | errortracking           |   100.0% |
-| events                  |   100.0% |
-| externalstatuschecks    |   100.0% |
+| events                  |    98.9% |
+| externalstatuschecks    |    99.5% |
 | featureflags            |   100.0% |
 | features                |    98.2% |
 | ffuserlists             |   100.0% |
@@ -462,7 +463,7 @@
 | geo                     |    98.3% |
 | gitignoretemplates      |   100.0% |
 | groupanalytics          |   100.0% |
-| groupboards             |   100.0% |
+| groupboards             |    99.4% |
 | groupcredentials        |   100.0% |
 | groupepicboards         |    98.4% |
 | groupimportexport       |   100.0% |
@@ -471,7 +472,7 @@
 | groupldap               |   100.0% |
 | groupmarkdownuploads    |   100.0% |
 | groupmembers            |   100.0% |
-| groupmilestones         |   100.0% |
+| groupmilestones         |    99.7% |
 | groupprotectedbranches  |   100.0% |
 | groupprotectedenvs      |   100.0% |
 | grouprelationsexport    |   100.0% |
@@ -488,48 +489,48 @@
 | impersonationtokens     |   100.0% |
 | importservice           |   100.0% |
 | instancevariables       |   100.0% |
-| integrations            |    99.6% |
+| integrations            |    99.5% |
 | invites                 |   100.0% |
 | issuediscussions        |   100.0% |
-| issuelinks              |   100.0% |
+| issuelinks              |    99.4% |
 | issuenotes              |   100.0% |
-| issues                  |   100.0% |
+| issues                  |    99.9% |
 | issuestatistics         |   100.0% |
-| iterationdata           |   100.0% |
-| jobs                    |   100.0% |
+| iterationdata           |    98.8% |
+| jobs                    |    99.9% |
 | jobtokenscope           |   100.0% |
 | keys                    |   100.0% |
-| labeldata               |   100.0% |
+| labeldata               |    97.5% |
 | labels                  |   100.0% |
 | license                 |   100.0% |
 | licensetemplates        |   100.0% |
 | markdown                |   100.0% |
 | memberroles             |   100.0% |
 | members                 |   100.0% |
-| mergerequests           |   100.0% |
-| mergetrains             |   100.0% |
+| mergerequests           |    99.8% |
+| mergetrains             |    98.6% |
 | metadata                |   100.0% |
-| milestones              |   100.0% |
+| milestones              |    99.7% |
 | modelregistry           |   100.0% |
-| mrapprovals             |   100.0% |
+| mrapprovals             |    99.4% |
 | mrapprovalsettings      |   100.0% |
-| mrchanges               |   100.0% |
+| mrchanges               |    98.4% |
 | mrcontextcommits        |   100.0% |
 | mrdiscussions           |   100.0% |
 | mrdraftnotes            |   100.0% |
 | mrnotes                 |   100.0% |
-| namespaces              |    99.4% |
+| namespaces              |    99.5% |
 | notifications           |   100.0% |
 | orbit                   |   100.0% |
 | packages                |    99.0% |
 | pages                   |   100.0% |
-| pipelines               |   100.0% |
-| pipelineschedules       |    99.7% |
+| pipelines               |    99.8% |
+| pipelineschedules       |    99.0% |
 | pipelinetriggers        |   100.0% |
 | planlimits              |   100.0% |
 | projectaliases          |   100.0% |
 | projectdiscovery        |   100.0% |
-| projectimportexport     |    99.6% |
+| projectimportexport     |    99.5% |
 | projectiterations       |   100.0% |
 | projectmirrors          |   100.0% |
 | projects                |   100.0% |
@@ -537,45 +538,46 @@
 | projectstatistics       |   100.0% |
 | projectstoragemoves     |   100.0% |
 | projecttemplates        |   100.0% |
-| protectedenvs           |   100.0% |
+| protectedenvs           |    99.5% |
 | protectedpackages       |   100.0% |
 | releaselinks            |   100.0% |
-| releases                |   100.0% |
+| releases                |    99.2% |
 | repository              |   100.0% |
 | repositorysubmodules    |   100.0% |
-| resourceevents          |   100.0% |
-| resourcegroups          |   100.0% |
+| resourceevents          |    99.3% |
+| resourcegroups          |    98.8% |
 | runnercontrollers       |   100.0% |
 | runnercontrollerscopes  |   100.0% |
 | runnercontrollertokens  |   100.0% |
-| runners                 |   100.0% |
+| runners                 |    99.7% |
 | search                  |   100.0% |
-| securefiles             |   100.0% |
-| securityattributes      |   100.0% |
+| securefiles             |    98.3% |
+| securityattributes      |    99.7% |
 | securitycategories      |   100.0% |
 | securityfindings        |   100.0% |
 | securityscanprofiles    |   100.0% |
 | securitysettings        |   100.0% |
-| settings                |    94.4% |
+| settings                |    95.9% |
 | sidekiq                 |   100.0% |
 | snippetdiscussions      |   100.0% |
 | snippetnotes            |   100.0% |
-| snippets                |    99.6% |
+| snippets                |    99.1% |
 | snippetstoragemoves     |   100.0% |
-| systemhooks             |   100.0% |
+| systemhooks             |    99.6% |
 | tags                    |   100.0% |
-| terraformstates         |   100.0% |
-| todos                   |   100.0% |
+| terraformstates         |    98.7% |
+| todos                   |    98.8% |
+| toolvisibility          |   100.0% |
 | topics                  |   100.0% |
 | uploads                 |   100.0% |
 | usagedata               |   100.0% |
 | useremails              |   100.0% |
 | usergpgkeys             |   100.0% |
-| users                   |    99.2% |
-| vulnerabilities         |   100.0% |
+| users                   |    99.3% |
+| vulnerabilities         |    99.7% |
 | waitpoll                |    99.2% |
-| wikis                   |   100.0% |
-| workitems               |   100.0% |
+| wikis                   |    99.5% |
+| workitems               |    99.5% |
 | workitemsavedviews      |   100.0% |
 
 Coverage target: **>90%** per package. Packages below the target in the latest generated coverage snapshot:
