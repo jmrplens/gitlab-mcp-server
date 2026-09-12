@@ -1,7 +1,6 @@
 package notifications
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -14,38 +13,51 @@ func FormatMarkdown(out Output) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatMarkdownString(out))
 }
 
-// FormatMarkdownString renders notification settings as Markdown.
+// FormatMarkdownString renders notification settings as the card of one
+// object: the level and the email, then the per-event flags as a section when
+// the level is custom and GitLab sends them.
+//
+// The event flags used to be written as "- ✅ Close Issue", which reads as a
+// list of enabled events rather than as fields of the settings object. Each is
+// a field, so each is a row whose value is the flag.
 func FormatMarkdownString(out Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Notification Settings\n\n")
-	//gitlab:allow-unescaped out.Level: a notification level GitLab picks from a fixed set (disabled, participating, watch, global, mention, custom).
-	fmt.Fprintf(&b, "- **Level**: %s\n", out.Level)
-	if out.NotificationEmail != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdEmail, toolutil.EscapeMdTableCell(out.NotificationEmail))
-	}
+	c := toolutil.NewCard(&b, "Notification Settings")
+	c.Field("Level", out.Level)
+	c.Field("Email", out.NotificationEmail)
 	if out.Events != nil {
-		b.WriteString("\n### Custom Events\n\n")
-		b.WriteString(eventLine("Close Issue", out.Events.CloseIssue))
-		b.WriteString(eventLine("Close MR", out.Events.CloseMergeRequest))
-		b.WriteString(eventLine("Failed Pipeline", out.Events.FailedPipeline))
-		b.WriteString(eventLine("Fixed Pipeline", out.Events.FixedPipeline))
-		b.WriteString(eventLine("Issue Due", out.Events.IssueDue))
-		b.WriteString(eventLine("Merge MR", out.Events.MergeMergeRequest))
-		b.WriteString(eventLine("Merge When Pipeline Succeeds", out.Events.MergeWhenPipelineSucceeds))
-		b.WriteString(eventLine("Moved Project", out.Events.MovedProject))
-		b.WriteString(eventLine("New Issue", out.Events.NewIssue))
-		b.WriteString(eventLine("New MR", out.Events.NewMergeRequest))
-		b.WriteString(eventLine("New Epic", out.Events.NewEpic))
-		b.WriteString(eventLine("New Note", out.Events.NewNote))
-		b.WriteString(eventLine("Push to MR", out.Events.PushToMergeRequest))
-		b.WriteString(eventLine("Reassign Issue", out.Events.ReassignIssue))
-		b.WriteString(eventLine("Reassign MR", out.Events.ReassignMergeRequest))
-		b.WriteString(eventLine("Reopen Issue", out.Events.ReopenIssue))
-		b.WriteString(eventLine("Reopen MR", out.Events.ReopenMergeRequest))
-		b.WriteString(eventLine("Success Pipeline", out.Events.SuccessPipeline))
+		writeEventRows(c.Section("Custom Events"), *out.Events)
 	}
-	toolutil.WriteHints(&b, "Use `gitlab_notification_global_update` (or the project/group variants) to change notification preferences")
+	c.End(
+		toolutil.HintAction("user.notification_global_update", "change the account-wide preferences"),
+		toolutil.HintAction("user.notification_project_update", "override them for one project"),
+		toolutil.HintAction("user.notification_group_update", "override them for one group"),
+	)
 	return b.String()
+}
+
+// writeEventRows writes one row per event flag. Every flag is written whatever
+// its value: false is the answer "this event does not notify you", not an
+// absence.
+func writeEventRows(c *toolutil.Card, events EventOutput) {
+	c.Bool("Close Issue", events.CloseIssue)
+	c.Bool("Close MR", events.CloseMergeRequest)
+	c.Bool("Failed Pipeline", events.FailedPipeline)
+	c.Bool("Fixed Pipeline", events.FixedPipeline)
+	c.Bool("Issue Due", events.IssueDue)
+	c.Bool("Merge MR", events.MergeMergeRequest)
+	c.Bool("Merge When Pipeline Succeeds", events.MergeWhenPipelineSucceeds)
+	c.Bool("Moved Project", events.MovedProject)
+	c.Bool("New Issue", events.NewIssue)
+	c.Bool("New MR", events.NewMergeRequest)
+	c.Bool("New Epic", events.NewEpic)
+	c.Bool("New Note", events.NewNote)
+	c.Bool("Push to MR", events.PushToMergeRequest)
+	c.Bool("Reassign Issue", events.ReassignIssue)
+	c.Bool("Reassign MR", events.ReassignMergeRequest)
+	c.Bool("Reopen Issue", events.ReopenIssue)
+	c.Bool("Reopen MR", events.ReopenMergeRequest)
+	c.Bool("Success Pipeline", events.SuccessPipeline)
 }
 
 func init() {

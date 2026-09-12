@@ -2,7 +2,6 @@ package notifications
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -269,12 +268,4 @@ func toOutput(s *gl.NotificationSettings) Output {
 		}
 	}
 	return out
-}
-
-// Formatters.
-
-// eventLine formats a single notification event flag as a Markdown
-// bullet line with a checkmark/cross emoji.
-func eventLine(name string, enabled bool) string {
-	return fmt.Sprintf("- %s %s\n", toolutil.BoolEmoji(enabled), name)
 }

@@ -1,116 +1,143 @@
 package sidekiq
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatQueueMetricsMarkdown formats queue metrics as markdown.
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionQueueMetrics   = "admin.sidekiq_queue_metrics"
+	actionProcessMetrics = "admin.sidekiq_process_metrics"
+	actionJobStats       = "admin.sidekiq_job_stats"
+	actionCompound       = "admin.sidekiq_compound_metrics"
+)
+
+// queueColumns are the columns of the queue table, shared by the standalone
+// queue result and the queue section of the compound one so a reader meets one
+// table in both.
+var queueColumns = []string{"Queue", "Backlog", "Latency"}
+
+// processColumns are the columns of the process table, shared the same way.
+var processColumns = []string{"Hostname", "PID", "Tag", "Started At", "Concurrency", "Busy", "Queues"}
+
+// queueCells renders one queue as the cells of a row. The name is whatever the
+// instance called the queue.
+func queueCells(q QueueItem) []string {
+	return []string{
+		toolutil.EscapeMdTableCell(q.Name),
+		strconv.FormatInt(q.Backlog, 10),
+		strconv.FormatInt(q.Latency, 10),
+	}
+}
+
+// processCells renders one Sidekiq process as the cells of a row. The hostname,
+// the tag and the queue names come from the instance's own configuration, and
+// the start time is rendered in the display form rather than as the RFC 3339
+// string GitLab sent.
+func processCells(p ProcessItem) []string {
+	return []string{
+		toolutil.EscapeMdTableCell(p.Hostname),
+		strconv.FormatInt(p.Pid, 10),
+		toolutil.EscapeMdTableCell(p.Tag),
+		toolutil.FormatTime(p.StartedAt),
+		strconv.FormatInt(p.Concurrency, 10),
+		strconv.FormatInt(p.Busy, 10),
+		toolutil.EscapeMdTableCell(strings.Join(p.Queues, ", ")),
+	}
+}
+
+// FormatQueueMetricsMarkdown renders the queues as a table: a collection of
+// objects that share columns.
 func FormatQueueMetricsMarkdown(out GetQueueMetricsOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Sidekiq Queue Metrics\n\n")
 	if len(out.Queues) == 0 {
-		sb.WriteString("No queues found.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("Sidekiq queues")
 	}
-	sb.WriteString("| Queue | Backlog | Latency |\n")
-	sb.WriteString("|---|---|---|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Sidekiq Queue Metrics", len(out.Queues), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader(queueColumns...))
 	for _, q := range out.Queues {
-		fmt.Fprintf(&sb, "| %s | %d | %d |\n",
-			toolutil.EscapeMdTableCell(q.Name), q.Backlog, q.Latency)
+		b.WriteString(toolutil.MarkdownTableRow(queueCells(q)...))
 	}
-	toolutil.WriteHints(&sb, "Monitor queues with high backlog or latency for potential issues")
-	return sb.String()
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		"Monitor queues with high backlog or latency for potential issues",
+		toolutil.HintAction(actionCompound, "read the queues, processes and job counts in one call"))
+	return b.String()
 }
 
-// FormatProcessMetricsMarkdown formats process metrics as markdown.
+// FormatProcessMetricsMarkdown renders the Sidekiq processes as a table.
 func FormatProcessMetricsMarkdown(out GetProcessMetricsOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Sidekiq Process Metrics\n\n")
 	if len(out.Processes) == 0 {
-		sb.WriteString("No processes found.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("Sidekiq processes")
 	}
-	sb.WriteString("| Hostname | PID | Tag | Started At | Concurrency | Busy | Queues |\n")
-	sb.WriteString("|---|---|---|---|---|---|---|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Sidekiq Process Metrics", len(out.Processes), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader(processColumns...))
 	for _, p := range out.Processes {
-		queues := strings.Join(p.Queues, ", ")
-		fmt.Fprintf(&sb, "| %s | %d | %s | %s | %d | %d | %s |\n",
-			toolutil.EscapeMdTableCell(p.Hostname),
-			p.Pid,
-			toolutil.EscapeMdTableCell(p.Tag),
-			toolutil.EscapeMdTableCell(p.StartedAt),
-			p.Concurrency,
-			p.Busy,
-			toolutil.EscapeMdTableCell(queues))
+		b.WriteString(toolutil.MarkdownTableRow(processCells(p)...))
 	}
-	toolutil.WriteHints(&sb, "Check process resource usage to identify overloaded workers")
-	return sb.String()
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		"Check process resource usage to identify overloaded workers",
+		toolutil.HintAction(actionCompound, "read the queues, processes and job counts in one call"))
+	return b.String()
 }
 
-// FormatJobStatsMarkdown formats job statistics as markdown.
+// FormatJobStatsMarkdown renders the job counters as the card of one object.
+//
+// The three counters used to open a "| Metric | Value |" table, which is the
+// shape a collection takes; three fields of one object are card rows.
 func FormatJobStatsMarkdown(out GetJobStatsOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Sidekiq Job Statistics\n\n")
-	sb.WriteString("| Metric | Value |\n")
-	sb.WriteString("|---|---|\n")
-	fmt.Fprintf(&sb, "| Processed | %d |\n", out.Jobs.Processed)
-	fmt.Fprintf(&sb, "| Failed | %d |\n", out.Jobs.Failed)
-	fmt.Fprintf(&sb, "| Enqueued | %d |\n", out.Jobs.Enqueued)
-	toolutil.WriteHints(&sb, "Use `gitlab_get_sidekiq_compound_metrics` for a complete overview")
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Sidekiq Job Statistics")
+	writeJobStats(c, out.Jobs)
+	c.End(toolutil.HintAction(actionCompound, "read the queues, processes and job counts in one call"))
+	return b.String()
 }
 
-// FormatCompoundMetricsMarkdown formats compound metrics as markdown.
+// FormatCompoundMetricsMarkdown renders queues, processes and job counters as
+// one card with a section each.
 func FormatCompoundMetricsMarkdown(out GetCompoundMetricsOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Sidekiq Compound Metrics\n\n")
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Sidekiq Compound Metrics")
 
-	// Queues section
-	sb.WriteString("### Queues\n\n")
+	queues := c.Section("Queues")
 	if len(out.Queues) == 0 {
-		sb.WriteString("No queues found.\n")
+		queues.Note(toolutil.EmptyMessage("Sidekiq queues"))
 	} else {
-		sb.WriteString("| Queue | Backlog | Latency |\n")
-		sb.WriteString("|---|---|---|\n")
+		table := queues.Table("", queueColumns...)
 		for _, q := range out.Queues {
-			fmt.Fprintf(&sb, "| %s | %d | %d |\n",
-				toolutil.EscapeMdTableCell(q.Name), q.Backlog, q.Latency)
+			table.Row(queueCells(q)...)
 		}
-		sb.WriteString("\n")
 	}
 
-	// Processes section
-	sb.WriteString("### Processes\n\n")
+	processes := c.Section("Processes")
 	if len(out.Processes) == 0 {
-		sb.WriteString("No processes found.\n")
+		processes.Note(toolutil.EmptyMessage("Sidekiq processes"))
 	} else {
-		sb.WriteString("| Hostname | PID | Tag | Started At | Concurrency | Busy |\n")
-		sb.WriteString("|---|---|---|---|---|---|\n")
+		table := processes.Table("", processColumns...)
 		for _, p := range out.Processes {
-			fmt.Fprintf(&sb, "| %s | %d | %s | %s | %d | %d |\n",
-				toolutil.EscapeMdTableCell(p.Hostname),
-				p.Pid,
-				toolutil.EscapeMdTableCell(p.Tag),
-				toolutil.EscapeMdTableCell(p.StartedAt),
-				p.Concurrency,
-				p.Busy)
+			table.Row(processCells(p)...)
 		}
-		sb.WriteString("\n")
 	}
 
-	// Jobs section
-	sb.WriteString("### Job Statistics\n\n")
-	sb.WriteString("| Metric | Value |\n")
-	sb.WriteString("|---|---|\n")
-	fmt.Fprintf(&sb, "| Processed | %d |\n", out.Jobs.Processed)
-	fmt.Fprintf(&sb, "| Failed | %d |\n", out.Jobs.Failed)
-	fmt.Fprintf(&sb, "| Enqueued | %d |\n", out.Jobs.Enqueued)
+	writeJobStats(c.Section("Job Statistics"), out.Jobs)
 
-	toolutil.WriteHints(&sb, "Use individual metric tools for detailed queue, process, or job analysis")
-	return sb.String()
+	c.End(
+		toolutil.HintAction(actionQueueMetrics, "read the queues on their own"),
+		toolutil.HintAction(actionProcessMetrics, "read the worker processes on their own"),
+		toolutil.HintAction(actionJobStats, "read the job counters on their own"),
+	)
+	return b.String()
+}
+
+// writeJobStats writes the three job counters as rows of c. Zero is an answer
+// for every one of them, so each is written whatever GitLab sent.
+func writeJobStats(c *toolutil.Card, jobs JobStatsItem) {
+	c.Int("Processed", jobs.Processed)
+	c.Int("Failed", jobs.Failed)
+	c.Int("Enqueued", jobs.Enqueued)
 }
 
 func init() {

@@ -3,12 +3,23 @@ package orbit
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionStatus      = "orbit.status"
+	actionSchema      = "orbit.schema"
+	actionTools       = "orbit.tools"
+	actionDSL         = "orbit.dsl"
+	actionQuery       = "orbit.query"
+	actionGraphStatus = "orbit.graph_status"
 )
 
 // orbitNotFoundOutput is returned by MCP Orbit tools when the requested resource or feature is not found (HTTP 404).
@@ -44,200 +55,274 @@ func formatOrbitNotFound(out orbitNotFoundOutput) *mcp.CallToolResult {
 	)
 }
 
-// FormatStatusMarkdown returns a Markdown-formatted summary of Orbit cluster health for LLM consumption.
+// FormatStatusMarkdown renders Orbit cluster health as the card of one object:
+// whether the caller reaches the graph at all, the cluster's own health, and
+// the subsystems as a nested collection.
 //
-// Includes status, version, timestamp, and a table of subsystem components with replica counts.
-// If FormattedText is present, it is rendered as a fenced code block.
+// Two of those rows were missing, and both are the answer to the question the
+// action is asked. "Available to you" is the user-level access flag, which is
+// what separates a healthy cluster the caller cannot query from one they can;
+// "Error" is what the backend says when it cannot reach the gRPC cluster, which
+// is exactly the case where "Status: unknown" alone explains nothing.
 func FormatStatusMarkdown(out StatusOutput) string {
 	var b strings.Builder
-	b.WriteString("## Orbit Status\n\n")
-	if out.FormattedText != "" {
-		b.WriteString(fencedBlock("text", out.FormattedText))
-		toolutil.WriteHints(&b, "Use `gitlab_orbit_graph_status` to inspect indexing status for a namespace or project")
+	c := toolutil.NewCard(&b, "Orbit Status")
+	facts := readStatus(out)
+
+	if facts.formattedText != "" {
+		c.Fence("", "text", facts.formattedText)
+		c.End(toolutil.HintAction(actionGraphStatus, "inspect indexing status for a namespace or project"))
 		return b.String()
 	}
-	if out.Status == "" && len(out.Components) == 0 {
-		b.WriteString("No Orbit status data returned.\n")
+
+	if out.User == nil && facts.empty() {
+		c.Note("No Orbit status data returned.")
+		c.End(toolutil.HintAction(actionGraphStatus, "inspect indexing status for a namespace or project"))
 		return b.String()
 	}
-	writeKV(&b, "Status", out.Status)
-	writeKV(&b, "Version", out.Version)
-	writeKV(&b, "Timestamp", out.Timestamp)
-	if len(out.Components) > 0 {
-		b.WriteString("\n| Component | Status | Replicas |\n")
-		b.WriteString("|---|---|---|\n")
-		for _, component := range out.Components {
-			replicas := ""
-			if component.Replicas != nil {
-				replicas = fmt.Sprintf("%d/%d", component.Replicas.Ready, component.Replicas.Desired)
-			}
+
+	if out.User != nil {
+		c.Bool("Available to you", out.User.Available)
+	}
+	c.Field("Status", facts.status)
+	c.Field("Version", facts.version)
+	c.Time("Timestamp", facts.timestamp)
+	c.Field("Error", facts.systemError)
+
+	if len(facts.components) > 0 {
+		table := c.Table("Components", "Component", "Status", "Replicas")
+		for _, component := range facts.components {
 			// Both come back from the Knowledge Graph API as free strings, and
 			// nothing in this repository constrains either.
-			fmt.Fprintf(&b, "| %s | %s | %s |\n",
-				toolutil.EscapeMdTableCell(component.Name), toolutil.EscapeMdTableCell(component.Status), replicas)
+			table.Row(
+				toolutil.EscapeMdTableCell(component.Name),
+				toolutil.EscapeMdTableCell(component.Status),
+				replicaCell(component.Replicas),
+			)
 		}
 	}
-	toolutil.WriteHints(&b, "Use `gitlab_orbit_graph_status` to inspect indexing status for a namespace or project")
+
+	c.End(toolutil.HintAction(actionGraphStatus, "inspect indexing status for a namespace or project"))
 	return b.String()
 }
 
-// FormatSchemaMarkdown returns a Markdown-formatted summary of the Orbit Knowledge Graph schema.
+// statusFacts is the cluster health one status response carried, read from
+// whichever of its two shapes carried it.
+type statusFacts struct {
+	formattedText string
+	status        string
+	version       string
+	timestamp     string
+	systemError   string
+	components    []StatusComponent
+}
+
+// empty reports whether the response said nothing about the cluster at all.
+func (f statusFacts) empty() bool {
+	return f.status == "" && f.version == "" && f.timestamp == "" && f.systemError == "" && len(f.components) == 0
+}
+
+// readStatus reads the cluster health out of the response.
 //
-// Includes schema version, domain table, and counts of nodes and edges. Used for LLM and user-facing docs.
+// Orbit answers in two shapes: the flat one fills the top-level fields, and the
+// nested one leaves them empty and fills System instead. Reading only the flat
+// fields rendered "no status data" for every nested answer, including the one
+// that carries the backend error.
+func readStatus(out StatusOutput) statusFacts {
+	facts := statusFacts{
+		formattedText: out.FormattedText,
+		status:        out.Status,
+		version:       out.Version,
+		timestamp:     out.Timestamp,
+		components:    out.Components,
+	}
+	if out.System == nil {
+		return facts
+	}
+	facts.systemError = out.System.Error
+	if facts.formattedText == "" {
+		facts.formattedText = out.System.FormattedText
+	}
+	if facts.status == "" {
+		facts.status = out.System.Status
+	}
+	if facts.version == "" {
+		facts.version = out.System.Version
+	}
+	if facts.timestamp == "" {
+		facts.timestamp = out.System.Timestamp
+	}
+	if len(facts.components) == 0 {
+		facts.components = out.System.Components
+	}
+	return facts
+}
+
+// replicaCell renders a subsystem's ready and desired replica counts, or
+// nothing for a stateless subsystem GitLab sends none for.
+func replicaCell(replicas *StatusReplicas) string {
+	if replicas == nil {
+		return ""
+	}
+	return strconv.FormatInt(replicas.Ready, 10) + "/" + strconv.FormatInt(replicas.Desired, 10)
+}
+
+// FormatSchemaMarkdown renders the Knowledge Graph ontology as the card of one
+// object: the version and the three type counts, then the domains as a nested
+// collection.
 func FormatSchemaMarkdown(out SchemaOutput) string {
 	var b strings.Builder
-	b.WriteString("## Orbit Schema\n\n")
-	writeKV(&b, "Schema version", out.SchemaVersion)
-	fmt.Fprintf(&b, "- Domains: %d\n", len(out.Domains))
-	fmt.Fprintf(&b, "- Nodes: %d\n", len(out.Nodes))
-	fmt.Fprintf(&b, "- Edges: %d\n", len(out.Edges))
+	c := toolutil.NewCard(&b, "Orbit Schema")
+	c.Field("Schema version", out.SchemaVersion)
+	c.Int("Domains", int64(len(out.Domains)))
+	c.Int("Nodes", int64(len(out.Nodes)))
+	c.Int("Edges", int64(len(out.Edges)))
 	if len(out.Domains) > 0 {
-		b.WriteString("\n| Domain | Description | Nodes |\n")
-		b.WriteString("|---|---|---|\n")
+		table := c.Table("Domains", "Domain", "Description", "Nodes")
 		for _, domain := range out.Domains {
-			fmt.Fprintf(
-				&b, "| %s | %s | %s |\n",
+			table.Row(
 				toolutil.EscapeMdTableCell(domain.Name),
 				toolutil.EscapeMdTableCell(domain.Description),
 				toolutil.EscapeMdTableCell(strings.Join(domain.NodeNames, ", ")),
 			)
 		}
 	}
-	toolutil.WriteHints(&b,
-		"Use `gitlab_orbit_tools` to inspect the live query/tool manifest",
-		"Use `gitlab_orbit_query` after choosing a supported query shape from the manifest")
+	c.End(
+		toolutil.HintAction(actionTools, "inspect the live query and tool manifest"),
+		toolutil.HintAction(actionQuery, "run a query once you have chosen a shape from the manifest"),
+	)
 	return b.String()
 }
 
-// FormatToolsMarkdown returns a Markdown-formatted table of Orbit MCP tool definitions.
+// FormatToolsMarkdown renders the Orbit tool manifest as a table: a collection
+// of objects that share columns.
 //
-// Each row shows the tool name and description. Used for LLM tool discovery and user docs.
+// The name goes in a code span through the cell form of the span writer. It
+// used to be stripped of every backtick it held and then run through the cell
+// escaper inside a hand-written span, which showed "&#124;" as those five
+// characters and quietly deleted part of the name.
 func FormatToolsMarkdown(out ToolsOutput) string {
-	var b strings.Builder
-	b.WriteString("## Orbit Tools\n\n")
 	if len(out.Tools) == 0 {
-		b.WriteString("No Orbit tools returned.\n")
-		return b.String()
+		return toolutil.EmptyMessage("Orbit tools")
 	}
-	b.WriteString("| Tool | Description |\n")
-	b.WriteString("|---|---|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Orbit Tools", len(out.Tools), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("Tool", "Description"))
 	for _, tool := range out.Tools {
-		safeName := strings.ReplaceAll(tool.Name, "`", "")
-		fmt.Fprintf(
-			&b, "| `%s` | %s |\n",
-			toolutil.EscapeMdTableCell(safeName),
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdCodeSpanCell(tool.Name),
 			toolutil.EscapeMdTableCell(tool.Description),
-		)
+		))
 	}
-	toolutil.WriteHints(&b,
-		"Use the returned parameters JSON to build `gitlab_orbit_query` input",
-		"Use `gitlab_orbit_schema` to understand node and edge names")
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(actionQuery, "build a query from the parameters a tool declares"),
+		toolutil.HintAction(actionSchema, "read the node and edge names those parameters take"))
 	return b.String()
 }
 
-// FormatDSLMarkdown returns a Markdown-formatted fenced code block with the Orbit query DSL.
-//
-// Used to display the DSL grammar or schema for LLMs and users.
+// FormatDSLMarkdown renders the Orbit query DSL as the card of one object whose
+// body is the grammar inside a fence sized to it.
 func FormatDSLMarkdown(out DSLOutput) string {
 	var b strings.Builder
-	b.WriteString("## Orbit DSL\n\n")
+	c := toolutil.NewCard(&b, "Orbit DSL")
 	if out.Content == "" {
-		b.WriteString("No Orbit DSL data returned.\n")
+		c.Note("No Orbit DSL data returned.")
+		c.End(toolutil.HintAction(actionSchema, "read the node and edge names a query names"))
 		return b.String()
 	}
 	language := "json"
 	if strings.EqualFold(out.ResponseFormat, string(gl.OrbitResponseFormatLLM)) {
 		language = "text"
 	}
-	b.WriteString(fencedBlock(language, out.Content))
-	toolutil.WriteHints(&b,
-		"Use `gitlab_orbit_query` after choosing a supported query shape from the DSL",
-		"Use `gitlab_orbit_schema` to understand node and edge names")
+	c.Fence("", language, out.Content)
+	c.End(
+		toolutil.HintAction(actionQuery, "run a query once you have chosen a shape from the DSL"),
+		toolutil.HintAction(actionSchema, "read the node and edge names a query names"),
+	)
 	return b.String()
 }
 
-// FormatQueryMarkdown returns a Markdown-formatted summary of an Orbit query result.
-//
-// If FormattedText is present, it is rendered as a fenced code block. Otherwise, the result is shown as JSON.
+// FormatQueryMarkdown renders one query result as the card of one object: what
+// was asked and how much came back, then the query text and the rows as fenced
+// bodies.
 func FormatQueryMarkdown(out QueryOutput) string {
 	var b strings.Builder
-	b.WriteString("## Orbit Query Result\n\n")
+	c := toolutil.NewCard(&b, "Orbit Query Result")
+	hints := []string{
+		toolutil.HintAction(actionGraphStatus, "check indexing when a result looks stale or incomplete"),
+		toolutil.HintAction(actionDSL, "read the grammar the next query is written in"),
+	}
+
 	if out.FormattedText != "" {
-		b.WriteString(fencedBlock("text", out.FormattedText))
-		toolutil.WriteHints(&b, "Use `gitlab_orbit_graph_status` if query results look stale or incomplete")
+		c.Fence("", "text", out.FormattedText)
+		c.End(hints...)
 		return b.String()
 	}
-	writeKV(&b, "Query type", out.QueryType)
-	if out.RowCount > 0 {
-		fmt.Fprintf(&b, "- Row count: %d\n", out.RowCount)
-	}
+
+	c.Field("Query type", out.QueryType)
+	c.Count("Row count", out.RowCount)
 	if len(out.RawQueryStrings) > 0 {
-		b.WriteString("\n### Raw Query Strings\n\n")
+		section := c.Section("Raw Query Strings")
 		for _, raw := range out.RawQueryStrings {
-			b.WriteString(fencedBlock("text", raw))
+			section.Fence("", "text", raw)
 		}
 	}
 	if out.Result != nil {
-		b.WriteString("\n### Result\n\n")
-		b.WriteString(fencedBlock("json", prettyAny(out.Result)))
+		c.Fence("Result", "json", prettyAny(out.Result))
 	}
-	toolutil.WriteHints(&b, "Use `gitlab_orbit_graph_status` if query results look stale or incomplete")
+	c.End(hints...)
 	return b.String()
 }
 
-// FormatGraphStatusMarkdown returns a Markdown-formatted summary of Orbit graph indexing status.
-//
-// Includes indexed project counts, domain node counts, and indexing pipeline state. Used for LLM and user docs.
+// FormatGraphStatusMarkdown renders Orbit indexing status as the card of one
+// object: how much is indexed, how the last run went, and the per-domain node
+// counts as a nested collection.
 func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 	var b strings.Builder
-	b.WriteString("## Orbit Graph Status\n\n")
+	c := toolutil.NewCard(&b, "Orbit Graph Status")
+	hints := []string{
+		toolutil.HintAction(actionQuery, "query the graph once indexing reaches a healthy state"),
+		toolutil.HintAction(actionStatus, "check the cluster itself when indexing never starts"),
+	}
+
 	if out.FormattedText != "" {
-		b.WriteString(fencedBlock("text", out.FormattedText))
-		toolutil.WriteHints(&b, "Use `gitlab_orbit_query` after indexing reaches a healthy state")
+		c.Fence("", "text", out.FormattedText)
+		c.End(hints...)
 		return b.String()
 	}
+
 	if out.Projects != nil {
-		fmt.Fprintf(&b, "- Indexed projects: %d\n", out.Projects.Indexed)
-		fmt.Fprintf(&b, "- Total known projects: %d\n", out.Projects.TotalKnown)
+		c.Int("Indexed projects", out.Projects.Indexed)
+		c.Int("Total known projects", out.Projects.TotalKnown)
 	}
 	if out.Indexing != nil {
-		writeKV(&b, "Indexing state", out.Indexing.State)
-		writeKV(&b, "Last started at", out.Indexing.LastStartedAt)
-		writeKV(&b, "Last completed at", out.Indexing.LastCompletedAt)
-		if out.Indexing.LastDurationMs > 0 {
-			fmt.Fprintf(&b, "- Last duration: %d ms\n", out.Indexing.LastDurationMs)
-		}
-		writeKV(&b, "Last error", out.Indexing.LastError)
+		c.Field("Indexing state", out.Indexing.State)
+		c.Time("Last started at", out.Indexing.LastStartedAt)
+		c.Time("Last completed at", out.Indexing.LastCompletedAt)
+		c.Count("Last duration (ms)", out.Indexing.LastDurationMs)
+		c.Field("Last error", out.Indexing.LastError)
 	}
 	if len(out.Domains) > 0 {
-		b.WriteString("\n| Domain | Counts |\n")
-		b.WriteString("|---|---|\n")
+		table := c.Table("Domains", "Domain", "Counts")
 		for _, domain := range out.Domains {
-			var counts []string
-			for _, item := range domain.Items {
-				counts = append(counts, fmt.Sprintf("%s: %d", item.Name, item.Count))
-			}
-			fmt.Fprintf(
-				&b, "| %s | %s |\n",
+			table.Row(
 				toolutil.EscapeMdTableCell(domain.Name),
-				toolutil.EscapeMdTableCell(strings.Join(counts, ", ")),
+				toolutil.EscapeMdTableCell(domainCounts(domain.Items)),
 			)
 		}
 	}
-	toolutil.WriteHints(&b, "Use `gitlab_orbit_query` after indexing reaches a healthy state")
+	c.End(hints...)
 	return b.String()
 }
 
-// writeKV writes a Markdown bullet list item for a key-value pair,
-// skipping the entry when value is empty. Used by all Orbit Markdown
-// formatters for summary fields.
-func writeKV(b *strings.Builder, key, value string) {
-	if value == "" {
-		return
+// domainCounts renders one domain's node counts as the "Name: count" list the
+// cell shows.
+func domainCounts(items []GraphStatusDomainItem) string {
+	counts := make([]string, 0, len(items))
+	for _, item := range items {
+		counts = append(counts, item.Name+": "+strconv.FormatInt(item.Count, 10))
 	}
-	// The key is a literal at every call site; the value is whatever the
-	// Knowledge Graph API answered.
-	fmt.Fprintf(b, "- %s: %s\n", key, toolutil.EscapeMdTableCell(value))
+	return strings.Join(counts, ", ")
 }
 
 // prettyAny returns a pretty-printed JSON string for any value, or
@@ -249,19 +334,4 @@ func prettyAny(value any) string {
 		return fmt.Sprint(value)
 	}
 	return string(buf)
-}
-
-// fencedBlock returns a Markdown fenced code block for the given language and
-// content, with the fence sized to the content by [toolutil.MarkdownCodeFence].
-//
-// This package kept a copy of that sizing of its own. The copy agreed with the
-// shared helper, which is exactly why it was worth removing: a second
-// implementation of a containment rule is one that can drift from it silently,
-// and the audit that gates hand-written fences recognizes the shared helper.
-func fencedBlock(language, content string) string {
-	fence := toolutil.MarkdownCodeFence(content)
-	if language != "" {
-		return fmt.Sprintf("%s%s\n%s\n%s\n", fence, language, content, fence)
-	}
-	return fmt.Sprintf("%s\n%s\n%s\n", fence, content, fence)
 }

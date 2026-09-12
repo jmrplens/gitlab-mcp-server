@@ -5,7 +5,6 @@ package sidekiq
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -217,63 +216,142 @@ func TestGetCompoundMetrics_Error(t *testing.T) {
 	}
 }
 
-// TestFormatQueueMetricsMarkdown verifies FormatQueueMetricsMarkdown.
-func TestFormatQueueMetricsMarkdown(t *testing.T) {
+// TestFormatQueueMetricsMarkdown_TwoQueues_RendersTheWholeTable verifies that a
+// collection of queues renders as a table under the heading that counts them.
+func TestFormatQueueMetricsMarkdown_TwoQueues_RendersTheWholeTable(t *testing.T) {
 	out := GetQueueMetricsOutput{
 		Queues: []QueueItem{
 			{Name: "default", Backlog: 10, Latency: 5},
 			{Name: "mailers", Backlog: 2, Latency: 1},
 		},
 	}
-	md := FormatQueueMetricsMarkdown(out)
-	if !strings.Contains(md, "default") {
-		t.Fatal("expected 'default' queue in markdown")
-	}
-	if !strings.Contains(md, "mailers") {
-		t.Fatal("expected 'mailers' queue in markdown")
+
+	want := "## Sidekiq Queue Metrics (2)\n\n" +
+		"| Queue | Backlog | Latency |\n| --- | --- | --- |\n" +
+		"| default | 10 | 5 |\n" +
+		"| mailers | 2 | 1 |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Monitor queues with high backlog or latency for potential issues\n" +
+		"- Use action 'admin.sidekiq_compound_metrics' to read the queues, processes and job counts in one call\n"
+
+	if got := FormatQueueMetricsMarkdown(out); got != want {
+		t.Errorf("FormatQueueMetricsMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatProcessMetricsMarkdown verifies FormatProcessMetricsMarkdown.
-func TestFormatProcessMetricsMarkdown(t *testing.T) {
+// TestFormatProcessMetricsMarkdown_OneProcess_RendersTheStartTimeInDisplayForm
+// verifies that the process table renders whole, and that the start time is
+// rendered in the display form rather than as the RFC 3339 string GitLab sent.
+func TestFormatProcessMetricsMarkdown_OneProcess_RendersTheStartTimeInDisplayForm(t *testing.T) {
 	out := GetProcessMetricsOutput{
-		Processes: []ProcessItem{
-			{Hostname: "worker-01", Pid: 1234, Tag: "default", Concurrency: 25, Busy: 10},
-		},
+		Processes: []ProcessItem{{
+			Hostname:    "worker-01",
+			Pid:         1234,
+			Tag:         "default",
+			StartedAt:   "2026-03-20T15:45:00Z",
+			Queues:      []string{"default", "mailers"},
+			Concurrency: 25,
+			Busy:        10,
+		}},
 	}
-	md := FormatProcessMetricsMarkdown(out)
-	if !strings.Contains(md, "worker-01") {
-		t.Fatal("expected 'worker-01' in markdown")
+
+	want := "## Sidekiq Process Metrics (1)\n\n" +
+		"| Hostname | PID | Tag | Started At | Concurrency | Busy | Queues |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| worker-01 | 1234 | default | 20 Mar 2026 15:45 UTC | 25 | 10 | default, mailers |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Check process resource usage to identify overloaded workers\n" +
+		"- Use action 'admin.sidekiq_compound_metrics' to read the queues, processes and job counts in one call\n"
+
+	if got := FormatProcessMetricsMarkdown(out); got != want {
+		t.Errorf("FormatProcessMetricsMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatJobStatsMarkdown verifies FormatJobStatsMarkdown.
-func TestFormatJobStatsMarkdown(t *testing.T) {
+// TestFormatProcessMetricsMarkdown_HostileProcess_StaysInsideItsCells verifies
+// that a hostname, a tag and a queue name the instance chose cannot split the
+// row or end the table: all three are free strings nothing here constrains.
+func TestFormatProcessMetricsMarkdown_HostileProcess_StaysInsideItsCells(t *testing.T) {
+	out := GetProcessMetricsOutput{
+		Processes: []ProcessItem{{
+			Hostname:  "worker|01",
+			Pid:       7,
+			Tag:       "tag\nwith a break",
+			StartedAt: "not a timestamp|either",
+			Queues:    []string{"a|b"},
+		}},
+	}
+
+	want := "## Sidekiq Process Metrics (1)\n\n" +
+		"| Hostname | PID | Tag | Started At | Concurrency | Busy | Queues |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| worker&#124;01 | 7 | tag with a break | not a timestamp&#124;either | 0 | 0 | a&#124;b |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Check process resource usage to identify overloaded workers\n" +
+		"- Use action 'admin.sidekiq_compound_metrics' to read the queues, processes and job counts in one call\n"
+
+	if got := FormatProcessMetricsMarkdown(out); got != want {
+		t.Errorf("FormatProcessMetricsMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatJobStatsMarkdown_Counters_RenderAsACard verifies that the three job
+// counters render as the rows of one object rather than as a two-column table.
+func TestFormatJobStatsMarkdown_Counters_RenderAsACard(t *testing.T) {
 	out := GetJobStatsOutput{
 		Jobs: JobStatsItem{Processed: 100000, Failed: 50, Enqueued: 25},
 	}
-	md := FormatJobStatsMarkdown(out)
-	if !strings.Contains(md, "100000") {
-		t.Fatal("expected '100000' in markdown")
+
+	want := "## Sidekiq Job Statistics\n\n" +
+		"- **Processed**: 100000\n" +
+		"- **Failed**: 50\n" +
+		"- **Enqueued**: 25\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'admin.sidekiq_compound_metrics' to read the queues, processes and job counts in one call\n"
+
+	if got := FormatJobStatsMarkdown(out); got != want {
+		t.Errorf("FormatJobStatsMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatCompoundMetricsMarkdown verifies FormatCompoundMetricsMarkdown.
-func TestFormatCompoundMetricsMarkdown(t *testing.T) {
+// TestFormatCompoundMetricsMarkdown_EverySection_RendersWhole verifies that the
+// compound result is one card with a section each, that the two collections are
+// the same tables the standalone results render, and that the counters are card
+// rows.
+func TestFormatCompoundMetricsMarkdown_EverySection_RendersWhole(t *testing.T) {
 	out := GetCompoundMetricsOutput{
-		Queues:    []QueueItem{{Name: "default", Backlog: 10, Latency: 5}},
-		Processes: []ProcessItem{{Hostname: "worker-01", Pid: 1234}},
-		Jobs:      JobStatsItem{Processed: 100000, Failed: 50, Enqueued: 25},
+		Queues: []QueueItem{{Name: "default", Backlog: 10, Latency: 5}},
+		Processes: []ProcessItem{{
+			Hostname:    "worker-01",
+			Pid:         1234,
+			Tag:         "default",
+			StartedAt:   "2026-03-20T15:45:00Z",
+			Queues:      []string{"default"},
+			Concurrency: 25,
+			Busy:        10,
+		}},
+		Jobs: JobStatsItem{Processed: 100000, Failed: 50, Enqueued: 25},
 	}
-	md := FormatCompoundMetricsMarkdown(out)
-	if !strings.Contains(md, "Compound") {
-		t.Fatal("expected 'Compound' in markdown")
-	}
-	if !strings.Contains(md, "default") {
-		t.Fatal("expected 'default' queue in markdown")
-	}
-	if !strings.Contains(md, "worker-01") {
-		t.Fatal("expected 'worker-01' in markdown")
+
+	want := "## Sidekiq Compound Metrics\n\n" +
+		"### Queues\n\n" +
+		"| Queue | Backlog | Latency |\n| --- | --- | --- |\n" +
+		"| default | 10 | 5 |\n\n" +
+		"### Processes\n\n" +
+		"| Hostname | PID | Tag | Started At | Concurrency | Busy | Queues |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| worker-01 | 1234 | default | 20 Mar 2026 15:45 UTC | 25 | 10 | default |\n\n" +
+		"### Job Statistics\n\n" +
+		"- **Processed**: 100000\n" +
+		"- **Failed**: 50\n" +
+		"- **Enqueued**: 25\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'admin.sidekiq_queue_metrics' to read the queues on their own\n" +
+		"- Use action 'admin.sidekiq_process_metrics' to read the worker processes on their own\n" +
+		"- Use action 'admin.sidekiq_job_stats' to read the job counters on their own\n"
+
+	if got := FormatCompoundMetricsMarkdown(out); got != want {
+		t.Errorf("FormatCompoundMetricsMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -283,30 +361,46 @@ func TestFormatCompoundMetricsMarkdown(t *testing.T) {
 // Formatters — empty states
 // ---------------------------------------------------------------------------.
 
-// TestFormatQueueMetricsMarkdown_Empty verifies FormatQueueMetricsMarkdown when empty.
-func TestFormatQueueMetricsMarkdown_Empty(t *testing.T) {
-	md := FormatQueueMetricsMarkdown(GetQueueMetricsOutput{})
-	if !strings.Contains(md, "No queues found") {
-		t.Errorf("expected empty message, got: %s", md)
+// TestFormatQueueMetricsMarkdown_NoQueues_IsOneSentence verifies that an empty
+// collection renders the one sentence an empty list renders, heading included:
+// a heading counting zero above a sentence saying so said it twice.
+func TestFormatQueueMetricsMarkdown_NoQueues_IsOneSentence(t *testing.T) {
+	want := "No Sidekiq queues found.\n"
+	if got := FormatQueueMetricsMarkdown(GetQueueMetricsOutput{}); got != want {
+		t.Errorf("FormatQueueMetricsMarkdown() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatProcessMetricsMarkdown_Empty verifies FormatProcessMetricsMarkdown when empty.
-func TestFormatProcessMetricsMarkdown_Empty(t *testing.T) {
-	md := FormatProcessMetricsMarkdown(GetProcessMetricsOutput{})
-	if !strings.Contains(md, "No processes found") {
-		t.Errorf("expected empty message, got: %s", md)
+// TestFormatProcessMetricsMarkdown_NoProcesses_IsOneSentence verifies the same
+// for an instance running no Sidekiq process.
+func TestFormatProcessMetricsMarkdown_NoProcesses_IsOneSentence(t *testing.T) {
+	want := "No Sidekiq processes found.\n"
+	if got := FormatProcessMetricsMarkdown(GetProcessMetricsOutput{}); got != want {
+		t.Errorf("FormatProcessMetricsMarkdown() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatCompoundMetricsMarkdown_Empty verifies FormatCompoundMetricsMarkdown when empty.
-func TestFormatCompoundMetricsMarkdown_Empty(t *testing.T) {
-	md := FormatCompoundMetricsMarkdown(GetCompoundMetricsOutput{})
-	if !strings.Contains(md, "No queues found") {
-		t.Error("expected empty queues message")
-	}
-	if !strings.Contains(md, "No processes found") {
-		t.Error("expected empty processes message")
+// TestFormatCompoundMetricsMarkdown_NothingRunning_KeepsEverySection verifies
+// that the compound card keeps its three sections when two of them are empty,
+// each saying so, and that the counters still render: zero processed jobs is an
+// answer.
+func TestFormatCompoundMetricsMarkdown_NothingRunning_KeepsEverySection(t *testing.T) {
+	want := "## Sidekiq Compound Metrics\n\n" +
+		"### Queues\n\n" +
+		"No Sidekiq queues found.\n\n" +
+		"### Processes\n\n" +
+		"No Sidekiq processes found.\n\n" +
+		"### Job Statistics\n\n" +
+		"- **Processed**: 0\n" +
+		"- **Failed**: 0\n" +
+		"- **Enqueued**: 0\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'admin.sidekiq_queue_metrics' to read the queues on their own\n" +
+		"- Use action 'admin.sidekiq_process_metrics' to read the worker processes on their own\n" +
+		"- Use action 'admin.sidekiq_job_stats' to read the job counters on their own\n"
+
+	if got := FormatCompoundMetricsMarkdown(GetCompoundMetricsOutput{}); got != want {
+		t.Errorf("FormatCompoundMetricsMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
 

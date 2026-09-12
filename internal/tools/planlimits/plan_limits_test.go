@@ -5,7 +5,6 @@ package planlimits
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -118,8 +117,10 @@ func TestChange_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies FormatGetMarkdown.
-func TestFormatGetMarkdown(t *testing.T) {
+// TestFormatGetMarkdown_EveryLimit_RendersTheWholeCard verifies that the plan
+// limits render as one card whose every row carries the unit GitLab counts the
+// limit in, with the binary-prefix size in front of the exact byte count.
+func TestFormatGetMarkdown_EveryLimit_RendersTheWholeCard(t *testing.T) {
 	out := GetOutput{
 		ConanMaxFileSize:           3221225472,
 		GenericPackagesMaxFileSize: 5368709120,
@@ -130,83 +131,83 @@ func TestFormatGetMarkdown(t *testing.T) {
 		PyPiMaxFileSize:            3221225472,
 		TerraformModuleMaxFileSize: 1073741824,
 	}
-	md := FormatGetMarkdown(out)
-	if !strings.Contains(md, "Plan Limits") {
-		t.Fatal("expected 'Plan Limits' in markdown")
-	}
-	if !strings.Contains(md, "3221225472") {
-		t.Fatal("expected '3221225472' in markdown")
+
+	want := "## Plan Limits\n\n" +
+		"- **Conan Max File Size**: 3 GiB (3221225472 bytes)\n" +
+		"- **Generic Packages Max File Size**: 5 GiB (5368709120 bytes)\n" +
+		"- **Helm Max File Size**: 5 MiB (5242880 bytes)\n" +
+		"- **Maven Max File Size**: 3 GiB (3221225472 bytes)\n" +
+		"- **NPM Max File Size**: 500 MiB (524288000 bytes)\n" +
+		"- **NuGet Max File Size**: 500 MiB (524288000 bytes)\n" +
+		"- **PyPI Max File Size**: 3 GiB (3221225472 bytes)\n" +
+		"- **Terraform Module Max File Size**: 1 GiB (1073741824 bytes)\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'admin.plan_limits_change' to raise or lower one of these limits\n"
+
+	if got := FormatGetMarkdown(out); got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatChangeMarkdown verifies FormatChangeMarkdown.
-func TestFormatChangeMarkdown(t *testing.T) {
+// TestFormatChangeMarkdown_SmallAndZeroLimits_RendersTheWholeCard verifies that
+// the card a change returns is the card a read returns, that a limit below a
+// kibibyte renders as a plain byte count, and that a zero limit is written
+// rather than dropped: zero is an answer GitLab gave.
+func TestFormatChangeMarkdown_SmallAndZeroLimits_RendersTheWholeCard(t *testing.T) {
 	out := ChangeOutput{
-		ConanMaxFileSize: 3221225472,
-		HelmMaxFileSize:  5242880,
+		ConanMaxFileSize: 1023,
+		HelmMaxFileSize:  1024,
 	}
-	md := FormatChangeMarkdown(out)
-	if !strings.Contains(md, "Updated Plan Limits") {
-		t.Fatal("expected 'Updated Plan Limits' in markdown")
+
+	want := "## Updated Plan Limits\n\n" +
+		"- **Conan Max File Size**: 1023 bytes\n" +
+		"- **Generic Packages Max File Size**: 0 bytes\n" +
+		"- **Helm Max File Size**: 1 KiB (1024 bytes)\n" +
+		"- **Maven Max File Size**: 0 bytes\n" +
+		"- **NPM Max File Size**: 0 bytes\n" +
+		"- **NuGet Max File Size**: 0 bytes\n" +
+		"- **PyPI Max File Size**: 0 bytes\n" +
+		"- **Terraform Module Max File Size**: 0 bytes\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'admin.plan_limits_get' to read the plan's limits back\n"
+
+	if got := FormatChangeMarkdown(out); got != want {
+		t.Errorf("FormatChangeMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFileSize_EveryMagnitude_CarriesTheUnit verifies that a byte count renders
+// with the prefix a reader judges it by and the exact count the change action
+// takes back, at every magnitude the helper distinguishes.
+func TestFileSize_EveryMagnitude_CarriesTheUnit(t *testing.T) {
+	tests := []struct {
+		name  string
+		bytes int64
+		want  string
+	}{
+		{name: "zero", bytes: 0, want: "0 bytes"},
+		{name: "below a kibibyte", bytes: 1023, want: "1023 bytes"},
+		{name: "exactly a kibibyte", bytes: 1024, want: "1 KiB (1024 bytes)"},
+		{name: "fractional kibibytes", bytes: 1536, want: "1.5 KiB (1536 bytes)"},
+		{name: "mebibytes", bytes: 5242880, want: "5 MiB (5242880 bytes)"},
+		{name: "gibibytes", bytes: 3221225472, want: "3 GiB (3221225472 bytes)"},
+		{name: "tebibytes", bytes: 1099511627776, want: "1 TiB (1099511627776 bytes)"},
+		{name: "pebibytes", bytes: 1125899906842624, want: "1 PiB (1125899906842624 bytes)"},
+		{name: "exbibytes", bytes: 1152921504606846976, want: "1 EiB (1152921504606846976 bytes)"},
+		{name: "the largest prefix the table has", bytes: 1 << 62, want: "4 EiB (4611686018427387904 bytes)"},
+		{name: "negative", bytes: -1, want: "-1 bytes"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := fileSize(tt.bytes); got != tt.want {
+				t.Errorf("fileSize(%d) = %q, want %q", tt.bytes, got, tt.want)
+			}
+		})
 	}
 }
 
 // ---------- Tests consolidated from coverage_test.go ----------.
-
-// ---------------------------------------------------------------------------
-// FormatGetMarkdown — all fields
-// ---------------------------------------------------------------------------.
-
-// TestFormatGetMarkdown_AllFields verifies FormatGetMarkdown when all fields.
-func TestFormatGetMarkdown_AllFields(t *testing.T) {
-	out := GetOutput{
-		ConanMaxFileSize:           100,
-		GenericPackagesMaxFileSize: 200,
-		HelmMaxFileSize:            300,
-		MavenMaxFileSize:           400,
-		NPMMaxFileSize:             500,
-		NugetMaxFileSize:           600,
-		PyPiMaxFileSize:            700,
-		TerraformModuleMaxFileSize: 800,
-	}
-	md := FormatGetMarkdown(out)
-	for _, want := range []string{"100", "200", "300", "400", "500", "600", "700", "800", "Plan Limits"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("missing %q in markdown", want)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FormatChangeMarkdown — all fields
-// ---------------------------------------------------------------------------.
-
-// TestFormatChangeMarkdown_AllFields verifies FormatChangeMarkdown when all fields.
-func TestFormatChangeMarkdown_AllFields(t *testing.T) {
-	out := ChangeOutput{
-		ConanMaxFileSize:           1,
-		GenericPackagesMaxFileSize: 2,
-		HelmMaxFileSize:            3,
-		MavenMaxFileSize:           4,
-		NPMMaxFileSize:             5,
-		NugetMaxFileSize:           6,
-		PyPiMaxFileSize:            7,
-		TerraformModuleMaxFileSize: 8,
-	}
-	md := FormatChangeMarkdown(out)
-	if !strings.Contains(md, "Updated Plan Limits") {
-		t.Error("missing title")
-	}
-	for _, want := range []string{"Conan", "Generic", "Helm", "Maven", "NPM", "NuGet", "PyPI", "Terraform"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("missing %q in markdown", want)
-			}
-		})
-	}
-}
 
 // ---------------------------------------------------------------------------
 // Change — all optional fields

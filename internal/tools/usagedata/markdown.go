@@ -8,121 +8,168 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatServicePingMarkdown formats service ping data as markdown.
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionServicePing       = "admin.usage_data_service_ping"
+	actionNonSQLMetrics     = "admin.usage_data_non_sql_metrics"
+	actionQueries           = "admin.usage_data_queries"
+	actionMetricDefinitions = "admin.usage_data_metric_definitions"
+	actionTrackEvents       = "admin.usage_data_track_events"
+)
+
+// maxRenderedMetrics is how many rows of a Service Ping map the card shows.
+// The whole map reaches the caller in the structured result, and the note under
+// the table says how much of it the card left out.
+const maxRenderedMetrics = 20
+
+// maxRenderedYAMLBytes is how much of the metric-definition document the card
+// shows. The cut lands on a rune boundary: a byte-count cut through a
+// multi-byte character leaves a replacement glyph at the end of the fence.
+const maxRenderedYAMLBytes = 10000
+
+// FormatServicePingMarkdown renders the Service Ping payload as a card: when it
+// was recorded, then the license attributes and the metric counts as nested
+// collections.
 func FormatServicePingMarkdown(out GetServicePingOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Service Ping Data\n\n")
-	fmt.Fprintf(&sb, "**Recorded At**: %s\n\n", toolutil.FormatTime(out.RecordedAt))
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Service Ping Data")
+	c.Time("Recorded At", out.RecordedAt)
 
 	if len(out.License) > 0 {
-		sb.WriteString("### License\n\n")
-		sb.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
-		for _, k := range sortedKeys(out.License) {
-			fmt.Fprintf(&sb, "| %s | %s |\n",
-				toolutil.EscapeMdTableCell(k), toolutil.EscapeMdTableCell(out.License[k]))
-		}
-		sb.WriteString("\n")
-	}
-
-	if len(out.Counts) > 0 {
-		sb.WriteString("### Counts (first 20)\n\n")
-		sb.WriteString(toolutil.MarkdownTableHeader("Metric", "Count"))
-		keys := sortedKeysInt64(out.Counts)
-		limit := min(len(keys), 20)
-		for _, k := range keys[:limit] {
-			fmt.Fprintf(&sb, "| %s | %d |\n",
-				toolutil.EscapeMdTableCell(k), out.Counts[k])
-		}
-		if len(keys) > 20 {
-			fmt.Fprintf(&sb, "\n*...and %d more metrics*\n", len(keys)-20)
+		table := c.Table("License", "Key", "Value")
+		for _, key := range sortedKeys(out.License) {
+			table.Row(toolutil.EscapeMdTableCell(key), toolutil.EscapeMdTableCell(out.License[key]))
 		}
 	}
 
-	toolutil.WriteHints(&sb, "Use individual metric tools for detailed analysis")
-	return sb.String()
+	keys := sortedKeysInt64(out.Counts)
+	if len(keys) > 0 {
+		shown := min(len(keys), maxRenderedMetrics)
+		table := c.Table("Counts", "Metric", "Count")
+		for _, key := range keys[:shown] {
+			table.Row(toolutil.EscapeMdTableCell(key), strconv.FormatInt(out.Counts[key], 10))
+		}
+		c.Note(truncationNote(shown, len(keys), "metrics"))
+	}
+
+	c.End(
+		toolutil.HintAction(actionNonSQLMetrics, "read the non-SQL half of the same report"),
+		toolutil.HintAction(actionMetricDefinitions, "look a metric key up in the definitions"),
+	)
+	return b.String()
 }
 
-// FormatNonSQLMetricsMarkdown formats non-SQL metrics as markdown.
+// FormatNonSQLMetricsMarkdown renders the non-SQL half of the Service Ping
+// report as the card of one object.
 func FormatNonSQLMetricsMarkdown(out NonSQLMetricsOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Non-SQL Metrics\n\n")
-	sb.WriteString(toolutil.MarkdownTableHeader("Property", "Value"))
-	fmt.Fprintf(&sb, "| UUID | %s |\n", toolutil.EscapeMdTableCell(out.UUID))
-	fmt.Fprintf(&sb, "| Hostname | %s |\n", toolutil.EscapeMdTableCell(out.Hostname))
-	fmt.Fprintf(&sb, "| Version | %s |\n", toolutil.EscapeMdTableCell(out.Version))
-	fmt.Fprintf(&sb, "| Edition | %s |\n", toolutil.EscapeMdTableCell(out.Edition))
-	fmt.Fprintf(&sb, "| Installation Type | %s |\n", toolutil.EscapeMdTableCell(out.InstallationType))
-	fmt.Fprintf(&sb, "| Active Users | %d |\n", out.ActiveUserCount)
-	fmt.Fprintf(&sb, "| Historical Max Users | %d |\n", out.HistoricalMaxUsers)
-	fmt.Fprintf(&sb, "| License Plan | %s |\n", toolutil.EscapeMdTableCell(out.LicensePlan))
-	fmt.Fprintf(&sb, "| Recorded At | %s |\n", toolutil.EscapeMdTableCell(toolutil.FormatTime(out.RecordedAt)))
-	toolutil.WriteHints(&sb, "Use `gitlab_get_service_ping` for the full metrics overview")
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Non-SQL Metrics")
+	c.Field("UUID", out.UUID)
+	c.Field("Hostname", out.Hostname)
+	c.Field("Version", out.Version)
+	c.Field("Edition", out.Edition)
+	c.Field("Installation Type", out.InstallationType)
+	c.Int("Active Users", out.ActiveUserCount)
+	c.Int("Historical Max Users", out.HistoricalMaxUsers)
+	c.Field("License Plan", out.LicensePlan)
+	c.Time("Recorded At", out.RecordedAt)
+	c.End(toolutil.HintAction(actionServicePing, "read the full Service Ping report"))
+	return b.String()
 }
 
-// FormatQueriesMarkdown formats queries as markdown.
+// FormatQueriesMarkdown renders the SQL behind the Service Ping counters as a
+// card whose nested collection is the query per metric.
+//
+// The instance's version, edition and recording time used to share one line
+// with no list marker in front of it and no escaping on any of the three, so a
+// value carrying a pipe, a tag or a line break wrote whatever it liked into the
+// response. Each is a row of its own now.
 func FormatQueriesMarkdown(out QueriesOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Service Ping Queries\n\n")
-	fmt.Fprintf(&sb, "**Version**: %s | **Edition**: %s | **Recorded At**: %s\n\n",
-		out.Version, out.Edition, out.RecordedAt)
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Service Ping Queries")
+	c.Field("Version", out.Version)
+	c.Field("Edition", out.Edition)
+	c.Time("Recorded At", out.RecordedAt)
 
-	if len(out.Counts) > 0 {
-		sb.WriteString("### SQL Queries (first 20)\n\n")
-		sb.WriteString(toolutil.MarkdownTableHeader("Metric", "Query"))
-		keys := sortedKeys(out.Counts)
-		limit := min(len(keys), 20)
-		for _, k := range keys[:limit] {
-			fmt.Fprintf(&sb, "| %s | %s |\n",
-				toolutil.EscapeMdTableCell(k), toolutil.EscapeMdTableCell(out.Counts[k]))
+	keys := sortedKeys(out.Counts)
+	if len(keys) > 0 {
+		shown := min(len(keys), maxRenderedMetrics)
+		table := c.Table("SQL Queries", "Metric", "Query")
+		for _, key := range keys[:shown] {
+			table.Row(toolutil.EscapeMdTableCell(key), toolutil.EscapeMdTableCell(out.Counts[key]))
 		}
-		if len(keys) > 20 {
-			fmt.Fprintf(&sb, "\n*...and %d more queries*\n", len(keys)-20)
-		}
+		c.Note(truncationNote(shown, len(keys), "queries"))
 	}
-	toolutil.WriteHints(&sb, "Review query patterns for optimization opportunities")
-	return sb.String()
+
+	c.End(
+		toolutil.HintAction(actionServicePing, "read the counts these queries produce"),
+		toolutil.HintAction(actionMetricDefinitions, "look a metric key up in the definitions"),
+	)
+	return b.String()
 }
 
-// FormatMetricDefinitionsMarkdown formats metric definitions as markdown.
+// FormatMetricDefinitionsMarkdown renders the metric dictionary as a card whose
+// body is the YAML document inside a fence sized to it.
 func FormatMetricDefinitionsMarkdown(out MetricDefinitionsOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Metric Definitions (YAML)\n\n")
-	// The fence is written by hand here, and stays that way.
-	//gitlab:allow-unescaped yaml: the instance's own metric definition document, shipped with GitLab rather than written by anyone with an account, and served by an endpoint only an administrator may call.
-	sb.WriteString("```yaml\n")
-	// Truncate if very large
-	yaml := out.YAML
-	if len(yaml) > 10000 {
-		yaml = yaml[:10000] + "\n# ... truncated (total " + strconv.Itoa(len(out.YAML)) + " bytes)"
-	}
-	sb.WriteString(yaml)
-	sb.WriteString("\n```\n")
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Metric Definitions (YAML)")
+	c.Warn("Truncated", out.Truncated)
+
+	document, shortened := displayYAML(out.YAML)
+	c.Fence("", "yaml", document)
+
 	// Two different cuts can reach this point and the model must not read the
-	// second as the first: the block above shortens a long document for display
-	// only, while Truncated means the server stopped reading and the rest of the
-	// document is not in this response at all.
-	if out.Truncated {
-		sb.WriteString("\n- " + toolutil.EmojiWarning + " **Truncated**: the document exceeded the size this action returns, so it was cut short. Read the remainder from GitLab directly (GET /usage_data/metric_definitions)\n")
+	// second as the first: the display cut shortens a long document for this
+	// response only, while Truncated means the server stopped reading and the
+	// rest of the document is not in the structured result either.
+	if shortened {
+		c.Note(fmt.Sprintf("The card shows the first %d bytes of the document; the whole of what this action read is in the structured result.", maxRenderedYAMLBytes))
 	}
-	toolutil.WriteHints(&sb, "Use metric key names to query specific usage data")
-	return sb.String()
+	if out.Truncated {
+		c.Note("The document exceeded the size this action returns, so it was cut short. Read the remainder from GitLab directly (GET /usage_data/metric_definitions).")
+	}
+
+	c.End(toolutil.HintAction(actionServicePing, "read the values these metrics are reported with"))
+	return b.String()
 }
 
-// FormatTrackEventMarkdown formats track event result as markdown.
+// FormatTrackEventMarkdown renders the answer to one tracked event as a card.
 func FormatTrackEventMarkdown(out TrackEventOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Track Event\n\n**Status**: %s\n", out.Status)
-	toolutil.WriteHints(&b, "Use `gitlab_get_metric_definitions` to review available metrics")
+	c := toolutil.NewCard(&b, "Track Event")
+	c.Field("Status", out.Status)
+	c.End(toolutil.HintAction(actionTrackEvents, "send a batch of events in one call"))
 	return b.String()
 }
 
-// FormatTrackEventsMarkdown formats track events result as markdown.
+// FormatTrackEventsMarkdown renders the answer to a batch of tracked events as
+// a card.
 func FormatTrackEventsMarkdown(out TrackEventsOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Track Events\n\n**Status**: %s | **Events**: %d\n", out.Status, out.Count)
-	toolutil.WriteHints(&b, "Use `gitlab_get_metric_definitions` to review available metrics")
+	c := toolutil.NewCard(&b, "Track Events")
+	c.Field("Status", out.Status)
+	c.Int("Events", int64(out.Count))
+	c.End(toolutil.HintAction(actionMetricDefinitions, "review the metrics these events feed"))
 	return b.String()
+}
+
+// truncationNote is the sentence under a table the card cut short, or nothing
+// when it showed every row.
+func truncationNote(shown, total int, noun string) string {
+	if total <= shown {
+		return ""
+	}
+	return fmt.Sprintf("Showing the first %d of %d %s; the rest are in the structured result.", shown, total, noun)
+}
+
+// displayYAML shortens the definition document for display and reports whether
+// it had to, cutting on a rune boundary so the fence never ends in half a
+// character.
+func displayYAML(document string) (string, bool) {
+	if len(document) <= maxRenderedYAMLBytes {
+		return document, false
+	}
+	return string(truncateAtRuneBoundary([]byte(document), maxRenderedYAMLBytes)), true
 }
 
 func init() {
