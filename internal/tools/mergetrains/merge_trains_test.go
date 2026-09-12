@@ -741,13 +741,13 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			},
 			contains: []string{
 				"## Merge Train #1",
-				"| Status | merged |",
-				"| Target Branch | main |",
+				"- **Status**: merged\n",
+				"- **Target Branch**: main\n",
 				"[!5](https://gitlab.example.com/-/merge_requests/5)",
-				"| User | admin |",
-				"| Pipeline | #200 |",
-				"| Duration | 120s |",
-				"| Merged At |",
+				"- **User**: admin\n",
+				"- **Pipeline**: #200\n",
+				"- **Duration**: 120s\n",
+				"- **Merged At**:",
 			},
 		},
 		{
@@ -761,13 +761,13 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			},
 			contains: []string{
 				"## Merge Train #2",
-				"| Status | idle |",
+				"- **Status**: idle\n",
 				"!10",
 			},
 			absent: []string{
-				"| User |",
-				"| Pipeline |",
-				"| Merged At |",
+				"- **User**:",
+				"- **Pipeline**:",
+				"- **Merged At**:",
 			},
 		},
 		{
@@ -789,6 +789,14 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := FormatOutputMarkdown(tt.input)
+			// A one-object card is a bulleted field list, and a pipe row in
+			// one renders as literal text. Asserting the shape and not only
+			// the substrings is what would have caught the defect this
+			// formatter shipped with: the fields were all present, and the
+			// card they were written into rendered as a broken table.
+			if strings.Contains(got, "\n|") {
+				t.Errorf("a one-object card must write no table row\ngot:\n%s", got)
+			}
 			for _, want := range tt.contains {
 				if !strings.Contains(got, want) {
 					t.Errorf("output missing %q\ngot:\n%s", want, got)

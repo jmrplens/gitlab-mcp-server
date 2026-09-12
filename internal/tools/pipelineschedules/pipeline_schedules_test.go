@@ -1525,19 +1525,25 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 		UpdatedAt:    "2026-03-07T12:00:00Z",
 	})
 
+	// A one-object card is a bulleted field list, so a pipe row in this output
+	// would render as literal text rather than as a field.
+	if strings.Contains(out, "\n|") {
+		t.Errorf("a one-object card must write no table row:\n%s", out)
+	}
+
 	for _, want := range []string{
 		"## Pipeline Schedule #1",
-		"| Description | Nightly |",
-		"| Ref | main |",
-		"| Cron | `0 1 * * *` |",
-		"| Timezone | UTC |",
-		"| Active | ✅ |",
-		"| Next Run | 8 Mar 2026 01:00 UTC |",
-		"| Owner | admin |",
-		"| Last Pipeline |",
+		"- **Description**: Nightly\n",
+		"- **Ref**: main\n",
+		"- **Cron**: `0 1 * * *`\n",
+		"- **Timezone**: UTC\n",
+		"- **Active**: ✅\n",
+		"- **Next Run**: 8 Mar 2026 01:00 UTC\n",
+		"- **Owner**: admin\n",
+		"- **Last Pipeline**:",
 		"#99 (success)",
-		"| Created | 1 Jan 2026 00:00 UTC |",
-		"| Updated | 7 Mar 2026 12:00 UTC |",
+		"- **Created**: 1 Jan 2026 00:00 UTC\n",
+		"- **Updated**: 7 Mar 2026 12:00 UTC\n",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(out, want) {
@@ -1573,11 +1579,11 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 		t.Errorf("missing header:\n%s", md)
 	}
 	for _, absent := range []string{
-		"| Timezone |",
-		"| Next Run |",
-		"| Owner |",
-		"| Created |",
-		"| Updated |",
+		"- **Timezone**:",
+		"- **Next Run**:",
+		"- **Owner**:",
+		"- **Created**:",
+		"- **Updated**:",
 	} {
 		t.Run(absent, func(t *testing.T) {
 			if strings.Contains(md, absent) {

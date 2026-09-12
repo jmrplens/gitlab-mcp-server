@@ -1778,15 +1778,21 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		Online:      true,
 	})
 
+	// A one-object card is a bulleted field list, so a pipe row in this output
+	// would render as literal text rather than as a field.
+	if strings.Contains(md, "\n|") {
+		t.Errorf("a one-object card must write no table row:\n%s", md)
+	}
+
 	for _, want := range []string{
 		"## Runner #5",
-		"| Name | my-runner |",
-		"| Description | test runner |",
-		"| Type | project_type |",
-		"| Status | online |",
-		"| Paused | ❌ |",
-		"| Shared | ✅ |",
-		"| Online | ✅ |",
+		"- **Name**: my-runner\n",
+		"- **Description**: test runner\n",
+		"- **Type**: project_type\n",
+		"- **Status**: online\n",
+		"- **Paused**: ❌\n",
+		"- **Shared**: ✅\n",
+		"- **Online**: ✅\n",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(md, want) {
@@ -1822,24 +1828,30 @@ func TestFormatDetailsMarkdown_Full(t *testing.T) {
 		Groups:          []RunnerDetailsGroupOutput{{ID: 5}},
 	})
 
+	// A one-object card is a bulleted field list, so a pipe row in this output
+	// would render as literal text rather than as a field.
+	if strings.Contains(md, "\n|") {
+		t.Errorf("a one-object card must write no table row:\n%s", md)
+	}
+
 	for _, want := range []string{
 		"## Runner #10: Details",
-		"| Name | detail-runner |",
-		"| Description | detailed |",
-		"| Type | group_type |",
-		"| Status | offline |",
-		"| Paused | ✅ |",
-		"| Shared | ❌ |",
-		"| Online | ❌ |",
-		"| Locked | ✅ |",
-		"| Access Level | ref_protected |",
-		"| Run Untagged | ❌ |",
-		"| Tags | docker, linux |",
-		"| Max Timeout | 7200s |",
-		"| Maintenance Note | under repair |",
-		"| Last Contact | 15 Jan 2026 10:00 UTC |",
-		"| Projects | 2 |",
-		"| Groups | 1 |",
+		"- **Name**: detail-runner\n",
+		"- **Description**: detailed\n",
+		"- **Type**: group_type\n",
+		"- **Status**: offline\n",
+		"- **Paused**: ✅\n",
+		"- **Shared**: ❌\n",
+		"- **Online**: ❌\n",
+		"- **Locked**: ✅\n",
+		"- **Access Level**: ref_protected\n",
+		"- **Run Untagged**: ❌\n",
+		"- **Tags**: docker, linux\n",
+		"- **Max Timeout**: 7200s\n",
+		"- **Maintenance Note**: under repair\n",
+		"- **Last Contact**: 15 Jan 2026 10:00 UTC\n",
+		"- **Projects**: 2\n",
+		"- **Groups**: 1\n",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(md, want) {
@@ -1860,10 +1872,10 @@ func TestFormatDetailsMarkdown_Minimal(t *testing.T) {
 		t.Errorf("missing header:\n%s", md)
 	}
 	for _, absent := range []string{
-		"| Tags |",
-		"| Max Timeout |",
-		"| Maintenance Note |",
-		"| Last Contact |",
+		"- **Tags**:",
+		"- **Max Timeout**:",
+		"- **Maintenance Note**:",
+		"- **Last Contact**:",
 	} {
 		t.Run(absent, func(t *testing.T) {
 			if strings.Contains(md, absent) {

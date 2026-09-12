@@ -163,6 +163,16 @@ dispatch. `internal/tools/markdown.go` is a thin delegator (~19 lines) to
 `toolutil.MarkdownForResult`. List output should include
 `toolutil.HintPreserveLinks` so LLMs keep `[text](url)` clickable.
 
+**A table row is an object, not a field.** A table carries many objects,
+one row an object, under column headings naming the fields. A one-object
+card carries one object, one field a line, and is written through the
+`toolutil.WriteMdField*` helpers — never as a `| Field | Value |` table,
+which is that card with the information taken out of its header. The
+helpers own the escaping too, so a call site passes the raw value;
+`WriteMdFieldRendered` is the one that does not, and is declared a sink in
+`cmd/audit_md_escaping` so a raw value is reported against the package
+that wrote the call.
+
 ## E2E test gotchas
 
 - **Build tag**: all E2E tests are gated by `-tags e2e`. The unit test

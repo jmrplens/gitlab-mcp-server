@@ -43,6 +43,33 @@ var cellArgFuncs = map[string]bool{
 	"MarkdownTableHeader": true,
 }
 
+// fieldArgFuncs names, per toolutil card helper, which argument lands in a
+// list item with nothing between it and the page.
+//
+// Only the rendered variant is here. Every other WriteMdField* helper escapes
+// or renders its own value, so its call sites hold no hole, the same way
+// WriteMdURL's do not. Declaring this one at the call site rather than letting
+// the audit resolve the parameter inside toolutil is what keeps a finding — and
+// the //gitlab:allow-unescaped directive that answers it — with the package
+// that wrote the value rather than with the helper every package shares.
+var fieldArgFuncs = map[string]int{
+	"WriteMdFieldRendered": 2,
+}
+
+// fieldSink splits a card-field call whose value argument lands in a list item.
+func fieldSink(pkg *packages.Package, call *ast.CallExpr, name string) (sink, bool) {
+	index, known := fieldArgFuncs[name]
+	if !known || index >= len(call.Args) {
+		return sink{}, false
+	}
+	return sink{
+		pkg:    pkg,
+		call:   call,
+		callee: name,
+		holes:  []sinkHole{{expr: call.Args[index], ctx: ctxListItem, verb: "field"}},
+	}, true
+}
+
 // collectSinks finds every call in the loaded packages that writes Markdown
 // with a runtime value in it.
 //
@@ -81,7 +108,10 @@ func sinkOf(pkg *packages.Package, call *ast.CallExpr, fences *fenceIndex) (sink
 	case "fmt":
 		return formatSink(pkg, call, callee.Name(), fences)
 	case toolutilPath:
-		return cellSink(pkg, call, callee.Name())
+		if s, isCell := cellSink(pkg, call, callee.Name()); isCell {
+			return s, true
+		}
+		return fieldSink(pkg, call, callee.Name())
 	default:
 		return sink{}, false
 	}

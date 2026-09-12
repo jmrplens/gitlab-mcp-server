@@ -11,17 +11,15 @@ import (
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Runner #%d\n\n", out.ID)
-	b.WriteString("| Field | Value |\n")
-	b.WriteString(toolutil.TblSep2Col)
-	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
+	toolutil.WriteMdField(&b, "Name", out.Name)
+	toolutil.WriteMdField(&b, "Description", out.Description)
 	//gitlab:allow-unescaped out.RunnerType: a runner type GitLab picks from a fixed set (instance_type, group_type, project_type).
+	toolutil.WriteMdFieldRendered(&b, "Type", out.RunnerType)
 	//gitlab:allow-unescaped out.Status: a runner status GitLab derives from when the runner last contacted it (online, offline, stale, never_contacted).
-	fmt.Fprintf(&b, "| Type | %s |\n", out.RunnerType)
-	fmt.Fprintf(&b, "| Status | %s |\n", out.Status)
-	fmt.Fprintf(&b, "| Paused | %s |\n", toolutil.BoolEmoji(out.Paused))
-	fmt.Fprintf(&b, "| Shared | %s |\n", toolutil.BoolEmoji(out.IsShared))
-	fmt.Fprintf(&b, "| Online | %s |\n", toolutil.BoolEmoji(out.Online))
+	toolutil.WriteMdFieldRendered(&b, "Status", out.Status)
+	toolutil.WriteMdFieldBool(&b, "Paused", out.Paused)
+	toolutil.WriteMdFieldBool(&b, "Shared", out.IsShared)
+	toolutil.WriteMdFieldBool(&b, "Online", out.Online)
 	toolutil.WriteHints(
 		&b,
 		"Use action 'get' for full runner configuration",
@@ -34,38 +32,32 @@ func FormatOutputMarkdown(out Output) string {
 func FormatDetailsMarkdown(out DetailsOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Runner #%d: Details\n\n", out.ID)
-	b.WriteString("| Field | Value |\n")
-	b.WriteString(toolutil.TblSep2Col)
-	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
+	toolutil.WriteMdField(&b, "Name", out.Name)
+	toolutil.WriteMdField(&b, "Description", out.Description)
 	//gitlab:allow-unescaped out.RunnerType: a runner type GitLab picks from a fixed set (instance_type, group_type, project_type).
+	toolutil.WriteMdFieldRendered(&b, "Type", out.RunnerType)
 	//gitlab:allow-unescaped out.Status: a runner status GitLab derives from when the runner last contacted it (online, offline, stale, never_contacted).
-	fmt.Fprintf(&b, "| Type | %s |\n", out.RunnerType)
-	fmt.Fprintf(&b, "| Status | %s |\n", out.Status)
-	fmt.Fprintf(&b, "| Paused | %s |\n", toolutil.BoolEmoji(out.Paused))
-	fmt.Fprintf(&b, "| Shared | %s |\n", toolutil.BoolEmoji(out.IsShared))
-	fmt.Fprintf(&b, "| Online | %s |\n", toolutil.BoolEmoji(out.Online))
-	fmt.Fprintf(&b, "| Locked | %s |\n", toolutil.BoolEmoji(out.Locked))
+	toolutil.WriteMdFieldRendered(&b, "Status", out.Status)
+	toolutil.WriteMdFieldBool(&b, "Paused", out.Paused)
+	toolutil.WriteMdFieldBool(&b, "Shared", out.IsShared)
+	toolutil.WriteMdFieldBool(&b, "Online", out.Online)
+	toolutil.WriteMdFieldBool(&b, "Locked", out.Locked)
 	//gitlab:allow-unescaped out.AccessLevel: a runner access level GitLab picks from a fixed set (not_protected, ref_protected), and refuses any other value on register and update.
-	fmt.Fprintf(&b, "| Access Level | %s |\n", out.AccessLevel)
-	fmt.Fprintf(&b, "| Run Untagged | %s |\n", toolutil.BoolEmoji(out.RunUntagged))
+	toolutil.WriteMdFieldRendered(&b, "Access Level", out.AccessLevel)
+	toolutil.WriteMdFieldBool(&b, "Run Untagged", out.RunUntagged)
 	if len(out.TagList) > 0 {
-		fmt.Fprintf(&b, "| Tags | %s |\n", toolutil.EscapeMdTableCell(strings.Join(out.TagList, ", ")))
+		toolutil.WriteMdField(&b, "Tags", strings.Join(out.TagList, ", "))
 	}
 	if out.MaximumTimeout > 0 {
-		fmt.Fprintf(&b, "| Max Timeout | %ds |\n", out.MaximumTimeout)
+		toolutil.WriteMdFieldRendered(&b, "Max Timeout", fmt.Sprintf("%ds", out.MaximumTimeout))
 	}
-	if out.MaintenanceNote != "" {
-		fmt.Fprintf(&b, "| Maintenance Note | %s |\n", toolutil.EscapeMdTableCell(out.MaintenanceNote))
-	}
-	if out.ContactedAt != "" {
-		fmt.Fprintf(&b, "| Last Contact | %s |\n", toolutil.FormatTime(out.ContactedAt))
-	}
+	toolutil.WriteMdFieldIf(&b, "Maintenance Note", out.MaintenanceNote)
+	toolutil.WriteMdFieldTime(&b, "Last Contact", out.ContactedAt)
 	if len(out.Projects) > 0 {
-		fmt.Fprintf(&b, "| Projects | %d |\n", len(out.Projects))
+		toolutil.WriteMdFieldInt(&b, "Projects", int64(len(out.Projects)))
 	}
 	if len(out.Groups) > 0 {
-		fmt.Fprintf(&b, "| Groups | %d |\n", len(out.Groups))
+		toolutil.WriteMdFieldInt(&b, "Groups", int64(len(out.Groups)))
 	}
 	toolutil.WriteHints(
 		&b,
@@ -128,10 +120,8 @@ func FormatAuthTokenMarkdown(out AuthTokenOutput) string {
 	var b strings.Builder
 	b.WriteString("## Runner Authentication Token\n\n")
 	//gitlab:allow-unescaped out.Token: a token GitLab minted, a fixed prefix and URL-safe characters, which the reader has to copy back verbatim.
-	fmt.Fprintf(&b, "- **Token**: %s\n", out.Token)
-	if out.ExpiresAt != "" {
-		fmt.Fprintf(&b, "- **Expires At**: %s\n", toolutil.FormatTime(out.ExpiresAt))
-	}
+	toolutil.WriteMdFieldRendered(&b, "Token", out.Token)
+	toolutil.WriteMdFieldTime(&b, "Expires At", out.ExpiresAt)
 	toolutil.WriteHints(&b, "Use action 'register' with this token to register a new runner")
 	return b.String()
 }
@@ -141,10 +131,8 @@ func FormatRegTokenMarkdown(out AuthTokenOutput) string {
 	var b strings.Builder
 	b.WriteString("## Runner Registration Token\n\n")
 	//gitlab:allow-unescaped out.Token: a token GitLab minted, a fixed prefix and URL-safe characters, which the reader has to copy back verbatim.
-	fmt.Fprintf(&b, "- **Token**: %s\n", out.Token)
-	if out.ExpiresAt != "" {
-		fmt.Fprintf(&b, "- **Expires At**: %s\n", toolutil.FormatTime(out.ExpiresAt))
-	}
+	toolutil.WriteMdFieldRendered(&b, "Token", out.Token)
+	toolutil.WriteMdFieldTime(&b, "Expires At", out.ExpiresAt)
 	toolutil.WriteHints(&b, "Use action 'register' with this token to register a new runner")
 	return b.String()
 }

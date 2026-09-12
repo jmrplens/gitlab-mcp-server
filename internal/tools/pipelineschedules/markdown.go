@@ -14,33 +14,22 @@ func FormatOutputMarkdown(s Output) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Pipeline Schedule #%d\n\n", s.ID)
-	b.WriteString("| Field | Value |\n")
-	b.WriteString(toolutil.TblSep2Col)
-	fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(s.Description))
-	fmt.Fprintf(&b, "| Ref | %s |\n", toolutil.EscapeMdTableCell(s.Ref))
-	fmt.Fprintf(&b, "| Cron | `%s` |\n", toolutil.EscapeMdTableCell(s.Cron))
-	if s.CronTimezone != "" {
-		fmt.Fprintf(&b, "| Timezone | %s |\n", toolutil.EscapeMdTableCell(s.CronTimezone))
-	}
-	fmt.Fprintf(&b, "| Active | %s |\n", toolutil.BoolEmoji(s.Active))
-	if s.NextRunAt != "" {
-		fmt.Fprintf(&b, "| Next Run | %s |\n", toolutil.FormatTime(s.NextRunAt))
-	}
+	toolutil.WriteMdField(&b, "Description", s.Description)
+	toolutil.WriteMdField(&b, "Ref", s.Ref)
+	toolutil.WriteMdFieldCode(&b, "Cron", s.Cron)
+	toolutil.WriteMdFieldIf(&b, "Timezone", s.CronTimezone)
+	toolutil.WriteMdFieldBool(&b, "Active", s.Active)
+	toolutil.WriteMdFieldTime(&b, "Next Run", s.NextRunAt)
 	if s.Owner != nil && s.Owner.Username != "" {
-		fmt.Fprintf(&b, "| Owner | %s |\n", toolutil.EscapeMdTableCell(s.Owner.Username))
+		toolutil.WriteMdField(&b, "Owner", s.Owner.Username)
 	}
 	if s.LastPipeline != nil {
-		// The documented `last_pipeline` reference has no web_url, so render the
-		// title as plain text (MdTitleLink emits no link for an empty URL).
-		fmt.Fprintf(&b, "| Last Pipeline | %s |\n",
-			toolutil.MdTitleLink(fmt.Sprintf("#%d (%s)", s.LastPipeline.ID, s.LastPipeline.Status), ""))
+		// The documented `last_pipeline` reference has no web_url, so the
+		// pipeline is named rather than linked.
+		toolutil.WriteMdField(&b, "Last Pipeline", fmt.Sprintf("#%d (%s)", s.LastPipeline.ID, s.LastPipeline.Status))
 	}
-	if s.CreatedAt != "" {
-		fmt.Fprintf(&b, "| Created | %s |\n", toolutil.FormatTime(s.CreatedAt))
-	}
-	if s.UpdatedAt != "" {
-		fmt.Fprintf(&b, "| Updated | %s |\n", toolutil.FormatTime(s.UpdatedAt))
-	}
+	toolutil.WriteMdFieldTime(&b, "Created", s.CreatedAt)
+	toolutil.WriteMdFieldTime(&b, "Updated", s.UpdatedAt)
 	toolutil.WriteHints(
 		&b,
 		"Use the selected tool surface's pipeline-schedule update action with the same project_id and schedule_id to modify schedule settings",
@@ -82,11 +71,11 @@ func FormatListMarkdown(out ListOutput) string {
 func FormatVariableMarkdown(v VariableOutput) string {
 	var b strings.Builder
 	b.WriteString("## Pipeline Schedule Variable\n\n")
-	fmt.Fprintf(&b, "- **Key**: %s\n", toolutil.EscapeMdTableCell(v.Key))
-	fmt.Fprintf(&b, "- **Value**: %s\n", toolutil.EscapeMdTableCell(v.Value))
+	toolutil.WriteMdField(&b, "Key", v.Key)
+	toolutil.WriteMdField(&b, "Value", v.Value)
 	if v.VariableType != "" {
 		//gitlab:allow-unescaped v.VariableType: a CI variable type GitLab picks from a fixed set (env_var, file).
-		fmt.Fprintf(&b, "- **Type**: %s\n", v.VariableType)
+		toolutil.WriteMdFieldRendered(&b, "Type", v.VariableType)
 	}
 	toolutil.WriteHints(
 		&b,

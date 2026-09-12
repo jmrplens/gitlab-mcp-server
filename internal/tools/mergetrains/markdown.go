@@ -45,26 +45,23 @@ func FormatListMarkdown(out ListOutput) string {
 func FormatOutputMarkdown(out Output) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Merge Train #%d\n\n", out.ID)
-	sb.WriteString("| Property | Value |\n|---|---|\n")
 	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
 	//gitlab:allow-unescaped out.Status: a merge-train car state GitLab's own state machine writes (created, idle, stale, fresh, merging, merged).
-	fmt.Fprintf(&sb, "| Status | %s |\n", out.Status)
-	fmt.Fprintf(&sb, "| Target Branch | %s |\n", toolutil.EscapeMdTableCell(out.TargetBranch))
+	toolutil.WriteMdFieldRendered(&sb, "Status", out.Status)
+	toolutil.WriteMdField(&sb, "Target Branch", out.TargetBranch)
 	mr := fmt.Sprintf("%s - %s",
 		toolutil.MdTitleLink(fmt.Sprintf("!%d", out.MergeRequest.IID), out.MergeRequest.WebURL),
 		toolutil.EscapeMdTableCell(out.MergeRequest.Title))
-	fmt.Fprintf(&sb, "| Merge Request | %s |\n", mr)
+	toolutil.WriteMdFieldRendered(&sb, "Merge Request", mr)
 	if name := userName(out.User); name != "" {
-		fmt.Fprintf(&sb, "| User | %s |\n", toolutil.EscapeMdTableCell(name))
+		toolutil.WriteMdField(&sb, "User", name)
 	}
 	if out.Pipeline != nil && out.Pipeline.ID > 0 {
-		fmt.Fprintf(&sb, "| Pipeline | #%d |\n", out.Pipeline.ID)
+		toolutil.WriteMdFieldRendered(&sb, "Pipeline", fmt.Sprintf("#%d", out.Pipeline.ID))
 	}
-	fmt.Fprintf(&sb, "| Duration | %ds |\n", out.Duration)
-	fmt.Fprintf(&sb, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
-	if out.MergedAt != "" {
-		fmt.Fprintf(&sb, "| Merged At | %s |\n", toolutil.FormatTime(out.MergedAt))
-	}
+	toolutil.WriteMdFieldRendered(&sb, "Duration", fmt.Sprintf("%ds", out.Duration))
+	toolutil.WriteMdFieldTime(&sb, "Created", out.CreatedAt)
+	toolutil.WriteMdFieldTime(&sb, "Merged At", out.MergedAt)
 	toolutil.WriteHints(
 		&sb,
 		"Use `gitlab_list_project_merge_trains` to view all merge trains",

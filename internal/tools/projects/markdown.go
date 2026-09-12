@@ -219,13 +219,12 @@ func FormatListHooksMarkdown(out ListHooksOutput) string {
 func FormatHookMarkdown(out HookOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Webhook #%d\n\n", out.ID)
-	if out.Name != "" {
-		fmt.Fprintf(&b, "**Name:** %s\n", out.Name)
-	}
-	fmt.Fprintf(&b, "**URL:** %s\n", out.URL)
-	fmt.Fprintf(&b, "**SSL Verification:** %s\n", boolIcon(out.EnableSSLVerification))
-	fmt.Fprintf(&b, "**Token Present:** %s\n", boolIcon(out.TokenPresent))
-	fmt.Fprintf(&b, "**Signing Token Present:** %s\n\n", boolIcon(out.SigningTokenPresent))
+	toolutil.WriteMdFieldIf(&b, "Name", out.Name)
+	toolutil.WriteMdField(&b, "URL", out.URL)
+	toolutil.WriteMdFieldRendered(&b, "SSL Verification", boolIcon(out.EnableSSLVerification))
+	toolutil.WriteMdFieldRendered(&b, "Token Present", boolIcon(out.TokenPresent))
+	toolutil.WriteMdFieldRendered(&b, "Signing Token Present", boolIcon(out.SigningTokenPresent))
+	b.WriteString("\n")
 	b.WriteString("### Event Triggers\n\n")
 	b.WriteString(toolutil.MarkdownTableHeader("Event", "Enabled"))
 	events := []struct {
@@ -345,11 +344,10 @@ func FormatShareProjectMarkdown(out ShareProjectOutput) string {
 	b.WriteString("## Project Shared\n\n")
 	fmt.Fprintf(&b, "%s\n", out.Message)
 	if out.GroupID != 0 {
-		fmt.Fprintf(&b, "\n| Field | Value |\n")
-		b.WriteString("|---|---|\n")
-		fmt.Fprintf(&b, "| Group ID | %d |\n", out.GroupID)
+		b.WriteString("\n")
+		toolutil.WriteMdFieldInt(&b, "Group ID", out.GroupID)
 		//gitlab:allow-unescaped out.AccessRole: accessLevelName returns one of this package's six role literals, or "Level" and an integer.
-		fmt.Fprintf(&b, "| Access Role | %s |\n", out.AccessRole)
+		toolutil.WriteMdFieldRendered(&b, "Access Role", out.AccessRole)
 	}
 	toolutil.WriteHints(
 		&b,

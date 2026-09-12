@@ -32,18 +32,17 @@ func FormatListMarkdown(title, emptyText string, iterations []Output, pagination
 func FormatOutputMarkdown(output Output, hints ...string) string {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "## Iteration #%d: %s\n\n", output.IID, toolutil.EscapeMdTableCell(output.Title))
-	builder.WriteString(toolutil.MarkdownTableHeader("Property", "Value"))
 	fmt.Fprintf(&builder, toolutil.FmtMdID, output.ID)
-	fmt.Fprintf(&builder, "| IID | %d |\n", output.IID)
-	fmt.Fprintf(&builder, "| Title | %s |\n", toolutil.EscapeMdTableCell(output.Title))
-	fmt.Fprintf(&builder, "| State | %s |\n", StateName(output.State))
-	fmt.Fprintf(&builder, "| Group ID | %d |\n", output.GroupID)
-	fmt.Fprintf(&builder, "| Start | %s |\n", toolutil.FormatTime(output.StartDate))
-	fmt.Fprintf(&builder, "| Due | %s |\n", toolutil.FormatTime(output.DueDate))
+	toolutil.WriteMdFieldInt(&builder, "IID", output.IID)
+	toolutil.WriteMdField(&builder, "Title", output.Title)
+	toolutil.WriteMdField(&builder, "State", StateName(output.State))
+	toolutil.WriteMdFieldInt(&builder, "Group ID", output.GroupID)
+	toolutil.WriteMdFieldTime(&builder, "Start", output.StartDate)
+	toolutil.WriteMdFieldTime(&builder, "Due", output.DueDate)
 	if output.WebURL != "" {
 		toolutil.WriteMdURL(&builder, output.WebURL)
 	}
-	fmt.Fprintf(&builder, toolutil.FmtMdCreated, toolutil.FormatTime(output.CreatedAt))
+	toolutil.WriteMdFieldTime(&builder, "Created", output.CreatedAt)
 	if output.Description != "" {
 		builder.WriteString("\n### Description\n\n")
 		builder.WriteString(toolutil.WrapGFMBody(output.Description))
