@@ -41,6 +41,21 @@ func TestLintShapes(t *testing.T) {
 			md:   "## Job log\n\n```\n| not | a | table |\n```\n",
 			want: []Shape{ShapeOther},
 		},
+		{
+			name: "a content line that only begins with the fence does not close it",
+			md:   "## Job log\n\n```\n```go still inside\n| not | a | table |\n```\n",
+			want: []Shape{ShapeOther},
+		},
+		{
+			name: "a longer run of the same character closes the fence",
+			md:   "## Job log\n\n```\n| not | a | table |\n````\n",
+			want: []Shape{ShapeOther},
+		},
+		{
+			name: "a tilde fence is not closed by backticks",
+			md:   "## Job log\n\n~~~\n```\n| not | a | table |\n~~~\n",
+			want: []Shape{ShapeOther},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

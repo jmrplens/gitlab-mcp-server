@@ -115,7 +115,7 @@ func Lint(md string) Report {
 			continue
 		}
 		if inFence {
-			if strings.HasPrefix(trimmed, fence) {
+			if closesFence(trimmed, fence) {
 				inFence, fence = false, ""
 			}
 			continue
@@ -282,6 +282,22 @@ func cutListMarker(text string) (string, bool) {
 		return text[digits+2:], true
 	}
 	return "", false
+}
+
+// closesFence reports whether a line closes a fence that opening opened.
+//
+// CommonMark closes a fenced block on a run of the same character, at least as
+// long as the one that opened it, followed by nothing but whitespace. A line
+// that merely begins with that run is content: ```go inside a fenced block
+// neither opens nor closes anything. Treating it as a close ends the skip
+// early, and the quoted lines under it — a job log or a repository file, free
+// to contain anything — are then judged as this response's own shape.
+func closesFence(text, opening string) bool {
+	run := openingFence(text)
+	if run == "" || run[0] != opening[0] || len(run) < len(opening) {
+		return false
+	}
+	return strings.TrimSpace(strings.TrimPrefix(text, run)) == ""
 }
 
 // openingFence returns the backtick or tilde run that opens a fenced code
