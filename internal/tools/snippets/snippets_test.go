@@ -354,36 +354,55 @@ func TestExplore_Success(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown verifies FormatMarkdown.
+// TestFormatMarkdown verifies the whole card of a personal snippet.
 func TestFormatMarkdown(t *testing.T) {
-	out := Output{
+	const webURL = "https://example.com/snippets/42"
+	got := FormatMarkdown(Output{
 		ID: 42, Title: "Test", Visibility: "private",
 		Author: &SnippetAuthorOutput{Name: "Admin", Username: "admin"},
-		WebURL: "https://example.com/snippets/42",
-	}
-	md := FormatMarkdown(out)
-	if !strings.Contains(md, "Test") || !strings.Contains(md, "@admin") {
-		t.Errorf("unexpected markdown: %s", md)
+		WebURL: webURL,
+	})
+	want := "## Snippet #42: Test\n\n" +
+		"- **ID**: 42\n" +
+		"- **Title**: Test\n" +
+		"- **Visibility**: private\n" +
+		"- **Author**: Admin (@admin)\n" +
+		"- **URL**: [" + webURL + "](" + webURL + ")\n" +
+		snippetCardHints(false, true)
+	if got != want {
+		t.Errorf("personal snippet card:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// TestFormatListMarkdown verifies the whole render of a page of personal
+// snippets: the heading, the table and the personal actions.
 func TestFormatListMarkdown(t *testing.T) {
-	out := ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Snippets: []Output{{ID: 1, Title: "S1", Visibility: "public", Author: &SnippetAuthorOutput{Username: "u1"}}},
-	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "S1") {
-		t.Errorf("unexpected markdown: %s", md)
+	})
+	want := "## Snippets (1)\n\n" +
+		"| ID | Title | Visibility | Author | Files |\n| --- | --- | --- | --- | --- |\n" +
+		"| 1 | S1 | public | @u1 | 0 |\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'get' with snippet_id for full details\n" +
+		"- Use action 'create' to add a new snippet\n"
+	if got != want {
+		t.Errorf("personal snippet list:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatContentMarkdown verifies FormatContentMarkdown.
+// TestFormatContentMarkdown verifies the whole render of a snippet's content:
+// the heading, the content in a fence and the two next steps.
 func TestFormatContentMarkdown(t *testing.T) {
-	out := ContentOutput{SnippetID: 42, Content: "hello world"}
-	md := FormatContentMarkdown(out)
-	if !strings.Contains(md, "hello world") {
-		t.Errorf("unexpected markdown: %s", md)
+	got := FormatContentMarkdown(ContentOutput{SnippetID: 42, Content: "hello world"})
+	want := "## Snippet #42 Content\n\n" +
+		"```\nhello world\n```\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'file_content' to get content of a specific file\n" +
+		"- " + hintUpdateSnippet + "\n"
+	if got != want {
+		t.Errorf("snippet content:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -494,12 +513,17 @@ func TestSnippetCreateInputSchemaMap_DeadBranches(t *testing.T) {
 	}
 }
 
-// TestFormatFileContentMarkdown verifies FormatFileContentMarkdown.
+// TestFormatFileContentMarkdown verifies the whole render of one snippet
+// file's content.
 func TestFormatFileContentMarkdown(t *testing.T) {
-	out := FileContentOutput{SnippetID: 42, Ref: "main", FileName: "test.go", Content: "package main"}
-	md := FormatFileContentMarkdown(out)
-	if !strings.Contains(md, "test.go") || !strings.Contains(md, "package main") {
-		t.Errorf("unexpected markdown: %s", md)
+	got := FormatFileContentMarkdown(FileContentOutput{SnippetID: 42, Ref: "main", FileName: "test.go", Content: "package main"})
+	want := "## Snippet #42 File: test.go (ref: main)\n\n" +
+		"```\npackage main\n```\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'content' to get the full snippet content\n" +
+		"- " + hintUpdateSnippet + "\n"
+	if got != want {
+		t.Errorf("snippet file content:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1094,23 +1118,28 @@ func TestSnippets_UnreadableCapturedFields(t *testing.T) {
 // written only for a snippet that has files, and that a project snippet is
 // given the project actions while a personal one is given the personal ones.
 func TestFormatMarkdown_FilesAndHintsFollowTheSnippet(t *testing.T) {
+	const rawURL = "https://gitlab.example.com/raw/test.go"
 	withFiles := FormatMarkdown(Output{
 		ID: 42, Title: "Test Snippet", ProjectID: 7,
-		Files: []FileOutput{{Path: "test.go", RawURL: "https://gitlab.example.com/raw/test.go"}},
+		Files: []FileOutput{{Path: "test.go", RawURL: rawURL}},
 	})
-	if !strings.Contains(withFiles, "### Files") || !strings.Contains(withFiles, "test.go") {
-		t.Errorf("markdown missing the file table: %s", withFiles)
-	}
-	if !strings.Contains(withFiles, "project_delete") || strings.Contains(withFiles, "action 'content'") {
-		t.Errorf("a project snippet was given the personal actions: %s", withFiles)
+	wantFiles := "## Snippet #42: Test Snippet\n\n" +
+		"- **ID**: 42\n" +
+		"- **Title**: Test Snippet\n" +
+		"- **Project ID**: 7\n" +
+		"\n### Files\n\n| Path | Raw URL |\n| --- | --- |\n| test.go | [" + rawURL + "](" + rawURL + ") |\n" +
+		snippetCardHints(true, true)
+	if withFiles != wantFiles {
+		t.Errorf("project snippet with files:\n got %q\nwant %q", withFiles, wantFiles)
 	}
 
 	personal := FormatMarkdown(Output{ID: 42, Title: "Test Snippet"})
-	if strings.Contains(personal, "### Files") {
-		t.Errorf("markdown shows a file table for a snippet with none: %s", personal)
-	}
-	if !strings.Contains(personal, "action 'content'") || strings.Contains(personal, "project_delete") {
-		t.Errorf("a personal snippet was given the project actions: %s", personal)
+	wantPersonal := "## Snippet #42: Test Snippet\n\n" +
+		"- **ID**: 42\n" +
+		"- **Title**: Test Snippet\n" +
+		snippetCardHints(false, false)
+	if personal != wantPersonal {
+		t.Errorf("personal snippet without files:\n got %q\nwant %q", personal, wantPersonal)
 	}
 }
 
@@ -1139,30 +1168,36 @@ func TestApplySnippetMeta_WithoutAnEntryKeepsThePlaceholders(t *testing.T) {
 // URLs and the import origin read off the captured answer, and leaves each of
 // them out of a snippet that carries none.
 func TestFormatMarkdown_SentFields(t *testing.T) {
-	full := FormatMarkdown(Output{
-		ID: 42, Title: "Test Snippet", Visibility: "private",
-		SSHURLToRepo:  "git@gitlab.example.com:snippets/42.git",
-		HTTPURLToRepo: "https://gitlab.example.com/snippets/42.git",
-		Imported:      true, ImportedFrom: "github",
+	t.Run("shows what GitLab sent", func(t *testing.T) {
+		got := FormatMarkdown(Output{
+			ID: 42, Title: "Test Snippet", Visibility: "private",
+			SSHURLToRepo:  "git@gitlab.example.com:snippets/42.git",
+			HTTPURLToRepo: "https://gitlab.example.com/snippets/42.git",
+			Imported:      true, ImportedFrom: "github",
+		})
+		want := "## Snippet #42: Test Snippet\n\n" +
+			"- **ID**: 42\n" +
+			"- **Title**: Test Snippet\n" +
+			"- **Visibility**: private\n" +
+			"- **SSH URL to Repo**: `git@gitlab.example.com:snippets/42.git`\n" +
+			"- **HTTP URL to Repo**: `https://gitlab.example.com/snippets/42.git`\n" +
+			"- **Imported**\n" +
+			"- **Imported From**: github\n" +
+			snippetCardHints(false, false)
+		if got != want {
+			t.Errorf("imported snippet card:\n got %q\nwant %q", got, want)
+		}
 	})
-	for _, want := range []string{
-		"SSH URL to Repo", "git@gitlab.example.com:snippets/42.git",
-		"HTTP URL to Repo", "https://gitlab.example.com/snippets/42.git",
-		"Imported From", "github",
-	} {
-		t.Run("shows "+want, func(t *testing.T) {
-			if !strings.Contains(full, want) {
-				t.Errorf("FormatMarkdown missing %q: %s", want, full)
-			}
-		})
-	}
 
-	bare := FormatMarkdown(Output{ID: 42, Title: "Test Snippet", Visibility: "private"})
-	for _, unwanted := range []string{"SSH URL to Repo", "HTTP URL to Repo", "Imported From"} {
-		t.Run("omits "+unwanted, func(t *testing.T) {
-			if strings.Contains(bare, unwanted) {
-				t.Errorf("FormatMarkdown shows %q for a snippet that has none: %s", unwanted, bare)
-			}
-		})
-	}
+	t.Run("omits what it did not", func(t *testing.T) {
+		got := FormatMarkdown(Output{ID: 42, Title: "Test Snippet", Visibility: "private"})
+		want := "## Snippet #42: Test Snippet\n\n" +
+			"- **ID**: 42\n" +
+			"- **Title**: Test Snippet\n" +
+			"- **Visibility**: private\n" +
+			snippetCardHints(false, false)
+		if got != want {
+			t.Errorf("bare snippet card:\n got %q\nwant %q", got, want)
+		}
+	})
 }

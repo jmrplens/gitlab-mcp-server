@@ -8,7 +8,7 @@ import (
 func FormatListMarkdown(out ListOutput) string {
 	items := make([]toolutil.TemplateAttributeListMarkdownItem, 0, len(out.Templates))
 	for _, template := range out.Templates {
-		items = append(items, toolutil.TemplateAttributeListMarkdownItem{Key: template.Key, Name: template.Name, Attribute: popularLabel(template.Popular)})
+		items = append(items, toolutil.TemplateAttributeListMarkdownItem{Key: template.Key, Name: template.Name, Attribute: toolutil.BoolEmoji(template.Popular)})
 	}
 	return toolutil.FormatTemplateAttributeListMarkdown(items, toolutil.TemplateAttributeListMarkdownOptions{
 		Title:           "Project Templates",
@@ -34,13 +34,6 @@ func FormatGetMarkdown(out GetOutput) string {
 		ContentHeading: "Content",
 		Hints:          []string{"Use this template when creating new project files"},
 	})
-}
-
-func popularLabel(popular bool) string {
-	if popular {
-		return "Yes"
-	}
-	return ""
 }
 
 func init() {

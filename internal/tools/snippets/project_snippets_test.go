@@ -315,8 +315,6 @@ const (
 	fmtIDEquals = "ID = %d"
 	// testWebURL identifies the test web URL constant used by this package.
 	testWebURL = "https://x"
-	// labelProjectID identifies the label project ID constant used by this package.
-	labelProjectID = "Project ID"
 )
 
 // snippetFixtureNoFiles stores the package-level snippet fixture no files state.
@@ -657,47 +655,72 @@ func TestProjectDelete_APIError(t *testing.T) {
 // Formatter coverage
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_AllFields verifies FormatMarkdown when all fields.
+// snippetCardHints is the guidance section a snippet card closes with: the
+// project actions for a project snippet and the personal ones otherwise, led
+// by the instruction to keep the links only when the card carries one.
+func snippetCardHints(project, linked bool) string {
+	out := "\n---\n\U0001F4A1 **Next steps:**\n"
+	if linked {
+		out += "- " + toolutil.HintPreserveLinks + "\n"
+	}
+	if project {
+		return out +
+			"- Use action 'project_get' with project_id and snippet_id; do not use personal action 'get'\n" +
+			"- Use action 'project_update' with files[] to modify project snippet content; include files[].action set to 'update' and use the Path value as files[].file_path\n" +
+			"- Use action 'project_delete' to remove this project snippet\n"
+	}
+	return out +
+		"- Use action 'content' to read snippet content\n" +
+		"- " + hintUpdateSnippet + "\n" +
+		"- Use action 'delete' to remove this snippet\n"
+}
+
+// TestFormatMarkdown_AllFields verifies the whole card of a snippet GitLab
+// answered every field for, the nested file table included.
 func TestFormatMarkdown_AllFields(t *testing.T) {
-	s := FormatMarkdown(Output{
+	got := FormatMarkdown(Output{
 		ID: 1, Title: "T", FileName: "f.rb", Description: "desc",
 		Visibility: "private", ProjectID: 42, WebURL: testWebURL,
 		Author: &SnippetAuthorOutput{Name: "User", Username: "user"},
 		Files:  []FileOutput{{Path: "f.rb", RawURL: "https://r"}},
 	})
-	if !strings.Contains(s, "File Name") {
-		t.Error("expected File Name")
-	}
-	if !strings.Contains(s, "Description") {
-		t.Error("expected Description")
-	}
-	if !strings.Contains(s, labelProjectID) {
-		t.Error("expected Project ID")
-	}
-	if !strings.Contains(s, "Files") {
-		t.Error("expected Files section")
+	want := "## Snippet #1: T\n\n" +
+		"- **ID**: 1\n" +
+		"- **Title**: T\n" +
+		"- **File Name**: f.rb\n" +
+		"- **Description**: desc\n" +
+		"- **Visibility**: private\n" +
+		"- **Author**: User (@user)\n" +
+		"- **Project ID**: 42\n" +
+		"- **URL**: [" + testWebURL + "](" + testWebURL + ")\n" +
+		"\n### Files\n\n| Path | Raw URL |\n| --- | --- |\n| f.rb | [https://r](https://r) |\n" +
+		snippetCardHints(true, true)
+	if got != want {
+		t.Errorf("snippet card:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatMarkdown_Minimal verifies FormatMarkdown when minimal.
+// TestFormatMarkdown_Minimal verifies that a snippet GitLab answered little
+// for renders no row for a value it did not send: no file name, no
+// description, no project and no URL.
 func TestFormatMarkdown_Minimal(t *testing.T) {
-	s := FormatMarkdown(Output{ID: 1, Title: "T", Visibility: "private", Author: &SnippetAuthorOutput{Name: "U", Username: "u"}})
-	if strings.Contains(s, "File Name") {
-		t.Error("should not include File Name when empty")
-	}
-	if strings.Contains(s, "Description") {
-		t.Error("should not include Description when empty")
-	}
-	if strings.Contains(s, labelProjectID) {
-		t.Error("should not include Project ID when 0")
+	got := FormatMarkdown(Output{ID: 1, Title: "T", Visibility: "private", Author: &SnippetAuthorOutput{Name: "U", Username: "u"}})
+	want := "## Snippet #1: T\n\n" +
+		"- **ID**: 1\n" +
+		"- **Title**: T\n" +
+		"- **Visibility**: private\n" +
+		"- **Author**: U (@u)\n" +
+		snippetCardHints(false, false)
+	if got != want {
+		t.Errorf("minimal snippet card:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies that an empty page is the one sentence
+// and nothing else.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	s := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(s, "No snippets found") {
-		t.Error("expected empty message")
+	if got, want := FormatListMarkdown(ListOutput{}), "No snippets found.\n"; got != want {
+		t.Errorf("empty snippet list:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -735,31 +758,47 @@ func TestExtractProjectPath(t *testing.T) {
 // FormatMarkdown with project path
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_WithProjectPath verifies FormatMarkdown when with project path.
+// TestFormatMarkdown_WithProjectPath verifies that a project snippet names its
+// project by path, not by the numeric ID, when the web URL carries one.
 func TestFormatMarkdown_WithProjectPath(t *testing.T) {
-	s := FormatMarkdown(Output{
+	const webURL = "https://gitlab.example.com/my-group/my-project/-/snippets/5"
+	got := FormatMarkdown(Output{
 		ID: 5, Title: "Project Snippet", Visibility: "internal",
 		ProjectID: 42,
-		WebURL:    "https://gitlab.example.com/my-group/my-project/-/snippets/5",
+		WebURL:    webURL,
 		Author:    &SnippetAuthorOutput{Name: "Dev", Username: "dev"},
 	})
-	if !strings.Contains(s, "| Project | my-group/my-project |") {
-		t.Errorf("expected project path row, got:\n%s", s)
-	}
-	if strings.Contains(s, labelProjectID) {
-		t.Error("should not show numeric Project ID when path is extractable")
+	want := "## Snippet #5: Project Snippet\n\n" +
+		"- **ID**: 5\n" +
+		"- **Title**: Project Snippet\n" +
+		"- **Visibility**: internal\n" +
+		"- **Author**: Dev (@dev)\n" +
+		"- **Project**: my-group/my-project\n" +
+		"- **URL**: [" + webURL + "](" + webURL + ")\n" +
+		snippetCardHints(true, true)
+	if got != want {
+		t.Errorf("project snippet card:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatMarkdown_FallbackProjectID verifies FormatMarkdown when fallback project ID.
+// TestFormatMarkdown_FallbackProjectID verifies that a project snippet whose
+// web URL names no path falls back to the numeric project ID.
 func TestFormatMarkdown_FallbackProjectID(t *testing.T) {
-	s := FormatMarkdown(Output{
+	got := FormatMarkdown(Output{
 		ID: 5, Title: "Snippet", Visibility: "private",
 		ProjectID: 99, WebURL: testWebURL,
 		Author: &SnippetAuthorOutput{Name: "U", Username: "u"},
 	})
-	if !strings.Contains(s, "| Project ID | 99 |") {
-		t.Errorf("expected numeric Project ID fallback, got:\n%s", s)
+	want := "## Snippet #5: Snippet\n\n" +
+		"- **ID**: 5\n" +
+		"- **Title**: Snippet\n" +
+		"- **Visibility**: private\n" +
+		"- **Author**: U (@u)\n" +
+		"- **Project ID**: 99\n" +
+		"- **URL**: [" + testWebURL + "](" + testWebURL + ")\n" +
+		snippetCardHints(true, true)
+	if got != want {
+		t.Errorf("project snippet card without a path:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -767,14 +806,18 @@ func TestFormatMarkdown_FallbackProjectID(t *testing.T) {
 // FormatListMarkdown with project column
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithProjectColumn verifies FormatListMarkdown when with project column.
+// TestFormatListMarkdown_WithProjectColumn verifies the whole render of a page
+// of project snippets: the project column, the path where the web URL carries
+// one and the numeric ID where it does not, and the project actions rather
+// than the personal ones, which answer 404 for every row on such a page.
 func TestFormatListMarkdown_WithProjectColumn(t *testing.T) {
-	out := ListOutput{
+	const appURL = "https://gitlab.example.com/team/app/-/snippets/1"
+	got := FormatListMarkdown(ListOutput{
 		Snippets: []Output{
 			{
 				ID: 1, Title: "PS1", Visibility: "public",
 				ProjectID: 10,
-				WebURL:    "https://gitlab.example.com/team/app/-/snippets/1",
+				WebURL:    appURL,
 				Author:    &SnippetAuthorOutput{Username: "u1"},
 			},
 			{
@@ -784,29 +827,37 @@ func TestFormatListMarkdown_WithProjectColumn(t *testing.T) {
 				Author:    &SnippetAuthorOutput{Username: "u2"},
 			},
 		},
-	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "| Project |") {
-		t.Errorf("expected Project column header, got:\n%s", md)
-	}
-	if !strings.Contains(md, "team/app") {
-		t.Errorf("expected project path in row, got:\n%s", md)
-	}
-	if !strings.Contains(md, "| 20 |") {
-		t.Errorf("expected numeric project ID fallback for short URL, got:\n%s", md)
+	})
+	want := "## Snippets (2)\n\n" +
+		"| ID | Title | Project | Visibility | Author | Files |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | [PS1](" + appURL + ") | team/app | public | @u1 | 0 |\n" +
+		"| 2 | [PS2](https://short-url) | 20 | private | @u2 | 0 |\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'project_get' with project_id and snippet_id for full details\n" +
+		"- Use action 'project_create' to add a new project snippet\n"
+	if got != want {
+		t.Errorf("project snippet list:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_NoProjectColumn verifies FormatListMarkdown when no project column.
+// TestFormatListMarkdown_NoProjectColumn verifies that a page of personal
+// snippets carries no project column and the personal actions.
 func TestFormatListMarkdown_NoProjectColumn(t *testing.T) {
-	out := ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Snippets: []Output{
 			{ID: 1, Title: "Personal", Visibility: "private", Author: &SnippetAuthorOutput{Username: "u1"}},
 		},
-	}
-	md := FormatListMarkdown(out)
-	if strings.Contains(md, "| Project") {
-		t.Errorf("should not include Project column for personal snippets, got:\n%s", md)
+	})
+	want := "## Snippets (1)\n\n" +
+		"| ID | Title | Visibility | Author | Files |\n| --- | --- | --- | --- | --- |\n" +
+		"| 1 | Personal | private | @u1 | 0 |\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'get' with snippet_id for full details\n" +
+		"- Use action 'create' to add a new snippet\n"
+	if got != want {
+		t.Errorf("personal snippet list:\n got %q\nwant %q", got, want)
 	}
 }
 

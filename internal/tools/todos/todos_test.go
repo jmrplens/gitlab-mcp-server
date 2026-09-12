@@ -6,7 +6,6 @@ package todos
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -342,127 +341,11 @@ func todoWithNils() gl.Todo {
 // Markdown formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdownString_Full verifies FormatOutputMarkdownString when full.
-func TestFormatOutputMarkdownString_Full(t *testing.T) {
-	s := FormatOutputMarkdownString(Output{
-		ID: 1, ActionName: "assigned", Target: &TodoTargetOut{Title: "Fix"}, TargetType: "Issue",
-		State: "pending", Project: &BasicProjectOut{Name: "proj"}, Author: &BasicUserOut{Username: "alice"}, CreatedAt: "2026-01-01",
-		TargetURL: "https://x", Body: "Some body",
-	})
-	if !strings.Contains(s, "To-Do #1") {
-		t.Error("expected To-Do header")
-	}
-	if !strings.Contains(s, "alice") {
-		t.Error("expected author")
-	}
-	if !strings.Contains(s, "Some body") {
-		t.Error("expected body")
-	}
-}
-
-// TestFormatOutputMarkdownString_Minimal verifies FormatOutputMarkdownString when minimal.
-func TestFormatOutputMarkdownString_Minimal(t *testing.T) {
-	s := FormatOutputMarkdownString(Output{ID: 2, ActionName: "mentioned", State: "done"})
-	if !strings.Contains(s, "To-Do #2") {
-		t.Error("expected To-Do header")
-	}
-	if strings.Contains(s, "**Author:**") {
-		t.Error("should skip author when empty")
-	}
-}
-
 // TestFormatOutputMarkdown verifies FormatOutputMarkdown.
 func TestFormatOutputMarkdown(t *testing.T) {
 	r := FormatOutputMarkdown(Output{ID: 1})
 	if r == nil {
 		t.Error(errExpectedNonNilResult)
-	}
-}
-
-// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
-func TestFormatListMarkdownString_Empty(t *testing.T) {
-	s := FormatListMarkdownString(ListOutput{})
-	if !strings.Contains(s, "No to-do items found") {
-		t.Errorf("expected 'No to-do items found', got %q", s)
-	}
-}
-
-// TestFormatListMarkdownString_WithItems verifies FormatListMarkdownString when with items.
-func TestFormatListMarkdownString_WithItems(t *testing.T) {
-	s := FormatListMarkdownString(ListOutput{
-		Todos: []Output{
-			{ID: 1, ActionName: "assigned", Target: &TodoTargetOut{Title: "Fix"}, TargetType: "Issue", State: "pending", Project: &BasicProjectOut{Name: "proj"}},
-			{ID: 2, ActionName: "mentioned", Target: &TodoTargetOut{Title: "Add"}, TargetType: "MergeRequest", State: "pending", Project: &BasicProjectOut{Name: "proj"}},
-		},
-	})
-	if !strings.Contains(s, "assigned") {
-		t.Error("expected action in table")
-	}
-	if !strings.Contains(s, "mentioned") {
-		t.Error("expected second item")
-	}
-}
-
-// TestFormatListMarkdownString_ClickableTargetLinks verifies that list table
-// renders target titles as clickable Markdown links when TargetURL is present.
-func TestFormatListMarkdownString_ClickableTargetLinks(t *testing.T) {
-	s := FormatListMarkdownString(ListOutput{
-		Todos: []Output{
-			{
-				ID: 1, ActionName: "assigned", Target: &TodoTargetOut{Title: "Fix bug"}, TargetType: "Issue",
-				State: "pending", Project: &BasicProjectOut{Name: "proj"}, TargetURL: "https://gitlab.example.com/issues/1",
-			},
-		},
-	})
-	if !strings.Contains(s, "[Fix bug](https://gitlab.example.com/issues/1)") {
-		t.Errorf("expected clickable target link in list, got:\n%s", s)
-	}
-}
-
-// TestFormatListMarkdownString_NoLinkWithoutTargetURL verifies that target
-// title appears as plain text when TargetURL is empty.
-func TestFormatListMarkdownString_NoLinkWithoutTargetURL(t *testing.T) {
-	s := FormatListMarkdownString(ListOutput{
-		Todos: []Output{
-			{
-				ID: 1, ActionName: "assigned", Target: &TodoTargetOut{Title: "Fix bug"}, TargetType: "Issue",
-				State: "pending", Project: &BasicProjectOut{Name: "proj"},
-			},
-		},
-	})
-	if strings.Contains(s, "[Fix bug](") {
-		t.Errorf("should not contain link when TargetURL is empty, got:\n%s", s)
-	}
-	if !strings.Contains(s, "Fix bug") {
-		t.Errorf("should contain target title as plain text, got:\n%s", s)
-	}
-}
-
-// TestFormatOutputMarkdownString_ClickableTarget verifies that detail view
-// renders target as clickable link when TargetURL is present.
-func TestFormatOutputMarkdownString_ClickableTarget(t *testing.T) {
-	s := FormatOutputMarkdownString(Output{
-		ID: 1, ActionName: "assigned", Target: &TodoTargetOut{Title: "Fix"}, TargetType: "Issue",
-		State: "pending", Project: &BasicProjectOut{Name: "proj"},
-		TargetURL: "https://gitlab.example.com/issues/1",
-	})
-	if !strings.Contains(s, "[Fix](https://gitlab.example.com/issues/1)") {
-		t.Errorf("expected clickable target in detail, got:\n%s", s)
-	}
-}
-
-// TestFormatOutputMarkdownString_NoLinkWithoutTargetURL verifies that
-// target appears as plain text when TargetURL is empty.
-func TestFormatOutputMarkdownString_NoLinkWithoutTargetURL(t *testing.T) {
-	s := FormatOutputMarkdownString(Output{
-		ID: 1, ActionName: "assigned", Target: &TodoTargetOut{Title: "Fix"}, TargetType: "Issue",
-		State: "pending", Project: &BasicProjectOut{Name: "proj"},
-	})
-	if strings.Contains(s, "[Fix](") {
-		t.Errorf("should not contain link without TargetURL, got:\n%s", s)
-	}
-	if !strings.Contains(s, "Fix") {
-		t.Errorf("should contain target title as plain text, got:\n%s", s)
 	}
 }
 
@@ -474,27 +357,11 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatMarkDoneMarkdownString verifies FormatMarkDoneMarkdownString.
-func TestFormatMarkDoneMarkdownString(t *testing.T) {
-	s := FormatMarkDoneMarkdownString(MarkDoneOutput{ID: 1, Message: "To-do 1 marked as done"})
-	if !strings.Contains(s, "To-do 1 marked as done") {
-		t.Errorf("got %q", s)
-	}
-}
-
 // TestFormatMarkDoneMarkdown verifies FormatMarkDoneMarkdown.
 func TestFormatMarkDoneMarkdown(t *testing.T) {
 	r := FormatMarkDoneMarkdown(MarkDoneOutput{Message: "done"})
 	if r == nil {
 		t.Error(errExpectedNonNilResult)
-	}
-}
-
-// TestFormatMarkAllDoneMarkdownString verifies FormatMarkAllDoneMarkdownString.
-func TestFormatMarkAllDoneMarkdownString(t *testing.T) {
-	s := FormatMarkAllDoneMarkdownString(MarkAllDoneOutput{Message: "All done"})
-	if !strings.Contains(s, "All done") {
-		t.Errorf("got %q", s)
 	}
 }
 

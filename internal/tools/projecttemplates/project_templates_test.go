@@ -82,19 +82,29 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// TestFormatListMarkdown verifies the whole list render, with the popular
+// column as the flag glyph rather than the word "Yes".
 func TestFormatListMarkdown(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Templates: []TemplateItem{{Key: "mit", Name: "MIT", Popular: true}}})
-	if !strings.Contains(md, "MIT") || !strings.Contains(md, "Yes") {
-		t.Error("missing content")
+	want := "## Project Templates (1)\n\n" +
+		"| Key | Name | Popular |\n| --- | --- | --- |\n" +
+		"| mit | MIT | " + toolutil.EmojiSuccess + " |\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n- Use `gitlab_get_project_template` to view a specific template\n"
+	if md != want {
+		t.Errorf("project template list:\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatGetMarkdown verifies FormatGetMarkdown.
+// TestFormatGetMarkdown verifies the whole card of one project template.
 func TestFormatGetMarkdown(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{Name: "MIT", Key: "mit", Content: "text", Permissions: []string{"use"}})
-	if !strings.Contains(md, "MIT") || !strings.Contains(md, "use") {
-		t.Error("missing content")
+	want := "## Project Template: MIT\n\n" +
+		"- **Key**: mit\n" +
+		"- **Permissions**: use\n" +
+		"\n### Content\n\n```\ntext\n```\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n- Use this template when creating new project files\n"
+	if md != want {
+		t.Errorf("project template card:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -104,25 +114,32 @@ func TestFormatGetMarkdown(t *testing.T) {
 // FormatListMarkdown — empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies that an empty page is the one sentence
+// and nothing else.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Templates: nil})
-	if !strings.Contains(md, "No templates found") {
-		t.Error("expected 'No templates found' for empty list")
+	if want := "No templates found.\n"; md != want {
+		t.Errorf("empty template list:\n got %q\nwant %q", md, want)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// FormatListMarkdown — non-popular item (no "Yes" in Popular column)
+// FormatListMarkdown — non-popular item
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_NonPopular verifies FormatListMarkdown when non popular.
+// TestFormatListMarkdown_NonPopular verifies that a template GitLab does not
+// list among the popular ones renders the cross glyph, where the column used
+// to be blank and said nothing at all.
 func TestFormatListMarkdown_NonPopular(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{Templates: []TemplateItem{
 		{Key: "test", Name: "Test", Popular: false},
 	}})
-	if !strings.Contains(md, "test") {
-		t.Error("expected template key in output")
+	want := "## Project Templates (1)\n\n" +
+		"| Key | Name | Popular |\n| --- | --- | --- |\n" +
+		"| test | Test | " + toolutil.EmojiCross + " |\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n- Use `gitlab_get_project_template` to view a specific template\n"
+	if md != want {
+		t.Errorf("project template list:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -130,7 +147,8 @@ func TestFormatListMarkdown_NonPopular(t *testing.T) {
 // FormatGetMarkdown — all optional fields populated
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_AllFields verifies FormatGetMarkdown when all fields.
+// TestFormatGetMarkdown_AllFields verifies the whole card when GitLab answered
+// with every field a project template can carry.
 func TestFormatGetMarkdown_AllFields(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{
 		Key:         "mit",
@@ -143,12 +161,18 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 		Limitations: []string{"no-liability"},
 		Content:     "MIT License text",
 	})
-	for _, want := range []string{"MIT License", "MIT", "Popular", "A permissive license", "commercial-use", "include-copyright", "no-liability", "MIT License text"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("missing %q in markdown output", want)
-			}
-		})
+	want := "## Project Template: MIT License\n\n" +
+		"- **Key**: mit\n" +
+		"- **Nickname**: MIT\n" +
+		"- **Popular**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Description**: A permissive license\n" +
+		"- **Permissions**: commercial-use\n" +
+		"- **Conditions**: include-copyright\n" +
+		"- **Limitations**: no-liability\n" +
+		"\n### Content\n\n```\nMIT License text\n```\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n- Use this template when creating new project files\n"
+	if md != want {
+		t.Errorf("project template card:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -156,23 +180,19 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 // FormatGetMarkdown — minimal fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_MinimalFields verifies FormatGetMarkdown when minimal fields.
+// TestFormatGetMarkdown_MinimalFields verifies that a template GitLab answered
+// with a key and a name renders those two rows and no absent value: no
+// nickname, no popular flag and no content section.
 func TestFormatGetMarkdown_MinimalFields(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{
 		Key:  "basic",
 		Name: "Basic",
 	})
-	if !strings.Contains(md, "Basic") {
-		t.Error("expected template name")
-	}
-	if strings.Contains(md, "Nickname") {
-		t.Error("should not contain Nickname")
-	}
-	if strings.Contains(md, "Popular") {
-		t.Error("should not contain Popular")
-	}
-	if strings.Contains(md, "Content") {
-		t.Error("should not contain Content section")
+	want := "## Project Template: Basic\n\n" +
+		"- **Key**: basic\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n- Use this template when creating new project files\n"
+	if md != want {
+		t.Errorf("minimal project template card:\n got %q\nwant %q", md, want)
 	}
 }
 

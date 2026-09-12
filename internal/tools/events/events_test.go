@@ -248,156 +248,177 @@ func TestListCurrentUserContributionEvents_APIError_Forbidden(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_WithEvents verifies the ContributionListMarkdownString_WithEvents Markdown formatter for a representative contributionliststring_withevents input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// eventFooter is the guidance section a page of events closes with. A page
+// whose targets carry no link carries no instruction to preserve them.
+func eventFooter(linked bool) string {
+	out := "\n---\n\U0001F4A1 **Next steps:**\n"
+	if linked {
+		out += "- " + toolutil.HintPreserveLinks + "\n"
+	}
+	return out + "- Filter events using action and target_type parameters\n"
+}
+
+// TestFormatContributionListMarkdownString_WithEvents verifies the whole
+// render of a page of contribution events: the heading, one list item per
+// event and the guidance section, and no event ID anywhere, which is an
+// internal number no caller can act on.
 func TestFormatContributionListMarkdownString_WithEvents(t *testing.T) {
-	out := ListContributionEventsOutput{
+	got := FormatContributionListMarkdownString(ListContributionEventsOutput{
 		Events: []ContributionEventOutput{
 			{ID: 1, ActionName: actionPushed, AuthorUsername: "dev", CreatedAt: "2026-06-01T10:00:00Z", TargetType: "MergeRequest", TargetIID: 3},
 			{ID: 2, ActionName: "opened", AuthorUsername: "dev", CreatedAt: "2026-06-02T11:00:00Z"},
 		},
-	}
-	md := FormatContributionListMarkdownString(out)
-	if md == "" {
-		t.Fatal("expected non-empty markdown")
-	}
-	if !contains(md, actionPushed) || !contains(md, "dev") {
-		t.Errorf("markdown missing expected content: %s", md)
+	})
+	want := "## Contribution Events (2)\n\n" +
+		"- **pushed** MergeRequest #3 by @dev, 1 Jun 2026 10:00 UTC\n" +
+		"- **opened** by @dev, 2 Jun 2026 11:00 UTC\n" +
+		eventFooter(false)
+	if got != want {
+		t.Errorf("contribution events:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatContributionListMarkdownString_Empty verifies the ContributionListMarkdownString_Empty Markdown formatter for a representative contributionliststring_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatContributionListMarkdownString_Empty verifies that an empty page
+// is the one sentence and nothing else.
 func TestFormatContributionListMarkdownString_Empty(t *testing.T) {
-	out := ListContributionEventsOutput{Events: []ContributionEventOutput{}}
-	md := FormatContributionListMarkdownString(out)
-	if md != "No contribution events found.\n" {
-		t.Errorf("got %q, want %q", md, "No contribution events found.\n")
+	got := FormatContributionListMarkdownString(ListContributionEventsOutput{Events: []ContributionEventOutput{}})
+	if want := "No contribution events found.\n"; got != want {
+		t.Errorf("empty contribution events:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdownString_WithEvents verifies the ListMarkdownString_WithEvents Markdown formatter for a representative liststring_withevents input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatContributionListMarkdownString_CountsWhatGitLabSent verifies that
+// the heading counts the total GitLab reported rather than the length of the
+// page, which is what a page of two under a total of forty-five used to
+// announce as "(2)".
+func TestFormatContributionListMarkdownString_CountsWhatGitLabSent(t *testing.T) {
+	got := FormatContributionListMarkdownString(ListContributionEventsOutput{
+		Events:     []ContributionEventOutput{{ID: 1, ActionName: actionPushed, AuthorUsername: "dev", CreatedAt: testDateAfter}},
+		Pagination: toolutil.PaginationOutput{TotalItems: 45, Page: 1, PerPage: 20, TotalPages: 3},
+	})
+	want := "## Contribution Events (45)\n\n" +
+		"Showing 1 of 45 results (page 1 of 3)\n\n" +
+		"- **pushed** by @dev, 1 Jun 2026\n" +
+		"\nPage 1 of 3 | 45 items total | 20 per page\n" +
+		eventFooter(false)
+	if got != want {
+		t.Errorf("paginated contribution events:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestFormatListMarkdownString_WithEvents verifies the whole render of a page
+// of project events, target reference included.
 func TestFormatListMarkdownString_WithEvents(t *testing.T) {
-	out := ListProjectEventsOutput{
+	got := FormatListMarkdownString(ListProjectEventsOutput{
 		Events: []ProjectEventOutput{
 			{ID: 1, ActionName: actionPushed, AuthorUsername: "alice", CreatedAt: "2026-01-15", TargetType: "MergeRequest", TargetIID: 3},
 			{ID: 2, ActionName: "commented", AuthorUsername: "bob", CreatedAt: testDateCreated},
 		},
-	}
-	md := FormatListMarkdownString(out)
-	if md == "" {
-		t.Fatal("expected non-empty markdown")
-	}
-	if !contains(md, actionPushed) || !contains(md, "alice") {
-		t.Errorf("markdown missing expected content: %s", md)
-	}
-	if !contains(md, "MergeRequest #3") {
-		t.Errorf("markdown missing target info: %s", md)
+	})
+	want := "## Project Events (2)\n\n" +
+		"- **pushed** MergeRequest #3 by @alice, 15 Jan 2026\n" +
+		"- **commented** by @bob, 14 Jan 2026\n" +
+		eventFooter(false)
+	if got != want {
+		t.Errorf("project events:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies the ListMarkdownString_Empty Markdown formatter for a representative liststring_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdownString_Empty verifies that an empty page is the one
+// sentence and nothing else.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
-	out := ListProjectEventsOutput{Events: []ProjectEventOutput{}}
-	md := FormatListMarkdownString(out)
-	if md != "No project events found.\n" {
-		t.Errorf("got %q, want %q", md, "No project events found.\n")
+	got := FormatListMarkdownString(ListProjectEventsOutput{Events: []ProjectEventOutput{}})
+	if want := "No project events found.\n"; got != want {
+		t.Errorf("empty project events:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatContributionListMarkdownString_TargetTitleShown verifies the ContributionListMarkdownString_TargetTitleShown Markdown formatter for a representative contributionliststring_targettitleshown input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatContributionListMarkdownString_TargetTitleShown verifies that an
+// event whose target GitLab named renders the title as the link label and the
+// reference beside it, so neither the subject nor its kind is lost.
 func TestFormatContributionListMarkdownString_TargetTitleShown(t *testing.T) {
-	out := ListContributionEventsOutput{
+	got := FormatContributionListMarkdownString(ListContributionEventsOutput{
 		Events: []ContributionEventOutput{
-			{ID: 10, ActionName: "opened", AuthorUsername: "dev", TargetType: "Issue", TargetIID: 7, TargetTitle: titleBugReport, CreatedAt: testDateAfter},
+			{ID: 10, ActionName: "opened", AuthorUsername: "dev", TargetType: "Issue", TargetIID: 7, TargetTitle: titleBugReport, TargetURL: "https://gitlab.example.com/issues/7", CreatedAt: testDateAfter},
 		},
-	}
-	md := FormatContributionListMarkdownString(out)
-	if !contains(md, `Issue #7 "Bug Report"`) {
-		t.Errorf("expected TargetTitle in output, got: %s", md)
+	})
+	want := "## Contribution Events (1)\n\n" +
+		"- **opened** [Bug Report](https://gitlab.example.com/issues/7) (Issue #7) by @dev, 1 Jun 2026\n" +
+		eventFooter(true)
+	if got != want {
+		t.Errorf("contribution event with a target title:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatContributionListMarkdownString_AuthorPrefixed verifies the ContributionListMarkdownString_AuthorPrefixed Markdown formatter for a representative contributionliststring_authorprefixed input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatContributionListMarkdownString_AuthorPrefixed(t *testing.T) {
-	out := ListContributionEventsOutput{
-		Events: []ContributionEventOutput{
-			{ID: 10, ActionName: actionPushed, AuthorUsername: "alice", CreatedAt: testDateAfter},
-		},
-	}
-	md := FormatContributionListMarkdownString(out)
-	if !contains(md, "@alice") {
-		t.Errorf("expected @alice in output, got: %s", md)
-	}
-}
-
-// TestFormatContributionListMarkdownString_NoEventID verifies the ContributionListMarkdownString_NoEventID Markdown formatter for a representative contributionliststring_noeventid input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatContributionListMarkdownString_NoEventID(t *testing.T) {
-	out := ListContributionEventsOutput{
-		Events: []ContributionEventOutput{
-			{ID: 99, ActionName: actionPushed, AuthorUsername: "dev", CreatedAt: testDateAfter},
-		},
-	}
-	md := FormatContributionListMarkdownString(out)
-	if contains(md, "(ID: 99)") {
-		t.Errorf("event ID should not appear in markdown, got: %s", md)
-	}
-}
-
-// TestFormatListMarkdownString_TargetTitleShown verifies the ListMarkdownString_TargetTitleShown Markdown formatter for a representative liststring_targettitleshown input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdownString_TargetTitleShown verifies the same at project
+// scope.
 func TestFormatListMarkdownString_TargetTitleShown(t *testing.T) {
-	out := ListProjectEventsOutput{
+	got := FormatListMarkdownString(ListProjectEventsOutput{
 		Events: []ProjectEventOutput{
 			{ID: 20, ActionName: "commented", AuthorUsername: "bob", TargetType: "MergeRequest", TargetIID: 5, TargetTitle: "Add feature X", CreatedAt: testDateCreated},
 		},
-	}
-	md := FormatListMarkdownString(out)
-	if !contains(md, `MergeRequest #5 "Add feature X"`) {
-		t.Errorf("expected TargetTitle in output, got: %s", md)
-	}
-}
-
-// TestFormatListMarkdownString_AuthorPrefixed verifies the ListMarkdownString_AuthorPrefixed Markdown formatter for a representative liststring_authorprefixed input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdownString_AuthorPrefixed(t *testing.T) {
-	out := ListProjectEventsOutput{
-		Events: []ProjectEventOutput{
-			{ID: 20, ActionName: actionPushed, AuthorUsername: "bob", CreatedAt: testDateCreated},
-		},
-	}
-	md := FormatListMarkdownString(out)
-	if !contains(md, "@bob") {
-		t.Errorf("expected @bob in output, got: %s", md)
+	})
+	want := "## Project Events (1)\n\n" +
+		"- **commented** Add feature X (MergeRequest #5) by @bob, 14 Jan 2026\n" +
+		eventFooter(false)
+	if got != want {
+		t.Errorf("project event with a target title:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdownString_NoEventID verifies the ListMarkdownString_NoEventID Markdown formatter for a representative liststring_noeventid input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdownString_NoEventID(t *testing.T) {
-	out := ListProjectEventsOutput{
-		Events: []ProjectEventOutput{
-			{ID: 88, ActionName: actionPushed, AuthorUsername: "alice", CreatedAt: "2026-01-15"},
-		},
+// TestFormatListMarkdownString_PushDataRendered verifies that a push event
+// names the ref it pushed to, how many commits it carried and the newest
+// commit's title. All three used to be dropped, so every push event read as
+// the bare word "pushed to".
+func TestFormatListMarkdownString_PushDataRendered(t *testing.T) {
+	got := FormatListMarkdownString(ListProjectEventsOutput{
+		Events: []ProjectEventOutput{{
+			ID: 1, ActionName: "pushed to", AuthorUsername: "alice", CreatedAt: "2026-01-15",
+			PushData: &ProjectEventPushDataOutput{CommitCount: 3, RefType: "branch", Ref: "main", CommitTitle: "Fix login"},
+		}},
+	})
+	want := "## Project Events (1)\n\n" +
+		"- **pushed to** branch `main` (3 commits, latest \"Fix login\") by @alice, 15 Jan 2026\n" +
+		eventFooter(false)
+	if got != want {
+		t.Errorf("project push event:\n got %q\nwant %q", got, want)
 	}
-	md := FormatListMarkdownString(out)
-	if contains(md, "(ID: 88)") {
-		t.Errorf("event ID should not appear in markdown, got: %s", md)
+}
+
+// TestFormatListMarkdownString_NoteTargetRendered verifies that a comment
+// event names the issue or merge request the note hangs on. The event's own
+// target is the note, so without this the reader is never told what was
+// commented on.
+func TestFormatListMarkdownString_NoteTargetRendered(t *testing.T) {
+	got := FormatListMarkdownString(ListProjectEventsOutput{
+		Events: []ProjectEventOutput{{
+			ID: 2, ActionName: "commented on", AuthorUsername: "bob", CreatedAt: testDateCreated,
+			Note: &ProjectEventNoteOutput{ID: 9, NoteableType: "MergeRequest", NoteableIID: 5},
+		}},
+	})
+	want := "## Project Events (1)\n\n" +
+		"- **commented on** on MergeRequest #5 by @bob, 14 Jan 2026\n" +
+		eventFooter(false)
+	if got != want {
+		t.Errorf("project note event:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestFormatContributionListMarkdownString_PushDataRendered verifies the push
+// payload reaches the page at contribution scope too.
+func TestFormatContributionListMarkdownString_PushDataRendered(t *testing.T) {
+	got := FormatContributionListMarkdownString(ListContributionEventsOutput{
+		Events: []ContributionEventOutput{{
+			ID: 1, ActionName: "pushed to", AuthorUsername: "dev", CreatedAt: testDateAfter,
+			PushData: &ContributionEventPushDataOutput{CommitCount: 1, RefType: "tag", Ref: "v1.0"},
+			Note:     &NoteOutput{ID: 3, NoteableType: "Issue", NoteableIID: 8},
+		}},
+	})
+	want := "## Contribution Events (1)\n\n" +
+		"- **pushed to** tag `v1.0` (1 commit) on Issue #8 by @dev, 1 Jun 2026\n" +
+		eventFooter(false)
+	if got != want {
+		t.Errorf("contribution push event:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -421,21 +442,6 @@ func TestFormatAuthor(t *testing.T) {
 			}
 		})
 	}
-}
-
-// contains reports whether contains.
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(s) > 0 && containsSubstring(s, sub))
-}
-
-// containsSubstring reports whether contains substring.
-func containsSubstring(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }
 
 // ---------- Tests consolidated from coverage_test.go ----------.
@@ -507,29 +513,29 @@ func TestFormatContributionListMarkdown_Wrapper(t *testing.T) {
 	}
 }
 
-// TestFormatContributionListMarkdownString_EmptyTargetType verifies the ContributionListMarkdownString_EmptyTargetType Markdown formatter for a representative contributionliststring_emptytargettype input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatContributionListMarkdownString_EmptyTargetType verifies that an
+// event GitLab sent no target for renders the action alone: no reference to
+// "#0", and no author or timestamp separators around values it never sent.
 func TestFormatContributionListMarkdownString_EmptyTargetType(t *testing.T) {
-	out := ListContributionEventsOutput{
+	got := FormatContributionListMarkdownString(ListContributionEventsOutput{
 		Events: []ContributionEventOutput{{ID: 1, ActionName: "pushed", TargetType: ""}},
-	}
-	md := FormatContributionListMarkdownString(out)
-	if strings.Contains(md, "#0") {
-		t.Error("empty TargetType should not produce target text")
+	})
+	want := "## Contribution Events (1)\n\n- **pushed**\n" + eventFooter(false)
+	if got != want {
+		t.Errorf("contribution event without a target:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatContributionListMarkdownString_WithTargetType verifies the ContributionListMarkdownString_WithTargetType Markdown formatter for a representative contributionliststring_withtargettype input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatContributionListMarkdownString_WithTargetType verifies that an
+// event GitLab sent a target type and IID but no title for is named by its
+// reference.
 func TestFormatContributionListMarkdownString_WithTargetType(t *testing.T) {
-	out := ListContributionEventsOutput{
+	got := FormatContributionListMarkdownString(ListContributionEventsOutput{
 		Events: []ContributionEventOutput{{ID: 1, ActionName: "pushed", TargetType: "Issue", TargetIID: 42}},
-	}
-	md := FormatContributionListMarkdownString(out)
-	if !strings.Contains(md, "Issue #42") {
-		t.Error("expected target type in markdown")
+	})
+	want := "## Contribution Events (1)\n\n- **pushed** Issue #42\n" + eventFooter(false)
+	if got != want {
+		t.Errorf("contribution event with a target reference:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -576,29 +582,27 @@ func TestFormatListMarkdown_Wrapper(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_EmptyTargetType verifies the ListMarkdownString_EmptyTargetType Markdown formatter for a representative liststring_emptytargettype input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdownString_EmptyTargetType verifies the same at project
+// scope: no target, no "#0" and no empty attribution.
 func TestFormatListMarkdownString_EmptyTargetType(t *testing.T) {
-	out := ListProjectEventsOutput{
+	got := FormatListMarkdownString(ListProjectEventsOutput{
 		Events: []ProjectEventOutput{{ID: 1, ActionName: "pushed", TargetType: ""}},
-	}
-	md := FormatListMarkdownString(out)
-	if strings.Contains(md, "#0") {
-		t.Error("empty TargetType should not produce target text")
+	})
+	want := "## Project Events (1)\n\n- **pushed**\n" + eventFooter(false)
+	if got != want {
+		t.Errorf("project event without a target:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdownString_WithTargetType verifies the ListMarkdownString_WithTargetType Markdown formatter for a representative liststring_withtargettype input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdownString_WithTargetType verifies that a project event's
+// target reference names the type and the IID.
 func TestFormatListMarkdownString_WithTargetType(t *testing.T) {
-	out := ListProjectEventsOutput{
+	got := FormatListMarkdownString(ListProjectEventsOutput{
 		Events: []ProjectEventOutput{{ID: 1, ActionName: "pushed", TargetType: "MR", TargetIID: 5}},
-	}
-	md := FormatListMarkdownString(out)
-	if !strings.Contains(md, "MR #5") {
-		t.Error("expected target type in markdown")
+	})
+	want := "## Project Events (1)\n\n- **pushed** MR #5\n" + eventFooter(false)
+	if got != want {
+		t.Errorf("project event with a target reference:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -791,28 +795,35 @@ func TestUserActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
-// TestFormatTarget_WithURLAndTitle verifies that formatTarget produces a clickable
-// link when targetURL is provided, and appends the title in quotes.
-func TestFormatTarget_WithURLAndTitle(t *testing.T) {
-	got := formatTarget("Issue", 42, "Bug title", "https://gitlab.example.com/issues/42")
-	if !strings.Contains(got, "[Issue #42](https://gitlab.example.com/issues/42)") {
-		t.Errorf("expected markdown link, got %q", got)
+// TestFormatTarget covers the four shapes a target comes in: a title and a
+// URL, a URL with no title, a type and an IID with no URL, and nothing GitLab
+// could name at all.
+func TestFormatTarget(t *testing.T) {
+	tests := []struct {
+		name       string
+		targetType string
+		iid        int64
+		title      string
+		url        string
+		want       string
+	}{
+		{
+			name: "title and URL", targetType: "Issue", iid: 42, title: "Bug title", url: "https://gitlab.example.com/issues/42",
+			want: " [Bug title](https://gitlab.example.com/issues/42) (Issue #42)",
+		},
+		{
+			name: "URL without a title", targetType: "MergeRequest", iid: 10, url: "https://gitlab.example.com/mr/10",
+			want: " [MergeRequest #10](https://gitlab.example.com/mr/10)",
+		},
+		{name: "reference without a URL", targetType: "Issue", iid: 7, want: " Issue #7"},
+		{name: "nothing GitLab named", targetType: "Issue", want: ""},
 	}
-	if !strings.Contains(got, `"Bug title"`) {
-		t.Errorf("expected title in quotes, got %q", got)
-	}
-}
-
-// TestFormatTarget_WithURLNoTitle verifies the Target_WithURLNoTitle Markdown formatter for a representative target_withurlnotitle input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatTarget_WithURLNoTitle(t *testing.T) {
-	got := formatTarget("MergeRequest", 10, "", "https://gitlab.example.com/mr/10")
-	if !strings.Contains(got, "[MergeRequest #10](https://gitlab.example.com/mr/10)") {
-		t.Errorf("expected markdown link, got %q", got)
-	}
-	if strings.Contains(got, `""`) {
-		t.Error("should not contain empty quoted title")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatTarget(tt.targetType, tt.iid, tt.title, tt.url); got != tt.want {
+				t.Errorf("formatTarget() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -1226,7 +1237,7 @@ func TestEvents_UnreadableCapturedFields(t *testing.T) {
 // and say nothing of either for an event that carries neither.
 func TestFormatEventListMarkdown_SentFields(t *testing.T) {
 	page := &WikiPageOutput{Format: "markdown", Slug: "home", Title: "Home", WikiPageMetaID: 77}
-	for name, rendered := range map[string]string{
+	for name, got := range map[string]string{
 		"contribution": FormatContributionListMarkdownString(ListContributionEventsOutput{
 			Events: []ContributionEventOutput{{
 				ID: 1, ActionName: "created", WikiPage: page, Imported: true, ImportedFrom: "github",
@@ -1239,15 +1250,16 @@ func TestFormatEventListMarkdown_SentFields(t *testing.T) {
 		}),
 	} {
 		t.Run(name, func(t *testing.T) {
-			for _, want := range []string{`wiki page "Home"`, "(imported from github)"} {
-				if !strings.Contains(rendered, want) {
-					t.Errorf("%s markdown missing %q: %s", name, want, rendered)
-				}
+			want := "## " + eventListTitle(name) + " (1)\n\n" +
+				"- **created** wiki page \"Home\" (imported from github)\n" +
+				eventFooter(false)
+			if got != want {
+				t.Errorf("%s events:\n got %q\nwant %q", name, got, want)
 			}
 		})
 	}
 
-	for name, rendered := range map[string]string{
+	for name, got := range map[string]string{
 		"contribution": FormatContributionListMarkdownString(ListContributionEventsOutput{
 			Events: []ContributionEventOutput{{ID: 1, ActionName: "pushed"}},
 		}),
@@ -1256,13 +1268,20 @@ func TestFormatEventListMarkdown_SentFields(t *testing.T) {
 		}),
 	} {
 		t.Run(name+" without them", func(t *testing.T) {
-			for _, unwanted := range []string{"wiki page", "imported"} {
-				if strings.Contains(rendered, unwanted) {
-					t.Errorf("%s markdown shows %q for an event that has none: %s", name, unwanted, rendered)
-				}
+			want := "## " + eventListTitle(name) + " (1)\n\n- **pushed**\n" + eventFooter(false)
+			if got != want {
+				t.Errorf("%s events without a wiki page or an origin:\n got %q\nwant %q", name, got, want)
 			}
 		})
 	}
+}
+
+// eventListTitle names the heading each event scope renders.
+func eventListTitle(scope string) string {
+	if scope == "contribution" {
+		return "Contribution Events"
+	}
+	return "Project Events"
 }
 
 // Each of the four converters below decides whether a nested event object is
@@ -1356,13 +1375,11 @@ func TestEventConverters_LeaveOutTheTimestampsGitLabDidNotSend(t *testing.T) {
 // TestFormatOrigin_ImportedWithoutASource verifies an event GitLab marked as
 // imported without naming the platform still says so.
 func TestFormatOrigin_ImportedWithoutASource(t *testing.T) {
-	rendered := FormatListMarkdownString(ListProjectEventsOutput{
+	got := FormatListMarkdownString(ListProjectEventsOutput{
 		Events: []ProjectEventOutput{{ID: 1, ActionName: "pushed", Imported: true}},
 	})
-	if !strings.Contains(rendered, "(imported)") {
-		t.Errorf("markdown missing the bare imported note: %s", rendered)
-	}
-	if strings.Contains(rendered, "imported from") {
-		t.Errorf("markdown names a source GitLab did not send: %s", rendered)
+	want := "## Project Events (1)\n\n- **pushed** (imported)\n" + eventFooter(false)
+	if got != want {
+		t.Errorf("imported event without a source:\n got %q\nwant %q", got, want)
 	}
 }

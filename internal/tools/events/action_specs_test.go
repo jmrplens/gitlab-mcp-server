@@ -4,6 +4,7 @@ package events
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -21,7 +22,7 @@ func TestUserActionSpecs_Descriptions(t *testing.T) {
 			if desc == "" {
 				t.Fatal("empty description")
 			}
-			if !contains(desc, "Returns:") || !contains(desc, "See also:") {
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
 				t.Errorf("description missing Returns/See also: %q", desc)
 			}
 		})

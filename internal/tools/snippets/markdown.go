@@ -24,118 +24,156 @@ func formatSnippetNotFound(out snippetNotFoundOutput) *mcp.CallToolResult {
 
 const hintUpdateSnippet = "Use action 'update' to modify a personal snippet; for project snippets use action 'project_update'"
 
-// FormatMarkdown formats a single snippet as markdown.
+// authorCell renders a snippet author as the name and the handle, or nothing
+// when GitLab sent no author.
+func authorCell(a *SnippetAuthorOutput) string {
+	if a == nil {
+		return ""
+	}
+	handle := toolutil.MdUserHandle(a.Username)
+	name := toolutil.EscapeMdTableCell(a.Name)
+	switch {
+	case name == "":
+		return handle
+	case handle == "":
+		return name
+	default:
+		return name + " (" + handle + ")"
+	}
+}
+
+// FormatMarkdown renders one snippet as the card of one object.
+//
+// It used to open a "| Field | Value |" table and fill it row by row, which
+// left "| Imported From |  |" on the page for every snippet GitLab marked
+// imported without naming the platform, and put the two clone URLs — values a
+// reader copies verbatim — in cells rather than in code spans.
 func FormatMarkdown(out Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Snippet #%d: %s\n\n", out.ID, toolutil.EscapeMdHeading(out.Title))
-	b.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&b, "| ID | %d |\n", out.ID)
-	fmt.Fprintf(&b, "| Title | %s |\n", toolutil.EscapeMdTableCell(out.Title))
-	if out.FileName != "" {
-		fmt.Fprintf(&b, "| File Name | %s |\n", toolutil.EscapeMdTableCell(out.FileName))
-	}
-	if out.Description != "" {
-		fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
-	}
-	//gitlab:allow-unescaped out.Visibility: a snippet visibility GitLab answers as private, internal or public.
-	fmt.Fprintf(&b, "| Visibility | %s |\n", out.Visibility)
-	if out.Author != nil {
-		fmt.Fprintf(&b, "| Author | %s (@%s) |\n",
-			toolutil.EscapeMdTableCell(out.Author.Name), toolutil.EscapeMdTableCell(out.Author.Username))
-	}
+	c := toolutil.NewCard(&b, fmt.Sprintf("Snippet #%d: %s", out.ID, out.Title))
+	c.Int("ID", out.ID)
+	c.Field("Title", out.Title)
+	c.Field("File Name", out.FileName)
+	c.Text("Description", out.Description)
+	c.Field("Visibility", out.Visibility)
+	c.Markdown("Author", authorCell(out.Author))
 	if out.ProjectID != 0 {
 		if pp := extractProjectPath(out.WebURL); pp != "" {
-			fmt.Fprintf(&b, "| Project | %s |\n", toolutil.EscapeMdTableCell(pp))
+			c.Field("Project", pp)
 		} else {
-			fmt.Fprintf(&b, "| Project ID | %d |\n", out.ProjectID)
+			c.Int("Project ID", out.ProjectID)
 		}
 	}
-	fmt.Fprintf(&b, "| Web URL | %s |\n", toolutil.MdTitleLink(out.Title, out.WebURL))
-	if out.SSHURLToRepo != "" {
-		fmt.Fprintf(&b, "| SSH URL to Repo | %s |\n", toolutil.EscapeMdTableCell(out.SSHURLToRepo))
-	}
-	if out.HTTPURLToRepo != "" {
-		fmt.Fprintf(&b, "| HTTP URL to Repo | %s |\n", toolutil.EscapeMdTableCell(out.HTTPURLToRepo))
-	}
-	if out.Imported {
-		fmt.Fprintf(&b, "| Imported From | %s |\n", toolutil.EscapeMdTableCell(out.ImportedFrom))
-	}
+	c.URL(out.WebURL)
+	c.Code("SSH URL to Repo", out.SSHURLToRepo)
+	c.Code("HTTP URL to Repo", out.HTTPURLToRepo)
+	c.Flag("", "Imported", out.Imported)
+	c.Field("Imported From", out.ImportedFrom)
 	if len(out.Files) > 0 {
-		b.WriteString("\n### Files\n\n")
-		b.WriteString("| Path | Raw URL |\n|---|---|\n")
+		t := c.Table("Files", "Path", "Raw URL")
 		for _, f := range out.Files {
-			fmt.Fprintf(&b, "| %s | %s |\n", toolutil.EscapeMdTableCell(f.Path), toolutil.MdTitleLink(f.Path, f.RawURL))
+			// The path names the column already; a link labeled with it a
+			// second time says nothing, so the destination is its own label.
+			t.Row(toolutil.EscapeMdTableCell(f.Path), toolutil.MdTitleLink(f.RawURL, f.RawURL))
 		}
 	}
-	hints := []string{toolutil.HintPreserveLinks}
-	if out.ProjectID != 0 {
-		hints = append(
-			hints,
-			"For project snippets, use action 'project_get' with project_id and snippet_id; do not use personal action 'get'",
-			"Use action 'project_update' with files[] to modify project snippet content; include files[].action set to 'update' and use the Path value as files[].file_path",
-			"Use action 'project_delete' to remove this project snippet",
-		)
-	} else {
-		hints = append(
-			hints,
-			"Use action 'content' to read snippet content",
-			hintUpdateSnippet,
-			"Use action 'delete' to remove this snippet",
-		)
-	}
-	toolutil.WriteHints(&b, hints...)
+	c.End(snippetHints(out)...)
 	return b.String()
 }
 
-// FormatListMarkdown formats a list of snippets as markdown.
-func FormatListMarkdown(out ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Snippets (%d)\n\n", len(out.Snippets))
-	toolutil.WriteListSummary(&b, len(out.Snippets), out.Pagination)
-	if len(out.Snippets) == 0 {
-		b.WriteString("No snippets found.\n")
-		toolutil.WritePagination(&b, out.Pagination)
-		return b.String()
+// snippetHints names the actions that apply to the snippet just rendered, and
+// leads with the instruction to keep the links only when the card has one: a
+// snippet with no web URL and no files carries no link to preserve.
+func snippetHints(out Output) []string {
+	var hints []string
+	if out.ProjectID != 0 {
+		hints = []string{
+			"Use action 'project_get' with project_id and snippet_id; do not use personal action 'get'",
+			"Use action 'project_update' with files[] to modify project snippet content; include files[].action set to 'update' and use the Path value as files[].file_path",
+			"Use action 'project_delete' to remove this project snippet",
+		}
+	} else {
+		hints = []string{
+			"Use action 'content' to read snippet content",
+			hintUpdateSnippet,
+			"Use action 'delete' to remove this snippet",
+		}
 	}
+	if snippetHasLink(out) {
+		return toolutil.ListHints(hints...)
+	}
+	return hints
+}
 
-	if snippetsHaveProject(out.Snippets) {
+// snippetHasLink reports whether the card renders any clickable link.
+func snippetHasLink(out Output) bool {
+	if out.WebURL != "" {
+		return true
+	}
+	for _, f := range out.Files {
+		if f.RawURL != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// FormatListMarkdown renders a page of snippets as a Markdown table: a
+// collection of objects that share columns.
+func FormatListMarkdown(out ListOutput) string {
+	if len(out.Snippets) == 0 {
+		return toolutil.EmptyMessage("snippets")
+	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Snippets", len(out.Snippets), out.Pagination)
+	withProject := snippetsHaveProject(out.Snippets)
+	if withProject {
 		writeProjectSnippetTable(&b, out.Snippets)
 	} else {
 		writeSimpleSnippetTable(&b, out.Snippets)
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use action 'get' with snippet_id for full details",
-		"Use action 'create' to add a new snippet",
-	)
+	toolutil.WriteListFooter(&b, out.Pagination, true, toolutil.ListHints(listHints(withProject)...)...)
 	return b.String()
 }
 
-// FormatContentMarkdown formats snippet content as markdown.
+// listHints names the actions a reader of the list can take next. A page of
+// project snippets is served by the project actions: the personal 'get' and
+// 'create' it used to name answer 404 for every row on it.
+func listHints(withProject bool) []string {
+	if withProject {
+		return []string{
+			"Use action 'project_get' with project_id and snippet_id for full details",
+			"Use action 'project_create' to add a new project snippet",
+		}
+	}
+	return []string{
+		"Use action 'get' with snippet_id for full details",
+		"Use action 'create' to add a new snippet",
+	}
+}
+
+// FormatContentMarkdown renders snippet content as a fenced block under the
+// card's heading: the content is a file, so it is contained rather than
+// escaped.
 func FormatContentMarkdown(out ContentOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Snippet #%d Content\n\n", out.SnippetID)
-	b.WriteString(toolutil.MarkdownFencedBlock("", out.Content))
-	toolutil.WriteHints(
-		&b,
+	c := toolutil.NewCard(&b, fmt.Sprintf("Snippet #%d Content", out.SnippetID))
+	c.Fence("", "", out.Content)
+	c.End(
 		"Use action 'file_content' to get content of a specific file",
 		hintUpdateSnippet,
 	)
 	return b.String()
 }
 
-// FormatFileContentMarkdown formats snippet file content as markdown.
+// FormatFileContentMarkdown renders one snippet file's content the same way.
 func FormatFileContentMarkdown(out FileContentOutput) string {
 	var b strings.Builder
 	// Both are echoed from the caller's own arguments, and a git ref may hold
-	// '|', '<' and '>'.
-	fmt.Fprintf(&b, "## Snippet #%d File: %s (ref: %s)\n\n", out.SnippetID,
-		toolutil.EscapeMdHeading(out.FileName), toolutil.EscapeMdHeading(out.Ref))
-	b.WriteString(toolutil.MarkdownFencedBlock("", out.Content))
-	toolutil.WriteHints(
-		&b,
+	// '|', '<' and '>'; NewCard escapes the composed heading.
+	c := toolutil.NewCard(&b, fmt.Sprintf("Snippet #%d File: %s (ref: %s)", out.SnippetID, out.FileName, out.Ref))
+	c.Fence("", "", out.Content)
+	c.End(
 		"Use action 'content' to get the full snippet content",
 		hintUpdateSnippet,
 	)

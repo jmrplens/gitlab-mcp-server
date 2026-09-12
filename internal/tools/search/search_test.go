@@ -776,8 +776,6 @@ const (
 	errExpected = "expected error"
 	// fmtUnexpErr identifies the fmt unexp err constant used by this package.
 	fmtUnexpErr = "unexpected error: %v"
-	// errExpectedHdr identifies the err expected hdr constant used by this package.
-	errExpectedHdr = "expected header with count"
 	// fmtLenWant1 identifies the fmt len want 1 constant used by this package.
 	fmtLenWant1 = "len=%d, want 1"
 )
@@ -1282,47 +1280,85 @@ func TestSearchSnippets_NilAuthorAndDates(t *testing.T) {
 // Markdown formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatCodeMarkdown_Empty verifies FormatCodeMarkdown when empty.
+// onePage is the pagination of a single full page, the shape every formatter
+// test below renders under.
+var onePage = toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1}
+
+// onePageFooter is what a single-page list closes with: the pagination line
+// and the guidance section carrying hints.
+func onePageFooter(hints ...string) string {
+	var b strings.Builder
+	b.WriteString("\nPage 1 of 1 | 1 items total | 20 per page\n\n---\n\U0001F4A1 **Next steps:**\n")
+	for _, hint := range hints {
+		b.WriteString("- " + hint + "\n")
+	}
+	return b.String()
+}
+
+// TestFormatCodeMarkdown_Empty verifies that an empty code search is the one
+// sentence and nothing else.
 func TestFormatCodeMarkdown_Empty(t *testing.T) {
-	s := FormatCodeMarkdown(CodeOutput{})
-	if !strings.Contains(s, "No code search results found") {
-		t.Errorf("expected 'No code search results found', got %q", s)
+	if got, want := FormatCodeMarkdown(CodeOutput{}), "No code search results found.\n"; got != want {
+		t.Errorf("empty code search:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatCodeMarkdown_WithResults verifies FormatCodeMarkdown when with results.
+// TestFormatCodeMarkdown_WithResults verifies the whole render of a page of
+// code search results.
 func TestFormatCodeMarkdown_WithResults(t *testing.T) {
-	s := FormatCodeMarkdown(CodeOutput{
+	got := FormatCodeMarkdown(CodeOutput{
 		Blobs:      []BlobOutput{{Filename: "main.go", Path: "cmd/main.go", Ref: "main", Startline: 10}},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+		Pagination: onePage,
 	})
-	if !strings.Contains(s, "main.go") {
-		t.Error("expected main.go in output")
-	}
-	if !strings.Contains(s, "Code Search Results (1)") {
-		t.Error(errExpectedHdr)
+	want := "## Code Search Results (1)\n\n" +
+		"| Project | File | Path | Ref | Line |\n| --- | --- | --- | --- | --- |\n" +
+		"| 0 | main.go | cmd/main.go | main | 10 |\n" +
+		onePageFooter("Use gitlab_repository action 'file_get' with path to read a found file")
+	if got != want {
+		t.Errorf("code search:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatMRsMarkdown_Empty verifies FormatMRsMarkdown when empty.
+// TestFormatMRsMarkdown_Empty verifies that an empty merge request search is
+// the one sentence and nothing else.
 func TestFormatMRsMarkdown_Empty(t *testing.T) {
-	s := FormatMRsMarkdown(MergeRequestsOutput{})
-	if !strings.Contains(s, "No merge requests found") {
-		t.Errorf("expected 'No merge requests found', got %q", s)
+	if got, want := FormatMRsMarkdown(MergeRequestsOutput{}), "No merge requests found.\n"; got != want {
+		t.Errorf("empty MR search:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatMRsMarkdown_WithResults verifies FormatMRsMarkdown when with results.
+// TestFormatMRsMarkdown_WithResults verifies the whole render of a page of
+// merge request search results.
 func TestFormatMRsMarkdown_WithResults(t *testing.T) {
-	s := FormatMRsMarkdown(MergeRequestsOutput{
+	got := FormatMRsMarkdown(MergeRequestsOutput{
 		MergeRequests: []mergerequests.Output{{IID: 5, Title: "Fix", State: "merged", SourceBranch: "fix", TargetBranch: "main"}},
-		Pagination:    toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+		Pagination:    onePage,
 	})
-	if !strings.Contains(s, "!5") {
-		t.Error("expected !5 in output")
+	want := "## MR Search Results (1)\n\n" +
+		"| IID | Title | State | Author | Project | Source -> Target |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| !5 | Fix | " + toolutil.MRStateEmoji("merged") + " merged |  |  | fix -> main |\n" +
+		onePageFooter(toolutil.HintPreserveLinks,
+			"Use gitlab_merge_request action 'get' with project_id and merge_request_iid to see full details")
+	if got != want {
+		t.Errorf("MR search:\n got %q\nwant %q", got, want)
 	}
-	if !strings.Contains(s, "MR Search Results (1)") {
-		t.Error(errExpectedHdr)
+}
+
+// TestFormatMRsMarkdown_DraftMarked verifies that a draft merge request is
+// marked as one in the title column. A draft cannot be merged, and the row
+// used to read exactly like a mergeable one.
+func TestFormatMRsMarkdown_DraftMarked(t *testing.T) {
+	got := FormatMRsMarkdown(MergeRequestsOutput{
+		MergeRequests: []mergerequests.Output{{IID: 5, Title: "Fix", State: "opened", Draft: true, SourceBranch: "fix", TargetBranch: "main"}},
+		Pagination:    onePage,
+	})
+	want := "## MR Search Results (1)\n\n" +
+		"| IID | Title | State | Author | Project | Source -> Target |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| !5 | Fix " + toolutil.EmojiDraft + " | " + toolutil.MRStateEmoji("opened") + " opened |  |  | fix -> main |\n" +
+		onePageFooter(toolutil.HintPreserveLinks,
+			"Use gitlab_merge_request action 'get' with project_id and merge_request_iid to see full details")
+	if got != want {
+		t.Errorf("draft MR search:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1358,28 +1394,28 @@ func TestMarkdownForResult_Unknown(t *testing.T) {
 // New formatter tests: Issues
 // ---------------------------------------------------------------------------.
 
-// TestFormatIssuesMarkdown_Empty verifies FormatIssuesMarkdown when empty.
+// TestFormatIssuesMarkdown_Empty verifies that an empty issue search is the
+// one sentence and nothing else.
 func TestFormatIssuesMarkdown_Empty(t *testing.T) {
-	s := FormatIssuesMarkdown(IssuesOutput{})
-	if !strings.Contains(s, "No issues found") {
-		t.Errorf("expected 'No issues found', got %q", s)
+	if got, want := FormatIssuesMarkdown(IssuesOutput{}), "No issues found.\n"; got != want {
+		t.Errorf("empty issue search:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatIssuesMarkdown_WithResults verifies FormatIssuesMarkdown when with results.
+// TestFormatIssuesMarkdown_WithResults verifies the whole render of a page of
+// issue search results.
 func TestFormatIssuesMarkdown_WithResults(t *testing.T) {
-	s := FormatIssuesMarkdown(IssuesOutput{
+	got := FormatIssuesMarkdown(IssuesOutput{
 		Issues:     []issues.BasicOutput{{IID: 3, Title: "Fix login", State: "opened", Author: &toolutil.IssueUserOutput{Username: "dev1"}, Labels: []string{"bug", "critical"}}},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+		Pagination: onePage,
 	})
-	if !strings.Contains(s, "#3") {
-		t.Error("expected #3 in output")
-	}
-	if !strings.Contains(s, "Issue Search Results (1)") {
-		t.Error(errExpectedHdr)
-	}
-	if !strings.Contains(s, "bug, critical") {
-		t.Error("expected labels in output")
+	want := "## Issue Search Results (1)\n\n" +
+		"| IID | Title | State | Author | Labels |\n| --- | --- | --- | --- | --- |\n" +
+		"| #3 | Fix login | " + toolutil.IssueStateEmoji("opened") + " opened | dev1 | bug, critical |\n" +
+		onePageFooter(toolutil.HintPreserveLinks,
+			"Use gitlab_issue action 'get' with project_id and issue_iid to see full details")
+	if got != want {
+		t.Errorf("issue search:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1387,25 +1423,29 @@ func TestFormatIssuesMarkdown_WithResults(t *testing.T) {
 // New formatter tests: Commits
 // ---------------------------------------------------------------------------.
 
-// TestFormatCommitsMarkdown_Empty verifies FormatCommitsMarkdown when empty.
+// TestFormatCommitsMarkdown_Empty verifies that an empty commit search is the
+// one sentence and nothing else.
 func TestFormatCommitsMarkdown_Empty(t *testing.T) {
-	s := FormatCommitsMarkdown(CommitsOutput{})
-	if !strings.Contains(s, "No commits found") {
-		t.Errorf("expected 'No commits found', got %q", s)
+	if got, want := FormatCommitsMarkdown(CommitsOutput{}), "No commits found.\n"; got != want {
+		t.Errorf("empty commit search:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatCommitsMarkdown_WithResults verifies FormatCommitsMarkdown when with results.
+// TestFormatCommitsMarkdown_WithResults verifies the whole render of a page of
+// commit search results, with the commit date in the display form rather than
+// the wire form GitLab sent.
 func TestFormatCommitsMarkdown_WithResults(t *testing.T) {
-	s := FormatCommitsMarkdown(CommitsOutput{
-		Commits:    []commits.Output{{ShortID: "abc123", Title: "Initial commit", AuthorName: "Dev", CommittedDate: "2026-01-01"}},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+	got := FormatCommitsMarkdown(CommitsOutput{
+		Commits:    []commits.Output{{ShortID: "abc123", Title: "Initial commit", AuthorName: "Dev", CommittedDate: "2026-01-01T09:30:00Z"}},
+		Pagination: onePage,
 	})
-	if !strings.Contains(s, "abc123") {
-		t.Error("expected short ID in output")
-	}
-	if !strings.Contains(s, "Commit Search Results (1)") {
-		t.Error(errExpectedHdr)
+	want := "## Commit Search Results (1)\n\n" +
+		"| Short ID | Title | Author | Date |\n| --- | --- | --- | --- |\n" +
+		"| abc123 | Initial commit | Dev | 1 Jan 2026 09:30 UTC |\n" +
+		onePageFooter(toolutil.HintPreserveLinks,
+			"Use gitlab_repository action 'commit_get' with short_id to see full commit details")
+	if got != want {
+		t.Errorf("commit search:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1413,36 +1453,45 @@ func TestFormatCommitsMarkdown_WithResults(t *testing.T) {
 // New formatter tests: Milestones
 // ---------------------------------------------------------------------------.
 
-// TestFormatMilestonesMarkdown_Empty verifies FormatMilestonesMarkdown when empty.
+// TestFormatMilestonesMarkdown_Empty verifies that an empty milestone search
+// is the one sentence and nothing else.
 func TestFormatMilestonesMarkdown_Empty(t *testing.T) {
-	s := FormatMilestonesMarkdown(MilestonesOutput{})
-	if !strings.Contains(s, "No milestones found") {
-		t.Errorf("expected 'No milestones found', got %q", s)
+	if got, want := FormatMilestonesMarkdown(MilestonesOutput{}), "No milestones found.\n"; got != want {
+		t.Errorf("empty milestone search:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatMilestonesMarkdown_WithResults verifies FormatMilestonesMarkdown when with results.
+// TestFormatMilestonesMarkdown_WithResults verifies the whole render of a page
+// of milestone search results, with the due date in the display form.
 func TestFormatMilestonesMarkdown_WithResults(t *testing.T) {
-	s := FormatMilestonesMarkdown(MilestonesOutput{
+	got := FormatMilestonesMarkdown(MilestonesOutput{
 		Milestones: []milestones.Output{{IID: 1, Title: "v1.0", State: "active", DueDate: "2026-06-01"}},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+		Pagination: onePage,
 	})
-	if !strings.Contains(s, "v1.0") {
-		t.Error("expected milestone title in output")
-	}
-	if !strings.Contains(s, "Milestone Search Results (1)") {
-		t.Error(errExpectedHdr)
+	want := "## Milestone Search Results (1)\n\n" +
+		"| IID | Title | State | Due Date |\n| --- | --- | --- | --- |\n" +
+		"| 1 | v1.0 | active | 1 Jun 2026 |\n" +
+		onePageFooter(toolutil.HintPreserveLinks,
+			"Use gitlab_project action 'milestone_get' with project_id and milestone_id to see full details")
+	if got != want {
+		t.Errorf("milestone search:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatMilestonesMarkdown_NoDueDate verifies FormatMilestonesMarkdown when no due date.
+// TestFormatMilestonesMarkdown_NoDueDate verifies that a milestone with no due
+// date renders the em dash rather than an empty cell.
 func TestFormatMilestonesMarkdown_NoDueDate(t *testing.T) {
-	s := FormatMilestonesMarkdown(MilestonesOutput{
+	got := FormatMilestonesMarkdown(MilestonesOutput{
 		Milestones: []milestones.Output{{IID: 2, Title: "v2.0", State: "active"}},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+		Pagination: onePage,
 	})
-	if !strings.Contains(s, "\u2014") {
-		t.Error("expected em-dash for missing due date")
+	want := "## Milestone Search Results (1)\n\n" +
+		"| IID | Title | State | Due Date |\n| --- | --- | --- | --- |\n" +
+		"| 2 | v2.0 | active | \u2014 |\n" +
+		onePageFooter(toolutil.HintPreserveLinks,
+			"Use gitlab_project action 'milestone_get' with project_id and milestone_id to see full details")
+	if got != want {
+		t.Errorf("milestone search without a due date:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1450,28 +1499,28 @@ func TestFormatMilestonesMarkdown_NoDueDate(t *testing.T) {
 // New formatter tests: Notes
 // ---------------------------------------------------------------------------.
 
-// TestFormatNotesMarkdown_Empty verifies FormatNotesMarkdown when empty.
+// TestFormatNotesMarkdown_Empty verifies that an empty note search is the one
+// sentence and nothing else.
 func TestFormatNotesMarkdown_Empty(t *testing.T) {
-	s := FormatNotesMarkdown(NotesOutput{})
-	if !strings.Contains(s, "No note search results found") {
-		t.Errorf("expected 'No note search results found', got %q", s)
+	if got, want := FormatNotesMarkdown(NotesOutput{}), "No note search results found.\n"; got != want {
+		t.Errorf("empty note search:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatNotesMarkdown_WithResults verifies FormatNotesMarkdown when with results.
+// TestFormatNotesMarkdown_WithResults verifies the whole render of a page of
+// note search results. The table carries no link, so the guidance section
+// carries no instruction to keep links.
 func TestFormatNotesMarkdown_WithResults(t *testing.T) {
-	s := FormatNotesMarkdown(NotesOutput{
+	got := FormatNotesMarkdown(NotesOutput{
 		Notes:      []NoteOutput{{Author: "reviewer", NoteableType: "Issue", NoteableIID: 5, Body: "Looks good"}},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+		Pagination: onePage,
 	})
-	if !strings.Contains(s, "reviewer") {
-		t.Error("expected author in output")
-	}
-	if !strings.Contains(s, "#5") {
-		t.Error("expected issue ref in output")
-	}
-	if !strings.Contains(s, "Note Search Results (1)") {
-		t.Error(errExpectedHdr)
+	want := "## Note Search Results (1)\n\n" +
+		"| Author | Type | Ref | Body |\n| --- | --- | --- | --- |\n" +
+		"| reviewer | Issue | #5 | Looks good |\n" +
+		onePageFooter("Use the note's parent tool (gitlab_issue note actions or gitlab_mr_review note actions) to see full note")
+	if got != want {
+		t.Errorf("note search:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1479,25 +1528,28 @@ func TestFormatNotesMarkdown_WithResults(t *testing.T) {
 // New formatter tests: Projects
 // ---------------------------------------------------------------------------.
 
-// TestFormatProjectsMarkdown_Empty verifies FormatProjectsMarkdown when empty.
+// TestFormatProjectsMarkdown_Empty verifies that an empty project search is
+// the one sentence and nothing else.
 func TestFormatProjectsMarkdown_Empty(t *testing.T) {
-	s := FormatProjectsMarkdown(ProjectsOutput{})
-	if !strings.Contains(s, "No projects found") {
-		t.Errorf("expected 'No projects found', got %q", s)
+	if got, want := FormatProjectsMarkdown(ProjectsOutput{}), "No projects found.\n"; got != want {
+		t.Errorf("empty project search:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatProjectsMarkdown_WithResults verifies FormatProjectsMarkdown when with results.
+// TestFormatProjectsMarkdown_WithResults verifies the whole render of a page
+// of project search results.
 func TestFormatProjectsMarkdown_WithResults(t *testing.T) {
-	s := FormatProjectsMarkdown(ProjectsOutput{
+	got := FormatProjectsMarkdown(ProjectsOutput{
 		Projects:   []projects.BasicOutput{{Name: "my-project", PathWithNamespace: "user/my-project", Visibility: "private", DefaultBranch: "main"}},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+		Pagination: onePage,
 	})
-	if !strings.Contains(s, "user/my-project") {
-		t.Error("expected project path in output")
-	}
-	if !strings.Contains(s, "Project Search Results (1)") {
-		t.Error(errExpectedHdr)
+	want := "## Project Search Results (1)\n\n" +
+		"| Name | Path | Visibility | Default Branch |\n| --- | --- | --- | --- |\n" +
+		"| my-project | user/my-project | private | main |\n" +
+		onePageFooter(toolutil.HintPreserveLinks,
+			"Use gitlab_project action 'get' with the project path to see full details")
+	if got != want {
+		t.Errorf("project search:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1505,25 +1557,28 @@ func TestFormatProjectsMarkdown_WithResults(t *testing.T) {
 // New formatter tests: Snippets
 // ---------------------------------------------------------------------------.
 
-// TestFormatSnippetsMarkdown_Empty verifies FormatSnippetsMarkdown when empty.
+// TestFormatSnippetsMarkdown_Empty verifies that an empty snippet search is
+// the one sentence and nothing else.
 func TestFormatSnippetsMarkdown_Empty(t *testing.T) {
-	s := FormatSnippetsMarkdown(SnippetsOutput{})
-	if !strings.Contains(s, "No snippets found") {
-		t.Errorf("expected 'No snippets found', got %q", s)
+	if got, want := FormatSnippetsMarkdown(SnippetsOutput{}), "No snippets found.\n"; got != want {
+		t.Errorf("empty snippet search:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatSnippetsMarkdown_WithResults verifies FormatSnippetsMarkdown when with results.
+// TestFormatSnippetsMarkdown_WithResults verifies the whole render of a page
+// of snippet search results.
 func TestFormatSnippetsMarkdown_WithResults(t *testing.T) {
-	s := FormatSnippetsMarkdown(SnippetsOutput{
+	got := FormatSnippetsMarkdown(SnippetsOutput{
 		Snippets:   []SnippetOutput{{Title: "My snippet", FileName: "notes.md", Visibility: "private", Author: "dev1"}},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+		Pagination: onePage,
 	})
-	if !strings.Contains(s, "My snippet") {
-		t.Error("expected snippet title in output")
-	}
-	if !strings.Contains(s, "Snippet Search Results (1)") {
-		t.Error(errExpectedHdr)
+	want := "## Snippet Search Results (1)\n\n" +
+		"| Title | File | Visibility | Author |\n| --- | --- | --- | --- |\n" +
+		"| My snippet | notes.md | private | dev1 |\n" +
+		onePageFooter(toolutil.HintPreserveLinks,
+			"Use gitlab_snippet action 'get' with snippet_id to see full content")
+	if got != want {
+		t.Errorf("snippet search:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1531,25 +1586,28 @@ func TestFormatSnippetsMarkdown_WithResults(t *testing.T) {
 // New formatter tests: Users
 // ---------------------------------------------------------------------------.
 
-// TestFormatUsersMarkdown_Empty verifies FormatUsersMarkdown when empty.
+// TestFormatUsersMarkdown_Empty verifies that an empty user search is the one
+// sentence and nothing else.
 func TestFormatUsersMarkdown_Empty(t *testing.T) {
-	s := FormatUsersMarkdown(UsersOutput{})
-	if !strings.Contains(s, "No users found") {
-		t.Errorf("expected 'No users found', got %q", s)
+	if got, want := FormatUsersMarkdown(UsersOutput{}), "No users found.\n"; got != want {
+		t.Errorf("empty user search:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatUsersMarkdown_WithResults verifies FormatUsersMarkdown when with results.
+// TestFormatUsersMarkdown_WithResults verifies the whole render of a page of
+// user search results.
 func TestFormatUsersMarkdown_WithResults(t *testing.T) {
-	s := FormatUsersMarkdown(UsersOutput{
+	got := FormatUsersMarkdown(UsersOutput{
 		Users:      []UserOutput{{Username: "admin", Name: "Admin User", State: "active"}},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+		Pagination: onePage,
 	})
-	if !strings.Contains(s, "@admin") {
-		t.Error("expected @admin in output")
-	}
-	if !strings.Contains(s, "User Search Results (1)") {
-		t.Error(errExpectedHdr)
+	want := "## User Search Results (1)\n\n" +
+		"| Username | Name | State |\n| --- | --- | --- |\n" +
+		"| @admin | Admin User | active |\n" +
+		onePageFooter(toolutil.HintPreserveLinks,
+			"Use gitlab_user action 'get' with user_id to see full profile")
+	if got != want {
+		t.Errorf("user search:\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1557,25 +1615,27 @@ func TestFormatUsersMarkdown_WithResults(t *testing.T) {
 // New formatter tests: Wiki
 // ---------------------------------------------------------------------------.
 
-// TestFormatWikiMarkdown_Empty verifies FormatWikiMarkdown when empty.
+// TestFormatWikiMarkdown_Empty verifies that an empty wiki search is the one
+// sentence and nothing else.
 func TestFormatWikiMarkdown_Empty(t *testing.T) {
-	s := FormatWikiMarkdown(WikiOutput{})
-	if !strings.Contains(s, "No wiki pages found") {
-		t.Errorf("expected 'No wiki pages found', got %q", s)
+	if got, want := FormatWikiMarkdown(WikiOutput{}), "No wiki pages found.\n"; got != want {
+		t.Errorf("empty wiki search:\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatWikiMarkdown_WithResults verifies FormatWikiMarkdown when with results.
+// TestFormatWikiMarkdown_WithResults verifies the whole render of a page of
+// wiki search results.
 func TestFormatWikiMarkdown_WithResults(t *testing.T) {
-	s := FormatWikiMarkdown(WikiOutput{
+	got := FormatWikiMarkdown(WikiOutput{
 		WikiBlobs:  []WikiBlobOutput{{Title: "Home", Slug: "home", Format: "markdown"}},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+		Pagination: onePage,
 	})
-	if !strings.Contains(s, "Home") {
-		t.Error("expected wiki title in output")
-	}
-	if !strings.Contains(s, "Wiki Search Results (1)") {
-		t.Error(errExpectedHdr)
+	want := "## Wiki Search Results (1)\n\n" +
+		"| Title | Slug | Format |\n| --- | --- | --- |\n" +
+		"| Home | home | markdown |\n" +
+		onePageFooter("Use gitlab_wiki action 'get' with slug to read the full wiki page")
+	if got != want {
+		t.Errorf("wiki search:\n got %q\nwant %q", got, want)
 	}
 }
 
