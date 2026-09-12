@@ -13479,6 +13479,12 @@
       "path": "/todos/mark_as_done"
     },
     {
+      "package": "internal/tools/toolvisibility",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/issues"
+    },
+    {
       "package": "internal/tools/topics",
       "kind": "rest",
       "method": "GET",

@@ -67,7 +67,7 @@ graph TD
         MAIN[main.go<br/>Entry point]
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
-        SPECS[domain ActionSpecs<br/>178 internal/tools packages<br/>(168 with action_specs.go)]
+        SPECS[domain ActionSpecs<br/>179 internal/tools packages<br/>(170 with action_specs.go)]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
         IND[individual projection<br/>866 Free/CE / 1019 Premium / 1085 Ultimate / 1091 GitLab.com Ultimate tools]
@@ -186,7 +186,7 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 | `scope_filter.go`   | `MetaToolScopes` and `FilterScopeFilteredCatalog`, the PAT scope filter, applied to the catalog before registration so one group-keyed map reaches all three surfaces                  |
 | `safe_mode.go`      | Safe-mode preview wrappers for the individual surface                                                                                                                                  |
 
-**Representative `internal/tools` package groups** (178 sub-packages total):
+**Representative `internal/tools` package groups** (179 sub-packages total):
 
 | Category          | Representative packages                                                                    |
 | ----------------- | ------------------------------------------------------------------------------------------ |
