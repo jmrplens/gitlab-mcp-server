@@ -34,6 +34,30 @@ func TestNotFoundResult(t *testing.T) {
 	}
 }
 
+// TestNotFoundResult_HostileResourceLabel_ReachesBothSlotsAsText verifies the
+// other half of the sentence, the resource label, byte for byte in both places
+// it lands: the heading, through the card writer's heading escaper, and the
+// sentence, lowered and then escaped for the inline slot it sits in.
+//
+// The label used to be interpolated raw, on the strength of a doc comment
+// saying every caller passes a constant. Two callers did not: badges reads it
+// off its result and escaped it at its own call site, and orbit read it off
+// its result and passed it through. A rule kept in a comment is a rule half
+// the callers follow, so it is kept here instead, and this test is what says
+// so.
+func TestNotFoundResult_HostileResourceLabel_ReachesBothSlotsAsText(t *testing.T) {
+	result := NotFoundResult("Award <b>Emoji", "7")
+	if result == nil || !result.IsError {
+		t.Fatal("expected an error result")
+	}
+	text := result.Content[0].(*mcp.TextContent).Text
+	want := "## " + EmojiQuestion + " Award &lt;b>Emoji Not Found\n\n" +
+		"The award &lt;b>emoji **7** does not exist or is not accessible with your current permissions.\n"
+	if text != want {
+		t.Errorf("not-found card:\n got %q\nwant %q", text, want)
+	}
+}
+
 // TestNotFoundResult_NoHints_EscapesTheIdentifier verifies a result without
 // hints ends after the sentence, and that an identifier the caller typed
 // cannot open a link or a tag in it: it is escaped on its way in, with the
