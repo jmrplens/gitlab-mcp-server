@@ -69,10 +69,13 @@ const (
 
 	findToolDescription          = "Search the local GitLab action catalog. Read-only and no GitLab API call. Use when the action ID or params are unclear. Returns schemas, hints, destructive flags, and execute examples."
 	executeActionToolDescription = "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object. Destructive actions require top-level confirm=true. Use find first only when action or params are unclear."
-	dynamicExecuteEnvelopeHint   = "Execute matches with top-level `action` and one `params` object; every Required Params key below belongs inside `params`, not beside it. Use top-level `confirm` only for destructive actions."
+	dynamicExecuteEnvelopeHint   = "Execute an action with top-level `action` and one `params` object; every required parameter name belongs inside `params`, not beside it. Use top-level `confirm` only for destructive actions."
 
-	defaultLimit                 = 20
-	maxLimit                     = 50
+	defaultLimit = 20
+	maxLimit     = 50
+	// noMatchSuggestionLimit is how many nearby tokens a query that matched
+	// nothing is offered, in both discovery tools.
+	noMatchSuggestionLimit       = 6
 	defaultMaxParamGuidanceItems = 2
 	minSegmentTerms              = 3
 	maxSegmentTerms              = 6
@@ -688,7 +691,7 @@ func (r *Registry) Search(ctx context.Context, _ *mcp.CallToolRequest, input Sea
 
 	output := SearchOutput{Query: query, Count: len(results), Results: results, NextStep: searchNextStep(results)}
 	if len(results) == 0 {
-		output.Suggestions = r.suggestSearchTokens(query, 6)
+		output.Suggestions = r.suggestSearchTokens(query, noMatchSuggestionLimit)
 	}
 	return toolutil.ToolResultAnnotated(formatSearchOutput(output), toolutil.ContentList), output, nil
 }
@@ -777,7 +780,14 @@ func (r *Registry) Find(ctx context.Context, req *mcp.CallToolRequest, input Fin
 	}
 
 	output := FindOutput{Query: query, Count: len(results), Results: results}
-	return toolutil.ToolResultAnnotated(formatFindOutput(output), toolutil.ContentDetail), output, nil
+	// The suggestions are computed for the rendering alone and are not
+	// published: FindOutput carries no field for them, and a caller whose
+	// query matched nothing is the one caller with nothing else to go on.
+	var suggestions []string
+	if len(results) == 0 {
+		suggestions = r.suggestSearchTokens(query, noMatchSuggestionLimit)
+	}
+	return toolutil.ToolResultAnnotated(formatFindOutput(output, suggestions), toolutil.ContentDetail), output, nil
 }
 
 // Execute dispatches one catalog action through the existing meta-tool handler.
@@ -3938,101 +3948,292 @@ func hasExplicitConfirm(params map[string]any) bool {
 	return false
 }
 
-// formatSearchOutput renders a catalog search as a Markdown table.
+// The three catalog discovery formatters, and the vocabulary they share.
 //
-// Every cell but the Why column holds catalog metadata compiled into the
-// binary from an ActionSpec rather than text read from a GitLab response, so
-// escaping it would teach the next reader a rule that is not the rule.
-// formatFindOutput builds the same two values under the same names, and one
-// declaration covers a package.
-//
-//gitlab:allow-unescaped result.ID: a canonical catalog ID such as project.create, compiled in from an ActionSpec rather than read from a GitLab response.
-//gitlab:allow-unescaped required: the action's required parameter names, joined from its compiled-in input schema, so each one is a JSON property identifier.
-func formatSearchOutput(output SearchOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## GitLab Action Search\n\n")
-	if output.Count == 0 {
-		fmt.Fprintf(&b, "No catalog actions matched %q.", output.Query)
-		if len(output.Suggestions) > 0 {
-			fmt.Fprintf(&b, " Try: %s.\n", strings.Join(backtickStrings(output.Suggestions), ", "))
-		} else {
-			b.WriteString(" Try broader terms such as project, issue, merge request, pipeline, branch, or user.\n")
+// What they write is what a model on the default surface reads before it
+// reads anything else: the finder answers with a collection of matching
+// catalog actions, and the search and describe entry points answer with the
+// same metadata in the other two shapes. One heading, one query row, one
+// table writer and one guidance section serve all three, because six
+// hand-built header variants can disagree with the rows written under them,
+// and because guidance written as a closing paragraph is prose that
+// [toolutil.ExtractHints] never lifts into next_steps.
+
+// actionMatchColumns is the column order both the header and every row are
+// filtered from, so a row can never carry a cell its header did not declare.
+var actionMatchColumns = []string{"Action ID", "Score", "Destructive", "Required Params", "Guidance", "Why"}
+
+// dashCell is what a column with nothing to say holds: an empty table cell
+// reads as a missing value rather than as "none".
+const dashCell = "-"
+
+// actionColumns says which of the two optional columns a table opens. Both
+// are decided over the whole result set and never per row.
+type actionColumns struct {
+	guidance bool
+	why      bool
+}
+
+// kept reports, position by position over [actionMatchColumns], which columns
+// this table carries.
+func (cols actionColumns) kept() []bool {
+	return []bool{true, true, true, true, cols.guidance, cols.why}
+}
+
+// selectColumns keeps the values whose column the table carries. The header
+// and every row go through it, which is what makes a row with more cells than
+// its header impossible rather than merely untested.
+func selectColumns(values []string, cols actionColumns) []string {
+	kept := cols.kept()
+	selected := make([]string, 0, len(values))
+	for i, value := range values {
+		if kept[i] {
+			selected = append(selected, value)
 		}
+	}
+	return selected
+}
+
+// actionRow is one catalog match as the shared table writes it. SearchResult
+// and FindResult are two published types carrying the same answer, so the
+// table is written from this and from neither of them.
+type actionRow struct {
+	id             string
+	score          int
+	destructive    bool
+	requiredParams []string
+	// guidance and why hold their rendered cell, and are blank exactly when
+	// the column is closed.
+	guidance string
+	why      string
+}
+
+// actionColumnsFor opens a column when any row has something to put in it.
+func actionColumnsFor(rows []actionRow) actionColumns {
+	return actionColumns{
+		guidance: slices.ContainsFunc(rows, func(row actionRow) bool { return row.guidance != "" }),
+		why:      slices.ContainsFunc(rows, func(row actionRow) bool { return row.why != "" }),
+	}
+}
+
+// actionRowCells renders one row in the order of [actionMatchColumns]. The
+// guidance and why cells are escaped here even though the two renderers that
+// build them escape as well: the escaper is idempotent, so the rendering is
+// unchanged, and the cell is escaped where the cell is written rather than
+// two calls away, which is the rule every other formatter is held to.
+func actionRowCells(row actionRow, cols actionColumns) []string {
+	return selectColumns([]string{
+		toolutil.MdCodeSpanCell(row.id),
+		strconv.Itoa(row.score),
+		destructiveCell(row.destructive),
+		requiredParamsCell(row.requiredParams),
+		toolutil.EscapeMdTableCell(row.guidance),
+		toolutil.EscapeMdTableCell(row.why),
+	}, cols)
+}
+
+// destructiveCell renders the Destructive column. A destructive action is
+// marked with the warning sign and not with BoolEmoji's tick, for the reason
+// [toolutil.Card.Warn] exists: a tick beside "Destructive" reads as approval
+// of the action rather than as the warning it is.
+func destructiveCell(destructive bool) string {
+	if destructive {
+		return toolutil.EmojiWarning + " yes"
+	}
+	return dashCell
+}
+
+// requiredParamsCell names the keys that belong inside the params object, as
+// code spans a caller can copy verbatim.
+func requiredParamsCell(params []string) string {
+	if len(params) == 0 {
+		return dashCell
+	}
+	spans := make([]string, 0, len(params))
+	for _, param := range params {
+		spans = append(spans, toolutil.MdCodeSpanCell(param))
+	}
+	return strings.Join(spans, ", ")
+}
+
+// actionRowsFromSearch renders the search matches as rows. A search result
+// carries no parameter guidance map, so its Guidance column is built from the
+// disambiguation note and the destructive flag alone.
+func actionRowsFromSearch(results []SearchResult) []actionRow {
+	withGuidance := hasSearchGuidance(results)
+	withWhy := hasSearchExplanations(results)
+	rows := make([]actionRow, 0, len(results))
+	for _, result := range results {
+		row := actionRow{
+			id:             result.ID,
+			score:          result.Score,
+			destructive:    result.Destructive,
+			requiredParams: result.RequiredParams,
+		}
+		if withGuidance {
+			row.guidance = compactSearchGuidance(result)
+		}
+		if withWhy {
+			row.why = explanationSummary(result.Explanation)
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+// actionRowsFromFind renders the finder's matches as rows, with the parameter
+// bindings a find result carries and a search result does not.
+func actionRowsFromFind(results []FindResult) []actionRow {
+	withGuidance := hasFindGuidance(results)
+	withWhy := hasFindExplanations(results)
+	rows := make([]actionRow, 0, len(results))
+	for _, result := range results {
+		row := actionRow{
+			id:             result.ID,
+			score:          result.Score,
+			destructive:    result.Destructive,
+			requiredParams: result.RequiredParams,
+		}
+		if withGuidance {
+			row.guidance = compactFindGuidance(result)
+		}
+		if withWhy {
+			row.why = explanationSummary(result.Explanation)
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+// actionMatchesHeading names what the tool found and how much of it, so the
+// two discovery tools cannot disagree about the noun or leave the count to be
+// inferred from the table.
+func actionMatchesHeading(count int) string {
+	switch count {
+	case 0:
+		return "GitLab Catalog: no matching action"
+	case 1:
+		return "GitLab Catalog: 1 matching action"
+	default:
+		return fmt.Sprintf("GitLab Catalog: %d matching actions", count)
+	}
+}
+
+// noMatchHints is what a caller can do next when nothing matched: the nearby
+// tokens the registry computed, or the domains worth trying when it found
+// none.
+func noMatchHints(suggestions []string) []string {
+	if len(suggestions) == 0 {
+		return []string{"Try broader terms such as project, issue, merge request, pipeline, branch, or user."}
+	}
+	return []string{fmt.Sprintf("Try: %s.", strings.Join(backtickStrings(suggestions), ", "))}
+}
+
+// ambiguousActionHint tells the caller to name the action it meant, when the
+// alias it used resolves to several.
+func ambiguousActionHint(targets []string) string {
+	return fmt.Sprintf("Use one canonical action ID explicitly: %s.", strings.Join(backtickStrings(targets), ", "))
+}
+
+// formatActionMatches writes what both discovery tools answer with: the
+// heading that names the count, the query the caller sent as a code span, the
+// table of matches, and the guidance last, where ExtractHints reads it. An
+// empty result set writes no table at all; the heading says nothing matched
+// and the suggestions are the hints, since a suggestion is a next step.
+func formatActionMatches(query string, rows []actionRow, suggestions, hints []string) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, actionMatchesHeading(len(rows)))
+	c.Code("Query", query)
+	if len(rows) == 0 {
+		c.End(noMatchHints(suggestions)...)
 		return b.String()
 	}
-	fmt.Fprintf(&b, "Query: `%s`\n\n", output.Query)
-	fmt.Fprintf(&b, "%s\n\n", dynamicExecuteEnvelopeHint)
-	if targets := ambiguousTargetsFromSearchResults(output.Results); len(targets) > 0 {
-		fmt.Fprintf(&b, "Use one canonical action ID explicitly: %s.\n\n", strings.Join(backtickStrings(targets), ", "))
+	cols := actionColumnsFor(rows)
+	table := c.Table("", selectColumns(actionMatchColumns, cols)...)
+	for _, row := range rows {
+		table.Row(actionRowCells(row, cols)...)
 	}
-	withExplanations := hasSearchExplanations(output.Results)
-	if withExplanations {
-		b.WriteString("| Action ID | Destructive | Required Params | Why |\n")
-		b.WriteString("| --- | --- | --- | --- |\n")
-	} else {
-		b.WriteString("| Action ID | Destructive | Required Params |\n")
-		b.WriteString("| --- | --- | --- |\n")
-	}
-	for _, result := range output.Results {
-		required := "-"
-		if len(result.RequiredParams) > 0 {
-			required = strings.Join(result.RequiredParams, ", ")
-		}
-		if withExplanations {
-			fmt.Fprintf(&b, "| `%s` | %t | %s | %s |\n", result.ID, result.Destructive, required, explanationSummary(result.Explanation))
-		} else {
-			fmt.Fprintf(&b, "| `%s` | %t | %s |\n", result.ID, result.Destructive, required)
-		}
-	}
-	if output.NextStep != "" {
-		fmt.Fprintf(&b, "\nNext step: %s\n", output.NextStep)
-	} else {
-		b.WriteString("\nUse `gitlab_find_action` when the chosen action's full schema is still needed.\n")
-	}
+	c.End(hints...)
 	return b.String()
 }
 
-// formatDescribeOutput renders one or more catalog actions as a heading and a
-// list of their metadata.
-//
-// Everything it interpolates is compiled into the binary from an ActionSpec or
-// derived from the action's own input schema, so none of it is GitLab-authored
-// text and none of it wants an escaper.
-//
-//gitlab:allow-unescaped action.ID: a canonical catalog ID such as project.create, compiled in from an ActionSpec rather than read from a GitLab response.
-//gitlab:allow-unescaped action.Tool: the backing meta-tool name of the catalog group, such as gitlab_issue, compiled in from an ActionSpec.
-//gitlab:allow-unescaped action.Action: the action name inside the catalog group, compiled in from an ActionSpec.
-//gitlab:allow-unescaped strings.Join(action.RequiredParams, "`, `"): the action's required parameter names, read from its compiled-in input schema, so each one is a JSON property identifier.
-//gitlab:allow-unescaped strings.Join(action.RelatedActions, "`, `"): curated canonical catalog IDs, compiled in from an ActionSpec or from actionUXMetadataByID.
-//gitlab:allow-unescaped action.SchemaURI: the constant gitlab://tools/ prefix concatenated with a canonical catalog ID by toolDetailURIForID.
+// formatSearchOutput renders a catalog search as the collection it is.
+func formatSearchOutput(output SearchOutput) string {
+	return formatActionMatches(output.Query, actionRowsFromSearch(output.Results), output.Suggestions, searchHints(output))
+}
+
+// searchHints is the guidance a search closes with: how an execute call is
+// shaped, which action to name when the query was ambiguous, and the
+// schema-aware next step the registry computed for the top result.
+func searchHints(output SearchOutput) []string {
+	hints := make([]string, 0, 3)
+	if targets := ambiguousTargetsFromSearchResults(output.Results); len(targets) > 0 {
+		hints = append(hints, ambiguousActionHint(targets))
+	}
+	if output.NextStep != "" {
+		hints = append(hints, output.NextStep)
+	} else {
+		hints = append(hints, "Use `gitlab_find_action` when the chosen action's full schema is still needed.")
+	}
+	return append(hints, dynamicExecuteEnvelopeHint)
+}
+
+// describedActionsHeading names how many actions the card describes, in the
+// noun the two collection formatters use.
+func describedActionsHeading(count int) string {
+	if count == 1 {
+		return "GitLab Catalog: 1 action described"
+	}
+	return fmt.Sprintf("GitLab Catalog: %d actions described", count)
+}
+
+// formatDescribeOutput renders each described action as a card of its own
+// under the catalog heading: the rows a caller builds a call from, then the
+// input schema and the example call as fenced JSON.
 func formatDescribeOutput(output DescribeOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## GitLab Action Description\n\n")
+	c := toolutil.NewCard(&b, describedActionsHeading(len(output.Actions)))
 	for _, action := range output.Actions {
-		fmt.Fprintf(&b, "### `%s`\n\n", action.ID)
-		fmt.Fprintf(&b, "- **Tool**: `%s`\n", action.Tool)
-		fmt.Fprintf(&b, "- **Action**: `%s`\n", action.Action)
-		fmt.Fprintf(&b, "- **Destructive**: %t\n", action.Destructive)
-		if len(action.RequiredParams) > 0 {
-			fmt.Fprintf(&b, "- **Required params**: `%s`\n", strings.Join(action.RequiredParams, "`, `"))
-		}
-		if len(action.RelatedActions) > 0 {
-			fmt.Fprintf(&b, "- **Related actions**: `%s`\n", strings.Join(action.RelatedActions, "`, `"))
-		}
-		fmt.Fprintf(&b, "- **Schema URI**: `%s`\n", action.SchemaURI)
-		if schemaJSON := compactSchemaJSON(action.InputSchema); schemaJSON != "" {
-			b.WriteString("- **Input schema**:\n\n")
-			// The fence is written by hand here, and stays that way: the body is
-			// this server's own input schema, generated from the Go types an
-			// ActionSpec names, so nothing GitLab or an account holder wrote
-			// reaches it.
-			b.WriteString("```json\n")
-			b.WriteString(schemaJSON)
-			b.WriteString("\n```\n")
-		}
-		b.WriteString("\n")
+		writeActionDescription(c.Section(action.ID), action)
 	}
+	if len(output.Actions) == 0 {
+		c.End()
+		return b.String()
+	}
+	c.End(
+		"Call `gitlab_execute_action` with the action ID this card names and the params its input schema requires.",
+		dynamicExecuteEnvelopeHint,
+	)
 	return b.String()
+}
+
+// writeActionDescription writes one action's section: what to call, what it
+// needs, what it costs when it is destructive, and the two JSON blocks a
+// caller copies from. The usage note, the parameter guidance and the example
+// are written here because the card used to compute all three and print none
+// of them, which left the one surface that has room for them showing less
+// than the finder's table.
+func writeActionDescription(c *toolutil.Card, action ActionDescription) {
+	c.Code("Tool", action.Tool)
+	c.Code("Action", action.Action)
+	c.Warn("Destructive", action.Destructive)
+	c.Field("Usage", action.Usage)
+	c.Field("Required params", codeSpanList(action.RequiredParams))
+	c.Field("Related actions", codeSpanList(action.RelatedActions))
+	c.Field("Parameter guidance", compactParameterGuidance(action.ParamGuidance, len(action.ParamGuidance), action.RequiredParams...))
+	c.Code("Schema URI", action.SchemaURI)
+	c.Fence("Input schema", "json", compactSchemaJSON(action.InputSchema))
+	c.Fence("Example call", "json", compactExampleJSON(action.Example))
+}
+
+// codeSpanList renders catalog identifiers as the code spans a caller copies,
+// and nothing at all for an empty list, so no label is written over an empty
+// value.
+func codeSpanList(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return strings.Join(backtickStrings(values), ", ")
 }
 
 func compactSchemaJSON(schema map[string]any) string {
@@ -4047,51 +4248,63 @@ func compactSchemaJSON(schema map[string]any) string {
 	return string(encoded)
 }
 
-func formatFindOutput(output FindOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## GitLab Action Finder\n\n")
-	if output.Count == 0 {
-		fmt.Fprintf(&b, "No catalog actions matched %q. Try broader terms such as project, issue, merge request, pipeline, branch, or user.\n", output.Query)
-		return b.String()
+// compactExampleJSON renders the execute-call example as the JSON envelope a
+// caller sends, so the fence holding it can be copied into
+// gitlab_execute_action as it stands.
+func compactExampleJSON(example ActionExample) string {
+	if example.Tool == "" && len(example.Arguments) == 0 {
+		return ""
 	}
-	fmt.Fprintf(&b, "Query: `%s`\n\n", output.Query)
-	b.WriteString("Immediate next step: choose one row and call `gitlab_execute_action` now; do not call `gitlab_find_action` again until that execute call returns.\n\n")
-	fmt.Fprintf(&b, "%s\n\n", dynamicExecuteEnvelopeHint)
-	withExplanations := hasFindExplanations(output.Results)
-	withGuidance := hasFindGuidance(output.Results)
-	switch {
-	case withExplanations && withGuidance:
-		b.WriteString("| Action ID | Score | Destructive | Required Params | Guidance | Why |\n")
-		b.WriteString("| --- | ---: | --- | --- | --- | --- |\n")
-	case withExplanations:
-		b.WriteString("| Action ID | Score | Destructive | Required Params | Why |\n")
-		b.WriteString("| --- | ---: | --- | --- | --- |\n")
-	case withGuidance:
-		b.WriteString("| Action ID | Score | Destructive | Required Params | Guidance |\n")
-		b.WriteString("| --- | ---: | --- | --- | --- |\n")
-	default:
-		b.WriteString("| Action ID | Score | Destructive | Required Params |\n")
-		b.WriteString("| --- | ---: | --- | --- |\n")
+	encoded, err := json.Marshal(example)
+	if err != nil {
+		slog.Debug("dynamic action example marshal failed", "error", err)
+		return ""
 	}
-	for _, result := range output.Results {
-		required := "-"
-		if len(result.RequiredParams) > 0 {
-			required = strings.Join(result.RequiredParams, ", ")
+	return string(encoded)
+}
+
+// formatFindOutput renders the finder's matches. The suggestions are passed
+// in rather than read off the output, because FindOutput publishes none and a
+// caller whose query matched nothing is exactly the caller with something to
+// try next.
+func formatFindOutput(output FindOutput, suggestions []string) string {
+	return formatActionMatches(output.Query, actionRowsFromFind(output.Results), suggestions, findHints(output.Results))
+}
+
+// findHints is the guidance the finder closes with: execute now, name the
+// action when the alias was ambiguous, do not trust a low-confidence top row,
+// how an execute call is shaped, and what the structured result carries that
+// the table does not.
+//
+// The confidence and ambiguity hints matter because the first one tells the
+// model to execute the top row immediately: a finder that says that while
+// holding LowConfidence or AmbiguousWith and showing neither is telling the
+// model to act on a guess it knows is a guess.
+func findHints(results []FindResult) []string {
+	hints := make([]string, 0, 5)
+	hints = append(hints, "Choose one row and call `gitlab_execute_action` with that row's schema and example now, before starting another catalog operation; do not call `gitlab_find_action` again until that execute call returns.")
+	if targets := ambiguousTargetsFromFindResults(results); len(targets) > 0 {
+		hints = append(hints, ambiguousActionHint(targets))
+	}
+	if len(results) > 0 && results[0].LowConfidence {
+		hints = append(hints, fmt.Sprintf("Top result %s is low confidence: read the rows and pick the intended action rather than taking the first.", backtickString(results[0].ID)))
+	}
+	hints = append(hints, dynamicExecuteEnvelopeHint)
+	return append(hints, "Structured results carry the exact `input_schema` and a `gitlab_execute_action` example for every action listed.")
+}
+
+// ambiguousTargetsFromFindResults is the finder's twin of
+// [ambiguousTargetsFromSearchResults]: the ambiguity set of the first result
+// that carries one, since a query's ambiguity is modeled as a single
+// canonical set. It sits beside the guidance that reads it, which is its only
+// caller.
+func ambiguousTargetsFromFindResults(results []FindResult) []string {
+	for _, result := range results {
+		if len(result.AmbiguousWith) > 0 {
+			return dedupeSortedStrings(result.AmbiguousWith)
 		}
-		switch {
-		case withExplanations && withGuidance:
-			fmt.Fprintf(&b, "| `%s` | %d | %t | %s | %s | %s |\n", result.ID, result.Score, result.Destructive, required, compactFindGuidance(result), explanationSummary(result.Explanation))
-		case withExplanations:
-			fmt.Fprintf(&b, "| `%s` | %d | %t | %s | %s |\n", result.ID, result.Score, result.Destructive, required, explanationSummary(result.Explanation))
-		case withGuidance:
-			fmt.Fprintf(&b, "| `%s` | %d | %t | %s | %s |\n", result.ID, result.Score, result.Destructive, required, compactFindGuidance(result))
-		default:
-			fmt.Fprintf(&b, "| `%s` | %d | %t | %s |\n", result.ID, result.Score, result.Destructive, required)
-		}
 	}
-	b.WriteString("\nNext step: choose one row and call `gitlab_execute_action` with that row's schema/example before starting another catalog operation.\n")
-	b.WriteString("Structured results include exact `input_schema` values and `gitlab_execute_action` examples for each action.\n")
-	return b.String()
+	return nil
 }
 
 func hasFindGuidance(results []FindResult) bool {
@@ -4100,19 +4313,39 @@ func hasFindGuidance(results []FindResult) bool {
 	})
 }
 
+// hasSearchGuidance is the search twin of [hasFindGuidance]: a search result
+// carries no parameter guidance map, so the two signals it can have are the
+// disambiguation note and the destructive flag.
+func hasSearchGuidance(results []SearchResult) bool {
+	return slices.ContainsFunc(results, func(result SearchResult) bool {
+		return result.Destructive || strings.TrimSpace(result.Usage) != ""
+	})
+}
+
 func compactFindGuidance(result FindResult) string {
+	return compactGuidance(result.Usage, result.ParamGuidance, result.RequiredParams, result.Destructive)
+}
+
+func compactSearchGuidance(result SearchResult) string {
+	return compactGuidance(result.Usage, nil, result.RequiredParams, result.Destructive)
+}
+
+// compactGuidance renders the Guidance cell of one row: the disambiguation
+// note, the parameter bindings worth naming, and the confirmation a
+// destructive action needs, in that order.
+func compactGuidance(usage string, guidance map[string]toolutil.ParameterGuidance, requiredParams []string, destructive bool) string {
 	parts := make([]string, 0, 3)
-	if usage := strings.TrimSpace(result.Usage); usage != "" {
+	if usage = strings.TrimSpace(usage); usage != "" {
 		parts = append(parts, usage)
 	}
-	if guidance := compactParameterGuidance(result.ParamGuidance, defaultMaxParamGuidanceItems, result.RequiredParams...); guidance != "" {
-		parts = append(parts, guidance)
+	if compact := compactParameterGuidance(guidance, defaultMaxParamGuidanceItems, requiredParams...); compact != "" {
+		parts = append(parts, compact)
 	}
-	if result.Destructive {
+	if destructive {
 		parts = append(parts, "Execute destructive actions with top-level `confirm:true`.")
 	}
 	if len(parts) == 0 {
-		return "-"
+		return dashCell
 	}
 	return toolutil.EscapeMdTableCell(strings.Join(parts, " "))
 }
