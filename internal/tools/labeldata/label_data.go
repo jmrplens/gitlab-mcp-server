@@ -104,7 +104,68 @@ func NewGroupListOptions(page, perPage int, search string, withCounts, includeAn
 
 // ToMarkdown converts shared label output to the toolutil markdown model.
 func ToMarkdown(label Output) toolutil.LabelMarkdown {
-	return toolutil.LabelMarkdown{ID: label.ID, Name: label.Name, Color: label.Color, Description: label.Description, OpenIssuesCount: label.OpenIssuesCount, ClosedIssuesCount: label.ClosedIssuesCount, OpenMergeRequestsCount: label.OpenMergeRequestsCount, Priority: label.Priority, PrioritySpecified: label.PrioritySpecified, IsProjectLabel: label.IsProjectLabel, Subscribed: label.Subscribed}
+	return toolutil.LabelMarkdown{ID: label.ID, Name: label.Name, Color: label.Color, Description: label.Description, OpenIssuesCount: label.OpenIssuesCount, ClosedIssuesCount: label.ClosedIssuesCount, OpenMergeRequestsCount: label.OpenMergeRequestsCount, Priority: label.Priority, PrioritySpecified: label.PrioritySpecified, IsProjectLabel: label.IsProjectLabel, Subscribed: label.Subscribed, Archived: label.Archived}
+}
+
+// The copy each scope's label surfaces are rendered with. It lives here, with
+// the type, because both label packages alias this one output type: the
+// Markdown registry keys them together and keeps whichever init ran first, so
+// the formatter that wins has to answer for both scopes and cannot do that
+// from copy held in one of them.
+var (
+	// ProjectMarkdownOptions is the copy of a project label.
+	ProjectMarkdownOptions = toolutil.LabelMarkdownOptions{
+		DetailTitle:   "Label",
+		ListTitle:     "Labels",
+		EmptyListText: toolutil.EmptyMessage("labels"),
+		DetailHints: []string{
+			"Use action 'label_update' to change label name, color, or description",
+			"Use action 'label_delete' to remove this label",
+		},
+		ListHints: []string{
+			toolutil.HintPreserveLinks,
+			"Use action 'label_get' with a label_id to see label details",
+			"Use action 'label_create' to create a new label",
+		},
+	}
+
+	// GroupMarkdownOptions is the copy of a group label.
+	GroupMarkdownOptions = toolutil.LabelMarkdownOptions{
+		DetailTitle:   "Group Label",
+		ListTitle:     "Group Labels",
+		EmptyListText: toolutil.EmptyMessage("group labels"),
+		DetailHints: []string{
+			"If the workflow asks to fetch/get before update or delete, use the selected tool surface's group-label get action with the same group_id and this label_id next",
+			"Use the selected tool surface's group-label update action with the same group_id and this label_id to modify this label",
+			"Use the selected tool surface's group-label delete action with the same group_id, this label_id, and explicit confirm=true to remove this label",
+			"Use the selected tool surface's group-label subscribe or unsubscribe actions with the same group_id and this label_id to follow or unfollow",
+		},
+		ListHints: []string{
+			toolutil.HintPreserveLinks,
+			"Use the selected tool surface's group-label get action with the same group_id and label_id for full details before update/delete workflows",
+			"Use the selected tool surface's group-label create action with group_id to add a new group label",
+		},
+	}
+)
+
+// MarkdownOptionsFor picks the copy of the scope a label belongs to, which is
+// the label's own answer rather than the calling package's: a project label
+// list carries the group labels the project inherits, and a card that titles
+// one of those "Label" and points at the project actions names actions that
+// cannot touch it.
+func MarkdownOptionsFor(label Output) toolutil.LabelMarkdownOptions {
+	if label.IsProjectLabel {
+		return ProjectMarkdownOptions
+	}
+	return GroupMarkdownOptions
+}
+
+// FormatMarkdown renders one label as the card of one object, with the copy of
+// the scope it belongs to. Both label packages register this same rendering
+// for the one type they share, so which of their inits ran first no longer
+// decides whether a group label is shown as a project one.
+func FormatMarkdown(label Output) string {
+	return toolutil.FormatLabelMarkdown(ToMarkdown(label), MarkdownOptionsFor(label))
 }
 
 type labelFields struct {

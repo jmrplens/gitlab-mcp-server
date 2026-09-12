@@ -7,25 +7,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// labelMarkdownOptions configures the shared [toolutil.LabelMarkdownOptions]
-// used by the package's single-label and list Markdown formatters. It
-// centralizes the title, empty-state copy, and follow-up hints so both
-// renderers stay in sync.
-var labelMarkdownOptions = toolutil.LabelMarkdownOptions{
-	DetailTitle:   "Label",
-	ListTitle:     "Labels",
-	EmptyListText: "No labels found.",
-	DetailHints: []string{
-		"Use action 'label_update' to change label name, color, or description",
-		"Use action 'label_delete' to remove this label",
-	},
-	ListHints: []string{
-		toolutil.HintPreserveLinks,
-		"Use action 'label_get' with a label_id to see label details",
-		"Use action 'label_create' to create a new label",
-	},
-}
-
 type labelNotFoundOutput struct {
 	Identifier string
 }
@@ -40,14 +21,17 @@ func formatLabelNotFound(out labelNotFoundOutput) *mcp.CallToolResult {
 	)
 }
 
-// FormatMarkdown renders a single label as a Markdown summary.
+// FormatMarkdown renders a single label as a Markdown card, with the copy of
+// the scope the label itself belongs to: a project label list carries the
+// group labels the project inherits, and one of those is not a project label
+// whichever action fetched it.
 func FormatMarkdown(l Output) string {
-	return toolutil.FormatLabelMarkdown(toLabelMarkdown(l), labelMarkdownOptions)
+	return labeldata.FormatMarkdown(l)
 }
 
 // FormatListMarkdownString renders a paginated list of labels as a Markdown table string.
 func FormatListMarkdownString(out ListOutput) string {
-	return toolutil.FormatLabelListMarkdownFunc(out.Labels, out.Pagination, labelMarkdownOptions, toLabelMarkdown)
+	return toolutil.FormatLabelListMarkdownFunc(out.Labels, out.Pagination, labeldata.ProjectMarkdownOptions, labeldata.ToMarkdown)
 }
 
 // FormatListMarkdown renders a paginated list of labels as an MCP Markdown result.
@@ -59,10 +43,4 @@ func init() {
 	toolutil.RegisterMarkdownResult(formatLabelNotFound)
 	toolutil.RegisterMarkdown(FormatMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
-}
-
-// toLabelMarkdown adapts a package [Output] into the
-// [toolutil.LabelMarkdown] shape used by the shared formatter helpers.
-func toLabelMarkdown(label Output) toolutil.LabelMarkdown {
-	return labeldata.ToMarkdown(label)
 }

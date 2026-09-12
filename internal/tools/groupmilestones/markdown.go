@@ -2,6 +2,7 @@ package groupmilestones
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -9,66 +10,91 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatMarkdown renders a single group milestone as a Markdown string.
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionGet           = "group_milestone.get"
+	actionCreate        = "group_milestone.create"
+	actionUpdate        = "group_milestone.update"
+	actionDelete        = "group_milestone.delete"
+	actionIssues        = "group_milestone.issues"
+	actionMergeRequests = "group_milestone.merge_requests"
+	actionIssueGet      = "issue.get"
+	actionMRGet         = "merge_request.get"
+)
+
+// FormatMarkdown renders one group milestone as the card of one object.
+//
+// The hints used to name a milestone_id parameter that no group milestone
+// action takes: every one of them is addressed by group_id and milestone_iid,
+// which is the IID this card shows.
 func FormatMarkdown(v Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Group Milestone: %s\n\n", toolutil.EscapeMdHeading(v.Title))
-	fmt.Fprintf(&b, "- **ID**: %d (IID: %d)\n", v.ID, v.IID)
-	fmt.Fprintf(&b, "- **Group**: %d\n", v.GroupID)
-	//gitlab:allow-unescaped v.State: GitLab computes a milestone's state, which is active or closed and never text a person typed.
-	fmt.Fprintf(&b, toolutil.FmtMdState, v.State)
-	if v.Description != "" {
-		toolutil.WriteDescription(&b, v.Description)
-	}
-	if v.StartDate != "" {
-		fmt.Fprintf(&b, "- **Start Date**: %s\n", toolutil.FormatTime(v.StartDate))
-	}
-	if v.DueDate != "" {
-		fmt.Fprintf(&b, "- **Due Date**: %s\n", toolutil.FormatTime(v.DueDate))
-	}
-	fmt.Fprintf(&b, "- **Expired**: %v\n", v.Expired)
-	if v.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(v.CreatedAt))
-	}
-	if v.UpdatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdUpdated, toolutil.FormatTime(v.UpdatedAt))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use gitlab_group_milestone_get with the same group_id and milestone_id before update/delete workflows",
-		"Use gitlab_group_milestone_update with the same group_id and milestone_id to modify this milestone",
-		"Use gitlab_group_milestone_issues or gitlab_group_milestone_merge_requests with the same group_id and milestone_id to list associated items",
-		"Use gitlab_group_milestone_delete with the same group_id, milestone_id, and confirm=true to remove this milestone",
+	c := toolutil.NewCard(&b, fmt.Sprintf("Group Milestone #%d: %s", v.IID, v.Title))
+	c.Int("ID", v.ID)
+	c.Int("IID", v.IID)
+	c.Count("Group ID", v.GroupID)
+	c.Count("Project ID", v.ProjectID)
+	c.Field("State", v.State)
+	c.Time("Start Date", v.StartDate)
+	c.Time("Due Date", v.DueDate)
+	c.Warn("Expired", v.Expired)
+	c.URL(v.WebURL)
+	c.Time("Created", v.CreatedAt)
+	c.Time("Updated", v.UpdatedAt)
+	c.Text("Description", v.Description)
+	c.End(
+		toolutil.HintAction(actionUpdate, "change this milestone, with the same group_id and milestone_iid"),
+		toolutil.HintAction(actionIssues, "list its issues, with the same group_id and milestone_iid"),
+		toolutil.HintAction(actionMergeRequests, "list its merge requests, with the same group_id and milestone_iid"),
+		toolutil.HintAction(actionDelete, "remove it, with the same group_id, milestone_iid and confirm=true"),
 	)
 	return b.String()
 }
 
-// FormatListMarkdownString renders a paginated list of group milestones as a Markdown table string.
+// FormatListMarkdownString renders a page of group milestones as a Markdown
+// table, with the column set and the date formatting the project scope uses,
+// since the two answer the same question about the same entity.
 func FormatListMarkdownString(out ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Group Milestones (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Milestones), out.Pagination)
 	if len(out.Milestones) == 0 {
-		b.WriteString("No group milestones found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("group milestones")
 	}
-	b.WriteString("| ID | IID | Title | State | Start Date | Due Date |\n")
-	b.WriteString("|----|-----|-------|-------|------------|----------|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Group Milestones", len(out.Milestones), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Start Date", "Due Date", "Expired"))
 	for _, m := range out.Milestones {
-		fmt.Fprintf(&b, "| %d | %d | %s | %s | %s | %s |\n",
-			//gitlab:allow-unescaped m.State: GitLab computes a milestone's state, which is active or closed and never text a person typed.
-			//gitlab:allow-unescaped m.StartDate: toOutput renders this from the ISO date the client library decoded, so it holds digits and hyphens.
-			//gitlab:allow-unescaped m.DueDate: toOutput renders this from the ISO date the client library decoded, so it holds digits and hyphens.
-			m.ID, m.IID, toolutil.EscapeMdTableCell(m.Title), m.State, m.StartDate, m.DueDate)
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(strconv.FormatInt(m.IID, 10), m.WebURL),
+			toolutil.EscapeMdTableCell(m.Title),
+			toolutil.EscapeMdTableCell(m.State),
+			dateCell(m.StartDate),
+			dateCell(m.DueDate),
+			toolutil.BoolEmoji(m.Expired),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use gitlab_group_milestone_get with group_id and milestone_id for full details before update/delete",
-		"Use gitlab_group_milestone_create with group_id to add a new group milestone",
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(actionGet, "read one milestone by its milestone_iid"),
+		toolutil.HintAction(actionCreate, "add a new milestone to the group"),
 	)
 	return b.String()
+}
+
+// dateCell renders a milestone date in the display form, and a dash where
+// GitLab sent none, so an empty cell is never mistaken for a date it failed to
+// render.
+func dateCell(date string) string {
+	if date == "" {
+		return "-"
+	}
+	return toolutil.FormatTime(date)
+}
+
+// stateCell renders a state word with the glyph its domain gives it, and
+// nothing at all when GitLab sent no state.
+func stateCell(emoji, state string) string {
+	if state == "" {
+		return ""
+	}
+	return emoji + " " + toolutil.EscapeMdTableCell(state)
 }
 
 // FormatListMarkdown renders a paginated list of group milestones as an MCP Markdown result.
@@ -76,24 +102,27 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatListMarkdownString(out))
 }
 
-// FormatIssuesMarkdownString renders a paginated list of milestone issues as a Markdown table string.
+// FormatIssuesMarkdownString renders a page of a group milestone's issues as a
+// Markdown table.
 func FormatIssuesMarkdownString(out IssuesOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Milestone Issues (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Issues), out.Pagination)
 	if len(out.Issues) == 0 {
-		b.WriteString("No issues found for this milestone.\n")
-		return b.String()
+		return toolutil.EmptyMessage("milestone issues")
 	}
-	b.WriteString("| ID | IID | Title | State |\n")
-	b.WriteString("|----|-----|-------|-------|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Milestone Issues", len(out.Issues), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Created"))
 	for _, issue := range out.Issues {
-		fmt.Fprintf(&b, "| %d | %d | %s | %s |\n",
-			//gitlab:allow-unescaped issue.State: GitLab computes an issue's state, which is opened or closed and never text a person typed.
-			issue.ID, issue.IID, toolutil.MdTitleLink(issue.Title, issue.WebURL), issue.State)
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", issue.IID), issue.WebURL),
+			toolutil.EscapeMdTableCell(issue.Title),
+			stateCell(toolutil.IssueStateEmoji(issue.State), issue.State),
+			toolutil.FormatTime(issue.CreatedAt),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, toolutil.HintPreserveLinks, "Use `gitlab_issue_get` to view full issue details", "Filter by state to narrow down results")
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(actionIssueGet, "read one of these issues in full"),
+		toolutil.HintAction(actionMergeRequests, "see the merge requests in this milestone instead"),
+	)
 	return b.String()
 }
 
@@ -102,25 +131,31 @@ func FormatIssuesMarkdown(out IssuesOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatIssuesMarkdownString(out))
 }
 
-// FormatMergeRequestsMarkdownString renders a paginated list of milestone MRs as a Markdown table string.
+// FormatMergeRequestsMarkdownString renders a page of a group milestone's
+// merge requests as a Markdown table.
 func FormatMergeRequestsMarkdownString(out MergeRequestsOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Milestone Merge Requests (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.MergeRequests), out.Pagination)
 	if len(out.MergeRequests) == 0 {
-		b.WriteString("No merge requests found for this milestone.\n")
-		return b.String()
+		return toolutil.EmptyMessage("milestone merge requests")
 	}
-	b.WriteString("| ID | IID | Title | State | Source | Target |\n")
-	b.WriteString("|----|-----|-------|-------|--------|--------|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Milestone Merge Requests", len(out.MergeRequests), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Source", "Target", "Created"))
 	for _, mr := range out.MergeRequests {
-		fmt.Fprintf(&b, "| %d | %d | %s | %s | %s | %s |\n",
-			//gitlab:allow-unescaped mr.State: GitLab computes a merge request's state, one of opened, closed, locked or merged.
-			mr.ID, mr.IID, toolutil.MdTitleLink(mr.Title, mr.WebURL), mr.State,
-			toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch))
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(fmt.Sprintf("!%d", mr.IID), mr.WebURL),
+			toolutil.EscapeMdTableCell(mr.Title),
+			stateCell(toolutil.MRStateEmoji(mr.State), mr.State),
+			// A branch name is not an identifier: git check-ref-format permits
+			// '|', '<' and '>'.
+			toolutil.EscapeMdTableCell(mr.SourceBranch),
+			toolutil.EscapeMdTableCell(mr.TargetBranch),
+			toolutil.FormatTime(mr.CreatedAt),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, toolutil.HintPreserveLinks, "Use `gitlab_mr_get` to view full MR details", "Filter by state to see only open or merged MRs")
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(actionMRGet, "read one of these merge requests in full"),
+		toolutil.HintAction(actionIssues, "see the issues in this milestone instead"),
+	)
 	return b.String()
 }
 
@@ -129,24 +164,36 @@ func FormatMergeRequestsMarkdown(out MergeRequestsOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatMergeRequestsMarkdownString(out))
 }
 
-// FormatBurndownChartEventsMarkdownString renders burndown chart events as a Markdown table string.
+// FormatBurndownChartEventsMarkdownString renders a milestone's burndown chart
+// events as a Markdown table.
 func FormatBurndownChartEventsMarkdownString(out BurndownChartEventsOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Burndown Chart Events (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Events), out.Pagination)
 	if len(out.Events) == 0 {
-		b.WriteString("No burndown chart events found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("burndown chart events")
 	}
-	b.WriteString("| Created At | Weight | Action |\n")
-	b.WriteString("|------------|--------|--------|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Burndown Chart Events", len(out.Events), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Created At", "Weight", "Action"))
 	for _, e := range out.Events {
-		//gitlab:allow-unescaped e.Action: GitLab names the resource event that moved the burndown line, which is an enum of its own.
-		fmt.Fprintf(&b, "| %s | %d | %s |\n", toolutil.FormatTime(e.CreatedAt), e.Weight, e.Action)
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.FormatTime(e.CreatedAt),
+			weightCell(e.Weight),
+			toolutil.EscapeMdTableCell(e.Action),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, "Track milestone progress by comparing event weights over time")
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionIssues, "see the issues whose weight these events moved"),
+	)
 	return b.String()
+}
+
+// weightCell renders a burndown event's weight, and a dash for zero: a weight
+// of nothing is GitLab saying the issue carried none, and printing 0 read as a
+// weight the team had set.
+func weightCell(weight int64) string {
+	if weight == 0 {
+		return "-"
+	}
+	return strconv.FormatInt(weight, 10)
 }
 
 // FormatBurndownChartEventsMarkdown renders burndown chart events as an MCP Markdown result.

@@ -2580,36 +2580,29 @@ func mdGateLog(t *testing.T, title string, findings []mdGateFinding) {
 // the formatter wrote. It reports rather than fails, apart from the two
 // assertions that keep it honest.
 //
-// The first is that it still sees the class it exists for: iterationdata opens
-// a table and writes a list row into it, which ends the table with no body and
-// leaves every later row on the page as literal pipes, and it has not been
-// migrated yet.
-//
-// The second is the other half of the same proof, and is what the fixed
-// formatter is worth: mergetrains was the sibling the audit proved broken, the
-// card migration moved it onto [toolutil.Card], and nothing about it may be
-// reported again. An assertion that it is still broken would have to be
-// deleted by whoever fixed it, which is how a gate stops proving anything.
+// Both are what the fixed formatters are worth. mergetrains and iterationdata
+// are the two the audit proved broken — each opened a table and wrote a list
+// row into it, which ends the table with no body and leaves every later row on
+// the page as literal pipes — and the card migration moved both onto
+// [toolutil.Card], so nothing about either may be reported again. An assertion
+// that one is still broken would have to be deleted by whoever fixed it, which
+// is how a gate stops proving anything; that the rules still see the class is
+// proved directly, on the line model's own inputs, by
+// [testutil.ScanGFM]'s tests.
 func TestMarkdownRegistry_EveryFormatter_KeepsTableBoundaries(t *testing.T) {
 	report := mdGateScan(t)
 
 	mdGateLog(t, "structural scan", report.findings)
 	t.Logf("structural scan: %d case(s), %d render(s), %d silent render(s)", len(report.cases), report.rendered, report.silent)
-	t.Run("iterationdata is reported", func(t *testing.T) {
-		for _, f := range report.findings {
-			if f.kase.pkg == "iterationdata" {
-				return
+	for _, pkg := range []string{"mergetrains", "iterationdata"} {
+		t.Run(pkg+" keeps its table boundaries", func(t *testing.T) {
+			for _, f := range report.findings {
+				if f.kase.pkg == pkg {
+					t.Errorf("%s was migrated onto the card and is reported again: %s", pkg, f)
+				}
 			}
-		}
-		t.Error("the gate reports nothing for iterationdata, whose tables the audit proved broken, so the gate does not see the defect it exists for")
-	})
-	t.Run("mergetrains keeps its table boundaries", func(t *testing.T) {
-		for _, f := range report.findings {
-			if f.kase.pkg == "mergetrains" {
-				t.Errorf("mergetrains was migrated onto the card and is reported again: %s", f)
-			}
-		}
-	})
+		})
+	}
 	for _, f := range report.findings {
 		if f.rule == "P0" {
 			t.Errorf("%s", f)

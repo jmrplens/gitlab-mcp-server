@@ -458,78 +458,117 @@ func TestDeleteGroupBoardList_MissingParams(t *testing.T) {
 // Formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatGroupBoardMarkdown verifies the GroupBoardMarkdown Markdown formatter for a representative groupboard input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatGroupBoardMarkdown(t *testing.T) {
+// TestFormatGroupBoardMarkdown_AllFields pins the whole group board card: the
+// heading carrying the board's reference, one list item per field with the
+// group, milestone and assignee linked, the weight, the two visibility flags
+// as glyphs, and the columns as a nested table naming each one's scope.
+func TestFormatGroupBoardMarkdown_AllFields(t *testing.T) {
 	out := GroupBoardOutput{
-		ID:        1,
-		Name:      "Dev Board",
-		Group:     &GroupRefOutput{ID: 42, Name: "mygroup"},
-		Milestone: &MilestoneOutput{ID: 5, Title: "v1.0"},
-		Labels:    []*LabelDetailsOutput{{ID: 1, Name: "bug"}, {ID: 2, Name: "feature"}},
-		Lists:     []BoardListOutput{{ID: 10, Label: &LabelOutput{Name: "To Do"}, Position: 0}},
+		ID:              1,
+		Name:            "Dev Board",
+		Group:           &GroupRefOutput{ID: 42, Name: "mygroup", WebURL: "https://gitlab.example.com/groups/mygroup"},
+		Milestone:       &MilestoneOutput{ID: 5, Title: "v1.0", WebURL: "https://gitlab.example.com/groups/mygroup/-/milestones/1"},
+		Assignee:        &BasicUserOutput{ID: 3, Username: "alice", WebURL: "https://gitlab.example.com/alice"},
+		Weight:          4,
+		Labels:          []*LabelDetailsOutput{{ID: 1, Name: "bug"}, nil, {ID: 2, Name: "feature"}},
+		HideBacklogList: true,
+		HideClosedList:  false,
+		Lists: []BoardListOutput{
+			{ID: 10, Label: &LabelOutput{Name: "To Do"}, Position: 0, MaxIssueCount: 5},
+			{ID: 11, Position: 1, Iteration: &IterationOutput{ID: 9, Title: "Sprint 3"}},
+		},
 	}
+
 	md := FormatGroupBoardMarkdown(out)
-	if !strings.Contains(md, "Dev Board") {
-		t.Errorf("markdown missing board name")
-	}
-	if !strings.Contains(md, "mygroup") {
-		t.Errorf("markdown missing group name")
-	}
-	if !strings.Contains(md, "v1.0") {
-		t.Errorf("markdown missing milestone")
-	}
-	if !strings.Contains(md, "bug, feature") {
-		t.Errorf("markdown missing labels")
-	}
-	if !strings.Contains(md, "To Do") {
-		t.Errorf("markdown missing list label")
+
+	want := "## Group Board #1: Dev Board\n\n" +
+		"- **ID**: 1\n" +
+		"- **Group**: [mygroup](https://gitlab.example.com/groups/mygroup)\n" +
+		"- **Milestone**: [v1.0](https://gitlab.example.com/groups/mygroup/-/milestones/1)\n" +
+		"- **Assignee**: [@alice](https://gitlab.example.com/alice)\n" +
+		"- **Weight**: 4\n" +
+		"- **Labels**: bug, feature\n" +
+		"- **Hide Backlog**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Hide Closed**: " + toolutil.EmojiCross + "\n\n" +
+		"### Lists\n\n" +
+		"| ID | Scope | Position | Max Issues | Max Weight |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 10 | To Do | 0 | 5 | - |\n" +
+		"| 11 | Iteration: Sprint 3 | 1 | - | - |\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.group_board_create_list' to add a column to this board\n" +
+		"- Use action 'group.group_board_update' to change this board's name or scope\n" +
+		"- Use action 'group.group_board_delete' to remove this board\n"
+	if md != want {
+		t.Errorf("FormatGroupBoardMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatListGroupBoardsMarkdown verifies the ListGroupBoardsMarkdown Markdown formatter for a representative listgroupboards input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListGroupBoardsMarkdown pins the whole list: the counted heading,
+// one row per board with its ID and its linked group and milestone, and the
+// guidance section last with the preserve-links hint first.
 func TestFormatListGroupBoardsMarkdown(t *testing.T) {
 	out := ListGroupBoardsOutput{
 		Boards: []GroupBoardOutput{
-			{ID: 1, Name: "Board A", Group: &GroupRefOutput{ID: 1, Name: "grp"}, Milestone: &MilestoneOutput{ID: 3, Title: "M1"}},
-			{ID: 2, Name: "Board B", Group: &GroupRefOutput{ID: 1, Name: "grp"}},
+			{
+				ID: 1, Name: "Board A",
+				Group:     &GroupRefOutput{ID: 1, Name: "grp", WebURL: "https://gitlab.example.com/groups/grp"},
+				Milestone: &MilestoneOutput{ID: 3, Title: "M1", WebURL: "https://gitlab.example.com/groups/grp/-/milestones/3"},
+				Lists:     []BoardListOutput{{ID: 10}},
+			},
+			{ID: 2, Name: "Board B", Group: &GroupRefOutput{ID: 1, Name: "grp", WebURL: "https://gitlab.example.com/groups/grp"}},
 		},
 	}
+
 	md := FormatListGroupBoardsMarkdown(out)
-	if !strings.Contains(md, "Board A") || !strings.Contains(md, "Board B") {
-		t.Errorf("markdown missing board names")
+
+	want := "## Group Issue Boards (2)\n\n" +
+		"| ID | Name | Group | Milestone | Lists |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | Board A | [grp](https://gitlab.example.com/groups/grp) | [M1](https://gitlab.example.com/groups/grp/-/milestones/3) | 1 |\n" +
+		"| 2 | Board B | [grp](https://gitlab.example.com/groups/grp) |  | 0 |\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'group.group_board_get' to read one board with its columns\n" +
+		"- Use action 'group.group_board_create' to add a new board to the group\n"
+	if md != want {
+		t.Errorf("FormatListGroupBoardsMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatBoardListMarkdown verifies the BoardListMarkdown Markdown formatter for a representative boardlist input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatBoardListMarkdown(t *testing.T) {
+// TestFormatBoardListMarkdown_AllFields pins the whole column card: every
+// scope GitLab sent, the position, the two ceilings and the metric they are
+// counted in.
+func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 	out := BoardListOutput{
 		ID:             10,
 		Label:          &LabelOutput{Name: "Priority"},
 		Position:       0,
 		Assignee:       &BoardListAssigneeOutput{ID: 3, Username: "dev1"},
-		Iteration:      &IterationOutput{ID: 9, Title: "Iteration 1"},
-		Milestone:      &MilestoneOutput{ID: 7, Title: "sprint-1"},
+		Iteration:      &IterationOutput{ID: 9, Title: "Iteration 1", WebURL: "https://gitlab.example.com/groups/grp/-/iterations/9"},
+		Milestone:      &MilestoneOutput{ID: 7, Title: "sprint-1", WebURL: "https://gitlab.example.com/groups/grp/-/milestones/7"},
 		MaxIssueCount:  10,
 		MaxIssueWeight: 50,
+		LimitMetric:    "all_metrics",
 	}
+
 	md := FormatBoardListMarkdown(out)
-	if !strings.Contains(md, "Priority") {
-		t.Errorf("markdown missing label")
-	}
-	if !strings.Contains(md, "dev1") {
-		t.Errorf("markdown missing assignee")
-	}
-	if !strings.Contains(md, "Iteration 1") {
-		t.Errorf("markdown missing iteration")
-	}
-	if !strings.Contains(md, "sprint-1") {
-		t.Errorf("markdown missing milestone")
+
+	want := "## Board List #10: Priority\n\n" +
+		"- **ID**: 10\n" +
+		"- **Label**: Priority\n" +
+		"- **Assignee**: @dev1\n" +
+		"- **Iteration**: [Iteration 1](https://gitlab.example.com/groups/grp/-/iterations/9)\n" +
+		"- **Milestone**: [sprint-1](https://gitlab.example.com/groups/grp/-/milestones/7)\n" +
+		"- **Position**: 0\n" +
+		"- **Max Issue Count**: 10\n" +
+		"- **Max Issue Weight**: 50\n" +
+		"- **Limit Metric**: all_metrics\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.group_board_update_list' to change this column's position or limits\n" +
+		"- Use action 'group.group_board_delete_list' to remove this column\n"
+	if md != want {
+		t.Errorf("FormatBoardListMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -885,20 +924,22 @@ func TestDeleteGroupBoardList_CancelledContext(t *testing.T) {
 // Formatter coverage: FormatGroupBoardMarkdown — minimal (no optional fields)
 // ---------------------------------------------------------------------------.
 
-// TestFormatGroupBoardMarkdown_Minimal verifies the GroupBoardMarkdown_Minimal Markdown formatter for a representative groupboard_minimal input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatGroupBoardMarkdown_Minimal pins the whole card of a board GitLab
+// sent nothing optional for: no group, milestone, assignee, weight, label or
+// column row is written at all, and the two flags GitLab always sends are.
 func TestFormatGroupBoardMarkdown_Minimal(t *testing.T) {
 	md := FormatGroupBoardMarkdown(GroupBoardOutput{ID: 1, Name: "Board"})
-	if !strings.Contains(md, "Board") {
-		t.Error("markdown missing board name")
-	}
-	for _, absent := range []string{"**Group**", "**Milestone**", "**Labels**", "### Lists"} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("should not contain %q for minimal board", absent)
-			}
-		})
+
+	want := "## Group Board #1: Board\n\n" +
+		"- **ID**: 1\n" +
+		"- **Hide Backlog**: " + toolutil.EmojiCross + "\n" +
+		"- **Hide Closed**: " + toolutil.EmojiCross + "\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.group_board_create_list' to add a column to this board\n" +
+		"- Use action 'group.group_board_update' to change this board's name or scope\n" +
+		"- Use action 'group.group_board_delete' to remove this board\n"
+	if md != want {
+		t.Errorf("FormatGroupBoardMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -906,13 +947,12 @@ func TestFormatGroupBoardMarkdown_Minimal(t *testing.T) {
 // Formatter coverage: FormatListGroupBoardsMarkdown — empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListGroupBoardsMarkdown_Empty verifies the ListGroupBoardsMarkdown_Empty Markdown formatter for a representative listgroupboards_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListGroupBoardsMarkdown_Empty pins the whole render of a group
+// with no boards: one sentence, where the formatter used to write a heading
+// and a table header with nothing under it.
 func TestFormatListGroupBoardsMarkdown_Empty(t *testing.T) {
-	md := FormatListGroupBoardsMarkdown(ListGroupBoardsOutput{})
-	if !strings.Contains(md, "## Group Issue Boards") {
-		t.Error("markdown missing header")
+	if got, want := FormatListGroupBoardsMarkdown(ListGroupBoardsOutput{}), "No group issue boards found.\n"; got != want {
+		t.Errorf("FormatListGroupBoardsMarkdown() = %q, want %q", got, want)
 	}
 }
 
@@ -920,23 +960,20 @@ func TestFormatListGroupBoardsMarkdown_Empty(t *testing.T) {
 // Formatter coverage: FormatBoardListMarkdown — minimal (no optional fields)
 // ---------------------------------------------------------------------------.
 
-// TestFormatBoardListMarkdown_Minimal verifies the BoardListMarkdown_Minimal Markdown formatter for a representative boardlist_minimal input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatBoardListMarkdown_Minimal pins the whole card of a column with no
+// scope and no ceilings: the heading falls back to the reference, the position
+// is written because zero is the first column, and nothing else is.
 func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 	md := FormatBoardListMarkdown(BoardListOutput{ID: 5, Position: 1})
-	if !strings.Contains(md, "Board List (ID: 5)") {
-		t.Error("markdown missing list header")
-	}
-	if !strings.Contains(md, "**Position**: 1") {
-		t.Error("markdown missing position")
-	}
-	for _, absent := range []string{"**Label**", "**Max Issue Count**", "**Max Issue Weight**", "**Assignee**", "**Milestone**"} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("should not contain %q for minimal board list", absent)
-			}
-		})
+
+	want := "## Board List #5\n\n" +
+		"- **ID**: 5\n" +
+		"- **Position**: 1\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.group_board_update_list' to change this column's position or limits\n" +
+		"- Use action 'group.group_board_delete_list' to remove this column\n"
+	if md != want {
+		t.Errorf("FormatBoardListMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -944,9 +981,10 @@ func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 // Formatter coverage: FormatListBoardListsMarkdown — with data and empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListBoardListsMarkdown_WithData verifies the ListBoardListsMarkdown_WithData Markdown formatter for a representative listboardlists_withdata input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListBoardListsMarkdown_WithData pins the whole column list: the
+// counted heading, one row per column naming what it collects, the pagination
+// line, and the guidance section last with no preserve-links hint, since the
+// table carries no link.
 func TestFormatListBoardListsMarkdown_WithData(t *testing.T) {
 	out := ListBoardListsOutput{
 		Lists: []BoardListOutput{
@@ -955,23 +993,28 @@ func TestFormatListBoardListsMarkdown_WithData(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
+
 	md := FormatListBoardListsMarkdown(out)
-	for _, want := range []string{"## Board Lists", "To Do", "Doing", "| 10 |", "| 11 |"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+
+	want := "## Board Lists (2)\n\n" +
+		"| ID | Scope | Position | Max Issues | Max Weight |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 10 | To Do | 0 | 5 | 20 |\n" +
+		"| 11 | Doing | 1 | 3 | 15 |\n\n" +
+		"Page 1 of 1 | 2 items total | 20 per page\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.group_board_get_list' to read one column\n" +
+		"- Use action 'group.group_board_list_lists' to page through the rest of the board's columns\n"
+	if md != want {
+		t.Errorf("FormatListBoardListsMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatListBoardListsMarkdown_Empty verifies the ListBoardListsMarkdown_Empty Markdown formatter for a representative listboardlists_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListBoardListsMarkdown_Empty pins the whole render of a board with
+// no columns: one sentence and nothing else.
 func TestFormatListBoardListsMarkdown_Empty(t *testing.T) {
-	md := FormatListBoardListsMarkdown(ListBoardListsOutput{})
-	if !strings.Contains(md, "## Board Lists") {
-		t.Error("markdown missing header")
+	if got, want := FormatListBoardListsMarkdown(ListBoardListsOutput{}), "No board lists found.\n"; got != want {
+		t.Errorf("FormatListBoardListsMarkdown() = %q, want %q", got, want)
 	}
 }
 
@@ -1070,19 +1113,33 @@ func TestMarkdownHelpers_NilFallbacks(t *testing.T) {
 	if got := boardListLabelName(BoardListOutput{ID: 1}); got != "" {
 		t.Errorf("boardListLabelName(no label) = %q, want empty", got)
 	}
-	if got := groupName(nil); got != "" {
-		t.Errorf("groupName(nil) = %q, want empty", got)
+	if got := groupCell(nil); got != "" {
+		t.Errorf("groupCell(nil) = %q, want empty", got)
 	}
-	if got := milestoneTitle(nil); got != "" {
-		t.Errorf("milestoneTitle(nil) = %q, want empty", got)
+	if got := milestoneCell(nil); got != "" {
+		t.Errorf("milestoneCell(nil) = %q, want empty", got)
 	}
-	// A board with a nil group/milestone and a label-less list must still render.
+	// A board with a nil group and milestone, a nil label entry and a column
+	// with no scope renders the whole card without inventing any of them.
 	md := FormatGroupBoardMarkdown(GroupBoardOutput{
 		ID: 1, Name: "Plain", Labels: []*LabelDetailsOutput{nil},
 		Lists: []BoardListOutput{{ID: 9, Position: 0}},
 	})
-	if !strings.Contains(md, "Plain") {
-		t.Errorf("markdown missing board name:\n%s", md)
+
+	want := "## Group Board #1: Plain\n\n" +
+		"- **ID**: 1\n" +
+		"- **Hide Backlog**: " + toolutil.EmojiCross + "\n" +
+		"- **Hide Closed**: " + toolutil.EmojiCross + "\n\n" +
+		"### Lists\n\n" +
+		"| ID | Scope | Position | Max Issues | Max Weight |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 9 |  | 0 | - | - |\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.group_board_create_list' to add a column to this board\n" +
+		"- Use action 'group.group_board_update' to change this board's name or scope\n" +
+		"- Use action 'group.group_board_delete' to remove this board\n"
+	if md != want {
+		t.Errorf("FormatGroupBoardMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 

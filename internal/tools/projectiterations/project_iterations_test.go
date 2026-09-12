@@ -5,13 +5,13 @@ package projectiterations
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const fmtUnexpErr = "unexpected error: %v"
@@ -314,79 +314,48 @@ func TestToOutput_NilDates(t *testing.T) {
 	}
 }
 
-// TestIterationState verifies iterationState maps state integers to the correct
-// human-readable strings for all known states and unknown values.
-func TestIterationState(t *testing.T) {
-	tests := []struct {
-		name  string
-		state int64
-		want  string
-	}{
-		{name: "opened", state: 1, want: "opened"},
-		{name: "upcoming", state: 2, want: "upcoming"},
-		{name: "current", state: 3, want: "current"},
-		{name: "closed", state: 4, want: "closed"},
-		{name: "unknown zero", state: 0, want: "unknown(0)"},
-		{name: "unknown high", state: 99, want: "unknown(99)"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := iterationState(tt.state)
-			if got != tt.want {
-				t.Errorf("iterationState(%d) = %q, want %q", tt.state, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown returns the
-// "no iterations found" message for an empty list.
+// TestFormatListMarkdown_Empty pins the whole render of an empty page: the
+// one-sentence empty message, with no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	got := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(got, "No project iterations found") {
-		t.Errorf("expected 'No project iterations found' message, got:\n%s", got)
+	if got, want := FormatListMarkdown(ListOutput{}), "No project iterations found.\n"; got != want {
+		t.Errorf("FormatListMarkdown() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_WithIterations verifies FormatListMarkdown produces
-// a Markdown table with ID, IID, title, state, dates, and URL columns.
+// TestFormatListMarkdown_WithIterations pins the whole table: the project
+// title in the heading, the iteration title linked to its page, GitLab's state
+// words, and the guidance section last.
 func TestFormatListMarkdown_WithIterations(t *testing.T) {
 	out := ListOutput{
 		Iterations: []Output{
 			{ID: 1, IID: 1, Title: "Sprint 1", State: 1, StartDate: "2026-01-01", DueDate: "2026-01-14", WebURL: "https://gitlab.example.com/it/1"},
-			{ID: 2, IID: 2, Title: "Sprint 2", State: 4, StartDate: "2026-01-15", DueDate: "2026-01-28", WebURL: ""},
+			{ID: 2, IID: 2, Title: "Sprint 2", State: 3, StartDate: "2026-01-15", DueDate: "2026-01-28", WebURL: ""},
 		},
 	}
+
 	got := FormatListMarkdown(out)
 
-	if !strings.Contains(got, "## Project Iterations") {
-		t.Error("expected '## Project Iterations' header")
-	}
-	if !strings.Contains(got, "Sprint 1") {
-		t.Error("expected 'Sprint 1' in output")
-	}
-	if !strings.Contains(got, "Sprint 2") {
-		t.Error("expected 'Sprint 2' in output")
-	}
-	if !strings.Contains(got, "opened") {
-		t.Error("expected 'opened' state in output")
-	}
-	if !strings.Contains(got, "closed") {
-		t.Error("expected 'closed' state in output")
-	}
-	if !strings.Contains(got, "[opened](https://gitlab.example.com/it/1)") {
-		t.Error("expected clickable link for iteration with web_url")
+	want := "## Project Iterations (2)\n\n" +
+		"| ID | IID | Title | State | Start | Due |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | 1 | [Sprint 1](https://gitlab.example.com/it/1) | upcoming | 1 Jan 2026 | 14 Jan 2026 |\n" +
+		"| 2 | 2 | Sprint 2 | closed | 15 Jan 2026 | 28 Jan 2026 |\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n"
+	if got != want {
+		t.Errorf("FormatListMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_Full verifies FormatOutputMarkdown renders all fields
-// including description, URL, and dates for a fully populated iteration.
+// TestFormatOutputMarkdown_Full pins the whole card of a populated project
+// iteration, hints included: both list actions are named so the card reads the
+// same whichever of the two iteration packages registered the formatter.
 func TestFormatOutputMarkdown_Full(t *testing.T) {
 	out := Output{
 		ID:          42,
 		IID:         7,
 		Title:       "Sprint 7",
-		State:       3,
+		State:       2,
 		GroupID:     10,
 		StartDate:   "2026-03-01",
 		DueDate:     "2026-03-14",
@@ -394,60 +363,42 @@ func TestFormatOutputMarkdown_Full(t *testing.T) {
 		CreatedAt:   "2026-03-01T00:00:00Z",
 		Description: "This is the iteration description.",
 	}
+
 	got := FormatOutputMarkdown(out)
 
-	if !strings.Contains(got, "## Iteration #7") {
-		t.Error("expected iteration header with IID")
-	}
-	if !strings.Contains(got, "Sprint 7") {
-		t.Error("expected title in output")
-	}
-	if !strings.Contains(got, "current") {
-		t.Error("expected 'current' state in output")
-	}
-	if !strings.Contains(got, "https://gitlab.example.com/iterations/42") {
-		t.Error("expected web_url in output")
-	}
-	if !strings.Contains(got, "### Description") {
-		t.Error("expected description section")
-	}
-	if !strings.Contains(got, "This is the iteration description.") {
-		t.Error("expected description body")
+	want := "## Iteration #7: Sprint 7\n\n" +
+		"- **ID**: 42\n" +
+		"- **IID**: 7\n" +
+		"- **State**: current\n" +
+		"- **Group ID**: 10\n" +
+		"- **Start**: 1 Mar 2026\n" +
+		"- **Due**: 14 Mar 2026\n" +
+		"- **URL**: [https://gitlab.example.com/iterations/42](https://gitlab.example.com/iterations/42)\n" +
+		"- **Created**: 1 Mar 2026 00:00 UTC\n" +
+		"- **Description**: This is the iteration description.\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'issue.iteration_list_group' to see every iteration in the group\n" +
+		"- Use action 'issue.iteration_list_project' to see the iterations a project takes part in\n"
+	if got != want {
+		t.Errorf("FormatOutputMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_NoDescription verifies FormatOutputMarkdown omits
-// the description section when Description is empty.
-func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
-	out := Output{
-		ID:    1,
-		IID:   1,
-		Title: "Sprint 1",
-		State: 1,
-	}
-	got := FormatOutputMarkdown(out)
+// TestFormatOutputMarkdown_NoDescriptionNoURL pins the whole card of an
+// iteration GitLab sent no description, URL or dates for: each absent value
+// writes no row at all.
+func TestFormatOutputMarkdown_NoDescriptionNoURL(t *testing.T) {
+	got := FormatOutputMarkdown(Output{ID: 1, IID: 1, Title: "Sprint 1", State: 1})
 
-	if strings.Contains(got, "### Description") {
-		t.Error("expected no description section for empty description")
-	}
-}
-
-// TestFormatOutputMarkdown_NoURL verifies FormatOutputMarkdown omits the URL
-// row when WebURL is empty.
-func TestFormatOutputMarkdown_NoURL(t *testing.T) {
-	out := Output{
-		ID:    1,
-		IID:   1,
-		Title: "No URL",
-		State: 2,
-	}
-	got := FormatOutputMarkdown(out)
-
-	if !strings.Contains(got, "## Iteration #1") {
-		t.Error("expected iteration header")
-	}
-	if !strings.Contains(got, "upcoming") {
-		t.Error("expected 'upcoming' state")
+	want := "## Iteration #1: Sprint 1\n\n" +
+		"- **ID**: 1\n" +
+		"- **IID**: 1\n" +
+		"- **State**: upcoming\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'issue.iteration_list_group' to see every iteration in the group\n" +
+		"- Use action 'issue.iteration_list_project' to see the iterations a project takes part in\n"
+	if got != want {
+		t.Errorf("FormatOutputMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 

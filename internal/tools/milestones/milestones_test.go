@@ -1034,7 +1034,9 @@ func TestGetMergeRequests_NoCreatedAt(t *testing.T) {
 // Formatters — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_AllFields verifies FormatMarkdown when all fields.
+// TestFormatMarkdown_AllFields pins the whole milestone card: the heading
+// carrying the milestone's reference, one list item per field GitLab sent, the
+// description as the card's text, and the hints last.
 func TestFormatMarkdown_AllFields(t *testing.T) {
 	o := Output{
 		ID: 1, IID: 1, ProjectID: 42, Title: "v1.0", Description: "First release",
@@ -1042,60 +1044,103 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 		WebURL: "https://example.com/-/milestones/1", CreatedAt: "2026-01-01T00:00:00Z",
 		UpdatedAt: "2026-01-15T10:00:00Z", Expired: false,
 	}
+
 	md := FormatMarkdown(o)
-	for _, want := range []string{"v1.0", "active", "First release", "Start Date", "Due Date", "Created", "Updated", "URL"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatMarkdown missing %q in:\n%s", want, md)
-			}
-		})
+
+	want := "## Milestone #1: v1.0\n\n" +
+		"- **ID**: 1\n" +
+		"- **IID**: 1\n" +
+		"- **Project ID**: 42\n" +
+		"- **State**: active\n" +
+		"- **Start Date**: 1 Jan 2026\n" +
+		"- **Due Date**: 31 Mar 2026\n" +
+		"- **URL**: [https://example.com/-/milestones/1](https://example.com/-/milestones/1)\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Updated**: 15 Jan 2026 10:00 UTC\n" +
+		"- **Description**: First release\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'milestone.issues' to list the issues in this milestone\n" +
+		"- Use action 'milestone.merge_requests' to list the merge requests in this milestone\n" +
+		"- Use action 'milestone.update' to change this milestone's dates or state\n"
+	if md != want {
+		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatMarkdown_Minimal verifies FormatMarkdown when minimal.
+// TestFormatMarkdown_ExpiredIsWarned pins the whole card of an expired
+// milestone: the expiry is a warning line rather than the word "true", which
+// read as a value GitLab stored.
+func TestFormatMarkdown_ExpiredIsWarned(t *testing.T) {
+	md := FormatMarkdown(Output{ID: 3, IID: 3, GroupID: 7, Title: "v0.9", State: "closed", Expired: true})
+
+	want := "## Milestone #3: v0.9\n\n" +
+		"- **ID**: 3\n" +
+		"- **IID**: 3\n" +
+		"- **Group ID**: 7\n" +
+		"- **State**: closed\n" +
+		"- " + toolutil.EmojiWarning + " **Expired**\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'milestone.issues' to list the issues in this milestone\n" +
+		"- Use action 'milestone.merge_requests' to list the merge requests in this milestone\n" +
+		"- Use action 'milestone.update' to change this milestone's dates or state\n"
+	if md != want {
+		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatMarkdown_Minimal pins the whole card of a milestone GitLab sent
+// nothing optional for: no date, description, URL or expiry row is written.
 func TestFormatMarkdown_Minimal(t *testing.T) {
-	o := Output{ID: 2, IID: 2, Title: "v2.0", State: "closed"}
-	md := FormatMarkdown(o)
-	if strings.Contains(md, "Start Date") {
-		t.Error("minimal milestone should not show Start Date")
-	}
-	if strings.Contains(md, "Due Date") {
-		t.Error("minimal milestone should not show Due Date")
-	}
-	if strings.Contains(md, "Description") {
-		t.Error("minimal milestone should not show Description")
-	}
-	if !strings.Contains(md, "v2.0") {
-		t.Error("missing milestone title")
+	md := FormatMarkdown(Output{ID: 2, IID: 2, Title: "v2.0", State: "closed"})
+
+	want := "## Milestone #2: v2.0\n\n" +
+		"- **ID**: 2\n" +
+		"- **IID**: 2\n" +
+		"- **State**: closed\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'milestone.issues' to list the issues in this milestone\n" +
+		"- Use action 'milestone.merge_requests' to list the merge requests in this milestone\n" +
+		"- Use action 'milestone.update' to change this milestone's dates or state\n"
+	if md != want {
+		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
+// TestFormatListMarkdownString_Empty pins the whole render of a project with
+// no milestones: one sentence and nothing else.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
-	md := FormatListMarkdownString(ListOutput{})
-	if !strings.Contains(md, "No milestones found") {
-		t.Errorf("expected 'No milestones found', got:\n%s", md)
+	if got, want := FormatListMarkdownString(ListOutput{}), "No milestones found.\n"; got != want {
+		t.Errorf("FormatListMarkdownString() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatListMarkdownString_WithExpired verifies FormatListMarkdownString when with expired.
+// TestFormatListMarkdownString_WithExpired pins the whole milestone table: the
+// counted heading, the IID linked to the milestone, the expiry as a glyph
+// rather than the words Yes and No, a dash where GitLab sent no due date, and
+// the guidance section last.
 func TestFormatListMarkdownString_WithExpired(t *testing.T) {
 	out := ListOutput{
 		Milestones: []Output{
-			{IID: 1, Title: "v1.0", State: "active", DueDate: "2026-03-31", Expired: true},
+			{IID: 1, Title: "v1.0", State: "active", DueDate: "2026-03-31", Expired: true, WebURL: "https://gitlab.example.com/-/milestones/1"},
 			{IID: 2, Title: "v2.0", State: "active"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	}
+
 	md := FormatListMarkdownString(out)
-	if !strings.Contains(md, "Yes") {
-		t.Errorf("expected 'Yes' for expired, got:\n%s", md)
-	}
-	if !strings.Contains(md, "No") {
-		t.Errorf("expected 'No' for not expired, got:\n%s", md)
-	}
-	if !strings.Contains(md, "| IID |") {
-		t.Errorf("missing table header:\n%s", md)
+
+	want := "## Milestones (2)\n\n" +
+		"| IID | Title | State | Due Date | Expired |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| [1](https://gitlab.example.com/-/milestones/1) | v1.0 | active | 31 Mar 2026 | " + toolutil.EmojiSuccess + " |\n" +
+		"| 2 | v2.0 | active | - | " + toolutil.EmojiCross + " |\n\n" +
+		"2 items total\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'milestone.get' to read one milestone by its IID\n" +
+		"- Use action 'milestone.create' to add a new milestone to the project\n"
+	if md != want {
+		t.Errorf("FormatListMarkdownString()\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -1111,68 +1156,41 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_ClickableLinks verifies that milestone IIDs
-// in the list are rendered as clickable Markdown links [IID](weburl).
-func TestFormatListMarkdownString_ClickableLinks(t *testing.T) {
-	out := ListOutput{
-		Milestones: []Output{
-			{
-				IID: 3, Title: "v3.0", State: "active",
-				WebURL: "https://gitlab.example.com/-/milestones/3",
-			},
-		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1},
-	}
-	md := FormatListMarkdownString(out)
-	if !strings.Contains(md, "[3](https://gitlab.example.com/-/milestones/3)") {
-		t.Errorf("expected clickable milestone link, got:\n%s", md)
-	}
-}
-
-// TestFormatMarkdown_ClickableURL verifies that milestone detail renders
-// the URL as a clickable Markdown link [url](url).
-func TestFormatMarkdown_ClickableURL(t *testing.T) {
-	md := FormatMarkdown(Output{
-		ID: 1, IID: 1, Title: "v1.0", State: "active",
-		WebURL: "https://gitlab.example.com/-/milestones/1",
-	})
-	if !strings.Contains(md, "[https://gitlab.example.com/-/milestones/1](https://gitlab.example.com/-/milestones/1)") {
-		t.Errorf("expected clickable URL in detail, got:\n%s", md)
-	}
-}
-
-// TestFormatMarkdown_NoURLWhenEmpty verifies that no URL line appears
-// when WebURL is empty.
-func TestFormatMarkdown_NoURLWhenEmpty(t *testing.T) {
-	md := FormatMarkdown(Output{ID: 1, IID: 1, Title: "v1.0", State: "active"})
-	if strings.Contains(md, "**URL**") {
-		t.Errorf("expected no URL line when WebURL is empty, got:\n%s", md)
-	}
-}
-
-// TestFormatIssuesMarkdownString_Empty verifies FormatIssuesMarkdownString when empty.
+// TestFormatIssuesMarkdownString_Empty pins the whole render of a milestone
+// with no issues: one sentence and nothing else.
 func TestFormatIssuesMarkdownString_Empty(t *testing.T) {
-	md := FormatIssuesMarkdownString(MilestoneIssuesOutput{})
-	if !strings.Contains(md, "No issues found") {
-		t.Errorf("expected 'No issues found', got:\n%s", md)
+	if got, want := FormatIssuesMarkdownString(MilestoneIssuesOutput{}), "No milestone issues found.\n"; got != want {
+		t.Errorf("FormatIssuesMarkdownString() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatIssuesMarkdownString_WithIssues verifies FormatIssuesMarkdownString when with issues.
+// TestFormatIssuesMarkdownString_WithIssues pins the whole issue table: the
+// counted heading, the IID linked to the issue, the state with the glyph its
+// domain gives it, and the creation instant in the display form rather than as
+// the RFC 3339 string GitLab sent.
 func TestFormatIssuesMarkdownString_WithIssues(t *testing.T) {
 	out := MilestoneIssuesOutput{
 		Issues: []IssueItem{
-			{IID: 1, Title: "Bug fix", State: "opened", CreatedAt: "2026-01-05T00:00:00Z"},
+			{IID: 1, Title: "Bug fix", State: "opened", CreatedAt: "2026-01-05T00:00:00Z", WebURL: "https://gitlab.example.com/-/issues/1"},
 			{IID: 2, Title: "Feature", State: "closed"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	}
+
 	md := FormatIssuesMarkdownString(out)
-	if !strings.Contains(md, "Bug fix") {
-		t.Errorf("missing issue title:\n%s", md)
-	}
-	if !strings.Contains(md, "| IID |") {
-		t.Errorf("missing table header:\n%s", md)
+
+	want := "## Milestone Issues (2)\n\n" +
+		"| IID | Title | State | Created |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| [#1](https://gitlab.example.com/-/issues/1) | Bug fix | " + toolutil.EmojiGreen + " opened | 5 Jan 2026 00:00 UTC |\n" +
+		"| #2 | Feature | " + toolutil.EmojiRed + " closed |  |\n\n" +
+		"2 items total\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'issue.get' to read one of these issues in full\n" +
+		"- Use action 'milestone.merge_requests' to see the merge requests in this milestone instead\n"
+	if md != want {
+		t.Errorf("FormatIssuesMarkdownString()\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -1188,32 +1206,41 @@ func TestFormatIssuesMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatMergeRequestsMarkdownString_Empty verifies FormatMergeRequestsMarkdownString when empty.
+// TestFormatMergeRequestsMarkdownString_Empty pins the whole render of a
+// milestone with no merge requests: one sentence and nothing else.
 func TestFormatMergeRequestsMarkdownString_Empty(t *testing.T) {
-	md := FormatMergeRequestsMarkdownString(MilestoneMergeRequestsOutput{})
-	if !strings.Contains(md, "No merge requests found") {
-		t.Errorf("expected 'No merge requests found', got:\n%s", md)
+	if got, want := FormatMergeRequestsMarkdownString(MilestoneMergeRequestsOutput{}), "No milestone merge requests found.\n"; got != want {
+		t.Errorf("FormatMergeRequestsMarkdownString() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatMergeRequestsMarkdownString_WithMRs verifies FormatMergeRequestsMarkdownString when with MRs.
+// TestFormatMergeRequestsMarkdownString_WithMRs pins the whole merge request
+// table: the counted heading, the reference linked to the merge request, the
+// state with its glyph, both branches escaped, and the creation instant in the
+// display form.
 func TestFormatMergeRequestsMarkdownString_WithMRs(t *testing.T) {
 	out := MilestoneMergeRequestsOutput{
 		MergeRequests: []MergeRequestItem{
-			{IID: 1, Title: "Feature X", State: "merged", SourceBranch: "feat-x", TargetBranch: "main", CreatedAt: "2026-02-01T00:00:00Z"},
+			{IID: 1, Title: "Feature X", State: "merged", SourceBranch: "feat-x", TargetBranch: "main", CreatedAt: "2026-02-01T00:00:00Z", WebURL: "https://gitlab.example.com/-/merge_requests/1"},
 			{IID: 2, Title: "Fix Y", State: "opened", SourceBranch: "fix-y", TargetBranch: "main"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	}
+
 	md := FormatMergeRequestsMarkdownString(out)
-	if !strings.Contains(md, "Feature X") {
-		t.Errorf("missing MR title:\n%s", md)
-	}
-	if !strings.Contains(md, "feat-x") {
-		t.Errorf("missing source branch:\n%s", md)
-	}
-	if !strings.Contains(md, "| IID |") {
-		t.Errorf("missing table header:\n%s", md)
+
+	want := "## Milestone Merge Requests (2)\n\n" +
+		"| IID | Title | State | Source | Target | Created |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| [!1](https://gitlab.example.com/-/merge_requests/1) | Feature X | " + toolutil.EmojiPurple + " merged | feat-x | main | 1 Feb 2026 00:00 UTC |\n" +
+		"| !2 | Fix Y | " + toolutil.EmojiGreen + " opened | fix-y | main |  |\n\n" +
+		"2 items total\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'merge_request.get' to read one of these merge requests in full\n" +
+		"- Use action 'milestone.issues' to see the issues in this milestone instead\n"
+	if md != want {
+		t.Errorf("FormatMergeRequestsMarkdownString()\n got %q\nwant %q", md, want)
 	}
 }
 

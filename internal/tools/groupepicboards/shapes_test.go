@@ -136,10 +136,18 @@ func TestMarkdownHelpersNil(t *testing.T) {
 	if got := labelNames([]*LabelDetailsOutput{nil, {Name: "a"}}); len(got) != 1 || got[0] != "a" {
 		t.Errorf("labelNames filtered = %v", got)
 	}
-	if got := listLabelName(BoardListOutput{}); got != "" {
-		t.Errorf("listLabelName(no label) = %q, want empty", got)
+	if got := listScope(BoardListOutput{}); got != "" {
+		t.Errorf("listScope(no label, no type) = %q, want empty", got)
 	}
-	if got := listLabelName(BoardListOutput{Label: &ListLabelOutput{Name: "L"}}); got != "L" {
-		t.Errorf("listLabelName = %q, want L", got)
+	if got := listScope(BoardListOutput{Label: &ListLabelOutput{Name: "L"}}); got != "L" {
+		t.Errorf("listScope(label) = %q, want L", got)
+	}
+	// A column with no label is the board's backlog or closed column, and its
+	// list type is what names it.
+	if got := listScope(BoardListOutput{ListType: "closed"}); got != "closed" {
+		t.Errorf("listScope(no label) = %q, want closed", got)
+	}
+	if got := collapsedCell(nil); got != "" {
+		t.Errorf("collapsedCell(nil) = %q, want empty", got)
 	}
 }

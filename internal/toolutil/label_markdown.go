@@ -7,6 +7,11 @@ import (
 )
 
 // LabelMarkdown holds the common fields rendered for project and group labels.
+//
+// Archived is here because GitLab archives a label rather than deleting it,
+// and a card that says nothing about it shows an archived label exactly as it
+// shows a live one: the label carried the flag on its output type and no
+// renderer read it.
 type LabelMarkdown struct {
 	ID                     int64
 	Name                   string
@@ -19,6 +24,7 @@ type LabelMarkdown struct {
 	PrioritySpecified      bool
 	IsProjectLabel         bool
 	Subscribed             bool
+	Archived               bool
 }
 
 // LabelMarkdownOptions controls label detail and list Markdown copy. The
@@ -49,6 +55,7 @@ func FormatLabelMarkdown(label LabelMarkdown, opts LabelMarkdownOptions) string 
 	}
 	c.Bool("Project label", label.IsProjectLabel)
 	c.Bool("Subscribed", label.Subscribed)
+	c.Flag(EmojiArchived, "Archived", label.Archived)
 	if label.OpenIssuesCount > 0 || label.ClosedIssuesCount > 0 || label.OpenMergeRequestsCount > 0 {
 		c.Field("Issues", fmt.Sprintf("%d open, %d closed", label.OpenIssuesCount, label.ClosedIssuesCount))
 		c.Int("Open MRs", label.OpenMergeRequestsCount)
@@ -70,7 +77,7 @@ func formatLabelListMarkdown(labels []LabelMarkdown, pagination PaginationOutput
 	b.WriteString(MarkdownTableHeader("Name", "Color", "Scope", "Open Issues", "Closed Issues", "Open MRs"))
 	for _, label := range labels {
 		b.WriteString(MarkdownTableRow(
-			EscapeMdTableCell(label.Name),
+			labelNameCell(label),
 			EscapeMdTableCell(label.Color),
 			labelScope(label.IsProjectLabel),
 			strconv.FormatInt(label.OpenIssuesCount, 10),
@@ -80,6 +87,17 @@ func formatLabelListMarkdown(labels []LabelMarkdown, pagination PaginationOutput
 	}
 	WriteListFooter(&b, pagination, false, opts.ListHints...)
 	return b.String()
+}
+
+// labelNameCell renders a label's name, marked with the archive glyph when
+// GitLab has archived it: an archived label is still returned by a list and
+// still shown on an issue, and the row used to read exactly like a live one.
+func labelNameCell(label LabelMarkdown) string {
+	name := EscapeMdTableCell(label.Name)
+	if !label.Archived {
+		return name
+	}
+	return EmojiArchived + " " + name
 }
 
 // labelScope names where a label is defined, which a list mixing a project's

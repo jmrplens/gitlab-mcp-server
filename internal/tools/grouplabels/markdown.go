@@ -7,31 +7,20 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-var labelMarkdownOptions = toolutil.LabelMarkdownOptions{
-	DetailTitle:   "Group Label",
-	ListTitle:     "Group Labels",
-	EmptyListText: "No group labels found.",
-	DetailHints: []string{
-		"If the workflow asks to fetch/get before update or delete, use the selected tool surface's group-label get action with the same group_id and this label_id next",
-		"Use the selected tool surface's group-label update action with the same group_id and this label_id to modify this label",
-		"Use the selected tool surface's group-label delete action with the same group_id, this label_id, and explicit confirm=true to remove this label",
-		"Use the selected tool surface's group-label subscribe or unsubscribe actions with the same group_id and this label_id to follow or unfollow",
-	},
-	ListHints: []string{
-		toolutil.HintPreserveLinks,
-		"Use the selected tool surface's group-label get action with the same group_id and label_id for full details before update/delete workflows",
-		"Use the selected tool surface's group-label create action with group_id to add a new group label",
-	},
-}
-
-// FormatMarkdown renders a single group label as a Markdown summary.
+// FormatMarkdown renders a single group label as a Markdown card.
+//
+// This package and the project label package alias one output type, so the
+// Markdown registry keys them together and keeps whichever init ran first.
+// Both now render through the shared formatter, which picks the copy from the
+// label's own scope, so a group label is no longer titled "Label" and pointed
+// at the project actions because the other package's init won the race.
 func FormatMarkdown(l Output) string {
-	return toolutil.FormatLabelMarkdown(toLabelMarkdown(l), labelMarkdownOptions)
+	return labeldata.FormatMarkdown(l)
 }
 
 // FormatListMarkdownString renders a paginated list of group labels as a Markdown table string.
 func FormatListMarkdownString(out ListOutput) string {
-	return toolutil.FormatLabelListMarkdownFunc(out.Labels, out.Pagination, labelMarkdownOptions, toLabelMarkdown)
+	return toolutil.FormatLabelListMarkdownFunc(out.Labels, out.Pagination, labeldata.GroupMarkdownOptions, labeldata.ToMarkdown)
 }
 
 // FormatListMarkdown renders a paginated list of group labels as an MCP Markdown result.
@@ -42,8 +31,4 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 func init() {
 	toolutil.RegisterMarkdown(FormatMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
-}
-
-func toLabelMarkdown(label Output) toolutil.LabelMarkdown {
-	return labeldata.ToMarkdown(label)
 }

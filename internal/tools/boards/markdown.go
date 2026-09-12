@@ -2,10 +2,32 @@ package boards
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionBoardCreate     = "project.board_create"
+	actionBoardUpdate     = "project.board_update"
+	actionBoardDelete     = "project.board_delete"
+	actionBoardListCreate = "project.board_list_create"
+	actionBoardListUpdate = "project.board_list_update"
+	actionBoardListDelete = "project.board_list_delete"
+)
+
+// boardHeading composes a card heading from what names the object: its kind
+// and ID always, and the title GitLab gave it when there is one, so a board
+// with no name heads its card with the reference alone rather than with a
+// colon and nothing after it.
+func boardHeading(kind string, id int64, title string) string {
+	if strings.TrimSpace(title) == "" {
+		return fmt.Sprintf("%s #%d", kind, id)
+	}
+	return fmt.Sprintf("%s #%d: %s", kind, id, title)
+}
 
 // boardProjectLabel renders the most descriptive project reference, or "".
 func boardProjectLabel(p *ProjectOutput) string {
@@ -18,6 +40,14 @@ func boardProjectLabel(p *ProjectOutput) string {
 	return p.Name
 }
 
+// boardProjectURL is the project's own page, or "" when GitLab sent none.
+func boardProjectURL(p *ProjectOutput) string {
+	if p == nil {
+		return ""
+	}
+	return p.WebURL
+}
+
 // boardListLabelName returns the label name for a list, or "" when unset.
 func boardListLabelName(l BoardListOutput) string {
 	if l.Label != nil {
@@ -26,131 +56,188 @@ func boardListLabelName(l BoardListOutput) string {
 	return ""
 }
 
-// FormatBoardMarkdown formats a single board as markdown.
+// boardListScope names what a list collects, which is the one thing a reader
+// of a column wants and the one thing the label column could not say: a label
+// list carries its label, and the Premium assignee, milestone and iteration
+// lists carry theirs. The column used to print the list's own ID whenever
+// there was no label, which named every scope "milestone" by omission.
+// A list with no scope of its own is the board's backlog or closed column, and
+// renders as nothing rather than as an invented one.
+func boardListScope(l BoardListOutput) string {
+	switch {
+	case boardListLabelName(l) != "":
+		return toolutil.EscapeMdTableCell(boardListLabelName(l))
+	case l.Assignee != nil && l.Assignee.Username != "":
+		return toolutil.MdUserHandle(l.Assignee.Username)
+	case l.Milestone != nil && l.Milestone.Title != "":
+		return "Milestone: " + toolutil.EscapeMdTableCell(l.Milestone.Title)
+	case l.Iteration != nil && l.Iteration.Title != "":
+		return "Iteration: " + toolutil.EscapeMdTableCell(l.Iteration.Title)
+	default:
+		return ""
+	}
+}
+
+// boardListLimit renders a list's issue or weight ceiling. Zero is GitLab
+// saying the column has no limit, not a limit of nothing, so it renders as a
+// dash rather than as the number 0.
+func boardListLimit(v int64) string {
+	if v == 0 {
+		return "-"
+	}
+	return strconv.FormatInt(v, 10)
+}
+
+// boardLabelNames lists a board's scope label names, skipping the nil entries
+// GitLab's own arrays can carry.
+func boardLabelNames(labels []*LabelDetailsOutput) []string {
+	names := make([]string, 0, len(labels))
+	for _, lbl := range labels {
+		if lbl != nil && lbl.Name != "" {
+			names = append(names, lbl.Name)
+		}
+	}
+	return names
+}
+
+// writeBoardListsTable writes a board's columns as the nested collection they
+// are, under a heading of the card's own.
+func writeBoardListsTable(c *toolutil.Card, lists []BoardListOutput) {
+	if len(lists) == 0 {
+		return
+	}
+	t := c.Table("Lists", "ID", "Scope", "Position", "Max Issues", "Max Weight")
+	for _, l := range lists {
+		t.Row(
+			strconv.FormatInt(l.ID, 10),
+			boardListScope(l),
+			strconv.FormatInt(l.Position, 10),
+			boardListLimit(l.MaxIssueCount),
+			boardListLimit(l.MaxIssueWeight),
+		)
+	}
+}
+
+// FormatBoardMarkdown renders one issue board as the card of one object: the
+// identity, the scope GitLab filters the board by, the two column-visibility
+// flags, and the board's own columns as a nested table.
+//
+// Every field used to be written as a bullet-less "**Label**: value" line with
+// the value interpolated raw, so consecutive fields ran together into one
+// paragraph and a board named across two lines added headings and list items
+// of its own. The board's ID was nowhere on the card at all, which left the
+// reader nothing to pass back to board_update or board_delete.
 func FormatBoardMarkdown(out BoardOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Board: %s\n\n", toolutil.EscapeMdTableCell(out.Name))
-	if project := boardProjectLabel(out.Project); project != "" {
-		fmt.Fprintf(&b, "**Project**: %s\n", project)
+	c := toolutil.NewCard(&b, boardHeading("Board", out.ID, out.Name))
+	c.Int("ID", out.ID)
+	c.Link("Project", boardProjectLabel(out.Project), boardProjectURL(out.Project))
+	if out.Group != nil {
+		c.Link("Group", out.Group.Name, out.Group.WebURL)
 	}
-	if out.Milestone != nil && out.Milestone.Title != "" {
-		fmt.Fprintf(&b, "**Milestone**: %s\n", out.Milestone.Title)
+	if out.Milestone != nil {
+		c.Link("Milestone", out.Milestone.Title, out.Milestone.WebURL)
 	}
-	if out.Assignee != nil && out.Assignee.Username != "" {
-		fmt.Fprintf(&b, "**Assignee**: @%s\n", out.Assignee.Username)
+	if out.Assignee != nil {
+		c.Markdown("Assignee", toolutil.MdUserLink(out.Assignee.Username, out.Assignee.WebURL))
 	}
-	if out.Weight > 0 {
-		fmt.Fprintf(&b, "**Weight**: %d\n", out.Weight)
+	c.Count("Weight", out.Weight)
+	if names := boardLabelNames(out.Labels); len(names) > 0 {
+		c.Field("Labels", strings.Join(names, ", "))
 	}
-	if len(out.Labels) > 0 {
-		names := make([]string, 0, len(out.Labels))
-		for _, lbl := range out.Labels {
-			if lbl != nil {
-				names = append(names, lbl.Name)
-			}
-		}
-		if len(names) > 0 {
-			fmt.Fprintf(&b, "**Labels**: %s\n", strings.Join(names, ", "))
-		}
-	}
-	fmt.Fprintf(&b, "**Hide Backlog**: %t | **Hide Closed**: %t\n", out.HideBacklogList, out.HideClosedList)
-	if len(out.Lists) > 0 {
-		b.WriteString("\n### Lists\n\n| Label | Position | Max Issues | Max Weight |\n|---|---|---|---|\n")
-		for _, l := range out.Lists {
-			label := toolutil.EscapeMdTableCell(boardListLabelName(l))
-			if label == "" {
-				label = fmt.Sprintf("#%d", l.ID)
-			}
-			fmt.Fprintf(&b, "| %s | %d | %d | %d |\n",
-				label, l.Position, l.MaxIssueCount, l.MaxIssueWeight)
-		}
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'board_list_create' to add columns to this board",
-		"Use action 'board_update' to modify board settings",
-		"Use action 'board_delete' to remove this board",
+	c.Bool("Hide Backlog", out.HideBacklogList)
+	c.Bool("Hide Closed", out.HideClosedList)
+	writeBoardListsTable(c, out.Lists)
+	c.End(
+		toolutil.HintAction(actionBoardListCreate, "add a column to this board"),
+		toolutil.HintAction(actionBoardUpdate, "change this board's name or scope"),
+		toolutil.HintAction(actionBoardDelete, "remove this board"),
 	)
 	return b.String()
 }
 
-// FormatListBoardsMarkdown formats a paginated list of boards.
+// FormatListBoardsMarkdown renders a page of issue boards as a Markdown table:
+// a collection of objects that share columns.
 func FormatListBoardsMarkdown(out ListBoardsOutput) string {
+	if len(out.Boards) == 0 {
+		return toolutil.EmptyMessage("issue boards")
+	}
 	var b strings.Builder
-	b.WriteString("## Issue Boards\n\n")
-	toolutil.WriteListSummary(&b, len(out.Boards), out.Pagination)
-	b.WriteString("| Name | Project | Milestone | Assignee | Lists |\n|---|---|---|---|---|\n")
+	toolutil.WriteListHeading(&b, "Issue Boards", len(out.Boards), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Project", "Milestone", "Assignee", "Lists"))
 	for _, bd := range out.Boards {
 		var milestone, assignee string
 		if bd.Milestone != nil {
-			milestone = bd.Milestone.Title
+			milestone = toolutil.MdTitleLink(bd.Milestone.Title, bd.Milestone.WebURL)
 		}
 		if bd.Assignee != nil {
-			assignee = bd.Assignee.Username
+			assignee = toolutil.MdUserLink(bd.Assignee.Username, bd.Assignee.WebURL)
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %d |\n",
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(bd.ID, 10),
 			toolutil.EscapeMdTableCell(bd.Name),
-			toolutil.EscapeMdTableCell(boardProjectLabel(bd.Project)),
-			toolutil.EscapeMdTableCell(milestone),
-			toolutil.EscapeMdTableCell(assignee),
-			len(bd.Lists))
+			toolutil.MdTitleLink(boardProjectLabel(bd.Project), boardProjectURL(bd.Project)),
+			milestone,
+			assignee,
+			strconv.Itoa(len(bd.Lists)),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use action 'board_get' with board_id for full details",
-		"Use action 'board_create' to add a new board",
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(actionBoardGet, "read one board with its columns"),
+		toolutil.HintAction(actionBoardCreate, "add a new board"),
 	)
 	return b.String()
 }
 
-// FormatBoardListMarkdown formats a single board list as markdown.
+// FormatBoardListMarkdown renders one board column as the card of one object.
 func FormatBoardListMarkdown(out BoardListOutput) string {
 	var b strings.Builder
-	if label := boardListLabelName(out); label != "" {
-		fmt.Fprintf(&b, "## Board List: %s\n\n", toolutil.EscapeMdTableCell(label))
-	} else {
-		fmt.Fprintf(&b, "## Board List #%d\n\n", out.ID)
+	c := toolutil.NewCard(&b, boardHeading("Board List", out.ID, boardListLabelName(out)))
+	c.Int("ID", out.ID)
+	if out.Label != nil {
+		c.Field("Label", out.Label.Name)
 	}
-	fmt.Fprintf(&b, "**Position**: %d\n", out.Position)
-	if out.MaxIssueCount > 0 {
-		fmt.Fprintf(&b, "**Max Issue Count**: %d\n", out.MaxIssueCount)
+	if out.Assignee != nil {
+		c.Markdown("Assignee", toolutil.MdUserHandle(out.Assignee.Username))
 	}
-	if out.MaxIssueWeight > 0 {
-		fmt.Fprintf(&b, "**Max Issue Weight**: %d\n", out.MaxIssueWeight)
+	if out.Milestone != nil {
+		c.Link("Milestone", out.Milestone.Title, out.Milestone.WebURL)
 	}
-	if out.Assignee != nil && out.Assignee.Username != "" {
-		fmt.Fprintf(&b, "**Assignee**: @%s\n", out.Assignee.Username)
+	if out.Iteration != nil {
+		c.Link("Iteration", out.Iteration.Title, out.Iteration.WebURL)
 	}
-	if out.Milestone != nil && out.Milestone.Title != "" {
-		fmt.Fprintf(&b, "**Milestone**: %s\n", out.Milestone.Title)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'board_list_update' to change position or limits",
-		"Use action 'board_list_delete' to remove this list",
+	c.Int("Position", out.Position)
+	c.Count("Max Issue Count", out.MaxIssueCount)
+	c.Count("Max Issue Weight", out.MaxIssueWeight)
+	c.Field("Limit Metric", out.LimitMetric)
+	c.End(
+		toolutil.HintAction(actionBoardListUpdate, "change this column's position or limits"),
+		toolutil.HintAction(actionBoardListDelete, "remove this column"),
 	)
 	return b.String()
 }
 
-// FormatListBoardListsMarkdown formats a paginated list of board lists.
+// FormatListBoardListsMarkdown renders a page of board columns as a Markdown
+// table.
 func FormatListBoardListsMarkdown(out ListBoardListsOutput) string {
-	var b strings.Builder
-	b.WriteString("## Board Lists\n\n")
-	toolutil.WriteListSummary(&b, len(out.Lists), out.Pagination)
-	b.WriteString("| Label | Position | Max Issues | Max Weight |\n|---|---|---|---|\n")
-	for _, l := range out.Lists {
-		label := toolutil.EscapeMdTableCell(boardListLabelName(l))
-		if label == "" {
-			label = fmt.Sprintf("#%d", l.ID)
-		}
-		fmt.Fprintf(&b, "| %s | %d | %d | %d |\n",
-			label, l.Position, l.MaxIssueCount, l.MaxIssueWeight)
+	if len(out.Lists) == 0 {
+		return toolutil.EmptyMessage("board lists")
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use action 'board_list_create' to add a new list",
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Board Lists", len(out.Lists), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Scope", "Position", "Max Issues", "Max Weight"))
+	for _, l := range out.Lists {
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(l.ID, 10),
+			boardListScope(l),
+			strconv.FormatInt(l.Position, 10),
+			boardListLimit(l.MaxIssueCount),
+			boardListLimit(l.MaxIssueWeight),
+		))
+	}
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionBoardListGet, "read one column"),
+		toolutil.HintAction(actionBoardListCreate, "add a new column"),
 	)
 	return b.String()
 }
