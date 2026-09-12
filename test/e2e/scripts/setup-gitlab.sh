@@ -291,13 +291,13 @@ ENTERPRISE_ACTIVATION_CODE="$(env_or_dotenv GITLAB_ACTIVATION_CODE)"
 ENTERPRISE_LICENSE_CACHED="$(enterprise_license_file_value)"
 ENTERPRISE_LICENSE=""
 ENTERPRISE_LICENSE_SOURCE=""
-if [ -n "$ENTERPRISE_LICENSE_RAW" ] && ! looks_like_activation_code "$ENTERPRISE_LICENSE_RAW" ]; then
+if [ -n "$ENTERPRISE_LICENSE_RAW" ] && ! looks_like_activation_code "$ENTERPRISE_LICENSE_RAW"; then
     ENTERPRISE_LICENSE="$ENTERPRISE_LICENSE_RAW"
     ENTERPRISE_LICENSE_SOURCE="ENTERPRISE_LICENSE"
 elif [ -n "$ENTERPRISE_LICENSE_CACHED" ]; then
     ENTERPRISE_LICENSE="$ENTERPRISE_LICENSE_CACHED"
     ENTERPRISE_LICENSE_SOURCE="$ENTERPRISE_LICENSE_FILE_DISPLAY"
-elif [ -z "$ENTERPRISE_ACTIVATION_CODE" ] && looks_like_activation_code "$ENTERPRISE_LICENSE_RAW" ]; then
+elif [ -z "$ENTERPRISE_ACTIVATION_CODE" ] && looks_like_activation_code "$ENTERPRISE_LICENSE_RAW"; then
     ENTERPRISE_ACTIVATION_CODE="$ENTERPRISE_LICENSE_RAW"
 fi
 if [ "$ENTERPRISE_MODE" = "true" ]; then
@@ -511,6 +511,14 @@ else
 fi
 
 # 3. Create Personal Access Token for test user (with retry for timing issues)
+#
+# admin_mode is part of the set because the server narrows its own catalog to
+# the scopes the token reports at startup (cmd/server/main.go), and without it
+# the five admin groups listed in internal/tools/scope_filter.go are withheld:
+# gitlab_admin, gitlab_enterprise_user, gitlab_project_alias, gitlab_geo and
+# gitlab_storage_move. The user is created with admin=true above, so GitLab
+# accepts the scope; a suite that drives the real binary would otherwise be
+# served a smaller surface than the one it means to cover.
 echo "  [3/4] Creating Personal Access Token..."
 PAT=""
 for attempt in 1 2 3; do
@@ -521,6 +529,7 @@ for attempt in 1 2 3; do
         -d "scopes[]=read_user" \
         -d "scopes[]=read_repository" \
         -d "scopes[]=write_repository" \
+        -d "scopes[]=admin_mode" \
         --retry 3 --retry-delay 2 --retry-all-errors \
         --connect-timeout 5 --max-time 30 2>/dev/null || true)
 
@@ -575,24 +584,70 @@ curl -sSf -o /dev/null -X PUT "${GITLAB_URL}/api/v4/application/settings" \
     --data "import_sources[]=github&import_sources[]=bitbucket&import_sources[]=bitbucket_server&default_branch_protection=0" \
     --connect-timeout 5 --max-time 30 || echo "      WARNING: instance settings update rejected; importer and branch-protection coverage may misbehave"
 
-# 6. Seed a container image so the registry repository/tag e2e coverage can
+# Seed consumers: the runtime package and surface that each take a private
+# copy of a single-use seed. A destructive scenario eats its seed, so the
+# three surfaces cannot share one: the individual delete would take the tag
+# the meta run still needs, and whichever ran second would have to skip.
+# Both seeded scenarios below (registry tags, pending approvals) drive Free
+# actions, so their tests live in the rebuilt suite's `common` package, which
+# runs on every runtime; `ce` and `ee` gain a slot here when a scenario of
+# theirs starts consuming one. The frozen suite keeps reading the unsuffixed
+# variables, which are still written beside these.
+SEED_CONSUMERS="common:individual common:meta common:dynamic"
+
+# Suffix a consumer slot contributes to a seed variable name, so that
+# common:individual reads back as E2E_..._COMMON_INDIVIDUAL.
+seed_slot_suffix() {
+    printf '_%s' "$(printf '%s' "${1}" | tr '[:lower:]' '[:upper:]' | tr ':-' '__')"
+}
+
+# Infix a consumer slot contributes to a seeded object's own name, so that
+# common:individual reads back as ...-common-individual-...
+seed_slot_infix() {
+    printf '%s' "${1}" | tr ':' '-'
+}
+
+# 6. Seed container images so the registry repository/tag e2e coverage can
 # exercise real repositories instead of skipping. The registry listens on
 # plain HTTP at localhost:5050 (Docker treats localhost registries as
 # insecure by default), and GitLab issues the push token for the test user's
 # PAT. Best-effort: without a docker CLI the suite skips those subtests.
+# One project per consumer slot, because deleting a tag (or the repository)
+# is itself a scenario: a shared project would leave the second surface to
+# run without the tag it asserts on.
 REGISTRY_HOST="${REGISTRY_HOST:-localhost:5050}"
 REGISTRY_PROJECT_NAME="e2e-registry-seed"
-if command -v docker >/dev/null 2>&1; then
-    echo "  [6/8] Seeding container registry image (${REGISTRY_HOST})..."
-    seed_project_json=$(curl -sS -X POST "${GITLAB_URL}/api/v4/projects" \
+
+# Create one registry seed project, push seed-a and seed-b into it, and record
+# its path under the given variable name. The image must already be pulled.
+seed_registry_project() {
+    local project_name="$1"
+    local var_name="$2"
+    local project_json project_path
+    project_json=$(curl -sS -X POST "${GITLAB_URL}/api/v4/projects" \
         -H "PRIVATE-TOKEN: ${PAT}" \
-        --data "name=${REGISTRY_PROJECT_NAME}&visibility=private" \
+        --data-urlencode "name=${project_name}" \
+        --data "visibility=private" \
         --connect-timeout 5 --max-time 30 2>/dev/null || true)
-    seed_path=$(json_field "${seed_project_json}" "path_with_namespace")
-    if [ -z "${seed_path}" ]; then
+    project_path=$(json_field "${project_json}" "path_with_namespace")
+    if [ -z "${project_path}" ]; then
         # Project may already exist from a previous provisioning run.
-        seed_path="${TEST_USER}/${REGISTRY_PROJECT_NAME}"
+        project_path="${TEST_USER}/${project_name}"
     fi
+    if DOCKER_CONFIG="${seed_docker_config}" docker tag busybox:stable "${REGISTRY_HOST}/${project_path}:seed-a" \
+        && DOCKER_CONFIG="${seed_docker_config}" docker tag busybox:stable "${REGISTRY_HOST}/${project_path}:seed-b" \
+        && DOCKER_CONFIG="${seed_docker_config}" docker push "${REGISTRY_HOST}/${project_path}:seed-a" >/dev/null \
+        && DOCKER_CONFIG="${seed_docker_config}" docker push "${REGISTRY_HOST}/${project_path}:seed-b" >/dev/null; then
+        echo "${var_name}=${project_path}" >> "${ENV_FILE}"
+        echo "      Seeded ${REGISTRY_HOST}/${project_path} with tags seed-a, seed-b (${var_name})"
+        return 0
+    fi
+    echo "      WARNING: registry image seeding failed for ${project_path}; ${var_name} coverage will skip"
+    return 1
+}
+
+if command -v docker >/dev/null 2>&1; then
+    echo "  [6/8] Seeding container registry images (${REGISTRY_HOST})..."
     # docker login is avoided on purpose: on macOS the credential helper
     # requires an unlocked keychain, which non-interactive sessions (CI,
     # agents) do not have. A scratch DOCKER_CONFIG with the base64 auth
@@ -605,15 +660,15 @@ if command -v docker >/dev/null 2>&1; then
     (umask 177 && printf '{"auths":{"%s":{"auth":"%s"}}}' "${REGISTRY_HOST}" "${seed_auth}" > "${seed_docker_config}/config.json")
     [ -d "${HOME}/.docker/contexts" ] && ln -s "${HOME}/.docker/contexts" "${seed_docker_config}/contexts"
     [ -d "${HOME}/.docker/cli-plugins" ] && ln -s "${HOME}/.docker/cli-plugins" "${seed_docker_config}/cli-plugins"
-    if DOCKER_CONFIG="${seed_docker_config}" docker pull busybox:stable >/dev/null \
-        && DOCKER_CONFIG="${seed_docker_config}" docker tag busybox:stable "${REGISTRY_HOST}/${seed_path}:seed-a" \
-        && DOCKER_CONFIG="${seed_docker_config}" docker tag busybox:stable "${REGISTRY_HOST}/${seed_path}:seed-b" \
-        && DOCKER_CONFIG="${seed_docker_config}" docker push "${REGISTRY_HOST}/${seed_path}:seed-a" >/dev/null \
-        && DOCKER_CONFIG="${seed_docker_config}" docker push "${REGISTRY_HOST}/${seed_path}:seed-b" >/dev/null; then
-        echo "E2E_REGISTRY_PROJECT=${seed_path}" >> "${ENV_FILE}"
-        echo "      Seeded ${REGISTRY_HOST}/${seed_path} with tags seed-a, seed-b"
+    if DOCKER_CONFIG="${seed_docker_config}" docker pull busybox:stable >/dev/null; then
+        seed_registry_project "${REGISTRY_PROJECT_NAME}" "E2E_REGISTRY_PROJECT" || true
+        for seed_consumer in ${SEED_CONSUMERS}; do
+            seed_registry_project \
+                "${REGISTRY_PROJECT_NAME}-$(seed_slot_infix "${seed_consumer}")" \
+                "E2E_REGISTRY_PROJECT$(seed_slot_suffix "${seed_consumer}")" || true
+        done
     else
-        echo "      WARNING: registry image seeding failed; registry tag e2e coverage will skip"
+        echo "      WARNING: could not pull busybox:stable; registry tag e2e coverage will skip"
     fi
 else
     echo "  [6/8] docker CLI not found; skipping registry image seeding"
@@ -627,6 +682,10 @@ fi
 # instance ends the run in the same state it started. The newest version is
 # used because GitLab squashes old migrations: only recent versions are
 # guaranteed to still have a migration file the mark service can resolve.
+# This is the one seed that cannot be given a copy per consumer: an instance
+# has a single schema_migrations table and a single newest post_migrate
+# version, and marking it puts the row back. Its scenario therefore runs on
+# one surface, which the test declares with OnSurfaces and this reason.
 if command -v docker >/dev/null 2>&1; then
     echo "  [7/8] Seeding a pending schema migration for db_migration_mark coverage..."
     # The version must be one the WEB process can resolve to a migration
@@ -651,52 +710,87 @@ else
     echo "  [7/8] docker CLI not found; skipping db_migration_mark seeding"
 fi
 
-# 8. Seed two users in blocked_pending_approval state so the
+# 8. Seed users in blocked_pending_approval state so the
 # approve_user/reject_user happy paths can run: admin-created users are born
 # active on current GitLab (the require-admin-approval setting only affects
 # self-signups, which have no API), so the users are created through the API
 # and their state is flipped through the Rails console — exactly the state a
 # real pending signup would have. The approve test re-activates one and the
 # reject test deletes the other, so nothing lingers.
+# One pair per consumer slot: approving and rejecting each consume their user,
+# so a shared pair would serve exactly one surface.
+
+# Create one throwaway user for a pending-approval seed. Prints its numeric id
+# and returns non-zero when GitLab did not create it.
+create_pending_user() {
+    local username="$1"
+    local role="$2"
+    local password user_json user_id
+    # Random throwaway credential; the account only ever gets approved or
+    # rejected and nothing logs in with it.
+    password="E2eP!$(openssl rand -hex 8)"
+    user_json=$(curl -sS -X POST "${GITLAB_URL}/api/v4/users" \
+        -H "PRIVATE-TOKEN: ${PAT}" \
+        --data-urlencode "username=${username}" \
+        --data-urlencode "email=${username}@e2e-test.local" \
+        --data-urlencode "name=E2E Pending ${role}" \
+        --data-urlencode "password=${password}" \
+        --data-urlencode "skip_confirmation=true" \
+        --connect-timeout 5 --max-time 30 2>/dev/null || true)
+    user_id=$(json_field "${user_json}" "id")
+    case "${user_id}" in
+        # API data is interpolated into Ruby below: digits only.
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    printf '%s' "${user_id}"
+}
+
+# Create one approve/reject pair for a seed consumer slot, collecting the ids
+# for the single state flip below and the lines the env file gets once that
+# flip succeeded. The slot's name infix and variable suffix are empty for the
+# pair the frozen suite reads. A pair that could not be created warns and
+# leaves the other slots alone.
+seed_pending_pair() {
+    local slot_label="$1"
+    local name_infix="$2"
+    local var_suffix="$3"
+    local approve_id reject_id
+    approve_id=$(create_pending_user "e2e-pending-approve-${name_infix}${pending_suffix}" "approve" || true)
+    reject_id=$(create_pending_user "e2e-pending-reject-${name_infix}${pending_suffix}" "reject" || true)
+    if [ -z "${approve_id}" ] || [ -z "${reject_id}" ]; then
+        echo "      WARNING: could not create the ${slot_label} pending pair; its approve/reject happy path will skip"
+        return 0
+    fi
+    pending_ids="${pending_ids} ${approve_id} ${reject_id}"
+    pending_env="${pending_env}E2E_PENDING_APPROVE_USER_ID${var_suffix}=${approve_id}
+E2E_PENDING_REJECT_USER_ID${var_suffix}=${reject_id}
+"
+    echo "      Users ${approve_id} (approve) and ${reject_id} (reject) seeded for ${slot_label}"
+}
+
 if command -v docker >/dev/null 2>&1; then
     echo "  [8/8] Seeding pending-approval users for approve/reject coverage..."
     pending_suffix=$(date +%s)
     pending_ids=""
-    for role in approve reject; do
-        pending_username="e2e-pending-${role}-${pending_suffix}"
-        # Random throwaway credential; the account only ever gets approved or
-        # rejected and nothing logs in with it.
-        pending_password="E2eP!$(openssl rand -hex 8)"
-        pending_json=$(curl -sS -X POST "${GITLAB_URL}/api/v4/users" \
-            -H "PRIVATE-TOKEN: ${PAT}" \
-            --data-urlencode "username=${pending_username}" \
-            --data-urlencode "email=${pending_username}@e2e-test.local" \
-            --data-urlencode "name=E2E Pending ${role}" \
-            --data-urlencode "password=${pending_password}" \
-            --data-urlencode "skip_confirmation=true" \
-            --connect-timeout 5 --max-time 30 2>/dev/null || true)
-        pending_id=$(json_field "${pending_json}" "id")
-        case "${pending_id}" in
-            *[!0-9]*) pending_id="" ;; # API data is interpolated into Ruby below: digits only
-        esac
-        if [ -z "${pending_id}" ]; then
-            echo "      WARNING: could not create pending-${role} user; approve/reject happy path will skip"
-            pending_ids=""
-            break
-        fi
-        pending_ids="${pending_ids} ${pending_id}"
+    pending_env=""
+    seed_pending_pair "the frozen suite" "" ""
+    for seed_consumer in ${SEED_CONSUMERS}; do
+        seed_pending_pair \
+            "${seed_consumer}" \
+            "$(seed_slot_infix "${seed_consumer}")-" \
+            "$(seed_slot_suffix "${seed_consumer}")"
     done
     if [ -n "${pending_ids}" ]; then
-        pending_ids_csv=$(echo ${pending_ids} | tr ' ' ',')
+        # The leading separator goes first: the list is interpolated into a
+        # Ruby array literal, which an empty first element would not parse.
+        pending_ids_csv=$(printf '%s' "${pending_ids# }" | tr ' ' ',')
         if docker compose -f "${COMPOSE_FILE}" exec -T gitlab gitlab-rails runner \
             "User.where(id: [${pending_ids_csv}]).update_all(state: 'blocked_pending_approval')" \
             >/dev/null 2>&1; then
-            set -- ${pending_ids}
-            echo "E2E_PENDING_APPROVE_USER_ID=$1" >> "${ENV_FILE}"
-            echo "E2E_PENDING_REJECT_USER_ID=$2" >> "${ENV_FILE}"
-            echo "      Users $1 (approve) and $2 (reject) set to blocked_pending_approval"
+            printf '%s' "${pending_env}" >> "${ENV_FILE}"
+            echo "      Users ${pending_ids_csv} set to blocked_pending_approval"
         else
-            echo "      WARNING: could not flip user states to pending approval; approve/reject happy path will skip"
+            echo "      WARNING: could not flip user states to pending approval; approve/reject happy paths will skip"
         fi
     fi
 else
