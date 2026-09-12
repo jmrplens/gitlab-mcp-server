@@ -18,15 +18,15 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,809 |
-| Unit test functions                                   | 15,195 |
-| E2E test functions                                    |    614 |
-| cmd test functions                                    |  3,061 |
-| Test files (internal/)                                |    551 |
+| Total test functions                                  | 15,996 |
+| Unit test functions                                   | 15,221 |
+| E2E test functions                                    |    775 |
+| cmd test functions                                    |  3,064 |
+| Test files (internal/)                                |    554 |
 | Test files (cmd/)                                     |    210 |
-| Test files (test/e2e/)                                |    240 |
+| Test files (test/e2e/)                                |    255 |
 | Tool sub-packages tested                              |    177 |
-| Core packages tested                                  |     22 |
+| Core packages tested                                  |     23 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  98.4% |
 | Overall coverage (`go test ./internal/...`)           |  98.6% |
 | Average package coverage                              |  98.7% |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,391 | 78.4% |
-| `TestFunc` (no underscore)             |    944 |  6.0% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,474 | 15.6% |
+| `TestFunc_Scenario` (2-part)           | 12,444 | 77.8% |
+| `TestFunc` (no underscore)             |    944 |  5.9% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,608 | 16.3% |
 
 ## Test Distribution
 
@@ -45,40 +45,41 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,683 |        157 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,706 |        160 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (177) |          9,085 |        378 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            614 |        240 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          3,061 |        210 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,809** |  **1,001** |                                                                                                 |
+| E2E integration         |            775 |        255 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| cmd packages            |          3,064 |        210 | server entry point and developer command utilities                                              |
+| **Total**               |     **15,996** |  **1,019** |                                                                                                 |
 
 ### Core Packages
 
-| Package       |     Tests | Coverage | Description                                                                                                                                                                                                                                                        |
-| ------------- | --------: | -------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| cachehints    |         8 |   100.0% | Package cachehints applies SEP-2549 cache hints (ttlMs/cacheScope) to MCP results.                                                                                                                                                                                 |
-| capguard      |         1 |   100.0% | Package capguard keeps the methods this server answers in step with the capabilities it declares.                                                                                                                                                                  |
-| clientcompat  |        18 |   100.0% | Package clientcompat applies per-client response compatibility profiles to MCP results.                                                                                                                                                                            |
-| cmdutil       |         8 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                                                                          |
-| completions   |       101 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                           |
-| config        |       109 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                   |
-| edition       |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                      |
-| elicitation   |       129 |    98.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                       |
-| freshness     |         3 |   100.0% | Package freshness reads the one harness setting that decides whether a test comparing a committed, generated artifact runs that comparison now or leaves it to the run where the artifact is refreshed.                                                            |
-| gatewaycompat |        19 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions. |
-| gitlab        |       109 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                            |
-| graphqlschema |        20 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                   |
-| mcpotel       |       107 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                               |
-| oauth         |        80 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                            |
-| progress      |        17 |    83.8% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                      |
-| prompts       |       295 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                         |
-| resources     |       194 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                |
-| serverpool    |       122 |   100.0% | Package serverpool manages a pool of credential entries keyed by GitLab token and URL.                                                                                                                                                                             |
-| subscriptions |        99 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
-| telemetry     |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
-| testutil      |       116 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
-| toolutil      |     1,021 |    98.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**  | **2,683** |          |                                                                                                                                                                                                                                                                    |
+| Package           |     Tests | Coverage | Description                                                                                                                                                                                                                                                        |
+| ----------------- | --------: | -------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| cachehints        |         8 |   100.0% | Package cachehints applies SEP-2549 cache hints (ttlMs/cacheScope) to MCP results.                                                                                                                                                                                 |
+| capguard          |         1 |   100.0% | Package capguard keeps the methods this server answers in step with the capabilities it declares.                                                                                                                                                                  |
+| clientcompat      |        18 |   100.0% | Package clientcompat applies per-client response compatibility profiles to MCP results.                                                                                                                                                                            |
+| cmdutil           |         8 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                                                                          |
+| completions       |       101 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                           |
+| config            |       109 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                   |
+| edition           |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                      |
+| elicitation       |       129 |    98.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                       |
+| freshness         |         3 |   100.0% | Package freshness reads the one harness setting that decides whether a test comparing a committed, generated artifact runs that comparison now or leaves it to the run where the artifact is refreshed.                                                            |
+| gatewaycompat     |        19 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions. |
+| gitlab            |       109 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                            |
+| graphqlschema     |        20 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                   |
+| mcpotel           |       107 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                               |
+| oauth             |        80 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                            |
+| progress          |        17 |    83.8% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                      |
+| prompts           |       295 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                         |
+| resources         |       194 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                |
+| serverpool        |       122 |   100.0% | Package serverpool manages a pool of credential entries keyed by GitLab token and URL.                                                                                                                                                                             |
+| subscriptions     |        99 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
+| telemetry         |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
+| testutil          |       116 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
+| testutil/e2ecalls |        23 |      n/a | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                         |
+| toolutil          |     1,021 |    98.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
+| **Subtotal**      | **2,706** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -367,30 +368,31 @@
 
 ### Core Packages
 
-| Package       | Coverage |
-| ------------- | -------: |
-| cachehints    |   100.0% |
-| capguard      |   100.0% |
-| clientcompat  |   100.0% |
-| cmdutil       |   100.0% |
-| completions   |   100.0% |
-| config        |   100.0% |
-| edition       |    87.0% |
-| elicitation   |    98.3% |
-| freshness     |   100.0% |
-| gatewaycompat |    99.4% |
-| gitlab        |   100.0% |
-| graphqlschema |   100.0% |
-| mcpotel       |   100.0% |
-| oauth         |   100.0% |
-| progress      |    83.8% |
-| prompts       |   100.0% |
-| resources     |   100.0% |
-| serverpool    |   100.0% |
-| subscriptions |   100.0% |
-| telemetry     |    93.1% |
-| testutil      |   100.0% |
-| toolutil      |    98.7% |
+| Package           | Coverage |
+| ----------------- | -------: |
+| cachehints        |   100.0% |
+| capguard          |   100.0% |
+| clientcompat      |   100.0% |
+| cmdutil           |   100.0% |
+| completions       |   100.0% |
+| config            |   100.0% |
+| edition           |    87.0% |
+| elicitation       |    98.3% |
+| freshness         |   100.0% |
+| gatewaycompat     |    99.4% |
+| gitlab            |   100.0% |
+| graphqlschema     |   100.0% |
+| mcpotel           |   100.0% |
+| oauth             |   100.0% |
+| progress          |    83.8% |
+| prompts           |   100.0% |
+| resources         |   100.0% |
+| serverpool        |   100.0% |
+| subscriptions     |   100.0% |
+| telemetry         |    93.1% |
+| testutil          |   100.0% |
+| testutil/e2ecalls |      n/a |
+| toolutil          |    98.7% |
 
 ### Tool Sub-Packages
 
