@@ -171,7 +171,11 @@ which is that card with the information taken out of its header. The
 helpers own the escaping too, so a call site passes the raw value;
 `WriteMdFieldRendered` is the one that does not, and is declared a sink in
 `cmd/audit_md_escaping` so a raw value is reported against the package
-that wrote the call.
+that wrote the call. `make check-md-cards` (`cmd/audit_md_cards`) is the
+gate: it renders a sample of every registered output type through the
+registry and judges the finished string, so a mixed block fails whatever
+conditionals and helpers assembled it. `make audit-md-cards` prints the
+same sweep plus the card/table census.
 
 ## E2E test gotchas
 

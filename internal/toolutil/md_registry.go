@@ -97,6 +97,32 @@ func MarkdownForResult(result any) *mcp.CallToolResult {
 	return nil
 }
 
+// MarkdownFormatterTypes lists every output type a Markdown formatter is
+// registered for, in no particular order.
+//
+// It exists for cmd/audit_md_cards, which builds a sample of each type, asks
+// [MarkdownForResult] for its Markdown and judges the shape of what comes
+// out. The registry is the only place that knows the set: a formatter
+// registers itself from its own package's init, and no list of them is kept
+// anywhere else, which is also why the shape of a card drifted for as long as
+// it did without anything noticing.
+func MarkdownFormatterTypes() []reflect.Type {
+	seen := map[reflect.Type]bool{}
+	var types []reflect.Type
+	collect := func(key, _ any) bool {
+		t, ok := key.(reflect.Type)
+		if !ok || t == nil || seen[t] {
+			return true
+		}
+		seen[t] = true
+		types = append(types, t)
+		return true
+	}
+	stringFormatters.Range(collect)
+	resultFormatters.Range(collect)
+	return types
+}
+
 // wrapMarkdown converts a Markdown string into a CallToolResult with
 // trailing whitespace stripped and assistant-only audience annotations.
 func wrapMarkdown(md string) *mcp.CallToolResult {

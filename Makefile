@@ -11,6 +11,7 @@
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	audit-md-escaping check-md-escaping \
+	audit-md-cards check-md-cards \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent \
@@ -1317,6 +1318,23 @@ check-test-subtests:
 ## declares a value that needs none.
 audit-md-escaping:
 	go run ./cmd/audit_md_escaping/ -v -json plan/md-escaping-backlog.json
+
+## audit-md-cards: report every Markdown response whose blocks mix a
+## one-object card with a table, and the card/table census by package.
+audit-md-cards:
+	go run ./cmd/audit_md_cards/ -census -v
+
+## check-md-cards: fail when a response writes a card field inside a table, a
+## pipe row no delimiter row turns into one, or any other block holding both
+## shapes. CI gate.
+##
+## bold-prefix-field is deliberately not gated yet: 24 formatters write a card
+## field as "**Label**: value" with no list marker, which collapses the card
+## into one paragraph. It is as real as the rest and is a sweep rather than a
+## fix, so `make audit-md-cards` reports it and this gate is turned on for it
+## once the sweep lands.
+check-md-cards:
+	go run ./cmd/audit_md_cards/ -check "-rules=pipe-rows-without-a-delimiter,card-field-inside-a-table,mixed-shapes-in-one-block"
 
 ## check-md-escaping: fail when a value still reaches a Markdown construct
 ## unescaped, or when a directive excuses nothing. CI gate.

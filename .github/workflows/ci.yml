@@ -212,6 +212,8 @@ jobs:
         run: make check-test-subtests
       - name: Check Markdown formatters escape what they interpolate
         run: make check-md-escaping
+      - name: Check one-object cards keep one shape
+        run: make check-md-cards
       - name: Check gateway-safe served characters
         run: make check-gateway-chars
       - name: Check test-file naming convention
