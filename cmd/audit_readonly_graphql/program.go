@@ -13,10 +13,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
 )
 
-// toolutilPath is the import path of the package that owns ActionSpec, the
-// route constructors, and the shared GraphQL executors. Resolution keys on the
-// path rather than on the package name so an import alias cannot fool it.
-const toolutilPath = "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+// toolutilPath is the gates' shared spelling of the package that owns
+// ActionSpec, the route constructors and the shared GraphQL executors, kept
+// under the name this package reads it by: the path is written once, in
+// [goprogram.ToolutilPath], so a module move lands in every gate at once.
+const toolutilPath = goprogram.ToolutilPath
 
 // program is the loaded, indexed source the audit reasons over.
 type program struct {
