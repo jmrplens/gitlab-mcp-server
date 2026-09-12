@@ -317,40 +317,104 @@ func TestListProjectStatuses_NotFound(t *testing.T) {
 	}
 }
 
+// mutationHints is the guidance section every mutation render closes with.
+const mutationHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'security_scan_profile.list_project_statuses' to see which scan profiles a project carries now\n" +
+	"- Use action 'vulnerability.list' to read the vulnerabilities a scan found\n"
+
 // TestFormatMutationMarkdown covers the attach/detach confirmation renderer.
+// The whole render is compared rather than a set of substrings: a substring
+// assertion passes on a row that landed outside the block it was meant for.
 func TestFormatMutationMarkdown(t *testing.T) {
 	md := FormatMutationMarkdown(MutationOutput{
 		Status: "success", Message: "Successfully attached security scan profile.",
 		SecurityScanProfileID: "dependency_scanning",
 		ProjectIDs:            []int64{7, 8}, GroupIDs: []int64{3},
 	})
-	for _, want := range []string{"Security Scan Profile", "dependency_scanning", "7, 8", "3"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+
+	want := "## Security Scan Profile\n\n" +
+		"- **Result**: Successfully attached security scan profile.\n" +
+		"- **Status**: success\n" +
+		"- **Profile**: `dependency_scanning`\n" +
+		"- **Projects**: 7, 8\n" +
+		"- **Groups**: 3\n" +
+		mutationHints
+
+	if md != want {
+		t.Errorf("FormatMutationMarkdown() =\n%s\nwant:\n%s", md, want)
 	}
 }
 
-// TestFormatListProjectStatusesMarkdown covers the populated and empty renders.
+// TestFormatMutationMarkdown_NoTargets verifies that a confirmation naming no
+// projects and no groups writes neither row: an absent value is never a label
+// with nothing after it.
+func TestFormatMutationMarkdown_NoTargets(t *testing.T) {
+	md := FormatMutationMarkdown(MutationOutput{
+		Status: "success", Message: "Successfully detached security scan profile.",
+		SecurityScanProfileID: "42",
+	})
+
+	want := "## Security Scan Profile\n\n" +
+		"- **Result**: Successfully detached security scan profile.\n" +
+		"- **Status**: success\n" +
+		"- **Profile**: `42`\n" +
+		mutationHints
+
+	if md != want {
+		t.Errorf("FormatMutationMarkdown() =\n%s\nwant:\n%s", md, want)
+	}
+}
+
+// TestFormatMutationMarkdown_HostileProfileID verifies that the identifier the
+// caller supplied cannot open a heading, a list item or a raw tag: it is shown
+// inside a code span, where nothing is Markdown.
+func TestFormatMutationMarkdown_HostileProfileID(t *testing.T) {
+	md := FormatMutationMarkdown(MutationOutput{
+		Status:                "success",
+		Message:               "Successfully attached security scan profile.",
+		SecurityScanProfileID: "x\n## injected\n<a href=\"http://attacker.invalid\">x</a>",
+	})
+
+	want := "## Security Scan Profile\n\n" +
+		"- **Result**: Successfully attached security scan profile.\n" +
+		"- **Status**: success\n" +
+		"- **Profile**: `x ## injected <a href=\"http://attacker.invalid\">x</a>`\n" +
+		mutationHints
+
+	if md != want {
+		t.Errorf("FormatMutationMarkdown() =\n%s\nwant:\n%s", md, want)
+	}
+}
+
+// TestFormatListProjectStatusesMarkdown covers the populated and empty
+// renders. The profile ID is a column because it is what the detach action
+// takes, and nothing else in the surface hands it to a reader.
 func TestFormatListProjectStatusesMarkdown(t *testing.T) {
 	empty := FormatListProjectStatusesMarkdown(ListProjectStatusesOutput{ProjectFullPath: "g/p"})
-	if !strings.Contains(empty, "No scan profile statuses found") {
-		t.Errorf("empty markdown = %s", empty)
+	if want := "No scan profile statuses found.\n"; empty != want {
+		t.Errorf("empty markdown = %q, want %q", empty, want)
 	}
+
 	md := FormatListProjectStatusesMarkdown(ListProjectStatusesOutput{
 		ProjectFullPath: "g/p",
 		Statuses: []ScanProfileStatus{{
-			Status: "ACTIVE", ScanProfile: ScanProfile{Name: "Default", ScanType: "sast"},
+			Status: "ACTIVE", ScanProfile: ScanProfile{ID: "51", Name: "Default", ScanType: "sast"},
 		}},
 	})
-	for _, want := range []string{"Scan Profile Statuses: g/p", "ACTIVE", "Default", "sast"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+
+	want := "## Scan Profile Statuses: g/p (1)\n\n" +
+		"| ID | Scan Type | Profile | Status |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| `51` | sast | Default | ACTIVE |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'security_scan_profile.attach' to attach a scan profile to more projects or groups\n" +
+		"- Use action 'security_scan_profile.detach' to detach one, naming the profile ID above\n"
+
+	if md != want {
+		t.Errorf("FormatListProjectStatusesMarkdown() =\n%s\nwant:\n%s", md, want)
+	}
+	if strings.Contains(md, "clickable [text](url) links") {
+		t.Error("the list tells the model to keep links a table without links cannot have")
 	}
 }
 

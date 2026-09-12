@@ -575,17 +575,25 @@ func TestList_ContainerScanningLocation(t *testing.T) {
 
 // Markdown formatter tests.
 
-// TestFormatListMarkdown_Empty verifies that formatting an empty security
-// findings list produces the expected no-results Markdown message.
+// findingsHints is the guidance section every populated list closes with.
+const findingsHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'vulnerability.list' to read the project's vulnerabilities, which is what a confirmed finding becomes\n" +
+	"- Use action 'vulnerability.pipeline_security_summary' to see how many findings each scanner reported in this pipeline\n"
+
+// TestFormatListMarkdown_Empty verifies that an empty findings list renders
+// the one empty-list sentence and nothing else: no heading counting zero above
+// a sentence that says the same thing.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No security findings found") {
-		t.Error("expected 'No security findings found' in empty output")
+	if got, want := FormatListMarkdown(ListOutput{}), "No security findings found.\n"; got != want {
+		t.Errorf("FormatListMarkdown() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_WithItems verifies that formatting security findings
-// produces a Markdown table with severity badges, scanner, and location.
+// TestFormatListMarkdown_WithItems verifies that security findings render as
+// one table with the shared severity badge, the scanner and the location. The
+// whole render is compared: a substring assertion passes on a row that landed
+// outside the table it was meant for, which is the defect class this
+// migration closes.
 func TestFormatListMarkdown_WithItems(t *testing.T) {
 	out := ListOutput{
 		Findings: []FindingItem{
@@ -600,18 +608,39 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 			},
 		},
 	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "🟠 HIGH") {
-		t.Error("expected severity badge in output")
+
+	want := "## Security Report Findings (1)\n\n" +
+		"| Severity | Title | Report Type | Scanner | Location | State |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 🟠 HIGH | XSS Vulnerability | SAST | Semgrep | app.js:10 | DETECTED |\n\n" +
+		"Showing 1 items | no more pages\n" +
+		findingsHints
+
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("FormatListMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
-	if !strings.Contains(md, "XSS Vulnerability") {
-		t.Error("expected finding title in output")
-	}
-	if !strings.Contains(md, "Semgrep") {
-		t.Error("expected scanner name in output")
-	}
-	if !strings.Contains(md, "app.js:10") {
-		t.Error("expected location in output")
+}
+
+// TestFormatListMarkdown_UnknownSeverity verifies that the shared badge covers
+// GitLab's UNKNOWN level, which the package's own severity table used to fall
+// through to the raw word, and that a level nobody has heard of is escaped
+// rather than trusted.
+func TestFormatListMarkdown_UnknownSeverity(t *testing.T) {
+	md := FormatListMarkdown(ListOutput{Findings: []FindingItem{
+		{Title: "a", Severity: "UNKNOWN", State: "DETECTED"},
+		{Title: "b", Severity: "NEW|LEVEL", State: "DETECTED"},
+	}})
+
+	want := "## Security Report Findings (2)\n\n" +
+		"| Severity | Title | Report Type | Scanner | Location | State |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| ❓ UNKNOWN | a |  |  |  | DETECTED |\n" +
+		"| NEW&#124;LEVEL | b |  |  |  | DETECTED |\n\n" +
+		"Showing 2 items | no more pages\n" +
+		findingsHints
+
+	if md != want {
+		t.Errorf("FormatListMarkdown() =\n%s\nwant:\n%s", md, want)
 	}
 }
 
@@ -675,30 +704,6 @@ func TestList_EvidenceShapes(t *testing.T) {
 				t.Fatalf("Evidence = nil, want %+v", tc.want)
 			case tc.want != nil && *got != *tc.want:
 				t.Fatalf("Evidence = %+v, want %+v", *got, *tc.want)
-			}
-		})
-	}
-}
-
-// TestSeverityBadge verifies that severityBadge returns the correct
-// emoji-prefixed labels for each severity level.
-func TestSeverityBadge(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"CRITICAL", "🔴 CRITICAL"},
-		{"HIGH", "🟠 HIGH"},
-		{"MEDIUM", "🟡 MEDIUM"},
-		{"LOW", "🔵 LOW"},
-		{"INFO", "ℹ️ INFO"},
-		{"UNKNOWN", "UNKNOWN"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.input, func(t *testing.T) {
-			got := severityBadge(tc.input)
-			if got != tc.want {
-				t.Errorf("severityBadge(%q) = %q, want %q", tc.input, got, tc.want)
 			}
 		})
 	}

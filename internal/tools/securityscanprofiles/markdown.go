@@ -1,52 +1,60 @@
 package securityscanprofiles
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatMutationMarkdown renders an attach or detach confirmation as Markdown.
+// FormatMutationMarkdown renders an attach or detach confirmation as the card
+// of one result: what GitLab did, the profile it did it with, and the targets
+// the request named.
 func FormatMutationMarkdown(out MutationOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Security Scan Profile\n\n%s\n\n", out.Message)
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Security Scan Profile")
+	// The status and the message are this server's own words, and they are
+	// written through the card's row escaper like any other value: a row is
+	// where they land, and the row decides the containment, not the author.
+	c.Field("Result", out.Message)
+	c.Field("Status", out.Status)
 	// Echoed from the caller's own argument.
-	fmt.Fprintf(&sb, "- Profile: `%s`\n", toolutil.EscapeMdTableCell(out.SecurityScanProfileID))
-	if len(out.ProjectIDs) > 0 {
-		fmt.Fprintf(&sb, "- Projects: %s\n", joinInts(out.ProjectIDs))
-	}
-	if len(out.GroupIDs) > 0 {
-		fmt.Fprintf(&sb, "- Groups: %s\n", joinInts(out.GroupIDs))
-	}
-	return sb.String()
+	c.Code("Profile", out.SecurityScanProfileID)
+	c.Field("Projects", joinInts(out.ProjectIDs))
+	c.Field("Groups", joinInts(out.GroupIDs))
+	c.End(
+		toolutil.HintAction(actionListProjectStatuses, "see which scan profiles a project carries now"),
+		toolutil.HintAction(actionVulnList, "read the vulnerabilities a scan found"),
+	)
+	return b.String()
 }
 
 // FormatListProjectStatusesMarkdown renders per-project scan profile statuses
-// as a Markdown table.
+// as a Markdown table: a collection of objects that share columns. The profile
+// ID is a column because it is what the detach action takes, and the list used
+// to be the only place a reader could have found it.
 func FormatListProjectStatusesMarkdown(out ListProjectStatusesOutput) string {
-	var sb strings.Builder
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	fmt.Fprintf(&sb, "## Scan Profile Statuses: %s\n\n", toolutil.EscapeMdHeading(out.ProjectFullPath))
-
 	if len(out.Statuses) == 0 {
-		sb.WriteString("No scan profile statuses found.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("scan profile statuses")
 	}
-
-	sb.WriteString("| Scan Type | Profile | Status |\n")
-	sb.WriteString("|-----------|---------|--------|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Scan Profile Statuses: "+out.ProjectFullPath, len(out.Statuses), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Scan Type", "Profile", "Status"))
 	for _, s := range out.Statuses {
-		fmt.Fprintf(
-			&sb, "| %s | %s | %s |\n",
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdCodeSpanCell(s.ScanProfile.ID),
 			toolutil.EscapeMdTableCell(s.ScanProfile.ScanType),
 			toolutil.EscapeMdTableCell(s.ScanProfile.Name),
 			toolutil.EscapeMdTableCell(s.Status),
-		)
+		))
 	}
-	sb.WriteString("\n")
-	return sb.String()
+	// The table carries no link, so the footer carries no instruction to keep
+	// the links of a table that has none.
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(actionAttach, "attach a scan profile to more projects or groups"),
+		toolutil.HintAction(actionDetach, "detach one, naming the profile ID above"),
+	)
+	return b.String()
 }
 
 // joinInts renders a slice of int64 IDs as a comma-separated string.

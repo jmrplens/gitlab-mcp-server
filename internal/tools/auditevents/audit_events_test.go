@@ -728,9 +728,16 @@ func TestListInstance_EmptyResult(t *testing.T) {
 
 // --- Markdown formatter tests ---
 
-// TestFormatMarkdown_Full verifies the Markdown_Full Markdown formatter for a representative _full input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// eventHints is the guidance section every single-event card closes with.
+const eventHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'audit_event.list_project' to browse a project's audit events\n" +
+	"- Use action 'audit_event.list_group' to browse a group's audit events\n" +
+	"- Use action 'audit_event.list_instance' to browse the instance's audit events\n"
+
+// TestFormatMarkdown_Full verifies that one audit event renders as a card: one
+// list item per field, the address in a code span, and the instant in the
+// display form. The whole render is compared, since a substring assertion
+// passes on a row that landed outside the block it was meant for.
 func TestFormatMarkdown_Full(t *testing.T) {
 	e := Output{
 		ID:         42,
@@ -747,32 +754,119 @@ func TestFormatMarkdown_Full(t *testing.T) {
 			EntityPath:    "group/project",
 		},
 	}
-	md := FormatMarkdown(e)
-	checks := []string{
-		"## Audit Event #42",
-		"| ID | 42 |",
-		"| Author ID | 10 |",
-		"| Entity ID | 5 |",
-		"| Entity Type | Project |",
-		"| Event Name | project_update |",
-		"| Author Name | admin |",
-		"| Target Type | Setting |",
-		"| Target Details | visibility_level |",
-		"| IP Address | 192.168.1.1 |",
-		"| Entity Path | group/project |",
-	}
-	for _, want := range checks {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q", want)
-			}
-		})
+
+	want := "## Audit Event #42\n\n" +
+		"- **ID**: 42\n" +
+		"- **Event Name**: project_update\n" +
+		"- **Entity Type**: Project\n" +
+		"- **Entity ID**: 5\n" +
+		"- **Entity Path**: group/project\n" +
+		"- **Created**: 15 Jun 2026 12:00 UTC\n" +
+		"- **Author ID**: 10\n" +
+		"- **Author Name**: admin\n" +
+		"- **Target Type**: Setting\n" +
+		"- **Target Details**: visibility_level\n" +
+		"- **IP Address**: `192.168.1.1`\n" +
+		eventHints
+
+	if got := FormatMarkdown(e); got != want {
+		t.Errorf("FormatMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatMarkdown_Minimal verifies the Markdown_Minimal Markdown formatter for a representative _minimal input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdown_SingularDetailFields verifies that every singular detail
+// field reaches the card. They are what a particular audit event says about
+// itself, and the card used to show five of them and drop the rest, leaving a
+// reader with an event name and nothing about what changed.
+func TestFormatMarkdown_SingularDetailFields(t *testing.T) {
+	e := Output{
+		ID:         7,
+		AuthorID:   3,
+		EntityType: "Group",
+		EventName:  "group_settings_updated",
+		Details: DetailsOutput{
+			With:          "standard",
+			Add:           "deploy_key",
+			As:            "Maintainer",
+			Change:        "visibility",
+			From:          "private",
+			To:            "internal",
+			Remove:        "user_access",
+			CustomMessage: "Changed by the compliance bot",
+			AuthorEmail:   "admin@example.com",
+			AuthorClass:   "User",
+			TargetID:      "99",
+			FailedLogin:   "STANDARD",
+			EventName:     "group_visibility_changed",
+		},
+	}
+
+	want := "## Audit Event #7\n\n" +
+		"- **ID**: 7\n" +
+		"- **Event Name**: group_settings_updated\n" +
+		"- **Detail Event Name**: group_visibility_changed\n" +
+		"- **Entity Type**: Group\n" +
+		"- **Entity ID**: 0\n" +
+		"- **Author ID**: 3\n" +
+		"- **Author Email**: admin@example.com\n" +
+		"- **Author Class**: User\n" +
+		"- **Target ID**: 99\n" +
+		"- **Failed Login**: STANDARD\n" +
+		"- **With**: standard\n" +
+		"- **As**: Maintainer\n" +
+		"- **Add**: deploy_key\n" +
+		"- **Remove**: user_access\n" +
+		"- **Change**: visibility\n" +
+		"- **From**: private\n" +
+		"- **To**: internal\n" +
+		"- **Custom Message**: Changed by the compliance bot\n" +
+		eventHints
+
+	if got := FormatMarkdown(e); got != want {
+		t.Errorf("FormatMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatMarkdown_ChangesAndChangeObject verifies that the plural changes
+// array renders as the nested collection it is, under its own heading, and
+// that an object-valued change renders inside a fence sized to the document.
+func TestFormatMarkdown_ChangesAndChangeObject(t *testing.T) {
+	e := Output{
+		ID:         8,
+		EntityType: "Project",
+		EventName:  "project_group_link_updated",
+		Details: DetailsOutput{
+			Changes: []ChangeEntry{
+				{Change: "visibility", From: "private", To: "internal"},
+				{Change: "description", From: "old", To: "new"},
+			},
+			ChangeObject: map[string]any{"group_access": "30"},
+		},
+	}
+
+	want := "## Audit Event #8\n\n" +
+		"- **ID**: 8\n" +
+		"- **Event Name**: project_group_link_updated\n" +
+		"- **Entity Type**: Project\n" +
+		"- **Entity ID**: 0\n" +
+		"- **Author ID**: 0\n\n" +
+		"### Changes\n\n" +
+		"| Change | From | To |\n" +
+		"| --- | --- | --- |\n" +
+		"| visibility | private | internal |\n" +
+		"| description | old | new |\n\n" +
+		"### Change (object)\n\n" +
+		"```json\n{\"group_access\":\"30\"}\n```\n" +
+		eventHints
+
+	if got := FormatMarkdown(e); got != want {
+		t.Errorf("FormatMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatMarkdown_Minimal verifies that an event GitLab sent no details for
+// writes no detail row at all: an absent value is never a label with nothing
+// after it.
 func TestFormatMarkdown_Minimal(t *testing.T) {
 	e := Output{
 		ID:         1,
@@ -781,27 +875,47 @@ func TestFormatMarkdown_Minimal(t *testing.T) {
 		EntityType: "User",
 		EventName:  "login",
 	}
-	md := FormatMarkdown(e)
-	if !strings.Contains(md, "## Audit Event #1") {
-		t.Error("markdown missing header")
-	}
-	if strings.Contains(md, "Author Name") {
-		t.Error("markdown should not contain Author Name for empty details")
-	}
-	if strings.Contains(md, "Target Type") {
-		t.Error("markdown should not contain Target Type for empty details")
-	}
-	if strings.Contains(md, "IP Address") {
-		t.Error("markdown should not contain IP Address for empty details")
-	}
-	if strings.Contains(md, "Entity Path") {
-		t.Error("markdown should not contain Entity Path for empty details")
+
+	want := "## Audit Event #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Event Name**: login\n" +
+		"- **Entity Type**: User\n" +
+		"- **Entity ID**: 0\n" +
+		"- **Author ID**: 2\n" +
+		eventHints
+
+	if got := FormatMarkdown(e); got != want {
+		t.Errorf("FormatMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_WithEvents verifies the ListMarkdown_WithEvents Markdown formatter for a representative list_withevents input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdown_HostileDetail verifies that a detail value cannot open a
+// heading, a list item or a link of its own: the row escaper neutralizes the
+// pipe, the tag and the bracket, and the card's structure is unchanged.
+func TestFormatMarkdown_HostileDetail(t *testing.T) {
+	e := Output{
+		ID:        2,
+		EventName: "login",
+		Details:   DetailsOutput{TargetDetails: "a|b\n## injected\n- **State**: closed"},
+	}
+
+	want := "## Audit Event #2\n\n" +
+		"- **ID**: 2\n" +
+		"- **Event Name**: login\n" +
+		"- **Entity ID**: 0\n" +
+		"- **Author ID**: 0\n" +
+		"- **Target Details**: a&#124;b ## injected - **State**: closed\n" +
+		eventHints
+
+	if got := FormatMarkdown(e); got != want {
+		t.Errorf("FormatMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_WithEvents verifies that a page of audit events
+// renders as one table under a heading counting what the response reports,
+// with the summary line above the rows rather than after them, where it was
+// absorbed as one more row.
 func TestFormatListMarkdown_WithEvents(t *testing.T) {
 	out := ListOutput{
 		AuditEvents: []Output{
@@ -810,31 +924,57 @@ func TestFormatListMarkdown_WithEvents(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 20, TotalItems: 2, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "## Audit Events") {
-		t.Error("markdown missing header")
+
+	want := "## Audit Events (2)\n\n" +
+		"| ID | Event Name | Entity Type | Entity ID | Author ID | Created |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | login | User | 0 | 10 | 1 Jan 2026 00:00 UTC |\n" +
+		"| 2 | logout | User | 0 | 11 | 2 Jan 2026 00:00 UTC |\n\n" +
+		"Page 1 of 1 | 2 items total | 20 per page\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'audit_event.get_project' to read one project event in full, details included\n" +
+		"- Use action 'audit_event.get_group' to read one group event in full\n" +
+		"- Use action 'audit_event.get_instance' to read one instance event in full\n"
+
+	got := FormatListMarkdown(out)
+	if got != want {
+		t.Errorf("FormatListMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
-	if !strings.Contains(md, "| 1 |") {
-		t.Error("markdown missing event ID 1")
-	}
-	if !strings.Contains(md, "| 2 |") {
-		t.Error("markdown missing event ID 2")
-	}
-	if strings.Contains(md, "No audit events found") {
-		t.Error("markdown should not contain empty message when events exist")
+	if strings.Contains(got, "clickable [text](url) links") {
+		t.Error("the list tells the model to keep links a table without links cannot have")
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown_Empty(t *testing.T) {
+// TestFormatListMarkdown_MultiPage verifies that the summary line sits between
+// the heading and the table, where it is a paragraph of its own, and that the
+// heading counts what GitLab reported rather than the page length.
+func TestFormatListMarkdown_MultiPage(t *testing.T) {
 	out := ListOutput{
-		AuditEvents: []Output{},
+		AuditEvents: []Output{{ID: 1, EventName: "login", EntityType: "User", AuthorID: 10}},
+		Pagination:  toolutil.PaginationOutput{Page: 1, PerPage: 1, TotalItems: 45, TotalPages: 45, HasMore: true, NextPage: 2},
 	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "No audit events found") {
-		t.Error("markdown missing 'No audit events found' for empty list")
+
+	want := "## Audit Events (45)\n\n" +
+		"Showing 1 of 45 results (page 1 of 45)\n\n" +
+		"| ID | Event Name | Entity Type | Entity ID | Author ID | Created |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | login | User | 0 | 10 |  |\n\n" +
+		"Page 1 of 45 | 45 items total | 1 per page\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'audit_event.get_project' to read one project event in full, details included\n" +
+		"- Use action 'audit_event.get_group' to read one group event in full\n" +
+		"- Use action 'audit_event.get_instance' to read one instance event in full\n"
+
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("FormatListMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_Empty verifies that an empty page renders the one
+// empty-list sentence and nothing else.
+func TestFormatListMarkdown_Empty(t *testing.T) {
+	if got, want := FormatListMarkdown(ListOutput{AuditEvents: []Output{}}), "No audit events found.\n"; got != want {
+		t.Errorf("FormatListMarkdown() = %q, want %q", got, want)
 	}
 }
 
@@ -915,31 +1055,28 @@ func TestGetInstance_ObjectValuedChange_LandsInChangeObject(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_ChangesAndChangeObject verifies the single-event Markdown
-// formatter renders the plural changes table and the object-valued change JSON
-// block when those detail fields are present.
-func TestFormatMarkdown_ChangesAndChangeObject(t *testing.T) {
+// TestFormatMarkdown_RawChangeObject verifies that an object-valued change
+// still decoded as json.RawMessage, which is what the SDK hands the converter
+// before it unmarshals, reaches the fence as the document it is.
+func TestFormatMarkdown_RawChangeObject(t *testing.T) {
 	e := Output{
 		ID:        9,
 		EventName: "project_group_link_updated",
 		Details: DetailsOutput{
-			Changes: []ChangeEntry{
-				{Change: "visibility", From: "private", To: "internal"},
-			},
 			ChangeObject: json.RawMessage(`{"group_access":{"from":10,"to":30}}`),
 		},
 	}
-	md := FormatMarkdown(e)
-	if !strings.Contains(md, "### Changes") {
-		t.Error("markdown missing Changes section")
-	}
-	if !strings.Contains(md, "| visibility | private | internal |") {
-		t.Error("markdown missing changes row")
-	}
-	if !strings.Contains(md, "### Change (object)") {
-		t.Error("markdown missing Change (object) section")
-	}
-	if !strings.Contains(md, "group_access") {
-		t.Error("markdown missing raw change object JSON")
+
+	want := "## Audit Event #9\n\n" +
+		"- **ID**: 9\n" +
+		"- **Event Name**: project_group_link_updated\n" +
+		"- **Entity ID**: 0\n" +
+		"- **Author ID**: 0\n\n" +
+		"### Change (object)\n\n" +
+		"```json\n{\"group_access\":{\"from\":10,\"to\":30}}\n```\n" +
+		eventHints
+
+	if got := FormatMarkdown(e); got != want {
+		t.Errorf("FormatMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
 }

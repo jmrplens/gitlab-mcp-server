@@ -233,51 +233,41 @@ func TestUpdate_BadRequestHint(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestFormatOutputMarkdown validates the Markdown formatter for compliance policy
-// settings output, covering both set and unset CSPNamespaceID values.
+// settings output, covering both set and unset CSPNamespaceID values. The whole
+// render is compared, since a substring assertion cannot see a row that landed
+// outside the block it was meant for.
 func TestFormatOutputMarkdown(t *testing.T) {
 	nsID := int64(42)
 
 	tests := []struct {
-		name     string
-		output   Output
-		contains []string
-		excludes []string
+		name   string
+		output Output
+		want   string
 	}{
 		{
 			name:   "formats output with csp_namespace_id set",
 			output: Output{CSPNamespaceID: &nsID},
-			contains: []string{
-				"## Compliance Policy Settings",
-				"| CSP Namespace ID | 42 |",
-				"Field",
-				"Value",
-			},
-			excludes: []string{
-				"_not set_",
-			},
+			want: "## Compliance Policy Settings\n\n" +
+				"- **CSP Namespace ID**: 42\n\n" +
+				"---\n💡 **Next steps:**\n" +
+				"- Use action 'compliance_policy.update' to bind the compliance security policy project to a top-level group\n" +
+				"- Use action 'group.get' to read the group this namespace ID names\n",
 		},
 		{
 			name:   "formats output with nil csp_namespace_id",
 			output: Output{CSPNamespaceID: nil},
-			contains: []string{
-				"## Compliance Policy Settings",
-				"| CSP Namespace ID | _not set_ |",
-			},
+			want: "## Compliance Policy Settings\n\n" +
+				"- **CSP Namespace ID**: not set\n\n" +
+				"---\n💡 **Next steps:**\n" +
+				"- Use action 'compliance_policy.update' to bind the compliance security policy project to a top-level group\n" +
+				"- Use action 'group.get' to read the group this namespace ID names\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := FormatOutputMarkdown(tt.output)
-			for _, s := range tt.contains {
-				if !strings.Contains(result, s) {
-					t.Errorf("expected output to contain %q, got:\n%s", s, result)
-				}
-			}
-			for _, s := range tt.excludes {
-				if strings.Contains(result, s) {
-					t.Errorf("expected output NOT to contain %q, got:\n%s", s, result)
-				}
+			if got := FormatOutputMarkdown(tt.output); got != tt.want {
+				t.Errorf("FormatOutputMarkdown() =\n%s\nwant:\n%s", got, tt.want)
 			}
 		})
 	}
