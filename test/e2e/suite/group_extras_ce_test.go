@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // group_extras_ce_test.go covers gitlab_group meta-tool actions that were not
 // exercised elsewhere in the suite: archive/unarchive/restore, group and

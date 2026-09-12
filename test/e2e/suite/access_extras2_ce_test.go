@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // access_extras2_ce_test.go covers previously unexercised access-domain
 // actions that need an admin token and second authenticated identities:

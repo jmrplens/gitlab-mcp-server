@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // resources_read_ce_test.go exercises ReadResource against every registered
 // MCP resource URI template. It first creates the required GitLab fixtures

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // admin_ce_test.go tests lightweight admin and job-related MCP tools against
 // a live GitLab instance. Covers topic listing, settings retrieval via

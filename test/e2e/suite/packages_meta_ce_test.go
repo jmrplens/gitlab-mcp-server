@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // packages_meta_ce_test.go tests the container registry and package protection rule
 // MCP tools against a live GitLab instance via the gitlab_package meta-tool.

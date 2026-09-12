@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // package_extras_ce_test.go tests package registry MCP tools that were not
 // covered by the core package lifecycle tests: group-level package listing,

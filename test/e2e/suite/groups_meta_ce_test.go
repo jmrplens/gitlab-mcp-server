@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // groups_meta_ce_test.go tests advanced CE/common gitlab_group meta-tool actions
 // against a live GitLab instance.

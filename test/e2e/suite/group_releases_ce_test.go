@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // group_releases_ce_test.go exercises group-level release aggregation through the
 // gitlab_group meta-tool against a live GitLab instance.

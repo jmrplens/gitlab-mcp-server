@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // deploy_keys_ce_test.go tests the deploy key MCP tools against a live GitLab instance.
 // Covers add, get, list, update, and delete for both individual and meta-tool modes.

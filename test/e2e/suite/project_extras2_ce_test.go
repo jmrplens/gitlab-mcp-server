@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // project_extras2_ce_test.go covers gitlab_project meta-tool actions not
 // exercised elsewhere: export download + import-from-file, project and

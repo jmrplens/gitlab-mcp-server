@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // schema_compliance_ce_test.go validates that MCP tool schemas are correctly
 // enriched at runtime: additionalProperties lockdown, OutputSchema on

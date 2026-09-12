@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // user_extras2_ce_test.go covers previously unexercised admin-level
 // user-domain actions on disposable users: GPG keys for another user

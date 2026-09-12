@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // ci_variables_meta_ce_test.go tests the group-level CI variable MCP tools via
 // the gitlab_ci_variable meta-tool against a live GitLab instance.

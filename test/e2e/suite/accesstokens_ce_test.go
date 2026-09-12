@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // accesstokens_ce_test.go tests the project access token MCP tools against a
 // live GitLab instance using both individual tools and the gitlab_access

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // feature_flag_extras_ce_test.go tests the project feature flag read, update,
 // and delete MCP tools against a live GitLab instance. Flag creation is

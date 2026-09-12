@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // project_extras_ce_test.go covers gitlab_project meta-tool actions that were
 // not exercised by the existing project test files: member CRUD, group

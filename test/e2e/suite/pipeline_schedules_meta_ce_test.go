@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // pipeline_schedules_meta_ce_test.go tests extended pipeline schedule actions via the
 // gitlab_pipeline meta-tool (schedule_* actions) against a live GitLab instance. Covers get,

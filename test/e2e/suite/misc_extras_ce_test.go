@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // misc_extras_ce_test.go covers scattered single-action coverage gaps across
 // several domains: latest release retrieval, merge request raw diffs, CI/CD

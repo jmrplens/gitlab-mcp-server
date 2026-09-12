@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // oauth_helpers_ce_test.go provides raw HTTP helpers for OAuth E2E tests that need
 // to exercise MCP streamable HTTP authentication outside the in-memory transport.

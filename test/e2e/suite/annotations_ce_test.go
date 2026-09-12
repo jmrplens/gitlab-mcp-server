@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // annotations_ce_test.go validates that MCP tool annotations are correctly set
 // at runtime. This is the primary E2E validation for PR #22 (metadata-driven

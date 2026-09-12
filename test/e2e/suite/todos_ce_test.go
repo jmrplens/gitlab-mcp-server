@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // todos_ce_test.go tests the GitLab todo MCP tools against a live GitLab instance.
 // Covers listing todos and marking all as done via both individual tools and

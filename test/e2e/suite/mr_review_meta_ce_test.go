@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // mr_review_meta_ce_test.go tests advanced MR review actions via the gitlab_mr_review meta-tool
 // against a live GitLab instance. Covers MR changes, diff versions, discussion note

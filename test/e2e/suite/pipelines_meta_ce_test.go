@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // pipelines_meta_ce_test.go tests extended pipeline and resource group actions via the
 // gitlab_pipeline meta-tool against a live GitLab instance. Covers latest, variables,

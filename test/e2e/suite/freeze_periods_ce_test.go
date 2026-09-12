@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // freeze_periods_ce_test.go tests the freeze period MCP tools against a live GitLab instance.
 // Exercises create, list, get, update, and delete via the gitlab_environment meta-tool.

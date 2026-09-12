@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // group_extras2_ce_test.go covers the remaining gitlab_group meta-tool
 // actions from the e2e gap audit: group markdown uploads, group

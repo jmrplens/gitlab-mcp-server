@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // groups_ce_test.go tests the group MCP tools against a live GitLab instance.
 // Covers create, list, get, members, subgroups, and delete for both individual and meta-tool modes.

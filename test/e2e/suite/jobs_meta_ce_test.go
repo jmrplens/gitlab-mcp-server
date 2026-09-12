@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // jobs_meta_ce_test.go tests job-related MCP tools against a live GitLab instance.
 // Covers job token scope management (patch, inbound allowlist, group allowlist)

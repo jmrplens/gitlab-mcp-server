@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // wait_helpers_ce_test.go contains polling and retry helpers used by E2E tests to
 // absorb GitLab Docker startup lag and eventual-consistency delays.

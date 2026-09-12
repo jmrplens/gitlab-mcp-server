@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // labels_ce_test.go tests the project label MCP tools against a live GitLab
 // instance. Covers label create, list, update, and delete for both individual

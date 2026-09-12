@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // misc_meta_ce_test.go tests miscellaneous MCP tools against a live GitLab instance.
 // Covers feature flags, feature flag user lists, branch rules (GraphQL), CI/CD catalog (GraphQL),

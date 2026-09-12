@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // safe_mode_ce_test.go verifies that Safe Mode intercepts mutating tools and
 // returns a structured preview instead of executing. It also verifies that

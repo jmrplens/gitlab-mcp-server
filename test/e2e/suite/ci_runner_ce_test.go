@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // ci_runner_ce_test.go tests the pipeline and job MCP tools against a live
 // GitLab instance with a CI runner. Exercises the full CI lifecycle:

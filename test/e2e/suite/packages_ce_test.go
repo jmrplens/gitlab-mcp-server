@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // packages_ce_test.go tests the package registry MCP tools against a live GitLab instance.
 // Covers the full generic package lifecycle: publish, list, file-list, download,

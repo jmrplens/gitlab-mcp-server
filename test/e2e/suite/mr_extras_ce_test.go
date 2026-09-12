@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // mr_extras_ce_test.go tests merge request auxiliary MCP tools against a live
 // GitLab instance: context commits (create/delete), to-do creation, related

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // mr_approval_ce_test.go tests the MR approval and merge lifecycle MCP tools against
 // a live GitLab instance. Covers pipelines listing, rebase, approve, unapprove,

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // search_meta_ce_test.go tests extended search MCP tools against a live GitLab instance
 // via the gitlab_search meta-tool. Covers all 10 search actions: merge_requests, issues,

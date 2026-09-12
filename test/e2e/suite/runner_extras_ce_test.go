@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // runner_extras_ce_test.go tests the runner MCP tools that manage throwaway
 // runners and registration tokens against a live GitLab instance. Covers

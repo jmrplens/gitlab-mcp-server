@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // repository_meta_ce_test.go tests extended repository, file, commit, and commit discussion
 // MCP tools against a live GitLab instance via the gitlab_repository meta-tool.

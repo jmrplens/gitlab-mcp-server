@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // mr_notes_ce_test.go tests the MR note MCP tools against a live GitLab instance.
 // Covers note create, list, get, update, and delete for both individual tools

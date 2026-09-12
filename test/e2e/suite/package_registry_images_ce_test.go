@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // package_registry_images_ce_test.go covers the image-backed container
 // registry actions of the gitlab_package meta-tool: registry_get,

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // search_type_ce_test.go validates the search_type parameter added to GitLab
 // search tools. It uses only basic search for live GitLab calls because

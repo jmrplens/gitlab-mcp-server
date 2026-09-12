@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // releases_ce_test.go tests the release and release link MCP tools against a live GitLab instance.
 // Covers the full lifecycle: tag → release create → get → update → list → link CRUD → delete,

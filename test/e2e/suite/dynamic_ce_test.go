@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // dynamic_ce_test.go verifies the default dynamic tool surface against a live
 // GitLab instance. The tests exercise the default two-tool workflow exposed by

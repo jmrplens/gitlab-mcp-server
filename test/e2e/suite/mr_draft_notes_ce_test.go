@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // mr_draft_notes_ce_test.go tests the MR draft note MCP tools against a live GitLab instance.
 // Covers draft note create, list, get, update, and publish-all for both

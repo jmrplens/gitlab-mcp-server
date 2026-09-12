@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // groups_meta_helpers_ce_test.go contains shared helpers for advanced gitlab_group
 // meta-tool E2E workflows.

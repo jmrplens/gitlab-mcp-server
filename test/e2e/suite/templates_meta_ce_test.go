@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // templates_meta_ce_test.go tests GitLab template MCP tools (CI YAML, Dockerfile,
 // .gitignore, license, project templates) via the gitlab_template meta-tool

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // cluster_agents_ce_test.go tests the cluster agent MCP tools against a live GitLab instance.
 // Exercises the full lifecycle: register agent → list → get → create token →

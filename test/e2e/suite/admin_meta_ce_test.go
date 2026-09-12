@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // admin_meta_ce_test.go tests the GitLab admin-level MCP tools via the
 // gitlab_admin meta-tool against a live GitLab instance. Covers topics,

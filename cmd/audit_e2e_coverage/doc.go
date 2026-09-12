@@ -49,7 +49,11 @@
 // at <directory>.results.json beside it, and refused when there is none rather
 // than compared against nothing. -port-map
 // reads the "// Replaces:" lines of the new suite against every Test function
-// of the old one, with declared drops for the tests nothing replaces.
+// of the old one, with declared drops for the tests nothing replaces. An old
+// test whose file has already been deleted stays on the map through the
+// retired list in portmap.go, held to the same rule, since a deleted file
+// declares nothing and the lines that replaced it would otherwise read as
+// naming a test that never existed.
 //
 // -static needs no GitLab and runs on push. It loads test/e2e/gitlab and
 // test/e2e/internal with their tests under the e2e tag and, from the type

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // environments_ce_test.go tests the environment MCP tools against a live GitLab instance.
 // Covers create, get, list, update, stop, and delete for both individual and meta-tool modes.

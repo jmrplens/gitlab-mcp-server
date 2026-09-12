@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // modes_ce_test.go verifies the two protective modes against a live GitLab
 // instance: read-only mode (GITLAB_MCP_READ_ONLY) must remove every mutating

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // pipelines_ce_test.go tests the pipeline and job MCP tools against a live GitLab instance.
 // Requires Docker mode with a CI runner. Covers pipeline create, get, list, retry, delete,

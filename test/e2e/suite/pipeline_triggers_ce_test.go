@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // pipeline_triggers_ce_test.go tests the pipeline trigger MCP tools against a live GitLab
 // instance. Covers trigger create, list, get, update, and delete via the gitlab_pipeline

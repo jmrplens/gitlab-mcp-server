@@ -62,12 +62,14 @@ type options struct {
 	exemptions map[string]actionExemption
 	// drops is the port map's declared-drops table.
 	drops map[string]dropDeclaration
+	// retired is the port map's list of old tests whose files are gone.
+	retired []string
 }
 
 func main() {
 	opts := options{
 		catalogs: buildServedCatalog, harnessPath: harnessImportPath, staticPatterns: staticPatterns,
-		ratchet: ratchetEnabled, exemptions: exemptedActions, drops: declaredDrops,
+		ratchet: ratchetEnabled, exemptions: exemptedActions, drops: declaredDrops, retired: retiredTests,
 	}
 	flag.StringVar(&opts.dir, "dir", "", "repository root (default: found from the working directory)")
 	flag.StringVar(&opts.calls, "calls", "", "shard directory written by the e2e suite, or a directory holding one per runtime")
@@ -169,30 +171,19 @@ func printStatic(opts options, result *staticResult, stdout, stderr io.Writer) {
 
 // runPortMap runs -port-map and prints what is unresolved.
 func runPortMap(opts options, stdout, stderr io.Writer) int {
-	oldDir := filepath.Join(opts.dir, opts.oldSuite)
-	oldTests, err := testFunctions(oldDir)
+	m, err := buildPortMap(filepath.Join(opts.dir, opts.oldSuite), filepath.Join(opts.dir, opts.newSuite), opts.retired, opts.drops)
 	if err != nil {
 		fmt.Fprintln(stderr, "audit_e2e_coverage: port map:", err)
 		return exitUsage
 	}
-	if len(oldTests) == 0 {
-		fmt.Fprintf(stderr, "audit_e2e_coverage: port map: no Test function under %s\n", oldDir)
-		return exitUsage
-	}
-	replaces, err := replacesLines(filepath.Join(opts.dir, opts.newSuite))
-	if err != nil {
-		fmt.Fprintln(stderr, "audit_e2e_coverage: port map:", err)
-		return exitUsage
-	}
-	m := resolvePortMap(oldTests, replaces, opts.drops)
 	for _, finding := range m.Findings {
 		fmt.Fprintln(stderr, "port map:", finding)
 	}
 	for _, name := range m.Unresolved {
 		fmt.Fprintf(stdout, "port map: %s has no Replaces: successor and no declared drop\n", name)
 	}
-	fmt.Fprintf(stdout, "port map: %d old tests, %d replaced, %d dropped, %d unresolved, %d findings\n",
-		len(m.Old), len(m.Replaced), len(m.Dropped), len(m.Unresolved), len(m.Findings))
+	fmt.Fprintf(stdout, "port map: %d old tests (%d retired), %d replaced, %d dropped, %d unresolved, %d findings\n",
+		len(m.Old), len(m.Retired), len(m.Replaced), len(m.Dropped), len(m.Unresolved), len(m.Findings))
 	if !m.complete() {
 		return exitFindings
 	}

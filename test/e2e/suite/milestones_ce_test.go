@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // milestones_ce_test.go tests the project milestone MCP tools against a live
 // GitLab instance. Covers milestone create, get, update (with close), and

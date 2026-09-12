@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // runner_meta_ce_test.go tests runner and runner controller MCP tools via the
 // gitlab_runner meta-tool against a live GitLab instance. Exercises list, get,
