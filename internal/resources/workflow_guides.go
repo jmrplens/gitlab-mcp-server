@@ -47,6 +47,20 @@ func RegisterWorkflowGuides(server *mcp.Server) {
 	}
 }
 
+// workflowGuide is one static Markdown body and the resource metadata it is
+// served under. The bodies are prose this server wrote, so nothing GitLab
+// authored is interpolated into them, but they are Markdown a client renders
+// and so they keep two rules of their own:
+//
+//   - a call is named by its canonical action ID, never by the tool name of
+//     one surface. A guide is the same text whichever surface is registered,
+//     and the default dynamic surface registers none of the individual tools
+//     the pipeline guide used to name, so a model reading it was sent at a
+//     tool call it could not make. Every ID named is held against the canonical
+//     catalog by TestWorkflowGuides_ActionIDsResolve_InTheCanonicalCatalog.
+//   - a fenced block is written by [toolutil.MarkdownFencedBlock] rather than
+//     by three backticks of its own, so a body that grows a backtick run
+//     cannot close its own fence and render the rest of the guide as Markdown.
 type workflowGuide struct {
 	uri         string
 	name        string
@@ -120,14 +134,12 @@ var workflowGuides = []workflowGuide{
 		content: `# Conventional Commits
 
 ## Format
-` + "```" + `
-<type>(<scope>): <description>
+` + toolutil.MarkdownFencedBlock("", `<type>(<scope>): <description>
 
 [optional body]
 
 [optional footer(s)]
-` + "```" + `
-
+`) + `
 ## Types
 | Type       | When to use                                      |
 |------------|--------------------------------------------------|
@@ -151,12 +163,10 @@ var workflowGuides = []workflowGuide{
 
 ## Breaking Changes
 Add ` + "`!`" + ` after type/scope or a ` + "`BREAKING CHANGE:`" + ` footer:
-` + "```" + `
-feat(api)!: change authentication endpoint path
+` + toolutil.MarkdownFencedBlock("", `feat(api)!: change authentication endpoint path
 
 BREAKING CHANGE: /auth/login is now /api/v2/auth/login
-` + "```" + `
-`,
+`),
 	},
 	{
 		uri:         "gitlab://guides/code-review",
@@ -231,11 +241,17 @@ BREAKING CHANGE: /auth/login is now /api/v2/auth/login
 - Review recent infrastructure changes.
 
 ## Diagnostic Steps
-1. Check pipeline status: ` + "`gitlab_pipeline_get`" + ` for pipeline details.
-2. List jobs: ` + "`gitlab_job_list`" + ` to find the failing job.
-3. Read job log: ` + "`gitlab_job_trace`" + ` for detailed output.
-4. Check variables: ` + "`gitlab_ci_variable_list`" + ` for missing configuration.
-5. Retry the job: ` + "`gitlab_job_retry`" + ` for transient failures.
+
+Each step below names a canonical action ID, which every tool surface can
+reach. On the default dynamic surface it is the ` + "`action`" + ` argument of
+` + "`gitlab_execute_action`" + `; the meta and individual surfaces call the same
+operation under their own tool names.
+
+1. Check pipeline status: ` + "`pipeline.get`" + ` for pipeline details.
+2. List jobs: ` + "`job.list`" + ` to find the failing job.
+3. Read job log: ` + "`job.trace`" + ` for detailed output.
+4. Check variables: ` + "`ci_variable.list`" + ` for missing configuration.
+5. Retry the job: ` + "`job.retry`" + ` for transient failures.
 
 ## Watching Instead of Polling
 If your client supports MCP resource subscriptions (resources.subscribe —
