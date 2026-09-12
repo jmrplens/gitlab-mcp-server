@@ -62,7 +62,10 @@ func Read(dir string) ([]Record, error) {
 	if walkErr != nil {
 		return nil, fmt.Errorf("read shard directory %s: %w", dir, walkErr)
 	}
-	if shards == 0 {
+	// Asked as "did the walk reach at least one shard" rather than "is the
+	// count exactly zero": the question is whether anything was read, and a
+	// guard that only recognizes one value answers it for one value.
+	if shards <= 0 {
 		return nil, fmt.Errorf("no %s shard under %s: the suite records only when %s is set to an absolute directory", ShardPattern, dir, DirEnv)
 	}
 	return records, nil

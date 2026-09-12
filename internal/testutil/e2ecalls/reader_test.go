@@ -157,6 +157,70 @@ func TestRead_ReportsALineItCannotRead(t *testing.T) {
 	}
 }
 
+// TestRead_NamesTheLineTheBadRecordIsOn verifies that the error counts lines
+// from one and names the line the bad record is actually on, with a good
+// record and a blank line ahead of it.
+//
+// The number is the whole value of the message: a shard is one line per call
+// and can hold thousands, so an error that names the file and not the line
+// says only that the run is unreadable. A blank line is skipped rather than
+// counted, because the writer ends every line with a newline and the last one
+// therefore reads as empty.
+func TestRead_NamesTheLineTheBadRecordIsOn(t *testing.T) {
+	dir := t.TempDir()
+	writeShard(t, dir, "calls-numbered.jsonl",
+		`{"schema":1,"type":"skip","skip":{"test":"a","reason":"b"}}`,
+		"",
+		`{"schema":1,"type":"skip"}`,
+	)
+
+	_, err := Read(dir)
+
+	if err == nil {
+		t.Fatal("Read error = nil, want one naming the third line")
+	}
+	if !strings.Contains(err.Error(), "line 3") {
+		t.Errorf("Read error = %v, want it to name line 3", err)
+	}
+}
+
+// TestShardPattern_MatchesWhatTheWriterNames verifies that the pattern a
+// reader is told to look for is the one a writer's own file name satisfies,
+// and that isShard agrees with filepath.Match on it.
+//
+// The two are spelled apart on purpose, the pattern from its prefix and
+// extension and the predicate from the same two constants, so nothing but a
+// test holds them to each other.
+func TestShardPattern_MatchesWhatTheWriterNames(t *testing.T) {
+	if ShardPattern != "calls-*.jsonl" {
+		t.Errorf("ShardPattern = %q, want calls-*.jsonl", ShardPattern)
+	}
+
+	dir := t.TempDir()
+	Release()
+	t.Cleanup(Release)
+	OpenDir(dir).Write(&recordingReporter{}, &Skip{Test: "a", Reason: "b"})
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir error = %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("the writer left %d file(s) in its directory, want exactly one shard", len(entries))
+	}
+	name := entries[0].Name()
+	matched, matchErr := filepath.Match(ShardPattern, name)
+	if matchErr != nil {
+		t.Fatalf("Match error = %v", matchErr)
+	}
+	if !matched {
+		t.Errorf("the shard the writer named, %q, does not match ShardPattern %q", name, ShardPattern)
+	}
+	if !isShard(name) {
+		t.Errorf("isShard(%q) = false, want true: it must agree with ShardPattern", name)
+	}
+}
+
 // TestReadShard_ReportsAFileItCannotOpen verifies that a shard that cannot be
 // opened is reported.
 //

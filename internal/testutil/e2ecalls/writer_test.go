@@ -314,6 +314,43 @@ func TestRelease_ClosesTheShardAndForgetsTheWriter(t *testing.T) {
 	}
 }
 
+// TestRelease_LetsTheSameWriterStartAnotherShard verifies that release lets go
+// of the file rather than only of the registry entry: a writer that kept
+// writing after Release opens a shard of its own instead of appending to the
+// one it was told to let go of.
+//
+// The sibling above releases and then opens the directory again, which gets a
+// new writer from the registry and would pass whether or not the old file was
+// ever closed. Writing through the same handle is what asks the question,
+// because only a closed file makes the writer open another.
+func TestRelease_LetsTheSameWriterStartAnotherShard(t *testing.T) {
+	dir := t.TempDir()
+	Release()
+	t.Cleanup(Release)
+
+	reporter := &recordingReporter{}
+	writer := OpenDir(dir)
+	// The second shard below belongs to a writer the registry has already let
+	// go of, so the package-level Release cannot close it; this test closes it
+	// itself, or Windows refuses to remove the directory holding it.
+	t.Cleanup(writer.release)
+	writer.Write(reporter, &Skip{Test: "TestCommon_Issues", Reason: "no runner"})
+
+	Release()
+	writer.Write(reporter, &Skip{Test: "TestCommon_Labels", Reason: "no runner"})
+
+	if len(reporter.messages) != 0 {
+		t.Fatalf("reported %v, want nothing", reporter.messages)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir error = %v", err)
+	}
+	if len(entries) != 2 {
+		t.Errorf("shards = %d, want 2: a released writer holds no file and opens another", len(entries))
+	}
+}
+
 // TestCreateShard_ReportsADirectoryItCannotMake verifies that the shard
 // constructor fails when the directory cannot be created.
 //
