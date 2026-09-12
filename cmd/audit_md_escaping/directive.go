@@ -21,20 +21,48 @@ import "strings"
 // text, and wrapping it teaches the next reader a rule that is not the rule.
 const exemptionDirective = "//gitlab:allow-unescaped"
 
+// rawDirective is the same declaration for the second verdict:
+//
+//	//gitlab:allow-raw <expression>: <reason>
+//
+// It is a directive of its own rather than a second meaning of the first, so
+// that a value excused for escaping (a timestamp cannot carry a pipe) is not
+// thereby excused for display (it is still printed as GitLab sent it). The
+// two verdicts ask different questions and each is answered on its own.
+const rawDirective = "//gitlab:allow-raw"
+
+// directiveKind names which verdict a directive answers.
+type directiveKind string
+
+const (
+	// kindUnescaped excuses the escaping verdict.
+	kindUnescaped directiveKind = "unescaped"
+	// kindRaw excuses the bool-or-time verdict.
+	kindRaw directiveKind = "raw"
+)
+
+// directivePrefixes maps each directive's spelling to the verdict it answers.
+var directivePrefixes = map[string]directiveKind{
+	exemptionDirective: kindUnescaped,
+	rawDirective:       kindRaw,
+}
+
 // Directive is one declared exemption, kept with where it was declared so a
 // stale one can be pointed at.
 type Directive struct {
-	Package    string `json:"package"`
-	File       string `json:"file"`
-	Line       int    `json:"line"`
-	Expression string `json:"expression"`
-	Reason     string `json:"reason"`
+	Package    string        `json:"package"`
+	File       string        `json:"file"`
+	Line       int           `json:"line"`
+	Kind       directiveKind `json:"kind"`
+	Expression string        `json:"expression"`
+	Reason     string        `json:"reason"`
 }
 
 // directiveKey identifies the findings one directive excuses: an expression,
-// in the package that writes it.
+// in the package that writes it, for one verdict.
 type directiveKey struct {
 	pkg        string
+	kind       directiveKind
 	expression string
 }
 
@@ -45,16 +73,17 @@ func collectDirectives(prog *program, root string) map[directiveKey]Directive {
 		for _, file := range pkg.Syntax {
 			for _, group := range file.Comments {
 				for _, comment := range group.List {
-					expression, reason, ok := parseDirective(comment.Text)
+					kind, expression, reason, ok := parseDirective(comment.Text)
 					if !ok {
 						continue
 					}
 					pos := prog.position(comment.Pos())
-					key := directiveKey{pkg: shortPackage(pkg.PkgPath), expression: expression}
+					key := directiveKey{pkg: shortPackage(pkg.PkgPath), kind: kind, expression: expression}
 					found[key] = Directive{
 						Package:    key.pkg,
 						File:       relativePath(pos.Filename, root),
 						Line:       pos.Line,
+						Kind:       kind,
 						Expression: expression,
 						Reason:     reason,
 					}
@@ -65,34 +94,46 @@ func collectDirectives(prog *program, root string) map[directiveKey]Directive {
 	return found
 }
 
-// parseDirective splits one comment into the expression it excuses and the
-// reason given for it.
+// parseDirective splits one comment into the verdict it answers, the
+// expression it excuses and the reason given for it.
 //
 // Both halves are required. A directive with no reason is not read as an
 // exemption at all, because the reason is the whole value of the mechanism:
 // the next reader has to be able to tell a value that needs no escaping from
 // one somebody decided not to escape.
-func parseDirective(text string) (expression, reason string, ok bool) {
-	rest, isDirective := strings.CutPrefix(strings.TrimSpace(text), exemptionDirective)
-	if !isDirective {
-		return "", "", false
+func parseDirective(text string) (kind directiveKind, expression, reason string, ok bool) {
+	text = strings.TrimSpace(text)
+	for prefix, candidate := range directivePrefixes {
+		rest, isDirective := strings.CutPrefix(text, prefix)
+		if !isDirective {
+			continue
+		}
+		excused, why, hasReason := strings.Cut(strings.TrimSpace(rest), ":")
+		excused = strings.TrimSpace(excused)
+		why = strings.TrimSpace(why)
+		if excused == "" || !hasReason || why == "" {
+			return "", "", "", false
+		}
+		return candidate, excused, why, true
 	}
-	expression, reason, hasReason := strings.Cut(strings.TrimSpace(rest), ":")
-	expression = strings.TrimSpace(expression)
-	reason = strings.TrimSpace(reason)
-	if expression == "" || !hasReason || reason == "" {
-		return "", "", false
-	}
-	return expression, reason, true
+	return "", "", "", false
 }
 
 // staleDirectives lists the exemptions that excused nothing this run.
-func staleDirectives(declared map[directiveKey]Directive, used map[directiveKey]bool) []Directive {
+//
+// A raw directive is judged stale only when the raw verdict ran: the rule it
+// answers is staged, and a run that never asked the question has no grounds
+// to say the answer was not needed.
+func staleDirectives(declared map[directiveKey]Directive, used map[directiveKey]bool, judgedRaw bool) []Directive {
 	var stale []Directive
 	for key, directive := range declared {
-		if !used[key] {
-			stale = append(stale, directive)
+		if used[key] {
+			continue
 		}
+		if key.kind == kindRaw && !judgedRaw {
+			continue
+		}
+		stale = append(stale, directive)
 	}
 	sortDirectives(stale)
 	return stale

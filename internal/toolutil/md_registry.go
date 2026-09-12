@@ -3,6 +3,7 @@ package toolutil
 import (
 	"fmt"
 	"reflect"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -14,6 +15,10 @@ import (
 var (
 	stringFormatters sync.Map // reflect.Type → stringFormatter
 	resultFormatters sync.Map // reflect.Type → func(any) *mcp.CallToolResult
+	// formatterNames records, per registered type, the name of the function
+	// registered first, so a runtime finding can name the formatter and not
+	// only the type it renders.
+	formatterNames sync.Map // reflect.Type → string
 
 	// registrationProblems records every registration the registry refused
 	// or could only half honor, so a test can assert there are none: a
@@ -86,10 +91,34 @@ func RegisterMarkdownAnnotated[T any](fn func(T) string, ann *mcp.Annotations) {
 	}
 	if _, loaded := stringFormatters.LoadOrStore(t, entry); loaded {
 		recordRegistrationProblem(fmt.Sprintf("duplicate Markdown formatter for %s: the first registration is kept", t))
+	} else {
+		formatterNames.LoadOrStore(t, functionName(fn))
 	}
 	if _, both := resultFormatters.Load(t); both {
 		recordRegistrationProblem(fmt.Sprintf("%s has a string and a result formatter: the result formatter is served", t))
 	}
+}
+
+// functionName names a registered function the way a stack trace does, so a
+// finding can say groupcredentials.FormatPATListMarkdown rather than only the
+// type it renders. A closure is named by the function that made it.
+func functionName(fn any) string {
+	if f := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()); f != nil {
+		return f.Name()
+	}
+	return ""
+}
+
+// RegisteredMarkdownFormatterName returns the name of the formatter
+// registered for t, the served one where two were registered, or "" when
+// none is.
+func RegisteredMarkdownFormatterName(t reflect.Type) string {
+	if name, ok := formatterNames.Load(t); ok {
+		if s, isString := name.(string); isString {
+			return s
+		}
+	}
+	return ""
 }
 
 // RegisterMarkdownPair registers two Markdown string formatters.
@@ -124,6 +153,10 @@ func RegisterMarkdownResult[T any](fn func(T) *mcp.CallToolResult) {
 	}
 	if _, loaded := resultFormatters.LoadOrStore(t, entry); loaded {
 		recordRegistrationProblem(fmt.Sprintf("duplicate Markdown result formatter for %s: the first registration is kept", t))
+	} else {
+		// A result formatter is the one served, so its name replaces a string
+		// formatter's for the same type.
+		formatterNames.Store(t, functionName(fn))
 	}
 	if _, both := stringFormatters.Load(t); both {
 		recordRegistrationProblem(fmt.Sprintf("%s has a string and a result formatter: the result formatter is served", t))

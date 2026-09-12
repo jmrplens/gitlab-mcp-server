@@ -156,9 +156,17 @@ func DefuseHintsHeading(s string) string {
 //
 // A hint is written as it is given, control bytes aside: it is the server's
 // own sentence, and a GitLab-authored value inside one has to be escaped by
-// the formatter that composed it. The escaping gate judges this write like
-// any other list item, so a hint built from a value the classifier cannot
-// follow is reported rather than passed.
+// the formatter that composed it. The escaping gate follows this write back
+// through every caller, and at L1-08 every hint a domain formatter passes
+// classifies safe; the ten arguments that do not are this package's own
+// plumbing of those hints through an options struct, a renderer constructor,
+// a method receiver or a registered formatter's output type, which the
+// classifier does not follow to the literal the domain wrote. The write is
+// therefore declared below rather than judged, and the declaration retires
+// when the classifier follows those shapes: it fails the gate as stale the
+// moment nothing needs it.
+//
+//gitlab:allow-unescaped StripControlBytes(h): a hint is the server's own sentence; every hint a domain passes classifies safe, and the ten that do not are this package's plumbing of them through options, constructors and receivers the classifier does not follow.
 func WriteHints(b *strings.Builder, hints ...string) {
 	written := b.String()
 	content := DefuseHintsHeading(written)

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // toolName prefixes every line this command writes about itself, so a failure
@@ -36,7 +37,13 @@ type auditRun struct {
 	check          bool
 	verbose        bool
 	failUnresolved bool
-	patterns       []string
+	// failUnresolvedIn names the packages, by repository-relative prefix,
+	// whose unresolved values fail the gate while the rest stay reported. It
+	// is how the tree is held to the stricter rule one package at a time:
+	// toolutil first, since a blind spot there is a blind spot behind every
+	// formatter that calls it.
+	failUnresolvedIn string
+	patterns         []string
 	// overlay supplies source that is not on disk, which is how a test hands
 	// the audit a fixture package instead of the repository.
 	overlay map[string][]byte
@@ -62,6 +69,8 @@ func run(args []string, out, errOut io.Writer) int {
 	flags.BoolVar(&cfg.check, "check", false, "exit non-zero when a value still reaches a Markdown construct unescaped")
 	flags.BoolVar(&cfg.verbose, "v", false, "list the excused and unresolved values as well as the failing ones")
 	flags.BoolVar(&cfg.failUnresolved, "fail-unresolved", false, "count a value the audit cannot follow as a failure")
+	flags.StringVar(&cfg.failUnresolvedIn, "fail-unresolved-in", "",
+		"count a value the audit cannot follow as a failure in these packages only: a comma-separated list of repository-relative prefixes, such as internal/toolutil")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -108,25 +117,68 @@ func execute(cfg auditRun, out, errOut io.Writer) int {
 	if !cfg.check {
 		return 0
 	}
-	return gate(out, report, cfg.failUnresolved)
+	return gate(out, report, cfg.failUnresolved, splitPrefixes(cfg.failUnresolvedIn))
+}
+
+// splitPrefixes reads the comma-separated package prefixes of
+// -fail-unresolved-in, dropping the empty entries a trailing comma leaves.
+func splitPrefixes(value string) []string {
+	var prefixes []string
+	for prefix := range strings.SplitSeq(value, ",") {
+		if prefix = strings.TrimSpace(prefix); prefix != "" {
+			prefixes = append(prefixes, prefix)
+		}
+	}
+	return prefixes
 }
 
 // gate turns the report into the check-mode verdict.
 //
 // A stale directive fails alongside a finding on purpose. An exemption that
 // excuses nothing has outlived whatever made its value safe, and leaving it in
-// place is how a gate widens without anyone deciding to widen it.
-func gate(out io.Writer, report Report, failUnresolved bool) int {
+// place is how a gate widens without anyone deciding to widen it. An
+// unresolved value fails only where the run was told to hold a package to
+// that: everywhere with -fail-unresolved, or in the packages
+// -fail-unresolved-in names.
+func gate(out io.Writer, report Report, failUnresolved bool, failUnresolvedIn []string) int {
 	failures := report.Summary.Findings + report.Summary.Stale
-	if failUnresolved {
+	held := unresolvedWithin(report.Unresolved, failUnresolvedIn)
+	switch {
+	case failUnresolved:
 		failures += report.Summary.Unresolved
+	default:
+		failures += held
 	}
 	if failures > 0 {
-		fmt.Fprintf(out, "check: FAIL. %d value(s) reach a Markdown construct unescaped, %d directive(s) excuse nothing, %d unresolved\n",
+		fmt.Fprintf(out, "check: FAIL. %d value(s) reach a Markdown construct unescaped, %d directive(s) excuse nothing, %d unresolved",
 			report.Summary.Findings, report.Summary.Stale, report.Summary.Unresolved)
+		if len(failUnresolvedIn) > 0 {
+			fmt.Fprintf(out, " (%d in %s, where none is allowed)", held, strings.Join(failUnresolvedIn, ", "))
+		}
+		fmt.Fprintln(out)
 		return 1
 	}
-	fmt.Fprintf(out, "check: PASS. Every value reaching %s is escaped or declared safe (%d excused by directive, %d unresolved)\n",
+	fmt.Fprintf(out, "check: PASS. Every value reaching %s is escaped or declared safe (%d excused by directive, %d unresolved",
 		report.Summary.Contexts, report.Summary.Excused, report.Summary.Unresolved)
+	if len(failUnresolvedIn) > 0 {
+		fmt.Fprintf(out, ", none in %s", strings.Join(failUnresolvedIn, ", "))
+	}
+	fmt.Fprintln(out, ")")
 	return 0
+}
+
+// unresolvedWithin counts the unresolved values in the packages named by
+// prefix, so a package can be held to the stricter rule while the tree is
+// still reported.
+func unresolvedWithin(unresolved []Finding, prefixes []string) int {
+	count := 0
+	for _, finding := range unresolved {
+		for _, prefix := range prefixes {
+			if finding.Package == prefix || strings.HasPrefix(finding.Package, prefix+"/") {
+				count++
+				break
+			}
+		}
+	}
+	return count
 }

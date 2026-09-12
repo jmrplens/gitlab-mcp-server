@@ -640,7 +640,7 @@ analyze:
 	run_check "[7/16] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
 	run_check "[8/16] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
 	run_check "[9/16] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/16] Markdown escaping" go run ./cmd/audit_md_escaping --check; \
+	run_check "[10/16] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
 	run_check "[11/16] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
 	run_check "[12/16] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
 	run_check "[13/16] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
@@ -1310,18 +1310,24 @@ check-test-subtests:
 	go run ./cmd/audit_test_subtests/ -check
 
 ## audit-md-escaping: report every value a Markdown formatter interpolates into
-## a table cell, a heading, a list item or a link without routing it through
-## toolutil.EscapeMdTableCell, EscapeMdHeading or MdTitleLink, with the JSON
-## work list. `-contexts` narrows the sweep to some of the five constructs;
-## `//gitlab:allow-unescaped <expression>: <reason>` in the owning package
-## declares a value that needs none.
+## a table cell, a heading, a list item, a link or a hand-written code fence
+## without routing it through toolutil.EscapeMdTableCell, EscapeMdHeading,
+## MdTitleLink or MarkdownFencedBlock, with the JSON work list. The two staged
+## rules are named beside `all`: `card` lists every card row written by hand
+## instead of through toolutil.Card, and `bool-time` every flag or timestamp
+## printed without BoolEmoji or FormatTime; both report here and do not gate
+## yet. `//gitlab:allow-unescaped <expression>: <reason>` in the owning
+## package declares a value that needs no escaping, and
+## `//gitlab:allow-raw <expression>: <reason>` one whose raw form is right.
 audit-md-escaping:
-	go run ./cmd/audit_md_escaping/ -v -json plan/md-escaping-backlog.json
+	go run ./cmd/audit_md_escaping/ -v -contexts all,card,bool-time -json plan/md-escaping-backlog.json
 
 ## check-md-escaping: fail when a value still reaches a Markdown construct
-## unescaped, or when a directive excuses nothing. CI gate.
+## unescaped, when a directive excuses nothing, or when internal/toolutil holds
+## a value the audit cannot follow, since a blind spot there sits behind every
+## formatter that calls it. The staged rules are not judged here. CI gate.
 check-md-escaping:
-	go run ./cmd/audit_md_escaping/ -check
+	go run ./cmd/audit_md_escaping/ -check -fail-unresolved-in internal/toolutil
 
 ## audit-gateway-chars: report served descriptions and titles violating the
 ## gateway-safe text policy (pure ASCII prose, no semicolons), across every

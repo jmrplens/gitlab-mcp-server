@@ -3,11 +3,12 @@
 package markdown
 
 import (
-	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -65,28 +66,65 @@ func TestRender_Error(t *testing.T) {
 	}
 }
 
-// TestFormatRenderMarkdown_Empty verifies FormatRenderMarkdown when empty.
+// TestFormatRenderMarkdown_Empty verifies that a render with no HTML produces
+// the fixed sentence and nothing else, so a client is told the render was
+// empty rather than shown an empty fence.
 func TestFormatRenderMarkdown_Empty(t *testing.T) {
-	result := FormatRenderMarkdown(RenderOutput{})
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	text := fmt.Sprintf("%v", result.Content[0])
-	if text == "" {
-		t.Fatal("expected non-empty text")
+	if got := renderedText(t, FormatRenderMarkdown(RenderOutput{})); got != "Empty markdown rendered." {
+		t.Errorf("text = %q, want the empty-render sentence", got)
 	}
 }
 
-// TestFormatRenderMarkdown_WithData verifies FormatRenderMarkdown when with data.
+// TestFormatRenderMarkdown_WithData pins the whole text a populated render
+// produces: the heading, the line saying whose HTML follows, and the HTML
+// inside a fence.
+//
+// The fence is what the test is for. GitLab builds this HTML out of text
+// anybody who can open an issue may have written, and concatenating it into
+// the response hands the client whatever that document says: a client that
+// renders raw HTML shows a live anchor to whatever host the content names,
+// and a client that suppresses it drops the tag and says nothing about having
+// done so. Escaping is not the answer for this one tool, since returning the
+// rendered HTML is its whole job, so the fence is the containment and it is
+// pinned here rather than described.
 func TestFormatRenderMarkdown_WithData(t *testing.T) {
-	result := FormatRenderMarkdown(RenderOutput{HTML: "<p>Hello</p>"})
+	html := `<p>Hello <a href="http://elsewhere.invalid">x</a></p>`
+
+	got := renderedText(t, FormatRenderMarkdown(RenderOutput{HTML: html}))
+
+	want := "## Rendered Markdown\n\nThe HTML the GitLab instance produced for the text it was given:\n\n" +
+		"```html\n" + html + "\n```\n"
+	if got != want {
+		t.Errorf("text =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatRenderMarkdown_HTMLCarryingBackticks verifies that HTML holding a
+// run of backticks of its own cannot close the fence around it: the fence is
+// sized past the longest run inside, so everything after it stays contained
+// instead of rendering as Markdown of the response.
+func TestFormatRenderMarkdown_HTMLCarryingBackticks(t *testing.T) {
+	got := renderedText(t, FormatRenderMarkdown(RenderOutput{HTML: "<p>```</p>"}))
+
+	if !strings.Contains(got, "````html\n<p>```</p>\n````\n") {
+		t.Errorf("text = %q, want a fence longer than the run inside it", got)
+	}
+}
+
+// renderedText returns the one text block a formatter's result carries.
+func renderedText(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
 	if result == nil {
-		t.Fatal("expected non-nil result")
+		t.Fatal("the formatter returned no result")
 	}
-	text := fmt.Sprintf("%v", result.Content[0])
-	if text == "" {
-		t.Fatal("expected non-empty text")
+	if len(result.Content) != 1 {
+		t.Fatalf("the result carries %d content block(s), want 1", len(result.Content))
 	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("the content block is %T, want text", result.Content[0])
+	}
+	return text.Text
 }
 
 // TestRender_CancelledContext verifies Render when cancelled context.

@@ -93,6 +93,26 @@ func TestClassifyExpr_Fixture_AnswersEachShape(t *testing.T) {
 			expression: `toolutil.FormatTime("2024-01-01")`, want: safe, reason: "everything FormatTime returns is safe",
 		},
 		{
+			name: "a slice allocated and appended to out of escaped values", pkg: "mdsafe",
+			expression: `strings.Join(joined(item), ", ")`, want: safe, reason: "made only of values that are already safe",
+		},
+		{
+			name: "the zero value the builtin new allocates", pkg: "mdsafe",
+			expression: "*new(string)", want: safe, reason: "an empty value the builtin new allocates",
+		},
+		{
+			name: "a variadic parameter one caller leaves empty", pkg: "mdsafe",
+			expression: "hinted()", want: safe, reason: "everything hinted returns is safe",
+		},
+		{
+			name: "a slice allocated and appended to out of raw values", pkg: "mdcase",
+			expression: `strings.Join(rawJoined(item), ", ")`, want: unescaped, reason: "handed to FormatShapes",
+		},
+		{
+			name: "a builtin other than append", pkg: "mdcase",
+			expression: `min(item.Title, "z")`, want: unresolved, reason: "the builtin min",
+		},
+		{
 			name: "a field of a GitLab response", pkg: "mdcase",
 			expression: "item.State", want: unescaped, reason: "handed to FormatOutputMarkdown",
 		},
@@ -138,8 +158,11 @@ func TestClassifyExpr_Fixture_AnswersEachShape(t *testing.T) {
 			expression: "namedResult(item)", want: unresolved, reason: "named result",
 		},
 		{
+			// The one caller passes nothing to rest, which is an empty slice
+			// and not a shape the audit cannot read, so nothing reaches the
+			// hole through it.
 			name: "a variadic parameter no caller fills", pkg: "mdcase",
-			expression: "rest[0]", want: unresolved, reason: "shape the audit does not follow",
+			expression: "rest[0]", want: safe, reason: "every caller of FormatVariadic passes a safe value",
 		},
 		{
 			name: "a package-level variable nothing assigns", pkg: "mdcase",
@@ -221,21 +244,94 @@ func TestResolveBase_Depth_StopsAtTheExpressionItHas(t *testing.T) {
 	}
 }
 
-// TestClassifyParamField_ShortCall_IsUnresolved checks the guard on a call
-// that passes fewer arguments than the parameter being asked about, which a
-// variadic signature makes possible.
-func TestClassifyParamField_ShortCall_IsUnresolved(t *testing.T) {
+// TestClassifyParamField_ShortCall_TellsAnEmptyVariadicFromAShortCall checks
+// the guard on a call that passes fewer arguments than the parameter being
+// asked about. A variadic parameter left empty is an empty slice, which
+// carries nothing; a call short of a parameter that is not variadic cannot
+// type-check, so the guard is exercised with a call injected into the index,
+// and it answers unresolved rather than passing the value.
+func TestClassifyParamField_ShortCall_TellsAnEmptyVariadicFromAShortCall(t *testing.T) {
 	prog := loadFixture(t, caseFixture)
 	c := newClassifier(prog)
-	ref, ok := paramNamed(c, "FormatVariadic", "rest")
+	rest, ok := paramNamed(c, "FormatVariadic", "rest")
 	if !ok {
 		t.Fatal("the fixture's variadic parameter was not indexed")
 	}
+	prefix, ok := paramNamed(c, "FormatVariadic", "prefix")
+	if !ok {
+		t.Fatal("the fixture's first parameter was not indexed")
+	}
 
-	got, why := c.classifyParamField(ref, "Title", 0)
+	if got, why := c.classifyParamField(rest, "Title", 0); got != safe || !strings.Contains(why, "passes a safe Title") {
+		t.Errorf("classifyParamField on the empty variadic = %v (%s), want safe", got, why)
+	}
+	if got, why := c.classifyParam(rest, 0); got != safe || !strings.Contains(why, "passes a safe value") {
+		t.Errorf("classifyParam on the empty variadic = %v (%s), want safe", got, why)
+	}
 
-	if got != unresolved || !strings.Contains(why, "shape the audit does not follow") {
-		t.Errorf("classifyParamField = %v (%s), want unresolved", got, why)
+	// The injected call goes first: the real caller passes a literal, which
+	// the field walk answers for before it reaches a second site.
+	pkg := fixturePackage(t, prog, "mdcase")
+	original := c.prog.callers[prefix.fn]
+	c.prog.callers[prefix.fn] = append([]callSite{{call: &ast.CallExpr{Fun: ast.NewIdent("FormatVariadic")}, pkg: pkg}}, original...)
+	t.Cleanup(func() { c.prog.callers[prefix.fn] = original })
+
+	if got, why := c.classifyParamField(prefix, "Title", 0); got != unresolved || !strings.Contains(why, "shape the audit does not follow") {
+		t.Errorf("classifyParamField on a short call = %v (%s), want unresolved", got, why)
+	}
+	if got, why := c.classifyParam(prefix, 0); got != unresolved || !strings.Contains(why, "shape the audit does not follow") {
+		t.Errorf("classifyParam on a short call = %v (%s), want unresolved", got, why)
+	}
+}
+
+// TestBuiltinOf_CallShapes_NamesABuiltinAndNothingElse checks the one
+// recognition the classifier makes past calleeOf: a call of a builtin, by
+// name, against a call through a selector and a call of a plain function,
+// neither of which is one.
+func TestBuiltinOf_CallShapes_NamesABuiltinAndNothingElse(t *testing.T) {
+	prog := loadFixture(t, caseFixture)
+	pkg, expr := holeByExpression(t, prog, "mdcase", `min(item.Title, "z")`)
+	builtin, ok := expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected a call, got %T", expr)
+	}
+
+	cases := []struct {
+		name string
+		call *ast.CallExpr
+		want string
+	}{
+		{name: "a builtin", call: builtin, want: "min"},
+		{name: "a call through a selector", call: &ast.CallExpr{Fun: &ast.SelectorExpr{X: ast.NewIdent("item"), Sel: ast.NewIdent("render")}}},
+		{name: "a plain function", call: &ast.CallExpr{Fun: ast.NewIdent("nothingNamesThis")}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, isBuiltin := builtinOf(pkg, tc.call)
+			if isBuiltin != (tc.want != "") || got != tc.want {
+				t.Errorf("builtinOf = %q, %v, want %q", got, isBuiltin, tc.want)
+			}
+		})
+	}
+}
+
+// TestClassifyParam_RawCallSite_NamesTheCallerInTheReason checks that a
+// finding reported at a shared helper says which caller made it fail, by
+// package, file and line, since a hundred and seventy-eight packages have a
+// markdown.go and the helper's own line is not where the fix goes.
+func TestClassifyParam_RawCallSite_NamesTheCallerInTheReason(t *testing.T) {
+	prog := loadFixture(t, caseFixture)
+	c := newClassifier(prog)
+	pkg, expr := holeByExpression(t, prog, "mdcase", "title")
+
+	got, why := c.classifyExpr(pkg, expr, nil, 0)
+
+	if got != unescaped {
+		t.Fatalf("classifyExpr(title) = %v (%s), want unescaped", got, why)
+	}
+	if !strings.Contains(why, "from a call site of FormatRow ("+fixtureDir+"/mdcase/mdcase.go:") {
+		t.Errorf("reason %q does not name the caller's package, file and line", why)
 	}
 }
 

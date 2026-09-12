@@ -74,11 +74,13 @@ var externalSafe = map[string]bool{
 // DefuseHintsHeading(EscapeMdTableCell(s)), and DefuseHintsHeading is a
 // strings.ReplaceAll of its argument.
 var passThroughArgs = map[string][]int{
+	"strings.Fields":     {0},
 	"strings.Join":       {0},
 	"strings.Map":        {1},
 	"strings.Repeat":     {0},
 	"strings.Replace":    {0, 2},
 	"strings.ReplaceAll": {0, 2},
+	"strings.Split":      {0},
 	"strings.ToLower":    {0},
 	"strings.ToTitle":    {0},
 	"strings.ToUpper":    {0},

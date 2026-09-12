@@ -2827,6 +2827,7 @@ func metaToolExampleAction(sortedActions []string) string {
 	return sortedActions[0]
 }
 
+//gitlab:allow-unescaped usage: the usage sentence an ActionSpec declares for its action, compiled in rather than read from GitLab, on a line of a served tool description.
 func metaToolActionGuidanceSummary(routes ActionMap, actionNames []string) string {
 	var lines []string
 	for _, action := range actionNames {
@@ -2843,6 +2844,7 @@ func metaToolActionGuidanceSummary(routes ActionMap, actionNames []string) strin
 	return "\nAction guidance:\n" + strings.Join(lines, "\n")
 }
 
+//gitlab:allow-unescaped name: a parameter name from an ActionSpec's parameter guidance, compiled in rather than read from GitLab, on a line of a served tool description.
 func metaToolParameterGuidanceSummary(routes ActionMap, actionNames []string) string {
 	var lines []string
 	for _, action := range actionNames {

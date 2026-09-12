@@ -233,7 +233,19 @@ func FormatShapes(item Item) string {
 	fmt.Fprintf(&b, "| %s |\n", (*(&item)).Title)
 	fmt.Fprintf(&b, "| %s |\n", mdsafe.DefaultLabel)
 	fmt.Fprintf(&b, "| %s |\n", emptyTemplate)
+	fmt.Fprintf(&b, "| %s |\n", strings.Join(rawJoined(item), ", "))
+	fmt.Fprintf(&b, "| %s |\n", min(item.Title, "z"))
 	return b.String()
+}
+
+// rawJoined builds a slice the way the tree builds one, allocated empty and
+// appended to, out of raw values.
+func rawJoined(item Item) []string {
+	names := make([]string, 0, len(item.Labels))
+	for _, label := range item.Labels {
+		names = append(names, label)
+	}
+	return names
 }
 
 // dynamicTemplate is a template the audit cannot read, even inside a call it
@@ -391,9 +403,27 @@ func FormatItem(item Item, opts Options) string {
 	fmt.Fprintf(&b, "| %s |\n", fmt.Sprintf("%s (%s)", toolutil.EscapeMdTableCell(item.Title), "server text"))
 	fmt.Fprintf(&b, "| %s |\n", toolutil.FormatTime("2024-01-01"))
 	fmt.Fprintf(&b, "| %s |\n", string(rune(item.Count)))
+	fmt.Fprintf(&b, "| %s |\n", strings.Join(joined(item), ", "))
+	fmt.Fprintf(&b, "| %s |\n", *new(string))
+	fmt.Fprintf(&b, "| %s |\n", hinted())
+	fmt.Fprintf(&b, "| %s |\n", hinted(toolutil.EscapeMdTableCell(item.Title)))
 	b.WriteString(toolutil.MarkdownTableHeader("Name", "State"))
 	b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(item.Title), statusIcon(item)))
 	return b.String()
+}
+
+// joined builds a slice the way the tree builds one, allocated empty and
+// appended to, out of escaped values.
+func joined(item Item) []string {
+	names := make([]string, 0, 1)
+	names = append(names, toolutil.EscapeMdTableCell(item.Title))
+	return names
+}
+
+// hinted takes a variadic parameter one caller leaves empty, which passes
+// nothing rather than a shape the audit cannot read.
+func hinted(hints ...string) string {
+	return strings.Join(hints, "; ")
 }
 
 // label returns an escaped cell whichever branch it takes.

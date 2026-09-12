@@ -15,7 +15,7 @@ func FormatOutputMarkdown(out Output) string {
 		b.WriteString("No file changes found.\n")
 		return b.String()
 	}
-	var truncated []string
+	truncated := []string{}
 	b.WriteString("| File | Status |\n")
 	b.WriteString("| --- | --- |\n")
 	for _, c := range out.Changes {
@@ -31,7 +31,9 @@ func FormatOutputMarkdown(out Output) string {
 			status = "renamed from " + toolutil.EscapeMdTableCell(c.OldPath)
 		}
 		if c.Diff == "" && !c.DeletedFile {
-			truncated = append(truncated, c.NewPath)
+			// The hint lists the paths, and a path is a committer's choice
+			// like any other, so it is escaped where it joins the sentence.
+			truncated = append(truncated, toolutil.EscapeMdTableCell(c.NewPath))
 		}
 		fmt.Fprintf(&b, "| %s | %s |\n",
 			toolutil.EscapeMdTableCell(c.NewPath), status)

@@ -35,15 +35,24 @@ func snapshotMarkdownRegistries(t *testing.T) {
 		savedResults[k.(reflect.Type)] = v
 		return true
 	})
+	savedNames := map[reflect.Type]any{}
+	formatterNames.Range(func(k, v any) bool {
+		savedNames[k.(reflect.Type)] = v
+		return true
+	})
 
 	t.Cleanup(func() {
 		stringFormatters = sync.Map{}
 		resultFormatters = sync.Map{}
+		formatterNames = sync.Map{}
 		for k, v := range saved {
 			stringFormatters.Store(k, v)
 		}
 		for k, v := range savedResults {
 			resultFormatters.Store(k, v)
+		}
+		for k, v := range savedNames {
+			formatterNames.Store(k, v)
 		}
 	})
 }
@@ -406,6 +415,47 @@ func snapshotRegistrationProblems(t *testing.T) {
 		registrationProblems = saved
 		registrationProblemsMu.Unlock()
 	})
+}
+
+// mdNamedOutput is a test-only type registered through a named function, so
+// the recorded formatter name can be asserted.
+type mdNamedOutput struct{ Name string }
+
+// formatMdNamedOutput is that named function.
+func formatMdNamedOutput(v mdNamedOutput) string { return "## " + v.Name }
+
+// formatMdPointerResult is a named result formatter, registered beside a
+// string one for the same type so the served name can be asserted.
+func formatMdPointerResult(mdPointerOutput) *mcp.CallToolResult { return SuccessResult("ok") }
+
+// TestRegisteredMarkdownFormatterName_Registrations_NameTheFunctionServed
+// verifies the name the runtime gate prints beside a type: the function
+// registered, the first one where two were registered for a type, the result
+// formatter where a type has both, and nothing for a type nobody registered.
+func TestRegisteredMarkdownFormatterName_Registrations_NameTheFunctionServed(t *testing.T) {
+	snapshotMarkdownRegistries(t)
+	snapshotRegistrationProblems(t)
+	RegisterMarkdown(formatMdNamedOutput)
+	RegisterMarkdown(func(mdNamedOutput) string { return "second" })
+	RegisterMarkdown(func(mdPointerOutput) string { return "string" })
+	RegisterMarkdownResult(formatMdPointerResult)
+
+	cases := []struct {
+		name string
+		typ  reflect.Type
+		want string
+	}{
+		{name: "the named function", typ: reflect.TypeFor[mdNamedOutput](), want: "toolutil.formatMdNamedOutput"},
+		{name: "the result formatter of a type with both", typ: reflect.TypeFor[mdPointerOutput](), want: "toolutil.formatMdPointerResult"},
+		{name: "a type nobody registered", typ: reflect.TypeFor[mdInterfaceOutput](), want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := RegisteredMarkdownFormatterName(tc.typ); !strings.HasSuffix(got, tc.want) || (tc.want == "" && got != "") {
+				t.Errorf("RegisteredMarkdownFormatterName(%v) = %q, want a name ending in %q", tc.typ, got, tc.want)
+			}
+		})
+	}
 }
 
 // mdPointerOutput is a test-only type registered by value and looked up

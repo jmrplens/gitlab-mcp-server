@@ -70,7 +70,7 @@ func FormatMarkdown(r Output) string {
 		b.WriteString("- " + toolutil.EmojiCalendar + " **Upcoming release**\n")
 	}
 	if titles := milestoneTitles(r.Milestones); len(titles) > 0 {
-		fmt.Fprintf(&b, "- **Milestones**: %s\n", strings.Join(titles, ", "))
+		fmt.Fprintf(&b, "- **Milestones**: %s\n", toolutil.EscapeMdTableCell(strings.Join(titles, ", ")))
 	}
 	if r.Description != "" {
 		fmt.Fprintf(&b, "\n### Description\n\n%s\n", toolutil.WrapGFMBody(r.Description))

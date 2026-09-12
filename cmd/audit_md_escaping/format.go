@@ -114,3 +114,9 @@ func consumeStar(template string, i, next int, holes *[]hole, start int) (offset
 // still ends the cell, and one holding an opening angle bracket still opens a
 // tag.
 var stringishVerbs = map[byte]bool{'s': true, 'v': true, 'q': true}
+
+// judgedVerbs are the verbs a hole is collected for at all: the textual ones,
+// which the escaping verdict judges, and %t, which renders "true" or "false"
+// and nothing that can change a construct, collected only so the second
+// verdict can name a flag printed as a word.
+var judgedVerbs = map[byte]bool{'s': true, 'v': true, 'q': true, 't': true}

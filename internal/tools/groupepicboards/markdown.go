@@ -39,7 +39,7 @@ func FormatOutputMarkdown(b Output) string {
 		fmt.Fprintf(&sb, "- **Group**: %s (#%d)\n", toolutil.EscapeMdTableCell(b.Group.Name), b.Group.ID)
 	}
 	if names := labelNames(b.Labels); len(names) > 0 {
-		fmt.Fprintf(&sb, "- **Labels**: %s\n", strings.Join(names, ", "))
+		fmt.Fprintf(&sb, "- **Labels**: %s\n", toolutil.EscapeMdTableCell(strings.Join(names, ", ")))
 	}
 	if len(b.Lists) > 0 {
 		sb.WriteString("\n### Board Lists\n\n")

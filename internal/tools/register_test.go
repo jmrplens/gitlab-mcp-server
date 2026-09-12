@@ -734,17 +734,28 @@ func TestRegisterAllDoesNotUseDomainRegisterTools(t *testing.T) {
 	}
 }
 
-// TestAllMarkdownFormattersRegistered verifies that every sub-package with a
-// markdown.go containing init() + RegisterMarkdown has at least one type
-// registered in the toolutil Markdown registry.
+// unformattedRoutes are the catalog routes whose declared output type has no
+// Markdown formatter, each with the reason, held as a baseline that may only
+// shrink: a route added to it fails, and an entry that stops matching fails
+// too. It used to be impossible to know this list at all, because the
+// coverage test read only `<pkg>/markdown.go`, went on when the file was not
+// there, and asked per package rather than per route, which is how a domain
+// whose formatter lives in another file, or whose route returns a type the
+// package never registered, stayed invisible.
+var unformattedRoutes = map[string]string{
+	"branch.unprotect": "branches registers no formatter for UnprotectOutput, so the action renders as JSON; the migration adds the confirmation card",
+}
+
+// TestAllMarkdownFormattersRegistered verifies two things the registry used
+// to leave unproven: every sub-package that registers a formatter, in any of
+// its non-test files, has at least one type in the registry; and every
+// catalog route that names an output type has a formatter for it, held to the
+// baseline above.
 func TestAllMarkdownFormattersRegistered(t *testing.T) {
-	// 1. Get all registered type names from the registry.
 	typeNames := toolutil.RegisteredMarkdownTypeNames()
 	if len(typeNames) == 0 {
-		t.Fatal("no Markdown formatters registered — registry may not be initialized")
+		t.Fatal("no Markdown formatters registered; the registry may not be initialized")
 	}
-
-	// Build a set of package prefixes that have registered formatters.
 	registeredPkgs := make(map[string]bool)
 	for _, name := range typeNames {
 		// Type names are like "branches.Output", "toolutil.DeleteOutput".
@@ -753,48 +764,94 @@ func TestAllMarkdownFormattersRegistered(t *testing.T) {
 			registeredPkgs[pkg] = true
 		}
 	}
-
-	// 2. Find sub-packages whose markdown.go files contain init() registrations.
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-
-	reRegister := regexp.MustCompile(`toolutil\.Register(?:Markdown|MarkdownResult)\b`)
-	var missing []string
-
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		mdPath := filepath.Join(e.Name(), "markdown.go")
-		src, readErr := os.ReadFile(mdPath)
-		if readErr != nil {
-			continue // no markdown.go — that's fine
-		}
-
-		if !reRegister.Match(src) {
-			continue // markdown.go exists but has no registry calls
-		}
-
-		// This sub-package registers formatters — check if they appear in the registry.
-		if !registeredPkgs[e.Name()] {
-			missing = append(missing, e.Name())
-		}
-	}
-
-	if len(missing) > 0 {
-		t.Errorf("sub-packages with RegisterMarkdown calls in markdown.go but no types in registry:\n  %s",
-			strings.Join(missing, "\n  "))
-	}
-
-	// 3. Check the toolutil.DeleteOutput formatter is registered.
 	if !registeredPkgs["toolutil"] {
 		t.Error("toolutil.DeleteOutput formatter not registered in registry")
 	}
 
-	t.Logf("verified %d registered formatter types across %d packages",
-		len(typeNames), len(registeredPkgs))
+	t.Run("every package that registers has a type in the registry", func(t *testing.T) {
+		assertRegisteringPackagesHaveTypes(t, registeredPkgs)
+	})
+	t.Run("every route with an output type has a formatter", func(t *testing.T) {
+		assertRoutesHaveFormatters(t)
+	})
+
+	t.Logf("verified %d registered formatter types across %d packages", len(typeNames), len(registeredPkgs))
+}
+
+// assertRegisteringPackagesHaveTypes walks every sub-package's non-test
+// files for a registration call and checks the package has a type in the
+// registry.
+func assertRegisteringPackagesHaveTypes(t *testing.T, registeredPkgs map[string]bool) {
+	t.Helper()
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	reRegister := regexp.MustCompile(`toolutil\.Register(?:Markdown|MarkdownResult|MarkdownAnnotated|MarkdownPair|MarkdownTriple)\b`)
+	var missing []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if packageRegistersMarkdown(t, e.Name(), reRegister) && !registeredPkgs[e.Name()] {
+			missing = append(missing, e.Name())
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("sub-packages with registration calls but no types in the registry:\n  %s", strings.Join(missing, "\n  "))
+	}
+}
+
+// assertRoutesHaveFormatters holds every catalog route that names an output
+// type to a registered formatter, against the baseline of the routes known
+// to lack one.
+func assertRoutesHaveFormatters(t *testing.T) {
+	t.Helper()
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	seen := map[string]bool{}
+	for _, action := range catalog.Actions() {
+		out := action.Route.OutputType
+		if out == nil || toolutil.HasRegisteredMarkdownFormatter(out) {
+			continue
+		}
+		id := string(action.ID)
+		seen[id] = true
+		if _, known := unformattedRoutes[id]; !known {
+			t.Errorf("%s declares output type %s and no Markdown formatter is registered for it", id, out)
+		}
+	}
+	for id, reason := range unformattedRoutes {
+		if reason == "" {
+			t.Errorf("the baseline entry for %s gives no reason", id)
+		}
+		if !seen[id] {
+			t.Errorf("the baseline entry for %s matches no route without a formatter; remove it", id)
+		}
+	}
+}
+
+// packageRegistersMarkdown reports whether any non-test Go file of a
+// sub-package calls a registration function, so a formatter kept outside
+// markdown.go is seen.
+func packageRegistersMarkdown(t *testing.T, dir string, reRegister *regexp.Regexp) bool {
+	t.Helper()
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir %s: %v", dir, err)
+	}
+	for _, f := range files {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".go") || strings.HasSuffix(f.Name(), "_test.go") {
+			continue
+		}
+		src, readErr := os.ReadFile(filepath.Join(dir, f.Name()))
+		if readErr != nil {
+			t.Fatalf("ReadFile %s: %v", filepath.Join(dir, f.Name()), readErr)
+		}
+		if reRegister.Match(src) {
+			return true
+		}
+	}
+	return false
 }
 
 // TestAllHintReferencesValid validates that tool names and meta-tool action

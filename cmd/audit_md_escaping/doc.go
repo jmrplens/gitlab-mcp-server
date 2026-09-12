@@ -35,16 +35,20 @@
 // it can carry a character that changes the document around it.
 //
 // A sink is an fmt formatting call whose format argument is a constant (a
-// literal or a named constant, both resolved by the type checker), or a call
-// of toolutil.MarkdownTableRow or MarkdownTableHeader, which have no template
-// at all because every argument they take is a cell by construction. The
-// template is parsed with fmt's own grammar, flags, explicit argument indices,
-// '*' widths and '%%' included, so a verb is never paired with the wrong
-// expression: one formatter in this repository writes "[%[1]s](%[1]s)", which
-// a regular expression mispairs. Only %s, %v and %q are judged. %q is judged
-// despite quoting because Go's quoting escapes a quote and a backslash and
-// neither a pipe nor an angle bracket, and the numeric verbs are skipped
-// because none of them can emit any of the three whatever they are handed.
+// literal or a named constant, both resolved by the type checker), a call of
+// toolutil.MarkdownTableRow or MarkdownTableHeader, which have no template at
+// all because every argument they take is a cell by construction, or a call
+// of the two toolutil.Card writes whose value the caller renders,
+// Card.Markdown and CardTable.Row: every other Card method escapes what it is
+// given, so a raw value passed to it reaches no construct, while those two
+// write the value as given and the hole is the call site. The template is
+// parsed with fmt's own grammar, flags, explicit argument indices, '*' widths
+// and '%%' included, so a verb is never paired with the wrong expression: one
+// formatter in this repository writes "[%[1]s](%[1]s)", which a regular
+// expression mispairs. Only %s, %v and %q are judged. %q is judged despite
+// quoting because Go's quoting escapes a quote and a backslash and neither a
+// pipe nor an angle bracket, and the numeric verbs are skipped because none of
+// them can emit any of the three whatever they are handed.
 //
 // Where a hole sits decides whether it matters, and the line it sits on
 // decides where it sits: a pipe first means a table cell, one to six '#' and a
@@ -101,17 +105,75 @@
 // when it has been through one of the toolutil escapers, when it is a nested
 // Sprintf whose own holes are all safe, when it is a standard-library
 // formatter of a non-textual value or a strings transform of values that are
-// themselves safe, when every return of the declared function producing it is
-// safe, when every assignment to the local holding it is safe, or when every
-// caller passes a safe value to the parameter carrying it. A call binds its
-// arguments to the callee's parameters, so a helper is judged at the call site
-// that reaches it: toolutil.FormatTime returns its argument verbatim when
+// themselves safe, when it is a slice allocated by make and built by append
+// out of safe values, when every return of the declared function producing it
+// is safe, when every assignment to the local holding it is safe, or when
+// every caller passes a safe value to the parameter carrying it. A call binds
+// its arguments to the callee's parameters, so a helper is judged at the call
+// site that reaches it: toolutil.FormatTime returns its argument verbatim when
 // neither layout parses, and without that binding the one caller passing a raw
-// field would condemn the other hundred and fifty. It is unsafe when it
-// bottoms out at a field of a struct filled from a GitLab response. Anything
-// else is unresolved, which is reported in a bucket of its own and never
-// counted as safe, because a gate that quietly called what it could not follow
-// safe would be a gate with a hole in it.
+// field would condemn the other hundred and fifty. A parameter no call site
+// binds is answered by every caller, and the reason names the caller that made
+// it fail, by package, file and line, since the helper's own line is not where
+// the fix goes; a caller that leaves a variadic parameter empty passes nothing
+// and is skipped. It is unsafe when it bottoms out at a field of a struct
+// filled from a GitLab response. Anything else is unresolved, which is
+// reported in a bucket of its own and never counted as safe, because a gate
+// that quietly called what it could not follow safe would be a gate with a
+// hole in it. -fail-unresolved-in holds the named packages to no unresolved
+// value at all, and the Makefile holds internal/toolutil to it: a blind spot
+// there sits behind every formatter that calls it.
+//
+// # The card shape
+//
+// A tool result about one GitLab object is a card, and toolutil.Card is the
+// one writer of its rows: a "- **Label**: value" list item per field, escaped
+// at the write, with the layout kept whatever the value carries. The rows the
+// tree wrote by hand before Card existed are the migration's work list, and
+// the "card" rule reports them so that list is measured rather than guessed
+// at: a constant line opening "- **Label**:" or "- **Label**" (a flag), with
+// or without an emoji before the label; a bullet-less "**Label**:" line, which
+// the line rule reads as prose and which renders as one run-on paragraph when
+// several follow; a two-cell table row whose first cell is a constant label,
+// "| Name | %s |"; and the header of a field table, "| Field | Value |" and
+// the Property, Setting and Attribute spellings of it, whether written as
+// text or built with MarkdownTableHeader. Matching the header alone is what
+// catches a card whose rows are assembled across several writes. A row whose
+// label is itself a value, an author item "- **@%s**", a row of a table of
+// objects and a metrics table keyed by a map key are not cards and are not
+// read as one. The rule reads constant text wherever it is written, in a
+// template, a builder write or a print call, and leaves two files alone: the
+// prompts, whose lists are the prompt's own layout, and card.go, whose writes
+// are the rows every other formatter is asked to use. A card finding is
+// reported as it stands, with no verdict to reach and no directive to excuse
+// it, since the fix is the same whatever the value.
+//
+// # The second verdict: flags and instants
+//
+// The "bool-time" rule asks a different question of the same holes: not where
+// the value lands but what it is. A boolean and a timestamp each have a
+// display helper, BoolEmoji or Card.Bool for the one and FormatTime or
+// Card.Time for the other, and a formatter that bypasses them renders the same
+// fact three ways across the tree. It reports a flag printed by %t, a boolean
+// or a pointer to one under a textual verb, strconv.FormatBool, and a declared
+// helper whose every return is a yes-or-no word; a time.Time or a pointer to
+// one under a textual verb, a Format call with a layout of the formatter's
+// own, and a string field named like an instant (CreatedAt, ExpiresAt,
+// DueDate) printed as GitLab sent it, through the escapers and transforms the
+// first verdict sees through. A value inside a fence is not judged, since
+// "true" and a Go-formatted instant are exactly what a JSON body says. The two
+// verdicts are independent, so a timestamp excused for escaping is still
+// reported for display, and each has its own directive:
+//
+//	//gitlab:allow-raw item.DueDate: a date GitLab sends without a time, shown as the day it names.
+//
+// A raw directive that excuses nothing is stale only once the rule has run,
+// because a run that never asked the question has no grounds to say the
+// answer was not needed.
+//
+// Both rules are staged: "all" names the six gating contexts and neither of
+// them, so the gate keeps its exit status while they report, and a rule joins
+// the gate when the Makefile names it beside "all".
 //
 // # Declaring that a value is already safe
 //
@@ -158,5 +220,7 @@
 //	go run ./cmd/audit_md_escaping/
 //	go run ./cmd/audit_md_escaping/ -json plan/md-escaping-backlog.json
 //	go run ./cmd/audit_md_escaping/ -check
+//	go run ./cmd/audit_md_escaping/ -check -fail-unresolved-in internal/toolutil
 //	go run ./cmd/audit_md_escaping/ -contexts table-cell,heading -check
+//	go run ./cmd/audit_md_escaping/ -contexts all,card,bool-time -v
 package main

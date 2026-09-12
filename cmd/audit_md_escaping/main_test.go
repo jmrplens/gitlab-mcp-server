@@ -192,12 +192,19 @@ func TestRun_CommandLine_ParsesItsFlags(t *testing.T) {
 // TestGate_Report_DecidesWhatFails checks the verdict itself, since what the
 // gate counts as a failure is the whole of its behavior in CI.
 func TestGate_Report_DecidesWhatFails(t *testing.T) {
+	unresolved := []Finding{
+		{Package: "internal/toolutil", Expression: "a"},
+		{Package: "internal/toolutil", Expression: "b"},
+		{Package: "internal/tools/issues", Expression: "c"},
+	}
 	cases := []struct {
-		name           string
-		summary        Summary
-		failUnresolved bool
-		want           int
-		says           string
+		name             string
+		summary          Summary
+		unresolved       []Finding
+		failUnresolved   bool
+		failUnresolvedIn []string
+		want             int
+		says             string
 	}{
 		{name: "nothing at all", summary: Summary{Contexts: "table-cell"}, want: 0, says: "check: PASS"},
 		{name: "an unescaped value", summary: Summary{Findings: 1}, want: 1, says: "check: FAIL"},
@@ -205,19 +212,54 @@ func TestGate_Report_DecidesWhatFails(t *testing.T) {
 		{name: "an unresolved value is not a failure", summary: Summary{Unresolved: 3, Contexts: "table-cell"}, want: 0, says: "3 unresolved"},
 		{name: "unless the operator asks", summary: Summary{Unresolved: 3}, failUnresolved: true, want: 1, says: "check: FAIL"},
 		{name: "an excused value is not one either", summary: Summary{Excused: 2, Contexts: "table-cell"}, want: 0, says: "2 excused"},
+		{
+			name: "an unresolved value in a held package fails", summary: Summary{Unresolved: 3}, unresolved: unresolved,
+			failUnresolvedIn: []string{"internal/toolutil"}, want: 1, says: "3 unresolved (2 in internal/toolutil, where none is allowed)",
+		},
+		{
+			name: "an unresolved value outside the held package does not", summary: Summary{Unresolved: 3, Contexts: "table-cell"}, unresolved: unresolved,
+			failUnresolvedIn: []string{"internal/tools/users"}, want: 0, says: "3 unresolved, none in internal/tools/users)",
+		},
+		{
+			name: "a prefix holds the packages under it and not a name it merely begins", summary: Summary{Unresolved: 3}, unresolved: unresolved,
+			failUnresolvedIn: []string{"internal/tools", "internal/tool"}, want: 1, says: "(1 in internal/tools, internal/tool, where none is allowed)",
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var out strings.Builder
 
-			got := gate(&out, Report{Summary: tc.summary}, tc.failUnresolved)
+			got := gate(&out, Report{Summary: tc.summary, Unresolved: tc.unresolved}, tc.failUnresolved, tc.failUnresolvedIn)
 
 			if got != tc.want {
 				t.Errorf("gate = %d, want %d", got, tc.want)
 			}
 			if !strings.Contains(out.String(), tc.says) {
 				t.Errorf("gate said %q, want it to say %q", out.String(), tc.says)
+			}
+		})
+	}
+}
+
+// TestSplitPrefixes_Values_ReadsAListAndDropsTheEmptyEntries checks the flag
+// value's spelling: a comma-separated list with the spaces and the trailing
+// comma a command line really carries, and nothing at all for the default.
+func TestSplitPrefixes_Values_ReadsAListAndDropsTheEmptyEntries(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{name: "the default", value: "", want: ""},
+		{name: "one package", value: "internal/toolutil", want: "internal/toolutil"},
+		{name: "a list with spaces and a trailing comma", value: " internal/toolutil , internal/tools/users,", want: "internal/toolutil internal/tools/users"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := strings.Join(splitPrefixes(tc.value), " "); got != tc.want {
+				t.Errorf("splitPrefixes(%q) = %q, want %q", tc.value, got, tc.want)
 			}
 		})
 	}
