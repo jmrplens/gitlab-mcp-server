@@ -48,7 +48,11 @@ func accessExtrasStartSession(t *testing.T, label, token string) *mcp.ClientSess
 	// Elicitation options: destructive tools (e.g. token self-revoke) fail
 	// closed for clients that cannot prompt, so this ad-hoc session confirms
 	// them through the auto-accepting handler like the main workflow sessions.
+	// Recorded under its own label, on the individual surface it registers:
+	// the baseline record folds sessions by surface and mode, so this one
+	// counts with the main individual session and is still told apart by name.
 	running, err := startE2ESession(
+		baselineShape{label: label, surface: shapeIndividual.surface, mode: shapeIndividual.mode, capabilities: shapeIndividual.capabilities},
 		"gitlab-mcp-server-e2e-"+label,
 		"e2e-"+label+"-client",
 		elicitationClientOptions(),

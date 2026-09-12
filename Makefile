@@ -71,8 +71,16 @@ E2E_REPORT_DIR=dist/e2e-reports
 # Docker target (dist/e2e-calls/ce, dist/e2e-calls/ee). The shards are a
 # byproduct of one run and are never committed; cmd/audit_e2e_coverage reads
 # them back. The e2e targets export it as an absolute path, since the recorder
-# refuses a relative one for the same reason the request inventory does.
+# refuses a relative one for the same reason the request inventory does, and
+# clear the target's directory first, so a shard of an earlier run never
+# folds into a later one's record. Every one of them runs with -count=1: a
+# package-list run can answer from the test cache, and a cached PASS records
+# nothing.
 E2E_CALLS_DIR=dist/e2e-calls
+# The revision the e2e run records on its run line, so a recorded baseline
+# says which tree produced it. Overridable for a run of a tree git cannot see.
+E2E_COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null)
+export E2E_COMMIT
 
 # Where the unit suite records the requests it issues, one shard per test
 # process. A shard is a byproduct of one run and only the merged inventory is
@@ -198,9 +206,12 @@ test-integration:
 ## test-e2e: run end-to-end tests against a real GitLab instance (reads GITLAB_URL, GITLAB_TOKEN from .env)
 test-e2e: ensure-gotestsum
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	bash -o pipefail -c '$(GOTESTSUM) \
+	$(call RM_RF,$(E2E_CALLS_DIR)/self-hosted)
+	$(call MKDIR_P,$(E2E_CALLS_DIR)/self-hosted)
+	bash -o pipefail -c 'GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/self-hosted $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-junit.xml \
+	  --jsonfile $(E2E_REPORT_DIR)/e2e-log.json \
 	  -- -tags e2e -count=1 -timeout 300s ./test/e2e/suite/'
 
 # ensure-gotestsum installs gotestsum on demand, so the e2e targets work on
@@ -298,12 +309,15 @@ test-e2e-docker: ensure-gotestsum
 	E2E_BITBUCKET_ADMIN_PASSWORD=$$(cat test/e2e/.bitbucket-admin-pass) ./test/e2e/scripts/setup-bitbucket.sh $(E2E_DOCKER_BITBUCKET_URL)
 	@echo "=== Running E2E tests ==="
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	$(call RM_RF,$(E2E_CALLS_DIR)/ce)
+	$(call MKDIR_P,$(E2E_CALLS_DIR)/ce)
 	@set +e; \
-	  bash -o pipefail -c 'set -a && . test/e2e/.env.docker && set +a && E2E_MODE=docker $(GOTESTSUM) \
+	  bash -o pipefail -c 'set -a && . test/e2e/.env.docker && set +a && \
+	  E2E_MODE=docker GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ce $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-docker-junit.xml \
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-docker-log.json \
-	  -- -tags e2e -timeout 1800s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-docker-output.txt'; \
+	  -- -tags e2e -count=1 -timeout 1800s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-docker-output.txt'; \
 	  echo $$? > $(E2E_REPORT_DIR)/e2e-docker-status
 	@echo "=== Tearing down ==="
 	@status=$$(cat $(E2E_REPORT_DIR)/e2e-docker-status); \
@@ -342,14 +356,16 @@ test-e2e-docker-enterprise: ensure-gotestsum
 	./test/e2e/scripts/register-runner.sh $(E2E_DOCKER_GITLAB_URL)
 	@echo "=== Running Enterprise E2E tests ==="
 	@$(call MKDIR_P,$(E2E_REPORT_DIR))
+	@$(call RM_RF,$(E2E_CALLS_DIR)/ee)
+	@$(call MKDIR_P,$(E2E_CALLS_DIR)/ee)
 	@set +e; \
 	  bash -o pipefail -c 'set -a && . test/e2e/.env.docker && set +a && \
 	  echo "Enterprise E2E suite: build tags e2e,enterprise"; \
-	  E2E_MODE=docker $(GOTESTSUM) \
+	  E2E_MODE=docker GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ee $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-docker-enterprise-junit.xml \
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-docker-enterprise-log.json \
-	  -- -tags "e2e enterprise" -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/suite/ \
+	  -- -tags "e2e enterprise" -count=1 -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/suite/ \
 	  2>&1 | tee $(E2E_REPORT_DIR)/e2e-docker-enterprise-output.txt'; \
 	  echo $$? > $(E2E_REPORT_DIR)/e2e-docker-enterprise-status
 	@echo "=== Tearing down ==="

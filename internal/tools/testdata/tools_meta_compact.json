@@ -19886,7 +19886,7 @@
         "merge_train_enforcement": {
           "type": [
             "null",
-            "boolean"
+            "string"
           ]
         },
         "merge_trains_enabled": {

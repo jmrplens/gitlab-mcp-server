@@ -1,8 +1,10 @@
 //go:build e2e
 
-// setup_test.go contains the main E2E test infrastructure: [TestMain], six
+// setup_test.go contains the main E2E test infrastructure: [TestMain], nine
 // in-process MCP server/client pairs, snapshot guardrails for self-hosted
-// mode, and shared helpers used across all domain test files.
+// mode, and shared helpers used across all domain test files. Every pair is
+// started through [startE2ESession], which is also where the baseline
+// recorder of baseline_recorder_test.go is attached to both ends.
 //
 // Build tag: e2e.
 package suite
@@ -29,6 +31,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamiccatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -99,13 +102,18 @@ type resourceSnapshot struct {
 // complete. In Docker mode (E2E_MODE=docker), snapshots are skipped.
 func TestMain(m *testing.M) {
 	configureE2EStartupEnvironment()
+	installBaselineTracing()
 
 	requestedTier, _ := edition.ParseTier(config.Getenv("TIER"))
 	// The Docker e2e harness toggles EE fixtures via GITLAB_ENTERPRISE; honor it
 	// as a legacy alias for requesting the enterprise tier.
 	envEnterprise := requestedTier.IsEnterprise() ||
 		strings.EqualFold(os.Getenv("GITLAB_ENTERPRISE"), "true")
+	if envEnterprise {
+		baselineRequirement = baselineRequirementLicensed
+	}
 	glClient := mustE2EGitLabClient()
+	facts := probeBaselineFacts(glClient)
 	// Detect the actual GitLab tier from the instance license. The GITLAB_MCP_TIER
 	// env var is the *requested* mode, but the real tier is what controls
 	// whether EE features work end-to-end. When the env asks for EE but GitLab
@@ -128,6 +136,7 @@ func TestMain(m *testing.M) {
 	code = verifyE2ESnapshotAfterRun(glClient, code)
 	cleanupOrphanedProjects(glClient)
 	closeE2ESessions(runtime.running)
+	code = finishBaseline(code, baselineRunLine(facts, enterprise, glClient))
 	os.Exit(code)
 }
 
@@ -141,39 +150,69 @@ type e2eRuntime struct {
 	running  []runningE2ESession
 }
 
+// The shapes of the nine sessions TestMain starts, in the vocabulary the
+// baseline record carries on every line. The label is the session's name in
+// the record; the surface and mode are what cmd/audit_e2e_coverage classifies
+// by. Only the individual session registers resources, which is why it alone
+// claims the full capability surface.
+var (
+	shapeIndividual      = baselineShape{label: "individual", surface: config.ToolSurfaceIndividual, mode: baselineModeDefault, capabilities: config.CapabilitySurfaceFull}
+	shapeMeta            = baselineShape{label: "meta", surface: config.ToolSurfaceMeta, mode: baselineModeDefault, capabilities: config.CapabilitySurfaceMinimal}
+	shapeDynamic         = baselineShape{label: "dynamic", surface: config.ToolSurfaceDynamic, mode: baselineModeDefault, capabilities: config.CapabilitySurfaceMinimal}
+	shapeElicitation     = baselineShape{label: "elicitation", surface: config.ToolSurfaceIndividual, mode: baselineModeDefault, capabilities: config.CapabilitySurfaceMinimal}
+	shapeNoElicitation   = baselineShape{label: "no-elicitation", surface: config.ToolSurfaceIndividual, mode: baselineModeDefault, capabilities: config.CapabilitySurfaceMinimal}
+	shapeSafeMode        = baselineShape{label: "safemode", surface: config.ToolSurfaceIndividual, mode: baselineModeSafe, capabilities: config.CapabilitySurfaceMinimal}
+	shapeSafeModeDynamic = baselineShape{label: "safemode-dynamic", surface: config.ToolSurfaceDynamic, mode: baselineModeSafe, capabilities: config.CapabilitySurfaceMinimal}
+	shapeReadOnly        = baselineShape{label: "readonly", surface: config.ToolSurfaceIndividual, mode: baselineModeReadOnly, capabilities: config.CapabilitySurfaceMinimal}
+	shapeReadOnlyDynamic = baselineShape{label: "readonly-dynamic", surface: config.ToolSurfaceDynamic, mode: baselineModeReadOnly, capabilities: config.CapabilitySurfaceMinimal}
+)
+
 func startE2ERuntime(glClient *gitlabclient.Client, enterprise bool) e2eRuntime {
 	runtime := e2eRuntime{}
 	// The individual and meta workflow sessions declare the auto-accepting
 	// elicitation handler: destructive tools fail closed for clients that
 	// cannot prompt (see sessions.noElicit), so the workflow suites confirm
 	// each destructive call through the interactive elicitation path instead.
-	runtime.sessions.individual = mustStartE2ESession(&runtime, "individual", "gitlab-mcp-server-e2e", "e2e-test-client", elicitationClientOptions(), configureIndividualE2EServer(glClient, enterprise))
-	runtime.sessions.meta = mustStartE2ESession(&runtime, "meta", "gitlab-mcp-server-e2e-meta", "e2e-test-meta-client", elicitationClientOptions(), configureMetaE2EServer(glClient, enterprise))
-	runtime.sessions.dynamic = mustStartE2ESession(&runtime, "dynamic", "gitlab-mcp-server-e2e-dynamic", "e2e-test-dynamic-client", nil, configureDynamicE2EServer(glClient, enterprise))
-	runtime.sessions.elicitation = mustStartE2ESession(&runtime, "elicitation", "gitlab-mcp-server-e2e-elicit", "e2e-test-elicit-client", elicitationClientOptions(), configureToolOnlyE2EServer(glClient, enterprise))
-	runtime.sessions.noElicit = mustStartE2ESession(&runtime, "no-elicitation", "gitlab-mcp-server-e2e-noelicit", "e2e-test-noelicit-client", nil, configureToolOnlyE2EServer(glClient, enterprise))
-	runtime.sessions.safeMode = mustStartE2ESession(&runtime, "safemode", "gitlab-mcp-server-e2e-safemode", "e2e-test-safemode-client", nil, configureSafeModeE2EServer(glClient, enterprise))
-	runtime.sessions.safeModeDyn = mustStartE2ESession(&runtime, "safemode-dynamic", "gitlab-mcp-server-e2e-safemode-dyn", "e2e-test-safemode-dyn-client", nil, configureDynamicModeE2EServer(glClient, enterprise, dynamicModeSafe))
-	runtime.sessions.readOnly = mustStartE2ESession(&runtime, "readonly", "gitlab-mcp-server-e2e-readonly", "e2e-test-readonly-client", nil, configureReadOnlyE2EServer(glClient, enterprise))
-	runtime.sessions.readOnlyDyn = mustStartE2ESession(&runtime, "readonly-dynamic", "gitlab-mcp-server-e2e-readonly-dyn", "e2e-test-readonly-dyn-client", nil, configureDynamicModeE2EServer(glClient, enterprise, dynamicModeReadOnly))
+	runtime.sessions.individual = mustStartE2ESession(&runtime, shapeIndividual, "gitlab-mcp-server-e2e", "e2e-test-client", elicitationClientOptions(), configureIndividualE2EServer(glClient, enterprise))
+	runtime.sessions.meta = mustStartE2ESession(&runtime, shapeMeta, "gitlab-mcp-server-e2e-meta", "e2e-test-meta-client", elicitationClientOptions(), configureMetaE2EServer(glClient, enterprise))
+	runtime.sessions.dynamic = mustStartE2ESession(&runtime, shapeDynamic, "gitlab-mcp-server-e2e-dynamic", "e2e-test-dynamic-client", nil, configureDynamicE2EServer(glClient, enterprise))
+	runtime.sessions.elicitation = mustStartE2ESession(&runtime, shapeElicitation, "gitlab-mcp-server-e2e-elicit", "e2e-test-elicit-client", elicitationClientOptions(), configureToolOnlyE2EServer(glClient, enterprise))
+	runtime.sessions.noElicit = mustStartE2ESession(&runtime, shapeNoElicitation, "gitlab-mcp-server-e2e-noelicit", "e2e-test-noelicit-client", nil, configureToolOnlyE2EServer(glClient, enterprise))
+	runtime.sessions.safeMode = mustStartE2ESession(&runtime, shapeSafeMode, "gitlab-mcp-server-e2e-safemode", "e2e-test-safemode-client", nil, configureSafeModeE2EServer(glClient, enterprise))
+	runtime.sessions.safeModeDyn = mustStartE2ESession(&runtime, shapeSafeModeDynamic, "gitlab-mcp-server-e2e-safemode-dyn", "e2e-test-safemode-dyn-client", nil, configureDynamicModeE2EServer(glClient, enterprise, dynamicModeSafe))
+	runtime.sessions.readOnly = mustStartE2ESession(&runtime, shapeReadOnly, "gitlab-mcp-server-e2e-readonly", "e2e-test-readonly-client", nil, configureReadOnlyE2EServer(glClient, enterprise))
+	runtime.sessions.readOnlyDyn = mustStartE2ESession(&runtime, shapeReadOnlyDynamic, "gitlab-mcp-server-e2e-readonly-dyn", "e2e-test-readonly-dyn-client", nil, configureDynamicModeE2EServer(glClient, enterprise, dynamicModeReadOnly))
 	return runtime
 }
 
-func mustStartE2ESession(runtime *e2eRuntime, label, serverName, clientName string, clientOptions *mcp.ClientOptions, configure func(*mcp.Server) error) *mcp.ClientSession {
-	running, err := startE2ESession(serverName, clientName, clientOptions, configure)
+func mustStartE2ESession(runtime *e2eRuntime, shape baselineShape, serverName, clientName string, clientOptions *mcp.ClientOptions, configure e2eServerConfigurer) *mcp.ClientSession {
+	running, err := startE2ESession(shape, serverName, clientName, clientOptions, configure)
 	if err != nil {
 		closeE2ESessions(runtime.running)
-		log.Fatalf("e2e: %s session: %v", label, err)
+		log.Fatalf("e2e: %s session: %v", shape.label, err)
 	}
 	runtime.running = append(runtime.running, running)
 	return running.session
 }
 
-func startE2ESession(serverName, clientName string, clientOptions *mcp.ClientOptions, configure func(*mcp.Server) error) (runningE2ESession, error) {
+// e2eServerConfigurer registers one surface on a server and returns the
+// catalog it registered from, which is what names the action a call asks for
+// and the route the server ran.
+type e2eServerConfigurer func(*mcp.Server) (*actioncatalog.Catalog, error)
+
+// startE2ESession builds one in-process server and client pair, with the
+// baseline recorder on both ends: the production telemetry middleware on the
+// server, so its span names the route that ran, and the sending middleware on
+// the client, which stamps the trace the span is joined on and writes the
+// call line.
+func startE2ESession(shape baselineShape, serverName, clientName string, clientOptions *mcp.ClientOptions, configure e2eServerConfigurer) (runningE2ESession, error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: "test"}, nil)
-	if err := configure(server); err != nil {
+	catalog, err := configure(server)
+	if err != nil {
 		return runningE2ESession{}, err
 	}
+	recorder := newBaselineSession(shape, catalog)
+	server.AddReceivingMiddleware(recorder.telemetry())
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	serverCtx, serverCancel := context.WithCancel(context.Background())
 	go func() {
@@ -183,48 +222,60 @@ func startE2ESession(serverName, clientName string, clientOptions *mcp.ClientOpt
 	}()
 
 	client := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: "test"}, clientOptions)
+	client.AddSendingMiddleware(recorder.sending())
 	session, err := client.Connect(context.Background(), clientTransport, nil)
 	if err != nil {
 		serverCancel()
 		return runningE2ESession{}, fmt.Errorf("connect %s MCP client: %w", clientName, err)
 	}
+	recorder.describeServed(context.Background(), session)
+	baseline.addSession(recorder)
 	return runningE2ESession{session: session, cancel: serverCancel}, nil
 }
 
-func configureIndividualE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
-	return func(server *mcp.Server) error {
-		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
+func configureIndividualE2EServer(glClient *gitlabclient.Client, enterprise bool) e2eServerConfigurer {
+	return func(server *mcp.Server) (*actioncatalog.Catalog, error) {
+		catalog := tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
 		resources.Register(server, glClient)
 		resources.RegisterWorkflowGuides(server)
-		return nil
+		return catalog, nil
 	}
 }
 
-func configureMetaE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
-	return func(server *mcp.Server) error {
-		return tools.RegisterAllMeta(server, glClient, edition.TierForEnterprise(enterprise))
+// configureMetaE2EServer registers the meta surface the way RegisterAllMeta
+// does, spelled out so the catalog it registered from can be returned: the
+// baseline recorder names a call's action from it, and RegisterAllMeta keeps
+// its catalog to itself.
+func configureMetaE2EServer(glClient *gitlabclient.Client, enterprise bool) e2eServerConfigurer {
+	return func(server *mcp.Server) (*actioncatalog.Catalog, error) {
+		catalog, err := tools.BuildActionCatalog(glClient, tools.ActionCatalogOptions{Tier: edition.TierForEnterprise(enterprise)})
+		if err != nil {
+			return nil, fmt.Errorf("build meta action catalog: %w", err)
+		}
+		tools.RegisterMetaCatalog(server, catalog)
+		tools.RegisterMetaStandaloneTools(server, glClient)
+		return catalog, nil
 	}
 }
 
-func configureDynamicE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
-	return func(server *mcp.Server) error {
+func configureDynamicE2EServer(glClient *gitlabclient.Client, enterprise bool) e2eServerConfigurer {
+	return func(server *mcp.Server) (*actioncatalog.Catalog, error) {
 		catalog, err := tools.BuildActionCatalog(glClient, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
 		if err != nil {
-			return fmt.Errorf("build dynamic action catalog: %w", err)
+			return nil, fmt.Errorf("build dynamic action catalog: %w", err)
 		}
 		catalog, err = dynamictools.AddStandaloneCatalog(catalog, glClient, dynamictools.StandaloneOptions{})
 		if err != nil {
-			return fmt.Errorf("add standalone dynamic catalog: %w", err)
+			return nil, fmt.Errorf("add standalone dynamic catalog: %w", err)
 		}
 		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
-		return nil
+		return catalog, nil
 	}
 }
 
-func configureToolOnlyE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
-	return func(server *mcp.Server) error {
-		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
-		return nil
+func configureToolOnlyE2EServer(glClient *gitlabclient.Client, enterprise bool) e2eServerConfigurer {
+	return func(server *mcp.Server) (*actioncatalog.Catalog, error) {
+		return tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise)), nil
 	}
 }
 
@@ -237,11 +288,11 @@ const (
 
 // configureReadOnlyE2EServer registers the individual surface restricted to
 // read-only tools, mirroring GITLAB_MCP_READ_ONLY=true in stdio mode.
-func configureReadOnlyE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
-	return func(server *mcp.Server) error {
-		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
+func configureReadOnlyE2EServer(glClient *gitlabclient.Client, enterprise bool) e2eServerConfigurer {
+	return func(server *mcp.Server) (*actioncatalog.Catalog, error) {
+		catalog := tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
 		tools.RemoveNonReadOnlyTools(context.Background(), server)
-		return nil
+		return catalog, nil
 	}
 }
 
@@ -255,27 +306,27 @@ func configureReadOnlyE2EServer(glClient *gitlabclient.Client, enterprise bool) 
 // read-only session answered a withheld write with "unknown action" while the
 // binary answered "exists but is not available", and the suite was green on
 // the copy.
-func configureDynamicModeE2EServer(glClient *gitlabclient.Client, enterprise bool, mode string) func(*mcp.Server) error {
-	return func(server *mcp.Server) error {
+func configureDynamicModeE2EServer(glClient *gitlabclient.Client, enterprise bool, mode string) e2eServerConfigurer {
+	return func(server *mcp.Server) (*actioncatalog.Catalog, error) {
 		catalog, withheld, err := dynamiccatalog.Build(glClient, &config.ServerConfig{
 			Tier:     edition.TierForEnterprise(enterprise),
 			ReadOnly: mode == dynamicModeReadOnly,
 			SafeMode: mode == dynamicModeSafe,
 		})
 		if err != nil {
-			return fmt.Errorf("build dynamic %s catalog: %w", mode, err)
+			return nil, fmt.Errorf("build dynamic %s catalog: %w", mode, err)
 		}
 		dynamictools.RegisterCatalogFindExecuteTools(server, catalog,
 			dynamictools.WithWithheldActions(withheld.ByTokenScope, withheld.ByOperator))
-		return nil
+		return catalog, nil
 	}
 }
 
-func configureSafeModeE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
-	return func(server *mcp.Server) error {
-		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
+func configureSafeModeE2EServer(glClient *gitlabclient.Client, enterprise bool) e2eServerConfigurer {
+	return func(server *mcp.Server) (*actioncatalog.Catalog, error) {
+		catalog := tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
 		tools.WrapMutatingToolsForSafeMode(context.Background(), server)
-		return nil
+		return catalog, nil
 	}
 }
 

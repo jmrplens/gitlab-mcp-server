@@ -1032,10 +1032,14 @@ func TestCapturedSplitReaders_ReadOneObjectEach(t *testing.T) {
 			x, e := CapturedIssue(c)
 			return x.EpicIID != nil && *x.EpicIID == 5 && x.Severity == "HIGH" && x.StartDate == "2026-01-02", e
 		}},
-		{"project", `{"max_pipelines_per_merge_train":4,"description_html":"<p>d</p>"}`, func(c *gitlabclient.ResponseCapture) (bool, error) {
+		// merge_train_enforcement is the enforcement level GitLab spells as a
+		// string; a reader that typed it as a flag refused every licensed
+		// project answer, so the case pins the spelling the instance sends.
+		{"project", `{"max_pipelines_per_merge_train":4,"description_html":"<p>d</p>","merge_train_enforcement":"allow_bypass"}`, func(c *gitlabclient.ResponseCapture) (bool, error) {
 			x, e := CapturedProject(c)
 			return x.MaxPipelinesPerMergeTrain != nil && *x.MaxPipelinesPerMergeTrain == 4 &&
-				x.DescriptionHTML != nil && *x.DescriptionHTML == "<p>d</p>", e
+				x.DescriptionHTML != nil && *x.DescriptionHTML == "<p>d</p>" &&
+				x.MergeTrainEnforcement != nil && *x.MergeTrainEnforcement == "allow_bypass", e
 		}},
 		{"group hook", `{"repository_update_events":true}`, func(c *gitlabclient.ResponseCapture) (bool, error) {
 			x, e := CapturedGroupHook(c)
