@@ -38,13 +38,19 @@ func (h sinkHole) escapable() bool {
 	return h.ctx != ctxCard && h.verb != "%t"
 }
 
+// verbSpread is the verb a hole carries when the call spreads a whole slice
+// into the sink rather than naming its cells one by one. The elements are then
+// values the caller assembled elsewhere, so the hole names the slice and no
+// expression this pass can read.
+const verbSpread = "cells..."
+
 // rawJudged reports whether the second verdict, on what the value is rather
 // than where it lands, applies to this hole: a formatted verb or a cell, but
 // not a card line, not a whole slice spread into a row, and not a value
 // inside a fence, where "true" and a Go-formatted instant are exactly what a
 // JSON body says.
 func (h sinkHole) rawJudged() bool {
-	return h.ctx != ctxCard && h.ctx != ctxFence && h.verb != "cells..."
+	return h.ctx != ctxCard && h.ctx != ctxFence && h.verb != verbSpread
 }
 
 // formatArgIndex names, per fmt function, which argument is the template.
@@ -245,7 +251,7 @@ func (f sinkFile) cellSink(call *ast.CallExpr, name string) (sink, bool) {
 	s := sink{pkg: f.pkg, call: call, callee: name}
 	verb := "cell"
 	if call.Ellipsis.IsValid() {
-		verb = "cells..."
+		verb = verbSpread
 	}
 	for _, arg := range call.Args {
 		s.holes = append(s.holes, sinkHole{expr: arg, ctx: ctxCell, verb: verb})
@@ -290,7 +296,7 @@ func (f sinkFile) cardCallSink(call *ast.CallExpr, callee *types.Func) (sink, bo
 	s := sink{pkg: f.pkg, call: call, callee: callee.Name()}
 	verb := spec.verb
 	if call.Ellipsis.IsValid() {
-		verb = "cells..."
+		verb = verbSpread
 	}
 	for _, arg := range call.Args[spec.from:] {
 		s.holes = append(s.holes, sinkHole{expr: arg, ctx: spec.ctx, verb: verb})
