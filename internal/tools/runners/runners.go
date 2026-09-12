@@ -149,6 +149,23 @@ type AuthTokenOutput struct {
 	ExpiresAt string `json:"token_expires_at,omitempty"`
 }
 
+// RegTokenOutput represents a runner *registration* token, carrying exactly
+// the fields [AuthTokenOutput] carries and published under the same JSON keys,
+// so the actions' schemas are unchanged.
+//
+// It is a type of its own because the Markdown registry is keyed by type: the
+// two tokens are different secrets used in different places, and while the
+// three registration resets answered with AuthTokenOutput the registry could
+// hold one formatter for the pair. The first registration won, so every
+// registration-token reset rendered under the heading "Runner Authentication
+// Token" and the auth-token reset was the one that never reached its own
+// formatter at all.
+type RegTokenOutput struct {
+	toolutil.HintableOutput
+	Token     string `json:"token"`
+	ExpiresAt string `json:"token_expires_at,omitempty"`
+}
+
 // ---------------------------------------------------------------------------
 // Converters
 // ---------------------------------------------------------------------------.
@@ -983,14 +1000,14 @@ type ResetInstanceRegTokenInput struct{}
 // ResetInstanceRegToken resets the instance-level runner registration token.
 //
 // Deprecated: Scheduled for removal in GitLab 20.0.
-func ResetInstanceRegToken(ctx context.Context, client *gitlabclient.Client, _ ResetInstanceRegTokenInput) (AuthTokenOutput, error) {
+func ResetInstanceRegToken(ctx context.Context, client *gitlabclient.Client, _ ResetInstanceRegTokenInput) (RegTokenOutput, error) {
 	if err := ctx.Err(); err != nil {
-		return AuthTokenOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
+		return RegTokenOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
 	t, _, err := client.GL().Runners.ResetInstanceRunnerRegistrationToken(gl.WithContext(ctx))
 	if err != nil {
-		return AuthTokenOutput{}, toolutil.WrapErrWithStatusHint("reset instance runner registration token", err, http.StatusForbidden,
+		return RegTokenOutput{}, toolutil.WrapErrWithStatusHint("reset instance runner registration token", err, http.StatusForbidden,
 			"resetting the instance-level registration token requires an admin token. For group/project scopes use gitlab_runner_reset_group_reg_token / gitlab_runner_reset_project_reg_token")
 	}
 	return toRegTokenOutput(t), nil
@@ -1008,21 +1025,21 @@ type ResetGroupRegTokenInput struct {
 // ResetGroupRegToken resets a group's runner registration token.
 //
 // Deprecated: Scheduled for removal in GitLab 20.0.
-func ResetGroupRegToken(ctx context.Context, client *gitlabclient.Client, input ResetGroupRegTokenInput) (AuthTokenOutput, error) {
+func ResetGroupRegToken(ctx context.Context, client *gitlabclient.Client, input ResetGroupRegTokenInput) (RegTokenOutput, error) {
 	if input.GroupID == "" {
-		return AuthTokenOutput{}, toolutil.ErrFieldRequired("group_id")
+		return RegTokenOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
 	if err := ctx.Err(); err != nil {
-		return AuthTokenOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
+		return RegTokenOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
 	t, _, err := client.GL().Runners.ResetGroupRunnerRegistrationToken(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return AuthTokenOutput{}, toolutil.WrapErrWithHint("reset group runner registration token", err,
+			return RegTokenOutput{}, toolutil.WrapErrWithHint("reset group runner registration token", err,
 				"resetting a group runner registration token requires Owner role on the group")
 		}
-		return AuthTokenOutput{}, toolutil.WrapErrWithStatusHint("reset group runner registration token", err, http.StatusNotFound,
+		return RegTokenOutput{}, toolutil.WrapErrWithStatusHint("reset group runner registration token", err, http.StatusNotFound,
 			"verify the group exists with gitlab_group_get")
 	}
 	return toRegTokenOutput(t), nil
@@ -1040,29 +1057,29 @@ type ResetProjectRegTokenInput struct {
 // ResetProjectRegToken resets a project's runner registration token.
 //
 // Deprecated: Scheduled for removal in GitLab 20.0.
-func ResetProjectRegToken(ctx context.Context, client *gitlabclient.Client, input ResetProjectRegTokenInput) (AuthTokenOutput, error) {
+func ResetProjectRegToken(ctx context.Context, client *gitlabclient.Client, input ResetProjectRegTokenInput) (RegTokenOutput, error) {
 	if input.ProjectID == "" {
-		return AuthTokenOutput{}, toolutil.ErrFieldRequired("project_id")
+		return RegTokenOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	if err := ctx.Err(); err != nil {
-		return AuthTokenOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
+		return RegTokenOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
 
 	t, _, err := client.GL().Runners.ResetProjectRunnerRegistrationToken(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
-			return AuthTokenOutput{}, toolutil.WrapErrWithHint("reset project runner registration token", err,
+			return RegTokenOutput{}, toolutil.WrapErrWithHint("reset project runner registration token", err,
 				"resetting a project runner registration token requires Maintainer or Owner role on the project")
 		}
-		return AuthTokenOutput{}, toolutil.WrapErrWithStatusHint("reset project runner registration token", err, http.StatusNotFound,
+		return RegTokenOutput{}, toolutil.WrapErrWithStatusHint("reset project runner registration token", err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get")
 	}
 	return toRegTokenOutput(t), nil
 }
 
-// toRegTokenOutput converts a RunnerRegistrationToken to AuthTokenOutput.
-func toRegTokenOutput(t *gl.RunnerRegistrationToken) AuthTokenOutput {
-	out := AuthTokenOutput{}
+// toRegTokenOutput converts a RunnerRegistrationToken to RegTokenOutput.
+func toRegTokenOutput(t *gl.RunnerRegistrationToken) RegTokenOutput {
+	out := RegTokenOutput{}
 	if t.Token != nil {
 		out.Token = *t.Token
 	}

@@ -2,150 +2,130 @@
 package groupreleases
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestFormatListMarkdown validates the Markdown formatter for group releases.
-// It covers empty results, a single release, multiple releases, and special
-// characters that require escaping in Markdown table cells.
-func TestFormatListMarkdown(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    ListOutput
-		wantSub  []string
-		wantNot  []string
-		wantFull string
-	}{
-		{
-			name:     "empty releases returns no-results message",
-			input:    ListOutput{},
-			wantFull: "No group releases found.\n",
-		},
-		{
-			name: "single release renders table with one row",
-			input: ListOutput{
-				Releases: []Output{
-					{
-						TagName:    "v1.0.0",
-						Name:       "First Release",
-						ReleasedAt: "2026-06-01",
-						Author:     &toolutil.AuthorOutput{Username: "admin"},
-					},
-				},
-				Pagination: toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1},
-			},
-			wantSub: []string{
-				"| Tag | Name | Released | Author |",
-				"| v1.0.0 | First Release | 2026-06-01 | admin |",
-			},
-		},
-		{
-			name: "multiple releases renders all rows",
-			input: ListOutput{
-				Releases: []Output{
-					{TagName: "v2.0.0", Name: "Second", ReleasedAt: "2026-07-01", Author: &toolutil.AuthorOutput{Username: "dev1"}},
-					{TagName: "v1.0.0", Name: "First", ReleasedAt: "2026-06-01", Author: &toolutil.AuthorOutput{Username: "dev2"}},
-				},
-				Pagination: toolutil.PaginationOutput{TotalItems: 2, TotalPages: 1},
-			},
-			wantSub: []string{
-				"| v2.0.0 | Second | 2026-07-01 | dev1 |",
-				"| v1.0.0 | First | 2026-06-01 | dev2 |",
-			},
-		},
-		{
-			name: "special characters in tag and name are escaped",
-			input: ListOutput{
-				Releases: []Output{
-					{TagName: "v1|beta", Name: "Rel|ease", ReleasedAt: "2026-01-01", Author: &toolutil.AuthorOutput{Username: "user"}},
-				},
-				Pagination: toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1},
-			},
-			wantSub: []string{"v1"},
-			wantNot: []string{"| v1|beta |"},
-		},
-		{
-			name: "empty optional fields render blank cells",
-			input: ListOutput{
-				Releases: []Output{
-					{TagName: "v0.1.0", Name: "Early"},
-				},
-				Pagination: toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1},
-			},
-			wantSub: []string{
-				"| v0.1.0 | Early |  |  |",
-			},
-		},
-		{
-			name: "non-nil links without self or edit url renders plain tag",
-			input: ListOutput{
-				Releases: []Output{
-					{
-						TagName: "v3.9.0",
-						Name:    "NoURL",
-						Links:   &toolutil.LinksOutput{ClosedIssuesURL: "https://ci"},
-					},
-				},
-				Pagination: toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1},
-			},
-			wantSub: []string{"| v3.9.0 | NoURL |"},
-			wantNot: []string{"[v3.9.0]("},
-		},
-		{
-			name: "self link renders tag as clickable link",
-			input: ListOutput{
-				Releases: []Output{
-					{
-						TagName: "v4.0.0",
-						Name:    "Linked",
-						Author:  &toolutil.AuthorOutput{Username: "rel"},
-						Links:   &toolutil.LinksOutput{Self: "https://git.example.com/g/p/-/releases/v4.0.0"},
-					},
-				},
-				Pagination: toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1},
-			},
-			wantSub: []string{
-				"[v4.0.0](https://git.example.com/g/p/-/releases/v4.0.0)",
-			},
-		},
-		{
-			name: "edit_url fallback derives release web url",
-			input: ListOutput{
-				Releases: []Output{
-					{
-						TagName: "v5.0.0",
-						Name:    "EditFallback",
-						Links:   &toolutil.LinksOutput{EditURL: "https://git.example.com/g/p/-/releases/v5.0.0/edit"},
-					},
-				},
-				Pagination: toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1},
-			},
-			wantSub: []string{
-				"[v5.0.0](https://git.example.com/g/p/-/releases/v5.0.0)",
-			},
-			wantNot: []string{"/edit)"},
-		},
-	}
+// listHints is the guidance section every group release listing closes with,
+// the preserve-links instruction first because the Tag column carries links.
+const listHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- " + toolutil.HintPreserveLinks + "\n" +
+	"- Use action 'release.get' to read one release in full, with its notes and assets\n" +
+	"- Use action 'release.link_list' to list the asset links of a release\n" +
+	"- Use action 'group.release_list' to page through the rest of the group's releases\n"
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := FormatListMarkdown(tt.input)
-			if tt.wantFull != "" && got != tt.wantFull {
-				t.Fatalf("got %q, want %q", got, tt.wantFull)
-			}
-			for _, sub := range tt.wantSub {
-				if !strings.Contains(got, sub) {
-					t.Errorf("output missing %q\ngot:\n%s", sub, got)
-				}
-			}
-			for _, not := range tt.wantNot {
-				if strings.Contains(got, not) {
-					t.Errorf("output should NOT contain %q\ngot:\n%s", not, got)
-				}
-			}
-		})
+const listHeader = "| Tag | Name | Released | Author |\n| --- | --- | --- | --- |\n"
+
+// TestFormatListMarkdown_Empty pins that a group with no releases renders the
+// one sentence and nothing else: no heading counting zero above it.
+func TestFormatListMarkdown_Empty(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{})
+
+	if want := "No group releases found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_SinglePage pins the whole document of a one-page
+// listing: the heading counting what GitLab said, the table, the pagination
+// line separated from the last row, and the hints last.
+func TestFormatListMarkdown_SinglePage(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Releases: []Output{{
+			TagName:    "v1.0.0",
+			Name:       "First Release",
+			ReleasedAt: "2026-06-01T00:00:00Z",
+			Author:     &toolutil.AuthorOutput{Username: "admin"},
+			Links:      &toolutil.LinksOutput{Self: "https://git.example.com/g/p/-/releases/v1.0.0"},
+		}},
+		Pagination: toolutil.PaginationOutput{TotalItems: 1, TotalPages: 1},
+	})
+
+	want := "## Group Releases (1)\n\n" +
+		listHeader +
+		"| [v1.0.0](https://git.example.com/g/p/-/releases/v1.0.0) | First Release | 1 Jun 2026 00:00 UTC | @admin |\n" +
+		"\n1 items total\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_MultiPage pins the heading, the summary line and the
+// pagination footer of a page that is one of several: the heading counts the
+// total GitLab reported rather than the rows shown.
+func TestFormatListMarkdown_MultiPage(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Releases: []Output{
+			{TagName: "v2.0.0", Name: "Second", ReleasedAt: "2026-07-01T10:00:00Z", Author: &toolutil.AuthorOutput{Username: "dev1"}},
+			{TagName: "v1.0.0", Name: "First", ReleasedAt: "2026-06-01T09:00:00Z", Author: &toolutil.AuthorOutput{Username: "dev2"}},
+		},
+		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 3, TotalItems: 45, PerPage: 20},
+	})
+
+	want := "## Group Releases (45)\n\n" +
+		"Showing 2 of 45 results (page 1 of 3)\n\n" +
+		listHeader +
+		"| v2.0.0 | Second | 1 Jul 2026 10:00 UTC | @dev1 |\n" +
+		"| v1.0.0 | First | 1 Jun 2026 09:00 UTC | @dev2 |\n" +
+		"\nPage 1 of 3 | 45 items total | 20 per page\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_UpcomingAndCreatedFallback pins the two things the
+// Released column answers besides a release date: a release GitLab marked
+// upcoming carries the calendar glyph, and one with no released_at falls back
+// to when it was created rather than rendering an empty cell.
+func TestFormatListMarkdown_UpcomingAndCreatedFallback(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Releases: []Output{
+			{TagName: "v9.0.0", Name: "Planned", ReleasedAt: "2027-01-01T00:00:00Z", UpcomingRelease: true},
+			{TagName: "v0.1.0", Name: "Early", CreatedAt: "2026-01-02T03:04:00Z"},
+		},
+		Pagination: toolutil.PaginationOutput{TotalItems: 2, TotalPages: 1},
+	})
+
+	want := "## Group Releases (2)\n\n" +
+		listHeader +
+		"| v9.0.0 | Planned | \U0001F4C5 1 Jan 2027 00:00 UTC |  |\n" +
+		"| v0.1.0 | Early | 2 Jan 2026 03:04 UTC |  |\n" +
+		"\n2 items total\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_HostileTagAndEditURLFallback pins both halves of the
+// Tag column: a tag name carrying a pipe and a bracket cannot split the row or
+// close a link label, and a release whose only link is the edit URL is linked
+// to the page that URL is the edit form of.
+func TestFormatListMarkdown_HostileTagAndEditURLFallback(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Releases: []Output{
+			{TagName: "v1|beta](http://attacker.invalid/)", Name: "Rel|ease"},
+			{TagName: "v5.0.0", Name: "EditFallback", Links: &toolutil.LinksOutput{EditURL: "https://git.example.com/g/p/-/releases/v5.0.0/edit"}},
+			{TagName: "v3.9.0", Name: "NoURL", Links: &toolutil.LinksOutput{ClosedIssuesURL: "https://ci.example.com"}},
+		},
+		Pagination: toolutil.PaginationOutput{TotalItems: 3, TotalPages: 1},
+	})
+
+	want := "## Group Releases (3)\n\n" +
+		listHeader +
+		"| v1&#124;beta](http://attacker.invalid/) | Rel&#124;ease |  |  |\n" +
+		"| [v5.0.0](https://git.example.com/g/p/-/releases/v5.0.0) | EditFallback |  |  |\n" +
+		"| v3.9.0 | NoURL |  |  |\n" +
+		"\n3 items total\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }

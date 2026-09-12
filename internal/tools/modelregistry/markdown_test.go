@@ -3,18 +3,22 @@
 package modelregistry
 
 import (
-	"strings"
 	"testing"
 )
 
 // TestFormatDownloadMarkdown validates Markdown rendering of a downloaded
-// ML model package file. Covers all output fields (project, model version,
-// path, filename, size) and verifies the hints section is appended.
+// ML model package file.
+//
+// Each case pins the whole response rather than a substring: the card's rows,
+// the note and the guidance section are one document, and a substring
+// assertion is what let a row survive in a table another row had already
+// closed. The cases cover a populated download, a response with nothing in it
+// but a size, and a large file.
 func TestFormatDownloadMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    DownloadOutput
-		contains []string
+		name  string
+		input DownloadOutput
+		want  string
 	}{
 		{
 			name: "all fields populated",
@@ -26,19 +30,18 @@ func TestFormatDownloadMarkdown(t *testing.T) {
 				ContentBase64:  "bW9kZWwtZGF0YQ==",
 				SizeBytes:      1024,
 			},
-			contains: []string{
-				"## ML Model Package: classifier.bin",
-				"| Project | 42 |",
-				"| Model Version | 7 |",
-				"| Path | models/v1 |",
-				"| Filename | classifier.bin |",
-				"| Size | 1024 bytes |",
-				"base64-encoded",
-				"gitlab_package_list",
-			},
+			want: "## ML Model Package: classifier.bin\n\n" +
+				"- **Project**: 42\n" +
+				"- **Model Version**: 7\n" +
+				"- **Path**: models/v1\n" +
+				"- **Filename**: classifier.bin\n" +
+				"- **Size**: 1024 bytes\n\n" +
+				"_Content is base64-encoded in the structured JSON output._\n\n" +
+				"---\n💡 **Next steps:**\n" +
+				"- Use `gitlab_package_list` to browse available model packages\n",
 		},
 		{
-			name: "empty fields render without panic",
+			name: "empty fields render the resource heading and the size alone",
 			input: DownloadOutput{
 				ProjectID:      "",
 				ModelVersionID: "",
@@ -46,11 +49,11 @@ func TestFormatDownloadMarkdown(t *testing.T) {
 				Filename:       "",
 				SizeBytes:      0,
 			},
-			contains: []string{
-				"## ML Model Package:",
-				"| Size | 0 bytes |",
-				"base64-encoded",
-			},
+			want: "## ML Model Package\n\n" +
+				"- **Size**: 0 bytes\n\n" +
+				"_Content is base64-encoded in the structured JSON output._\n\n" +
+				"---\n💡 **Next steps:**\n" +
+				"- Use `gitlab_package_list` to browse available model packages\n",
 		},
 		{
 			name: "large file size renders correctly",
@@ -61,23 +64,22 @@ func TestFormatDownloadMarkdown(t *testing.T) {
 				Filename:       "weights.h5",
 				SizeBytes:      104857600,
 			},
-			contains: []string{
-				"## ML Model Package: weights.h5",
-				"| Project | group/project |",
-				"| Model Version | candidate:5 |",
-				"| Path | deep/nested/path |",
-				"| Size | 104857600 bytes |",
-			},
+			want: "## ML Model Package: weights.h5\n\n" +
+				"- **Project**: group/project\n" +
+				"- **Model Version**: candidate:5\n" +
+				"- **Path**: deep/nested/path\n" +
+				"- **Filename**: weights.h5\n" +
+				"- **Size**: 104857600 bytes\n\n" +
+				"_Content is base64-encoded in the structured JSON output._\n\n" +
+				"---\n💡 **Next steps:**\n" +
+				"- Use `gitlab_package_list` to browse available model packages\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatDownloadMarkdown(tt.input)
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("expected output to contain %q, got:\n%s", s, got)
-				}
+			if got := FormatDownloadMarkdown(tt.input); got != tt.want {
+				t.Errorf("FormatDownloadMarkdown() =\n%q\nwant:\n%q", got, tt.want)
 			}
 		})
 	}

@@ -1,7 +1,6 @@
 package repositorysubmodules
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -9,75 +8,100 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatListMarkdown renders the submodule list as a Markdown table.
+// Canonical action IDs the hints name, the one form every surface resolves.
+// These actions are routes on the gitlab_repository catalog group, so each ID
+// carries that domain.
+const (
+	hintListSubmodules    = "repository.list_submodules"
+	hintReadSubmoduleFile = "repository.read_submodule_file"
+	hintUpdateSubmodule   = "repository.update_submodule"
+)
+
+// shortSHA is a git object id abbreviated to the eight characters a reader
+// compares by, or the whole id when it is shorter.
+func shortSHA(sha string) string {
+	if len(sha) > 8 {
+		return sha[:8]
+	}
+	return sha
+}
+
+// FormatListMarkdown renders the submodules of a repository as a Markdown
+// table.
 func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	if out.Count == 0 {
-		return toolutil.ToolResultWithMarkdown("## Repository Submodules\n\nNo submodules found.")
+		return toolutil.ToolResultWithMarkdown(toolutil.EmptyMessage("submodules"))
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Repository Submodules (%d)\n\n", out.Count)
-	b.WriteString("| Name | Path | Commit SHA | Resolved Project |\n")
-	b.WriteString("|------|------|------------|------------------|\n")
+	toolutil.WriteListHeading(&b, "Repository Submodules", out.Count, toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("Name", "Path", "Commit SHA", "Resolved Project"))
 	for _, s := range out.Submodules {
-		sha := s.CommitSHA
-		if len(sha) > 8 {
-			sha = sha[:8]
-		}
 		// The name, the path and the resolved project all come out of the
-		// repository's own .gitmodules, so all three are text somebody typed:
-		// resolveProjectPath returns the substring after the colon of an
-		// SCP-style remote verbatim.
-		//gitlab:allow-unescaped sha: the object id of a submodule tree entry, hexadecimal by construction.
-		fmt.Fprintf(&b, "| %s | `%s` | `%s` | %s |\n",
-			toolutil.EscapeMdTableCell(s.Name), toolutil.EscapeMdTableCell(s.Path), sha,
-			toolutil.EscapeMdTableCell(s.ResolvedProject))
+		// repository's own .gitmodules, so all three are text somebody typed;
+		// the path and the SHA are code spans a reader copies, and a code span
+		// sized by the helper cannot be closed from inside the value.
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.EscapeMdTableCell(s.Name),
+			toolutil.MdCodeSpanCell(s.Path),
+			toolutil.MdCodeSpanCell(shortSHA(s.CommitSHA)),
+			toolutil.EscapeMdTableCell(s.ResolvedProject),
+		))
 	}
-	toolutil.WriteHints(&b, "Use `gitlab_read_repository_submodule_file` to view submodule content details")
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(hintReadSubmoduleFile, "read a file out of one submodule"),
+		toolutil.HintAction(hintUpdateSubmodule, "move a submodule to another commit"),
+	)
 	return toolutil.ToolResultWithMarkdown(b.String())
 }
 
-// FormatReadMarkdown renders the submodule file read result as Markdown.
+// FormatReadMarkdown renders a file read out of a submodule as the card of the
+// file, with the body fenced under a section of its own.
 func FormatReadMarkdown(out ReadOutput) *mcp.CallToolResult {
 	ext := ""
 	if idx := strings.LastIndex(out.FileName, "."); idx >= 0 {
 		ext = out.FileName[idx+1:]
 	}
-	sha := out.CommitSHA
-	if len(sha) > 8 {
-		sha = sha[:8]
-	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "## File from Submodule\n\n")
-	fmt.Fprintf(&b, "- **Submodule**: `%s`\n", toolutil.EscapeMdTableCell(out.SubmodulePath))
-	fmt.Fprintf(&b, "- **Resolved Project**: %s\n", toolutil.EscapeMdTableCell(out.ResolvedProject))
-	fmt.Fprintf(&b, "- **Commit**: `%s`\n", sha)
-	fmt.Fprintf(&b, "- **File**: `%s` (%d bytes)\n\n", toolutil.EscapeMdTableCell(out.FilePath), out.Size)
+	c := toolutil.NewCard(&b, "File from Submodule")
+	c.Code("Submodule", out.SubmodulePath)
+	c.Field("Resolved Project", out.ResolvedProject)
+	c.Code("Commit", shortSHA(out.CommitSHA))
+	c.Code("File", out.FilePath)
+	c.Int("Size (bytes)", out.Size)
+	c.Field("Encoding", out.Encoding)
 	// The body is a file of the submodule's own repository, so whoever can push
 	// there chooses it: a three-backtick fence would be closed by the first run
 	// of three the file contains, and everything after it would render as
 	// Markdown of this response. The extension is read off the file name and is
 	// as much the pusher's choice, which is why the info string goes through the
 	// same helper rather than into the fence line by hand.
-	b.WriteString(toolutil.MarkdownFencedBlock(ext, out.Content))
-	toolutil.WriteHints(&b, "Use `gitlab_update_repository_submodule` to change the commit SHA reference")
+	c.Fence("Content", ext, out.Content)
+	c.End(toolutil.HintAction(hintUpdateSubmodule, "change the commit SHA this submodule is pinned to"))
 	return toolutil.ToolResultWithMarkdown(b.String())
 }
 
-// FormatUpdateMarkdown formats the submodule update result as markdown.
+// FormatUpdateMarkdown renders the commit a submodule update created as the
+// card of that commit.
 func FormatUpdateMarkdown(out UpdateOutput) *mcp.CallToolResult {
 	var b strings.Builder
+	c := toolutil.NewCard(&b, "Submodule Updated")
+	c.Code("Commit", out.ShortID)
+	c.Code("Full SHA", out.ID)
 	// The title, the ident and the message are what a person wrote in the
-	// commit, and this package's own update action supplies the message.
-	//gitlab:allow-unescaped out.ShortID: an abbreviated commit SHA, hexadecimal by construction.
-	//gitlab:allow-unescaped out.ID: the commit SHA GitLab returned for the commit the update created, hexadecimal by construction.
-	fmt.Fprintf(&b, "## Submodule Updated\n\n- **Commit**: %s (%s)\n- **Title**: %s\n- **Author**: %s <%s>\n- **Message**: %s",
-		out.ShortID, out.ID, toolutil.EscapeMdTableCell(out.Title), toolutil.EscapeMdTableCell(out.AuthorName),
-		toolutil.EscapeMdTableCell(out.AuthorEmail), toolutil.EscapeMdTableCell(out.Message))
-	if out.Status != "" {
-		//gitlab:allow-unescaped out.Status: a client-go BuildStateValue, one of a closed set of lowercase words.
-		fmt.Fprintf(&b, "\n- **Status**: %s", out.Status)
-	}
+	// commit, and this package's own update action supplies the message. The
+	// email is a plain row rather than an angle-bracketed ident, which GFM
+	// turns into a mailto autolink.
+	c.Field("Title", out.Title)
+	c.Field("Author", out.AuthorName)
+	c.Field("Author Email", out.AuthorEmail)
+	c.Time("Committed", out.CommittedDate)
+	c.Text("Message", out.Message)
+	c.Field("Status", out.Status)
+	c.End(
+		toolutil.HintAction(hintListSubmodules, "see every submodule of this repository"),
+		toolutil.HintAction(hintReadSubmoduleFile, "read a file at the new commit"),
+	)
 	return toolutil.ToolResultWithMarkdown(b.String())
 }
 

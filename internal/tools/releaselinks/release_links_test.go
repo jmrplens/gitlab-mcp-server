@@ -773,9 +773,33 @@ func TestList_EmptyResult(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_WithData verifies FormatOutputMarkdown when with data.
+// cardHints is the guidance section a link card closes with, and deletedHints
+// the one the deletion card carries instead: a removed link can be neither
+// updated nor deleted again.
+const (
+	cardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'release.link_update' to change this link's name, URL or type\n" +
+		"- Use action 'release.link_delete' to remove this link from the release\n"
+	deletedHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'release.link_list' to see the links the release still has\n" +
+		"- Use action 'release.link_create' to link another asset to the release\n"
+)
+
+// listHints is the guidance section the listing closes with, the preserve-links
+// instruction first because the URL column carries links.
+const listHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- " + toolutil.HintPreserveLinks + "\n" +
+	"- Use action 'release.link_get' to see one link on its own\n" +
+	"- Use action 'release.link_create' to add a new release asset link\n" +
+	"- Use action 'release.link_create_batch' to add several asset links in one call\n"
+
+const linkHeader = "| ID | Name | Type | URL |\n| --- | --- | --- | --- |\n"
+
+// TestFormatOutputMarkdown_WithData pins the whole card of an asset link:
+// every field GitLab sends, both URLs as links, and the hints a link that
+// still exists allows.
 func TestFormatOutputMarkdown_WithData(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:             10,
 		Name:           "Binary amd64",
 		URL:            "https://example.com/bin/amd64",
@@ -783,43 +807,75 @@ func TestFormatOutputMarkdown_WithData(t *testing.T) {
 		DirectAssetURL: "https://direct.example.com",
 	})
 
-	for _, want := range []string{
-		"## Release Link: Binary amd64",
-		"- **ID**: 10",
-		"- **URL**: [https://example.com/bin/amd64](https://example.com/bin/amd64)",
-		"- **Type**: package",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Release Link: Binary amd64\n\n" +
+		"- **ID**: 10\n" +
+		"- **Type**: package\n" +
+		"- **URL**: [https://example.com/bin/amd64](https://example.com/bin/amd64)\n" +
+		"- **Direct Asset URL**: [https://direct.example.com](https://direct.example.com)\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_Empty verifies FormatOutputMarkdown when empty.
+// TestFormatOutputMarkdown_Empty pins the card of a zero value: the ID row,
+// which is an answer at zero, and no label with an empty value under it.
 func TestFormatOutputMarkdown_Empty(t *testing.T) {
-	md := FormatOutputMarkdown(Output{})
-	if !strings.Contains(md, "## Release Link:") {
-		t.Errorf("expected header in empty output:\n%s", md)
-	}
-	if !strings.Contains(md, "- **ID**: 0") {
-		t.Errorf("expected zero ID:\n%s", md)
+	got := FormatOutputMarkdown(Output{})
+
+	want := "## Release Link: \n\n" +
+		"- **ID**: 0\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_LinkType verifies FormatOutputMarkdown renders the
-// link type GitLab sends. It used to assert the `external` flag beside it,
-// which no Grape entity has exposed since 16.0.
+// TestFormatOutputMarkdown_LinkType pins the link type GitLab sends. It used to
+// assert the `external` flag beside it, which no Grape entity has exposed
+// since 16.0.
 func TestFormatOutputMarkdown_LinkType(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:       5,
 		Name:     "Runbook",
 		URL:      "https://example.com/runbook",
 		LinkType: "runbook",
 	})
-	if !strings.Contains(md, "- **Type**: runbook") {
-		t.Errorf("expected the runbook link type:\n%s", md)
+
+	want := "## Release Link: Runbook\n\n" +
+		"- **ID**: 5\n" +
+		"- **Type**: runbook\n" +
+		"- **URL**: [https://example.com/runbook](https://example.com/runbook)\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatDeletedMarkdown pins what the delete action now answers with: a
+// card that says the link is gone and offers the two actions that still make
+// sense. Rendered as an ordinary link card, the same response used to invite
+// the reader to update and delete a link that no longer existed.
+func TestFormatDeletedMarkdown(t *testing.T) {
+	got := FormatDeletedMarkdown(DeletedOutput{
+		ID:       10,
+		Name:     "Binary amd64",
+		URL:      "https://example.com/bin/amd64",
+		LinkType: "package",
+	})
+
+	want := "## Release Link Deleted: Binary amd64\n\n" +
+		"- **ID**: 10\n" +
+		"- **Type**: package\n" +
+		"- **URL**: [https://example.com/bin/amd64](https://example.com/bin/amd64)\n" +
+		"\nThe link is removed from the release. The file or package it pointed at is untouched.\n" +
+		deletedHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -827,80 +883,80 @@ func TestFormatOutputMarkdown_LinkType(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithLinks verifies FormatListMarkdown when with links.
+// TestFormatListMarkdown_WithLinks pins the whole listing: the heading
+// counting what GitLab reported, the URL column labeled with the URL rather
+// than repeating the name beside it, and one guidance section at the end.
 func TestFormatListMarkdown_WithLinks(t *testing.T) {
-	out := ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Links: []Output{
 			{ID: 10, Name: "Binary amd64", LinkType: "package", URL: "https://example.com/amd64"},
 			{ID: 11, Name: "Binary arm64", LinkType: "package", URL: "https://example.com/arm64"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
-	}
-	md := FormatListMarkdown(out)
+	})
 
-	for _, want := range []string{
-		"## Release Links (2)",
-		"| ID |",
-		"| --- |",
-		"| 10 |",
-		"| 11 |",
-		"Binary amd64",
-		"Binary arm64",
-		"package",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Release Links (2)\n\n" +
+		linkHeader +
+		"| 10 | Binary amd64 | package | [https://example.com/amd64](https://example.com/amd64) |\n" +
+		"| 11 | Binary arm64 | package | [https://example.com/arm64](https://example.com/arm64) |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_HeadingCountsTheResponseTotal pins the count the
+// heading carries when a page is one of several: the total GitLab reported,
+// not the two rows shown, which is what the heading used to say.
+func TestFormatListMarkdown_HeadingCountsTheResponseTotal(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Links: []Output{
+			{ID: 10, Name: "Binary amd64", LinkType: "package", URL: "https://example.com/amd64"},
+			{ID: 11, Name: "Binary arm64", LinkType: "package", URL: "https://example.com/arm64"},
+		},
+		Pagination: toolutil.PaginationOutput{TotalItems: 45, Page: 1, PerPage: 2, TotalPages: 23},
+	})
+
+	want := "## Release Links (45)\n\n" +
+		"Showing 2 of 45 results (page 1 of 23)\n\n" +
+		linkHeader +
+		"| 10 | Binary amd64 | package | [https://example.com/amd64](https://example.com/amd64) |\n" +
+		"| 11 | Binary arm64 | package | [https://example.com/arm64](https://example.com/arm64) |\n" +
+		"\nPage 1 of 23 | 45 items total | 2 per page\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_Empty pins that a release with no links renders the
+// one sentence and nothing else.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No release links found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+	got := FormatListMarkdown(ListOutput{})
+
+	if want := "No release links found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_SingleLink verifies FormatListMarkdown when single link.
+// TestFormatListMarkdown_SingleLink pins the listing of a response GitLab sent
+// no pagination with: the heading counts the row shown and no pagination line
+// is written at all.
 func TestFormatListMarkdown_SingleLink(t *testing.T) {
-	out := ListOutput{
-		Links: []Output{
-			{ID: 1, Name: "Image", LinkType: "image", URL: "https://example.com/img"},
-		},
-	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "## Release Links (1)") {
-		t.Errorf("expected count 1:\n%s", md)
-	}
-	if !strings.Contains(md, "| 1 |") {
-		t.Errorf("expected row with ID 1:\n%s", md)
-	}
-}
+	got := FormatListMarkdown(ListOutput{
+		Links: []Output{{ID: 1, Name: "Image", LinkType: "image", URL: "https://example.com/img"}},
+	})
 
-// TestFormatListMarkdown_ContainsHints verifies that FormatListMarkdown includes
-// next-step hints for both link_create (single) and link_create_batch (bulk).
-func TestFormatListMarkdown_ContainsHints(t *testing.T) {
-	out := ListOutput{
-		Links: []Output{
-			{ID: 1, Name: "Binary", LinkType: "package", URL: "https://example.com/bin"},
-		},
-	}
-	md := FormatListMarkdown(out)
-	for _, want := range []string{
-		"link_create'",
-		"link_create_batch'",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatListMarkdown missing hint containing %q:\n%s", want, md)
-			}
-		})
+	want := "## Release Links (1)\n\n" +
+		linkHeader +
+		"| 1 | Image | image | [https://example.com/img](https://example.com/img) |\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -908,60 +964,64 @@ func TestFormatListMarkdown_ContainsHints(t *testing.T) {
 // FormatBatchMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatBatchMarkdown_WithCreatedAndFailed verifies that FormatBatchMarkdown
-// renders both the created links table and the failures list when both are present.
+// TestFormatBatchMarkdown_WithCreatedAndFailed pins the whole batch result:
+// the links created as a table, the ones GitLab refused under a heading of
+// their own, and one guidance section closing the document.
 func TestFormatBatchMarkdown_WithCreatedAndFailed(t *testing.T) {
-	out := CreateBatchOutput{
+	got := FormatBatchMarkdown(CreateBatchOutput{
 		Created: []Output{
 			{ID: 1, Name: "Binary amd64", LinkType: "package", URL: "https://example.com/amd64"},
 			{ID: 2, Name: "Binary arm64", LinkType: "package", URL: "https://example.com/arm64"},
 		},
 		Failed: []string{"checksum.txt: 409 Conflict"},
-	}
-	md := FormatBatchMarkdown(out)
-	checks := []string{
-		"## Release Links Created (2)",
-		"| ID | Name | Type | URL |",
-		"| 1 |", "Binary amd64", "package",
-		"| 2 |", "Binary arm64",
-		"### Failures (1)",
-		"checksum.txt: 409 Conflict",
-	}
-	for _, c := range checks {
-		t.Run(c, func(t *testing.T) {
-			if !strings.Contains(md, c) {
-				t.Errorf("missing %q in:\n%s", c, md)
-			}
-		})
+	})
+
+	want := "## Release Links Created (2)\n\n" +
+		linkHeader +
+		"| 1 | Binary amd64 | package | [https://example.com/amd64](https://example.com/amd64) |\n" +
+		"| 2 | Binary arm64 | package | [https://example.com/arm64](https://example.com/arm64) |\n" +
+		"\n### Failures (1)\n\n" +
+		"- checksum.txt: 409 Conflict\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'release.link_list' to see every link the release now has\n"
+
+	if got != want {
+		t.Errorf("batch mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatBatchMarkdown_AllCreated verifies rendering when all links
-// are created successfully with no failures.
+// TestFormatBatchMarkdown_AllCreated pins the result of a batch GitLab
+// accepted whole: no failures heading under it.
 func TestFormatBatchMarkdown_AllCreated(t *testing.T) {
-	out := CreateBatchOutput{
-		Created: []Output{
-			{ID: 5, Name: "Source", LinkType: "other", URL: "https://example.com/src"},
-		},
-	}
-	md := FormatBatchMarkdown(out)
-	if !strings.Contains(md, "## Release Links Created (1)") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	if strings.Contains(md, "Failures") {
-		t.Errorf("unexpected Failures section:\n%s", md)
+	got := FormatBatchMarkdown(CreateBatchOutput{
+		Created: []Output{{ID: 5, Name: "Source", LinkType: "other", URL: "https://example.com/src"}},
+	})
+
+	want := "## Release Links Created (1)\n\n" +
+		linkHeader +
+		"| 5 | Source | other | [https://example.com/src](https://example.com/src) |\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'release.link_list' to see every link the release now has\n"
+
+	if got != want {
+		t.Errorf("batch mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatBatchMarkdown_Empty verifies rendering when no links were created.
+// TestFormatBatchMarkdown_Empty pins the result of a batch that created
+// nothing: no table, and no instruction to preserve links a render with none
+// cannot have.
 func TestFormatBatchMarkdown_Empty(t *testing.T) {
-	out := CreateBatchOutput{Created: []Output{}}
-	md := FormatBatchMarkdown(out)
-	if !strings.Contains(md, "## Release Links Created (0)") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Errorf("unexpected table for empty output:\n%s", md)
+	got := FormatBatchMarkdown(CreateBatchOutput{Created: []Output{}})
+
+	want := "## Release Links Created (0)\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'release.link_list' to see every link the release now has\n"
+
+	if got != want {
+		t.Errorf("batch mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

@@ -548,23 +548,32 @@ func paginationInput(page, perPage int) toolutil.PaginationInput {
 
 // --- Markdown Formatter Tests ---
 
+// depListHeader is the dependency table's header and delimiter rows, and
+// depListHints the guidance the list closes with.
+const (
+	depListHeader = "| Name | Version | Package Manager | Vulns | Licenses | Malware |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n"
+	depListHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use `gitlab_create_dependency_list_export` to export the whole list as a CycloneDX SBOM\n"
+)
+
 // TestFormatListMarkdown validates Markdown rendering for dependency lists,
-// covering empty lists, single items, and multiple items with vulnerabilities/licenses.
+// covering empty lists, single items, multiple items with
+// vulnerabilities/licenses, and the three answers the malware column carries.
+//
+// Every case pins the whole response: the heading, the table, the pagination
+// footer and the guidance are one document, and a substring assertion cannot
+// see a row that landed outside the table it belongs to.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    ListOutput
-		contains []string
-		excludes []string
+		name  string
+		input ListOutput
+		want  string
 	}{
 		{
 			name:  "renders empty list",
 			input: ListOutput{},
-			contains: []string{
-				"## Project Dependencies",
-				"No dependencies found.",
-			},
-			excludes: []string{"| Name |"},
+			want:  "No dependencies found.\n",
 		},
 		{
 			name: "renders single dependency without vulns or licenses",
@@ -573,10 +582,8 @@ func TestFormatListMarkdown(t *testing.T) {
 					{Name: "lodash", Version: "4.17.21", PackageManager: "npm", DependencyFilePath: "package-lock.json"},
 				},
 			},
-			contains: []string{
-				"| Name | Version | Package Manager | Vulns | Licenses |",
-				"| lodash | 4.17.21 | npm | 0 | 0 |",
-			},
+			want: "## Project Dependencies (1)\n\n" + depListHeader +
+				"| lodash | 4.17.21 | npm | 0 | 0 | - |\n" + depListHints,
 		},
 		{
 			name: "renders dependency with vulnerabilities and licenses",
@@ -587,40 +594,44 @@ func TestFormatListMarkdown(t *testing.T) {
 						DependencyFilePath: "Gemfile.lock",
 						Vulnerabilities:    []VulnerabilityOutput{{Name: "CVE-1", Severity: "high", ID: 1}},
 						Licenses:           []LicenseOutput{{Name: "MIT", URL: "https://mit.example.com"}},
+						Malware:            new(false),
 					},
 				},
 			},
-			contains: []string{
-				"| rails | 7.0.4 | bundler | 1 | 1 |",
-			},
+			want: "## Project Dependencies (1)\n\n" + depListHeader +
+				"| rails | 7.0.4 | bundler | 1 | 1 | " + toolutil.EmojiSuccess + " clear |\n" + depListHints,
 		},
 		{
-			name: "renders multiple dependencies",
+			name: "renders a malware detection with the warning sign, never a tick",
+			input: ListOutput{
+				Dependencies: []Output{
+					{Name: "evil", Version: "1.0.0", PackageManager: "npm", Malware: new(true)},
+				},
+			},
+			want: "## Project Dependencies (1)\n\n" + depListHeader +
+				"| evil | 1.0.0 | npm | 0 | 0 | " + toolutil.EmojiWarning + " detected |\n" + depListHints,
+		},
+		{
+			name: "renders multiple dependencies with the total GitLab sent",
 			input: ListOutput{
 				Dependencies: []Output{
 					{Name: "react", Version: "18.2.0", PackageManager: "npm"},
 					{Name: "vue", Version: "3.3.0", PackageManager: "npm"},
 				},
+				Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 2, TotalItems: 45, TotalPages: 23, HasMore: true, NextPage: 2},
 			},
-			contains: []string{
-				"| react |",
-				"| vue |",
-			},
+			want: "## Project Dependencies (45)\n\n" +
+				"Showing 2 of 45 results (page 1 of 23)\n\n" + depListHeader +
+				"| react | 18.2.0 | npm | 0 | 0 | - |\n" +
+				"| vue | 3.3.0 | npm | 0 | 0 | - |\n" +
+				"\nPage 1 of 23 | 45 items total | 2 per page\n" + depListHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatListMarkdown(tt.input)
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("output missing %q\ngot:\n%s", s, got)
-				}
-			}
-			for _, s := range tt.excludes {
-				if strings.Contains(got, s) {
-					t.Errorf("output should not contain %q\ngot:\n%s", s, got)
-				}
+			if got := FormatListMarkdown(tt.input); got != tt.want {
+				t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, tt.want)
 			}
 		})
 	}
@@ -630,52 +641,46 @@ func TestFormatListMarkdown(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatExportMarkdown(t *testing.T) {
+	const (
+		heading = "## Dependency List Export\n\n"
+		hints   = "\n---\n💡 **Next steps:**\n" +
+			"- Use `gitlab_download_dependency_list_export` once the export has finished\n"
+	)
 	tests := []struct {
-		name     string
-		input    ExportOutput
-		contains []string
-		excludes []string
+		name  string
+		input ExportOutput
+		want  string
 	}{
 		{
 			name:  "renders finished export with download URL",
 			input: ExportOutput{ID: 1, HasFinished: true, Self: "https://example.com/self", Download: "https://example.com/download"},
-			contains: []string{
-				"## Dependency List Export",
-				"| ID | 1 |",
-				"| Self | https://example.com/self |",
-				"| Download | https://example.com/download |",
-			},
+			want: heading +
+				"- **ID**: 1\n" +
+				"- **Finished**: " + toolutil.BoolEmoji(true) + "\n" +
+				"- **Self**: https://example.com/self\n" +
+				"- **Download**: https://example.com/download\n" + hints,
 		},
 		{
 			name:  "renders unfinished export without download URL",
 			input: ExportOutput{ID: 2, HasFinished: false, Self: "https://example.com/self"},
-			contains: []string{
-				"| ID | 2 |",
-			},
-			excludes: []string{"| Download |"},
+			want: heading +
+				"- **ID**: 2\n" +
+				"- **Finished**: " + toolutil.BoolEmoji(false) + "\n" +
+				"- **Self**: https://example.com/self\n" + hints,
 		},
 		{
 			name:  "renders export without self or download URLs",
 			input: ExportOutput{ID: 3, HasFinished: false},
-			excludes: []string{
-				"| Self |",
-				"| Download |",
-			},
+			want: heading +
+				"- **ID**: 3\n" +
+				"- **Finished**: " + toolutil.BoolEmoji(false) + "\n" + hints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatExportMarkdown(tt.input)
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("output missing %q\ngot:\n%s", s, got)
-				}
-			}
-			for _, s := range tt.excludes {
-				if strings.Contains(got, s) {
-					t.Errorf("output should not contain %q\ngot:\n%s", s, got)
-				}
+			if got := FormatExportMarkdown(tt.input); got != tt.want {
+				t.Errorf("FormatExportMarkdown() =\n%q\nwant:\n%q", got, tt.want)
 			}
 		})
 	}
@@ -686,37 +691,28 @@ func TestFormatExportMarkdown(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatDownloadMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    DownloadOutput
-		contains []string
+		name  string
+		input DownloadOutput
+		want  string
 	}{
 		{
 			name:  "renders SBOM content in JSON code block",
 			input: DownloadOutput{Content: `{"bomFormat":"CycloneDX"}`},
-			contains: []string{
-				"## Dependency List Export (CycloneDX SBOM)",
-				"```json",
-				`{"bomFormat":"CycloneDX"}`,
-				"```",
-			},
+			want: "## Dependency List Export (CycloneDX SBOM)\n\n" +
+				"```json\n" + `{"bomFormat":"CycloneDX"}` + "\n```\n",
 		},
 		{
-			name:  "renders empty content",
+			name:  "an export with no content says so rather than opening an empty fence",
 			input: DownloadOutput{Content: ""},
-			contains: []string{
-				"```json",
-				"```",
-			},
+			want: "## Dependency List Export (CycloneDX SBOM)\n\n" +
+				"GitLab returned no SBOM content for this export.\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatDownloadMarkdown(tt.input)
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("output missing %q\ngot:\n%s", s, got)
-				}
+			if got := FormatDownloadMarkdown(tt.input); got != tt.want {
+				t.Errorf("FormatDownloadMarkdown() =\n%q\nwant:\n%q", got, tt.want)
 			}
 		})
 	}

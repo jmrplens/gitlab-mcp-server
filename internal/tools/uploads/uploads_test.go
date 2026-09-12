@@ -696,44 +696,57 @@ func TestProjectUploadDelete_Success(t *testing.T) {
 	}
 }
 
-// TestFormatUploadMarkdown verifies the Markdown output includes alt, URL,
-// full_url, and markdown fields.
+// uploadCardHints is the guidance an upload card closes with.
+const uploadCardHints = "\n---\n💡 **Next steps:**\n- " + uploadHint + "\n"
+
+// TestFormatUploadMarkdown verifies the whole card: the relative reference is
+// labeled Path, the absolute one is the linked URL row, and the Markdown
+// snippet is a code span sized to its content.
 func TestFormatUploadMarkdown(t *testing.T) {
 	out := UploadOutput{
+		ID:       12,
 		Alt:      "screenshot.png",
 		URL:      "/uploads/a1b2/screenshot.png",
 		FullURL:  "https://gitlab.example.com/uploads/a1b2/screenshot.png",
 		Markdown: "![screenshot.png](/uploads/a1b2/screenshot.png)",
 	}
-	md := FormatUploadMarkdown(out)
-	if !strings.Contains(md, "## File Uploaded") {
-		t.Error("expected header in markdown")
-	}
-	if !strings.Contains(md, "screenshot.png") {
-		t.Error("expected alt in markdown")
-	}
-	if !strings.Contains(md, "- **URL**: [") {
-		t.Error("expected full URL in markdown")
-	}
-	if !strings.Contains(md, "Markdown") {
-		t.Error("expected markdown field")
+	got := FormatUploadMarkdown(out)
+	want := "## File Uploaded\n\n" +
+		"- **ID**: 12\n" +
+		"- **Alt**: screenshot.png\n" +
+		"- **Path**: /uploads/a1b2/screenshot.png\n" +
+		"- **URL**: [https://gitlab.example.com/uploads/a1b2/screenshot.png](https://gitlab.example.com/uploads/a1b2/screenshot.png)\n" +
+		"- **Markdown**: `![screenshot.png](/uploads/a1b2/screenshot.png)`\n" +
+		uploadCardHints
+	if got != want {
+		t.Errorf("FormatUploadMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatUploadMarkdown_NoFullURL verifies the output omits Full URL when empty.
+// TestFormatUploadMarkdown_NoFullURL verifies the output omits the URL row
+// when GitLab sent no absolute address, and the ID row when it sent none:
+// the card shows what GitLab sent and never a label with nothing after it.
 func TestFormatUploadMarkdown_NoFullURL(t *testing.T) {
 	out := UploadOutput{
 		Alt:      "file.txt",
 		URL:      "/uploads/a1b2/file.txt",
 		Markdown: "![file.txt](/uploads/a1b2/file.txt)",
 	}
-	md := FormatUploadMarkdown(out)
-	if strings.Contains(md, "Full URL") {
-		t.Error("should not contain Full URL when empty")
+	got := FormatUploadMarkdown(out)
+	want := "## File Uploaded\n\n" +
+		"- **Alt**: file.txt\n" +
+		"- **Path**: /uploads/a1b2/file.txt\n" +
+		"- **Markdown**: `![file.txt](/uploads/a1b2/file.txt)`\n" +
+		uploadCardHints
+	if got != want {
+		t.Errorf("FormatUploadMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestUploadToolResult_Image verifies that image files get an inline embed.
+// TestUploadToolResult_Image verifies that an image upload carries the inline
+// embed between the rows and the guidance, that the guidance still closes the
+// response so ExtractHints can read it, and that the block states the
+// audience the embed implies.
 func TestUploadToolResult_Image(t *testing.T) {
 	out := UploadOutput{
 		Alt:      "screenshot.png",
@@ -742,19 +755,33 @@ func TestUploadToolResult_Image(t *testing.T) {
 		Markdown: "![screenshot.png](/uploads/a1b2/screenshot.png)",
 	}
 	result := UploadToolResult(out)
-	if result == nil || len(result.Content) == 0 {
-		t.Fatal("expected non-empty result")
+	if result == nil || len(result.Content) != 1 {
+		t.Fatalf("UploadToolResult() = %#v, want one content block", result)
 	}
 	tc, ok := result.Content[0].(*mcp.TextContent)
 	if !ok {
-		t.Fatal("expected TextContent")
+		t.Fatalf("content block is %T, want *mcp.TextContent", result.Content[0])
 	}
-	if !strings.Contains(tc.Text, "![screenshot.png]") {
-		t.Error("expected inline image embed for image file")
+	want := "## File Uploaded\n\n" +
+		"- **Alt**: screenshot.png\n" +
+		"- **Path**: /uploads/a1b2/screenshot.png\n" +
+		"- **URL**: [https://gitlab.example.com/uploads/a1b2/screenshot.png](https://gitlab.example.com/uploads/a1b2/screenshot.png)\n" +
+		"- **Markdown**: `![screenshot.png](/uploads/a1b2/screenshot.png)`\n\n" +
+		"![screenshot.png](https://gitlab.example.com/uploads/a1b2/screenshot.png)\n" +
+		uploadCardHints
+	if tc.Text != want {
+		t.Errorf("UploadToolResult() text =\n%q\nwant:\n%q", tc.Text, want)
+	}
+	if tc.Annotations != toolutil.ContentUser {
+		t.Errorf("annotations = %#v, want toolutil.ContentUser", tc.Annotations)
+	}
+	if hints := toolutil.ExtractHints(tc.Text); len(hints) != 1 || hints[0] != uploadHint {
+		t.Errorf("ExtractHints() = %#v, want the upload hint", hints)
 	}
 }
 
-// TestUploadToolResult_NonImage verifies that non-image files don't get an inline embed.
+// TestUploadToolResult_NonImage verifies that a non-image upload carries no
+// embed and stays annotated for the assistant.
 func TestUploadToolResult_NonImage(t *testing.T) {
 	out := UploadOutput{
 		Alt:      "report.pdf",
@@ -763,16 +790,24 @@ func TestUploadToolResult_NonImage(t *testing.T) {
 		Markdown: "![report.pdf](/uploads/a1b2/report.pdf)",
 	}
 	result := UploadToolResult(out)
-	if result == nil || len(result.Content) == 0 {
-		t.Fatal("expected non-empty result")
+	if result == nil || len(result.Content) != 1 {
+		t.Fatalf("UploadToolResult() = %#v, want one content block", result)
 	}
 	tc, ok := result.Content[0].(*mcp.TextContent)
 	if !ok {
-		t.Fatal("expected TextContent")
+		t.Fatalf("content block is %T, want *mcp.TextContent", result.Content[0])
 	}
-	// The embed pattern adds ![alt](full_url) with the full URL, not the relative URL
-	if strings.Contains(tc.Text, "![report.pdf](https://") {
-		t.Error("non-image should not have inline image embed with full URL")
+	want := "## File Uploaded\n\n" +
+		"- **Alt**: report.pdf\n" +
+		"- **Path**: /uploads/a1b2/report.pdf\n" +
+		"- **URL**: [https://gitlab.example.com/uploads/a1b2/report.pdf](https://gitlab.example.com/uploads/a1b2/report.pdf)\n" +
+		"- **Markdown**: `![report.pdf](/uploads/a1b2/report.pdf)`\n" +
+		uploadCardHints
+	if tc.Text != want {
+		t.Errorf("UploadToolResult() text =\n%q\nwant:\n%q", tc.Text, want)
+	}
+	if tc.Annotations != toolutil.ContentAssistant {
+		t.Errorf("annotations = %#v, want toolutil.ContentAssistant", tc.Annotations)
 	}
 }
 
@@ -1065,22 +1100,25 @@ func TestList_KeysetPaginationParams(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the list formatter renders a header and
-// an explicit no-uploads line for an empty result set.
+// uploadListHints is the guidance the upload list closes with.
+const uploadListHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use `gitlab_project_upload_delete` with an ID from the table to remove one\n"
+
+// TestFormatListMarkdown_Empty verifies an empty list is the one sentence and
+// nothing else: no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "Project Markdown Uploads (0)") {
-		t.Errorf("missing header: %q", md)
-	}
-	if !strings.Contains(md, "No uploads found.") {
-		t.Errorf("missing empty marker: %q", md)
+	got := FormatListMarkdown(ListOutput{})
+	want := "No uploads found.\n"
+	if got != want {
+		t.Errorf("FormatListMarkdown() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Populated verifies the list formatter emits a table row
-// with the uploader label and a pagination/hints block.
+// TestFormatListMarkdown_Populated verifies the whole table: the guidance sits
+// after the rows rather than between the heading and the header row, where it
+// used to swallow the table entirely, and the date renders in the display form.
 func TestFormatListMarkdown_Populated(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Uploads: []ListItem{
 			{
 				ID: 1, Size: 1024, Filename: "a.png", CreatedAt: "2026-01-01",
@@ -1088,14 +1126,13 @@ func TestFormatListMarkdown_Populated(t *testing.T) {
 			},
 		},
 	})
-	if !strings.Contains(md, "Project Markdown Uploads (1)") {
-		t.Errorf("missing header: %q", md)
-	}
-	if !strings.Contains(md, "Admin User (@admin)") {
-		t.Errorf("missing uploader label: %q", md)
-	}
-	if !strings.Contains(md, "a.png") {
-		t.Errorf("missing filename: %q", md)
+	want := "## Project Markdown Uploads (1)\n\n" +
+		"| ID | Filename | Size (bytes) | Created | Uploaded By |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | a.png | 1024 | 1 Jan 2026 | Admin User (@admin) |\n" +
+		uploadListHints
+	if got != want {
+		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 

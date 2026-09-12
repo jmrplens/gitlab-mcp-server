@@ -2,72 +2,82 @@ package runnercontrollers
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown renders a runner controller as Markdown.
+// Canonical action IDs the hints name, the one form every surface resolves: a
+// controller action is projected under the runner domain.
+const (
+	actionControllerGet       = "runner.controller_get"
+	actionControllerList      = "runner.controller_list"
+	actionControllerUpdate    = "runner.controller_update"
+	actionControllerTokenList = "runner.controller_token_list"
+	actionControllerScopeList = "runner.controller_scope_list"
+)
+
+// writeController writes the fields every runner controller carries, so the
+// summary and the detail card cannot drift apart.
+func writeController(c *toolutil.Card, out Output) {
+	c.Int("ID", out.ID)
+	c.Text("Description", out.Description)
+	// A runner controller state, a typed enum client-go renders from GitLab's
+	// own fixed set.
+	c.Field("State", out.State)
+	c.Time("Created", out.CreatedAt)
+	c.Time("Updated", out.UpdatedAt)
+}
+
+// FormatOutputMarkdown renders one runner controller as the card of a single
+// object.
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Runner Controller #%d\n\n", out.ID)
-	toolutil.WriteDescription(&b, out.Description)
-	//gitlab:allow-unescaped out.State: a runner controller state, a typed enum client-go renders from GitLab's own fixed set.
-	fmt.Fprintf(&b, toolutil.FmtMdState, out.State)
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, "- **Created At**: %s\n", toolutil.FormatTime(out.CreatedAt))
-	}
-	if out.UpdatedAt != "" {
-		fmt.Fprintf(&b, "- **Updated At**: %s\n", toolutil.FormatTime(out.UpdatedAt))
-	}
-	toolutil.WriteHints(&b, "Use `gitlab_runner_controller_token_list` to manage authentication")
+	c := toolutil.NewCard(&b, fmt.Sprintf("Runner Controller #%d", out.ID))
+	writeController(c, out)
+	c.End(
+		toolutil.HintAction(actionControllerGet, "see this controller's full details"),
+		toolutil.HintAction(actionControllerTokenList, "manage the tokens it authenticates with"),
+	)
 	return b.String()
 }
 
-// FormatDetailsMarkdown renders detailed runner controller info as Markdown.
+// FormatDetailsMarkdown renders one runner controller in full: the same fields
+// with whether it is connected right now.
 func FormatDetailsMarkdown(out DetailsOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Runner Controller #%d: Details\n\n", out.ID)
-	toolutil.WriteDescription(&b, out.Description)
-	//gitlab:allow-unescaped out.State: a runner controller state, a typed enum client-go renders from GitLab's own fixed set.
-	fmt.Fprintf(&b, toolutil.FmtMdState, out.State)
-	fmt.Fprintf(&b, "- **Connected**: %t\n", out.Connected)
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, "- **Created At**: %s\n", toolutil.FormatTime(out.CreatedAt))
-	}
-	if out.UpdatedAt != "" {
-		fmt.Fprintf(&b, "- **Updated At**: %s\n", toolutil.FormatTime(out.UpdatedAt))
-	}
-	toolutil.WriteHints(&b, "Use `gitlab_runner_controller_scope_list` to view scopes")
+	c := toolutil.NewCard(&b, fmt.Sprintf("Runner Controller #%d: Details", out.ID))
+	writeController(c, out.Output)
+	c.Bool("Connected", out.Connected)
+	c.End(
+		toolutil.HintAction(actionControllerScopeList, "see the runners this controller is scoped to"),
+		toolutil.HintAction(actionControllerUpdate, "change its description or state"),
+	)
 	return b.String()
 }
 
-// FormatListMarkdown renders a list of runner controllers as Markdown.
+// FormatListMarkdown renders a page of runner controllers as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Controllers) == 0 {
-		return "No runner controllers found.\n"
+		return toolutil.EmptyMessage("runner controllers")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Runner Controllers (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Controllers), out.Pagination)
-	b.WriteString("| ID | Description | State | Created At |\n")
-	b.WriteString("| --- | --- | --- | --- |\n")
+	toolutil.WriteListHeading(&b, "Runner Controllers", len(out.Controllers), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Description", "State", "Created"))
 	for _, rc := range out.Controllers {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
-			//gitlab:allow-unescaped rc.State: a runner controller state, a typed enum client-go renders from GitLab's own fixed set.
-			//gitlab:allow-unescaped rc.CreatedAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
-			rc.ID, toolutil.EscapeMdTableCell(rc.Description), rc.State, rc.CreatedAt)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(rc.ID, 10),
+			toolutil.EscapeMdTableCell(rc.Description),
+			toolutil.EscapeMdTableCell(rc.State),
+			toolutil.FormatTime(rc.CreatedAt),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, "Use `gitlab_runner_controller_get` to view details of a specific controller")
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionControllerGet, "see one controller in full"),
+		toolutil.HintAction(actionControllerList, "page through the rest of the controllers"),
+	)
 	return b.String()
-}
-
-// FormatGetMarkdown formats Get output as an MCP tool result.
-func FormatGetMarkdown(out DetailsOutput) *mcp.CallToolResult {
-	return toolutil.ToolResultWithMarkdown(FormatDetailsMarkdown(out))
 }
 
 func init() {

@@ -2,153 +2,172 @@ package mrchanges
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown renders the list of file changes in a merge request.
+// diffBudgetBytes bounds how much patch text one changes result carries.
+//
+// The diffs used to be dropped entirely: the result named the files and never
+// showed a line of what changed, so a reviewer had to make a second call for
+// every file. They are shown now, in the order GitLab sent them, and a patch
+// that no longer fits is named in the note rather than silently omitted, so the
+// reader knows the rest is reachable through the raw diff rather than absent.
+const diffBudgetBytes = 60_000
+
+// changeStatus is the word a file's row shows: what happened to it, and for a
+// rename the path it came from.
+func changeStatus(d FileDiffOutput) string {
+	switch {
+	case d.NewFile:
+		return "added"
+	case d.DeletedFile:
+		return "deleted"
+	case d.RenamedFile:
+		// The old path is a repository path a committer chose, and git allows
+		// every byte but NUL and the separator inside a component.
+		return "renamed from " + toolutil.EscapeMdTableCell(d.OldPath)
+	default:
+		return "modified"
+	}
+}
+
+// writeChangeTable writes the file table of a set of diffs under the card's
+// own heading, or none when there are no files.
+func writeChangeTable(c *toolutil.Card, title string, diffs []FileDiffOutput) {
+	if len(diffs) == 0 {
+		return
+	}
+	t := c.Table(title, "File", "Status")
+	for _, d := range diffs {
+		t.Row(toolutil.EscapeMdTableCell(d.NewPath), changeStatus(d))
+	}
+}
+
+// writeDiffBodies writes each file's patch as a fenced block until the budget
+// is spent, and returns the files whose patch was left out. A patch is fenced
+// by [toolutil.Card.Fence], which sizes the fence past the longest backtick run
+// the patch holds, so a diff of a Markdown file cannot close it early.
+func writeDiffBodies(c *toolutil.Card, diffs []FileDiffOutput) []string {
+	budget := diffBudgetBytes
+	var elided []string
+	for _, d := range diffs {
+		if d.Diff == "" {
+			continue
+		}
+		if len(d.Diff) > budget {
+			elided = append(elided, d.NewPath)
+			continue
+		}
+		budget -= len(d.Diff)
+		c.Fence(d.NewPath, "diff", d.Diff)
+	}
+	return elided
+}
+
+// FormatOutputMarkdown renders the file changes of a merge request: the files
+// as a collection sharing columns, then each patch as a fenced block.
 func FormatOutputMarkdown(out Output) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## MR !%d Changes (%d files)\n\n", out.MRIID, len(out.Changes))
 	if len(out.Changes) == 0 {
-		b.WriteString("No file changes found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("file changes")
 	}
-	truncated := []string{}
-	b.WriteString("| File | Status |\n")
-	b.WriteString("| --- | --- |\n")
-	for _, c := range out.Changes {
-		status := "modified"
-		switch {
-		case c.NewFile:
-			status = "added"
-		case c.DeletedFile:
-			status = "deleted"
-		case c.RenamedFile:
-			// The old path is a repository path a committer chose, and git
-			// allows every byte but NUL and the separator inside a component.
-			status = "renamed from " + toolutil.EscapeMdTableCell(c.OldPath)
-		}
-		if c.Diff == "" && !c.DeletedFile {
-			// The hint lists the paths, and a path is a committer's choice
-			// like any other, so it is escaped where it joins the sentence.
-			truncated = append(truncated, toolutil.EscapeMdTableCell(c.NewPath))
-		}
-		fmt.Fprintf(&b, "| %s | %s |\n",
-			toolutil.EscapeMdTableCell(c.NewPath), status)
-	}
-	hints := []string{
-		"Use 'diff_versions_list' to list all diff versions of this MR",
-	}
-	if len(truncated) > 0 {
-		hints = append(hints,
-			fmt.Sprintf("Some file diffs are empty due to GitLab truncation (%s). Use 'diff_versions_list' to get version IDs, then 'diff_version_get' with a version_id to retrieve full diffs",
-				strings.Join(truncated, ", ")))
-	}
-	toolutil.WriteHints(&b, hints...)
-	return b.String()
-}
-
-// FormatDiffVersionsListMarkdown renders the list of diff versions as markdown.
-func FormatDiffVersionsListMarkdown(out DiffVersionsListOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## MR Diff Versions (%d)\n\n", len(out.DiffVersions))
-	toolutil.WriteListSummary(&b, len(out.DiffVersions), out.Pagination)
-	if len(out.DiffVersions) == 0 {
-		b.WriteString("No diff versions found.\n")
-		return b.String()
+	c := toolutil.NewCard(&b, fmt.Sprintf("MR !%d Changes", out.MRIID))
+	c.Int("Files", int64(len(out.Changes)))
+	c.Count("Truncated by GitLab", int64(len(out.TruncatedFiles)))
+	writeChangeTable(c, "Files", out.Changes)
+	elided := writeDiffBodies(c, out.Changes)
+	if len(elided) > 0 {
+		c.Note(fmt.Sprintf("%d of %d patches are not shown here: the response would be too large. Read them with action '%s'.", len(elided), len(out.Changes), actionRawDiffs))
 	}
-	b.WriteString("| ID | State | Head SHA | Base SHA | Created |\n")
-	b.WriteString("| --- | --- | --- | --- | --- |\n")
-	for _, v := range out.DiffVersions {
-		short := v.HeadCommitSHA
-		if len(short) > 8 {
-			short = short[:8]
-		}
-		baseSHA := v.BaseCommitSHA
-		if len(baseSHA) > 8 {
-			baseSHA = baseSHA[:8]
-		}
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
-			//gitlab:allow-unescaped v.State: a merge request diff state GitLab records, one of its own fixed set.
-			//gitlab:allow-unescaped short: the head commit SHA, hexadecimal digits git computed, truncated here.
-			//gitlab:allow-unescaped baseSHA: the base commit SHA, hexadecimal digits git computed, truncated here.
-			//gitlab:allow-unescaped v.CreatedAt: a timestamp this package formatted with time.Time.Format as RFC 3339.
-			v.ID, v.State, short, baseSHA, v.CreatedAt)
+	hints := []string{toolutil.HintAction(actionDiffVersionsList, "list every diff version of this merge request")}
+	if len(out.TruncatedFiles) > 0 {
+		// The paths themselves are in truncated_files: naming them here would
+		// put a committer's paths into the guidance section, and the structured
+		// field is where a caller reads them anyway.
+		hints = append(hints, fmt.Sprintf("GitLab truncated %d file diff(s); truncated_files names them. Use action '%s' with a version_id for the full patch", len(out.TruncatedFiles), actionDiffVersionGet))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, "Use action 'diff_version_get' with version ID for detailed diffs")
+	c.End(hints...)
 	return b.String()
 }
 
-// FormatDiffVersionGetMarkdown renders a single diff version detail as markdown.
+// FormatDiffVersionsListMarkdown renders the diff versions of a merge request
+// as a Markdown table.
+func FormatDiffVersionsListMarkdown(out DiffVersionsListOutput) string {
+	if len(out.DiffVersions) == 0 {
+		return toolutil.EmptyMessage("diff versions")
+	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "MR Diff Versions", len(out.DiffVersions), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "State", "Head SHA", "Base SHA", "Created"))
+	for _, v := range out.DiffVersions {
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(v.ID, 10),
+			toolutil.EscapeMdTableCell(v.State),
+			toolutil.MdCodeSpanCell(shortSHA(v.HeadCommitSHA)),
+			toolutil.MdCodeSpanCell(shortSHA(v.BaseCommitSHA)),
+			toolutil.FormatTime(v.CreatedAt),
+		))
+	}
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionDiffVersionGet, "read one version's commits and file diffs"),
+	)
+	return b.String()
+}
+
+// shortSHA abbreviates a commit SHA to the eight characters GitLab shows, and
+// leaves a shorter one alone.
+func shortSHA(sha string) string {
+	if len(sha) > 8 {
+		return sha[:8]
+	}
+	return sha
+}
+
+// FormatDiffVersionGetMarkdown renders one diff version as the card of one
+// object, with its commits and its file changes as nested collections.
 func FormatDiffVersionGetMarkdown(out DiffVersionOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Diff Version %d\n\n", out.ID)
-	//gitlab:allow-unescaped out.State: a merge request diff state GitLab records, one of its own fixed set.
-	fmt.Fprintf(&b, toolutil.FmtMdState, out.State)
-	//gitlab:allow-unescaped out.HeadCommitSHA: a commit SHA, hexadecimal digits git computed.
-	fmt.Fprintf(&b, "- **Head SHA**: %s\n", out.HeadCommitSHA)
-	//gitlab:allow-unescaped out.BaseCommitSHA: a commit SHA, hexadecimal digits git computed.
-	fmt.Fprintf(&b, "- **Base SHA**: %s\n", out.BaseCommitSHA)
-	//gitlab:allow-unescaped out.StartCommitSHA: a commit SHA, hexadecimal digits git computed.
-	fmt.Fprintf(&b, "- **Start SHA**: %s\n", out.StartCommitSHA)
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
-	}
-	if out.RealSize != "" {
-		//gitlab:allow-unescaped out.RealSize: GitLab's own count of the files in the diff, decimal digits with a trailing plus when the diff overflowed.
-		fmt.Fprintf(&b, "- **Real Size**: %s\n", out.RealSize)
-	}
-
+	c := toolutil.NewCard(&b, fmt.Sprintf("Diff Version %d", out.ID))
+	c.Int("ID", out.ID)
+	c.Field("State", out.State)
+	c.Code("Head SHA", out.HeadCommitSHA)
+	c.Code("Base SHA", out.BaseCommitSHA)
+	c.Code("Start SHA", out.StartCommitSHA)
+	c.Code("Patch ID SHA", out.PatchIDSHA)
+	c.Time("Created", out.CreatedAt)
+	c.Field("Real Size", out.RealSize)
 	if len(out.Commits) > 0 {
-		fmt.Fprintf(&b, "\n### Commits (%d)\n\n", len(out.Commits))
-		b.WriteString("| SHA | Author | Title |\n")
-		b.WriteString("| --- | --- | --- |\n")
-		for _, c := range out.Commits {
-			short := c.ShortID
-			if short == "" && len(c.ID) > 8 {
-				short = c.ID[:8]
+		t := c.Table(fmt.Sprintf("Commits (%d)", len(out.Commits)), "SHA", "Author", "Title")
+		for _, commit := range out.Commits {
+			short := commit.ShortID
+			if short == "" {
+				short = shortSHA(commit.ID)
 			}
-			//gitlab:allow-unescaped short: a commit SHA, hexadecimal digits git computed, truncated here.
-			fmt.Fprintf(&b, "| %s | %s | %s |\n",
-				short, toolutil.EscapeMdTableCell(c.AuthorName), toolutil.EscapeMdTableCell(c.Title))
+			t.Row(
+				toolutil.MdCodeSpanCell(short),
+				toolutil.EscapeMdTableCell(commit.AuthorName),
+				toolutil.EscapeMdTableCell(commit.Title),
+			)
 		}
 	}
-
-	if len(out.Diffs) > 0 {
-		fmt.Fprintf(&b, "\n### File Changes (%d)\n\n", len(out.Diffs))
-		b.WriteString("| File | Status |\n")
-		b.WriteString("| --- | --- |\n")
-		for _, d := range out.Diffs {
-			status := "modified"
-			switch {
-			case d.NewFile:
-				status = "added"
-			case d.DeletedFile:
-				status = "deleted"
-			case d.RenamedFile:
-				status = "renamed from " + toolutil.EscapeMdTableCell(d.OldPath)
-			}
-			fmt.Fprintf(&b, "| %s | %s |\n",
-				toolutil.EscapeMdTableCell(d.NewPath), status)
-		}
-	}
-	toolutil.WriteHints(&b, "Use 'diff_versions_list' to list all diff versions of this MR")
+	writeChangeTable(c, fmt.Sprintf("File Changes (%d)", len(out.Diffs)), out.Diffs)
+	c.End(toolutil.HintAction(actionDiffVersionsList, "list every diff version of this merge request"))
 	return b.String()
 }
 
-// FormatRawDiffsMarkdown renders the raw diff output as a fenced code block.
+// FormatRawDiffsMarkdown renders the raw patch of a merge request as one fenced
+// block.
 func FormatRawDiffsMarkdown(out RawDiffsOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## MR !%d Raw Diffs\n\n", out.MRIID)
 	if out.RawDiff == "" {
-		b.WriteString("No diffs found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("diffs")
 	}
-	b.WriteString(toolutil.MarkdownFencedBlock("diff", out.RawDiff))
-	toolutil.WriteHints(&b, "Use action 'changes_get' for file-level change summary")
+	var b strings.Builder
+	c := toolutil.NewCard(&b, fmt.Sprintf("MR !%d Raw Diffs", out.MRIID))
+	c.Fence("", "diff", out.RawDiff)
+	c.End(toolutil.HintAction(actionChangesGet, "see the file-by-file change summary"))
 	return b.String()
 }
 

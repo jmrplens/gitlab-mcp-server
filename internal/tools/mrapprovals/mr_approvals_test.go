@@ -1163,113 +1163,187 @@ func TestConfig_ToOutputNilEntries(t *testing.T) {
 // FormatStateMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatStateMarkdown_WithRules verifies FormatStateMarkdown when with rules.
+// stateHints is the guidance section an approval state card with rules closes
+// with, and stateEmptyHints the one it closes with when there are none.
+const (
+	stateHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'merge_request.approve' to approve this merge request\n" +
+		"- Use action 'merge_request.unapprove' to withdraw an approval\n"
+	stateEmptyHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'merge_request.approval_rules' to list the rules configured on this merge request\n" +
+		"- Use action 'merge_request.approval_rule_create' to add an approval rule\n"
+)
+
+// TestFormatStateMarkdown_WithRules verifies the whole rendering of an approval
+// state: the card's own rows, then the rules as a nested collection under an H3
+// of their own. The rows precede the table, which is what keeps every row a row
+// rather than a line of literal pipes below the table's last one.
 func TestFormatStateMarkdown_WithRules(t *testing.T) {
 	s := StateOutput{
 		ApprovalRulesOverwritten: true,
 		Rules: []StateRuleOutput{
-			{ID: 1, Name: "Security", RuleType: "regular", ApprovalsRequired: 2, Approved: true, ApprovedBy: []*BasicUserOutput{{Name: "Alice"}}},
-			{ID: 2, Name: "QA", RuleType: "code_owner", ApprovalsRequired: 1, Approved: false, ApprovedBy: nil},
+			{ID: 1, Name: "Security", RuleType: "regular", ApprovalsRequired: 2, Approved: true, ApprovedBy: []*BasicUserOutput{{Name: "Alice", Username: "alice"}}},
+			{ID: 2, Name: "QA", RuleType: "code_owner", ApprovalsRequired: 1},
 		},
 	}
-	md := FormatStateMarkdown(s)
-	assertContains(t, md, "## MR Approval State")
-	assertContains(t, md, "**Rules overwritten**: Yes")
-	assertContains(t, md, "| 1 |")
-	assertContains(t, md, "| 2 |")
-	assertContains(t, md, "✅")
-	assertContains(t, md, "❌")
-	assertContains(t, md, "Alice")
+	want := "## MR Approval State\n\n" +
+		"- **Rules overwritten**: ✅\n" +
+		"- **Rules**: 2\n\n" +
+		"### Rules\n\n" +
+		"| ID | Name | Type | Required | Approved | Approved By |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | Security | regular | 2 | ✅ | @alice |\n" +
+		"| 2 | QA | code_owner | 1 | ❌ |  |\n" + stateHints
+	if got := FormatStateMarkdown(s); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
 }
 
-// TestFormatStateMarkdown_Empty verifies FormatStateMarkdown when empty.
+// TestFormatStateMarkdown_Empty verifies the whole rendering when no rule is
+// configured: the card says so in one sentence and opens no empty table.
 func TestFormatStateMarkdown_Empty(t *testing.T) {
-	md := FormatStateMarkdown(StateOutput{})
-	assertContains(t, md, "**Rules overwritten**: No")
-	assertContains(t, md, "No approval rules configured.")
+	want := "## MR Approval State\n\n" +
+		"- **Rules overwritten**: ❌\n" +
+		"- **Rules**: 0\n\n" +
+		"No approval rules are configured for this merge request.\n" + stateEmptyHints
+	if got := FormatStateMarkdown(StateOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
 }
 
 // ---------------------------------------------------------------------------
 // FormatRulesMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatRulesMarkdown_WithRules verifies FormatRulesMarkdown when with rules.
+// rulesHints is the guidance section an approval rules listing closes with,
+// and rulesLinkedHints the same section for a listing whose approvers carry a
+// profile URL, which is the only link the table can hold.
+const (
+	rulesHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'merge_request.approval_rule_create' to add a rule\n" +
+		"- Use action 'merge_request.approval_rule_update' to change an existing rule\n" +
+		"- Use action 'merge_request.approval_rule_delete' to remove a rule\n"
+	rulesLinkedHints = "\n---\n💡 **Next steps:**\n" +
+		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- Use action 'merge_request.approval_rule_create' to add a rule\n" +
+		"- Use action 'merge_request.approval_rule_update' to change an existing rule\n" +
+		"- Use action 'merge_request.approval_rule_delete' to remove a rule\n"
+	rulesTableHead = "| ID | Name | Type | Required | Eligible |\n| --- | --- | --- | --- | --- |\n"
+)
+
+// TestFormatRulesMarkdown_WithRules verifies the whole rendering of an approval
+// rules listing. There is no Approved column: the three approval_rules routes
+// present an entity that does not expose it, and a column claiming one would
+// print false on every row. The instruction to keep the table's links is
+// absent because this table has none: nobody here carries a profile URL.
 func TestFormatRulesMarkdown_WithRules(t *testing.T) {
 	out := RulesOutput{
 		Rules: []RuleOutput{
-			{ID: 10, Name: "Team", RuleType: "regular", ApprovalsRequired: 1, EligibleApprovers: []*BasicUserOutput{{Name: "Eve"}, {Name: "Frank"}}},
+			{ID: 10, Name: "Team", RuleType: "regular", ApprovalsRequired: 1, EligibleApprovers: []*BasicUserOutput{{Name: "Eve", Username: "eve"}, {Name: "Frank"}}},
 		},
 	}
-	md := FormatRulesMarkdown(out)
-	assertContains(t, md, "## MR Approval Rules (1)")
-	assertContains(t, md, "| 10 |")
-	assertContains(t, md, "Eve, Frank")
-	// The approval_rules routes do not send approved, so the table does not
-	// claim one either.
-	assertNotContains(t, md, "Approved")
+	want := "## MR Approval Rules (1)\n\n" + rulesTableHead +
+		"| 10 | Team | regular | 1 | @eve, Frank |\n" + rulesHints
+	if got := FormatRulesMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
 }
 
-// TestFormatRulesMarkdown_Empty verifies FormatRulesMarkdown when empty.
+// TestFormatRulesMarkdown_LinkedApprovers verifies that a listing whose
+// approvers carry a profile URL links them and asks the model to keep the
+// links, which the one above must not do.
+func TestFormatRulesMarkdown_LinkedApprovers(t *testing.T) {
+	out := RulesOutput{
+		Rules: []RuleOutput{
+			{ID: 11, Name: "Leads", RuleType: "regular", ApprovalsRequired: 2, EligibleApprovers: []*BasicUserOutput{
+				{Name: "Eve", Username: "eve", WebURL: "https://gitlab.example.com/eve"},
+			}},
+		},
+	}
+	want := "## MR Approval Rules (1)\n\n" + rulesTableHead +
+		"| 11 | Leads | regular | 2 | [@eve](https://gitlab.example.com/eve) |\n" + rulesLinkedHints
+	if got := FormatRulesMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatRulesMarkdown_Empty verifies that a merge request with no approval
+// rule renders the one-sentence empty message and no heading counting zero.
 func TestFormatRulesMarkdown_Empty(t *testing.T) {
-	md := FormatRulesMarkdown(RulesOutput{})
-	assertContains(t, md, "## MR Approval Rules (0)")
-	assertContains(t, md, "No approval rules configured.")
+	want := "No approval rules found.\n"
+	if got := FormatRulesMarkdown(RulesOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
 }
 
 // ---------------------------------------------------------------------------
 // FormatConfigMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatConfigMarkdown_Full verifies FormatConfigMarkdown when full.
+// configHints is the guidance section the approvals card closes with.
+const configHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'merge_request.approve' to approve this merge request\n" +
+	"- Use action 'merge_request.unapprove' to withdraw your approval\n" +
+	"- Use action 'merge_request.approval_state' to see how many approvals are required and left\n" +
+	"- Use action 'merge_request.approval_rules' to see every configured rule\n"
+
+// TestFormatConfigMarkdown_Full verifies the whole rendering of the approvals
+// card: four rows and the guidance. The rows that used to print here read
+// fields GitLab does not answer with at this endpoint, so each printed a zero;
+// the count and the rules live on approval_state, which the hints point at.
 func TestFormatConfigMarkdown_Full(t *testing.T) {
 	c := ConfigOutput{
 		Approved:        true,
 		UserHasApproved: true,
 		UserCanApprove:  false,
-		ApprovedBy:      []*MergeRequestApproverUserOutput{{User: &BasicUserOutput{Name: "Alice"}}},
+		ApprovedBy:      []*MergeRequestApproverUserOutput{{User: &BasicUserOutput{Name: "Alice", Username: "alice"}}},
 	}
-	md := FormatConfigMarkdown(c)
-	assertContains(t, md, "## MR Approvals")
-	assertContains(t, md, "| Approved | true |")
-	assertContains(t, md, "| User Has Approved | true |")
-	assertContains(t, md, "| User Can Approve | false |")
-	assertContains(t, md, "**Approved by**: Alice")
-	// The rows that used to print here read fields GitLab does not answer with,
-	// so each printed a zero: the count and the rules live on approval_state.
-	assertNotContains(t, md, "Approvals Required")
-	assertNotContains(t, md, "Approvals Left")
-	assertNotContains(t, md, "Has Approval Rules")
-	assertNotContains(t, md, "Suggested approvers")
-	assertContains(t, md, "Use action 'approval_state'")
+	want := "## MR Approvals\n\n" +
+		"- **Approved**: ✅\n" +
+		"- **You have approved**: ✅\n" +
+		"- **You can approve**: ❌\n" +
+		"- **Approved By**: @alice\n" + configHints
+	if got := FormatConfigMarkdown(c); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
 }
 
-// TestFormatConfigMarkdown_Minimal verifies FormatConfigMarkdown when minimal.
+// TestFormatConfigMarkdown_Minimal verifies that a merge request nobody has
+// approved renders the three flags and no approver row at all.
 func TestFormatConfigMarkdown_Minimal(t *testing.T) {
-	md := FormatConfigMarkdown(ConfigOutput{})
-	assertContains(t, md, "| Approved | false |")
-	assertNotContains(t, md, "**Approved by**")
+	want := "## MR Approvals\n\n" +
+		"- **Approved**: ❌\n" +
+		"- **You have approved**: ❌\n" +
+		"- **You can approve**: ❌\n" + configHints
+	if got := FormatConfigMarkdown(ConfigOutput{}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
 }
 
-// TestFormatConfigMarkdown_ApprovedByWithDate verifies that FormatConfigMarkdown
-// includes the approval date in parentheses when ApprovedAt is non-empty.
+// TestFormatConfigMarkdown_ApprovedByWithDate verifies that the approver row
+// carries the moment each approval happened, in the display form every other
+// timestamp takes, and nothing at all for an approval GitLab dated nowhere.
 func TestFormatConfigMarkdown_ApprovedByWithDate(t *testing.T) {
 	c := ConfigOutput{
 		ApprovedBy: []*MergeRequestApproverUserOutput{
-			{User: &BasicUserOutput{Name: "Alice"}, ApprovedAt: "2026-03-15T14:00:00Z"},
-			{User: &BasicUserOutput{Name: "Bob"}, ApprovedAt: ""},
+			{User: &BasicUserOutput{Name: "Alice", Username: "alice"}, ApprovedAt: "2026-03-15T14:00:00Z"},
+			{User: &BasicUserOutput{Name: "Bob", Username: "bob"}, ApprovedAt: ""},
 		},
 	}
-	md := FormatConfigMarkdown(c)
-	assertContains(t, md, "Alice (2026-03-15T14:00:00Z)")
-	assertContains(t, md, "Bob")
-	if strings.Contains(md, "Bob (") {
-		t.Error("Bob should not have date parentheses")
+	want := "## MR Approvals\n\n" +
+		"- **Approved**: ❌\n" +
+		"- **You have approved**: ❌\n" +
+		"- **You can approve**: ❌\n" +
+		"- **Approved By**: @alice (15 Mar 2026 14:00 UTC), @bob\n" + configHints
+	if got := FormatConfigMarkdown(c); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
 // TestFormatConfigMarkdown_SkipsNilApprovers verifies the config Markdown
 // formatter skips approver entries with a nil user object while rendering the
-// remaining named approvers.
+// remaining named approvers, and falls back to the display name for a user
+// GitLab sent without a username.
 func TestFormatConfigMarkdown_SkipsNilApprovers(t *testing.T) {
 	c := ConfigOutput{
 		ApprovedBy: []*MergeRequestApproverUserOutput{
@@ -1278,37 +1352,62 @@ func TestFormatConfigMarkdown_SkipsNilApprovers(t *testing.T) {
 			{User: &BasicUserOutput{Name: "Carol"}},
 		},
 	}
-	md := FormatConfigMarkdown(c)
-	assertContains(t, md, "**Approved by**: Carol")
+	want := "## MR Approvals\n\n" +
+		"- **Approved**: ❌\n" +
+		"- **You have approved**: ❌\n" +
+		"- **You can approve**: ❌\n" +
+		"- **Approved By**: Carol\n" + configHints
+	if got := FormatConfigMarkdown(c); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
 }
 
 // ---------------------------------------------------------------------------
 // FormatRuleMarkdown tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatRuleMarkdown_Full verifies FormatRuleMarkdown when full.
+// ruleHints is the guidance section an approval rule card closes with.
+const ruleHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'merge_request.approval_rule_update' to modify this rule\n" +
+	"- Use action 'merge_request.approval_rule_delete' to remove this rule\n" +
+	"- Use action 'merge_request.merge' to merge once the rule is satisfied\n"
+
+// TestFormatRuleMarkdown_Full verifies the whole rendering of one approval
+// rule, including the two conditions the card never used to show: whether the
+// rule overrides the project's, and whether it names groups the caller cannot
+// see, which is why the eligible list can look shorter than it is.
 func TestFormatRuleMarkdown_Full(t *testing.T) {
 	r := RuleOutput{
-		ID:                1,
-		Name:              "Team Leads",
-		RuleType:          "regular",
-		ApprovalsRequired: 2,
-		EligibleApprovers: []*BasicUserOutput{{Name: "Alice"}, {Name: "Bob"}},
-		Users:             []*BasicUserOutput{{Name: "Alice"}},
-		Groups:            []*GroupOutput{{Name: "Leads"}},
+		ID:                   1,
+		Name:                 "Team Leads",
+		RuleType:             "regular",
+		ReportType:           "code_coverage",
+		Section:              "backend",
+		ApprovalsRequired:    2,
+		Overridden:           true,
+		ContainsHiddenGroups: true,
+		EligibleApprovers:    []*BasicUserOutput{{Name: "Alice", Username: "alice"}, {Name: "Bob", Username: "bob"}},
+		Users:                []*BasicUserOutput{{Name: "Alice", Username: "alice"}},
+		Groups:               []*GroupOutput{{Name: "Leads", FullPath: "acme/leads"}},
 	}
-	md := FormatRuleMarkdown(r)
-	assertContains(t, md, "## Approval Rule: Team Leads")
-	assertContains(t, md, "| ID | 1 |")
-	assertContains(t, md, "| Type | regular |")
-	assertContains(t, md, "| Approvals Required | 2 |")
-	assertNotContains(t, md, "| Approved |")
-	assertContains(t, md, "| Eligible | Alice, Bob |")
-	assertContains(t, md, "| Users | Alice |")
-	assertContains(t, md, "| Groups | Leads |")
+	want := "## Approval Rule: Team Leads\n\n" +
+		"- **ID**: 1\n" +
+		"- **Type**: regular\n" +
+		"- **Report Type**: code_coverage\n" +
+		"- **Section**: backend\n" +
+		"- **Approvals Required**: 2\n" +
+		"- **Overridden**: ✅\n" +
+		"- ⚠️ **Contains groups you cannot see**\n" +
+		"- **Eligible**: @alice, @bob\n" +
+		"- **Users**: @alice\n" +
+		"- **Groups**: acme/leads\n" + ruleHints
+	if got := FormatRuleMarkdown(r); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
 }
 
-// TestFormatRuleMarkdown_Minimal verifies FormatRuleMarkdown when minimal.
+// TestFormatRuleMarkdown_Minimal verifies that a rule GitLab sent nothing
+// optional for shows no label with nothing after it.
 func TestFormatRuleMarkdown_Minimal(t *testing.T) {
 	r := RuleOutput{
 		ID:                3,
@@ -1316,27 +1415,13 @@ func TestFormatRuleMarkdown_Minimal(t *testing.T) {
 		RuleType:          "any_approver",
 		ApprovalsRequired: 0,
 	}
-	md := FormatRuleMarkdown(r)
-	assertContains(t, md, "## Approval Rule: Basic")
-	assertNotContains(t, md, "| Approved |")
-	assertNotContains(t, md, "| Eligible |")
-	assertNotContains(t, md, "| Users |")
-	assertNotContains(t, md, "| Groups |")
-}
-
-// assertContains checks contains invariants for tests.
-func assertContains(t *testing.T, s, substr string) {
-	t.Helper()
-	if !strings.Contains(s, substr) {
-		t.Errorf("expected string to contain %q, got:\n%s", substr, s)
-	}
-}
-
-// assertNotContains checks not contains invariants for tests.
-func assertNotContains(t *testing.T, s, substr string) {
-	t.Helper()
-	if strings.Contains(s, substr) {
-		t.Errorf("expected string NOT to contain %q, got:\n%s", substr, s)
+	want := "## Approval Rule: Basic\n\n" +
+		"- **ID**: 3\n" +
+		"- **Type**: any_approver\n" +
+		"- **Approvals Required**: 0\n" +
+		"- **Overridden**: ❌\n" + ruleHints
+	if got := FormatRuleMarkdown(r); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 

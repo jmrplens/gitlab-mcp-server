@@ -174,28 +174,42 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// listHints is the guidance section every deployment merge request listing
+// closes with, written once so the whole-output expectations below name it
+// rather than repeating four lines each.
+const listHints = "\n---\n💡 **Next steps:**\n" +
+	"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+	"- Use action 'merge_request.get' to read one of these merge requests in full\n" +
+	"- Use action 'mr_review.changes_get' to see what one of them changed\n"
+
+// tableHead is the header and delimiter of the deployment merge request table.
+const tableHead = "| IID | Title | State | Author | Source -> Target |\n| --- | --- | --- | --- | --- |\n"
+
+// TestFormatListMarkdown_Empty verifies that a deployment with no merge
+// requests renders the one-sentence empty message and nothing else: no
+// heading counting zero and no table header above an empty body.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{})
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	got := FormatListMarkdownString(ListOutput{})
+	want := "No merge requests for this deployment found.\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_WithData verifies the ListMarkdown_WithData Markdown formatter for a representative list_withdata input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_WithData verifies the whole rendering of a one-row
+// listing: the heading, the shared merge request row shape (the IID carries
+// the link, the state carries its glyph, the author is a handle) and the
+// guidance section.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
 		MergeRequests: []Output{
 			{IID: 1, Title: "MR One", State: "merged", Author: &toolutil.BasicUserOutput{Username: "dev"}, SourceBranch: "feat", TargetBranch: "main"},
 		},
 	}
-	result := FormatListMarkdown(out)
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	want := "## Deployment Merge Requests (1)\n\n" + tableHead +
+		"| !1 | MR One | 🟣 merged | @dev | feat -> main |\n" + listHints
+	if got := FormatListMarkdownString(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -630,35 +644,13 @@ func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 3, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	result := FormatListMarkdown(out)
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-
-	text := result.Content[0].(*mcp.TextContent).Text
-
-	for _, want := range []string{
-		"## Deployment Merge Requests (3)",
-		"| IID |",
-		"|-----|",
-		"!10",
-		"!11",
-		"!12",
-		"Feature A",
-		"Fix B",
-		"Hotfix C",
-		"dev1",
-		"dev2",
-		"dev3",
-		"feat-a -> main",
-		"fix-b -> develop",
-		"hotfix-c -> main",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(text, want) {
-				t.Errorf("markdown missing %q:\n%s", want, text)
-			}
-		})
+	want := "## Deployment Merge Requests (3)\n\n" + tableHead +
+		"| !10 | Feature A | 🟣 merged | @dev1 | feat-a -> main |\n" +
+		"| !11 | Fix B | 🟢 opened | @dev2 | fix-b -> develop |\n" +
+		"| !12 | Hotfix C | 🔴 closed | @dev3 | hotfix-c -> main |\n" +
+		"\nPage 1 of 1 | 3 items total | 20 per page\n" + listHints
+	if got := FormatListMarkdownString(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -671,13 +663,10 @@ func TestFormatListMarkdown_SpecialCharacters(t *testing.T) {
 			{IID: 1, Title: "Title with | pipe", State: "merged", Author: &toolutil.BasicUserOutput{Username: "user"}, SourceBranch: "src", TargetBranch: "tgt"},
 		},
 	}
-	result := FormatListMarkdown(out)
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if strings.Contains(text, "| pipe |") {
-		t.Error("pipe character in title should be escaped")
+	want := "## Deployment Merge Requests (1)\n\n" + tableHead +
+		"| !1 | Title with &#124; pipe | 🟣 merged | @user | src -> tgt |\n" + listHints
+	if got := FormatListMarkdownString(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -689,12 +678,10 @@ func TestFormatListMarkdown_EmptyOutput(t *testing.T) {
 	if result == nil {
 		t.Fatal(errExpNonNilResult)
 	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "No merge requests found") {
-		t.Errorf("expected empty message, got:\n%s", text)
-	}
-	if strings.Contains(text, "| IID |") {
-		t.Error("should not contain table header when empty")
+	got := result.Content[0].(*mcp.TextContent).Text
+	want := "No merge requests for this deployment found.\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -702,13 +689,10 @@ func TestFormatListMarkdown_EmptyOutput(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_NilSlice(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "No merge requests found") {
-		t.Errorf("expected empty message for nil slice, got:\n%s", text)
+	got := FormatListMarkdownString(ListOutput{})
+	want := "No merge requests for this deployment found.\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -1079,15 +1063,13 @@ func TestToOutput_DiffRefs_EachShaAloneProducesTheObject(t *testing.T) {
 // than dereferencing nothing. GitLab omits the object on a merge request whose
 // author was deleted.
 func TestFormatListMarkdown_NoAuthor_LeavesTheColumnEmpty(t *testing.T) {
-	rendered := FormatListMarkdown(ListOutput{MergeRequests: []Output{{
+	got := FormatListMarkdownString(ListOutput{MergeRequests: []Output{{
 		IID: 10, Title: "Add feature X", State: "merged",
 		SourceBranch: "feature-x", TargetBranch: "main",
 	}}})
-	text := rendered.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "| !10 |") {
-		t.Fatalf("rendered markdown does not carry the row: %s", text)
-	}
-	if !strings.Contains(text, "|  | feature-x -> main |") {
-		t.Errorf("author column = not empty, want an empty cell; rendered: %s", text)
+	want := "## Deployment Merge Requests (1)\n\n" + tableHead +
+		"| !10 | Add feature X | 🟣 merged |  | feature-x -> main |\n" + listHints
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }

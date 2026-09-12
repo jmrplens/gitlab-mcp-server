@@ -2,6 +2,7 @@ package freezeperiods
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -9,26 +10,47 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical action IDs the hints name.
+const (
+	actionFreezeGet    = "environment.freeze_get"
+	actionFreezeList   = "environment.freeze_list"
+	actionFreezeCreate = "environment.freeze_create"
+	actionFreezeUpdate = "environment.freeze_update"
+	actionFreezeDelete = "environment.freeze_delete"
+)
+
 // FormatListMarkdown formats a list of freeze periods as Markdown.
 func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatListMarkdownString(out))
 }
 
-// FormatListMarkdownString renders freeze periods list as Markdown.
+// FormatListMarkdownString renders a page of freeze periods as a Markdown
+// table: a collection of objects that share columns.
+//
+// The heading counts the total GitLab reports rather than the page length, and
+// the pagination footer is written before the guidance section rather than
+// after the rows of the next block.
 func FormatListMarkdownString(out ListOutput) string {
 	if len(out.FreezePeriods) == 0 {
-		return "No freeze periods found.\n"
+		return toolutil.EmptyMessage("freeze periods")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Freeze Periods (%d)\n\n", len(out.FreezePeriods))
-	toolutil.WriteListSummary(&b, len(out.FreezePeriods), out.Pagination)
+	toolutil.WriteListHeading(&b, "Freeze Periods", len(out.FreezePeriods), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Start", "End", "Timezone"))
 	for _, fp := range out.FreezePeriods {
-		fmt.Fprintf(&b, "- **ID %d**: start=`%s` end=`%s` tz=%s\n", fp.ID,
-			toolutil.EscapeMdTableCell(fp.FreezeStart), toolutil.EscapeMdTableCell(fp.FreezeEnd),
-			toolutil.EscapeMdTableCell(fp.CronTimezone))
+		// A freeze window is two cron expressions and a timezone a maintainer
+		// types, and GitLab validates only that the cron parses.
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(fp.ID, 10),
+			toolutil.MdCodeSpanCell(fp.FreezeStart),
+			toolutil.MdCodeSpanCell(fp.FreezeEnd),
+			toolutil.EscapeMdTableCell(fp.CronTimezone),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, "Use `gitlab_get_freeze_period` to view details of a specific freeze period")
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionFreezeGet, "see one freeze period in full"),
+		toolutil.HintAction(actionFreezeCreate, "add a freeze window"),
+	)
 	return b.String()
 }
 
@@ -37,22 +59,23 @@ func FormatMarkdown(out Output) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatMarkdownString(out))
 }
 
-// FormatMarkdownString renders a single freeze period as Markdown.
+// FormatMarkdownString renders one freeze period as the card of a single
+// object.
 func FormatMarkdownString(out Output) string {
 	var b strings.Builder
-	b.WriteString("## Freeze Period\n\n")
-	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
-	// A freeze window is two cron expressions and a timezone a maintainer
-	// types, and GitLab validates only that the cron parses.
-	fmt.Fprintf(&b, "- **Start**: `%s`\n", toolutil.EscapeMdTableCell(out.FreezeStart))
-	fmt.Fprintf(&b, "- **End**: `%s`\n", toolutil.EscapeMdTableCell(out.FreezeEnd))
-	if out.CronTimezone != "" {
-		fmt.Fprintf(&b, "- **Timezone**: %s\n", toolutil.EscapeMdTableCell(out.CronTimezone))
-	}
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
-	}
-	toolutil.WriteHints(&b, "Use `gitlab_update_freeze_period` to modify this freeze period")
+	c := toolutil.NewCard(&b, fmt.Sprintf("Freeze Period #%d", out.ID))
+	c.Int("ID", out.ID)
+	// The two cron expressions and the timezone are a maintainer's own text.
+	c.Code("Start", out.FreezeStart)
+	c.Code("End", out.FreezeEnd)
+	c.Field("Timezone", out.CronTimezone)
+	c.Time("Created", out.CreatedAt)
+	c.Time("Updated", out.UpdatedAt)
+	c.End(
+		toolutil.HintAction(actionFreezeUpdate, "change this freeze window"),
+		toolutil.HintAction(actionFreezeDelete, "remove it"),
+		toolutil.HintAction(actionFreezeList, "see every freeze window of this project"),
+	)
 	return b.String()
 }
 

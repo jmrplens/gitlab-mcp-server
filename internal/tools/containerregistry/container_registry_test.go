@@ -438,10 +438,6 @@ const (
 	fmtExpectedProjectIDErr = "expected project_id required error, got %v"
 	// fmtExpectedRepoIDErr identifies the fmt expected repo ID err constant used by this package.
 	fmtExpectedRepoIDErr = "expected repository_id required error, got %v"
-	// fmtExpectedInMarkdown identifies the fmt expected in markdown constant used by this package.
-	fmtExpectedInMarkdown = "expected %q in markdown, got:\n%s"
-	// fmtExpectedEmptyMsg identifies the fmt expected empty msg constant used by this package.
-	fmtExpectedEmptyMsg = "expected empty message, got:\n%s"
 	// testMethodNotAllowed identifies the test method not allowed constant used by this package.
 	testMethodNotAllowed = "method not allowed"
 	// testProdPattern identifies the test prod pattern constant used by this package.
@@ -573,45 +569,50 @@ func TestConvertTag_NilCreatedAt(t *testing.T) {
 // FormatRepositoryMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatRepositoryMarkdown_Full verifies the RepositoryMarkdown_Full Markdown formatter for a representative repository_full input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// repositoryCardHints is the guidance a registry repository card closes with.
+const repositoryCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'registry_tag_list' to list tags in this repository\n" +
+	"- Use action 'registry_delete' to delete this repository\n"
+
+// TestFormatRepositoryMarkdown_Full verifies the whole card of a fully
+// populated registry repository. The ID row is what the audit found missing:
+// every follow-up action on a repository takes repository_id, and the card
+// that named the repository did not carry it.
 func TestFormatRepositoryMarkdown_Full(t *testing.T) {
 	out := RepositoryOutput{
 		ID: 100, Name: "img", Path: testCovRepoPath, ProjectID: 42,
 		Location: "loc", TagsCount: 3,
 		Status: "delete_scheduled", CreatedAt: "2026-01-15T10:00:00Z",
 	}
-	md := FormatRepositoryMarkdown(out)
-	for _, want := range []string{"Registry Repository: " + testCovRepoPath, "img", testCovRepoPath, "loc", "3", "delete_scheduled", "15 Jan 2026"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf(fmtExpectedInMarkdown, want, md)
-			}
-		})
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain numeric ID column")
-	}
-	if strings.Contains(md, "| Project ID |") {
-		t.Error("should not contain numeric Project ID column")
+	got := FormatRepositoryMarkdown(out)
+	want := "## Registry Repository: " + testCovRepoPath + "\n\n" +
+		"- **ID**: 100\n" +
+		"- **Name**: img\n" +
+		"- **Path**: " + testCovRepoPath + "\n" +
+		"- **Location**: loc\n" +
+		"- **Tags Count**: 3\n" +
+		"- **Status**: delete_scheduled\n" +
+		"- **Created At**: 15 Jan 2026 10:00 UTC\n" +
+		repositoryCardHints
+	if got != want {
+		t.Errorf("FormatRepositoryMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatRepositoryMarkdown_EmptyOptionalFields verifies the RepositoryMarkdown_EmptyOptionalFields Markdown formatter for a representative repository_emptyoptionalfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatRepositoryMarkdown_EmptyOptionalFields verifies the card omits
+// every row GitLab did not fill, the tag count included: the count is sent
+// only when the caller asked for it, so a zero is silence rather than a
+// repository with no tags.
 func TestFormatRepositoryMarkdown_EmptyOptionalFields(t *testing.T) {
 	out := RepositoryOutput{ID: 1, Name: "n", Path: "p", ProjectID: 1}
-	md := FormatRepositoryMarkdown(out)
-	if strings.Contains(md, "Status") {
-		t.Error("should not contain Status row when empty")
-	}
-	if strings.Contains(md, "Created At") {
-		t.Error("should not contain Created At row when empty")
-	}
-	if !strings.Contains(md, "Registry Repository: p") {
-		t.Errorf("expected heading with path, got:\n%s", md)
+	got := FormatRepositoryMarkdown(out)
+	want := "## Registry Repository: p\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: n\n" +
+		"- **Path**: p\n" +
+		repositoryCardHints
+	if got != want {
+		t.Errorf("FormatRepositoryMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -619,9 +620,9 @@ func TestFormatRepositoryMarkdown_EmptyOptionalFields(t *testing.T) {
 // FormatRepositoryListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatRepositoryListMarkdown_WithItems verifies the RepositoryListMarkdown_WithItems Markdown formatter for a representative repositorylist_withitems input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatRepositoryListMarkdown_WithItems verifies the whole table. The ID
+// column is the one every follow-up action needs, and a repository whose tag
+// count GitLab did not report shows a dash rather than a zero it never sent.
 func TestFormatRepositoryListMarkdown_WithItems(t *testing.T) {
 	out := RepositoryListOutput{
 		Repositories: []RepositoryOutput{
@@ -629,30 +630,26 @@ func TestFormatRepositoryListMarkdown_WithItems(t *testing.T) {
 			{ID: 2, Name: "b", Path: "x/b", TagsCount: 0},
 		},
 	}
-	md := FormatRepositoryListMarkdown(out)
-	if !strings.Contains(md, "Repositories (2)") {
-		t.Errorf("expected header with count 2, got:\n%s", md)
-	}
-	if strings.Contains(md, "| ID ") {
-		t.Error("should not contain numeric ID column in list")
-	}
-	for _, want := range []string{"| a |", "| x/a |", "| b |", "| x/b |"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf(fmtExpectedInMarkdown, want, md)
-			}
-		})
+	got := FormatRepositoryListMarkdown(out)
+	want := "## Registry Repositories (2)\n\n" +
+		"| ID | Name | Path | Tags Count |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 1 | a | x/a | 2 |\n" +
+		"| 2 | b | x/b | - |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'registry_get' with repository_id for full details\n"
+	if got != want {
+		t.Errorf("FormatRepositoryListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatRepositoryListMarkdown_Empty verifies the RepositoryListMarkdown_Empty Markdown formatter for a representative repositorylist_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatRepositoryListMarkdown_Empty verifies an empty list is the one
+// sentence and nothing else: no heading counting zero above it.
 func TestFormatRepositoryListMarkdown_Empty(t *testing.T) {
-	out := RepositoryListOutput{}
-	md := FormatRepositoryListMarkdown(out)
-	if !strings.Contains(md, "No registry repositories found") {
-		t.Errorf(fmtExpectedEmptyMsg, md)
+	got := FormatRepositoryListMarkdown(RepositoryListOutput{})
+	want := "No registry repositories found.\n"
+	if got != want {
+		t.Errorf("FormatRepositoryListMarkdown() = %q, want %q", got, want)
 	}
 }
 
@@ -660,39 +657,47 @@ func TestFormatRepositoryListMarkdown_Empty(t *testing.T) {
 // FormatTagMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatTagMarkdown_Full verifies the TagMarkdown_Full Markdown formatter for a representative tag_full input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// tagCardHints is the guidance a registry tag card closes with.
+const tagCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'registry_tag_delete' to remove this tag\n"
+
+// TestFormatTagMarkdown_Full verifies the whole card of a fully populated
+// tag, with the digest and revision as code spans and the size carrying its
+// unit.
 func TestFormatTagMarkdown_Full(t *testing.T) {
 	out := TagOutput{
 		Name: "v1.0", Path: "p", Location: "loc",
-		Digest: "sha256:abc", Revision: "rev1",
+		Digest: "sha256:abc", Revision: "rev1", ShortRevision: "rev",
 		TotalSize: 1024, CreatedAt: "2026-02-01T08:00:00Z",
 	}
-	md := FormatTagMarkdown(out)
-	for _, want := range []string{"v1.0", "sha256:abc", "rev1", "1024", "1 Feb 2026"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf(fmtExpectedInMarkdown, want, md)
-			}
-		})
+	got := FormatTagMarkdown(out)
+	want := "## Registry Tag: v1.0\n\n" +
+		"- **Name**: v1.0\n" +
+		"- **Path**: p\n" +
+		"- **Location**: loc\n" +
+		"- **Digest**: `sha256:abc`\n" +
+		"- **Revision**: `rev1`\n" +
+		"- **Short Revision**: `rev`\n" +
+		"- **Total Size**: 1024 bytes\n" +
+		"- **Created At**: 1 Feb 2026 08:00 UTC\n" +
+		tagCardHints
+	if got != want {
+		t.Errorf("FormatTagMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatTagMarkdown_EmptyOptionalFields verifies the TagMarkdown_EmptyOptionalFields Markdown formatter for a representative tag_emptyoptionalfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatTagMarkdown_EmptyOptionalFields verifies the card omits every row
+// GitLab did not fill.
 func TestFormatTagMarkdown_EmptyOptionalFields(t *testing.T) {
-	out := TagOutput{Name: "latest", Path: "p", Location: "loc"}
-	md := FormatTagMarkdown(out)
-	if strings.Contains(md, "Digest") {
-		t.Error("should not contain Digest row when empty")
-	}
-	if strings.Contains(md, "Revision") {
-		t.Error("should not contain Revision row when empty")
-	}
-	if strings.Contains(md, "Created At") {
-		t.Error("should not contain Created At row when empty")
+	got := FormatTagMarkdown(TagOutput{Name: "latest", Path: "p", Location: "loc"})
+	want := "## Registry Tag: latest\n\n" +
+		"- **Name**: latest\n" +
+		"- **Path**: p\n" +
+		"- **Location**: loc\n" +
+		"- **Total Size**: 0 bytes\n" +
+		tagCardHints
+	if got != want {
+		t.Errorf("FormatTagMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -700,9 +705,8 @@ func TestFormatTagMarkdown_EmptyOptionalFields(t *testing.T) {
 // FormatTagListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatTagListMarkdown_WithItems verifies the TagListMarkdown_WithItems Markdown formatter for a representative taglist_withitems input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatTagListMarkdown_WithItems verifies the whole table, whose size
+// column names its unit in the header rather than showing a bare number.
 func TestFormatTagListMarkdown_WithItems(t *testing.T) {
 	out := TagListOutput{
 		Tags: []TagOutput{
@@ -710,20 +714,27 @@ func TestFormatTagListMarkdown_WithItems(t *testing.T) {
 			{Name: "v2", Path: "p", TotalSize: 200},
 		},
 	}
-	md := FormatTagListMarkdown(out)
-	if !strings.Contains(md, "Tags (2)") {
-		t.Errorf("expected header with count 2, got:\n%s", md)
+	got := FormatTagListMarkdown(out)
+	want := "## Registry Tags (2)\n\n" +
+		"| Name | Path | Total Size (bytes) |\n" +
+		"| --- | --- | --- |\n" +
+		"| v1 | p | 100 |\n" +
+		"| v2 | p | 200 |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'registry_tag_get' with tag name for full details\n" +
+		"- Use action 'registry_tag_delete_bulk' to clean up old tags\n"
+	if got != want {
+		t.Errorf("FormatTagListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatTagListMarkdown_Empty verifies the TagListMarkdown_Empty Markdown formatter for a representative taglist_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatTagListMarkdown_Empty verifies an empty list is the one sentence
+// and nothing else.
 func TestFormatTagListMarkdown_Empty(t *testing.T) {
-	out := TagListOutput{}
-	md := FormatTagListMarkdown(out)
-	if !strings.Contains(md, "No registry tags found") {
-		t.Errorf(fmtExpectedEmptyMsg, md)
+	got := FormatTagListMarkdown(TagListOutput{})
+	want := "No registry tags found.\n"
+	if got != want {
+		t.Errorf("FormatTagListMarkdown() = %q, want %q", got, want)
 	}
 }
 
@@ -731,14 +742,13 @@ func TestFormatTagListMarkdown_Empty(t *testing.T) {
 // FormatProtectionRuleListMarkdown — empty case
 // ---------------------------------------------------------------------------.
 
-// TestFormatProtectionRuleListMarkdown_Empty verifies the ProtectionRuleListMarkdown_Empty Markdown formatter for a representative protectionrulelist_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatProtectionRuleListMarkdown_Empty verifies an empty list is the
+// one sentence and nothing else.
 func TestFormatProtectionRuleListMarkdown_Empty(t *testing.T) {
-	out := ProtectionRuleListOutput{}
-	md := FormatProtectionRuleListMarkdown(out)
-	if !strings.Contains(md, "No protection rules found") {
-		t.Errorf(fmtExpectedEmptyMsg, md)
+	got := FormatProtectionRuleListMarkdown(ProtectionRuleListOutput{})
+	want := "No protection rules found.\n"
+	if got != want {
+		t.Errorf("FormatProtectionRuleListMarkdown() = %q, want %q", got, want)
 	}
 }
 
@@ -1347,66 +1357,62 @@ func registrySpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]t
 // Additional formatter tests for TASK-053 improvements
 // ---------------------------------------------------------------------------.
 
-// TestFormatRepositoryMarkdown_FallbackToName verifies the RepositoryMarkdown_FallbackToName Markdown formatter for a representative repository_fallbacktoname input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatRepositoryMarkdown_FallbackToName verifies the heading falls back
+// to the repository's name when GitLab sent no path.
 func TestFormatRepositoryMarkdown_FallbackToName(t *testing.T) {
-	out := RepositoryOutput{ID: 1, Name: "my-img", Path: ""}
-	md := FormatRepositoryMarkdown(out)
-	if !strings.Contains(md, "Registry Repository: my-img") {
-		t.Errorf("expected heading with name fallback, got:\n%s", md)
+	got := FormatRepositoryMarkdown(RepositoryOutput{ID: 1, Name: "my-img", Path: ""})
+	want := "## Registry Repository: my-img\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: my-img\n" +
+		repositoryCardHints
+	if got != want {
+		t.Errorf("FormatRepositoryMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatProtectionRuleMarkdown_NoNumericIDs verifies the ProtectionRuleMarkdown_NoNumericIDs Markdown formatter for a representative protectionrule_nonumericids input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatProtectionRuleMarkdown_NoNumericIDs(t *testing.T) {
+// TestFormatProtectionRuleMarkdown_CarriesTheRuleID verifies the whole card of
+// a repository-path protection rule: the pattern in the heading and again as a
+// code span, and the rule id every follow-up action takes.
+func TestFormatProtectionRuleMarkdown_CarriesTheRuleID(t *testing.T) {
 	out := ProtectionRuleOutput{
 		ID: 77, ProjectID: 42,
 		RepositoryPathPattern:       testStagingPattern,
 		MinimumAccessLevelForPush:   "owner",
 		MinimumAccessLevelForDelete: "admin",
 	}
-	md := FormatProtectionRuleMarkdown(out)
-	if !strings.Contains(md, "Protection Rule: staging/*") {
-		t.Errorf("expected heading with pattern, got:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain numeric ID column")
-	}
-	if strings.Contains(md, "| Project ID |") {
-		t.Error("should not contain numeric Project ID column")
-	}
-	for _, want := range []string{testStagingPattern, "owner", "admin"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf(fmtExpectedInMarkdown, want, md)
-			}
-		})
+	got := FormatProtectionRuleMarkdown(out)
+	want := "## Protection Rule: " + testStagingPattern + "\n\n" +
+		"- **ID**: 77\n" +
+		"- **Repository Path Pattern**: `" + testStagingPattern + "`\n" +
+		"- **Min Access Level (Push)**: owner\n" +
+		"- **Min Access Level (Delete)**: admin\n" +
+		protectionRuleCardHints
+	if got != want {
+		t.Errorf("FormatProtectionRuleMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatProtectionRuleListMarkdown_NoNumericIDs verifies the ProtectionRuleListMarkdown_NoNumericIDs Markdown formatter for a representative protectionrulelist_nonumericids input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatProtectionRuleListMarkdown_NoNumericIDs(t *testing.T) {
+// TestFormatProtectionRuleListMarkdown_WithItems verifies the whole table. The
+// ID column is the one registry_rule_update and registry_rule_delete both
+// take, and a list that showed only patterns left a reader with no way to name
+// the rule it had just found.
+func TestFormatProtectionRuleListMarkdown_WithItems(t *testing.T) {
 	out := ProtectionRuleListOutput{
 		Rules: []ProtectionRuleOutput{
 			{ID: 1, RepositoryPathPattern: testProdPattern, MinimumAccessLevelForPush: "maintainer", MinimumAccessLevelForDelete: "admin"},
 			{ID: 2, RepositoryPathPattern: testStagingPattern, MinimumAccessLevelForPush: "owner", MinimumAccessLevelForDelete: "owner"},
 		},
 	}
-	md := FormatProtectionRuleListMarkdown(out)
-	if strings.Contains(md, "| ID ") {
-		t.Error("should not contain numeric ID column in list")
-	}
-	for _, want := range []string{testProdPattern, testStagingPattern, "maintainer", "owner"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf(fmtExpectedInMarkdown, want, md)
-			}
-		})
+	got := FormatProtectionRuleListMarkdown(out)
+	want := "## Protection Rules (2)\n\n" +
+		"| ID | Pattern | Min Push | Min Delete |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 1 | `" + testProdPattern + "` | maintainer | admin |\n" +
+		"| 2 | `" + testStagingPattern + "` | owner | owner |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'registry_rule_create' to add a new rule\n"
+	if got != want {
+		t.Errorf("FormatProtectionRuleListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 

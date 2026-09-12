@@ -424,85 +424,100 @@ func TestJobWait_ContextCanceledDuringPoll(t *testing.T) {
 	}
 }
 
-// TestFormatWaitMarkdown_Success verifies markdown rendering for a successfully completed job.
+// waitJobRows is the job the wait fixtures poll, rendered under the wait's own
+// H3. The job is embedded without its heading so the response carries one H2,
+// one guidance section and no card nested inside another.
+func waitJobRows(status string) string {
+	return "\n### Job Details\n\n" +
+		"- **Status**: " + status + "\n" +
+		"- **Allow Failure**: ❌\n" +
+		"- **Tag**: ❌\n" +
+		"- **URL**: [https://gitlab.example.com/-/jobs/100](https://gitlab.example.com/-/jobs/100)\n"
+}
+
+// TestFormatWaitMarkdown_Success checks the whole rendering of a wait that
+// ended well: the wait's own rows, the job under one H3, and no guidance
+// section, since a job that succeeded needs no next step.
 func TestFormatWaitMarkdown_Success(t *testing.T) {
-	md := FormatWaitMarkdown(WaitOutput{
+	want := "## ✅ Job #100: success\n\n" +
+		"- **Waited**: 30s\n" +
+		"- **Polls**: 3\n" +
+		"- **Final Status**: success\n" +
+		waitJobRows("✅ success")
+	got := FormatWaitMarkdown(WaitOutput{
 		Job:         Output{ID: 100, Name: "build", Status: "success", WebURL: "https://gitlab.example.com/-/jobs/100"},
 		WaitedFor:   "30s",
 		PollCount:   3,
 		FinalStatus: "success",
 	})
-	if !strings.Contains(md, "Job #100") {
-		t.Error("expected 'Job #100' in markdown")
-	}
-	if !strings.Contains(md, "success") {
-		t.Error("expected 'success' in markdown")
-	}
-	if !strings.Contains(md, "30s") {
-		t.Error("expected waited duration in markdown")
-	}
-	if !strings.Contains(md, "3 polls") {
-		t.Error("expected poll count in markdown")
-	}
-	if strings.Contains(md, "Timed Out") {
-		t.Error("should not contain 'Timed Out' for success")
+	if got != want {
+		t.Errorf("FormatWaitMarkdown(success)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatWaitMarkdown_Failed verifies markdown rendering for a failed job with hints.
+// TestFormatWaitMarkdown_Failed checks that a failed wait names the two
+// actions that follow it, by the canonical IDs every surface resolves.
 func TestFormatWaitMarkdown_Failed(t *testing.T) {
-	md := FormatWaitMarkdown(WaitOutput{
+	want := "## ❌ Job #100: failed\n\n" +
+		"- **Waited**: 45s\n" +
+		"- **Polls**: 5\n" +
+		"- **Final Status**: failed\n" +
+		waitJobRows("❌ failed") +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'job.trace' to read the log for the failure\n" +
+		"- Use action 'job.retry' to retry the job\n"
+	got := FormatWaitMarkdown(WaitOutput{
 		Job:         Output{ID: 100, Name: "build", Status: "failed", WebURL: "https://gitlab.example.com/-/jobs/100"},
 		WaitedFor:   "45s",
 		PollCount:   5,
 		FinalStatus: "failed",
 	})
-	if !strings.Contains(md, "Job #100") {
-		t.Error("expected 'Job #100' in markdown")
-	}
-	if !strings.Contains(md, "failed") {
-		t.Error("expected 'failed' in markdown")
-	}
-	if !strings.Contains(md, "gitlab_job") {
-		t.Error("expected hint about job trace in markdown for failed job")
+	if got != want {
+		t.Errorf("FormatWaitMarkdown(failed)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatWaitMarkdown_TimedOut verifies markdown rendering for a timed-out job wait.
+// TestFormatWaitMarkdown_TimedOut checks that a timeout is marked with the
+// warning sign rather than a tick — a tick on "Timed Out" reads as success —
+// and that the heading names the status the job is still in.
 func TestFormatWaitMarkdown_TimedOut(t *testing.T) {
-	md := FormatWaitMarkdown(WaitOutput{
+	want := "## ⏰ Job #100: Timed Out (current: running)\n\n" +
+		"- **Waited**: 300s\n" +
+		"- **Polls**: 30\n" +
+		"- **Final Status**: running\n" +
+		"- ⚠️ **Timed Out**\n" +
+		waitJobRows("🔵 running") +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'job.wait' to keep waiting for this job\n" +
+		"- Use action 'job.cancel' to abort it instead\n"
+	got := FormatWaitMarkdown(WaitOutput{
 		Job:         Output{ID: 100, Name: "build", Status: "running", WebURL: "https://gitlab.example.com/-/jobs/100"},
 		WaitedFor:   "300s",
 		PollCount:   30,
 		FinalStatus: "running",
 		TimedOut:    true,
 	})
-	if !strings.Contains(md, "Timed Out") {
-		t.Error("expected 'Timed Out' in markdown")
-	}
-	if !strings.Contains(md, "Job #100") {
-		t.Error("expected 'Job #100' in markdown")
-	}
-	if !strings.Contains(md, "gitlab_job_wait") {
-		t.Error("expected hint about calling wait again")
-	}
-	if !strings.Contains(md, "gitlab_job_cancel") {
-		t.Error("expected hint about cancel")
+	if got != want {
+		t.Errorf("FormatWaitMarkdown(timed out)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatWaitMarkdown_Canceled verifies markdown rendering for a canceled job.
+// TestFormatWaitMarkdown_Canceled checks a wait that ended on a cancellation:
+// the outcome is neither a success nor a failure, so it carries the stop glyph
+// and no hints.
 func TestFormatWaitMarkdown_Canceled(t *testing.T) {
-	md := FormatWaitMarkdown(WaitOutput{
+	want := "## 🚫 Job #100: canceled\n\n" +
+		"- **Waited**: 15s\n" +
+		"- **Polls**: 2\n" +
+		"- **Final Status**: canceled\n" +
+		waitJobRows("⛔ canceled")
+	got := FormatWaitMarkdown(WaitOutput{
 		Job:         Output{ID: 100, Name: "build", Status: "canceled", WebURL: "https://gitlab.example.com/-/jobs/100"},
 		WaitedFor:   "15s",
 		PollCount:   2,
 		FinalStatus: "canceled",
 	})
-	if !strings.Contains(md, "Job #100") {
-		t.Error("expected 'Job #100' in markdown")
-	}
-	if !strings.Contains(md, "canceled") {
-		t.Error("expected 'canceled' in markdown")
+	if got != want {
+		t.Errorf("FormatWaitMarkdown(canceled)\n got %q\nwant %q", got, want)
 	}
 }

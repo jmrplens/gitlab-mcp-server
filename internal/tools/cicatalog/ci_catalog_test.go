@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -683,9 +684,11 @@ func TestGet_NullOptionalFields(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No catalog resources found.") {
-		t.Error("expected empty message")
+	// The empty render used to open with a guidance section telling the reader
+	// to keep the links of a table that is not there.
+	const want = "No catalog resources found.\n"
+	if md := FormatListMarkdown(ListOutput{}); md != want {
+		t.Errorf("FormatListMarkdown(empty)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -696,6 +699,7 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 		Resources: []ResourceItem{
 			{
 				Name:                "go-pipeline",
+				FullPath:            "g/go-pipeline",
 				WebPath:             "/explore/catalog/g/go-pipeline",
 				StarCount:           42,
 				Last30DayUsageCount: 5,
@@ -704,14 +708,20 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 			},
 		},
 	})
-	if !strings.Contains(md, "go-pipeline") {
-		t.Error("expected resource name in output")
-	}
-	if !strings.Contains(md, "42") {
-		t.Error("expected star count in output")
-	}
-	if !strings.Contains(md, "2.1.0") {
-		t.Error("expected version in output")
+	// The name is not linked: GitLab answers with webPath, a path relative to
+	// the instance root, and a link built from it resolved against whatever
+	// base the reading client happened to have. The full path the get action
+	// takes is shown instead.
+	want := "## CI/CD Catalog Resources (1)\n\n" +
+		"| Name | Path | Description | Stars | Usage (30d) | Verification | Latest Version | Released |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| go-pipeline | `g/go-pipeline` |  | 42 | 5 |  | 2.1.0 | 15 Jun 2026 10:30 UTC |\n" +
+		"\nShowing 1 items | no more pages\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'ci_catalog.get' to see one resource with its components and inputs\n" +
+		"- Use action 'template.lint' to check a configuration that includes one\n"
+	if md != want {
+		t.Errorf("FormatListMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -742,65 +752,60 @@ func TestFormatGetMarkdown_WithComponents(t *testing.T) {
 			},
 		},
 	})
-	if !strings.Contains(md, "go-pipeline") {
-		t.Error("expected resource name")
-	}
-	if !strings.Contains(md, "`build`") {
-		t.Error("expected component name")
-	}
-	if !strings.Contains(md, "binary_name") {
-		t.Error("expected input name")
-	}
-	if !strings.Contains(md, "**yes**") {
-		t.Error("expected required marker")
-	}
-	if !strings.Contains(md, "2.1.0") {
-		t.Error("expected version in versions table")
+	want := "## Catalog Resource: go-pipeline\n\n" +
+		"- **ID**: `gid://gitlab/Ci::CatalogResource/1`\n" +
+		"- **Full Path**: `my-group/go-pipeline`\n" +
+		"- **Web Path**: `/explore/catalog/my-group/go-pipeline`\n" +
+		"\n### Components (Latest Version)\n\n" +
+		"#### build\n\n" +
+		"- **Description**: Build binary\n" +
+		"- **Include**: `gitlab.example.com/my-group/go-pipeline/build@2.1.0`\n" +
+		"\n| Input | Type | Required | Default | Description |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| `go_version` | string | ❌ | 1.22 |  |\n" +
+		"| `binary_name` | string | ✅ |  |  |\n" +
+		"\n### Released Versions\n\n" +
+		"| Version | Released | Components |\n" +
+		"| --- | --- | --- |\n" +
+		"| 2.1.0 | 15 Jun 2026 10:30 UTC | build |\n" +
+		catalogCardHints
+	if md != want {
+		t.Errorf("FormatGetMarkdown(components)\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestTruncate verifies the Truncate handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestTruncate(t *testing.T) {
+// catalogCardHints is the guidance section the catalog resource card closes
+// with.
+const catalogCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'template.lint' to check a configuration that includes this component\n" +
+	"- Use action 'ci_catalog.list' to browse the catalog for others\n"
+
+// TestTruncateRunes verifies the description cell's shortening. It counts
+// runes rather than bytes: cutting a UTF-8 sequence in half leaves a
+// replacement character in the middle of a description, and a description is
+// the one field of a catalog resource most likely to need more than one byte
+// per character.
+func TestTruncateRunes(t *testing.T) {
 	tests := []struct {
-		name   string
-		input  string
-		maxLen int
-		want   string
+		name     string
+		input    string
+		maxRunes int
+		want     string
 	}{
 		{"short", "hello", 10, "hello"},
 		{"exact", "hello", 5, "hello"},
 		{"long", "hello world this is long", 10, "hello w..."},
+		{"multibyte cut on a rune boundary", "añadir un paso de compilación", 10, "añadir ..."},
+		{"maxRunes below the ellipsis", "hello", 2, "he"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := truncate(tt.input, tt.maxLen)
+			got := truncateRunes(tt.input, tt.maxRunes)
 			if got != tt.want {
-				t.Errorf("truncate(%q, %d) = %q, want %q", tt.input, tt.maxLen, got, tt.want)
+				t.Errorf("truncateRunes(%q, %d) = %q, want %q", tt.input, tt.maxRunes, got, tt.want)
 			}
-		})
-	}
-}
-
-// TestFormatDate verifies the Date Markdown formatter for a representative date input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatDate(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{"empty", "", ""},
-		{"iso", "2026-06-15T10:30:00Z", "2026-06-15"},
-		{"short", "2026-06", "2026-06"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := formatDate(tt.input)
-			if got != tt.want {
-				t.Errorf("formatDate(%q) = %q, want %q", tt.input, got, tt.want)
+			if !utf8.ValidString(got) {
+				t.Errorf("truncateRunes(%q, %d) = %q, which is not valid UTF-8", tt.input, tt.maxRunes, got)
 			}
 		})
 	}
@@ -843,29 +848,19 @@ func TestFormatGetMarkdown_MinimalResource(t *testing.T) {
 			},
 		},
 	})
-	if !strings.Contains(md, "GITLAB_MAINTAINED") {
-		t.Error("expected Verification row")
-	}
-	if !strings.Contains(md, "go, ci") {
-		t.Error("expected Topics row")
-	}
-	if !strings.Contains(md, "| Archived | yes |") {
-		t.Error("expected Archived row")
-	}
-	if !strings.Contains(md, "### Description") {
-		t.Error("expected Description section for non-empty description")
-	}
-	if !strings.Contains(md, "Latest Release") {
-		t.Error("expected Latest Release row for non-empty LatestReleasedAt")
-	}
-	if !strings.Contains(md, "Latest Version") {
-		t.Error("expected Latest Version row for non-empty LatestVersionName")
-	}
-	if strings.Contains(md, "### Components") {
-		t.Error("expected no Components section for empty components")
-	}
-	if strings.Contains(md, "### Released Versions") {
-		t.Error("expected no Versions section for empty versions")
+	want := "## Catalog Resource: minimal 📦\n\n" +
+		"- **ID**: `gid://gitlab/Ci::CatalogResource/2`\n" +
+		"- **Full Path**: `group/minimal`\n" +
+		"- **Web Path**: `/explore/catalog/group/minimal`\n" +
+		"- **Verification**: GITLAB_MAINTAINED\n" +
+		"- **Topics**: go, ci\n" +
+		"- 📦 **Archived**\n" +
+		"- **Latest Release**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Latest Version**: 1.0.0\n" +
+		"- **Description**: A minimal catalog resource\n" +
+		catalogCardHints
+	if md != want {
+		t.Errorf("FormatGetMarkdown(minimal)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -891,17 +886,43 @@ func TestFormatGetMarkdown_ComponentWithoutInputs(t *testing.T) {
 			},
 		},
 	})
-	if !strings.Contains(md, "`simple`") {
-		t.Error("expected component name header")
+	want := "## Catalog Resource: no-inputs\n\n" +
+		"- **ID**: `gid://gitlab/Ci::CatalogResource/3`\n" +
+		"- **Full Path**: `group/no-inputs`\n" +
+		"- **Web Path**: `/explore/catalog/group/no-inputs`\n" +
+		"\n### Components (Latest Version)\n\n" +
+		"#### simple\n\n" +
+		"- **Description**: A component without any inputs\n" +
+		"- **Include**: `gitlab.example.com/group/no-inputs/simple@1.0.0`\n" +
+		catalogCardHints
+	if md != want {
+		t.Errorf("FormatGetMarkdown(component without inputs)\n got %q\nwant %q", md, want)
 	}
-	if !strings.Contains(md, "A component without any inputs") {
-		t.Error("expected component description")
-	}
-	if !strings.Contains(md, "**Include:** `gitlab.example.com/group/no-inputs/simple@1.0.0`") {
-		t.Error("expected include path")
-	}
-	if strings.Contains(md, "| Input |") {
-		t.Error("expected no Inputs table for component with empty Inputs")
+}
+
+// TestFormatGetMarkdown_DescriptionIsQuoted verifies that a multi-line
+// description a maintainer typed is quoted under its label rather than written
+// into the response as Markdown of its own: it used to be interpolated raw,
+// so a heading in it became a heading of the response.
+func TestFormatGetMarkdown_DescriptionIsQuoted(t *testing.T) {
+	md := FormatGetMarkdown(GetOutput{
+		Resource: ResourceDetail{
+			ResourceItem: ResourceItem{
+				Name:        "prose",
+				FullPath:    "group/prose",
+				Description: "First line\n\n## Injected heading",
+			},
+		},
+	})
+	want := "## Catalog Resource: prose\n\n" +
+		"- **Full Path**: `group/prose`\n" +
+		"- **Description**:\n" +
+		"  > First line\n" +
+		"  >\n" +
+		"  > ## Injected heading\n" +
+		catalogCardHints
+	if md != want {
+		t.Errorf("FormatGetMarkdown(prose)\n got %q\nwant %q", md, want)
 	}
 }
 

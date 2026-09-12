@@ -156,44 +156,80 @@ func TestFormatProject_ListMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatBranch_Markdown verifies that branch fields appear in Markdown output.
+// TestFormatBranch_Markdown pins the branch card as the reader sees it: the
+// flags as glyphs and the head commit as a nested object.
 func TestFormatBranch_Markdown(t *testing.T) {
-	br := branches.Output{Name: "feature-x", Protected: true, Default: false, Merged: false, Commit: &branches.CommitOutput{ID: "abc123"}}
-	md := branches.FormatOutputMarkdown(br)
+	got := branches.FormatOutputMarkdown(branches.Output{
+		Name: "feature-x", Protected: true, Commit: &branches.CommitOutput{ID: "abc123"},
+	})
 
-	if !strings.Contains(md, "## Branch: feature-x") {
-		t.Error(errMissingHeader)
-	}
-	if !strings.Contains(md, "**Protected**: true") {
-		t.Error("missing protected field")
-	}
-	if !strings.Contains(md, "**Commit**: abc123") {
-		t.Error("missing commit")
+	want := "## Branch: feature-x\n\n" +
+		"- **Protected**: ✅\n" +
+		"- **Default**: ❌\n" +
+		"- **Merged**: ❌\n" +
+		"- **You Can Push**: ❌\n" +
+		"- **Developers Can Push**: ❌\n" +
+		"- **Developers Can Merge**: ❌\n" +
+		"- **Commit**:\n" +
+		"  - **SHA**: `abc123`\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'merge_request.create' to open a merge request from this branch\n" +
+		"- Use action 'repository.commit_list' to see recent commits on this branch\n" +
+		"- Use action 'branch.delete' to remove the branch after merging\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatBranch_ListMarkdown verifies table rendering for branch lists.
+// TestFormatBranch_ListMarkdown pins the branch table row.
 func TestFormatBranch_ListMarkdown(t *testing.T) {
-	out := branches.ListOutput{
+	got := branches.FormatListMarkdown(branches.ListOutput{
 		Branches:   []branches.Output{{Name: "main", Protected: true, Default: true}},
 		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
-	}
-	md := branches.FormatListMarkdown(out)
-	if !strings.Contains(md, "| main | true | true |") {
-		t.Error("missing branch row")
+	})
+
+	want := "## Branches (1)\n\n" +
+		"| Name | Protected | Default | Merged |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| main | ✅ | ✅ | ❌ |\n" +
+		"\nPage 1 of 1 | 1 items total | 20 per page\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- Use action 'branch.get' to see one branch in full\n" +
+		"- Use action 'branch.create' to create a new branch\n" +
+		"- Use action 'branch.protect' to protect a branch\n"
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatProtected_BranchMarkdown verifies protected branch fields in Markdown.
+// TestFormatProtected_BranchMarkdown pins the protection card: the access
+// levels as the role names they stand for rather than the numbers GitLab
+// sends.
 func TestFormatProtected_BranchMarkdown(t *testing.T) {
-	pb := branches.ProtectedOutput{ID: 1, Name: "main", PushAccessLevels: []branches.BranchAccessDescriptionOutput{{AccessLevel: 40}}, MergeAccessLevels: []branches.BranchAccessDescriptionOutput{{AccessLevel: 30}}, AllowForcePush: false}
-	md := branches.FormatProtectedMarkdown(pb)
+	got := branches.FormatProtectedMarkdown(branches.ProtectedOutput{
+		ID:                1,
+		Name:              "main",
+		PushAccessLevels:  []branches.BranchAccessDescriptionOutput{{AccessLevel: 40}},
+		MergeAccessLevels: []branches.BranchAccessDescriptionOutput{{AccessLevel: 30}},
+	})
 
-	if !strings.Contains(md, "## Protected Branch: main") {
-		t.Error(errMissingHeader)
-	}
-	if !strings.Contains(md, "**Push Access Levels**: 40") {
-		t.Error("missing push level")
+	want := "## Protected Branch: main\n\n" +
+		"- **ID**: 1\n" +
+		"- **Push Access Levels**: Maintainer\n" +
+		"- **Merge Access Levels**: Developer\n" +
+		"- **Unprotect Access Levels**: -\n" +
+		"- **Allow Force Push**: ❌\n" +
+		"- **Code Owner Approval Required**: ❌\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'branch.get_protected' to fetch this protection again before updating it\n" +
+		"- Use action 'branch.update_protected' to change protection settings\n" +
+		"- Use action 'branch.unprotect' to remove branch protection\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -221,29 +257,54 @@ func TestFormatTag_Markdown(t *testing.T) {
 	}
 }
 
-// TestFormatTag_ListMarkdown verifies table rendering for tag lists.
+// TestFormatTag_ListMarkdown pins the tag table row. The commit column is the
+// commit the tag resolves to, and falls back to the tag object's own id where
+// GitLab sent no commit.
 func TestFormatTag_ListMarkdown(t *testing.T) {
-	out := tags.ListOutput{
+	got := tags.FormatListMarkdownString(tags.ListOutput{
 		Tags:       []tags.Output{{Name: "v1.0", Target: "abc", Protected: true}},
 		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
-	}
-	md := tags.FormatListMarkdownString(out)
-	if !strings.Contains(md, "| v1.0 | abc | true |") {
-		t.Error("missing tag row")
+	})
+
+	want := "## Tags (1)\n\n" +
+		"| Name | Commit | Protected |\n" +
+		"| --- | --- | --- |\n" +
+		"| v1.0 | `abc` | ✅ |\n" +
+		"\nPage 1 of 1 | 1 items total | 20 per page\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'tag.get' to see one tag in full\n" +
+		"- Use action 'tag.create' to create a new tag\n"
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatRelease_Markdown verifies that release fields and description
-// section appear in Markdown output.
+// TestFormatRelease_Markdown verifies the whole card a release renders as.
+// The release notes are a labeled quote under the fields rather than the
+// "### Description" section this used to assert: a one-line body stays on the
+// field's line, and a longer one is quoted under it, which is what the card
+// contract settled on for prose a person typed into GitLab.
 func TestFormatRelease_Markdown(t *testing.T) {
-	r := releases.Output{TagName: "v1.0", Name: "Version 1.0", Description: "Features", CreatedAt: testDate20260101, ReleasedAt: "2026-01-02"}
-	md := releases.FormatMarkdown(r)
+	got := releases.FormatMarkdown(releases.Output{
+		TagName: "v1.0", Name: "Version 1.0", Description: "Features",
+		CreatedAt: testDate20260101, ReleasedAt: "2026-01-02",
+	})
 
-	if !strings.Contains(md, "## Release: Version 1.0") {
-		t.Error(errMissingHeader)
-	}
-	if !strings.Contains(md, mdDescriptionHdr) {
-		t.Error("missing description section")
+	want := "## Release: Version 1.0\n\n" +
+		"- **Tag**: v1.0\n" +
+		"- **Created**: 1 Jan 2026\n" +
+		"- **Released**: 2 Jan 2026\n" +
+		"- **Description**: Features\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'release.link_list' to see the assets linked to this release\n" +
+		"- Use action 'release.link_create' to add a single asset link\n" +
+		"- Use action 'release.link_create_batch' to add several asset links in one call\n" +
+		"- Use action 'package.publish_and_link' to upload a binary and link it to this release\n" +
+		"- Use action 'release.update' to edit the release notes\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -297,7 +358,9 @@ func TestFormatMR_Markdown(t *testing.T) {
 	checks := []string{
 		"MR !15: Add feature", "opened",
 		"**Source**: feature", "**Target**: main",
-		mdDescriptionHdr, "Adds a feature",
+		// The description is a labeled row now rather than an H3 section:
+		// the card writes prose under its label, quoted when it spans lines.
+		"- **Description**: Adds a feature",
 		"@dev1", "enhancement", "@dev2", "@dev3",
 	}
 	for _, c := range checks {
@@ -318,10 +381,12 @@ func TestFormatMRMarkdownDraft_Conflicts(t *testing.T) {
 		WebURL: "https://gitlab.example.com/mr/99",
 	}
 	md := mergerequests.FormatMarkdown(mr)
-	if !strings.Contains(md, "Draft") {
+	if !strings.Contains(md, "**Draft merge request**") {
 		t.Error("missing draft indicator")
 	}
-	if !strings.Contains(md, "Conflicts") {
+	// A negative-polarity condition is marked with the warning sign rather
+	// than with the tick a true would otherwise take.
+	if !strings.Contains(md, "⚠️ **Has conflicts**") {
 		t.Error("missing conflict indicator")
 	}
 }
@@ -348,7 +413,7 @@ func TestFormatMR_ApproveMarkdown(t *testing.T) {
 	a := mergerequests.ApproveOutput{ApprovalsRequired: 2, ApprovedBy: 1, Approved: false}
 	md := mergerequests.FormatApproveMarkdown(a)
 
-	if !strings.Contains(md, "**Approved**: false") {
+	if !strings.Contains(md, "**Approved**: ❌") {
 		t.Error("missing approved field")
 	}
 	if !strings.Contains(md, "**Approvals Required**: 2") {
@@ -383,21 +448,35 @@ func TestFormatMR_NotesListMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatDiscussion_NoteMarkdown verifies discussion note fields in Markdown.
+// TestFormatDiscussion_NoteMarkdown verifies discussion note fields in
+// Markdown. A note nothing can resolve carries no resolution row at all: the
+// "**Resolved**: false" this replaced was printed on every note, resolvable or
+// not, which told a reader a thread was open that was never a thread.
 func TestFormatDiscussion_NoteMarkdown(t *testing.T) {
-	n := mrdiscussions.NoteOutput{ID: 5, Body: "Needs fix", Author: &toolutil.NoteUserOutput{Username: "reviewer"}, CreatedAt: testDate20260101, Resolved: false}
+	n := mrdiscussions.NoteOutput{ID: 5, Body: "Needs fix", Author: &toolutil.NoteUserOutput{Username: "reviewer"}, CreatedAt: testDate20260101}
 	md := mrdiscussions.FormatNoteMarkdown(n)
 
 	if !strings.Contains(md, "## Discussion Note #5") {
 		t.Error(errMissingHeader)
 	}
-	if !strings.Contains(md, "**Resolved**: false") {
-		t.Error("missing resolved field")
+	if strings.Contains(md, "Resolvable") {
+		t.Errorf("a note that is not resolvable carries a resolution row:\n%s", md)
 	}
+
+	t.Run("resolvable", func(t *testing.T) {
+		n.Resolvable = true
+		resolvable := mrdiscussions.FormatNoteMarkdown(n)
+		if !strings.Contains(resolvable, "**Resolvable**: unresolved") {
+			t.Errorf("missing resolution state:\n%s", resolvable)
+		}
+	})
 }
 
 // TestFormatMR_DiscussionMarkdown verifies that a discussion thread with
-// multiple notes renders each note as a sub-heading.
+// multiple notes renders each note as a list item naming its author and its ID,
+// with the body quoted underneath — the shape every discussion family shares.
+// The "### Note N (by author)" heading this replaced put a name in a heading
+// and the body at column zero, where it could add structure of its own.
 func TestFormatMR_DiscussionMarkdown(t *testing.T) {
 	d := mrdiscussions.Output{
 		ID:             "abc123",
@@ -412,11 +491,11 @@ func TestFormatMR_DiscussionMarkdown(t *testing.T) {
 	if !strings.Contains(md, "## Discussion abc123") {
 		t.Error(errMissingHeader)
 	}
-	if !strings.Contains(md, "### Note 1 (by dev1)") {
-		t.Error("missing first note")
+	if !strings.Contains(md, "- **@dev1** (, note 1):\n  > First note") {
+		t.Errorf("missing first note:\n%s", md)
 	}
-	if !strings.Contains(md, "### Note 2 (by dev2)") {
-		t.Error("missing second note")
+	if !strings.Contains(md, "- **@dev2** (, note 2):\n  > Reply") {
+		t.Errorf("missing second note:\n%s", md)
 	}
 }
 
@@ -445,8 +524,8 @@ func TestFormatMR_ChangesMarkdown(t *testing.T) {
 	}
 	md := mrchanges.FormatOutputMarkdown(out)
 
-	if !strings.Contains(md, "## MR !15 Changes (4 files)") {
-		t.Error(errMissingHeader)
+	if !strings.Contains(md, "## MR !15 Changes\n\n- **Files**: 4\n") {
+		t.Errorf("%s:\n%s", errMissingHeader, md)
 	}
 	if !strings.Contains(md, "| a.go | modified |") {
 		t.Error("missing modified file")
@@ -462,33 +541,50 @@ func TestFormatMR_ChangesMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatCommit_Markdown verifies that commit fields appear in Markdown.
+// TestFormatCommit_Markdown pins the commit card. The author's address is
+// written in parentheses rather than in angle brackets, which GFM turns into a
+// mailto autolink.
 func TestFormatCommit_Markdown(t *testing.T) {
-	c := commits.Output{
+	got := commits.FormatOutputMarkdown(commits.Output{
 		ID: "abc123full", ShortID: "abc123", Title: testTitleFixBug,
 		AuthorName: "Dev", AuthorEmail: "dev@example.com",
 		CommittedDate: testDate20260101, WebURL: "https://gitlab.example.com/commit/abc123",
-	}
-	md := commits.FormatOutputMarkdown(c)
+	})
 
-	if !strings.Contains(md, "## Commit abc123") {
-		t.Error(errMissingHeader)
-	}
-	if !strings.Contains(md, "**Author**: Dev <dev@example.com>") {
-		t.Error("missing author")
+	want := "## Commit abc123\n\n" +
+		"- **Title**: " + testTitleFixBug + "\n" +
+		"- **Author**: Dev (dev@example.com)\n" +
+		"- **Date**: 1 Jan 2026\n" +
+		"- **URL**: [https://gitlab.example.com/commit/abc123](https://gitlab.example.com/commit/abc123)\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_get' to see this commit's full details and stats\n" +
+		"- Use action 'repository.commit_diff' to see the file changes for this commit\n" +
+		"- Use action 'repository.commit_refs' to see the branches and tags containing it\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatFile_Markdown verifies that file metadata fields appear in Markdown.
+// TestFormatFile_Markdown pins the file card of a metadata-only read.
 func TestFormatFile_Markdown(t *testing.T) {
-	f := files.Output{FilePath: testFileSrcMainGo, Size: 1024, Ref: "main", Encoding: "base64", BlobID: "blob123"}
-	md := files.FormatOutputMarkdown(f)
+	got := files.FormatOutputMarkdown(files.Output{
+		FilePath: testFileSrcMainGo, Size: 1024, Ref: "main", Encoding: "base64", BlobID: "blob123",
+	})
 
-	if !strings.Contains(md, "## File: src/main.go") {
-		t.Error(errMissingHeader)
-	}
-	if !strings.Contains(md, "**Size**: 1024 bytes") {
-		t.Error("missing size")
+	want := "## File: src/main.go\n\n" +
+		"- **Size (bytes)**: 1024\n" +
+		"- **Ref**: main\n" +
+		"- **Encoding**: base64\n" +
+		"- **Blob ID**: `blob123`\n" +
+		"- **Executable**: ❌\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.file_update' to modify this file\n" +
+		"- Use action 'repository.file_blame' to see who changed each line\n" +
+		"- Use action 'repository.file_delete' to remove this file\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -782,7 +878,7 @@ func TestFormatPipeline_DetailMarkdown(t *testing.T) {
 		YamlErrors: "", User: &toolutil.BasicUserOutput{Username: "admin"}, WebURL: "https://gl.example.com/p/100",
 	}
 	md := pipelines.FormatDetailMarkdown(p)
-	checks := []string{"Pipeline #100", "success", "**Duration**: 120s", "**Coverage**: 85.5%", "**User**: admin"}
+	checks := []string{"Pipeline #100", "success", "**Duration**: 120s", "**Coverage**: 85.5%", "**User**: @admin"}
 	for _, c := range checks {
 		t.Run(c, func(t *testing.T) {
 			if !strings.Contains(md, c) {
@@ -887,22 +983,33 @@ func TestFormatCommit_ListMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatCommit_DetailMarkdown verifies commit detail fields including stats.
+// TestFormatCommit_DetailMarkdown pins the commit detail card, the message
+// quoted under its own label where it says more than the title.
 func TestFormatCommit_DetailMarkdown(t *testing.T) {
-	c := commits.DetailOutput{
+	got := commits.FormatDetailMarkdown(commits.DetailOutput{
 		ShortID: "abc1234", Title: "feat: add feature", Message: "feat: add feature\n\nDetailed description",
 		AuthorName: "dev", AuthorEmail: "dev@example.com", CommittedDate: testDate20260101,
 		ParentIDs: []string{"parent1", "parent2"}, WebURL: "https://gl.example.com/commit/abc",
 		Stats: &commits.CommitStatsOutput{Additions: 10, Deletions: 3, Total: 13},
-	}
-	md := commits.FormatDetailMarkdown(c)
-	checks := []string{"## Commit abc1234", "+10 -3", "parent1, parent2", "### Message"}
-	for _, ch := range checks {
-		t.Run(ch, func(t *testing.T) {
-			if !strings.Contains(md, ch) {
-				t.Errorf(fmtMissing, ch)
-			}
-		})
+	})
+
+	want := "## Commit abc1234\n\n" +
+		"- **Title**: feat: add feature\n" +
+		"- **Author**: dev (dev@example.com)\n" +
+		"- **Date**: 1 Jan 2026\n" +
+		"- **Parents**: `parent1, parent2`\n" +
+		"- **Stats**: +10 -3 (13 total)\n" +
+		"- **URL**: [https://gl.example.com/commit/abc](https://gl.example.com/commit/abc)\n" +
+		"- **Message**:\n" +
+		"  > feat: add feature\n" +
+		"  >\n" +
+		"  > Detailed description\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'repository.commit_diff' to view the file changes\n" +
+		"- Use action 'repository.commit_cherry_pick' to apply this commit to another branch\n"
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1212,7 +1319,9 @@ func TestFormatJob_TraceMarkdown(t *testing.T) {
 	t.Run("truncated trace", func(t *testing.T) {
 		tr := jobs.TraceOutput{JobID: 99, Trace: "big output", Truncated: true}
 		md := jobs.FormatTraceMarkdown(tr)
-		if !strings.Contains(md, "truncated") {
+		// The note names the end that is missing: the log is cut at the first
+		// 100 KB and a failure is almost always at the end of it.
+		if !strings.Contains(md, "Showing the first 100 KB of the log.") {
 			t.Error("missing truncation warning")
 		}
 	})
@@ -2468,24 +2577,39 @@ func mdGateLog(t *testing.T, title string, findings []mdGateFinding) {
 // TestMarkdownRegistry_EveryFormatter_KeepsTableBoundaries drives every
 // registered formatter and the renderers outside the registry through the
 // line model and reports what the client would render differently from what
-// the formatter wrote. It reports rather than fails, and asserts the one
-// thing that proves the gate works: the two files the audit proved broken,
-// mergetrains and iterationdata, are among what it reports.
+// the formatter wrote. It reports rather than fails, apart from the two
+// assertions that keep it honest.
+//
+// The first is that it still sees the class it exists for: iterationdata opens
+// a table and writes a list row into it, which ends the table with no body and
+// leaves every later row on the page as literal pipes, and it has not been
+// migrated yet.
+//
+// The second is the other half of the same proof, and is what the fixed
+// formatter is worth: mergetrains was the sibling the audit proved broken, the
+// card migration moved it onto [toolutil.Card], and nothing about it may be
+// reported again. An assertion that it is still broken would have to be
+// deleted by whoever fixed it, which is how a gate stops proving anything.
 func TestMarkdownRegistry_EveryFormatter_KeepsTableBoundaries(t *testing.T) {
 	report := mdGateScan(t)
 
 	mdGateLog(t, "structural scan", report.findings)
 	t.Logf("structural scan: %d case(s), %d render(s), %d silent render(s)", len(report.cases), report.rendered, report.silent)
-	for _, name := range []string{"mergetrains", "iterationdata"} {
-		t.Run(name+" is reported", func(t *testing.T) {
-			for _, f := range report.findings {
-				if f.kase.pkg == name {
-					return
-				}
+	t.Run("iterationdata is reported", func(t *testing.T) {
+		for _, f := range report.findings {
+			if f.kase.pkg == "iterationdata" {
+				return
 			}
-			t.Errorf("the gate reports nothing for %s, whose tables the audit proved broken, so the gate does not see the defect it exists for", name)
-		})
-	}
+		}
+		t.Error("the gate reports nothing for iterationdata, whose tables the audit proved broken, so the gate does not see the defect it exists for")
+	})
+	t.Run("mergetrains keeps its table boundaries", func(t *testing.T) {
+		for _, f := range report.findings {
+			if f.kase.pkg == "mergetrains" {
+				t.Errorf("mergetrains was migrated onto the card and is reported again: %s", f)
+			}
+		}
+	})
 	for _, f := range report.findings {
 		if f.rule == "P0" {
 			t.Errorf("%s", f)
@@ -2522,16 +2646,17 @@ func TestMarkdownRegistry_Exceptions_NameACaseEach(t *testing.T) {
 // by the migration. The audit knew of two; the record showed twelve, because
 // the shared note and discussion shapes are registered by every domain that
 // renders them and the first init to run wins for all of them, which is the
-// same defect as the runner token with more surfaces behind it. Eleven are
-// left: the one interface-typed registration, groupimportexport's dispatcher
-// over `any`, went with that package's card migration.
+// same defect as the runner token with more surfaces behind it. Ten are left:
+// the one interface-typed registration, groupimportexport's dispatcher over
+// `any`, went with that package's card migration, and the runner token went
+// with the runners migration, which gave the registration token an output
+// type of its own so the two secrets stopped sharing a formatter.
 func TestMarkdownRegistry_Registrations_HaveNoUndeclaredProblems(t *testing.T) {
 	got := toolutil.MarkdownRegistrationProblems()
 
 	want := []string{
 		"duplicate Markdown formatter for iterationdata.Output: the first registration is kept",
 		"duplicate Markdown formatter for labeldata.Output: the first registration is kept",
-		"duplicate Markdown formatter for runners.AuthTokenOutput: the first registration is kept",
 		"duplicate Markdown formatter for toolutil.DiscussionThreadNoteOutput: the first registration is kept",
 		"duplicate Markdown formatter for toolutil.DiscussionThreadNoteOutput: the first registration is kept",
 		"duplicate Markdown formatter for toolutil.DiscussionThreadNoteOutput: the first registration is kept",

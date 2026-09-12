@@ -1044,9 +1044,35 @@ func TestProtectedTagOutput_FromGLEmptyLevels(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdownString verifies FormatOutputMarkdownString.
+// The guidance sections the five tag formatters close with, pinned once so
+// each whole-output expectation names them rather than restating them.
+const (
+	tagCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'tag.delete' to remove this tag\n" +
+		"- Use action 'release.create' to create a release from this tag\n"
+
+	tagListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'tag.get' to see one tag in full\n" +
+		"- Use action 'tag.create' to create a new tag\n"
+
+	tagSignatureHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'tag.get' to see the tag this signature belongs to\n" +
+		"- Use action 'tag.list' to browse all tags\n"
+
+	protectedTagCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'tag.list_protected' to see all protected tags\n" +
+		"- Use action 'tag.unprotect' to remove tag protection\n"
+
+	protectedTagListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'tag.get_protected' to see one rule in full\n" +
+		"- Use action 'tag.protect' to add a new protected tag\n"
+)
+
+// TestFormatOutputMarkdownString pins the whole card of an annotated tag: the
+// tag object's own id, which differs from the commit's here, then the commit
+// as a nested object.
 func TestFormatOutputMarkdownString(t *testing.T) {
-	md := FormatOutputMarkdownString(Output{
+	got := FormatOutputMarkdownString(Output{
 		Name:      testTagV100,
 		Target:    "abc123",
 		Protected: true,
@@ -1055,65 +1081,127 @@ func TestFormatOutputMarkdownString(t *testing.T) {
 		Release:   &ReleaseNoteOutput{TagName: testTagV100, Description: "Initial release"},
 		CreatedAt: "2026-01-01T00:00:00Z",
 	})
-	if !strings.Contains(md, "## Tag: v1.0.0") {
-		t.Error("expected heading with tag name")
-	}
-	if !strings.Contains(md, "abc123def456") {
-		t.Error("expected commit SHA")
-	}
-	if !strings.Contains(md, "feat: init") {
-		t.Error("expected commit message")
-	}
-	if !strings.Contains(md, "Initial release") {
-		t.Error("expected release description")
-	}
-	if !strings.Contains(md, testReleaseName) {
-		t.Error("expected message")
-	}
-	if !strings.Contains(md, "1 Jan 2026") {
-		t.Error("expected created at")
+
+	want := "## Tag: v1.0.0\n\n" +
+		"- **Protected**: ✅\n" +
+		"- **Tag Object**: `abc123`\n" +
+		"- **Message**: Release v1.0.0\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Commit**:\n" +
+		"  - **SHA**: `abc123def456`\n" +
+		"- **Release**: Initial release\n" +
+		tagCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatOutputMarkdownString_Minimal verifies FormatOutputMarkdownString when minimal.
+// TestFormatOutputMarkdownString_LightweightTag pins that a tag whose target
+// is its commit shows the id once: printing it twice under two labels invited
+// a reader to treat the tag object as a second commit.
+func TestFormatOutputMarkdownString_LightweightTag(t *testing.T) {
+	got := FormatOutputMarkdownString(Output{
+		Name:   testTagV100,
+		Target: "abc123def456",
+		Commit: &CommitOutput{ID: "abc123def456", Title: "Fix login", AuthorName: "Alice", CommittedDate: "2026-03-20T15:45:00Z"},
+	})
+
+	want := "## Tag: v1.0.0\n\n" +
+		"- **Protected**: ❌\n" +
+		"- **Commit**:\n" +
+		"  - **SHA**: `abc123def456`\n" +
+		"  - **Title**: Fix login\n" +
+		"  - **Author**: Alice\n" +
+		"  - **Committed**: 20 Mar 2026 15:45 UTC\n" +
+		tagCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatOutputMarkdownString_MultiLineMessage pins that an annotated tag
+// message of several lines is quoted under its label rather than flattened
+// onto the row, where its second paragraph used to become a line of the card.
+func TestFormatOutputMarkdownString_MultiLineMessage(t *testing.T) {
+	got := FormatOutputMarkdownString(Output{
+		Name:    "v2",
+		Target:  "abc",
+		Message: "Release notes\n\n- one\n- two",
+	})
+
+	want := "## Tag: v2\n\n" +
+		"- **Protected**: ❌\n" +
+		"- **Tag Object**: `abc`\n" +
+		"- **Message**:\n" +
+		"  > Release notes\n" +
+		"  >\n" +
+		"  > - one\n" +
+		"  > - two\n" +
+		tagCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatOutputMarkdownString_Minimal pins the card of a tag GitLab
+// answered with nothing but a name and a target.
 func TestFormatOutputMarkdownString_Minimal(t *testing.T) {
-	md := FormatOutputMarkdownString(Output{Name: "v0", Target: "x"})
-	if !strings.Contains(md, "## Tag: v0") {
-		t.Error("expected heading")
-	}
-	if strings.Contains(md, "Message") {
-		t.Error("should not contain Message when empty")
+	got := FormatOutputMarkdownString(Output{Name: "v0", Target: "x"})
+
+	want := "## Tag: v0\n\n" +
+		"- **Protected**: ❌\n" +
+		"- **Tag Object**: `x`\n" +
+		tagCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdownString verifies FormatListMarkdownString.
+// TestFormatListMarkdownString pins the whole tag listing. The commit column
+// is the commit a tag resolves to rather than the tag object's own id, which
+// for an annotated tag is a SHA no other action accepts.
 func TestFormatListMarkdownString(t *testing.T) {
-	md := FormatListMarkdownString(ListOutput{
+	got := FormatListMarkdownString(ListOutput{
 		Tags: []Output{
-			{Name: testTagV100, Target: "abc", Protected: true},
+			{Name: testTagV100, Target: "abc", Protected: true, Commit: &CommitOutput{ID: "c0ffee1"}},
 			{Name: "v0.9.0", Target: "def", Protected: false},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	})
-	if !strings.Contains(md, "## Tags (2)") {
-		t.Error("expected heading with count")
-	}
-	if !strings.Contains(md, "| v1.0.0 |") {
-		t.Error("expected v1.0.0 row")
+
+	want := "## Tags (2)\n\n" +
+		"| Name | Commit | Protected |\n" +
+		"| --- | --- | --- |\n" +
+		"| v1.0.0 | `c0ffee1` | ✅ |\n" +
+		"| v0.9.0 | `def` | ❌ |\n" +
+		"\n2 items total\n" +
+		tagListHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
+// TestFormatListMarkdownString_Empty pins the whole response of a project with
+// no tags.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
-	md := FormatListMarkdownString(ListOutput{})
-	if !strings.Contains(md, "No tags found") {
-		t.Error("expected 'No tags found' message")
+	got := FormatListMarkdownString(ListOutput{})
+
+	want := "No tags found.\n"
+
+	if got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatSignatureMarkdownString verifies FormatSignatureMarkdownString.
+// TestFormatSignatureMarkdownString pins the whole card of a signed tag: the
+// certificate and its issuer as sections of their own.
 func TestFormatSignatureMarkdownString(t *testing.T) {
-	md := FormatSignatureMarkdownString(SignatureOutput{
+	got := FormatSignatureMarkdownString(SignatureOutput{
 		SignatureType:      "X509",
 		VerificationStatus: "verified",
 		X509Certificate: X509CertificateOutput{
@@ -1127,167 +1215,163 @@ func TestFormatSignatureMarkdownString(t *testing.T) {
 			},
 		},
 	})
-	if !strings.Contains(md, "## Tag Signature") {
-		t.Error("expected signature heading")
-	}
-	if !strings.Contains(md, "X509") {
-		t.Error("expected signature type")
-	}
-	if !strings.Contains(md, testEmailAddr) {
-		t.Error("expected email")
-	}
-	if !strings.Contains(md, "12345") {
-		t.Error("expected serial number")
-	}
-	if !strings.Contains(md, testCRLURL) {
-		t.Error("expected CRL URL")
+
+	want := "## Tag Signature\n\n" +
+		"- **Signature Type**: X509\n" +
+		"- **Verification Status**: verified\n" +
+		"\n### X.509 Certificate\n\n" +
+		"- **Subject**: CN=Test\n" +
+		"- **Email**: test@example.com\n" +
+		"- **Status**: good\n" +
+		"- **Serial Number**: `12345`\n" +
+		"\n### Issuer\n\n" +
+		"- **Subject**: CN=Issuer\n" +
+		"- **CRL URL**: [https://example.com/crl](https://example.com/crl)\n" +
+		tagSignatureHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatSignatureMarkdownString_Minimal verifies FormatSignatureMarkdownString when minimal.
+// TestFormatSignatureMarkdownString_Minimal pins that a signature GitLab sent
+// no certificate for opens neither section: a heading with nothing beneath it
+// reads as content that failed to render.
 func TestFormatSignatureMarkdownString_Minimal(t *testing.T) {
-	md := FormatSignatureMarkdownString(SignatureOutput{
+	got := FormatSignatureMarkdownString(SignatureOutput{
 		SignatureType:      "X509",
 		VerificationStatus: "unverified",
 	})
-	if !strings.Contains(md, "unverified") {
-		t.Error("expected verification status")
-	}
-	if strings.Contains(md, "Serial Number") {
-		t.Error("should not contain serial number when empty")
+
+	want := "## Tag Signature\n\n" +
+		"- **Signature Type**: X509\n" +
+		"- **Verification Status**: unverified\n" +
+		tagSignatureHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatProtectedTagMarkdownString verifies FormatProtectedTagMarkdownString.
+// TestFormatProtectedTagMarkdownString pins the whole card of a protection
+// rule: its create access levels as the nested collection they are, the role
+// the number stands for beside GitLab's own description.
 func TestFormatProtectedTagMarkdownString(t *testing.T) {
-	md := FormatProtectedTagMarkdownString(ProtectedTagOutput{
-		Name: "v*",
-		CreateAccessLevels: []TagAccessLevelOutput{
-			{ID: 1, AccessLevel: 40, AccessLevelDescription: descMaintainers},
+	cases := []struct {
+		name  string
+		input ProtectedTagOutput
+		want  string
+	}{
+		{
+			name: "a role rule",
+			input: ProtectedTagOutput{
+				Name:               "v*",
+				CreateAccessLevels: []TagAccessLevelOutput{{ID: 1, AccessLevel: 40, AccessLevelDescription: descMaintainers}},
+			},
+			want: "## Protected Tag: v*\n\n" +
+				"### Create Access Levels\n\n" +
+				"| ID | Access Level | Description | User ID | Group ID | Deploy Key ID |\n" +
+				"| --- | --- | --- | --- | --- | --- |\n" +
+				"| 1 | Maintainer | Maintainers | - | - | - |\n" +
+				protectedTagCardHints,
 		},
-	})
-	if !strings.Contains(md, "## Protected Tag: v*") {
-		t.Error("expected heading")
+		{
+			name: "one user",
+			input: ProtectedTagOutput{
+				Name:               "v*",
+				CreateAccessLevels: []TagAccessLevelOutput{{ID: 1, AccessLevel: 40, AccessLevelDescription: descMaintainers, UserID: 5}},
+			},
+			want: "## Protected Tag: v*\n\n" +
+				"### Create Access Levels\n\n" +
+				"| ID | Access Level | Description | User ID | Group ID | Deploy Key ID |\n" +
+				"| --- | --- | --- | --- | --- | --- |\n" +
+				"| 1 | Maintainer | Maintainers | 5 | - | - |\n" +
+				protectedTagCardHints,
+		},
+		{
+			name: "one group",
+			input: ProtectedTagOutput{
+				Name:               "release-*",
+				CreateAccessLevels: []TagAccessLevelOutput{{ID: 2, AccessLevel: 30, AccessLevelDescription: "Developers", GroupID: 10}},
+			},
+			want: "## Protected Tag: release-*\n\n" +
+				"### Create Access Levels\n\n" +
+				"| ID | Access Level | Description | User ID | Group ID | Deploy Key ID |\n" +
+				"| --- | --- | --- | --- | --- | --- |\n" +
+				"| 2 | Developer | Developers | - | 10 | - |\n" +
+				protectedTagCardHints,
+		},
+		{
+			name: "one deploy key",
+			input: ProtectedTagOutput{
+				Name:               "deploy-*",
+				CreateAccessLevels: []TagAccessLevelOutput{{ID: 3, AccessLevel: 40, AccessLevelDescription: "Deploy Key", DeployKeyID: 7}},
+			},
+			want: "## Protected Tag: deploy-*\n\n" +
+				"### Create Access Levels\n\n" +
+				"| ID | Access Level | Description | User ID | Group ID | Deploy Key ID |\n" +
+				"| --- | --- | --- | --- | --- | --- |\n" +
+				"| 3 | Maintainer | Deploy Key | - | - | 7 |\n" +
+				protectedTagCardHints,
+		},
 	}
-	if !strings.Contains(md, descMaintainers) {
-		t.Error("expected access level description")
-	}
-	if !strings.Contains(md, "Deploy Key ID") {
-		t.Error("expected Deploy Key ID column header")
-	}
-	if !strings.Contains(md, "| - | - | - |") {
-		t.Error("expected '-' for zero UserID, GroupID, and DeployKeyID")
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := FormatProtectedTagMarkdownString(c.input); got != c.want {
+				t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, c.want)
+			}
+		})
 	}
 }
 
-// TestFormatProtectedTagMarkdownString_Empty verifies FormatProtectedTagMarkdownString when empty.
+// TestFormatProtectedTagMarkdownString_Empty pins the whole card of a rule
+// with no create access levels, which is a rule nobody may create the tag
+// under.
 func TestFormatProtectedTagMarkdownString_Empty(t *testing.T) {
-	md := FormatProtectedTagMarkdownString(ProtectedTagOutput{Name: "release-*"})
-	if !strings.Contains(md, "No create access levels") {
-		t.Error("expected no access levels message")
+	got := FormatProtectedTagMarkdownString(ProtectedTagOutput{Name: "release-*"})
+
+	want := "## Protected Tag: release-*\n\n" +
+		"No create access levels are defined, so no one may create this tag.\n" +
+		protectedTagCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListProtectedTagsMarkdownString verifies FormatListProtectedTagsMarkdownString.
+// TestFormatListProtectedTagsMarkdownString pins the whole protected-tag
+// listing, each entry naming the principal it grants when it grants one.
 func TestFormatListProtectedTagsMarkdownString(t *testing.T) {
-	md := FormatListProtectedTagsMarkdownString(ListProtectedTagsOutput{
-		Tags: []ProtectedTagOutput{
-			{Name: "v*", CreateAccessLevels: []TagAccessLevelOutput{{AccessLevelDescription: descMaintainers}}},
-		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1},
-	})
-	if !strings.Contains(md, "## Protected Tags (1)") {
-		t.Error("expected heading with count")
+	cases := []struct {
+		name   string
+		levels []TagAccessLevelOutput
+		cell   string
+	}{
+		{"a role", []TagAccessLevelOutput{{AccessLevelDescription: descMaintainers}}, "Maintainers"},
+		{"one user", []TagAccessLevelOutput{{AccessLevelDescription: "Developer", UserID: 5}}, "Developer (User #5)"},
+		{"one group", []TagAccessLevelOutput{{AccessLevelDescription: descMaintainers, GroupID: 10}}, "Maintainers (Group #10)"},
+		{"one deploy key", []TagAccessLevelOutput{{AccessLevelDescription: "Deploy Key", DeployKeyID: 7}}, "Deploy Key (Deploy Key #7)"},
 	}
-	if !strings.Contains(md, descMaintainers) {
-		t.Error("expected access level description")
-	}
-}
 
-// TestFormatProtectedTagMarkdownString_WithUserID verifies FormatProtectedTagMarkdownString when with user ID.
-func TestFormatProtectedTagMarkdownString_WithUserID(t *testing.T) {
-	md := FormatProtectedTagMarkdownString(ProtectedTagOutput{
-		Name: "v*",
-		CreateAccessLevels: []TagAccessLevelOutput{
-			{ID: 1, AccessLevel: 40, AccessLevelDescription: descMaintainers, UserID: 5},
-		},
-	})
-	if !strings.Contains(md, "| 5 |") {
-		t.Error("expected User ID 5 in table")
-	}
-	if !strings.Contains(md, "| - | - |") {
-		t.Error("expected '-' for zero GroupID and DeployKeyID")
-	}
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := FormatListProtectedTagsMarkdownString(ListProtectedTagsOutput{
+				Tags:       []ProtectedTagOutput{{Name: "v*", CreateAccessLevels: c.levels}},
+				Pagination: toolutil.PaginationOutput{TotalItems: 1},
+			})
 
-// TestFormatProtectedTagMarkdownString_WithGroupID verifies FormatProtectedTagMarkdownString when with group ID.
-func TestFormatProtectedTagMarkdownString_WithGroupID(t *testing.T) {
-	md := FormatProtectedTagMarkdownString(ProtectedTagOutput{
-		Name: "release-*",
-		CreateAccessLevels: []TagAccessLevelOutput{
-			{ID: 2, AccessLevel: 30, AccessLevelDescription: "Developers", GroupID: 10},
-		},
-	})
-	if !strings.Contains(md, "| 10 |") {
-		t.Error("expected Group ID 10 in table")
-	}
-}
+			want := "## Protected Tags (1)\n\n" +
+				"| Name | Create Access Levels |\n" +
+				"| --- | --- |\n" +
+				"| v* | " + c.cell + " |\n" +
+				"\n1 items total\n" +
+				protectedTagListHints
 
-// TestFormatProtectedTagMarkdownString_WithDeployKeyID verifies FormatProtectedTagMarkdownString when with deploy key ID.
-func TestFormatProtectedTagMarkdownString_WithDeployKeyID(t *testing.T) {
-	md := FormatProtectedTagMarkdownString(ProtectedTagOutput{
-		Name: "deploy-*",
-		CreateAccessLevels: []TagAccessLevelOutput{
-			{ID: 3, AccessLevel: 40, AccessLevelDescription: "Deploy Key", DeployKeyID: 7},
-		},
-	})
-	if !strings.Contains(md, "| 7 |") {
-		t.Error("expected Deploy Key ID 7 in table")
-	}
-}
-
-// TestFormatListProtectedTags_WithUserContext verifies FormatListProtectedTags when with user context.
-func TestFormatListProtectedTags_WithUserContext(t *testing.T) {
-	md := FormatListProtectedTagsMarkdownString(ListProtectedTagsOutput{
-		Tags: []ProtectedTagOutput{
-			{Name: "v*", CreateAccessLevels: []TagAccessLevelOutput{
-				{AccessLevelDescription: "Developer", UserID: 5},
-			}},
-		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1},
-	})
-	if !strings.Contains(md, "Developer (User #5)") {
-		t.Error("expected 'Developer (User #5)' context in list view")
-	}
-}
-
-// TestFormatListProtectedTags_WithGroupContext verifies FormatListProtectedTags when with group context.
-func TestFormatListProtectedTags_WithGroupContext(t *testing.T) {
-	md := FormatListProtectedTagsMarkdownString(ListProtectedTagsOutput{
-		Tags: []ProtectedTagOutput{
-			{Name: "v*", CreateAccessLevels: []TagAccessLevelOutput{
-				{AccessLevelDescription: descMaintainers, GroupID: 10},
-			}},
-		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1},
-	})
-	if !strings.Contains(md, "Maintainers (Group #10)") {
-		t.Error("expected 'Maintainers (Group #10)' context in list view")
-	}
-}
-
-// TestFormatListProtectedTags_WithDeployKeyContext verifies FormatListProtectedTags when with deploy key context.
-func TestFormatListProtectedTags_WithDeployKeyContext(t *testing.T) {
-	md := FormatListProtectedTagsMarkdownString(ListProtectedTagsOutput{
-		Tags: []ProtectedTagOutput{
-			{Name: "v*", CreateAccessLevels: []TagAccessLevelOutput{
-				{AccessLevelDescription: "Deploy Key", DeployKeyID: 7},
-			}},
-		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1},
-	})
-	if !strings.Contains(md, "Deploy Key (Deploy Key #7)") {
-		t.Error("expected 'Deploy Key (Deploy Key #7)' context in list view")
+			if got != want {
+				t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+			}
+		})
 	}
 }
 
@@ -1322,27 +1406,38 @@ func TestFormatAccessLevelSummary(t *testing.T) {
 	}
 }
 
-// TestFormatListProtectedTagsMarkdownString_Empty verifies FormatListProtectedTagsMarkdownString when empty.
+// TestFormatListProtectedTagsMarkdownString_Empty pins the whole response of a
+// project with no protected tags.
 func TestFormatListProtectedTagsMarkdownString_Empty(t *testing.T) {
-	md := FormatListProtectedTagsMarkdownString(ListProtectedTagsOutput{})
-	if !strings.Contains(md, "No protected tags found") {
-		t.Error("expected 'No protected tags found' message")
+	got := FormatListProtectedTagsMarkdownString(ListProtectedTagsOutput{})
+
+	want := "No protected tags found.\n"
+
+	if got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatMarkdownWrappers verifies the MCP CallToolResult wrappers preserve
-// the Markdown content produced by the tag string formatters.
+// TestFormatMarkdownWrappers verifies the MCP CallToolResult wrappers carry
+// exactly the Markdown the tag string formatters produce, which is what makes
+// the whole-output expectations above cover the wrapped surfaces too.
 func TestFormatMarkdownWrappers(t *testing.T) {
+	tagOut := Output{Name: testTagV100, Target: "abc"}
+	listOut := ListOutput{Tags: []Output{tagOut}, Pagination: toolutil.PaginationOutput{TotalItems: 1}}
+	signatureOut := SignatureOutput{SignatureType: "X509", VerificationStatus: "verified"}
+	protectedOut := ProtectedTagOutput{Name: "v*"}
+	protectedListOut := ListProtectedTagsOutput{Tags: []ProtectedTagOutput{protectedOut}, Pagination: toolutil.PaginationOutput{TotalItems: 1}}
+
 	tests := []struct {
 		name   string
 		result *mcp.CallToolResult
 		want   string
 	}{
-		{name: "tag", result: FormatOutputMarkdown(Output{Name: testTagV100, Target: "abc"}), want: "## Tag: v1.0.0"},
-		{name: "list", result: FormatListMarkdown(ListOutput{Tags: []Output{{Name: testTagV100, Target: "abc"}}, Pagination: toolutil.PaginationOutput{TotalItems: 1}}), want: "## Tags (1)"},
-		{name: "signature", result: FormatSignatureMarkdown(SignatureOutput{SignatureType: "X509", VerificationStatus: "verified"}), want: "## Tag Signature"},
-		{name: "protected", result: FormatProtectedTagMarkdown(ProtectedTagOutput{Name: "v*"}), want: "## Protected Tag: v*"},
-		{name: "protected list", result: FormatListProtectedTagsMarkdown(ListProtectedTagsOutput{Tags: []ProtectedTagOutput{{Name: "v*"}}, Pagination: toolutil.PaginationOutput{TotalItems: 1}}), want: "## Protected Tags (1)"},
+		{name: "tag", result: FormatOutputMarkdown(tagOut), want: FormatOutputMarkdownString(tagOut)},
+		{name: "list", result: FormatListMarkdown(listOut), want: FormatListMarkdownString(listOut)},
+		{name: "signature", result: FormatSignatureMarkdown(signatureOut), want: FormatSignatureMarkdownString(signatureOut)},
+		{name: "protected", result: FormatProtectedTagMarkdown(protectedOut), want: FormatProtectedTagMarkdownString(protectedOut)},
+		{name: "protected list", result: FormatListProtectedTagsMarkdown(protectedListOut), want: FormatListProtectedTagsMarkdownString(protectedListOut)},
 	}
 
 	for _, tt := range tests {
@@ -1354,8 +1449,8 @@ func TestFormatMarkdownWrappers(t *testing.T) {
 			if !ok {
 				t.Fatalf("content type = %T, want TextContent", tt.result.Content[0])
 			}
-			if !strings.Contains(content.Text, tt.want) {
-				t.Fatalf("markdown missing %q:\n%s", tt.want, content.Text)
+			if content.Text != tt.want {
+				t.Fatalf("wrapper mismatch:\ngot:\n%s\nwant:\n%s", content.Text, tt.want)
 			}
 		})
 	}

@@ -16,60 +16,87 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestFormatPublishMarkdown_WithChecksumAndURL verifies publish markdown includes
-// file identifiers, checksum, URL, and follow-up hints for common workflows.
+// The guidance sections the package formatters close with. Each card and
+// list pins its whole response below, so these are named once rather than
+// repeated in every expectation.
+const (
+	publishHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'publish_and_link' to also create a release asset link in one step\n" +
+		"- Use action 'publish_directory' to batch-upload all files from a directory\n" +
+		"- Use action 'list' to see all packages in this project\n"
+	downloadHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'file_list' to see all files in this package\n" +
+		"- Use action 'list' to browse other packages in the project\n"
+	publishAndLinkHints = "\n---\n💡 **Next steps:**\n" +
+		"- Repeat for more files, or use 'publish_directory' to batch-upload a directory\n" +
+		"- Use gitlab_release action 'get' to verify the release links\n"
+	publishDirHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use 'publish_and_link' to also create release asset links for each file\n" +
+		"- Use gitlab_release to create/manage releases and link these packages\n" +
+		"- Use action 'list' to verify the uploaded packages\n"
+	listHints = "\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'file_list' with a package_id to see individual files\n" +
+		"- Use action 'delete' to remove a package\n" +
+		"- Use action 'publish' or 'publish_directory' to upload new packages\n"
+	// The group table's last column is the owning project's path, not a link,
+	// so its guidance carries no instruction to preserve links.
+	groupListHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'list' to scope packages to a single project\n" +
+		"- Use action 'file_list' with a package_id to see individual files\n" +
+		"- Use action 'delete' to remove a package\n"
+	fileListHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'download' to retrieve a specific file\n" +
+		"- Use action 'file_delete' to remove a single file\n"
+	packageTableHeader = "| ID | Name | Version | Type | Status | Creator | Pipeline |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n"
+	groupTableHeader = "| ID | Name | Version | Type | Status | Creator | Project |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n"
+)
+
+// TestFormatPublishMarkdown_WithChecksumAndURL verifies the whole publish card:
+// the identifiers, the size with its unit, the digest as a code span and the
+// URL linked to itself.
 func TestFormatPublishMarkdown_WithChecksumAndURL(t *testing.T) {
+	const url = "https://gitlab.example.com/api/v4/projects/1/packages/generic/pkg/1.0.0/app.tar.gz"
 	out := PublishOutput{
 		PackageFileID: 10,
 		PackageID:     20,
 		FileName:      "app.tar.gz",
 		Size:          4096,
 		SHA256:        "0123456789abcdef",
-		URL:           "https://gitlab.example.com/api/v4/projects/1/packages/generic/pkg/1.0.0/app.tar.gz",
+		URL:           url,
 	}
 
 	got := FormatPublishMarkdown(out)
-	for _, want := range []string{
-		"## Package Published",
-		"**Package File ID**: 10",
-		"**Package ID**: 20",
-		"**File Name**: app.tar.gz",
-		"**Size**: 4096 bytes",
-		"**SHA256**: 0123456789abcdef",
-		"**URL**: [https://gitlab.example.com/api/v4/projects/1/packages/generic/pkg/1.0.0/app.tar.gz](https://gitlab.example.com/api/v4/projects/1/packages/generic/pkg/1.0.0/app.tar.gz)",
-		"publish_and_link",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(got, want) {
-				t.Fatalf("FormatPublishMarkdown() = %q, want %q", got, want)
-			}
-		})
+	want := "## Package Published\n\n" +
+		"- **Package File ID**: 10\n" +
+		"- **Package ID**: 20\n" +
+		"- **File Name**: app.tar.gz\n" +
+		"- **Size**: 4096 bytes\n" +
+		"- **SHA256**: `0123456789abcdef`\n" +
+		"- **URL**: [" + url + "](" + url + ")\n" +
+		publishHints
+	if got != want {
+		t.Errorf("FormatPublishMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatDownloadMarkdown_WithChecksum verifies download markdown reports the
-// local output path, byte count, checksum, and next actions.
+// TestFormatDownloadMarkdown_WithChecksum verifies the whole download card.
 func TestFormatDownloadMarkdown_WithChecksum(t *testing.T) {
-	out := DownloadOutput{OutputPath: "/tmp/app.tar.gz", Size: 2048, SHA256: "abcdef"}
-
-	got := FormatDownloadMarkdown(out)
-	for _, want := range []string{
-		"## Package Downloaded",
-		"**Output Path**: /tmp/app.tar.gz",
-		"**Size**: 2048 bytes",
-		"**SHA256**: abcdef",
-		"file_list",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(got, want) {
-				t.Fatalf("FormatDownloadMarkdown() = %q, want %q", got, want)
-			}
-		})
+	got := FormatDownloadMarkdown(DownloadOutput{OutputPath: "/tmp/app.tar.gz", Size: 2048, SHA256: "abcdef"})
+	want := "## Package Downloaded\n\n" +
+		"- **Output Path**: /tmp/app.tar.gz\n" +
+		"- **Size**: 2048 bytes\n" +
+		"- **SHA256**: `abcdef`\n" +
+		downloadHints
+	if got != want {
+		t.Errorf("FormatDownloadMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
 // TestFormatPublishAndLinkMarkdown_RendersBothSections verifies the composite
-// formatter keeps package and release-link details visible after a successful workflow.
+// card keeps both objects visible, each under a section of its own.
 func TestFormatPublishAndLinkMarkdown_RendersBothSections(t *testing.T) {
 	out := PublishAndLinkOutput{
 		Package: PublishOutput{
@@ -82,28 +109,25 @@ func TestFormatPublishAndLinkMarkdown_RendersBothSections(t *testing.T) {
 	}
 
 	got := FormatPublishAndLinkMarkdown(out)
-	for _, want := range []string{
-		"## Package Published & Linked",
-		"### Package",
-		"**Package File ID**: 11",
-		"**File Name**: app.tar.gz",
-		"**URL**: [https://gitlab.example.com/package/app.tar.gz](https://gitlab.example.com/package/app.tar.gz)",
-		"### Release Link",
-		"**ID**: 22",
-		"**Name**: app.tar.gz",
-		"**URL**: [https://gitlab.example.com/release/app.tar.gz](https://gitlab.example.com/release/app.tar.gz)",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(got, want) {
-				t.Fatalf("FormatPublishAndLinkMarkdown() = %q, want %q", got, want)
-			}
-		})
+	want := "## Package Published & Linked\n\n" +
+		"### Package\n\n" +
+		"- **Package File ID**: 11\n" +
+		"- **File Name**: app.tar.gz\n" +
+		"- **Size**: 1024 bytes\n" +
+		"- **URL**: [https://gitlab.example.com/package/app.tar.gz](https://gitlab.example.com/package/app.tar.gz)\n\n" +
+		"### Release Link\n\n" +
+		"- **ID**: 22\n" +
+		"- **Name**: app.tar.gz\n" +
+		"- **URL**: [https://gitlab.example.com/release/app.tar.gz](https://gitlab.example.com/release/app.tar.gz)\n" +
+		publishAndLinkHints
+	if got != want {
+		t.Errorf("FormatPublishAndLinkMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatPublishDirMarkdown_WithPublishedFiles verifies that
-// [FormatPublishDirMarkdown] renders a table of published files with SHA256
-// truncation when hashes exceed 12 characters.
+// TestFormatPublishDirMarkdown_WithPublishedFiles verifies a run where every
+// file succeeded: the heading claims success, the count names both halves, and
+// the files are a table under a heading of its own.
 func TestFormatPublishDirMarkdown_WithPublishedFiles(t *testing.T) {
 	out := PublishDirOutput{
 		TotalFiles: 2,
@@ -114,65 +138,97 @@ func TestFormatPublishDirMarkdown_WithPublishedFiles(t *testing.T) {
 		},
 	}
 	got := FormatPublishDirMarkdown(out)
-	if !strings.Contains(got, "## Directory Published") {
-		t.Error("missing header")
-	}
-	if !strings.Contains(got, "| file1.txt | 512 |") {
-		t.Error("missing file1.txt row")
-	}
-	if !strings.Contains(got, "abcdef123456...") {
-		t.Error("SHA256 should be truncated to 12 chars + ellipsis")
-	}
-	if !strings.Contains(got, "| file2.txt | 512 | short |") {
-		t.Error("short SHA256 should not be truncated")
+	want := "## Directory Published\n\n" +
+		"- **Published**: 2 of 2 files\n" +
+		"- **Total Bytes**: 1024 bytes\n\n" +
+		"### Published Files\n\n" +
+		"| File | Size (bytes) | SHA256 |\n" +
+		"| --- | --- | --- |\n" +
+		"| file1.txt | 512 | `abcdef123456...` |\n" +
+		"| file2.txt | 512 | `short` |\n" +
+		publishDirHints
+	if got != want {
+		t.Errorf("FormatPublishDirMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatPublishDirMarkdown_WithErrors verifies that
-// [FormatPublishDirMarkdown] includes error entries in the output.
+// TestFormatPublishDirMarkdown_WithErrors verifies that a run where every file
+// failed is headed by that outcome rather than by "Directory Published", which
+// is what it used to claim above the list of failures.
 func TestFormatPublishDirMarkdown_WithErrors(t *testing.T) {
 	out := PublishDirOutput{
-		TotalFiles: 1,
 		TotalBytes: 100,
 		Errors:     []string{"upload failed: timeout", "checksum mismatch"},
 	}
 	got := FormatPublishDirMarkdown(out)
-	if !strings.Contains(got, "### Errors (2)") {
-		t.Error("missing Errors section")
+	want := "## Directory Publish Failed\n\n" +
+		"- **Published**: 0 of 2 files\n" +
+		"- **Total Bytes**: 100 bytes\n\n" +
+		"### Errors (2)\n\n" +
+		"| Error |\n" +
+		"| --- |\n" +
+		"| upload failed: timeout |\n" +
+		"| checksum mismatch |\n" +
+		publishDirHints
+	if got != want {
+		t.Errorf("FormatPublishDirMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
-	if !strings.Contains(got, "- upload failed: timeout") {
-		t.Error("missing first error")
+}
+
+// TestFormatPublishDirMarkdown_PartialRun verifies a run where some files
+// failed is headed as partial, so the heading never contradicts the errors
+// under it.
+func TestFormatPublishDirMarkdown_PartialRun(t *testing.T) {
+	out := PublishDirOutput{
+		TotalFiles: 1,
+		TotalBytes: 512,
+		Published:  []PublishDirItem{{FileName: "ok.txt", Size: 512, SHA256: "short"}},
+		Errors:     []string{"bad.txt: upload failed"},
+	}
+	got := FormatPublishDirMarkdown(out)
+	want := "## Directory Partially Published\n\n" +
+		"- **Published**: 1 of 2 files\n" +
+		"- **Total Bytes**: 512 bytes\n\n" +
+		"### Published Files\n\n" +
+		"| File | Size (bytes) | SHA256 |\n" +
+		"| --- | --- | --- |\n" +
+		"| ok.txt | 512 | `short` |\n\n" +
+		"### Errors (1)\n\n" +
+		"| Error |\n" +
+		"| --- |\n" +
+		"| bad.txt: upload failed |\n" +
+		publishDirHints
+	if got != want {
+		t.Errorf("FormatPublishDirMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
 // TestFormatPublishDirMarkdown_Empty verifies that [FormatPublishDirMarkdown]
-// handles zero files and no errors gracefully.
+// handles zero files and no errors gracefully, opening no table.
 func TestFormatPublishDirMarkdown_Empty(t *testing.T) {
-	out := PublishDirOutput{}
-	got := FormatPublishDirMarkdown(out)
-	if !strings.Contains(got, "**Total Files**: 0") {
-		t.Error("missing total files")
-	}
-	if strings.Contains(got, "| File |") {
-		t.Error("should not contain table when no files published")
+	got := FormatPublishDirMarkdown(PublishDirOutput{})
+	want := "## Directory Published\n\n" +
+		"- **Published**: 0 of 0 files\n" +
+		"- **Total Bytes**: 0 bytes\n" +
+		publishDirHints
+	if got != want {
+		t.Errorf("FormatPublishDirMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_EmptyPackages verifies that [FormatListMarkdown]
-// renders "No packages found." when the list is empty.
+// TestFormatListMarkdown_EmptyPackages verifies an empty list is the one
+// sentence and nothing else: no heading counting zero above it.
 func TestFormatListMarkdown_EmptyPackages(t *testing.T) {
-	out := ListOutput{
-		Packages:   nil,
-		Pagination: toolutil.PaginationOutput{TotalItems: 0},
-	}
-	got := FormatListMarkdown(out)
-	if !strings.Contains(got, "No packages found.") {
-		t.Error("missing 'No packages found.' message")
+	got := FormatListMarkdown(ListOutput{Packages: nil, Pagination: toolutil.PaginationOutput{TotalItems: 0}})
+	want := "No packages found.\n"
+	if got != want {
+		t.Errorf("FormatListMarkdown() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_IncludesPreserveLinksHint verifies that package list
-// markdown links pipeline summaries and emits the preserve-links hint.
+// TestFormatListMarkdown_IncludesPreserveLinksHint verifies the whole table:
+// the pipeline cell is a link, and the preserve-links hint leads the guidance
+// because this table has one.
 func TestFormatListMarkdown_IncludesPreserveLinksHint(t *testing.T) {
 	out := ListOutput{
 		Packages: []ListItem{{
@@ -189,29 +245,42 @@ func TestFormatListMarkdown_IncludesPreserveLinksHint(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}
 	got := FormatListMarkdown(out)
-	if !strings.Contains(got, "[7 success main](https://gitlab.example.com/project/-/pipelines/7)") {
-		t.Fatalf("FormatListMarkdown() = %q, want linked pipeline", got)
+	want := "## Packages (1)\n\n" + packageTableHeader +
+		"| 1 | pkg | 1.0.0 |  |  |  | [7 success main](https://gitlab.example.com/project/-/pipelines/7) |\n" +
+		"\n1 items total\n" + listHints
+	if got != want {
+		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
-	if !strings.Contains(got, toolutil.HintPreserveLinks) {
-		t.Fatalf("FormatListMarkdown() = %q, want preserve-links hint", got)
+}
+
+// TestFormatListMarkdown_KeysetPageCountsWhatItShows verifies a page GitLab
+// sent no total for is headed by what it shows and says more is available,
+// rather than by a zero above a table of rows.
+func TestFormatListMarkdown_KeysetPageCountsWhatItShows(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Packages:   []ListItem{{ID: 1, Name: "pkg", Version: "1.0.0"}},
+		Pagination: toolutil.PaginationOutput{HasMore: true},
+	})
+	want := "## Packages (1 shown, more available)\n\n" + packageTableHeader +
+		"| 1 | pkg | 1.0.0 |  |  |  |  |\n" + listHints
+	if got != want {
+		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
 // TestFormatGroupListMarkdown_EmptyPackages verifies the group package list
-// markdown renders the empty-state message.
+// renders the empty-state sentence alone.
 func TestFormatGroupListMarkdown_EmptyPackages(t *testing.T) {
-	got := FormatGroupListMarkdown(GroupListOutput{
-		Packages:   nil,
-		Pagination: toolutil.PaginationOutput{TotalItems: 0},
-	})
-	if !strings.Contains(got, "No packages found.") {
-		t.Error("missing 'No packages found.' message")
+	got := FormatGroupListMarkdown(GroupListOutput{Packages: nil, Pagination: toolutil.PaginationOutput{TotalItems: 0}})
+	want := "No packages found.\n"
+	if got != want {
+		t.Errorf("FormatGroupListMarkdown() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatGroupListMarkdown_RendersProjectAndHint verifies the group package
-// list markdown renders the owning project path, the project id fallback, and
-// the preserve-links hint.
+// TestFormatGroupListMarkdown_RendersProjectAndHint verifies the whole table:
+// the owning project path, the project id fallback, and a guidance section
+// that does not tell the model to preserve links this table does not carry.
 func TestFormatGroupListMarkdown_RendersProjectAndHint(t *testing.T) {
 	got := FormatGroupListMarkdown(GroupListOutput{
 		Packages: []GroupListItem{
@@ -220,14 +289,12 @@ func TestFormatGroupListMarkdown_RendersProjectAndHint(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	})
-	if !strings.Contains(got, "grp/proj") {
-		t.Errorf("FormatGroupListMarkdown() = %q, want project path", got)
-	}
-	if !strings.Contains(got, "| 8 |") && !strings.Contains(got, " 8 |") {
-		t.Errorf("FormatGroupListMarkdown() = %q, want project id fallback 8", got)
-	}
-	if !strings.Contains(got, toolutil.HintPreserveLinks) {
-		t.Errorf("FormatGroupListMarkdown() = %q, want preserve-links hint", got)
+	want := "## Group Packages (2)\n\n" + groupTableHeader +
+		"| 1 | pkg-a | 1.0.0 | generic | default |  | grp/proj |\n" +
+		"| 2 | pkg-b | 2.0.0 | npm | default |  | 8 |\n" +
+		"\n2 items total\n" + groupListHints
+	if got != want {
+		t.Errorf("FormatGroupListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -321,18 +388,52 @@ func TestCreatorSummary_Variants(t *testing.T) {
 
 // TestFormatMarkdown_OmitTheChecksumsAndURLsGitLabDidNotSend verifies each
 // formatter that names a digest or a URL says nothing at all when the answer
-// carried neither, rather than printing an empty row.
+// carried neither, rather than printing an empty row. Each expectation is the
+// whole card, which is the only way to be sure the row is absent rather than
+// merely spelled differently.
 func TestFormatMarkdown_OmitTheChecksumsAndURLsGitLabDidNotSend(t *testing.T) {
-	for name, rendered := range map[string]string{
-		"publish":          FormatPublishMarkdown(PublishOutput{PackageFileID: 1, FileName: "app.bin"}),
-		"download":         FormatDownloadMarkdown(DownloadOutput{OutputPath: "/tmp/app.bin"}),
-		"publish and link": FormatPublishAndLinkMarkdown(PublishAndLinkOutput{}),
-	} {
-		t.Run(name, func(t *testing.T) {
-			for _, unwanted := range []string{"SHA256", "URL"} {
-				if strings.Contains(rendered, unwanted) {
-					t.Errorf("%s markdown names %q for an answer that carried none: %s", name, unwanted, rendered)
-				}
+	tests := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{
+			name: "publish",
+			got:  FormatPublishMarkdown(PublishOutput{PackageFileID: 1, FileName: "app.bin"}),
+			want: "## Package Published\n\n" +
+				"- **Package File ID**: 1\n" +
+				"- **Package ID**: 0\n" +
+				"- **File Name**: app.bin\n" +
+				"- **Size**: 0 bytes\n" +
+				publishHints,
+		},
+		{
+			name: "download",
+			got:  FormatDownloadMarkdown(DownloadOutput{OutputPath: "/tmp/app.bin"}),
+			want: "## Package Downloaded\n\n" +
+				"- **Output Path**: /tmp/app.bin\n" +
+				"- **Size**: 0 bytes\n" +
+				downloadHints,
+		},
+		{
+			name: "publish and link",
+			got:  FormatPublishAndLinkMarkdown(PublishAndLinkOutput{}),
+			want: "## Package Published & Linked\n\n" +
+				"### Package\n\n" +
+				"- **Package File ID**: 0\n" +
+				"- **Size**: 0 bytes\n\n" +
+				"### Release Link\n\n" +
+				"- **ID**: 0\n" +
+				publishAndLinkHints,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("%s markdown =\n%q\nwant:\n%q", tt.name, tt.got, tt.want)
+			}
+			if strings.Contains(tt.got, "SHA256") || strings.Contains(tt.got, "**URL**") {
+				t.Errorf("%s markdown names a digest or URL for an answer that carried none: %s", tt.name, tt.got)
 			}
 		})
 	}
@@ -352,11 +453,14 @@ func TestFormatMarkdown_ShortensOnlyAChecksumLongerThanTheColumn(t *testing.T) {
 			},
 			Pagination: toolutil.PaginationOutput{TotalItems: 2},
 		})
-		if !strings.Contains(got, "| "+exactly12+" |") {
-			t.Errorf("FormatFileListMarkdown shortened a twelve-character digest: %s", got)
-		}
-		if !strings.Contains(got, "abcdef123456...") {
-			t.Errorf("FormatFileListMarkdown did not shorten a longer digest: %s", got)
+		want := "## Package Files (2)\n\n" +
+			"| ID | File Name | Size (bytes) | SHA256 |\n" +
+			"| --- | --- | --- | --- |\n" +
+			"| 1 | short.bin | 0 | `" + exactly12 + "` |\n" +
+			"| 2 | long.bin | 0 | `abcdef123456...` |\n" +
+			"\n2 items total\n" + fileListHints
+		if got != want {
+			t.Errorf("FormatFileListMarkdown() =\n%q\nwant:\n%q", got, want)
 		}
 	})
 	t.Run("directory publish", func(t *testing.T) {
@@ -367,14 +471,17 @@ func TestFormatMarkdown_ShortensOnlyAChecksumLongerThanTheColumn(t *testing.T) {
 				{FileName: "long.bin", SHA256: longer},
 			},
 		})
-		if !strings.Contains(got, "| "+exactly12+" |") {
-			t.Errorf("FormatPublishDirMarkdown shortened a twelve-character digest: %s", got)
-		}
-		if !strings.Contains(got, "abcdef123456...") {
-			t.Errorf("FormatPublishDirMarkdown did not shorten a longer digest: %s", got)
-		}
-		if strings.Contains(got, "Errors") {
-			t.Errorf("FormatPublishDirMarkdown shows an errors section for a run with none: %s", got)
+		want := "## Directory Published\n\n" +
+			"- **Published**: 2 of 2 files\n" +
+			"- **Total Bytes**: 0 bytes\n\n" +
+			"### Published Files\n\n" +
+			"| File | Size (bytes) | SHA256 |\n" +
+			"| --- | --- | --- |\n" +
+			"| short.bin | 0 | `" + exactly12 + "` |\n" +
+			"| long.bin | 0 | `abcdef123456...` |\n" +
+			publishDirHints
+		if got != want {
+			t.Errorf("FormatPublishDirMarkdown() =\n%q\nwant:\n%q", got, want)
 		}
 	})
 }
@@ -386,41 +493,50 @@ func TestFormatPackageListMarkdown_SentFields(t *testing.T) {
 		ID: 10, Name: "my-pkg", Version: "1.0.0", PackageType: "generic", Status: "default",
 		CreatorID: 57, Versions: []toolutil.PackageVersionOutput{{ID: 9, Version: "0.9.0"}},
 	}
-	for name, rendered := range map[string]string{
-		"project": FormatListMarkdown(ListOutput{
-			Packages:   []ListItem{item},
-			Pagination: toolutil.PaginationOutput{TotalItems: 1},
-		}),
-		"group": FormatGroupListMarkdown(GroupListOutput{
-			Packages:   []GroupListItem{{ListItem: item, ProjectID: 42, ProjectPath: "grp/proj"}},
-			Pagination: toolutil.PaginationOutput{TotalItems: 1},
-		}),
-	} {
-		t.Run(name, func(t *testing.T) {
-			for _, want := range []string{"Creator", "| 57 |", "1.0.0 (+1)"} {
-				if !strings.Contains(rendered, want) {
-					t.Errorf("%s markdown missing %q: %s", name, want, rendered)
-				}
+	const row = "| 10 | my-pkg | 1.0.0 (+1) | generic | default | 57 | "
+	tests := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{
+			name: "project",
+			got: FormatListMarkdown(ListOutput{
+				Packages:   []ListItem{item},
+				Pagination: toolutil.PaginationOutput{TotalItems: 1},
+			}),
+			want: "## Packages (1)\n\n" + packageTableHeader + row + " |\n\n1 items total\n" + listHints,
+		},
+		{
+			name: "group",
+			got: FormatGroupListMarkdown(GroupListOutput{
+				Packages:   []GroupListItem{{ListItem: item, ProjectID: 42, ProjectPath: "grp/proj"}},
+				Pagination: toolutil.PaginationOutput{TotalItems: 1},
+			}),
+			want: "## Group Packages (1)\n\n" + groupTableHeader + row + "grp/proj |\n\n1 items total\n" + groupListHints,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("%s markdown =\n%q\nwant:\n%q", tt.name, tt.got, tt.want)
 			}
 		})
 	}
 }
 
-// TestFormatFileListMarkdown_EmptyFiles verifies that [FormatFileListMarkdown]
-// renders "No package files found." when the list is empty.
+// TestFormatFileListMarkdown_EmptyFiles verifies an empty list is the one
+// sentence and nothing else.
 func TestFormatFileListMarkdown_EmptyFiles(t *testing.T) {
-	out := FileListOutput{
-		Files:      nil,
-		Pagination: toolutil.PaginationOutput{TotalItems: 0},
-	}
-	got := FormatFileListMarkdown(out)
-	if !strings.Contains(got, "No package files found.") {
-		t.Error("missing 'No package files found.' message")
+	got := FormatFileListMarkdown(FileListOutput{Files: nil, Pagination: toolutil.PaginationOutput{TotalItems: 0}})
+	want := "No package files found.\n"
+	if got != want {
+		t.Errorf("FormatFileListMarkdown() = %q, want %q", got, want)
 	}
 }
 
-// TestFormatFileListMarkdown_LongSHA verifies that [FormatFileListMarkdown]
-// truncates SHA256 values longer than 12 characters.
+// TestFormatFileListMarkdown_LongSHA verifies the whole table for one file
+// whose digest is longer than the column.
 func TestFormatFileListMarkdown_LongSHA(t *testing.T) {
 	out := FileListOutput{
 		Files: []FileListItem{
@@ -429,8 +545,13 @@ func TestFormatFileListMarkdown_LongSHA(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}
 	got := FormatFileListMarkdown(out)
-	if !strings.Contains(got, "0123456789ab...") {
-		t.Error("SHA256 should be truncated to 12 chars + ellipsis")
+	want := "## Package Files (1)\n\n" +
+		"| ID | File Name | Size (bytes) | SHA256 |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 1 | pkg.tar.gz | 2048 | `0123456789ab...` |\n" +
+		"\n1 items total\n" + fileListHints
+	if got != want {
+		t.Errorf("FormatFileListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 

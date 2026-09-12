@@ -1,144 +1,155 @@
 package cicatalog
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatListMarkdown renders a paginated list of catalog resources as Markdown.
+// Canonical action IDs the hints name.
+const (
+	actionCatalogGetHint  = "ci_catalog.get"
+	actionCatalogListHint = "ci_catalog.list"
+	actionLintHint        = "template.lint"
+)
+
+// descriptionCellRunes is how much of a resource description one table cell
+// carries before it is cut.
+const descriptionCellRunes = 60
+
+// FormatListMarkdown renders a page of catalog resources as a Markdown table.
+//
+// The name is not linked. GitLab's catalog query answers with webPath, a path
+// relative to the instance root ("/explore/catalog/group/project"), and this
+// package never learns which instance answered, so a link built from it
+// resolved against whatever base the reading client happened to have. The path
+// is shown as the value it is, beside the full path the get action takes.
 func FormatListMarkdown(out ListOutput) string {
-	var sb strings.Builder
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	sb.WriteString("## CI/CD Catalog Resources\n\n")
-
 	if len(out.Resources) == 0 {
-		sb.WriteString("No catalog resources found.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("catalog resources")
 	}
-
-	sb.WriteString("| Name | Description | Stars | Usage (30d) | Verification | Latest Version | Released |\n")
-	sb.WriteString("|------|-------------|-------|-------------|--------------|----------------|----------|\n")
-
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "CI/CD Catalog Resources", len(out.Resources), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader(
+		"Name", "Path", "Description", "Stars", "Usage (30d)", "Verification", "Latest Version", "Released",
+	))
 	for _, r := range out.Resources {
-		desc := toolutil.EscapeMdTableCell(truncate(r.Description, 60))
-		name := toolutil.MdTitleLink(r.Name, r.WebPath)
-		fmt.Fprintf(
-			&sb, "| %s | %s | %d | %d | %s | %s | %s |\n",
-			name,
-			desc,
-			r.StarCount,
-			r.Last30DayUsageCount,
+		b.WriteString(toolutil.MarkdownTableRow(
+			resourceNameCell(r.Name, r.Archived),
+			toolutil.MdCodeSpanCell(r.FullPath),
+			toolutil.EscapeMdTableCell(truncateRunes(r.Description, descriptionCellRunes)),
+			strconv.Itoa(r.StarCount),
+			strconv.Itoa(r.Last30DayUsageCount),
 			toolutil.EscapeMdTableCell(r.VerificationLevel),
 			toolutil.EscapeMdTableCell(r.LatestVersionName),
-			formatDate(r.LatestReleasedAt),
-		)
+			toolutil.FormatTime(r.LatestReleasedAt),
+		))
 	}
-
-	sb.WriteString("\n")
-	sb.WriteString(toolutil.FormatGraphQLPagination(out.Pagination, len(out.Resources)))
-	sb.WriteString("\n")
-	return sb.String()
+	toolutil.WriteGraphQLPagination(&b, out.Pagination, len(out.Resources))
+	toolutil.WriteHints(&b,
+		toolutil.HintAction(actionCatalogGetHint, "see one resource with its components and inputs"),
+		toolutil.HintAction(actionLintHint, "check a configuration that includes one"),
+	)
+	return b.String()
 }
 
-// FormatGetMarkdown renders a single catalog resource detail as Markdown.
+// resourceNameCell carries the archived marker, without which a reader cannot
+// tell a resource nobody maintains any more from a live one.
+func resourceNameCell(name string, archived bool) string {
+	cell := toolutil.EscapeMdTableCell(name)
+	if archived {
+		cell += " " + toolutil.EmojiArchived
+	}
+	return cell
+}
+
+// FormatGetMarkdown renders one catalog resource as the card of a single
+// object: its own fields, then its components and released versions as the
+// nested collections they are.
 func FormatGetMarkdown(out GetOutput) string {
 	r := out.Resource
-	var sb strings.Builder
-
-	fmt.Fprintf(&sb, "## Catalog Resource: %s\n\n", toolutil.EscapeMdHeading(r.Name))
-	writeCatalogResourceSummary(&sb, r)
-	writeCatalogResourceComponents(&sb, r.Components)
-	writeCatalogResourceVersions(&sb, r.Versions)
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, catalogHeading(r))
+	writeCatalogResourceSummary(c, r)
+	writeCatalogResourceComponents(c, r.Components)
+	writeCatalogResourceVersions(c, r.Versions)
+	c.End(
+		toolutil.HintAction(actionLintHint, "check a configuration that includes this component"),
+		toolutil.HintAction(actionCatalogListHint, "browse the catalog for others"),
+	)
+	return b.String()
 }
 
-func writeCatalogResourceSummary(sb *strings.Builder, r ResourceDetail) {
-	sb.WriteString("| Field | Value |\n|-------|-------|\n")
-	fmt.Fprintf(sb, "| ID | %s |\n", toolutil.EscapeMdTableCell(r.ID))
-	fmt.Fprintf(sb, "| Full Path | %s |\n", toolutil.EscapeMdTableCell(r.FullPath))
-	fmt.Fprintf(sb, "| Web Path | %s |\n", toolutil.MdTitleLink(r.WebPath, r.WebPath))
-	fmt.Fprintf(sb, "| Stars | %d |\n", r.StarCount)
-	fmt.Fprintf(sb, "| Usage (30d) | %d |\n", r.Last30DayUsageCount)
-	if r.VerificationLevel != "" {
-		fmt.Fprintf(sb, "| Verification | %s |\n", toolutil.EscapeMdTableCell(r.VerificationLevel))
-	}
-	if len(r.Topics) > 0 {
-		fmt.Fprintf(sb, "| Topics | %s |\n", toolutil.EscapeMdTableCell(strings.Join(r.Topics, ", ")))
-	}
+// catalogHeading names the resource and marks an archived one.
+func catalogHeading(r ResourceDetail) string {
+	heading := "Catalog Resource: " + r.Name
 	if r.Archived {
-		sb.WriteString("| Archived | yes |\n")
+		heading += " " + toolutil.EmojiArchived
 	}
-	if r.LatestReleasedAt != "" {
-		fmt.Fprintf(sb, "| Latest Release | %s |\n", formatDate(r.LatestReleasedAt))
-	}
-	if r.LatestVersionName != "" {
-		fmt.Fprintf(sb, "| Latest Version | %s |\n", toolutil.EscapeMdTableCell(r.LatestVersionName))
-	}
-	if r.Description != "" {
-		fmt.Fprintf(sb, "\n### Description\n\n%s\n", r.Description)
-	}
+	return heading
 }
 
-func writeCatalogResourceComponents(sb *strings.Builder, components []ComponentItem) {
+func writeCatalogResourceSummary(c *toolutil.Card, r ResourceDetail) {
+	c.Code("ID", r.ID)
+	c.Code("Full Path", r.FullPath)
+	// A relative path, shown as the path it is rather than linked: see
+	// FormatListMarkdown.
+	c.Code("Web Path", r.WebPath)
+	c.Count("Stars", int64(r.StarCount))
+	c.Count("Usage (30d)", int64(r.Last30DayUsageCount))
+	c.Field("Verification", r.VerificationLevel)
+	c.Field("Visibility", r.VisibilityLevel)
+	c.Field("Topics", strings.Join(r.Topics, ", "))
+	c.Flag(toolutil.EmojiArchived, "Archived", r.Archived)
+	c.Time("Latest Release", r.LatestReleasedAt)
+	c.Field("Latest Version", r.LatestVersionName)
+	// The description is whatever the resource's maintainer typed, so it is
+	// quoted rather than written into the response as Markdown of its own.
+	c.Text("Description", r.Description)
+}
+
+func writeCatalogResourceComponents(c *toolutil.Card, components []ComponentItem) {
 	if len(components) == 0 {
 		return
 	}
-	sb.WriteString("\n### Components (Latest Version)\n\n")
+	section := c.Section("Components (Latest Version)")
 	for _, component := range components {
-		writeCatalogResourceComponent(sb, component)
+		writeCatalogResourceComponent(section, component)
 	}
 }
 
-func writeCatalogResourceComponent(sb *strings.Builder, component ComponentItem) {
-	fmt.Fprintf(sb, "#### `%s`\n\n", toolutil.EscapeMdHeading(component.Name))
-	if component.Description != "" {
-		fmt.Fprintf(sb, "%s\n\n", component.Description)
-	}
-	fmt.Fprintf(sb, "**Include:** `%s`\n\n", component.IncludePath)
+func writeCatalogResourceComponent(section *toolutil.Card, component ComponentItem) {
+	card := section.Section(component.Name)
+	card.Text("Description", component.Description)
+	card.Code("Include", component.IncludePath)
 	if len(component.Inputs) == 0 {
 		return
 	}
-	sb.WriteString("| Input | Type | Required | Default | Description |\n")
-	sb.WriteString("|-------|------|----------|---------|-------------|\n")
+	table := card.Table("", "Input", "Type", "Required", "Default", "Description")
 	for _, input := range component.Inputs {
-		writeCatalogComponentInput(sb, input)
+		table.Row(
+			toolutil.MdCodeSpanCell(input.Name),
+			toolutil.EscapeMdTableCell(input.Type),
+			toolutil.BoolEmoji(input.Required),
+			toolutil.EscapeMdTableCell(input.Default),
+			toolutil.EscapeMdTableCell(input.Description),
+		)
 	}
-	sb.WriteString("\n")
 }
 
-func writeCatalogComponentInput(sb *strings.Builder, input InputItem) {
-	required := "no"
-	if input.Required {
-		required = "**yes**"
-	}
-	fmt.Fprintf(
-		sb, "| `%s` | %s | %s | %s | %s |\n",
-		toolutil.EscapeMdTableCell(input.Name),
-		toolutil.EscapeMdTableCell(input.Type),
-		required,
-		toolutil.EscapeMdTableCell(input.Default),
-		toolutil.EscapeMdTableCell(input.Description),
-	)
-}
-
-func writeCatalogResourceVersions(sb *strings.Builder, versions []VersionItem) {
+func writeCatalogResourceVersions(c *toolutil.Card, versions []VersionItem) {
 	if len(versions) == 0 {
 		return
 	}
-	sb.WriteString("\n### Released Versions\n\n")
-	sb.WriteString("| Version | Released | Components |\n")
-	sb.WriteString("|---------|----------|------------|\n")
+	table := c.Table("Released Versions", "Version", "Released", "Components")
 	for _, version := range versions {
-		fmt.Fprintf(
-			sb, "| %s | %s | %s |\n",
+		table.Row(
 			toolutil.EscapeMdTableCell(version.Name),
-			formatDate(version.ReleasedAt),
+			toolutil.FormatTime(version.ReleasedAt),
 			toolutil.EscapeMdTableCell(strings.Join(catalogVersionComponentNames(version), ", ")),
 		)
 	}
-	sb.WriteString("\n")
 }
 
 func catalogVersionComponentNames(version VersionItem) []string {
@@ -149,28 +160,20 @@ func catalogVersionComponentNames(version VersionItem) []string {
 	return names
 }
 
-// truncate shortens s to maxLen characters, appending "..." if truncated.
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
+// truncateRunes shortens s to maxRunes characters, appending "..." when it
+// cut anything. It counts runes rather than bytes: cutting a UTF-8 sequence in
+// half leaves a replacement character in the middle of a description, and a
+// description is the one field of a catalog resource most likely to be
+// written in a language that needs more than one byte per character.
+func truncateRunes(s string, maxRunes int) string {
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
 		return s
 	}
-	return s[:maxLen-3] + "..."
-}
-
-// formatDate extracts the YYYY-MM-DD date portion from an ISO 8601 timestamp.
-// Returns an empty string if iso is empty.
-//
-// Slicing the first ten bytes shortens the value without saying anything about
-// what is in them, so the result is escaped: what arrives here is a GraphQL
-// field this package copies verbatim, and a cell is where it lands.
-func formatDate(iso string) string {
-	if iso == "" {
-		return ""
+	if maxRunes <= 3 {
+		return string(runes[:maxRunes])
 	}
-	if len(iso) >= 10 {
-		return toolutil.EscapeMdTableCell(iso[:10])
-	}
-	return toolutil.EscapeMdTableCell(iso)
+	return string(runes[:maxRunes-3]) + "..."
 }
 
 func init() {

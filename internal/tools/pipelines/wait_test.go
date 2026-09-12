@@ -375,89 +375,98 @@ func TestWait_ContextCanceledDuringPoll(t *testing.T) {
 	}
 }
 
-// TestFormatWaitMarkdown_Success verifies markdown rendering for a successfully completed pipeline.
+// waitPipelineRows is the pipeline the wait fixtures poll, rendered under the
+// wait's own H3. The detail is embedded without its heading so the response
+// carries one H2, one guidance section and no card nested inside another.
+const waitPipelineRows = "\n### Pipeline Details\n\n" +
+	"- **IID**: 0\n" +
+	"- **Tag**: ❌\n" +
+	"- **URL**: [https://gitlab.example.com/-/pipelines/10](https://gitlab.example.com/-/pipelines/10)\n"
+
+// TestFormatWaitMarkdown_Success checks the whole rendering of a wait that
+// ended well: the wait's own rows, the pipeline under one H3, and no guidance
+// section, since a pipeline that succeeded needs no next step.
 func TestFormatWaitMarkdown_Success(t *testing.T) {
-	md := FormatWaitMarkdown(WaitOutput{
+	want := "## ✅ Pipeline #10: success\n\n" +
+		"- **Waited**: 30s\n" +
+		"- **Polls**: 3\n" +
+		"- **Final Status**: success\n" +
+		waitPipelineRows
+	got := FormatWaitMarkdown(WaitOutput{
 		Pipeline:    DetailOutput{ID: 10, Status: "success", WebURL: "https://gitlab.example.com/-/pipelines/10"},
 		WaitedFor:   "30s",
 		PollCount:   3,
 		FinalStatus: "success",
 	})
-	if !strings.Contains(md, "Pipeline #10") {
-		t.Error("expected 'Pipeline #10' in markdown")
-	}
-	if !strings.Contains(md, "success") {
-		t.Error("expected 'success' in markdown")
-	}
-	if !strings.Contains(md, "30s") {
-		t.Error("expected waited duration in markdown")
-	}
-	if !strings.Contains(md, "3 polls") {
-		t.Error("expected poll count in markdown")
-	}
-	if strings.Contains(md, "Timed Out") {
-		t.Error("should not contain 'Timed Out' for success")
+	if got != want {
+		t.Errorf("FormatWaitMarkdown(success)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatWaitMarkdown_Failed verifies markdown rendering for a failed pipeline with hints.
+// TestFormatWaitMarkdown_Failed checks that a failed wait names the two
+// actions that follow it, by the canonical IDs every surface resolves.
 func TestFormatWaitMarkdown_Failed(t *testing.T) {
-	md := FormatWaitMarkdown(WaitOutput{
+	want := "## ❌ Pipeline #10: failed\n\n" +
+		"- **Waited**: 45s\n" +
+		"- **Polls**: 5\n" +
+		"- **Final Status**: failed\n" +
+		waitPipelineRows +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'job.list' to find the jobs that failed\n" +
+		"- Use action 'pipeline.retry' to retry the failed jobs\n"
+	got := FormatWaitMarkdown(WaitOutput{
 		Pipeline:    DetailOutput{ID: 10, Status: "failed", WebURL: "https://gitlab.example.com/-/pipelines/10"},
 		WaitedFor:   "45s",
 		PollCount:   5,
 		FinalStatus: "failed",
 	})
-	if !strings.Contains(md, "Pipeline #10") {
-		t.Error("expected 'Pipeline #10' in markdown")
-	}
-	if !strings.Contains(md, "failed") {
-		t.Error("expected 'failed' in markdown")
-	}
-	if !strings.Contains(md, "gitlab_job") {
-		t.Error("expected hint about jobs in markdown for failed pipeline")
-	}
-	if !strings.Contains(md, "gitlab_pipeline_retry") {
-		t.Error("expected hint about retry in markdown for failed pipeline")
+	if got != want {
+		t.Errorf("FormatWaitMarkdown(failed)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatWaitMarkdown_TimedOut verifies markdown rendering for a timed-out wait.
+// TestFormatWaitMarkdown_TimedOut checks that a timeout is marked with the
+// warning sign rather than a tick — a tick on "Timed Out" reads as success —
+// and that the heading names the status the pipeline is still in.
 func TestFormatWaitMarkdown_TimedOut(t *testing.T) {
-	md := FormatWaitMarkdown(WaitOutput{
+	want := "## ⏰ Pipeline #10: Timed Out (current: running)\n\n" +
+		"- **Waited**: 300s\n" +
+		"- **Polls**: 30\n" +
+		"- **Final Status**: running\n" +
+		"- ⚠️ **Timed Out**\n" +
+		waitPipelineRows +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'pipeline.wait' to keep waiting for this pipeline\n" +
+		"- Use action 'pipeline.cancel' to abort it instead\n"
+	got := FormatWaitMarkdown(WaitOutput{
 		Pipeline:    DetailOutput{ID: 10, Status: "running", WebURL: "https://gitlab.example.com/-/pipelines/10"},
 		WaitedFor:   "300s",
 		PollCount:   30,
 		FinalStatus: "running",
 		TimedOut:    true,
 	})
-	if !strings.Contains(md, "Timed Out") {
-		t.Error("expected 'Timed Out' in markdown")
-	}
-	if !strings.Contains(md, "Pipeline #10") {
-		t.Error("expected 'Pipeline #10' in markdown")
-	}
-	if !strings.Contains(md, "gitlab_pipeline_wait") {
-		t.Error("expected hint about calling wait again")
-	}
-	if !strings.Contains(md, "gitlab_pipeline_cancel") {
-		t.Error("expected hint about cancel")
+	if got != want {
+		t.Errorf("FormatWaitMarkdown(timed out)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatWaitMarkdown_Canceled verifies markdown rendering for a canceled pipeline.
+// TestFormatWaitMarkdown_Canceled checks a wait that ended on a cancellation:
+// the outcome is neither a success nor a failure, so it carries the stop glyph
+// and no hints.
 func TestFormatWaitMarkdown_Canceled(t *testing.T) {
-	md := FormatWaitMarkdown(WaitOutput{
+	want := "## ⛔ Pipeline #10: canceled\n\n" +
+		"- **Waited**: 15s\n" +
+		"- **Polls**: 2\n" +
+		"- **Final Status**: canceled\n" +
+		waitPipelineRows
+	got := FormatWaitMarkdown(WaitOutput{
 		Pipeline:    DetailOutput{ID: 10, Status: "canceled", WebURL: "https://gitlab.example.com/-/pipelines/10"},
 		WaitedFor:   "15s",
 		PollCount:   2,
 		FinalStatus: "canceled",
 	})
-	if !strings.Contains(md, "Pipeline #10") {
-		t.Error("expected 'Pipeline #10' in markdown")
-	}
-	if !strings.Contains(md, "canceled") {
-		t.Error("expected 'canceled' in markdown")
+	if got != want {
+		t.Errorf("FormatWaitMarkdown(canceled)\n got %q\nwant %q", got, want)
 	}
 }
 

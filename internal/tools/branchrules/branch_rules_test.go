@@ -493,13 +493,22 @@ func TestList_NullOptionalFields(t *testing.T) {
 
 // Markdown formatter tests.
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// branchRuleListHints is the guidance section every branch rule listing
+// closes with, pinned once so each whole-output expectation below names it
+// rather than restating it.
+const branchRuleListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'branch.get_protected' to see one rule's protection settings in full\n" +
+	"- Use action 'branch.protect' to change what a branch pattern requires\n"
+
+// TestFormatListMarkdown_Empty pins the whole response of a project with no
+// branch rules: one sentence, and no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No branch rules found") {
-		t.Error("empty output should contain 'No branch rules found'")
+	got := FormatListMarkdown(ListOutput{})
+
+	want := "No branch rules found.\n"
+
+	if got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -534,36 +543,47 @@ func TestFormatListMarkdown_WithRules(t *testing.T) {
 		Pagination: toolutil.GraphQLForwardPaginationOutput{HasNextPage: false},
 	}
 
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "main") {
-		t.Error("should contain 'main'")
-	}
-	if !strings.Contains(md, "feature/*") {
-		t.Error("should contain 'feature/*'")
-	}
-	if !strings.Contains(md, "Security Review") {
-		t.Error("should contain approval rule name")
-	}
-	if !strings.Contains(md, "SonarQube") {
-		t.Error("should contain status check name")
-	}
-	if !strings.Contains(md, "Approval Rules for") {
-		t.Error("should contain approval rules detail section")
-	}
-	if !strings.Contains(md, "External Status Checks for") {
-		t.Error("should contain external status checks detail section")
+	got := FormatListMarkdown(out)
+
+	want := "## Branch Rules (2)\n\n" +
+		"| Name | Default | Protected | Branches | Force Push | CODEOWNERS | Approval Rules | Status Checks |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| main | ✅ | ✅ | 1 | ❌ | ✅ | 1 (Security Review) | 1 (SonarQube) |\n" +
+		"| feature/* | ❌ | ❌ | 5 | - | - | None | None |\n" +
+		"\n### Approval Rules for main\n\n" +
+		"| Name | Approvals Required | Type |\n" +
+		"| --- | --- | --- |\n" +
+		"| Security Review | 2 | REGULAR |\n" +
+		"\n### External Status Checks for main\n\n" +
+		"| Name | URL |\n" +
+		"| --- | --- |\n" +
+		"| SonarQube | [https://sonar.example.com](https://sonar.example.com) |\n" +
+		"\nShowing 2 items | no more pages\n" +
+		branchRuleListHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestBoolIcon verifies the BoolIcon handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestBoolIcon(t *testing.T) {
-	if boolIcon(true) != "Yes" {
-		t.Errorf("boolIcon(true) = %q, want %q", boolIcon(true), "Yes")
-	}
-	if boolIcon(false) != "No" {
-		t.Errorf("boolIcon(false) = %q, want %q", boolIcon(false), "No")
+// TestFormatListMarkdown_NextPage pins that a connection with more to come
+// says so in the heading and names the cursor to pass back, which is the only
+// way a caller reaches the next page of a cursor-paginated list.
+func TestFormatListMarkdown_NextPage(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Rules:      []BranchRuleItem{{Name: "main", IsDefault: true, IsProtected: true, MatchingBranchesCount: 1}},
+		Pagination: toolutil.GraphQLForwardPaginationOutput{HasNextPage: true, EndCursor: "cursor7"},
+	})
+
+	want := "## Branch Rules (1 shown, more available)\n\n" +
+		"| Name | Default | Protected | Branches | Force Push | CODEOWNERS | Approval Rules | Status Checks |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| main | ✅ | ✅ | 1 | - | - | None | None |\n" +
+		"\nShowing 1 items | next page cursor: `cursor7`\n" +
+		branchRuleListHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

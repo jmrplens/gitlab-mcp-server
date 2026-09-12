@@ -1877,28 +1877,65 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		WebURL:         "https://gitlab.example.com/-/jobs/100",
 	})
 
-	for _, want := range []string{
-		"Job #100",
-		"build",
-		"**Pipeline**: #10",
-		"**Stage**: build",
-		"**Status**: success",
-		"**Allow Failure**: yes",
-		"**Ref**: main",
-		"`abcdef123456`",
-		"**Duration**: 45.5s",
-		"**Queued**: 2.1s",
-		"**Failure Reason**: script_failure",
-		"**Coverage**: 85.5%",
-		"**User**: testuser",
-		"**Created**:",
-		"https://gitlab.example.com/-/jobs/100",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## ✅ Job #100: build\n\n" +
+		"- **Pipeline**: #10\n" +
+		"- **Stage**: build\n" +
+		"- **Status**: ✅ success\n" +
+		"- **Allow Failure**: ✅\n" +
+		"- **Ref**: main\n" +
+		"- **Tag**: ❌\n" +
+		"- **Commit**: `abcdef123456`\n" +
+		"- **Duration**: 45.5s\n" +
+		"- **Queued**: 2.1s\n" +
+		"- **Failure Reason**: script_failure\n" +
+		"- **Coverage**: 85.5%\n" +
+		"- **User**: @testuser\n" +
+		"- **Created**: 1 Mar 2026 10:00 UTC\n" +
+		"- **URL**: [https://gitlab.example.com/-/jobs/100](https://gitlab.example.com/-/jobs/100)\n" +
+		jobCardHints
+	if md != want {
+		t.Errorf("FormatOutputMarkdown(all fields)\n got %q\nwant %q", md, want)
+	}
+}
+
+// jobCardHints is the guidance section a job card closes with when the job is
+// neither erased nor archived.
+const jobCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'job.trace' to read this job's log\n" +
+	"- Use action 'job.retry' to re-run this job\n" +
+	"- Use action 'job.cancel' to cancel it while it is still running\n"
+
+// TestFormatOutputMarkdown_ErasedAndArchivedRowsAndHints checks the three
+// rows a job's own state decides, and that the hints follow them: GitLab keeps
+// no log for an erased job and refuses both a retry and a cancel on an
+// archived one, so offering those was advice that could only fail. The hints
+// are replaced rather than dropped, so the card still closes with three.
+func TestFormatOutputMarkdown_ErasedAndArchivedRowsAndHints(t *testing.T) {
+	md := FormatOutputMarkdown(Output{
+		ID:                7,
+		Name:              "build",
+		Stage:             "build",
+		Status:            "success",
+		Ref:               "main",
+		ErasedAt:          "2026-03-02T08:00:00Z",
+		ArtifactsExpireAt: "2026-04-01T00:00:00Z",
+		Archived:          true,
+	})
+	want := "## ✅ Job #7: build 📦\n\n" +
+		"- **Stage**: build\n" +
+		"- **Status**: ✅ success\n" +
+		"- **Allow Failure**: ❌\n" +
+		"- **Ref**: main\n" +
+		"- **Tag**: ❌\n" +
+		"- **Erased**: 2 Mar 2026 08:00 UTC\n" +
+		"- **Artifacts Expire**: 1 Apr 2026 00:00 UTC\n" +
+		"- 📦 **Archived**\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'job.list_project' to look at the project's other jobs, since this one's log was erased\n" +
+		"- Use action 'pipeline.get' to open the pipeline this job ran in\n" +
+		"- Use action 'job.list' to see the other jobs of that pipeline\n"
+	if md != want {
+		t.Errorf("FormatOutputMarkdown(erased and archived)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -1919,7 +1956,8 @@ func TestFormatWaitResult_TimedOutMarksError(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies FormatOutputMarkdown when minimal fields.
+// TestFormatOutputMarkdown_MinimalFields checks that a job GitLab said little
+// about renders only the rows it answered: no label stands without a value.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:     50,
@@ -1928,22 +1966,15 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 		Status: "running",
 		Ref:    "develop",
 	})
-
-	if !strings.Contains(md, "Job #50") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	for _, absent := range []string{
-		"**Duration**",
-		"**Queued**",
-		"**Failure Reason**",
-		"**Coverage**",
-		"**User**",
-	} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-			}
-		})
+	want := "## 🔵 Job #50: test\n\n" +
+		"- **Stage**: test\n" +
+		"- **Status**: 🔵 running\n" +
+		"- **Allow Failure**: ❌\n" +
+		"- **Ref**: develop\n" +
+		"- **Tag**: ❌\n" +
+		jobCardHints
+	if md != want {
+		t.Errorf("FormatOutputMarkdown(minimal)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -1960,57 +1991,57 @@ func TestFormatListMarkdown_WithJobs(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
-
-	for _, want := range []string{
-		"## Jobs (2)",
-		"| ID |",
-		"| --- |",
-		// These jobs carry no web URL, and MdTitleLink renders a bare label
-		// rather than the empty link the hand-written "[%d](%s)" produced.
-		"#100",
-		"#101",
-		"build",
-		"test",
-		"success",
-		"failed",
-		"45.5s",
-		"12.3s",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	// These jobs carry no web URL, and MdTitleLink renders a bare label rather
+	// than the empty link the hand-written "[%d](%s)" produced.
+	want := "## Jobs (2)\n\n" +
+		"| ID | Name | Stage | Status | Duration |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| #100 | build | build | ✅ success | 45.5s |\n" +
+		"| #101 | test | test | ❌ failed | 12.3s |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		jobListHints
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("FormatListMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// jobListHints is the guidance section a job list closes with.
+const jobListHints = "\n---\n💡 **Next steps:**\n" +
+	"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+	"- Use action 'job.get' to see one job in full\n" +
+	"- Use action 'job.trace' to read a job's log\n"
+
+// TestFormatListMarkdown_Empty checks that an empty page is the one sentence
+// and nothing else.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No jobs found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+	const want = "No jobs found.\n"
+	if got := FormatListMarkdown(ListOutput{}); got != want {
+		t.Errorf("FormatListMarkdown(empty)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_ClickableJobLinks verifies that job IDs
-// in the list are rendered as clickable Markdown links [#ID](weburl).
-func TestFormatListMarkdown_ClickableJobLinks(t *testing.T) {
+// TestFormatListMarkdown_KeysetPageLinksAndMarksArchived checks the two things
+// a keyset page decides: the heading counts the rows shown, since GitLab sends
+// no total, and an archived job is marked in the row, without which a reader
+// cannot tell one GitLab will not retry from a live one.
+func TestFormatListMarkdown_KeysetPageLinksAndMarksArchived(t *testing.T) {
 	out := ListOutput{
 		Jobs: []Output{
 			{
 				ID: 200, Name: "deploy", Stage: "deploy", Status: "success", Duration: 10.0,
-				WebURL: "https://gitlab.example.com/-/jobs/200",
+				Archived: true,
+				WebURL:   "https://gitlab.example.com/-/jobs/200",
 			},
 		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 1},
+		Pagination: toolutil.PaginationOutput{NextPage: 2},
 	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "[#200](https://gitlab.example.com/-/jobs/200)") {
-		t.Errorf("expected clickable job link, got:\n%s", md)
+	want := "## Jobs (1 shown, more available)\n\n" +
+		"| ID | Name | Stage | Status | Duration |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| [#200](https://gitlab.example.com/-/jobs/200) | deploy 📦 | deploy | ✅ success | 10.0s |\n" +
+		jobListHints
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("FormatListMarkdown(keyset)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -2018,51 +2049,53 @@ func TestFormatListMarkdown_ClickableJobLinks(t *testing.T) {
 // FormatTraceMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatTraceMarkdown_WithData verifies FormatTraceMarkdown when with data.
+// traceHints is the guidance section a job trace closes with.
+const traceHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'job.get' to see this job's details\n" +
+	"- Use action 'job.retry' to re-run it\n"
+
+// TestFormatTraceMarkdown_WithData checks the whole trace rendering: the
+// heading, the log in a fence sized to its own content, and no truncation
+// note when nothing was cut.
 func TestFormatTraceMarkdown_WithData(t *testing.T) {
 	md := FormatTraceMarkdown(TraceOutput{
 		JobID: 100,
 		Trace: "Running with gitlab-runner 15.0.0\nJob succeeded",
 	})
-
-	for _, want := range []string{
-		"## Job #100 Trace",
-		"```",
-		"Running with gitlab-runner 15.0.0",
-		"Job succeeded",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-	if strings.Contains(md, "Truncated") {
-		t.Error("should not contain truncation warning")
+	want := "## Job #100 Trace\n\n" +
+		"```\nRunning with gitlab-runner 15.0.0\nJob succeeded\n```\n" +
+		traceHints
+	if md != want {
+		t.Errorf("FormatTraceMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatTraceMarkdown_Truncated verifies FormatTraceMarkdown when truncated.
+// TestFormatTraceMarkdown_Truncated checks that the note names the end that is
+// missing. The log is cut at the first 100 KB and a failure is almost always
+// at the end of it, so a reader told only "truncated" would look for the error
+// in what is shown.
 func TestFormatTraceMarkdown_Truncated(t *testing.T) {
 	md := FormatTraceMarkdown(TraceOutput{
 		JobID:     100,
 		Trace:     "partial log...",
 		Truncated: true,
 	})
-
-	if !strings.Contains(md, "Trace truncated at 100KB") {
-		t.Errorf("missing truncation warning:\n%s", md)
+	want := "## Job #100 Trace\n\n" +
+		"⚠️ Showing the first 100 KB of the log. The end, where a failure usually appears, is not included.\n" +
+		"\n```\npartial log...\n```\n" +
+		traceHints
+	if md != want {
+		t.Errorf("FormatTraceMarkdown(truncated)\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatTraceMarkdown_Empty verifies FormatTraceMarkdown when empty.
+// TestFormatTraceMarkdown_Empty checks that a job with no log yet renders no
+// fence at all: an empty fence is a glyph that reads as content.
 func TestFormatTraceMarkdown_Empty(t *testing.T) {
 	md := FormatTraceMarkdown(TraceOutput{JobID: 99})
-	if !strings.Contains(md, "## Job #99 Trace") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	if !strings.Contains(md, "```") {
-		t.Errorf("missing code fence:\n%s", md)
+	want := "## Job #99 Trace\n" + traceHints
+	if md != want {
+		t.Errorf("FormatTraceMarkdown(empty)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -2079,36 +2112,48 @@ func TestFormatBridgeListMarkdown_WithData(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatBridgeListMarkdown(out)
-
-	for _, want := range []string{
-		"## Bridge Jobs (2)",
-		"| ID |",
-		"| --- |",
-		"| 200 |",
-		"| 201 |",
-		"trigger-downstream",
-		"trigger-other",
-		"success",
-		"failed",
-		"#50",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Bridge Jobs (2)\n\n" +
+		"| ID | Name | Stage | Status | Duration | Downstream |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| #200 | trigger-downstream | deploy | ✅ success | 10.0s | #50 |\n" +
+		"| #201 | trigger-other | deploy | ❌ failed | 5.0s |  |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- Use action 'pipeline.get' to open the downstream pipeline\n"
+	if got := FormatBridgeListMarkdown(out); got != want {
+		t.Errorf("FormatBridgeListMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatBridgeListMarkdown_Empty verifies FormatBridgeListMarkdown when empty.
-func TestFormatBridgeListMarkdown_Empty(t *testing.T) {
-	md := FormatBridgeListMarkdown(BridgeListOutput{})
-	if !strings.Contains(md, "No bridge jobs found") {
-		t.Errorf("expected empty message:\n%s", md)
+// TestFormatBridgeListMarkdown_LinksTheDownstreamPipeline checks that the
+// downstream cell is a link when GitLab sent the pipeline's address: the
+// bridge exists to point at that pipeline, and the cell named it without
+// reaching it.
+func TestFormatBridgeListMarkdown_LinksTheDownstreamPipeline(t *testing.T) {
+	out := BridgeListOutput{
+		Bridges: []BridgeOutput{{
+			ID: 300, Name: "trigger", Stage: "deploy", Status: "success", Duration: 1.0,
+			WebURL: "https://gitlab.example.com/-/jobs/300",
+			DownstreamPipeline: &PipelineInfoObject{
+				ID: 77, WebURL: "https://gitlab.example.com/downstream/-/pipelines/77",
+			},
+		}},
 	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+	md := FormatBridgeListMarkdown(out)
+	const wantRow = "| [#300](https://gitlab.example.com/-/jobs/300) | trigger | deploy | ✅ success | 1.0s | " +
+		"[#77](https://gitlab.example.com/downstream/-/pipelines/77) |\n"
+	if !strings.Contains(md, wantRow) {
+		t.Errorf("FormatBridgeListMarkdown() missing %q:\n%s", wantRow, md)
+	}
+}
+
+// TestFormatBridgeListMarkdown_Empty checks that an empty page is the one
+// sentence and nothing else.
+func TestFormatBridgeListMarkdown_Empty(t *testing.T) {
+	const want = "No bridge jobs found.\n"
+	if got := FormatBridgeListMarkdown(BridgeListOutput{}); got != want {
+		t.Errorf("FormatBridgeListMarkdown(empty)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -2122,43 +2167,49 @@ func TestFormatArtifactsMarkdown_WithJobID(t *testing.T) {
 		JobID: 100,
 		Size:  2048,
 	})
-
-	for _, want := range []string{
-		"## Job #100 Artifacts",
-		"**Size**: 2048 bytes",
-		"base64-encoded",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-	if strings.Contains(md, "Truncated") {
-		t.Error("should not contain truncation warning")
+	want := "## Job #100 Artifacts\n\n" +
+		"- **Size (bytes)**: 2048\n" +
+		"\nThe archive is base64-encoded; decode it to extract the files.\n" +
+		artifactsHints
+	if md != want {
+		t.Errorf("FormatArtifactsMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatArtifactsMarkdown_WithoutJobID verifies FormatArtifactsMarkdown when without job ID.
+// artifactsHints is the guidance section an artifacts download closes with.
+const artifactsHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'job.download_single_artifact' to fetch one file out of the archive instead\n"
+
+// TestFormatArtifactsMarkdown_WithoutJobID checks the heading of the by-ref
+// download, which answers for a ref rather than for a job ID and must not
+// print "Job #0".
 func TestFormatArtifactsMarkdown_WithoutJobID(t *testing.T) {
 	md := FormatArtifactsMarkdown(ArtifactsOutput{Size: 512})
-	if !strings.Contains(md, "## Artifacts") {
-		t.Errorf("missing generic header:\n%s", md)
-	}
-	if strings.Contains(md, "Job #0") {
-		t.Error("should not have job-specific header when JobID=0")
+	want := "## Artifacts\n\n" +
+		"- **Size (bytes)**: 512\n" +
+		"\nThe archive is base64-encoded; decode it to extract the files.\n" +
+		artifactsHints
+	if md != want {
+		t.Errorf("FormatArtifactsMarkdown(no job)\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatArtifactsMarkdown_Truncated verifies FormatArtifactsMarkdown when truncated.
+// TestFormatArtifactsMarkdown_Truncated checks that a cut archive is marked
+// with the warning sign rather than a tick, which on "Truncated" reads as
+// success.
 func TestFormatArtifactsMarkdown_Truncated(t *testing.T) {
 	md := FormatArtifactsMarkdown(ArtifactsOutput{
 		JobID:     100,
 		Size:      1048576,
 		Truncated: true,
 	})
-	if !strings.Contains(md, "Truncated") {
-		t.Errorf("missing truncation warning:\n%s", md)
+	want := "## Job #100 Artifacts\n\n" +
+		"- **Size (bytes)**: 1048576\n" +
+		"- ⚠️ **Truncated at 1 MB**\n" +
+		"\nThe archive is base64-encoded; decode it to extract the files.\n" +
+		artifactsHints
+	if md != want {
+		t.Errorf("FormatArtifactsMarkdown(truncated)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -2174,38 +2225,38 @@ func TestFormatSingleArtifactMarkdown_WithJobID(t *testing.T) {
 		Size:         256,
 		Content:      "test report content",
 	})
-
-	for _, want := range []string{
-		"## Job #100",
-		"report.txt",
-		"**Size**: 256 bytes",
-		"test report content",
-		"```",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Job #100: report.txt\n\n" +
+		"- **Size (bytes)**: 256\n" +
+		"\n```\ntest report content\n```\n" +
+		singleArtifactHints
+	if md != want {
+		t.Errorf("FormatSingleArtifactMarkdown()\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatSingleArtifactMarkdown_WithoutJobID verifies FormatSingleArtifactMarkdown when without job ID.
+// singleArtifactHints is the guidance section one artifact file closes with.
+const singleArtifactHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'job.artifacts' to download the whole artifacts archive\n"
+
+// TestFormatSingleArtifactMarkdown_WithoutJobID checks that the by-ref
+// download heads with the path alone rather than "Job #0".
 func TestFormatSingleArtifactMarkdown_WithoutJobID(t *testing.T) {
 	md := FormatSingleArtifactMarkdown(SingleArtifactOutput{
 		ArtifactPath: "output.log",
 		Size:         64,
 		Content:      "log data",
 	})
-	if !strings.Contains(md, "## output.log") {
-		t.Errorf("missing path-only header:\n%s", md)
-	}
-	if strings.Contains(md, "Job #0") {
-		t.Error("should not have job-specific header when JobID=0")
+	want := "## output.log\n\n" +
+		"- **Size (bytes)**: 64\n" +
+		"\n```\nlog data\n```\n" +
+		singleArtifactHints
+	if md != want {
+		t.Errorf("FormatSingleArtifactMarkdown(no job)\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatSingleArtifactMarkdown_Truncated verifies FormatSingleArtifactMarkdown when truncated.
+// TestFormatSingleArtifactMarkdown_Truncated checks that a cut file is marked
+// with the warning sign.
 func TestFormatSingleArtifactMarkdown_Truncated(t *testing.T) {
 	md := FormatSingleArtifactMarkdown(SingleArtifactOutput{
 		JobID:        100,
@@ -2214,8 +2265,13 @@ func TestFormatSingleArtifactMarkdown_Truncated(t *testing.T) {
 		Content:      "...",
 		Truncated:    true,
 	})
-	if !strings.Contains(md, "Truncated") {
-		t.Errorf("missing truncation warning:\n%s", md)
+	want := "## Job #100: big.bin\n\n" +
+		"- **Size (bytes)**: 1048576\n" +
+		"- ⚠️ **Truncated at 1 MB**\n" +
+		"\n```\n...\n```\n" +
+		singleArtifactHints
+	if md != want {
+		t.Errorf("FormatSingleArtifactMarkdown(truncated)\n got %q\nwant %q", md, want)
 	}
 }
 

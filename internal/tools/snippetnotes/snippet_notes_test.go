@@ -490,65 +490,95 @@ func TestDelete_CancelledContext(t *testing.T) {
 
 // Markdown tests.
 
-// TestFormatOutputMarkdown_Basic verifies the OutputMarkdown_Basic markdown formatter output.
+// The two guidance sections a snippet note result ends with, so each
+// expectation below can pin the whole rendered document.
+const (
+	noteHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'note_update' with note_id to edit this note\n" +
+		"- Use action 'note_delete' with note_id to remove this note\n"
+	listHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'note_get' with note_id to read a specific note\n" +
+		"- Use action 'note_create' to add a new note to this snippet\n"
+)
+
+// TestFormatOutputMarkdown_Basic pins the whole card of a note somebody wrote.
 func TestFormatOutputMarkdown_Basic(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:     100,
 		Body:   "Great snippet",
 		Author: &toolutil.NoteUserOutput{Username: "alice"},
 		System: false,
 	})
-	if !contains(md, "## Snippet Note #100") {
-		t.Error("missing header")
-	}
-	if !contains(md, "alice") {
-		t.Error("missing author")
+
+	want := "## Snippet Note #100\n\n" +
+		"- **Author**: @alice\n" +
+		"- **Body**: Great snippet\n" +
+		noteHintsBlock
+	if got != want {
+		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_NilAuthor verifies the markdown formatter renders
-// without panicking when the author object is nil.
+// TestFormatOutputMarkdown_NilAuthor pins the card of a note GitLab answered
+// with no author object: the author row is absent rather than a bare handle.
 func TestFormatOutputMarkdown_NilAuthor(t *testing.T) {
-	md := FormatOutputMarkdown(Output{ID: 100, Body: "no author"})
-	if !contains(md, "## Snippet Note #100") {
-		t.Error("missing header")
+	got := FormatOutputMarkdown(Output{ID: 100, Body: "no author"})
+
+	want := "## Snippet Note #100\n\n" +
+		"- **Body**: no author\n" +
+		noteHintsBlock
+	if got != want {
+		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_SystemNote verifies the OutputMarkdown_SystemNote markdown formatter output.
+// TestFormatOutputMarkdown_SystemNote pins the card of a system note.
 func TestFormatOutputMarkdown_SystemNote(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:     101,
 		Body:   "changed the title",
 		Author: &toolutil.NoteUserOutput{Username: "admin"},
 		System: true,
 	})
-	if !contains(md, "System note") {
-		t.Error("missing system note indicator")
+
+	want := "## Snippet Note #101\n\n" +
+		"- **Author**: @admin\n" +
+		"- **System note**\n" +
+		"- **Body**: changed the title\n" +
+		noteHintsBlock
+	if got != want {
+		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty markdown formatter output.
+// TestFormatListMarkdown_Empty pins the whole response of a snippet with no
+// notes.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !contains(md, "No snippet notes found") {
-		t.Error("missing empty message")
+	got := FormatListMarkdown(ListOutput{})
+
+	if want := "No snippet notes found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_WithNotes verifies the ListMarkdown_WithNotes markdown formatter output.
+// TestFormatListMarkdown_WithNotes pins the whole list document: the table the
+// shared note list renderer writes, with the system flag as a glyph.
 func TestFormatListMarkdown_WithNotes(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Notes: []Output{
 			{ID: 100, Author: &toolutil.NoteUserOutput{Username: "alice"}, System: false},
 			{ID: 101, Author: &toolutil.NoteUserOutput{Username: "admin"}, System: true},
 		},
 	})
-	if !contains(md, "| 100 |") {
-		t.Error("missing note 100 row")
-	}
-	if !contains(md, "| 101 |") {
-		t.Error("missing note 101 row")
+
+	want := "## Snippet Notes (2)\n\n" +
+		"| ID | Author | Created | System |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 100 | alice |  | ❌ |\n" +
+		"| 101 | admin |  | ✅ |\n" +
+		listHintsBlock
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -853,19 +883,24 @@ func TestList_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_WithUpdatedAt verifies the OutputMarkdown_WithUpdatedAt markdown formatter output.
+// TestFormatOutputMarkdown_WithUpdatedAt pins the whole card of a note that has
+// been edited: the shared note card shows the time it was written, and the time
+// of the edit is carried by the JSON rather than the card.
 func TestFormatOutputMarkdown_WithUpdatedAt(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:        100,
 		Body:      "test note",
 		Author:    &toolutil.NoteUserOutput{Username: "bob"},
 		CreatedAt: "2026-03-10T09:00:00Z",
 		UpdatedAt: "2026-03-10T10:00:00Z",
 	})
-	if !contains(md, "bob") {
-		t.Error("missing author")
-	}
-	if !contains(md, "## Snippet Note #100") {
-		t.Error("missing header")
+
+	want := "## Snippet Note #100\n\n" +
+		"- **Author**: @bob\n" +
+		"- **Created**: 10 Mar 2026 09:00 UTC\n" +
+		"- **Body**: test note\n" +
+		noteHintsBlock
+	if got != want {
+		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }

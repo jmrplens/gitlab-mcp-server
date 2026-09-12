@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -642,19 +641,34 @@ func TestToOutput_MinimalFields(t *testing.T) {
 	}
 }
 
+// listTableHead is the header and delimiter of the merge train table, and
+// listHints the guidance section every listing closes with, written once so the
+// whole-output expectations below name them rather than repeating them.
+const (
+	listTableHead = "| ID | MR | Title | Target Branch | Status | Pipeline | User | Duration |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+	listHints = "\n---\n💡 **Next steps:**\n" +
+		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- Use action 'merge_train.get' to read one merge request's position on the train\n" +
+		"- Use action 'merge_train.add' to add another merge request to the train\n"
+)
+
 // TestFormatListMarkdown validates Markdown formatting for merge train lists.
 // Covers empty trains, trains with WebURL links, and trains without WebURL.
+//
+// Every case asserts the whole rendering rather than a substring of it. The
+// substring form is what let the card next door open a table and write list
+// rows into it while "| Status | merged |" still matched.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    ListOutput
-		contains []string
-		equals   string
+		name  string
+		input ListOutput
+		want  string
 	}{
 		{
-			name:   "empty list returns no-results message",
-			input:  ListOutput{Trains: []Output{}},
-			equals: "No merge trains found.\n",
+			name:  "empty list returns no-results message",
+			input: ListOutput{Trains: []Output{}},
+			want:  "No merge trains found.\n",
 		},
 		{
 			name: "renders table with WebURL link",
@@ -665,20 +679,15 @@ func TestFormatListMarkdown(t *testing.T) {
 						TargetBranch: "main",
 						Status:       "merged",
 						User:         &toolutil.BasicUserOutput{ID: 1, Username: "admin"},
+						Pipeline:     &toolutil.PipelineOutput{ID: 200, Status: "success", WebURL: "https://gitlab.example.com/-/pipelines/200"},
 						Duration:     120,
 						MergeRequest: MergeRequestOutput{IID: 5, Title: "Fix bug", WebURL: "https://gitlab.example.com/-/merge_requests/5"},
 					},
 				},
 			},
-			contains: []string{
-				"## Merge Trains",
-				"[!5](https://gitlab.example.com/-/merge_requests/5)",
-				"| 1 |",
-				"| main |",
-				"| merged |",
-				"| admin |",
-				"| 120s |",
-			},
+			want: "## Merge Trains (1)\n\n" + listTableHead +
+				"| 1 | [!5](https://gitlab.example.com/-/merge_requests/5) | Fix bug | main | merged | " +
+				"[#200](https://gitlab.example.com/-/pipelines/200) ✅ success | @admin | 120s |\n" + listHints,
 		},
 		{
 			name: "renders MR without WebURL as plain text",
@@ -694,37 +703,38 @@ func TestFormatListMarkdown(t *testing.T) {
 					},
 				},
 			},
-			contains: []string{
-				"!10",
-				"Add feature",
-				"| develop |",
-				"| idle |",
-			},
+			want: "## Merge Trains (1)\n\n" + listTableHead +
+				"| 2 | !10 | Add feature | develop | idle |  | @dev | 0s |\n" + listHints,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatListMarkdown(tt.input)
-			if tt.equals != "" && got != tt.equals {
-				t.Errorf("got %q, want %q", got, tt.equals)
-			}
-			for _, want := range tt.contains {
-				if !strings.Contains(got, want) {
-					t.Errorf("output missing %q\ngot:\n%s", want, got)
-				}
+			if got := FormatListMarkdown(tt.input); got != tt.want {
+				t.Errorf("rendered =\n%q\nwant\n%q", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestFormatOutputMarkdown validates Markdown formatting for a single merge train entry.
-// Covers minimal output, full output with all fields, and output without WebURL.
+// cardHints is the guidance section a merge train card closes with.
+const cardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'merge_train.list_project' to see every merge train in the project\n" +
+	"- Use action 'merge_train.list_branch' to see the rest of this branch's train\n" +
+	"- Use action 'merge_train.add' to add another merge request to the train\n"
+
+// TestFormatOutputMarkdown validates Markdown formatting for a single merge
+// train entry: the card of one object, asserted whole.
+//
+// This is the formatter the audit proved broken. It used to open a
+// "| Property | Value |" table and then write "- **ID**: 1" into it, which
+// ended the table with no body and left every later "| Status | merged |" on
+// the page as literal pipes — while a test asserting exactly that substring
+// passed. Nothing here is a substring any more.
 func TestFormatOutputMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    Output
-		contains []string
-		absent   []string
+		name  string
+		input Output
+		want  string
 	}{
 		{
 			name: "renders full output with all optional fields",
@@ -733,22 +743,24 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				TargetBranch: "main",
 				Status:       "merged",
 				User:         &toolutil.BasicUserOutput{ID: 1, Username: "admin"},
-				Pipeline:     &toolutil.PipelineOutput{ID: 200},
+				Pipeline:     &toolutil.PipelineOutput{ID: 200, Status: "success", WebURL: "https://gitlab.example.com/-/pipelines/200"},
 				Duration:     120,
 				CreatedAt:    "2026-01-15T10:00:00Z",
+				UpdatedAt:    "2026-01-16T10:00:00Z",
 				MergedAt:     "2026-01-17T10:00:00Z",
 				MergeRequest: MergeRequestOutput{IID: 5, Title: "Fix bug", WebURL: "https://gitlab.example.com/-/merge_requests/5"},
 			},
-			contains: []string{
-				"## Merge Train #1",
-				"| Status | merged |",
-				"| Target Branch | main |",
-				"[!5](https://gitlab.example.com/-/merge_requests/5)",
-				"| User | admin |",
-				"| Pipeline | #200 |",
-				"| Duration | 120s |",
-				"| Merged At |",
-			},
+			want: "## Merge Train #1\n\n" +
+				"- **ID**: 1\n" +
+				"- **Status**: merged\n" +
+				"- **Target Branch**: main\n" +
+				"- **Merge Request**: [!5](https://gitlab.example.com/-/merge_requests/5) - Fix bug\n" +
+				"- **User**: @admin\n" +
+				"- **Pipeline**: [#200](https://gitlab.example.com/-/pipelines/200) ✅ success\n" +
+				"- **Duration**: 120s\n" +
+				"- **Created**: 15 Jan 2026 10:00 UTC\n" +
+				"- **Updated**: 16 Jan 2026 10:00 UTC\n" +
+				"- **Merged**: 17 Jan 2026 10:00 UTC\n" + cardHints,
 		},
 		{
 			name: "renders minimal output without optional fields",
@@ -759,16 +771,12 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				Duration:     0,
 				MergeRequest: MergeRequestOutput{IID: 10, Title: "Add feature"},
 			},
-			contains: []string{
-				"## Merge Train #2",
-				"| Status | idle |",
-				"!10",
-			},
-			absent: []string{
-				"| User |",
-				"| Pipeline |",
-				"| Merged At |",
-			},
+			want: "## Merge Train #2\n\n" +
+				"- **ID**: 2\n" +
+				"- **Status**: idle\n" +
+				"- **Target Branch**: develop\n" +
+				"- **Merge Request**: !10 - Add feature\n" +
+				"- **Duration**: 0s\n" + cardHints,
 		},
 		{
 			name: "renders MR without WebURL as plain text",
@@ -778,26 +786,18 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				Status:       "active",
 				MergeRequest: MergeRequestOutput{IID: 7, Title: "Update docs"},
 			},
-			contains: []string{
-				"!7 - Update docs",
-			},
-			absent: []string{
-				"[!7](",
-			},
+			want: "## Merge Train #3\n\n" +
+				"- **ID**: 3\n" +
+				"- **Status**: active\n" +
+				"- **Target Branch**: main\n" +
+				"- **Merge Request**: !7 - Update docs\n" +
+				"- **Duration**: 0s\n" + cardHints,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatOutputMarkdown(tt.input)
-			for _, want := range tt.contains {
-				if !strings.Contains(got, want) {
-					t.Errorf("output missing %q\ngot:\n%s", want, got)
-				}
-			}
-			for _, notWant := range tt.absent {
-				if strings.Contains(got, notWant) {
-					t.Errorf("output should not contain %q\ngot:\n%s", notWant, got)
-				}
+			if got := FormatOutputMarkdown(tt.input); got != tt.want {
+				t.Errorf("rendered =\n%q\nwant\n%q", got, tt.want)
 			}
 		})
 	}

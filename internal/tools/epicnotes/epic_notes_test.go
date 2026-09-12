@@ -863,14 +863,26 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// The two guidance sections an epic note result ends with, so each expectation
+// below can pin the whole rendered document.
+const (
+	noteHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'epic_note_update' with note_id to edit this note\n" +
+		"- Use action 'epic_note_delete' with note_id to remove this note\n"
+	listHintsBlock = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'epic_note_get' with note_id to read a specific note\n" +
+		"- Use action 'epic_note_create' to add a new note to this epic\n"
+)
+
+// TestFormatOutputMarkdown uses table-driven subtests to pin the whole note
+// card: the author as a handle, the system marker where it holds, and no author
+// row at all for a note GitLab answered with none, where the card used to write
+// a label with nothing after it.
 func TestFormatOutputMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    Output
-		contains []string
+		name  string
+		input Output
+		want  string
 	}{
 		{
 			name: "renders regular note with author and body",
@@ -881,13 +893,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				CreatedAt: "2026-01-15T10:00:00Z",
 				System:    false,
 			},
-			contains: []string{
-				"## Epic Note #100",
-				"alice",
-				"This looks good",
-				"epic_note_update",
-				"epic_note_delete",
-			},
+			want: "## Epic Note #100\n\n" +
+				"- **Author**: @alice\n" +
+				"- **Created**: 15 Jan 2026 10:00 UTC\n" +
+				"- **Body**: This looks good\n" +
+				noteHintsBlock,
 		},
 		{
 			name: "renders system note with system flag",
@@ -898,11 +908,12 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				CreatedAt: "2026-01-15T12:00:00Z",
 				System:    true,
 			},
-			contains: []string{
-				"## Epic Note #101",
-				"**System note**",
-				"changed the description",
-			},
+			want: "## Epic Note #101\n\n" +
+				"- **Author**: @admin\n" +
+				"- **Created**: 15 Jan 2026 12:00 UTC\n" +
+				"- **System note**\n" +
+				"- **Body**: changed the description\n" +
+				noteHintsBlock,
 		},
 		{
 			name: "renders note with nil author object",
@@ -913,33 +924,32 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				CreatedAt: "2026-01-15T13:00:00Z",
 				System:    true,
 			},
-			contains: []string{
-				"## Epic Note #102",
-				"anonymous system entry",
-			},
+			want: "## Epic Note #102\n\n" +
+				"- **Created**: 15 Jan 2026 13:00 UTC\n" +
+				"- **System note**\n" +
+				"- **Body**: anonymous system entry\n" +
+				noteHintsBlock,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			md := FormatOutputMarkdown(tt.input)
-			for _, want := range tt.contains {
-				if !strings.Contains(md, want) {
-					t.Errorf("markdown missing %q\ngot:\n%s", want, md)
-				}
+			if got := FormatOutputMarkdown(tt.input); got != tt.want {
+				t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown uses table-driven subtests to pin the whole list
+// document: the table with the system flag as a glyph rather than the word
+// "false", the cursor line the keyset connection ends with, and one sentence for
+// an epic with no notes.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    ListOutput
-		contains []string
+		name  string
+		input ListOutput
+		want  string
 	}{
 		{
 			name: "renders table with notes",
@@ -950,16 +960,26 @@ func TestFormatListMarkdown(t *testing.T) {
 				},
 				Pagination: toolutil.GraphQLForwardPaginationOutput{HasNextPage: false},
 			},
-			contains: []string{
-				"## Epic Notes (2)",
-				"| ID | Author | Created | System |",
-				"| 100 |",
-				"| 101 |",
-				"alice",
-				"admin",
-				"epic_note_get",
-				"epic_note_create",
+			want: "## Epic Notes (2)\n\n" +
+				"| ID | Author | Created | System |\n" +
+				"| --- | --- | --- | --- |\n" +
+				"| 100 | alice | 15 Jan 2026 10:00 UTC | ❌ |\n" +
+				"| 101 | admin | 15 Jan 2026 12:00 UTC | ✅ |\n\n" +
+				"Showing 2 items | no more pages\n" +
+				listHintsBlock,
+		},
+		{
+			name: "renders the next-page cursor when one follows",
+			input: ListOutput{
+				Notes:      []Output{{ID: 100, Author: authorObj("alice"), CreatedAt: "2026-01-15T10:00:00Z"}},
+				Pagination: toolutil.GraphQLForwardPaginationOutput{HasNextPage: true, EndCursor: "eyJpZCI6IjEwMCJ9"},
 			},
+			want: "## Epic Notes (1)\n\n" +
+				"| ID | Author | Created | System |\n" +
+				"| --- | --- | --- | --- |\n" +
+				"| 100 | alice | 15 Jan 2026 10:00 UTC | ❌ |\n\n" +
+				"Showing 1 items | next page cursor: `eyJpZCI6IjEwMCJ9`\n" +
+				listHintsBlock,
 		},
 		{
 			name: "renders empty state when no notes",
@@ -967,20 +987,14 @@ func TestFormatListMarkdown(t *testing.T) {
 				Notes:      []Output{},
 				Pagination: toolutil.GraphQLForwardPaginationOutput{},
 			},
-			contains: []string{
-				"## Epic Notes (0)",
-				"No epic notes found.",
-			},
+			want: "No epic notes found.\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			md := FormatListMarkdown(tt.input)
-			for _, want := range tt.contains {
-				if !strings.Contains(md, want) {
-					t.Errorf("markdown missing %q\ngot:\n%s", want, md)
-				}
+			if got := FormatListMarkdown(tt.input); got != tt.want {
+				t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, tt.want)
 			}
 		})
 	}

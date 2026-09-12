@@ -245,9 +245,20 @@ func TestDeleteTagProtectionRule_MissingRuleID(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatTagProtectionRuleMarkdown verifies the TagProtectionRuleMarkdown formatter for a representative input.
-// The test exercises rendering of a single tag protection rule.
-// It asserts the rendered Markdown contains the tag pattern.
+// tagRuleCardHints is the guidance a tag protection rule card closes with,
+// and tagRuleListHints the guidance the list closes with.
+const (
+	tagRuleCardHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'registry_tag_rule_update' to modify access levels\n" +
+		"- Use action 'registry_tag_rule_delete' to remove this rule\n"
+	tagRuleListHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'registry_tag_rule_create' to add a new rule\n" +
+		"- These rules protect image *tags*; use action 'registry_rule_list' for repository-path protection rules\n"
+)
+
+// TestFormatTagProtectionRuleMarkdown verifies the whole card of a tag
+// protection rule. The pattern is an RE2 expression a person types, so it is
+// a code span rather than an escaped cell: '|' is ordinary alternation there.
 func TestFormatTagProtectionRuleMarkdown(t *testing.T) {
 	out := TagProtectionRuleOutput{
 		ID: 1, ProjectID: 10,
@@ -255,45 +266,60 @@ func TestFormatTagProtectionRuleMarkdown(t *testing.T) {
 		MinimumAccessLevelForPush:   "maintainer",
 		MinimumAccessLevelForDelete: "admin",
 	}
-	md := FormatTagProtectionRuleMarkdown(out)
-	if !strings.Contains(md, "v.+") {
-		t.Errorf("expected pattern in markdown, got: %s", md)
+	got := FormatTagProtectionRuleMarkdown(out)
+	want := "## Tag Protection Rule: v.+\n\n" +
+		"- **ID**: 1\n" +
+		"- **Tag Name Pattern**: `v.+`\n" +
+		"- **Min Access Level (Push)**: maintainer\n" +
+		"- **Min Access Level (Delete)**: admin\n" +
+		tagRuleCardHints
+	if got != want {
+		t.Errorf("FormatTagProtectionRuleMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatTagProtectionRuleMarkdown_Immutable verifies that an empty access level renders as "immutable".
-// The test exercises the protectionAccessLabel helper through the formatter.
-// It asserts the rendered Markdown surfaces the immutable label.
+// TestFormatTagProtectionRuleMarkdown_Immutable verifies that an empty access
+// level renders as "immutable", which is how the API expresses a rule that
+// forbids push and delete for everyone.
 func TestFormatTagProtectionRuleMarkdown_Immutable(t *testing.T) {
-	out := TagProtectionRuleOutput{ID: 1, ProjectID: 10, TagNamePattern: "prod-.+"}
-	md := FormatTagProtectionRuleMarkdown(out)
-	if !strings.Contains(md, "immutable") {
-		t.Errorf("expected immutable label in markdown, got: %s", md)
+	got := FormatTagProtectionRuleMarkdown(TagProtectionRuleOutput{ID: 1, ProjectID: 10, TagNamePattern: "prod-.+"})
+	want := "## Tag Protection Rule: prod-.+\n\n" +
+		"- **ID**: 1\n" +
+		"- **Tag Name Pattern**: `prod-.+`\n" +
+		"- **Min Access Level (Push)**: immutable\n" +
+		"- **Min Access Level (Delete)**: immutable\n" +
+		tagRuleCardHints
+	if got != want {
+		t.Errorf("FormatTagProtectionRuleMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatTagProtectionRuleListMarkdown verifies the TagProtectionRuleListMarkdown formatter for a representative input.
-// The test exercises rendering of a populated rule list.
-// It asserts the rendered Markdown contains the tag pattern.
+// TestFormatTagProtectionRuleListMarkdown verifies the whole table for a
+// populated rule list.
 func TestFormatTagProtectionRuleListMarkdown(t *testing.T) {
 	out := TagProtectionRuleListOutput{
 		Rules: []TagProtectionRuleOutput{
 			{ID: 1, TagNamePattern: "v.+", MinimumAccessLevelForPush: "maintainer", MinimumAccessLevelForDelete: "admin"},
 		},
 	}
-	md := FormatTagProtectionRuleListMarkdown(out)
-	if !strings.Contains(md, "v.+") {
-		t.Errorf("expected pattern in markdown, got: %s", md)
+	got := FormatTagProtectionRuleListMarkdown(out)
+	want := "## Tag Protection Rules (1)\n\n" +
+		"| ID | Tag Pattern | Min Push | Min Delete |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 1 | `v.+` | maintainer | admin |\n" +
+		tagRuleListHints
+	if got != want {
+		t.Errorf("FormatTagProtectionRuleListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatTagProtectionRuleListMarkdown_Empty verifies that the list formatter handles the empty state.
-// The test exercises rendering of an empty rule list.
-// It asserts the rendered Markdown shows the empty-state message.
+// TestFormatTagProtectionRuleListMarkdown_Empty verifies an empty list is the
+// one sentence and nothing else.
 func TestFormatTagProtectionRuleListMarkdown_Empty(t *testing.T) {
-	md := FormatTagProtectionRuleListMarkdown(TagProtectionRuleListOutput{})
-	if !strings.Contains(md, "No tag protection rules found") {
-		t.Errorf("expected empty-state message, got: %s", md)
+	got := FormatTagProtectionRuleListMarkdown(TagProtectionRuleListOutput{})
+	want := "No tag protection rules found.\n"
+	if got != want {
+		t.Errorf("FormatTagProtectionRuleListMarkdown() = %q, want %q", got, want)
 	}
 }
 

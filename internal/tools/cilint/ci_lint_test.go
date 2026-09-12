@@ -6,7 +6,6 @@ package cilint
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -307,15 +306,6 @@ func TestCILint_CancelledContext(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
-const (
-	// mdHeadingWarnings identifies the md heading warnings constant used by this package.
-	mdHeadingWarnings = "### Warnings"
-	// mdHeadingIncludes identifies the md heading includes constant used by this package.
-	mdHeadingIncludes = "### Includes"
-	// mdHeadingMergedYAML identifies the md heading merged YAML constant used by this package.
-	mdHeadingMergedYAML = "### Merged YAML"
-)
-
 // ---------------------------------------------------------------------------
 // LintProject — API error
 // ---------------------------------------------------------------------------.
@@ -493,28 +483,24 @@ func TestFormatOutputMarkdown_ValidAllSections(t *testing.T) {
 		},
 	})
 
-	for _, want := range []string{
-		"## CI Lint: ✅ Valid",
-		mdHeadingWarnings,
-		"- warn1",
-		"- warn2",
-		mdHeadingIncludes,
-		"| Type | Location | Context Project |",
-		"| local |",
-		"| remote |",
-		mdHeadingMergedYAML,
-		"```yaml",
-		"stages:",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-
-	if strings.Contains(md, "### Errors") {
-		t.Error("should not contain Errors section when errors is nil")
+	// The messages are table rows rather than bare list items: a lint message
+	// quotes the user's own CI file back, and one beginning with '#' or '-'
+	// opened a heading or a nested list where it was the content of an item.
+	want := "## CI Lint: ✅ Valid\n\n" +
+		"### Warnings\n\n" +
+		"| Message |\n| --- |\n" +
+		"| warn1 |\n| warn2 |\n" +
+		"\n### Includes\n\n" +
+		"| Type | Location | Context Project |\n| --- | --- | --- |\n" +
+		"| local | .gitlab-ci.yml | my/project |\n" +
+		"| remote | https://example.com/ci.yml |  |\n" +
+		"\n### Merged YAML\n\n" +
+		"```yaml\nstages:\n  - build\n```\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Fix the reported errors and warnings before committing this CI configuration\n" +
+		"- Use action 'template.lint' to check the corrected configuration again\n"
+	if md != want {
+		t.Errorf("FormatOutputMarkdown(all sections)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -531,29 +517,27 @@ func TestFormatOutputMarkdown_InvalidWithErrors(t *testing.T) {
 		Errors: []string{"syntax error on line 5", "unknown key: foo"},
 	})
 
-	for _, want := range []string{
-		"## CI Lint: ❌ Invalid",
-		"### Errors",
-		"- syntax error on line 5",
-		"- unknown key: foo",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-
-	if strings.Contains(md, mdHeadingWarnings) {
-		t.Error("should not contain Warnings section when no warnings")
-	}
-	if strings.Contains(md, mdHeadingIncludes) {
-		t.Error("should not contain Includes section when no includes")
-	}
-	if strings.Contains(md, mdHeadingMergedYAML) {
-		t.Error("should not contain Merged YAML section when empty")
+	want := "## CI Lint: ❌ Invalid\n\n" +
+		"### Errors\n\n" +
+		"| Message |\n| --- |\n" +
+		"| syntax error on line 5 |\n| unknown key: foo |\n" +
+		lintFixHints
+	if md != want {
+		t.Errorf("FormatOutputMarkdown(errors)\n got %q\nwant %q", md, want)
 	}
 }
+
+// lintFixHints is the guidance section a result with errors or warnings closes
+// with.
+const lintFixHints = "\n---\n💡 **Next steps:**\n" +
+	"- Fix the reported errors and warnings before committing this CI configuration\n" +
+	"- Use action 'template.lint' to check the corrected configuration again\n"
+
+// lintCleanHints is the guidance section a result with nothing to fix closes
+// with: telling a reader to fix errors GitLab did not report is noise.
+const lintCleanHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'template.lint_project' to lint the configuration committed in a project\n" +
+	"- Use action 'pipeline.create' to run a pipeline with it\n"
 
 // ---------------------------------------------------------------------------
 // FormatOutputMarkdown — empty output (all defaults)
@@ -563,10 +547,11 @@ func TestFormatOutputMarkdown_InvalidWithErrors(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_Empty(t *testing.T) {
-	md := FormatOutputMarkdown(Output{})
-	// Zero-value Output has Valid=false, which produces the Invalid header
-	if !strings.Contains(md, "❌ Invalid") {
-		t.Errorf("expected Invalid header for zero-value Output, got %q", md)
+	// A zero-value Output is Valid=false, which is the Invalid verdict with
+	// nothing under it to explain itself.
+	want := "## CI Lint: ❌ Invalid\n" + lintCleanHints
+	if md := FormatOutputMarkdown(Output{}); md != want {
+		t.Errorf("FormatOutputMarkdown(zero)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -578,12 +563,34 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_ValidNoContentReturnsMinimalMessage(t *testing.T) {
-	md := FormatOutputMarkdown(Output{Valid: true})
-	if md == "" {
-		t.Error("expected non-empty string for valid output with no content")
+	want := "## CI Lint: ✅ Valid\n\n" +
+		"The configuration is valid, with no errors, warnings, includes or jobs.\n"
+	if md := FormatOutputMarkdown(Output{Valid: true}); md != want {
+		t.Errorf("FormatOutputMarkdown(valid, nothing else)\n got %q\nwant %q", md, want)
 	}
-	if !strings.Contains(md, "Valid") {
-		t.Errorf("expected 'Valid' in output, got %q", md)
+}
+
+// TestFormatOutputMarkdown_ListsTheJobsGitLabExpanded checks the jobs table.
+// GitLab sends the expanded jobs when include_jobs is set, the Output has
+// carried them since the captured-response read, and no rendering showed them:
+// the expansion is the answer to "what will this pipeline run".
+func TestFormatOutputMarkdown_ListsTheJobsGitLabExpanded(t *testing.T) {
+	md := FormatOutputMarkdown(Output{
+		Valid: true,
+		Jobs: []toolutil.LintJobOutput{
+			{Name: "build", Stage: "build", When: "on_success", AllowFailure: false, TagList: []string{"docker", "linux"}},
+			{Name: "deploy", Stage: "deploy", When: "manual", AllowFailure: true},
+		},
+	})
+	want := "## CI Lint: ✅ Valid\n\n" +
+		"### Jobs\n\n" +
+		"| Name | Stage | When | Allow Failure | Tags |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| build | build | on_success | ❌ | docker, linux |\n" +
+		"| deploy | deploy | manual | ✅ |  |\n" +
+		lintCleanHints
+	if md != want {
+		t.Errorf("FormatOutputMarkdown(jobs)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -599,14 +606,12 @@ func TestFormatOutputMarkdown_OnlyMergedYaml(t *testing.T) {
 		Valid:      true,
 		MergedYaml: "image: alpine",
 	})
-	if !strings.Contains(md, mdHeadingMergedYAML) {
-		t.Errorf("expected Merged YAML section:\n%s", md)
-	}
-	if !strings.Contains(md, "```yaml") {
-		t.Errorf("expected yaml code block:\n%s", md)
-	}
-	if !strings.Contains(md, "image: alpine") {
-		t.Errorf("expected yaml content:\n%s", md)
+	want := "## CI Lint: ✅ Valid\n\n" +
+		"### Merged YAML\n\n" +
+		"```yaml\nimage: alpine\n```\n" +
+		lintCleanHints
+	if md != want {
+		t.Errorf("FormatOutputMarkdown(merged yaml)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -624,11 +629,13 @@ func TestFormatOutputMarkdown_OnlyIncludes(t *testing.T) {
 			{Type: "template", Location: "Auto-DevOps.gitlab-ci.yml", ContextProject: "gitlab-org/gitlab"},
 		},
 	})
-	if !strings.Contains(md, mdHeadingIncludes) {
-		t.Errorf("expected Includes section:\n%s", md)
-	}
-	if !strings.Contains(md, "| template |") {
-		t.Errorf("expected include row:\n%s", md)
+	want := "## CI Lint: ✅ Valid\n\n" +
+		"### Includes\n\n" +
+		"| Type | Location | Context Project |\n| --- | --- | --- |\n" +
+		"| template | Auto-DevOps.gitlab-ci.yml | gitlab-org/gitlab |\n" +
+		lintCleanHints
+	if md != want {
+		t.Errorf("FormatOutputMarkdown(includes)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -644,11 +651,13 @@ func TestFormatOutputMarkdown_OnlyWarnings(t *testing.T) {
 		Valid:    true,
 		Warnings: []string{"deprecated keyword"},
 	})
-	if !strings.Contains(md, mdHeadingWarnings) {
-		t.Errorf("expected Warnings section:\n%s", md)
-	}
-	if !strings.Contains(md, "- deprecated keyword") {
-		t.Errorf("expected warning entry:\n%s", md)
+	want := "## CI Lint: ✅ Valid\n\n" +
+		"### Warnings\n\n" +
+		"| Message |\n| --- |\n" +
+		"| deprecated keyword |\n" +
+		lintFixHints
+	if md != want {
+		t.Errorf("FormatOutputMarkdown(warnings)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -664,11 +673,13 @@ func TestFormatOutputMarkdown_OnlyErrors(t *testing.T) {
 		Valid:  false,
 		Errors: []string{"config error"},
 	})
-	if !strings.Contains(md, "## CI Lint: ❌ Invalid") {
-		t.Errorf("expected invalid header:\n%s", md)
-	}
-	if !strings.Contains(md, "- config error") {
-		t.Errorf("expected error entry:\n%s", md)
+	want := "## CI Lint: ❌ Invalid\n\n" +
+		"### Errors\n\n" +
+		"| Message |\n| --- |\n" +
+		"| config error |\n" +
+		lintFixHints
+	if md != want {
+		t.Errorf("FormatOutputMarkdown(one error)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -686,12 +697,13 @@ func TestFormatOutputMarkdown_IncludesSpecialChars(t *testing.T) {
 			{Type: "local", Location: "path/with|pipe", ContextProject: "proj|etc"},
 		},
 	})
-	if !strings.Contains(md, mdHeadingIncludes) {
-		t.Errorf("expected Includes section:\n%s", md)
-	}
-	// Pipe characters should be escaped in table cells
-	if strings.Contains(md, "path/with|pipe") {
-		t.Errorf("pipe char in Location should be escaped:\n%s", md)
+	want := "## CI Lint: ✅ Valid\n\n" +
+		"### Includes\n\n" +
+		"| Type | Location | Context Project |\n| --- | --- | --- |\n" +
+		"| local | path/with&#124;pipe | proj&#124;etc |\n" +
+		lintCleanHints
+	if md != want {
+		t.Errorf("FormatOutputMarkdown(special chars)\n got %q\nwant %q", md, want)
 	}
 }
 

@@ -284,22 +284,23 @@ func TestFormatOutputMarkdown_OptionalBranches(t *testing.T) {
 		CreatedAt:      "2024-01-01T00:00:00Z",
 		WebURL:         "https://gitlab.com/job/1",
 	}
-	md := FormatOutputMarkdown(out)
-
-	checks := []string{
-		"abc123def456", // truncated commit SHA
-		"45.5s",
-		"2.5s",
-		"script_failure",
-		"85.5%",
-		"admin",
-	}
-	for _, want := range checks {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q", want)
-			}
-		})
+	want := "## ❌ Job #1: build\n\n" +
+		"- **Stage**: build\n" +
+		"- **Status**: ❌ failed\n" +
+		"- **Allow Failure**: ❌\n" +
+		"- **Ref**: main\n" +
+		"- **Tag**: ❌\n" +
+		"- **Commit**: `abc123def456`\n" +
+		"- **Duration**: 45.5s\n" +
+		"- **Queued**: 2.5s\n" +
+		"- **Failure Reason**: script_failure\n" +
+		"- **Coverage**: 85.5%\n" +
+		"- **User**: @admin\n" +
+		"- **Created**: 1 Jan 2024 00:00 UTC\n" +
+		"- **URL**: [https://gitlab.com/job/1](https://gitlab.com/job/1)\n" +
+		jobCardHints
+	if md := FormatOutputMarkdown(out); md != want {
+		t.Errorf("FormatOutputMarkdown(optional branches)\n got %q\nwant %q", md, want)
 	}
 }
 

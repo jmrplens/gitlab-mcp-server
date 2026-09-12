@@ -1,67 +1,76 @@
 package mrdiscussions
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
-
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatNoteMarkdown renders a single discussion note as Markdown.
+// toMarkdownNote builds the shared note view model for a thread note.
+//
+// A confidential note is internal as far as a reader is concerned — GitLab
+// spells the same restriction both ways depending on the entity — so the two
+// flags are folded into the one the card shows.
+func toMarkdownNote(n NoteOutput) toolutil.NoteMarkdown {
+	flags := toolutil.NoteMarkdownFlags{
+		System:     n.System,
+		Internal:   n.Internal || n.Confidential,
+		Resolvable: n.Resolvable,
+		Resolved:   n.Resolved,
+	}
+	return toolutil.NewNoteMarkdown(n.ID, n.Body, n.AuthorUsername(), n.CreatedAt, flags, n.ResolvedByUsername())
+}
+
+// toMarkdownDiscussion builds the shared thread view model, every note through
+// [toMarkdownNote].
+func toMarkdownDiscussion(d Output) toolutil.DiscussionMarkdown {
+	notes := make([]toolutil.NoteMarkdown, 0, len(d.Notes))
+	for _, n := range d.Notes {
+		if n != nil {
+			notes = append(notes, toMarkdownNote(*n))
+		}
+	}
+	return toolutil.NewDiscussionMarkdown(d.ID, notes)
+}
+
+// FormatNoteMarkdown renders one discussion note as the note card every note
+// tool in the tree renders: the author as a handle, the time, the flags that
+// hold, the resolution state, and the body as quoted prose.
+//
+// It used to print "- **Resolved**: %v" on every note, resolvable or not, and
+// showed neither the internal flag nor who resolved the thread.
 func FormatNoteMarkdown(n NoteOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Discussion Note #%d\n\n", n.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdAuthor, toolutil.EscapeMdTableCell(n.AuthorUsername()))
-	fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(n.CreatedAt))
-	fmt.Fprintf(&b, "- **Resolved**: %v\n", n.Resolved)
-	fmt.Fprintf(&b, "\n%s\n", toolutil.WrapGFMBody(n.Body))
-	toolutil.WriteHints(
-		&b,
-		"Use action 'discussion_note_update' with note_id to edit this note",
-		"Use action 'discussion_resolve' with discussion_id to resolve this discussion",
-	)
-	return b.String()
+	return toolutil.FormatNoteMarkdown(toMarkdownNote(n), toolutil.NoteMarkdownOptions{
+		Title:             "Discussion Note",
+		IncludeInternal:   true,
+		IncludeResolvable: true,
+		Hints: []string{
+			toolutil.HintAction(actionDiscussionNoteUpdate, "edit this note"),
+			toolutil.HintAction(actionDiscussionNoteDelete, "remove this note"),
+			toolutil.HintAction(actionDiscussionResolve, "resolve or unresolve the thread it belongs to"),
+		},
+	})
 }
 
-// FormatOutputMarkdown renders a discussion thread with all its notes as Markdown.
+// FormatOutputMarkdown renders one discussion thread through the renderer every
+// discussion family shares: the thread's heading, then each note as a list item
+// naming its author, time and ID, with the body quoted underneath.
 func FormatOutputMarkdown(d Output) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Discussion %s\n\n", toolutil.EscapeMdHeading(d.ID))
-	fmt.Fprintf(&b, "- **Notes**: %d\n", len(d.Notes))
-	fmt.Fprintf(&b, "- **Individual Note**: %v\n", d.IndividualNote)
-	for i, n := range d.Notes {
-		fmt.Fprintf(&b, "\n### Note %d (by %s)\n\n%s\n", i+1, toolutil.EscapeMdHeading(n.AuthorUsername()), toolutil.WrapGFMBody(n.Body))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'discussion_reply' to reply to this discussion",
-		"Use action 'discussion_resolve' with discussion_id to resolve/unresolve",
+	return toolutil.FormatDiscussionMarkdown(toMarkdownDiscussion(d),
+		toolutil.HintAction(actionDiscussionReply, "reply to this discussion"),
+		toolutil.HintAction(actionDiscussionResolve, "resolve or unresolve it"),
+		toolutil.HintAction(actionDiscussionNoteUpdate, "edit one of its notes"),
 	)
-	return b.String()
 }
 
-// FormatListMarkdown renders a list of discussion threads as a Markdown table.
+// FormatListMarkdown renders a page of merge request discussion threads through
+// the same shared renderer, so a thread reads the same whether it was listed or
+// fetched.
 func FormatListMarkdown(out ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## MR Discussions (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Discussions), out.Pagination)
-	if len(out.Discussions) == 0 {
-		b.WriteString("No merge request discussions found.\n")
-		return b.String()
-	}
-	b.WriteString("| ID | Notes | Individual |\n")
-	b.WriteString(toolutil.TblSep3Col)
-	for _, d := range out.Discussions {
-		fmt.Fprintf(&b, toolutil.FmtRow3Str, toolutil.EscapeMdTableCell(d.ID), strconv.Itoa(len(d.Notes)), strconv.FormatBool(d.IndividualNote))
-	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use action 'discussion_get' with discussion_id to see full discussion notes",
-		"Use action 'discussion_create' to start a new discussion on this MR",
+	return toolutil.FormatRESTDiscussionListMarkdown(
+		out.Discussions, out.Pagination, toMarkdownDiscussion,
+		"MR Discussions", toolutil.EmptyMessage("merge request discussions"),
+		toolutil.HintAction(actionDiscussionGet, "read one thread in full"),
+		toolutil.HintAction(actionDiscussionCreate, "start a new discussion on this merge request"),
 	)
-	return b.String()
 }
 
 func init() {

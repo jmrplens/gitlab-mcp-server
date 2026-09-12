@@ -14,7 +14,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestGetAccessSettings_Success verifies GetAccessSettings when success.
@@ -215,27 +214,50 @@ func TestRemoveGroupAllowlist_ZeroTargetGroupID(t *testing.T) {
 	}
 }
 
-// TestFormatAccessSettingsMarkdown verifies FormatAccessSettingsMarkdown.
+// markdownText reads the one text block a formatter's result carries.
+func markdownText(t *testing.T, r *mcp.CallToolResult) string {
+	t.Helper()
+	if r == nil {
+		t.Fatal(errExpNonNilResult)
+	}
+	content, ok := r.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("result content is %T, want *mcp.TextContent", r.Content[0])
+	}
+	return content.Text
+}
+
+// TestFormatAccessSettingsMarkdown checks the whole card of an enforced job
+// token scope.
 func TestFormatAccessSettingsMarkdown(t *testing.T) {
-	r := FormatAccessSettingsMarkdown(AccessSettingsOutput{InboundEnabled: true})
-	if r == nil {
-		t.Fatal(errExpNonNilResult)
+	want := "## Job Token Access Settings\n\n" +
+		"- **Inbound job token access**: limited to the allowlist\n" +
+		accessSettingsHints
+	if got := markdownText(t, FormatAccessSettingsMarkdown(AccessSettingsOutput{InboundEnabled: true})); got != want {
+		t.Errorf("FormatAccessSettingsMarkdown(enabled)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListInboundAllowlistMarkdown_Empty verifies FormatListInboundAllowlistMarkdown when empty.
+// accessSettingsHints is the guidance section the settings card closes with.
+const accessSettingsHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'job.token_scope_list_inbound' to see the projects the allowlist holds\n" +
+	"- Use action 'job.token_scope_patch' to turn the restriction on or off\n"
+
+// TestFormatListInboundAllowlistMarkdown_Empty checks that an empty allowlist
+// is the one sentence and nothing else.
 func TestFormatListInboundAllowlistMarkdown_Empty(t *testing.T) {
-	r := FormatListInboundAllowlistMarkdown(ListInboundAllowlistOutput{})
-	if r == nil {
-		t.Fatal(errExpNonNilResult)
+	const want = "No projects on the job token inbound allowlist found.\n"
+	if got := markdownText(t, FormatListInboundAllowlistMarkdown(ListInboundAllowlistOutput{})); got != want {
+		t.Errorf("FormatListInboundAllowlistMarkdown(empty)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListGroupAllowlistMarkdown_Empty verifies FormatListGroupAllowlistMarkdown when empty.
+// TestFormatListGroupAllowlistMarkdown_Empty checks that an empty group
+// allowlist is the one sentence and nothing else.
 func TestFormatListGroupAllowlistMarkdown_Empty(t *testing.T) {
-	r := FormatListGroupAllowlistMarkdown(ListGroupAllowlistOutput{})
-	if r == nil {
-		t.Fatal(errExpNonNilResult)
+	const want = "No groups on the job token allowlist found.\n"
+	if got := markdownText(t, FormatListGroupAllowlistMarkdown(ListGroupAllowlistOutput{})); got != want {
+		t.Errorf("FormatListGroupAllowlistMarkdown(empty)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -577,46 +599,16 @@ func TestRemoveGroupAllowlist_CancelledContext(t *testing.T) {
 // FormatAccessSettingsMarkdown — disabled state
 // ---------------------------------------------------------------------------.
 
-// TestFormatAccessSettingsMarkdown_Disabled verifies FormatAccessSettingsMarkdown when disabled.
+// TestFormatAccessSettingsMarkdown_Disabled checks the card of a project with
+// the job token scope off. The row names the restriction rather than the
+// switch: "Inbound access: disabled" read as though access itself were denied,
+// and it is the opposite — every project's job token may reach this one.
 func TestFormatAccessSettingsMarkdown_Disabled(t *testing.T) {
-	r := FormatAccessSettingsMarkdown(AccessSettingsOutput{InboundEnabled: false})
-	if r == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := r.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "disabled") {
-		t.Errorf("expected 'disabled' in markdown, got: %s", text)
-	}
-}
-
-// TestFormatAccessSettingsMarkdown_Enabled verifies FormatAccessSettingsMarkdown when enabled.
-func TestFormatAccessSettingsMarkdown_Enabled(t *testing.T) {
-	r := FormatAccessSettingsMarkdown(AccessSettingsOutput{InboundEnabled: true})
-	if r == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := r.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "enabled") {
-		t.Errorf("expected 'enabled' in markdown, got: %s", text)
-	}
-	if strings.Contains(text, "disabled") {
-		t.Errorf("should not contain 'disabled' when enabled, got: %s", text)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FormatPatchResultMarkdown
-// ---------------------------------------------------------------------------.
-
-// TestFormatPatchResultMarkdown verifies FormatPatchResultMarkdown.
-func TestFormatPatchResultMarkdown(t *testing.T) {
-	r := FormatPatchResultMarkdown(toolutil.DeleteOutput{Status: "updated"})
-	if r == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := r.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "updated") {
-		t.Errorf("expected 'updated' in markdown, got: %s", text)
+	want := "## Job Token Access Settings\n\n" +
+		"- **Inbound job token access**: not limited (any project's job token may access this project)\n" +
+		accessSettingsHints
+	if got := markdownText(t, FormatAccessSettingsMarkdown(AccessSettingsOutput{InboundEnabled: false})); got != want {
+		t.Errorf("FormatAccessSettingsMarkdown(disabled)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -632,24 +624,18 @@ func TestFormatListInboundAllowlistMarkdown_WithData(t *testing.T) {
 			{ID: 11, Name: "proj-b", PathWithNamespace: "grp/proj-b", WebURL: "https://gitlab.example.com/grp/proj-b"},
 		},
 	})
-	if r == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := r.Content[0].(*mcp.TextContent).Text
-	for _, want := range []string{
-		"Job Token Inbound Allowlist (2 projects)",
-		"| ID |",
-		"| 10 |",
-		"| 11 |",
-		"proj-a",
-		"proj-b",
-		"grp/proj-a",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(text, want) {
-				t.Errorf("markdown missing %q:\n%s", want, text)
-			}
-		})
+	// The name carries the link, so a reader is never asked to click a column
+	// that says "View" and nothing about where it goes.
+	want := "## Job Token Inbound Allowlist (2)\n\n" +
+		"| ID | Name | Path |\n| --- | --- | --- |\n" +
+		"| 10 | [proj-a](https://gitlab.example.com/grp/proj-a) | grp/proj-a |\n" +
+		"| 11 | [proj-b](https://gitlab.example.com/grp/proj-b) | grp/proj-b |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- Use action 'job.token_scope_add_project' to allow another project\n" +
+		"- Use action 'job.token_scope_remove_project' to remove one from the allowlist\n"
+	if got := markdownText(t, r); got != want {
+		t.Errorf("FormatListInboundAllowlistMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -657,18 +643,19 @@ func TestFormatListInboundAllowlistMarkdown_WithData(t *testing.T) {
 // FormatAddProjectAllowlistMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatAddProjectAllowlistMarkdown verifies FormatAddProjectAllowlistMarkdown.
+// TestFormatAddProjectAllowlistMarkdown checks the whole card of the entry
+// that was created: a create result returns the object, so it is a card.
 func TestFormatAddProjectAllowlistMarkdown(t *testing.T) {
 	r := FormatAddProjectAllowlistMarkdown(InboundAllowItemOutput{SourceProjectID: 42, TargetProjectID: 99})
-	if r == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := r.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "99") {
-		t.Errorf("expected target project ID in markdown, got: %s", text)
-	}
-	if !strings.Contains(text, "42") {
-		t.Errorf("expected source project ID in markdown, got: %s", text)
+	want := "## Job Token Inbound Allowlist Entry\n\n" +
+		"- **Project**: 42\n" +
+		"- **Allowed project**: 99\n" +
+		"\nThe allowed project's job token may now reach this project.\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'job.token_scope_list_inbound' to see the whole allowlist\n" +
+		"- Use action 'job.token_scope_get' to check whether the restriction is enforced at all\n"
+	if got := markdownText(t, r); got != want {
+		t.Errorf("FormatAddProjectAllowlistMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -684,24 +671,16 @@ func TestFormatListGroupAllowlistMarkdown_WithData(t *testing.T) {
 			{ID: 6, Name: "group-b", FullPath: "org/group-b", WebURL: "https://gitlab.example.com/groups/org/group-b"},
 		},
 	})
-	if r == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := r.Content[0].(*mcp.TextContent).Text
-	for _, want := range []string{
-		"Job Token Group Allowlist (2 groups)",
-		"| ID |",
-		"| 5 |",
-		"| 6 |",
-		"group-a",
-		"group-b",
-		"org/group-b",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(text, want) {
-				t.Errorf("markdown missing %q:\n%s", want, text)
-			}
-		})
+	want := "## Job Token Group Allowlist (2)\n\n" +
+		"| ID | Name | Path |\n| --- | --- | --- |\n" +
+		"| 5 | [group-a](https://gitlab.example.com/groups/group-a) | group-a |\n" +
+		"| 6 | [group-b](https://gitlab.example.com/groups/org/group-b) | org/group-b |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- Use action 'job.token_scope_add_group' to allow another group\n" +
+		"- Use action 'job.token_scope_remove_group' to remove one from the allowlist\n"
+	if got := markdownText(t, r); got != want {
+		t.Errorf("FormatListGroupAllowlistMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -709,18 +688,19 @@ func TestFormatListGroupAllowlistMarkdown_WithData(t *testing.T) {
 // FormatAddGroupAllowlistMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatAddGroupAllowlistMarkdown verifies FormatAddGroupAllowlistMarkdown.
+// TestFormatAddGroupAllowlistMarkdown checks the whole card of the group entry
+// that was created.
 func TestFormatAddGroupAllowlistMarkdown(t *testing.T) {
 	r := FormatAddGroupAllowlistMarkdown(GroupAllowlistItemOutput{SourceProjectID: 42, TargetGroupID: 5})
-	if r == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := r.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "5") {
-		t.Errorf("expected target group ID in markdown, got: %s", text)
-	}
-	if !strings.Contains(text, "42") {
-		t.Errorf("expected source project ID in markdown, got: %s", text)
+	want := "## Job Token Group Allowlist Entry\n\n" +
+		"- **Project**: 42\n" +
+		"- **Allowed group**: 5\n" +
+		"\nEvery project in the allowed group may now reach this project with its job token.\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'job.token_scope_list_groups' to see the whole group allowlist\n" +
+		"- Use action 'job.token_scope_get' to check whether the restriction is enforced at all\n"
+	if got := markdownText(t, r); got != want {
+		t.Errorf("FormatAddGroupAllowlistMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -735,12 +715,9 @@ func TestFormatListInboundAllowlistMarkdown_EscapesPipes(t *testing.T) {
 			{ID: 10, Name: "proj|special", PathWithNamespace: "grp/proj-special", WebURL: "https://gitlab.example.com/grp/proj-special"},
 		},
 	})
-	if r == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := r.Content[0].(*mcp.TextContent).Text
-	if strings.Contains(text, "| proj|special |") {
-		t.Errorf("pipe character in name should be escaped:\n%s", text)
+	const wantRow = "| 10 | [proj&#124;special](https://gitlab.example.com/grp/proj-special) | grp/proj-special |\n"
+	if got := markdownText(t, r); !strings.Contains(got, wantRow) {
+		t.Errorf("FormatListInboundAllowlistMarkdown() missing %q:\n%s", wantRow, got)
 	}
 }
 
@@ -755,11 +732,8 @@ func TestFormatListGroupAllowlistMarkdown_EscapesPipes(t *testing.T) {
 			{ID: 5, Name: "group|special", FullPath: "group-special", WebURL: "https://gitlab.example.com/groups/group-special"},
 		},
 	})
-	if r == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	text := r.Content[0].(*mcp.TextContent).Text
-	if strings.Contains(text, "| group|special |") {
-		t.Errorf("pipe character in name should be escaped:\n%s", text)
+	const wantRow = "| 5 | [group&#124;special](https://gitlab.example.com/groups/group-special) | group-special |\n"
+	if got := markdownText(t, r); !strings.Contains(got, wantRow) {
+		t.Errorf("FormatListGroupAllowlistMarkdown() missing %q:\n%s", wantRow, got)
 	}
 }

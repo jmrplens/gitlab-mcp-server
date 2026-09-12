@@ -10,15 +10,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const (
-	fmtPropertyValueTableHeader = "| Property | Value |\n|---|---|\n"
-	fmtUserRow                  = "| User | %s |\n"
-	fmtResourceRow              = "| Resource | %s #%d |\n"
-	fmtCreatedRow               = "| Created | %s |\n"
-	fmtEventTableRow            = "| %d | %s | %s | %s | %s |\n"
-	fmtActionRow                = "| Action | %s |\n"
-)
-
 // ---------------------------------------------------------------------------
 // Input types
 // ---------------------------------------------------------------------------.

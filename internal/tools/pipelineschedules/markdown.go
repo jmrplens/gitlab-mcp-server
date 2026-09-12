@@ -2,123 +2,183 @@ package pipelineschedules
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown renders a single pipeline schedule as Markdown.
+// Canonical action IDs the hints name. Every surface resolves the ID: the
+// dynamic surface executes it and the meta and individual surfaces resolve it
+// to their own tool names, so a hint written this way never names something
+// the serving surface does not register — which "the selected tool surface's
+// pipeline-schedule update action" was a sentence-long way of avoiding.
+//
+// The ID is the catalog's: these actions are registered under the
+// gitlab_pipeline group, so their domain is "pipeline" and not
+// "pipeline_schedule", which is what the related-action constants beside
+// ActionSpecs still spell.
+const (
+	hintActionScheduleGet            = "pipeline.schedule_get"
+	hintActionScheduleList           = "pipeline.schedule_list"
+	hintActionScheduleCreate         = "pipeline.schedule_create"
+	hintActionScheduleUpdate         = "pipeline.schedule_update"
+	hintActionScheduleDelete         = "pipeline.schedule_delete"
+	hintActionScheduleRun            = "pipeline.schedule_run"
+	hintActionScheduleEditVariable   = "pipeline.schedule_edit_variable"
+	hintActionScheduleDeleteVariable = "pipeline.schedule_delete_variable"
+	hintActionPipelineGet            = "pipeline.get"
+)
+
+// FormatOutputMarkdown renders one pipeline schedule as the card of a single
+// object. A schedule with no ID is no schedule and renders nothing.
 func FormatOutputMarkdown(s Output) string {
 	if s.ID == 0 {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Pipeline Schedule #%d\n\n", s.ID)
-	b.WriteString("| Field | Value |\n")
-	b.WriteString(toolutil.TblSep2Col)
-	fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(s.Description))
-	fmt.Fprintf(&b, "| Ref | %s |\n", toolutil.EscapeMdTableCell(s.Ref))
-	fmt.Fprintf(&b, "| Cron | `%s` |\n", toolutil.EscapeMdTableCell(s.Cron))
-	if s.CronTimezone != "" {
-		fmt.Fprintf(&b, "| Timezone | %s |\n", toolutil.EscapeMdTableCell(s.CronTimezone))
-	}
-	fmt.Fprintf(&b, "| Active | %s |\n", toolutil.BoolEmoji(s.Active))
-	if s.NextRunAt != "" {
-		fmt.Fprintf(&b, "| Next Run | %s |\n", toolutil.FormatTime(s.NextRunAt))
-	}
-	if s.Owner != nil && s.Owner.Username != "" {
-		fmt.Fprintf(&b, "| Owner | %s |\n", toolutil.EscapeMdTableCell(s.Owner.Username))
+	c := toolutil.NewCard(&b, fmt.Sprintf("Pipeline Schedule #%d", s.ID))
+	// The description, the ref and the cron are what a maintainer typed.
+	c.Field("Description", s.Description)
+	c.Field("Ref", s.Ref)
+	c.Code("Cron", s.Cron)
+	c.Field("Timezone", s.CronTimezone)
+	c.Bool("Active", s.Active)
+	c.Time("Next Run", s.NextRunAt)
+	if s.Owner != nil {
+		c.Markdown("Owner", toolutil.MdUserLink(s.Owner.Username, s.Owner.WebURL))
 	}
 	if s.LastPipeline != nil {
-		// The documented `last_pipeline` reference has no web_url, so render the
-		// title as plain text (MdTitleLink emits no link for an empty URL).
-		fmt.Fprintf(&b, "| Last Pipeline | %s |\n",
-			toolutil.MdTitleLink(fmt.Sprintf("#%d (%s)", s.LastPipeline.ID, s.LastPipeline.Status), ""))
+		// The documented last_pipeline reference carries no web_url, so this
+		// row names the pipeline rather than linking it.
+		c.Field("Last Pipeline", fmt.Sprintf("#%d (%s)", s.LastPipeline.ID, s.LastPipeline.Status))
 	}
-	if s.CreatedAt != "" {
-		fmt.Fprintf(&b, "| Created | %s |\n", toolutil.FormatTime(s.CreatedAt))
-	}
-	if s.UpdatedAt != "" {
-		fmt.Fprintf(&b, "| Updated | %s |\n", toolutil.FormatTime(s.UpdatedAt))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use the selected tool surface's pipeline-schedule update action with the same project_id and schedule_id to modify schedule settings",
-		"Use the selected tool surface's pipeline-schedule run action with the same project_id and schedule_id to trigger this schedule immediately",
-		"Use the selected tool surface's pipeline-schedule delete action with the same project_id, schedule_id, and explicit confirm=true to remove this schedule",
+	// A schedule runs with its variables and inputs, and a reader deciding
+	// whether to run one needs to know which are set. The values never appear:
+	// a schedule variable may be a secret, and GitLab shows one nowhere.
+	c.Field("Variables", variableKeySummary(s.Variables))
+	c.Field("Inputs", inputNameSummary(s.Inputs))
+	c.Time("Created", s.CreatedAt)
+	c.Time("Updated", s.UpdatedAt)
+	c.End(
+		toolutil.HintAction(hintActionScheduleUpdate, "change this schedule"),
+		toolutil.HintAction(hintActionScheduleRun, "trigger it now"),
+		toolutil.HintAction(hintActionScheduleDelete, "remove it"),
 	)
 	return b.String()
 }
 
-// FormatListMarkdown renders a paginated list of pipeline schedules as a Markdown table.
+// variableKeySummary names the keys a schedule carries and the type of each,
+// never a value.
+func variableKeySummary(variables []VariableObject) string {
+	if len(variables) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(variables))
+	for _, v := range variables {
+		if v.VariableType == "" {
+			parts = append(parts, v.Key)
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s (%s)", v.Key, v.VariableType))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// inputNameSummary names the pipeline inputs a schedule carries, without their
+// values, which are typed like the variables and shown on the same terms.
+func inputNameSummary(inputs []InputObject) string {
+	if len(inputs) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(inputs))
+	for _, in := range inputs {
+		names = append(names, in.Name)
+	}
+	return strings.Join(names, ", ")
+}
+
+// FormatListMarkdown renders a page of pipeline schedules as a Markdown table.
+//
+// The table carries no link, so the footer carries no instruction to keep
+// them, and the heading counts what the response can vouch for rather than a
+// total keyset pagination never sends.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Schedules) == 0 {
-		return "No pipeline schedules found.\n"
+		return toolutil.EmptyMessage("pipeline schedules")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Pipeline Schedules (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Schedules), out.Pagination)
-	b.WriteString("| ID | Description | Ref | Cron | Active | Owner |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
+	toolutil.WriteListHeading(&b, "Pipeline Schedules", len(out.Schedules), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Description", "Ref", "Cron", "Active", "Owner"))
 	for _, s := range out.Schedules {
 		owner := ""
 		if s.Owner != nil {
-			owner = s.Owner.Username
+			owner = toolutil.MdUserHandle(s.Owner.Username)
 		}
-		fmt.Fprintf(&b, "| %d | %s | %s | `%s` | %t | %s |\n",
-			s.ID, toolutil.EscapeMdTableCell(s.Description), toolutil.EscapeMdTableCell(s.Ref), toolutil.EscapeMdTableCell(s.Cron), s.Active, toolutil.EscapeMdTableCell(owner))
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.Itoa(s.ID),
+			toolutil.EscapeMdTableCell(s.Description),
+			toolutil.EscapeMdTableCell(s.Ref),
+			toolutil.MdCodeSpanCell(s.Cron),
+			toolutil.BoolEmoji(s.Active),
+			owner,
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use the selected tool surface's pipeline-schedule get action with the same project_id and schedule_id for full details",
-		"Use the selected tool surface's pipeline-schedule create action with project_id to add a new schedule",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(hintActionScheduleGet, "see one schedule in full"),
+		toolutil.HintAction(hintActionScheduleCreate, "add a schedule"),
 	)
 	return b.String()
 }
 
-// FormatVariableMarkdown renders a pipeline schedule variable as Markdown.
+// FormatVariableMarkdown renders one pipeline schedule variable as the card of
+// a single object.
 func FormatVariableMarkdown(v VariableOutput) string {
 	var b strings.Builder
-	b.WriteString("## Pipeline Schedule Variable\n\n")
-	fmt.Fprintf(&b, "- **Key**: %s\n", toolutil.EscapeMdTableCell(v.Key))
-	fmt.Fprintf(&b, "- **Value**: %s\n", toolutil.EscapeMdTableCell(v.Value))
-	if v.VariableType != "" {
-		//gitlab:allow-unescaped v.VariableType: a CI variable type GitLab picks from a fixed set (env_var, file).
-		fmt.Fprintf(&b, "- **Type**: %s\n", v.VariableType)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use the selected tool surface's pipeline-schedule variable edit action with the same project_id, schedule_id, and key to change this variable",
-		"Use the selected tool surface's pipeline-schedule variable delete action with the same project_id, schedule_id, key, and explicit confirm=true to remove it",
+	c := toolutil.NewCard(&b, "Pipeline Schedule Variable")
+	c.Field("Key", v.Key)
+	c.Field("Value", v.Value)
+	// A CI variable type is one of GitLab's fixed set (env_var, file).
+	c.Field("Type", v.VariableType)
+	c.End(
+		toolutil.HintAction(hintActionScheduleEditVariable, "change this variable"),
+		toolutil.HintAction(hintActionScheduleDeleteVariable, "remove it"),
 	)
 	return b.String()
 }
 
-// FormatTriggeredPipelinesMarkdown renders a list of triggered pipelines as Markdown.
+// FormatTriggeredPipelinesMarkdown renders the pipelines a schedule triggered
+// as a Markdown table.
 func FormatTriggeredPipelinesMarkdown(out TriggeredPipelinesListOutput) string {
 	if len(out.Pipelines) == 0 {
-		return "No triggered pipelines found.\n"
+		return toolutil.EmptyMessage("triggered pipelines")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Triggered Pipelines (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Pipelines), out.Pagination)
-	b.WriteString("| ID | IID | Ref | Status | Source |\n")
-	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	toolutil.WriteListHeading(&b, "Triggered Pipelines", len(out.Pipelines), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "IID", "Ref", "Status", "Source"))
 	for _, p := range out.Pipelines {
-		fmt.Fprintf(&b, "| %s | %d | %s | %s | %s |\n",
-			//gitlab:allow-unescaped p.Status: a pipeline status, one of GitLab's fixed set (created, running, success, failed and the rest).
-			//gitlab:allow-unescaped p.Source: a pipeline source, one of GitLab's fixed set (push, web, schedule, trigger and the rest).
-			toolutil.MdTitleLink(fmt.Sprintf("#%d", p.ID), p.WebURL), p.IID, toolutil.EscapeMdTableCell(p.Ref), p.Status, p.Source)
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", p.ID), p.WebURL),
+			strconv.Itoa(p.IID),
+			toolutil.EscapeMdTableCell(p.Ref),
+			pipelineStatusCell(p.Status),
+			toolutil.EscapeMdTableCell(p.Source),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use the selected tool surface's pipeline get action with pipeline_id for full details",
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(hintActionPipelineGet, "see one pipeline in full"),
+		toolutil.HintAction(hintActionScheduleList, "see the schedules of this project"),
 	)
 	return b.String()
+}
+
+// pipelineStatusCell renders a pipeline status with the glyph every pipeline
+// row in the tree shows, and nothing when GitLab sent no status.
+func pipelineStatusCell(status string) string {
+	if strings.TrimSpace(status) == "" {
+		return ""
+	}
+	return toolutil.PipelineStatusEmoji(status) + " " + toolutil.EscapeMdTableCell(status)
 }
 
 func init() {

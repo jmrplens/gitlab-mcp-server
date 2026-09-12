@@ -759,7 +759,22 @@ const errExpectedAPI = "expected API error, got nil"
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_Full verifies FormatOutputMarkdown when full.
+// draftCardHints is the guidance section a draft note card closes with, and
+// draftListHints the one a listing closes with.
+const (
+	draftCardHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'mr_review.draft_note_publish' to publish this draft note\n" +
+		"- Use action 'mr_review.draft_note_update' to change it before publishing\n" +
+		"- Use action 'mr_review.draft_note_delete' to discard it\n"
+	draftListHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use action 'mr_review.draft_note_get' to read one draft note in full\n" +
+		"- Use action 'mr_review.draft_note_publish_all' to publish every draft at once\n"
+)
+
+// TestFormatOutputMarkdown_Full verifies the whole rendering of a draft note,
+// including the row this card used to label "MR ID": GitLab answers with the
+// merge request's global database id there, not the project-scoped IID every
+// draft note action takes, and a reader who passed it back got a 404.
 func TestFormatOutputMarkdown_Full(t *testing.T) {
 	out := Output{
 		ID:                10,
@@ -767,52 +782,60 @@ func TestFormatOutputMarkdown_Full(t *testing.T) {
 		MergeRequestID:    99,
 		Note:              "Draft review comment",
 		CommitID:          "abc123def456",
+		LineCode:          "a1b2c3_10_11",
 		DiscussionID:      "disc-001",
 		ResolveDiscussion: true,
+		Position:          &PositionOutput{NewPath: "main.go", NewLine: 42, PositionType: "text"},
 	}
-	md := FormatOutputMarkdown(out)
-
-	for _, want := range []string{
-		"## Draft Note #10",
-		"**Author ID**: 1",
-		"**MR ID**: 99",
-		"**Commit**: `abc123def456`",
-		"**Discussion**: disc-001",
-		"**Resolve Discussion**: true",
-		"### Body",
-		"Draft review comment",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Draft Note #10\n\n" +
+		"- **ID**: 10\n" +
+		"- **Author ID**: 1\n" +
+		"- **MR global ID (not the IID)**: 99\n" +
+		"- **Commit**: `abc123def456`\n" +
+		"- **Line Code**: `a1b2c3_10_11`\n" +
+		"- **Discussion**: `disc-001`\n" +
+		"- **Resolves the discussion**: ✅\n" +
+		"- **Position**: `main.go` line 42\n" +
+		"- **Note**: Draft review comment\n" + draftCardHints
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_Minimal verifies FormatOutputMarkdown when minimal.
+// TestFormatOutputMarkdown_Minimal verifies that a draft note GitLab sent
+// nothing optional for shows no label with nothing after it.
 func TestFormatOutputMarkdown_Minimal(t *testing.T) {
 	out := Output{
-		ID:                5,
-		AuthorID:          2,
-		MergeRequestID:    50,
-		Note:              "simple note",
-		ResolveDiscussion: false,
+		ID:             5,
+		AuthorID:       2,
+		MergeRequestID: 50,
+		Note:           "simple note",
 	}
-	md := FormatOutputMarkdown(out)
+	want := "## Draft Note #5\n\n" +
+		"- **ID**: 5\n" +
+		"- **Author ID**: 2\n" +
+		"- **MR global ID (not the IID)**: 50\n" +
+		"- **Resolves the discussion**: ❌\n" +
+		"- **Note**: simple note\n" + draftCardHints
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
 
-	if !strings.Contains(md, "## Draft Note #5") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	if !strings.Contains(md, "**Resolve Discussion**: false") {
-		t.Errorf("should show resolve false:\n%s", md)
-	}
-	// CommitID and DiscussionID are empty, lines should not appear
-	if strings.Contains(md, "**Commit**") {
-		t.Errorf("should not contain Commit when empty:\n%s", md)
-	}
-	if strings.Contains(md, "**Discussion**") {
-		t.Errorf("should not contain Discussion when empty:\n%s", md)
+// TestFormatOutputMarkdown_PositionWithoutALine verifies that a note anchored
+// to a whole file names no line: GitLab sends none for one, and "line 0" read
+// as the top of the file.
+func TestFormatOutputMarkdown_PositionWithoutALine(t *testing.T) {
+	out := Output{ID: 6, AuthorID: 2, MergeRequestID: 50, Note: "on the file", Position: &PositionOutput{OldPath: "docs/img.png", PositionType: "image"}}
+	want := "## Draft Note #6\n\n" +
+		"- **ID**: 6\n" +
+		"- **Author ID**: 2\n" +
+		"- **MR global ID (not the IID)**: 50\n" +
+		"- **Resolves the discussion**: ❌\n" +
+		"- **Position**: `docs/img.png` (image)\n" +
+		"- **Note**: on the file\n" + draftCardHints
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -829,46 +852,37 @@ func TestFormatListMarkdown_WithDraftNotes(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
-
-	for _, want := range []string{
-		"## Draft Notes (2)",
-		"| ID |",
-		"| -- |",
-		"| 1 |",
-		"| 2 |",
-		"abcdef12", // commit truncated to 8 chars
-		"Short note",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-	// Full 16-char commit should not appear (truncated to 8)
-	if strings.Contains(md, "abcdef1234567890") {
-		t.Errorf("commit should be truncated to 8 chars:\n%s", md)
-	}
-	// Long note should be truncated to 60 chars with "..."
-	if strings.Contains(md, "properly here") {
-		t.Errorf("long note should be truncated:\n%s", md)
+	want := "## Draft Notes (2)\n\n" +
+		"| ID | Author ID | Commit | Note |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 1 | 10 | `abcdef12` | Short note |\n" +
+		"| 2 | 20 | `abc` | Another note that is quite long and exceeds sixty characters… |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" + draftListHints
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
-func TestFormatListMarkdown_Empty(t *testing.T) {
-	out := ListOutput{
-		DraftNotes: []Output{},
-		Pagination: toolutil.PaginationOutput{},
+// TestFormatListMarkdown_TruncatesOnRuneBoundaries verifies that a note whose
+// sixtieth rune is multi-byte is cut between characters rather than through
+// one: the byte slice this replaced put half a character on the page.
+func TestFormatListMarkdown_TruncatesOnRuneBoundaries(t *testing.T) {
+	out := ListOutput{DraftNotes: []Output{{ID: 1, AuthorID: 10, Note: strings.Repeat("é", 70)}}}
+	want := "## Draft Notes (1)\n\n" +
+		"| ID | Author ID | Commit | Note |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 1 | 10 |  | " + strings.Repeat("é", 60) + "… |\n" + draftListHints
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
-	md := FormatListMarkdown(out)
+}
 
-	if !strings.Contains(md, "No draft notes found.") {
-		t.Errorf("expected 'No draft notes found.' in markdown:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+// TestFormatListMarkdown_Empty verifies that a merge request with no draft note
+// renders the one-sentence empty message and no table header.
+func TestFormatListMarkdown_Empty(t *testing.T) {
+	want := "No draft notes found.\n"
+	if got := FormatListMarkdown(ListOutput{DraftNotes: []Output{}}); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 

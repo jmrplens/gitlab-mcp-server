@@ -2,94 +2,103 @@ package branchrules
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatListMarkdown renders a paginated list of branch rules as Markdown.
+// Canonical action IDs the hints name, the one form every surface resolves.
+const (
+	actionBranchGetProtected = "branch.get_protected"
+	actionBranchProtect      = "branch.protect"
+)
+
+// FormatListMarkdown renders a page of branch rules as a Markdown table,
+// followed by one section per rule that carries approval rules or external
+// status checks.
 func FormatListMarkdown(out ListOutput) string {
-	var sb strings.Builder
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	sb.WriteString("## Branch Rules\n\n")
-
 	if len(out.Rules) == 0 {
-		sb.WriteString("No branch rules found.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("branch rules")
 	}
-
-	sb.WriteString("| Name | Default | Protected | Branches | Force Push | CODEOWNERS | Approval Rules | Status Checks |\n")
-	sb.WriteString("|------|---------|-----------|----------|------------|------------|----------------|---------------|\n")
-
+	var b strings.Builder
+	// A cursor-paginated connection sends no total, so the heading counts what
+	// is shown and says whether more follows, which is all the response knows.
+	toolutil.WriteListHeading(&b, "Branch Rules", len(out.Rules),
+		toolutil.PaginationOutput{HasMore: out.Pagination.HasNextPage})
+	b.WriteString(toolutil.MarkdownTableHeader(
+		"Name", "Default", "Protected", "Branches", "Force Push", "CODEOWNERS", "Approval Rules", "Status Checks",
+	))
 	for _, r := range out.Rules {
 		forcePush := "-"
 		codeOwners := "-"
 		if r.BranchProtection != nil {
-			forcePush = boolIcon(r.BranchProtection.AllowForcePush)
-			codeOwners = boolIcon(r.BranchProtection.CodeOwnerApprovalRequired)
+			forcePush = toolutil.BoolEmoji(r.BranchProtection.AllowForcePush)
+			codeOwners = toolutil.BoolEmoji(r.BranchProtection.CodeOwnerApprovalRequired)
 		}
-
-		approvals := formatApprovalRulesSummary(r.ApprovalRules)
-		checks := formatStatusChecksSummary(r.ExternalStatusChecks)
-
-		fmt.Fprintf(
-			&sb, "| %s | %s | %s | %d | %s | %s | %s | %s |\n",
+		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(r.Name),
-			boolIcon(r.IsDefault),
-			boolIcon(r.IsProtected),
-			r.MatchingBranchesCount,
+			toolutil.BoolEmoji(r.IsDefault),
+			toolutil.BoolEmoji(r.IsProtected),
+			strconv.Itoa(r.MatchingBranchesCount),
 			forcePush,
 			codeOwners,
-			approvals,
-			checks,
-		)
+			formatApprovalRulesSummary(r.ApprovalRules),
+			formatStatusChecksSummary(r.ExternalStatusChecks),
+		))
 	}
-
-	sb.WriteString("\n")
-
-	// Render detailed sections for rules with approval rules or external status checks.
 	for _, r := range out.Rules {
-		if len(r.ApprovalRules) > 0 {
-			// A branch rule's name is the branch pattern a maintainer typed.
-			fmt.Fprintf(&sb, "### Approval Rules for `%s`\n\n", toolutil.EscapeMdHeading(r.Name))
-			sb.WriteString("| Name | Approvals Required | Type |\n")
-			sb.WriteString("|------|--------------------|------|\n")
-			for _, ar := range r.ApprovalRules {
-				fmt.Fprintf(
-					&sb, "| %s | %d | %s |\n",
-					toolutil.EscapeMdTableCell(ar.Name),
-					ar.ApprovalsRequired,
-					toolutil.EscapeMdTableCell(ar.Type),
-				)
-			}
-			sb.WriteString("\n")
-		}
-		if len(r.ExternalStatusChecks) > 0 {
-			fmt.Fprintf(&sb, "### External Status Checks for `%s`\n\n", toolutil.EscapeMdHeading(r.Name))
-			sb.WriteString("| Name | URL |\n")
-			sb.WriteString("|------|-----|\n")
-			for _, esc := range r.ExternalStatusChecks {
-				fmt.Fprintf(
-					&sb, "| %s | %s |\n",
-					toolutil.EscapeMdTableCell(esc.Name),
-					toolutil.EscapeMdTableCell(esc.ExternalURL),
-				)
-			}
-			sb.WriteString("\n")
-		}
+		writeApprovalRuleSection(&b, r)
+		writeStatusCheckSection(&b, r)
 	}
-
-	sb.WriteString(toolutil.FormatGraphQLForwardPagination(out.Pagination, len(out.Rules)))
-	sb.WriteString("\n")
-	return sb.String()
+	toolutil.WriteGraphQLPagination(&b, toolutil.GraphQLPaginationOutput{
+		HasNextPage: out.Pagination.HasNextPage,
+		EndCursor:   out.Pagination.EndCursor,
+	}, len(out.Rules))
+	// The table carries no link, so the hints carry no instruction to preserve
+	// one, and they are written once, after the tables, rather than opening the
+	// response above its own table header.
+	toolutil.WriteHints(&b,
+		toolutil.HintAction(actionBranchGetProtected, "see one rule's protection settings in full"),
+		toolutil.HintAction(actionBranchProtect, "change what a branch pattern requires"),
+	)
+	return b.String()
 }
 
-// boolIcon returns "Yes" or "No" for use in Markdown table cells.
-func boolIcon(v bool) string {
-	if v {
-		return "Yes"
+// writeApprovalRuleSection writes the approval rules of one branch rule as a
+// table under its own heading, and nothing when the rule has none. The rule's
+// name is the heading's subject rather than a hand-written code span, since a
+// backtick in the name would end the span and the rest would render as
+// Markdown.
+func writeApprovalRuleSection(b *strings.Builder, r BranchRuleItem) {
+	if len(r.ApprovalRules) == 0 {
+		return
 	}
-	return "No"
+	fmt.Fprintf(b, "\n### Approval Rules for %s\n\n", toolutil.EscapeMdHeading(r.Name))
+	b.WriteString(toolutil.MarkdownTableHeader("Name", "Approvals Required", "Type"))
+	for _, ar := range r.ApprovalRules {
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.EscapeMdTableCell(ar.Name),
+			strconv.Itoa(ar.ApprovalsRequired),
+			toolutil.EscapeMdTableCell(ar.Type),
+		))
+	}
+}
+
+// writeStatusCheckSection writes the external status checks of one branch rule
+// as a table under its own heading, and nothing when the rule has none.
+func writeStatusCheckSection(b *strings.Builder, r BranchRuleItem) {
+	if len(r.ExternalStatusChecks) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\n### External Status Checks for %s\n\n", toolutil.EscapeMdHeading(r.Name))
+	b.WriteString(toolutil.MarkdownTableHeader("Name", "URL"))
+	for _, esc := range r.ExternalStatusChecks {
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.EscapeMdTableCell(esc.Name),
+			toolutil.MdTitleLink(esc.ExternalURL, esc.ExternalURL),
+		))
+	}
 }
 
 // formatApprovalRulesSummary returns a Markdown-safe summary of approval rules,

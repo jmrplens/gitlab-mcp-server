@@ -409,90 +409,115 @@ func TestDelete_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown verifies Markdown formatting with and without timestamps.
+// summaryHints, detailHints and listHints are the guidance sections the three
+// controller renderings close with.
+const (
+	summaryHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'runner.controller_get' to see this controller's full details\n" +
+		"- Use action 'runner.controller_token_list' to manage the tokens it authenticates with\n"
+	detailHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'runner.controller_scope_list' to see the runners this controller is scoped to\n" +
+		"- Use action 'runner.controller_update' to change its description or state\n"
+	listHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'runner.controller_get' to see one controller in full\n" +
+		"- Use action 'runner.controller_list' to page through the rest of the controllers\n"
+)
+
+// TestFormatOutputMarkdown pins the whole card of a runner controller, with
+// and without the timestamps GitLab may omit.
 func TestFormatOutputMarkdown(t *testing.T) {
-	out := Output{
+	got := FormatOutputMarkdown(Output{
 		ID: 1, Description: "ctrl-1", State: "enabled",
 		CreatedAt: "2026-01-15T10:00:00Z", UpdatedAt: "2026-01-15T12:00:00Z",
+	})
+
+	want := "## Runner Controller #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Description**: ctrl-1\n" +
+		"- **State**: enabled\n" +
+		"- **Created**: 15 Jan 2026 10:00 UTC\n" +
+		"- **Updated**: 15 Jan 2026 12:00 UTC\n" +
+		summaryHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 
-	md := FormatOutputMarkdown(out)
-	for _, want := range []string{"ctrl-1", "enabled", "Created At", "Updated At"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q: %s", want, md)
-			}
-		})
-	}
+	bare := FormatOutputMarkdown(Output{ID: 1, Description: "ctrl-1", State: "enabled"})
 
-	// Without timestamps
-	out.CreatedAt = ""
-	out.UpdatedAt = ""
-	md = FormatOutputMarkdown(out)
-	if strings.Contains(md, "Created At") {
-		t.Error("should not contain Created At when empty")
+	wantBare := "## Runner Controller #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Description**: ctrl-1\n" +
+		"- **State**: enabled\n" +
+		summaryHints
+
+	if bare != wantBare {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", bare, wantBare)
 	}
 }
 
-// TestFormatDetailsMarkdown verifies detailed Markdown formatting.
+// TestFormatDetailsMarkdown pins the whole detail card: the same fields with
+// the connection flag as a glyph rather than as the word "true".
 func TestFormatDetailsMarkdown(t *testing.T) {
-	out := DetailsOutput{
-		ID: 1, Description: "ctrl-1", State: "enabled", CreatedAt: "2026-01-15T10:00:00Z", UpdatedAt: "2026-01-15T12:00:00Z",
+	got := FormatDetailsMarkdown(DetailsOutput{
+		ID: 1, Description: "ctrl-1", State: "enabled",
+		CreatedAt: "2026-01-15T10:00:00Z", UpdatedAt: "2026-01-15T12:00:00Z",
 		Connected: true,
+	})
+
+	want := "## Runner Controller #1: Details\n\n" +
+		"- **ID**: 1\n" +
+		"- **Description**: ctrl-1\n" +
+		"- **State**: enabled\n" +
+		"- **Created**: 15 Jan 2026 10:00 UTC\n" +
+		"- **Updated**: 15 Jan 2026 12:00 UTC\n" +
+		"- **Connected**: ✅\n" +
+		detailHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 
-	md := FormatDetailsMarkdown(out)
-	for _, want := range []string{"ctrl-1", "Details", "true", "Created At"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q: %s", want, md)
-			}
-		})
-	}
+	disconnected := FormatDetailsMarkdown(DetailsOutput{
+		ID: 2, Description: "ctrl-2", State: "disabled",
+	})
 
-	// Without timestamps
-	out.CreatedAt = ""
-	out.UpdatedAt = ""
-	md = FormatDetailsMarkdown(out)
-	if strings.Contains(md, "Created At") {
-		t.Error("should not contain Created At when empty")
+	wantDisconnected := "## Runner Controller #2: Details\n\n" +
+		"- **ID**: 2\n" +
+		"- **Description**: ctrl-2\n" +
+		"- **State**: disabled\n" +
+		"- **Connected**: ❌\n" +
+		detailHints
+
+	if disconnected != wantDisconnected {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", disconnected, wantDisconnected)
 	}
 }
 
-// TestFormatListMarkdown verifies list Markdown with data and empty.
+// TestFormatListMarkdown pins the whole listing: the heading counting what
+// GitLab reported, the created column in the display form rather than the wire
+// one, and the empty answer as one sentence.
 func TestFormatListMarkdown(t *testing.T) {
-	out := ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Controllers: []Output{
-			{ID: 1, Description: "ctrl-1", State: "enabled"},
+			{ID: 1, Description: "ctrl-1", State: "enabled", CreatedAt: "2026-01-15T10:00:00Z"},
 			{ID: 2, Description: "ctrl-2", State: "disabled"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
+	})
+
+	want := "## Runner Controllers (2)\n\n" +
+		"| ID | Description | State | Created |\n| --- | --- | --- | --- |\n" +
+		"| 1 | ctrl-1 | enabled | 15 Jan 2026 10:00 UTC |\n" +
+		"| 2 | ctrl-2 | disabled |  |\n" +
+		"\n2 items total\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 
-	md := FormatListMarkdown(out)
-	for _, want := range []string{"ctrl-1", "ctrl-2", "enabled", "disabled"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q: %s", want, md)
-			}
-		})
-	}
-
-	// Empty
-	md = FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No runner controllers found") {
-		t.Errorf("expected empty message, got: %s", md)
-	}
-}
-
-// TestFormatGetMarkdown verifies FormatGetMarkdown returns a non-nil result.
-func TestFormatGetMarkdown(t *testing.T) {
-	out := DetailsOutput{
-		ID: 1, Description: "ctrl-1", State: "enabled",
-		Connected: true,
-	}
-	result := FormatGetMarkdown(out)
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	if empty := FormatListMarkdown(ListOutput{}); empty != "No runner controllers found.\n" {
+		t.Errorf("empty list mismatch:\ngot:\n%s", empty)
 	}
 }

@@ -843,87 +843,203 @@ func TestCovtoStateEventOutput_NilUser(t *testing.T) {
 
 // ======================== Formatters ========================.
 
-// TestFormatLabelEventsMarkdown_Empty verifies FormatLabelEventsMarkdown when empty.
+// The guidance sections the label, milestone and state event results end with,
+// so each expectation below can pin the whole rendered document.
+const (
+	labelListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use filters to narrow down label events by date or action\n"
+	labelCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use `gitlab_issue_label_event_list` or `gitlab_mr_label_event_list` to see all label changes\n"
+	milestoneListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use filters to narrow down milestone events by date or action\n"
+	milestoneCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use `gitlab_issue_milestone_event_list` or `gitlab_mr_milestone_event_list` to see all milestone changes\n"
+	stateListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use filters to narrow down state events by date or action\n"
+	stateCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use `gitlab_issue_state_event_list` or `gitlab_mr_state_event_list` to see all state changes\n"
+)
+
+// TestFormatLabelEventsMarkdown_Empty pins the whole response of an issue with
+// no label events.
 func TestFormatLabelEventsMarkdown_Empty(t *testing.T) {
-	md := FormatLabelEventsMarkdown(ListLabelEventsOutput{})
-	if !strings.Contains(md, "No label events found") {
-		t.Error("expected empty label events message")
+	got := FormatLabelEventsMarkdown(ListLabelEventsOutput{})
+
+	if want := "No label events found.\n"; got != want {
+		t.Errorf(fmtGotWant, got, want)
 	}
 }
 
-// TestFormatLabelEventsMarkdown_WithEvents verifies FormatLabelEventsMarkdown when with events.
+// TestFormatLabelEventsMarkdown_WithEvents pins the whole list document: the
+// heading counts the total GitLab reported, and the pagination footer opens a
+// block of its own after the last row, where the list used to end at the row and
+// say nothing about the pages that follow.
 func TestFormatLabelEventsMarkdown_WithEvents(t *testing.T) {
 	out := ListLabelEventsOutput{
-		Events: []LabelEventOutput{{ID: 1, Action: "add", Label: &LabelEventLabelOutput{Name: "bug"}, User: &EventUserOutput{Username: "alice"}}},
+		Events:     []LabelEventOutput{{ID: 1, Action: "add", Label: &LabelEventLabelOutput{Name: "bug"}, User: &EventUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z"}},
+		Pagination: toolutil.PaginationOutput{Page: 1, PerPage: 20, TotalItems: 45, TotalPages: 3, NextPage: 2, HasMore: true},
 	}
-	md := FormatLabelEventsMarkdown(out)
-	if !strings.Contains(md, "bug") || !strings.Contains(md, "alice") {
-		t.Error("expected label and user in markdown")
+
+	got := FormatLabelEventsMarkdown(out)
+
+	want := "## Label Events (45)\n\n" +
+		"Showing 1 of 45 results (page 1 of 3)\n\n" +
+		"| ID | Action | Label | User | Date |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | add | bug | alice | 1 Jan 2026 00:00 UTC |\n\n" +
+		"Page 1 of 3 | 45 items total | 20 per page\n" +
+		labelListHints
+	if got != want {
+		t.Errorf(fmtGotWant, got, want)
 	}
 }
 
-// TestFormatLabelEventMarkdown verifies FormatLabelEventMarkdown.
+// TestFormatLabelEventMarkdown pins the whole card of one label event, the
+// object it hangs on as two rows rather than one "Issue #1" whose sigil reads as
+// the per-project number while the value is the database ID.
 func TestFormatLabelEventMarkdown(t *testing.T) {
-	out := LabelEventOutput{ID: 10, Action: "add", Label: &LabelEventLabelOutput{Name: "bug"}, User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", ResourceID: 1}
-	md := FormatLabelEventMarkdown(out)
-	if !strings.Contains(md, "Label Event #10") || !strings.Contains(md, "bug") {
-		t.Error("expected label event details")
+	out := LabelEventOutput{ID: 10, Action: "add", Label: &LabelEventLabelOutput{Name: "bug"}, User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", ResourceID: 1, CreatedAt: "2026-01-01T00:00:00Z"}
+
+	got := FormatLabelEventMarkdown(out)
+
+	want := "## Label Event #10\n\n" +
+		"- **Action**: add\n" +
+		"- **Label**: bug\n" +
+		"- **User**: alice\n" +
+		"- **Resource Type**: Issue\n" +
+		"- **Resource ID**: 1\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		labelCardHints
+	if got != want {
+		t.Errorf(fmtGotWant, got, want)
 	}
 }
 
-// TestFormatMilestoneEventsMarkdown_Empty verifies FormatMilestoneEventsMarkdown when empty.
+// TestFormatLabelEventMarkdown_DeletedActors pins the card of an event whose
+// user and label GitLab no longer sends: each row is absent rather than empty,
+// where the card used to print a label with nothing after it.
+func TestFormatLabelEventMarkdown_DeletedActors(t *testing.T) {
+	got := FormatLabelEventMarkdown(LabelEventOutput{ID: 11, Action: "remove"})
+
+	want := "## Label Event #11\n\n" +
+		"- **Action**: remove\n" +
+		labelCardHints
+	if got != want {
+		t.Errorf(fmtGotWant, got, want)
+	}
+}
+
+// TestFormatMilestoneEventsMarkdown_Empty pins the whole response of an issue
+// with no milestone events.
 func TestFormatMilestoneEventsMarkdown_Empty(t *testing.T) {
-	md := FormatMilestoneEventsMarkdown(ListMilestoneEventsOutput{})
-	if !strings.Contains(md, "No milestone events found") {
-		t.Error("expected empty milestone events message")
+	got := FormatMilestoneEventsMarkdown(ListMilestoneEventsOutput{})
+
+	if want := "No milestone events found.\n"; got != want {
+		t.Errorf(fmtGotWant, got, want)
 	}
 }
 
-// TestFormatMilestoneEventsMarkdown_WithEvents verifies FormatMilestoneEventsMarkdown when with events.
+// TestFormatMilestoneEventsMarkdown_WithEvents pins the whole list document of
+// a single page: no summary line and no pagination footer, since there is
+// nothing to page through.
 func TestFormatMilestoneEventsMarkdown_WithEvents(t *testing.T) {
 	out := ListMilestoneEventsOutput{
-		Events: []MilestoneEventOutput{{ID: 1, Action: "add", Milestone: &MilestoneOutput{Title: "v1.0"}, User: &EventUserOutput{Username: "alice"}}},
+		Events: []MilestoneEventOutput{{ID: 1, Action: "add", Milestone: &MilestoneOutput{Title: "v1.0"}, User: &EventUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z"}},
 	}
-	md := FormatMilestoneEventsMarkdown(out)
-	if !strings.Contains(md, "v1.0") || !strings.Contains(md, "alice") {
-		t.Error("expected milestone and user in markdown")
+
+	got := FormatMilestoneEventsMarkdown(out)
+
+	want := "## Milestone Events (1)\n\n" +
+		"| ID | Action | Milestone | User | Date |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | add | v1.0 | alice | 1 Jan 2026 00:00 UTC |\n" +
+		milestoneListHints
+	if got != want {
+		t.Errorf(fmtGotWant, got, want)
 	}
 }
 
-// TestFormatMilestoneEventMarkdown verifies FormatMilestoneEventMarkdown.
+// TestFormatMilestoneEventMarkdown pins the whole card of one milestone event,
+// the milestone's own ID a row of its own.
 func TestFormatMilestoneEventMarkdown(t *testing.T) {
-	out := MilestoneEventOutput{ID: 30, Action: "add", Milestone: &MilestoneOutput{ID: 200, Title: "v1.0"}, User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", ResourceID: 1}
-	md := FormatMilestoneEventMarkdown(out)
-	if !strings.Contains(md, "Milestone Event #30") || !strings.Contains(md, "v1.0") {
-		t.Error("expected milestone event details")
+	out := MilestoneEventOutput{ID: 30, Action: "add", Milestone: &MilestoneOutput{ID: 200, Title: "v1.0"}, User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", ResourceID: 1, CreatedAt: "2026-01-01T00:00:00Z"}
+
+	got := FormatMilestoneEventMarkdown(out)
+
+	want := "## Milestone Event #30\n\n" +
+		"- **Action**: add\n" +
+		"- **Milestone**: v1.0\n" +
+		"- **Milestone ID**: 200\n" +
+		"- **User**: alice\n" +
+		"- **Resource Type**: Issue\n" +
+		"- **Resource ID**: 1\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		milestoneCardHints
+	if got != want {
+		t.Errorf(fmtGotWant, got, want)
 	}
 }
 
-// TestFormatStateEventsMarkdown_Empty verifies FormatStateEventsMarkdown when empty.
+// TestFormatMilestoneEventMarkdown_DeletedMilestone pins the card of an event
+// whose milestone has since been deleted: neither the title nor the ID is
+// written, where the card used to read "(ID: 0)" for a milestone that is not
+// there.
+func TestFormatMilestoneEventMarkdown_DeletedMilestone(t *testing.T) {
+	got := FormatMilestoneEventMarkdown(MilestoneEventOutput{ID: 31, Action: "remove", User: &EventUserOutput{Username: "alice"}})
+
+	want := "## Milestone Event #31\n\n" +
+		"- **Action**: remove\n" +
+		"- **User**: alice\n" +
+		milestoneCardHints
+	if got != want {
+		t.Errorf(fmtGotWant, got, want)
+	}
+}
+
+// TestFormatStateEventsMarkdown_Empty pins the whole response of an issue with
+// no state events.
 func TestFormatStateEventsMarkdown_Empty(t *testing.T) {
-	md := FormatStateEventsMarkdown(ListStateEventsOutput{})
-	if !strings.Contains(md, "No state events found") {
-		t.Error("expected empty state events message")
+	got := FormatStateEventsMarkdown(ListStateEventsOutput{})
+
+	if want := "No state events found.\n"; got != want {
+		t.Errorf(fmtGotWant, got, want)
 	}
 }
 
-// TestFormatStateEventsMarkdown_WithEvents verifies FormatStateEventsMarkdown when with events.
+// TestFormatStateEventsMarkdown_WithEvents pins the whole list document, the
+// resource cell naming the kind and the ID rather than a "#" reference.
 func TestFormatStateEventsMarkdown_WithEvents(t *testing.T) {
 	out := ListStateEventsOutput{
-		Events: []StateEventOutput{{ID: 1, State: "closed", User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", ResourceID: 1}},
+		Events: []StateEventOutput{{ID: 1, State: "closed", User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", ResourceID: 1, CreatedAt: "2026-01-01T00:00:00Z"}},
 	}
-	md := FormatStateEventsMarkdown(out)
-	if !strings.Contains(md, "closed") || !strings.Contains(md, "alice") {
-		t.Error("expected state and user in markdown")
+
+	got := FormatStateEventsMarkdown(out)
+
+	want := "## State Events (1)\n\n" +
+		"| ID | State | User | Resource | Date |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | closed | alice | Issue (ID 1) | 1 Jan 2026 00:00 UTC |\n" +
+		stateListHints
+	if got != want {
+		t.Errorf(fmtGotWant, got, want)
 	}
 }
 
-// TestFormatStateEventMarkdown verifies FormatStateEventMarkdown.
+// TestFormatStateEventMarkdown pins the whole card of one state event.
 func TestFormatStateEventMarkdown(t *testing.T) {
-	out := StateEventOutput{ID: 40, State: "closed", User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", ResourceID: 1}
-	md := FormatStateEventMarkdown(out)
-	if !strings.Contains(md, "State Event #40") || !strings.Contains(md, "closed") {
-		t.Error("expected state event details")
+	out := StateEventOutput{ID: 40, State: "closed", User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", ResourceID: 1, CreatedAt: "2026-01-01T00:00:00Z"}
+
+	got := FormatStateEventMarkdown(out)
+
+	want := "## State Event #40\n\n" +
+		"- **State**: closed\n" +
+		"- **User**: alice\n" +
+		"- **Resource Type**: Issue\n" +
+		"- **Resource ID**: 1\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		stateCardHints
+	if got != want {
+		t.Errorf(fmtGotWant, got, want)
 	}
 }
 

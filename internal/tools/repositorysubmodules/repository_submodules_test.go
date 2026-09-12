@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -119,60 +117,77 @@ func TestUpdate_Error(t *testing.T) {
 	}
 }
 
-// TestFormatUpdateMarkdown verifies FormatUpdateMarkdown.
+// TestFormatUpdateMarkdown pins the card of the commit a submodule update
+// created when GitLab answered with little more than the identity.
 func TestFormatUpdateMarkdown(t *testing.T) {
-	r := FormatUpdateMarkdown(UpdateOutput{
+	got := renderedText(t, FormatUpdateMarkdown(UpdateOutput{
 		ID:         "abc123",
 		ShortID:    "abc",
 		Title:      "Update submodule",
 		AuthorName: "Dev",
-	})
-	if r == nil {
-		t.Fatal("expected non-nil result")
+	}))
+
+	want := "## Submodule Updated\n\n" +
+		"- **Commit**: `abc`\n" +
+		"- **Full SHA**: `abc123`\n" +
+		"- **Title**: Update submodule\n" +
+		"- **Author**: Dev\n" +
+		submoduleUpdateHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatUpdateMarkdown_Content verifies FormatUpdateMarkdown when content.
+// TestFormatUpdateMarkdown_Content pins the whole card of a fully populated
+// update. The address is a row of its own rather than an angle-bracketed
+// ident, which GFM turns into a mailto autolink to an address nobody chose to
+// publish.
 func TestFormatUpdateMarkdown_Content(t *testing.T) {
-	out := UpdateOutput{
-		ID:          "abc123def456",
-		ShortID:     "abc123d",
-		Title:       "Update lib",
-		AuthorName:  "Alice",
-		AuthorEmail: "alice@example.com",
-		Message:     "Bump lib to v2",
-	}
-	r := FormatUpdateMarkdown(out)
-	if r == nil {
-		t.Fatal("expected non-nil result")
-	}
-	tc, ok := r.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatal("expected TextContent")
-	}
-	if !strings.Contains(tc.Text, "abc123d") {
-		t.Error("expected short ID")
-	}
-	if !strings.Contains(tc.Text, "Alice") {
-		t.Error("expected author")
+	got := renderedText(t, FormatUpdateMarkdown(UpdateOutput{
+		ID:            "abc123def456",
+		ShortID:       "abc123d",
+		Title:         "Update lib",
+		AuthorName:    "Alice",
+		AuthorEmail:   "alice@example.com",
+		CommittedDate: "2026-03-20T15:45:00Z",
+		Message:       "Bump lib to v2",
+	}))
+
+	want := "## Submodule Updated\n\n" +
+		"- **Commit**: `abc123d`\n" +
+		"- **Full SHA**: `abc123def456`\n" +
+		"- **Title**: Update lib\n" +
+		"- **Author**: Alice\n" +
+		"- **Author Email**: alice@example.com\n" +
+		"- **Committed**: 20 Mar 2026 15:45 UTC\n" +
+		"- **Message**: Bump lib to v2\n" +
+		submoduleUpdateHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatUpdateMarkdown_WithStatus verifies the Status line renders when status is set.
+// TestFormatUpdateMarkdown_WithStatus pins that the build state GitLab
+// reported is a row of the card.
 func TestFormatUpdateMarkdown_WithStatus(t *testing.T) {
-	out := UpdateOutput{
+	got := renderedText(t, FormatUpdateMarkdown(UpdateOutput{
 		ID:      "abc123def456",
 		ShortID: "abc123d",
 		Title:   "Update lib",
 		Status:  "success",
-	}
-	r := FormatUpdateMarkdown(out)
-	tc, ok := r.Content[0].(*mcp.TextContent)
-	if !ok {
-		t.Fatal("expected TextContent")
-	}
-	if !strings.Contains(tc.Text, "**Status**") || !strings.Contains(tc.Text, "success") {
-		t.Errorf("expected Status line, got %q", tc.Text)
+	}))
+
+	want := "## Submodule Updated\n\n" +
+		"- **Commit**: `abc123d`\n" +
+		"- **Full SHA**: `abc123def456`\n" +
+		"- **Title**: Update lib\n" +
+		"- **Status**: success\n" +
+		submoduleUpdateHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

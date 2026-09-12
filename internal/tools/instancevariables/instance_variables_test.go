@@ -316,15 +316,47 @@ func TestFormatListMarkdown(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, TotalPages: 1, Page: 1, PerPage: 20},
 	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "VAR1") {
-		t.Error("expected VAR1 in list output")
+	// The list keeps four columns: an instance variable's scope is the same on
+	// every row, so a column repeating it says nothing. The card names it.
+	want := "## Instance CI/CD Variables (2)\n\n" +
+		"| Key | Type | Protected | Masked |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| VAR1 | env_var | " + toolutil.EmojiSuccess + " | " + toolutil.EmojiCross + " |\n" +
+		"| VAR2 | file | " + toolutil.EmojiCross + " | " + toolutil.EmojiSuccess + " |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		variableListHints
+	if md := FormatListMarkdown(out); md != want {
+		t.Errorf("FormatListMarkdown()\n got %q\nwant %q", md, want)
 	}
-	if !strings.Contains(md, "VAR2") {
-		t.Error("expected VAR2 in list output")
-	}
-	if !strings.Contains(md, "Instance CI/CD Variables (2)") {
-		t.Error("expected header with count")
+}
+
+// variableListHints is the guidance section the instance variable list closes
+// with.
+const variableListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'get' with key for full details\n" +
+	"- Use action 'create' to add a new instance variable\n"
+
+// TestFormatOutputMarkdown_NamesTheEnvironmentScope verifies that the scope
+// GitLab sends reaches the card. The view model used to receive an empty
+// string in its place, so an instance variable scoped to one environment read
+// as one that applies everywhere.
+func TestFormatOutputMarkdown_NamesTheEnvironmentScope(t *testing.T) {
+	md := FormatOutputMarkdown(Output{
+		Key:              "DB_HOST",
+		Value:            "localhost",
+		VariableType:     "env_var",
+		EnvironmentScope: "production",
+	})
+	want := "## Instance Variable: DB_HOST\n\n" +
+		"- **Type**: env_var\n" +
+		"- **Protected**: " + toolutil.EmojiCross + "\n" +
+		"- **Masked**: " + toolutil.EmojiCross + "\n" +
+		"- **Raw**: " + toolutil.EmojiCross + "\n" +
+		"- **Environment Scope**: production\n" +
+		"- **Value**: localhost\n" +
+		variableCardHints
+	if md != want {
+		t.Errorf("variable card with a scope:\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -332,9 +364,9 @@ func TestFormatListMarkdown(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No instance CI/CD variables found") {
-		t.Errorf("FormatListMarkdown(empty) = %q, want no-results message", md)
+	const want = "No instance CI/CD variables found.\n"
+	if md := FormatListMarkdown(ListOutput{}); md != want {
+		t.Errorf("FormatListMarkdown(empty)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -810,21 +842,15 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
-
-	for _, want := range []string{
-		"## Instance CI/CD Variables (2)",
-		"| Key |",
-		"| --- |",
-		"| DB_HOST |",
-		"| API_KEY |",
-		"env_var",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Instance CI/CD Variables (2)\n\n" +
+		"| Key | Type | Protected | Masked |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| DB_HOST | env_var | " + toolutil.EmojiCross + " | " + toolutil.EmojiCross + " |\n" +
+		"| API_KEY | env_var | " + toolutil.EmojiSuccess + " | " + toolutil.EmojiSuccess + " |\n" +
+		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		variableListHints
+	if md := FormatListMarkdown(out); md != want {
+		t.Errorf("FormatListMarkdown(with variables)\n got %q\nwant %q", md, want)
 	}
 }
 
@@ -876,8 +902,8 @@ func TestFormatListMarkdown_EscapesTableCells(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
-	if strings.Contains(md, "| MY|VAR |") {
-		t.Errorf("pipe in key should be escaped:\n%s", md)
+	const wantRow = "| MY&#124;VAR | env_var | " + toolutil.EmojiCross + " | " + toolutil.EmojiCross + " |\n"
+	if md := FormatListMarkdown(out); !strings.Contains(md, wantRow) {
+		t.Errorf("FormatListMarkdown() missing %q:\n%s", wantRow, md)
 	}
 }

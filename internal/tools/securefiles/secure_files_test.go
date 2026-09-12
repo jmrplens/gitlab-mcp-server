@@ -238,19 +238,41 @@ func TestRemove_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// secureFileListHints is the guidance a secure file list closes with, and
+// secureFileCardHints the guidance the detail card closes with. Neither names
+// a download route: GitLab serves a secure file's contents only to a CI job
+// and this server exposes no such action.
+const (
+	secureFileListHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use `gitlab_show_secure_file` to view details of a specific file\n"
+	secureFileCardHints = "\n---\n💡 **Next steps:**\n" +
+		"- Use `gitlab_list_secure_files` to see the other secure files in this project\n" +
+		"- Use `gitlab_remove_secure_file` to delete it\n"
+	secureFileTableHeader = "| ID | Name | Checksum Algorithm | Expires At |\n| --- | --- | --- | --- |\n"
+)
+
+// TestFormatListMarkdown verifies the list renders as a whole: the heading
+// counting what GitLab reported, the table, and the guidance after the rows.
 func TestFormatListMarkdown(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{Files: []SecureFileItem{{ID: 1, Name: testFileName}}})
-	if md == "" {
-		t.Error("expected non-empty markdown")
+	got := FormatListMarkdown(ListOutput{Files: []SecureFileItem{{ID: 1, Name: testFileName}}})
+	want := "## Secure Files (1)\n\n" + secureFileTableHeader +
+		"| 1 | " + testFileName + " |  | - |\n" + secureFileListHints
+	if got != want {
+		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
-// TestFormatShowMarkdown verifies FormatShowMarkdown.
+// TestFormatShowMarkdown verifies the detail card of a file GitLab sent
+// nothing but an id and a name for: no metadata section, and no label with
+// nothing after it.
 func TestFormatShowMarkdown(t *testing.T) {
-	md := FormatShowMarkdown(SecureFileItem{ID: 1, Name: testFileName})
-	if md == "" {
-		t.Error("expected non-empty markdown")
+	got := FormatShowMarkdown(SecureFileItem{ID: 1, Name: testFileName})
+	want := "## Secure File: " + testFileName + "\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: " + testFileName + "\n" +
+		secureFileCardHints
+	if got != want {
+		t.Errorf("FormatShowMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -292,14 +314,13 @@ func TestList_WithPagination(t *testing.T) {
 // FormatListMarkdown — empty list
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies an empty list is the one sentence and
+// nothing else: no heading counting zero above it and no table header.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No secure files found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table when empty")
+	got := FormatListMarkdown(ListOutput{})
+	want := "No secure files found.\n"
+	if got != want {
+		t.Errorf("FormatListMarkdown() = %q, want %q", got, want)
 	}
 }
 
@@ -307,21 +328,24 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatListMarkdown — with pagination
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithPagination verifies FormatListMarkdown when with pagination.
+// TestFormatListMarkdown_WithPagination verifies the heading counts the total
+// GitLab reported rather than the page length, and that the pagination footer
+// follows the rows.
 func TestFormatListMarkdown_WithPagination(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		Files: []SecureFileItem{
 			{ID: 1, Name: "key.pem", ChecksumAlgorithm: "sha256"},
 			{ID: 2, Name: "cert.pem", ChecksumAlgorithm: "sha256"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 5, Page: 1, PerPage: 2, TotalPages: 3},
 	})
-	for _, want := range []string{"| ID |", "| 1 |", "| 2 |", "key.pem", "cert.pem"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Secure Files (5)\n\n" +
+		"Showing 2 of 5 results (page 1 of 3)\n\n" + secureFileTableHeader +
+		"| 1 | key.pem | sha256 | - |\n" +
+		"| 2 | cert.pem | sha256 | - |\n" +
+		"\nPage 1 of 3 | 5 items total | 2 per page\n" + secureFileListHints
+	if got != want {
+		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -411,19 +435,21 @@ func TestList_KeysetPagination(t *testing.T) {
 	}
 }
 
-// TestFormatShowMarkdown_FullMetadata verifies the detail markdown renders the
-// timestamps (non-nil branch) and the certificate metadata section.
+// TestFormatShowMarkdown_FullMetadata verifies the detail card renders the
+// timestamps in the display form (non-nil branch) and the parsed metadata as a
+// section of its own, whole.
 func TestFormatShowMarkdown_FullMetadata(t *testing.T) {
 	created := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
 	expires := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
 	mdExpires := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
-	md := FormatShowMarkdown(SecureFileItem{
+	got := FormatShowMarkdown(SecureFileItem{
 		ID:                7,
 		Name:              "cert.cer",
 		Checksum:          "deadbeef",
 		ChecksumAlgorithm: "sha256",
 		CreatedAt:         &created,
 		ExpiresAt:         &expires,
+		FileExtension:     "cer",
 		Metadata: &SecureFileMetadata{
 			ID:        "00:11:22",
 			Issuer:    SecureFileIssuer{CN: "Acme Root CA"},
@@ -431,16 +457,57 @@ func TestFormatShowMarkdown_FullMetadata(t *testing.T) {
 			ExpiresAt: &mdExpires,
 		},
 	})
-	for _, want := range []string{
-		"2024-01-02T03:04:05Z", "2025-01-02T03:04:05Z", "Certificate Metadata",
-		"00:11:22", "Acme Root CA", "service.example.com", "2026-06-01T00:00:00Z",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Secure File: cert.cer\n\n" +
+		"- **ID**: 7\n" +
+		"- **Name**: cert.cer\n" +
+		"- **Checksum**: `deadbeef`\n" +
+		"- **Algorithm**: sha256\n" +
+		"- **Created At**: 2 Jan 2024 03:04 UTC\n" +
+		"- **Expires At**: 2 Jan 2025 03:04 UTC\n" +
+		"- **File Extension**: cer\n\n" +
+		"### Certificate Metadata\n\n" +
+		"- **ID**: 00:11:22\n" +
+		"- **Expires At**: 1 Jun 2026 00:00 UTC\n" +
+		"- **Issuer CN**: Acme Root CA\n" +
+		"- **Subject CN**: service.example.com\n" +
+		secureFileCardHints
+	if got != want {
+		t.Errorf("FormatShowMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
+}
+
+// TestFormatShowMarkdown_MetadataSectionNamesTheFileKind verifies a
+// provisioning profile's metadata is not headed "Certificate Metadata", and
+// that metadata carrying nothing a reader would see opens no section at all:
+// a heading over four empty labels is what the old renderer printed.
+func TestFormatShowMarkdown_MetadataSectionNamesTheFileKind(t *testing.T) {
+	t.Run("provisioning profile", func(t *testing.T) {
+		got := FormatShowMarkdown(SecureFileItem{
+			ID: 3, Name: "app.mobileprovision", FileExtension: "mobileprovision",
+			Metadata: &SecureFileMetadata{ID: "aa-bb"},
+		})
+		want := "## Secure File: app.mobileprovision\n\n" +
+			"- **ID**: 3\n" +
+			"- **Name**: app.mobileprovision\n" +
+			"- **File Extension**: mobileprovision\n\n" +
+			"### Provisioning Profile Metadata\n\n" +
+			"- **ID**: aa-bb\n" +
+			secureFileCardHints
+		if got != want {
+			t.Errorf("FormatShowMarkdown() =\n%q\nwant:\n%q", got, want)
+		}
+	})
+
+	t.Run("empty metadata opens no section", func(t *testing.T) {
+		got := FormatShowMarkdown(SecureFileItem{ID: 4, Name: "blob.bin", Metadata: &SecureFileMetadata{}})
+		want := "## Secure File: blob.bin\n\n" +
+			"- **ID**: 4\n" +
+			"- **Name**: blob.bin\n" +
+			secureFileCardHints
+		if got != want {
+			t.Errorf("FormatShowMarkdown() =\n%q\nwant:\n%q", got, want)
+		}
+	})
 }
 
 // TestFormatShowMarkdown_FileExtension verifies the file extension reaches the
@@ -449,12 +516,21 @@ func TestFormatShowMarkdown_FullMetadata(t *testing.T) {
 // nothing to show for itself.
 func TestFormatShowMarkdown_FileExtension(t *testing.T) {
 	withExt := FormatShowMarkdown(SecureFileItem{ID: 1, Name: "keystore.jks", FileExtension: "jks"})
-	if !strings.Contains(withExt, "- **File Extension**: jks") {
-		t.Errorf("markdown missing the file extension line:\n%s", withExt)
+	wantWith := "## Secure File: keystore.jks\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: keystore.jks\n" +
+		"- **File Extension**: jks\n" +
+		secureFileCardHints
+	if withExt != wantWith {
+		t.Errorf("FormatShowMarkdown() =\n%q\nwant:\n%q", withExt, wantWith)
 	}
 	without := FormatShowMarkdown(SecureFileItem{ID: 1, Name: "keystore"})
-	if strings.Contains(without, "**File Extension**") {
-		t.Errorf("markdown shows an extension GitLab did not send:\n%s", without)
+	wantWithout := "## Secure File: keystore\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: keystore\n" +
+		secureFileCardHints
+	if without != wantWithout {
+		t.Errorf("FormatShowMarkdown() =\n%q\nwant:\n%q", without, wantWithout)
 	}
 }
 
@@ -491,20 +567,18 @@ func TestSecureFiles_UnreadableCapturedFileExtension(t *testing.T) {
 }
 
 // TestFormatListMarkdown_ExpiresColumn verifies the list table renders the
-// Expires At column, including the "-" placeholder for files without expiry.
+// Expires At column in the display form every other table in this server
+// shows, and the "-" placeholder for a file with no expiry.
 func TestFormatListMarkdown_ExpiresColumn(t *testing.T) {
 	expires := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
-	md := FormatListMarkdown(ListOutput{Files: []SecureFileItem{
+	got := FormatListMarkdown(ListOutput{Files: []SecureFileItem{
 		{ID: 1, Name: "a.pem", ChecksumAlgorithm: "sha256", ExpiresAt: &expires},
 		{ID: 2, Name: "b.pem", ChecksumAlgorithm: "sha256"},
 	}})
-	if !strings.Contains(md, "Expires At") {
-		t.Errorf("missing Expires At header:\n%s", md)
-	}
-	if !strings.Contains(md, "2025-01-02T03:04:05Z") {
-		t.Errorf("missing rendered expiry:\n%s", md)
-	}
-	if !strings.Contains(md, "| - |") {
-		t.Errorf("missing placeholder for absent expiry:\n%s", md)
+	want := "## Secure Files (2)\n\n" + secureFileTableHeader +
+		"| 1 | a.pem | sha256 | 2 Jan 2025 03:04 UTC |\n" +
+		"| 2 | b.pem | sha256 | - |\n" + secureFileListHints
+	if got != want {
+		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
