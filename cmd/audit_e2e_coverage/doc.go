@@ -42,7 +42,12 @@
 // -run filter (a partial run is not a coverage claim about the rest), and
 // when the asserted count falls below the floor exemptions.go records. -baseline compares two shard
 // directories and fails on any runtime x surface x mode x action x credit the
-// old suite reached in a passing test and the new one does not. -port-map
+// old suite reached in a passing test and the new one does not; a cleanup or
+// sweep credit is also met by the same cell asserted, since all three say the
+// action ran and answered. A baseline whose shards carry no verdicts, which is
+// how the old suite's recorder wrote them, is joined with the gotestsum stream
+// at <directory>.results.json beside it, and refused when there is none rather
+// than compared against nothing. -port-map
 // reads the "// Replaces:" lines of the new suite against every Test function
 // of the old one, with declared drops for the tests nothing replaces.
 //

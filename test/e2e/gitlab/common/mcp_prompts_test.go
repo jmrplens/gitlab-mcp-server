@@ -23,8 +23,8 @@ import (
 // TestPrompts_Sweep renders every served prompt whose required arguments bind
 // from the World.
 //
-// Replaces: the prompt coverage the old suite had none of, since no TestMain
-// session registered prompts.
+// It replaces no old test: the old suite had no prompt coverage, since no
+// TestMain session registered prompts.
 func TestPrompts_Sweep(t *testing.T) {
 	e := harness.New(t)
 	world := fixture.SharedWorld(e)

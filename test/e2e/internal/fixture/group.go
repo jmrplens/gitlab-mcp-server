@@ -7,6 +7,7 @@ package fixture
 
 import (
 	"context"
+	"strconv"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -24,6 +25,15 @@ type Group struct {
 	Name string
 	// ParentID is the parent group's ID, zero for a top-level group.
 	ParentID int64
+}
+
+// IDParam spells the group's ID as a group_id parameter declared a string
+// takes it, for the same reason [Project.IDParam] exists: the dispatcher
+// surfaces coerce a number into the string, and the individual surface
+// refuses one against the schema. An action whose group_id is declared
+// numeric takes ID itself.
+func (g Group) IDParam() string {
+	return strconv.FormatInt(g.ID, 10)
 }
 
 // groupSpec is what a builder asks GitLab for.

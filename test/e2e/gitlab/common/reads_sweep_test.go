@@ -48,8 +48,9 @@ type unboundEntry struct {
 // TestReads_Sweep reads every read-only action whose required parameters bind
 // from the World, on the dynamic, meta and individual surfaces.
 //
-// Replaces: the list-and-get coverage the old per-domain suite spread across
-// its TestIndividual_*, TestMeta_* and TestDynamicToolSurface_* families.
+// It replaces no old test by name: the old per-domain suite spread its
+// list-and-get coverage across its TestIndividual_*, TestMeta_* and
+// TestDynamicToolSurface_* families, whose ports name them.
 func TestReads_Sweep(t *testing.T) {
 	e := harness.New(t)
 	world := fixture.SharedWorld(e)

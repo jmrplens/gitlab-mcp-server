@@ -67,6 +67,32 @@ func NewMergeRequest(e *harness.Env, project Project, source, target, title stri
 	return mr
 }
 
+// EnableMergeTrains turns merged results pipelines and merge trains on for
+// a project and reports whether GitLab kept both.
+//
+// Both switches are needed, because setting merge_trains_enabled alone is
+// silently dropped. The report matters on a self-managed instance: GitLab
+// does not persist the flags on a project in a personal namespace, since the
+// namespace lacks the licensed feature, and answers the edit with 200 all
+// the same. A test that needs a train reads the answer and says what it can
+// assert when the flags did not stick.
+func EnableMergeTrains(e *harness.Env, project Project) bool {
+	e.T.Helper()
+
+	_, _, err := e.Client().GL().Projects.EditProject(project.ID, &gl.EditProjectOptions{
+		MergePipelinesEnabled: new(true),
+		MergeTrainsEnabled:    new(true),
+	}, gl.WithContext(e.Ctx))
+	if err != nil {
+		e.T.Fatalf("enabling merge trains on project %d: %v", project.ID, err)
+	}
+	current, _, err := e.Client().GL().Projects.GetProject(project.ID, nil, gl.WithContext(e.Ctx))
+	if err != nil {
+		e.T.Fatalf("reading project %d after enabling merge trains: %v", project.ID, err)
+	}
+	return current.MergePipelinesEnabled && current.MergeTrainsEnabled
+}
+
 // mergeRequestOf reads what a test needs out of what GitLab returned.
 func mergeRequestOf(mr *gl.MergeRequest) MergeRequest {
 	return MergeRequest{

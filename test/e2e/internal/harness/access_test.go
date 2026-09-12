@@ -7,7 +7,12 @@ package harness
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
@@ -69,6 +74,67 @@ func TestEnvRuntime_Scopes_AreACopy(t *testing.T) {
 
 	if got := inst.facts.Scopes[0]; got != "api" {
 		t.Errorf("the harness's scopes were changed through the copy: %q", got)
+	}
+}
+
+// TestEnvRepoRoot_FromAPackageDirectory_IsTheModuleRoot checks that the root
+// a fixture resolves a file from is the directory holding go.mod, whatever
+// package directory the test binary runs in.
+func TestEnvRepoRoot_FromAPackageDirectory_IsTheModuleRoot(t *testing.T) {
+	env := newEnv(t, stubInstance(t))
+
+	root := env.RepoRoot()
+	if _, err := os.Stat(filepath.Join(root, "go.mod")); err != nil {
+		t.Errorf("RepoRoot() = %q, which holds no go.mod: %v", root, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "test", "e2e", "internal", "harness")); err != nil {
+		t.Errorf("RepoRoot() = %q, under which this package is not found: %v", root, err)
+	}
+}
+
+// TestEnvReprobeTier_AnswersFromTheInstance_NotFromTheRecord checks that a
+// re-probe asks the instance again and leaves the harness's own record as it
+// was: a license test that changed the tier must be told so by the answer,
+// and must not be able to make the change the new baseline by asking.
+func TestEnvReprobeTier_AnswersFromTheInstance_NotFromTheRecord(t *testing.T) {
+	licensed := atomic.Bool{}
+	licensed.Store(true)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		writeStubJSON(w, map[string]any{"version": "18.0.0", "revision": "abcdef", "enterprise": true})
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		writeStubJSON(w, map[string]any{"id": 7, "username": "harness", "name": "Harness", "is_admin": true})
+	})
+	mux.HandleFunc("/api/v4/license", func(w http.ResponseWriter, _ *http.Request) {
+		if !licensed.Load() {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		writeStubJSON(w, map[string]any{"id": 1, "plan": "premium"})
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	stub := httptest.NewServer(mux)
+	t.Cleanup(stub.Close)
+
+	env := newEnv(t, instanceForStub(t, stub))
+
+	now, before := env.ReprobeTier()
+	if now != edition.Premium || before != edition.Premium {
+		t.Fatalf("ReprobeTier() = (%s, %s) on a Premium stub, want (premium, premium)", now, before)
+	}
+
+	// The license goes away underneath the run: the re-probe reports it, and
+	// the record the next test reads still says Premium.
+	licensed.Store(false)
+	now, before = env.ReprobeTier()
+	if now != edition.Free {
+		t.Errorf("ReprobeTier() now = %s after the license was removed, want free", now)
+	}
+	if before != edition.Premium || env.Runtime().Tier != edition.Premium {
+		t.Errorf("ReprobeTier() before = %s and Runtime().Tier = %s, want the bootstrap's premium in both: a re-probe must not rewrite the record", before, env.Runtime().Tier)
 	}
 }
 

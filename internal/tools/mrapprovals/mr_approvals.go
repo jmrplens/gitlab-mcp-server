@@ -43,25 +43,34 @@ type ResetInput struct {
 }
 
 // CreateRuleInput defines parameters for creating an MR approval rule.
+//
+// The three optional fields carry omitempty because the schema generator
+// marks a field required unless the tag says it may be absent: without it
+// the individual surface, which validates arguments against the schema
+// before any handler runs, refused every create that named no source rule
+// and no approvers, which is the ordinary one. The dispatcher surfaces
+// decode the arguments directly and never saw the refusal.
 type CreateRuleInput struct {
-	ProjectID             toolutil.StringOrInt `json:"project_id"               jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID                 int64                `json:"merge_request_iid"                   jsonschema:"Merge request internal ID,required"`
-	Name                  string               `json:"name"                     jsonschema:"Rule name,required"`
-	ApprovalsRequired     int64                `json:"approvals_required"       jsonschema:"Number of approvals required,required"`
-	ApprovalProjectRuleID int64                `json:"approval_project_rule_id" jsonschema:"Project-level approval rule ID to inherit from"`
-	UserIDs               []int64              `json:"user_ids"                 jsonschema:"User IDs eligible to approve"`
-	GroupIDs              []int64              `json:"group_ids"                jsonschema:"Group IDs eligible to approve"`
+	ProjectID             toolutil.StringOrInt `json:"project_id"                         jsonschema:"Project ID or URL-encoded path,required"`
+	MRIID                 int64                `json:"merge_request_iid"                  jsonschema:"Merge request internal ID,required"`
+	Name                  string               `json:"name"                               jsonschema:"Rule name,required"`
+	ApprovalsRequired     int64                `json:"approvals_required"                 jsonschema:"Number of approvals required,required"`
+	ApprovalProjectRuleID int64                `json:"approval_project_rule_id,omitempty" jsonschema:"Project-level approval rule ID to inherit from"`
+	UserIDs               []int64              `json:"user_ids,omitempty"                 jsonschema:"User IDs eligible to approve"`
+	GroupIDs              []int64              `json:"group_ids,omitempty"                jsonschema:"Group IDs eligible to approve"`
 }
 
-// UpdateRuleInput defines parameters for updating an MR approval rule.
+// UpdateRuleInput defines parameters for updating an MR approval rule. Every
+// field but the three that name the rule is optional, and says so for the
+// reason [CreateRuleInput] gives.
 type UpdateRuleInput struct {
-	ProjectID         toolutil.StringOrInt `json:"project_id"         jsonschema:"Project ID or URL-encoded path,required"`
-	MRIID             int64                `json:"merge_request_iid"             jsonschema:"Merge request internal ID,required"`
-	ApprovalRuleID    int64                `json:"approval_rule_id"   jsonschema:"Approval rule ID,required"`
-	Name              string               `json:"name"               jsonschema:"Rule name"`
-	ApprovalsRequired *int64               `json:"approvals_required" jsonschema:"Number of approvals required"`
-	UserIDs           []int64              `json:"user_ids"           jsonschema:"User IDs eligible to approve"`
-	GroupIDs          []int64              `json:"group_ids"          jsonschema:"Group IDs eligible to approve"`
+	ProjectID         toolutil.StringOrInt `json:"project_id"                   jsonschema:"Project ID or URL-encoded path,required"`
+	MRIID             int64                `json:"merge_request_iid"            jsonschema:"Merge request internal ID,required"`
+	ApprovalRuleID    int64                `json:"approval_rule_id"             jsonschema:"Approval rule ID,required"`
+	Name              string               `json:"name,omitempty"               jsonschema:"Rule name"`
+	ApprovalsRequired *int64               `json:"approvals_required,omitempty" jsonschema:"Number of approvals required"`
+	UserIDs           []int64              `json:"user_ids,omitempty"           jsonschema:"User IDs eligible to approve"`
+	GroupIDs          []int64              `json:"group_ids,omitempty"          jsonschema:"Group IDs eligible to approve"`
 }
 
 // DeleteRuleInput defines parameters for deleting an MR approval rule.
