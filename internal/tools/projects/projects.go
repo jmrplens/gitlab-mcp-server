@@ -403,18 +403,21 @@ type Output struct {
 	SecretPushProtectionEnabled *bool `json:"secret_push_protection_enabled,omitempty"`
 	// WebBasedCommitSigningEnabled is a GitLab.com feature (Gitlab::Saas), so a
 	// self-managed instance never sends it whatever its license.
-	WebBasedCommitSigningEnabled          *bool  `json:"web_based_commit_signing_enabled,omitempty"`
-	MergeTrainEnforcement                 *bool  `json:"merge_train_enforcement,omitempty" tier:"premium"`
-	MaxPipelinesPerMergeTrain             *int64 `json:"max_pipelines_per_merge_train,omitempty" tier:"premium"`
-	DuoRemoteFlowsEnabled                 *bool  `json:"duo_remote_flows_enabled,omitempty" tier:"premium"`
-	DuoFoundationalFlowsEnabled           *bool  `json:"duo_foundational_flows_enabled,omitempty" tier:"premium"`
-	OnlyAllowMergeIfAllStatusChecksPassed *bool  `json:"only_allow_merge_if_all_status_checks_passed,omitempty" tier:"ultimate"`
-	DuoSastFPDetectionEnabled             *bool  `json:"duo_sast_fp_detection_enabled,omitempty" tier:"ultimate"`
-	DuoSastVRWorkflowEnabled              *bool  `json:"duo_sast_vr_workflow_enabled,omitempty" tier:"ultimate"`
-	DuoSecretDetectionFPEnabled           *bool  `json:"duo_secret_detection_fp_enabled,omitempty" tier:"ultimate"`
-	DuoDependencyBumpBreakingChanges      *bool  `json:"duo_dependency_bump_breaking_changes_enabled,omitempty" tier:"ultimate"`
-	SecurityPolicyPipelineMustSucceed     *bool  `json:"security_policy_pipeline_must_succeed,omitempty" tier:"ultimate"`
-	SPPRepositoryPipelineAccess           *bool  `json:"spp_repository_pipeline_access,omitempty" tier:"ultimate"`
+	WebBasedCommitSigningEnabled *bool `json:"web_based_commit_signing_enabled,omitempty"`
+	// MergeTrainEnforcement is one of allow_bypass, enforce_for_all_users and
+	// enforce_with_owner_override, as GitLab spells the setting: a string, not
+	// the flag it was first declared as, which no licensed answer decoded into.
+	MergeTrainEnforcement                 *string `json:"merge_train_enforcement,omitempty" tier:"premium"`
+	MaxPipelinesPerMergeTrain             *int64  `json:"max_pipelines_per_merge_train,omitempty" tier:"premium"`
+	DuoRemoteFlowsEnabled                 *bool   `json:"duo_remote_flows_enabled,omitempty" tier:"premium"`
+	DuoFoundationalFlowsEnabled           *bool   `json:"duo_foundational_flows_enabled,omitempty" tier:"premium"`
+	OnlyAllowMergeIfAllStatusChecksPassed *bool   `json:"only_allow_merge_if_all_status_checks_passed,omitempty" tier:"ultimate"`
+	DuoSastFPDetectionEnabled             *bool   `json:"duo_sast_fp_detection_enabled,omitempty" tier:"ultimate"`
+	DuoSastVRWorkflowEnabled              *bool   `json:"duo_sast_vr_workflow_enabled,omitempty" tier:"ultimate"`
+	DuoSecretDetectionFPEnabled           *bool   `json:"duo_secret_detection_fp_enabled,omitempty" tier:"ultimate"`
+	DuoDependencyBumpBreakingChanges      *bool   `json:"duo_dependency_bump_breaking_changes_enabled,omitempty" tier:"ultimate"`
+	SecurityPolicyPipelineMustSucceed     *bool   `json:"security_policy_pipeline_must_succeed,omitempty" tier:"ultimate"`
+	SPPRepositoryPipelineAccess           *bool   `json:"spp_repository_pipeline_access,omitempty" tier:"ultimate"`
 }
 
 // GetInput defines parameters for retrieving a project.

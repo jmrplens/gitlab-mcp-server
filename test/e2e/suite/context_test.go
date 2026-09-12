@@ -12,6 +12,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 )
 
 // defaultCleanupTimeout bounds per-test resource cleanup during t.Cleanup.
@@ -51,7 +52,10 @@ func NewE2EContext(t *testing.T) *E2EContext {
 		}
 		ctx, cancel := cleanupContext(timeout)
 		defer cancel()
-		e2e.Ledger.CleanupAll(ctx, t)
+		// The ledger's cleanups run with no test frame left on the stack, so
+		// the baseline recorder is told whose calls they are through the
+		// context rather than left to guess from the goroutine.
+		e2e.Ledger.CleanupAll(withBaselineOrigin(ctx, t.Name(), e2ecalls.PurposeCleanup), t)
 	})
 
 	return e2e

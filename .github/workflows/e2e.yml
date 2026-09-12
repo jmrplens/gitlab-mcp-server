@@ -96,14 +96,27 @@ jobs:
           # setup-gitlab.sh writes .env.docker with GITLAB_URL, GITLAB_TOKEN, etc.
           cat .env.docker >> "$GITHUB_ENV"
 
+      # The suite records every call it makes and every route the server
+      # dispatched into the calls directory, one shard per test process, and
+      # the JSON stream beside it carries each test's verdict; together they
+      # are what cmd/audit_e2e_coverage reads. Both land under test-results,
+      # which the next step uploads. The directory must be absolute: the test
+      # binary runs in its own package directory and the recorder refuses a
+      # relative path rather than scatter shards under it.
       - name: Run E2E tests
         run: |
+          # The checkout is the dispatched ref, which github.sha is not when
+          # a ref was given, so the recorded revision is read off the tree.
+          E2E_COMMIT="$(git rev-parse HEAD)"
+          export E2E_COMMIT
           gotestsum \
             --junitfile test-results/e2e-junit.xml \
+            --jsonfile test-results/e2e-log.json \
             --format standard-verbose \
             -- -v -tags e2e -timeout 1800s -count=1 ./test/e2e/suite/
         env:
           E2E_MODE: "docker"
+          GITLAB_MCP_TEST_E2E_CALLS_DIR: ${{ github.workspace }}/test-results/e2e-calls
 
       - name: Upload test results
         if: always()

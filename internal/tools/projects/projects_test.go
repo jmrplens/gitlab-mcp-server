@@ -4863,6 +4863,45 @@ func TestGet_CICDCatalogEnabled_MirrorsPayload(t *testing.T) {
 	}
 }
 
+// TestGet_MergeTrainEnforcement_IsTheLevelGitLabSpells verifies a licensed
+// project answer decodes and surfaces merge_train_enforcement as the string
+// GitLab sends. The field was first typed as a flag, and every project answer
+// of a licensed instance then failed to decode, which is what took the meta
+// and dynamic project.create down in the enterprise e2e run.
+func TestGet_MergeTrainEnforcement_IsTheLevelGitLabSpells(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		want    string
+	}{
+		{"allow bypass", `{"id":42,"name":"test","merge_train_enforcement":"allow_bypass"}`, "allow_bypass"},
+		{"enforce for all users", `{"id":42,"name":"test","merge_train_enforcement":"enforce_for_all_users"}`, "enforce_for_all_users"},
+		{"absent on an unlicensed answer", `{"id":42,"name":"test"}`, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == pathProject42 {
+					testutil.RespondJSON(w, http.StatusOK, tt.payload)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			out, err := Get(context.Background(), client, GetInput{ProjectID: "42"})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			got := ""
+			if out.MergeTrainEnforcement != nil {
+				got = *out.MergeTrainEnforcement
+			}
+			if got != tt.want {
+				t.Errorf("MergeTrainEnforcement = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ListProjectGroups with all filter options
 // ---------------------------------------------------------------------------.
