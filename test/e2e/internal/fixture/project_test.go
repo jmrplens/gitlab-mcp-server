@@ -172,3 +172,12 @@ func TestProjectOf_Namespace_ReadsTheNamespaceID(t *testing.T) {
 		t.Errorf("projectOf(no namespace).NamespaceID = %d, want 0", bare.NamespaceID)
 	}
 }
+
+// TestProjectIDParam_SpellsTheIDAsTheSchemaDeclaresIt pins the one spelling
+// of a project ID that every surface accepts: the decimal string project_id
+// is declared as, which the individual surface refuses a number in place of.
+func TestProjectIDParam_SpellsTheIDAsTheSchemaDeclaresIt(t *testing.T) {
+	if got, want := (Project{ID: 405}).IDParam(), "405"; got != want {
+		t.Errorf("IDParam() = %q, want %q", got, want)
+	}
+}

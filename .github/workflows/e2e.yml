@@ -3,6 +3,14 @@
 # Runs the e2e suite against an ephemeral Docker-based GitLab CE instance.
 # Duration: ~15-20 min (GitLab boot ~5 min + tests ~5-10 min).
 #
+# Two jobs, each with a GitLab of its own. `e2e` runs the suite under
+# test/e2e/suite, which gates releases. `e2e-gitlab` runs the rebuilt suite
+# under test/e2e/gitlab, which drives the real binary over stdio and records
+# what the server dispatched; it is non-blocking (continue-on-error) while
+# the old suite's tests are ported, and its coverage report is uploaded
+# beside the results. It becomes the gate, and the old job goes, when the
+# port is complete.
+#
 # Three ways in. Manually, from the "Use workflow from" dropdown, optionally
 # with a custom ref such as a fork pull request's merge SHA. As a reusable
 # workflow, which is how the release pipeline runs its E2E gate: the job used
@@ -130,3 +138,77 @@ jobs:
         if: always()
         working-directory: test/e2e
         run: docker compose down -v --remove-orphans
+
+  # The rebuilt suite, on a GitLab CE of its own: the common and ce packages,
+  # driven through the real binary by test/e2e/scripts/run-docker-e2e.sh, the
+  # same lifecycle `make test-e2e-ce` runs. The licensed ee package stays
+  # local, since the license is renewed by hand. Non-blocking until the port
+  # is complete: a failure here is visible on the run and stops nothing.
+  e2e-gitlab:
+    name: "🧫 E2E (rebuilt suite, Docker GitLab)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum
+
+      # Built once and handed to every package through E2E_SERVER_BINARY, so
+      # the three test binaries do not each build cmd/server.
+      - name: Build the server the suite drives
+        run: go build -o dist/e2e/gitlab-mcp-server ./cmd/server
+
+      # The script brings the stack up, provisions it, runs the packages with
+      # -p 1 -count=1 and tears the stack down, keeping the run's status. The
+      # Bitbucket fixture is left out here as the old job leaves it out: the
+      # importer scenarios are ported later and the runner's memory is finite.
+      # The calls directory is absolute because the recorder refuses a
+      # relative one, and the reports go under test-results for the upload.
+      - name: Run the rebuilt E2E suite
+        run: |
+          E2E_COMMIT="$(git rev-parse HEAD)"
+          export E2E_COMMIT
+          ./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout 1800s ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
+        env:
+          E2E_BITBUCKET: "false"
+          E2E_SERVER_BINARY: ${{ github.workspace }}/dist/e2e/gitlab-mcp-server
+          E2E_REPORT_DIR: ${{ github.workspace }}/test-results
+          E2E_REPORT_NAME: e2e-gitlab
+          GITLAB_MCP_TEST_E2E_CALLS_DIR: ${{ github.workspace }}/test-results/e2e-calls
+
+      # What the run covered, from the calls it recorded and the verdicts
+      # gotestsum wrote: the JSON report is uploaded with the results and the
+      # Markdown summary lands on the run. -check applies the floors: the ce
+      # runtime present, test calls recorded, no package refused.
+      - name: Audit E2E coverage
+        if: always()
+        run: |
+          go run ./cmd/audit_e2e_coverage/ \
+            -calls test-results/e2e-calls \
+            -results test-results/e2e-gitlab-log.json \
+            -runtime ce \
+            -check \
+            -o test-results/e2e-coverage.json \
+            -summary "$GITHUB_STEP_SUMMARY"
+
+      # The children's stderr goes with the results: when a test failed
+      # because the server refused something, the reason is in the server's
+      # log and nowhere else.
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: e2e-gitlab-test-results
+          path: |
+            test-results/
+            dist/e2e-reports/servers/
+          retention-days: 14

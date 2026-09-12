@@ -29,6 +29,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
@@ -103,18 +104,17 @@ type surfaceExpectation struct {
 	standalone []string
 }
 
-// expectedSurface asks the server's own assemblers what this configuration
-// serves.
+// expectedSurface asks the server's own assemblers what a configuration
+// serves, given the config.ServerConfig the binary built for itself.
 //
 // The client it builds the catalogs with is the harness's own. Binding rebuilds
 // the handlers for that client and touches nothing this reads, so the names and
 // the action IDs are the ones the binary's own catalog carries.
-func expectedSurface(inst *instance, cfg ServerConfig, scopes []string) (surfaceExpectation, error) {
-	serverCfg := serverConfigFor(inst, cfg, scopes)
+func expectedSurface(inst *instance, surface Surface, serverCfg *config.ServerConfig) (surfaceExpectation, error) {
 	client := inst.client
 	standalone := standaloneToolNames(client)
 
-	switch cfg.Surface {
+	switch surface {
 	case SurfaceDynamic:
 		catalog, _, err := dynamiccatalog.Build(client, serverCfg)
 		if err != nil {
@@ -147,23 +147,43 @@ func expectedSurface(inst *instance, cfg ServerConfig, scopes []string) (surface
 		names, actions := individualRegistrations(catalog, serverCfg.ReadOnly)
 		return surfaceExpectation{tools: names, actions: actions, standalone: standalone}, nil
 	default:
-		return surfaceExpectation{}, fmt.Errorf("unknown tool surface %q", cfg.Surface)
+		return surfaceExpectation{}, fmt.Errorf("unknown tool surface %q", surface)
 	}
 }
 
+// credentialFacts is what the binary learns from the credential it starts
+// with, and builds its catalog from: the token's scopes, and the tier the
+// token could read off the license.
+//
+// The tier is the credential's and not the instance's. The license endpoint
+// answers administrators only, so a token belonging to anyone else is served
+// the Free catalog on a licensed instance whatever the run's own probe found,
+// and an expectation built from the run's tier would name every licensed
+// group the server never registered for it.
+type credentialFacts struct {
+	scopes []string
+	tier   edition.Tier
+}
+
+// credential returns what the binary learns from the run's own token, which
+// the probe already resolved.
+func (inst *instance) credential() credentialFacts {
+	return credentialFacts{scopes: inst.facts.Scopes, tier: inst.facts.Tier}
+}
+
 // serverConfigFor builds the configuration the binary builds for itself from
-// the same inputs: what the environment said, what the probe found, and what
-// the credential can do.
-func serverConfigFor(inst *instance, cfg ServerConfig, scopes []string) *config.ServerConfig {
+// the same inputs: what the environment said, and what the credential the
+// session runs with can do and can see.
+func serverConfigFor(inst *instance, cfg ServerConfig, cred credentialFacts) *config.ServerConfig {
 	serverCfg := &config.ServerConfig{
 		GitLabURL:         inst.facts.URL,
 		ToolSurface:       string(cfg.Surface),
 		CapabilitySurface: string(cfg.Capabilities),
-		Tier:              inst.facts.Tier,
+		Tier:              cred.tier,
 		ReadOnly:          cfg.Mode == ModeReadOnly,
 		SafeMode:          cfg.Mode == ModeSafe,
 		ExcludeTools:      slices.Clone(cfg.ExcludeTools),
-		TokenScopes:       scopes,
+		TokenScopes:       cred.scopes,
 		MetaParamSchema:   config.DefaultMetaParamSchema,
 	}
 	// The same call the binary makes, in the same place: a credential that

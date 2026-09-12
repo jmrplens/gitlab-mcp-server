@@ -58,6 +58,20 @@ func TestClassify_EveryRefusal_LandsInItsOwnClass(t *testing.T) {
 			wantOutcome: e2ecalls.RefusedOutcome(toolutil.RefusalUnknownAction),
 		},
 		{
+			// The dynamic dispatcher's wording for an action a scope or the
+			// operator withheld, which the server logs as unknown_action.
+			name:        "withheld by the operator",
+			text:        `gitlab_execute_action: action "issue.create" exists but is not available: this deployment is configured to withhold it, so a narrowed action surface was built. Ask the operator to enable it; do not report the capability as missing.`,
+			wantFailure: FailureUnknownAction,
+			wantOutcome: e2ecalls.RefusedOutcome(toolutil.RefusalUnknownAction),
+		},
+		{
+			name:        "withheld by the credential",
+			text:        `gitlab_execute_action: action "admin.metadata_get" exists but is not available to this session: the credential in use does not carry a GitLab scope that covers it, so a narrowed action surface was built for it. Reauthorize with the api scope to use it; do not report the capability as missing.`,
+			wantFailure: FailureUnknownAction,
+			wantOutcome: e2ecalls.RefusedOutcome(toolutil.RefusalUnknownAction),
+		},
+		{
 			name:        "missing params",
 			text:        "gitlab_issue/get: missing required params: project_id, issue_iid. Put action-specific fields under params.",
 			wantFailure: FailureInvalidParams,
@@ -66,6 +80,14 @@ func TestClassify_EveryRefusal_LandsInItsOwnClass(t *testing.T) {
 		{
 			name:        "params required",
 			text:        "gitlab_issue/get: 'params' is required for this action. Required params: project_id.",
+			wantFailure: FailureInvalidParams,
+			wantOutcome: e2ecalls.RefusedOutcome(toolutil.RefusalInvalidParams),
+		},
+		{
+			// The SDK's schema validation, which is what a meta tool answers
+			// for an action its group no longer carries.
+			name:        "schema refused the argument",
+			text:        `validating "arguments": validating root: validating /properties/action: enum: delete does not equal any of: [get list]`,
 			wantFailure: FailureInvalidParams,
 			wantOutcome: e2ecalls.RefusedOutcome(toolutil.RefusalInvalidParams),
 		},
@@ -380,6 +402,98 @@ func TestIsTransportError_OnlyTheDroppedConnections(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			if got := isTransportError(testCase.err); got != testCase.want {
 				t.Errorf("isTransportError(%v) = %t, want %t", testCase.err, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestWithheldAnswer_AcceptsTheThreeShapesASurfaceDeclinesIn pins what
+// Withheld accepts, which is one answer per surface and nothing else.
+//
+// The dispatchers refuse an action they have no route for as unknown, the
+// dynamic one with the withheld wording that classifies the same way, and the
+// individual surface answers a JSON-RPC error for a tool it never registered.
+// A GitLab 404 or a confirmation refusal is a different answer: the action
+// was served, so nothing was withheld.
+func TestWithheldAnswer_AcceptsTheThreeShapesASurfaceDeclinesIn(t *testing.T) {
+	cases := []struct {
+		name   string
+		answer callResult
+		want   bool
+	}{
+		{
+			name:   "unknown action from a dispatcher",
+			answer: classify(errorResult(`gitlab_issue: unknown action "create". Valid actions: get, list`), nil),
+			want:   true,
+		},
+		{
+			name:   "withheld with a reason from the dynamic dispatcher",
+			answer: classify(errorResult(`gitlab_execute_action: action "issue.create" exists but is not available: this deployment is configured to withhold it`), nil),
+			want:   true,
+		},
+		{
+			name:   "unregistered tool on the individual surface",
+			answer: classify(nil, errors.New(`unknown tool "gitlab_issue_create"`)),
+			want:   true,
+		},
+		{
+			name:   "action refused by the meta tool's schema",
+			answer: classify(errorResult(`validating "arguments": validating root: validating /properties/action: enum: create does not equal any of: [get list]`), nil),
+			want:   true,
+		},
+		{
+			name:   "a parameter refused by the schema",
+			answer: classify(errorResult(`validating "arguments": validating root: validating /properties/params/properties/project_id: type mismatch`), nil),
+			want:   false,
+		},
+		{
+			name:   "another protocol error",
+			answer: classify(nil, errors.New("invalid params: missing arguments")),
+			want:   false,
+		},
+		{
+			name:   "a refused confirmation",
+			answer: classify(errorResult("Confirm gitlab_project_delete? Re-send with confirm=true only after the user explicitly approves this operation."), nil),
+			want:   false,
+		},
+		{
+			name:   "a GitLab not found",
+			answer: classify(errorResult("get issue: 404 Not Found"), nil),
+			want:   false,
+		},
+		{
+			name:   "success",
+			answer: classify(&mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil),
+			want:   false,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := withheldAnswer(testCase.answer); got != testCase.want {
+				t.Errorf("withheldAnswer() = %t, want %t for %s", got, testCase.want, testCase.answer.describe())
+			}
+		})
+	}
+}
+
+// TestCallResultSaid_PrefersTheTextAndFallsBackToTheError checks that the
+// words Withheld hands back are the server's: the result text when there is
+// one, and the JSON-RPC error's message when the refusal never became a tool
+// result, which is the only text an unregistered tool is refused with.
+func TestCallResultSaid_PrefersTheTextAndFallsBackToTheError(t *testing.T) {
+	cases := []struct {
+		name   string
+		answer callResult
+		want   string
+	}{
+		{name: "text", answer: callResult{text: "unknown action", err: errors.New("ignored")}, want: "unknown action"},
+		{name: "error only", answer: callResult{err: errors.New(`unknown tool "x"`)}, want: `unknown tool "x"`},
+		{name: "nothing", answer: callResult{}, want: ""},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := testCase.answer.said(); got != testCase.want {
+				t.Errorf("said() = %q, want %q", got, testCase.want)
 			}
 		})
 	}

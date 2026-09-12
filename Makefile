@@ -1,5 +1,6 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
 	run brand brand-check brand-rasters ensure-mcp-publisher mcp-publisher-version test test-short test-race coverage-conditions coverage-mutants test-pkg test-integration test-e2e test-e2e-harness test-e2e-http test-e2e-stdio test-e2e-collector ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
+	e2e-server-binary test-e2e-ce test-e2e-ee test-e2e-gitlab e2e-clean-orphans \
 	validate-http-stateless validate-http-stateless-docker \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
 	eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
@@ -376,6 +377,61 @@ test-e2e-docker-enterprise: ensure-gotestsum
 	  rm -f $(E2E_REPORT_DIR)/e2e-docker-enterprise-status; \
 	  if [ "$$status" -ne 0 ]; then exit "$$status"; fi; \
 	  if [ "$$teardown_status" -ne 0 ]; then exit "$$teardown_status"; fi
+
+# The rebuilt suite: three packages under test/e2e/gitlab that drive the real
+# binary over stdio. Each declares the runtime it needs, so the two Docker
+# targets below name packages rather than build tags, and both run `common`.
+# The Docker lifecycle lives in test/e2e/scripts/run-docker-e2e.sh rather than
+# here, once, and every run carries -p 1 (capability locks are process-local)
+# and -count=1 (a cached PASS records no calls), which the script adds.
+#
+# The server binary is built once and handed to every package through
+# E2E_SERVER_BINARY, so the three test binaries do not each build cmd/server.
+E2E_SERVER_BINARY=dist/e2e/$(BINARY_NAME)$(BINARY_EXT)
+E2E_GITLAB_TIMEOUT ?= 1800s
+
+## e2e-server-binary: build the server the rebuilt e2e suite drives, once for every package.
+e2e-server-binary:
+	$(call MKDIR_P,dist/e2e)
+	go build -o $(E2E_SERVER_BINARY) $(CMD_PATH)
+
+## test-e2e-ce: start ephemeral GitLab CE (+ Bitbucket fixture), run the common and ce packages of the rebuilt suite, tear down.
+test-e2e-ce: ensure-gotestsum e2e-server-binary
+	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
+	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ce \
+	GOTESTSUM=$(GOTESTSUM) \
+	./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
+
+## test-e2e-ee: start ephemeral GitLab EE with the cached license or the activation code, run the common and ee packages of the rebuilt suite, tear down.
+test-e2e-ee: ensure-gotestsum e2e-server-binary
+	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
+	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ee \
+	GOTESTSUM=$(GOTESTSUM) \
+	./test/e2e/scripts/run-docker-e2e.sh ee -- -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ee/
+
+## test-e2e-gitlab: run the rebuilt suite against a self-hosted GitLab (reads GITLAB_URL, GITLAB_TOKEN from .env); a package the instance cannot serve skips.
+test-e2e-gitlab: ensure-gotestsum e2e-server-binary
+	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	$(call RM_RF,$(E2E_CALLS_DIR)/self-hosted)
+	$(call MKDIR_P,$(E2E_CALLS_DIR)/self-hosted)
+	bash -o pipefail -c 'E2E_RUNTIME_MISMATCH=skip E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	  GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/self-hosted $(GOTESTSUM) \
+	  --format testdox \
+	  --junitfile $(E2E_REPORT_DIR)/e2e-gitlab-junit.xml \
+	  --jsonfile $(E2E_REPORT_DIR)/e2e-gitlab-log.json \
+	  -- -tags e2e -p 1 -count=1 -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/gitlab/...'
+
+## e2e-clean-orphans: delete what earlier runs left on a self-hosted GitLab (reads GITLAB_URL, GITLAB_TOKEN from .env): every project, group and user named with E2E_SWEEP_PREFIX (default e2e-).
+# Run by hand and by nothing else: a run sweeps only what carries its own run
+# ID, and this is the prefix-wide sweep for the leftovers of a run that could
+# not clean up. It is a test of the fixture package because that library is
+# importable only from test/e2e, and it skips unless the prefix is set.
+E2E_SWEEP_PREFIX ?= e2e-
+e2e-clean-orphans:
+	bash -o pipefail -c 'if [ -f .env ]; then set -a; . ./.env; set +a; fi; \
+	  E2E_SWEEP_PREFIX=$(E2E_SWEEP_PREFIX) go test -tags e2e -count=1 -v -run "^TestSweepPrefix_Orphans_OnDemand$$" ./test/e2e/internal/fixture/'
 
 ## test-e2e-gitlab-com: end-to-end live test of the Orbit knowledge graph
 ## handlers against https://gitlab.com. Reads GITLAB_COM_TOKEN from .env,

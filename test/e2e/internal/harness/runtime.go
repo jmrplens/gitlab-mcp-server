@@ -74,12 +74,13 @@ func (r Requirement) token() string {
 }
 
 // target names the Makefile target that provides this requirement, which is
-// what a refusal tells the reader to run instead.
+// what a refusal tells the reader to run instead: the two Docker targets that
+// run the rebuilt packages on the runtime each needs.
 func (r Requirement) target() string {
 	if r == Licensed {
-		return "make test-e2e-docker-enterprise"
+		return "make test-e2e-ee"
 	}
-	return "make test-e2e-docker"
+	return "make test-e2e-ce"
 }
 
 // runtimeFacts is what the probe learned about the instance under test.

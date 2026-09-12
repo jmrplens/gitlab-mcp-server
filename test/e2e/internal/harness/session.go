@@ -33,6 +33,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
 
@@ -285,6 +286,15 @@ func (s *Session) Mode() Mode { return s.conn.cfg.Mode }
 // Capabilities returns the resource and prompt surface this session serves.
 func (s *Session) Capabilities() CapabilitySurface { return s.conn.cfg.Capabilities }
 
+// Tier returns the licensing tier the server detected with this session's
+// credential, which decides which actions exist in its catalog.
+//
+// It is the run's tier for a session on the run's own token, and for a
+// session given another token it is what that token could read: the license
+// endpoint answers administrators only, so any other user's token is served
+// the Free catalog on a licensed instance.
+func (s *Session) Tier() edition.Tier { return s.conn.tier }
+
 // Transport returns how the harness reaches this session's server.
 func (s *Session) Transport() TransportKind { return s.conn.cfg.Transport }
 
@@ -311,12 +321,27 @@ func (s *Session) Serves(id ActionID) bool {
 	return ok
 }
 
+// Actions returns every action this session can reach, sorted, on the same
+// terms as Serves. It is what a test compares a listing the server published
+// against, and what a sweep walks.
+func (s *Session) Actions() []ActionID {
+	actions := make([]ActionID, 0, len(s.conn.served.actions))
+	for id := range s.conn.served.actions {
+		actions = append(actions, id)
+	}
+	slices.Sort(actions)
+	return actions
+}
+
 // sessionConn is one running server and the client speaking to it.
 type sessionConn struct {
 	label string
 	cfg   ServerConfig
-	proc  *serverProcess
-	inst  *instance
+	// tier is the tier the server detected with this session's credential,
+	// which is the run's own unless the session was given another token.
+	tier edition.Tier
+	proc *serverProcess
+	inst *instance
 
 	// served is what the session listed when it started, and what the
 	// served-set check was run against.
@@ -456,8 +481,16 @@ func (e *Env) session(cfg ServerConfig) (*sessionConn, error) {
 }
 
 // startSession launches one server and checks what it serves.
+//
+// The credential's scopes are resolved before the child is launched, because
+// they decide what the session is: a token that cannot write is served a
+// read-only surface by the binary whatever the configuration asked for, and
+// the session is recorded as read-only so that the refusals its tests see are
+// filed under the mode that produced them rather than under the default one.
 func startSession(inst *instance, cfg ServerConfig, token, key string) (*sessionConn, error) {
 	lifetime := sessionLifetime()
+	ctx, cancel := context.WithTimeout(lifetime, sessionStartTimeout)
+	defer cancel()
 
 	root, err := harnessRoot()
 	if err != nil {
@@ -468,7 +501,20 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 		return nil, err
 	}
 
-	label := cfg.label(privateSessionNumber(key))
+	cred, err := sessionCredential(ctx, inst, token)
+	if err != nil {
+		return nil, err
+	}
+	serverCfg := serverConfigFor(inst, cfg, cred)
+	expectation, err := expectedSurface(inst, cfg.Surface, serverCfg)
+	if err != nil {
+		return nil, err
+	}
+	// The child is given what was asked for and narrows itself from the
+	// same scopes; only what the session is recorded as moves.
+	recorded := cfg.narrowedBy(serverCfg)
+
+	label := recorded.label(privateSessionNumber(key))
 	dir := filepath.Join(root, sanitizeNamePart(label, 60))
 	if err = os.MkdirAll(dir, 0o750); err != nil {
 		return nil, fmt.Errorf("creating the session directory %s: %w", dir, err)
@@ -481,7 +527,8 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 
 	conn := &sessionConn{
 		label:       label,
-		cfg:         cfg,
+		cfg:         recorded,
+		tier:        cred.tier,
 		inst:        inst,
 		proc:        newServerProcess(label, bin, newChildEnv(settingsForChild, dir, cfg.childVariables())),
 		notifier:    newUpdateNotifier(),
@@ -491,22 +538,9 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 		return nil, connectErr
 	}
 
-	ctx, cancel := context.WithTimeout(lifetime, sessionStartTimeout)
-	defer cancel()
 	if conn.served, err = listServed(ctx, conn.client()); err != nil {
 		conn.close()
 		return nil, fmt.Errorf("listing what the %s session serves: %w\nserver stderr:\n%s", label, err, conn.proc.stderrTail())
-	}
-
-	scopes, err := sessionScopes(ctx, inst, token)
-	if err != nil {
-		conn.close()
-		return nil, err
-	}
-	expectation, err := expectedSurface(inst, cfg, scopes)
-	if err != nil {
-		conn.close()
-		return nil, err
 	}
 	if err = checkServedTools(cfg.Surface, conn.served.tools, expectation); err != nil {
 		conn.close()
@@ -514,6 +548,17 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 	}
 	conn.served.actions = expectation.actions
 	return conn, nil
+}
+
+// narrowedBy returns the configuration as the binary will actually serve it:
+// read-only when the credential's scopes made it so, whatever mode was asked
+// for. It is applied to what the session is recorded as and never to the
+// child's environment, so the narrowing under test stays the binary's own.
+func (c ServerConfig) narrowedBy(serverCfg *config.ServerConfig) ServerConfig {
+	if serverCfg.ReadOnlyFromTokenScope && c.Mode == ModeDefault {
+		c.Mode = ModeReadOnly
+	}
+	return c
 }
 
 // privateSessionNumber reads back the number a private key carries, so the
@@ -531,22 +576,29 @@ func privateSessionNumber(key string) int64 {
 	return number
 }
 
-// sessionScopes returns the scopes of the credential a session runs with.
+// sessionCredential returns what the binary learns from the credential a
+// session runs with: the token's scopes, and the tier it can read.
 //
 // The run's own token was probed at bootstrap; a session given another one is
-// probed here, because the scopes decide which catalog groups the server
-// registers at all and a served-set check against the wrong list would fail
-// every session using that credential.
-func sessionScopes(ctx context.Context, inst *instance, token string) ([]string, error) {
+// probed here, with the two calls the binary makes at startup, because both
+// answers decide the catalog. The scopes decide which groups are registered
+// at all, and the tier decides which exist: the license endpoint answers
+// administrators only, so a token belonging to anyone else reads no license
+// and is served the Free catalog on a licensed instance, exactly as the
+// binary serves it.
+func sessionCredential(ctx context.Context, inst *instance, token string) (credentialFacts, error) {
 	if token == inst.settings.get(envGitLabToken) {
-		return inst.facts.Scopes, nil
+		return inst.credential(), nil
 	}
 	client, err := gitlabclient.NewClientWithToken(inst.facts.URL, token,
 		strings.EqualFold(inst.settings.get(envSkipTLSVerify), "true"))
 	if err != nil {
-		return nil, fmt.Errorf("building a client for the session's own credential: %w", err)
+		return credentialFacts{}, fmt.Errorf("building a client for the session's own credential: %w", err)
 	}
-	return gitlabclient.DetectScopes(ctx, client.GL()), nil
+	return credentialFacts{
+		scopes: gitlabclient.DetectScopes(ctx, client.GL()),
+		tier:   client.DetectTier(ctx),
+	}, nil
 }
 
 // connect starts the child and opens an MCP session to it.

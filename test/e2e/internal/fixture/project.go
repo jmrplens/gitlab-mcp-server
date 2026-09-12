@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -47,6 +48,17 @@ type Project struct {
 	// NamespaceID is the namespace it was created in: the group's when a
 	// group was named, the user's otherwise.
 	NamespaceID int64
+}
+
+// IDParam spells the project's ID as the project_id parameter takes it.
+//
+// Every action's project_id is declared a string, because the parameter also
+// accepts a path. The two dispatcher surfaces coerce a number into that
+// string before they validate; the individual surface validates what it was
+// sent against the schema and refuses a number. A test that sends the same
+// call to all three therefore spells the ID the way the schema declares it.
+func (p Project) IDParam() string {
+	return strconv.FormatInt(p.ID, 10)
 }
 
 // projectSpec is what a builder asks GitLab for.

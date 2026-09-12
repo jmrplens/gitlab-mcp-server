@@ -376,13 +376,16 @@ jobs:
           exit "$status"
 
   # The one thing every job below this one has in common: the server and the
-  # e2e suite compile. It is a minute, and it is the parent of the type-check
+  # e2e suites compile. It is a minute, and it is the parent of the type-check
   # matrix and the two transport modules so that the graph shows them as what
   # they are, three questions asked of one binary. The children do not receive
   # it as an artifact, since each transport harness builds ./cmd/server itself
   # in its TestMain; waiting on this job costs them a minute and saves nothing
   # when it passes, but it is a minute well below the pipeline's longest path,
-  # so the picture is free.
+  # so the picture is free. The rebuilt suite's harness runs its own unit
+  # tests here too, against a stub GitLab, and the push-time static gate over
+  # the rebuilt suite's typed action ids runs beside them, since neither needs
+  # an instance.
   compile:
     name: "🔨 Compile"
     runs-on: ubuntu-latest
@@ -411,8 +414,19 @@ jobs:
       # domain test happened to run first.
       - name: Verify the E2E harness compiles
         run: go test -tags e2e -c -o /dev/null ./test/e2e/internal/...
+      # The rebuilt suite's runtime packages, common, ce and ee, need a GitLab
+      # to run and none to compile. One compile with one tag sees all three,
+      # which is the property the old suite's two halves never had.
+      - name: Verify the rebuilt E2E suite compiles
+        run: go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...
       - name: Run the E2E harness tests
         run: go test -tags e2e -count=1 ./test/e2e/internal/...
+      # The push-time gate over the rebuilt suite: every typed action id names
+      # a catalog action, sits in a package that can run it, and an Ultimate
+      # id in ee declares its tier. Type-checks the tree with go/packages and
+      # needs no GitLab.
+      - name: Run the E2E static gate
+        run: go run ./cmd/audit_e2e_coverage/ -static
 
   # Type-checks every build-constrained file including the tests, for each
   # platform this project ships, on a Linux runner. The cross-platform matrix
@@ -443,14 +457,15 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: GOOS="${TARGET%%/*}" GOARCH="${TARGET##*/}" go vet ./...
-      # The harness is behind a build tag, so the vet above compiles its doc.go
-      # and nothing else. It starts processes and resolves a home directory,
-      # which are exactly the places a platform difference lives, so it is
-      # type-checked per platform on its own terms.
-      - name: Vet the E2E harness for ${{ matrix.target }}
+      # The harness and the rebuilt suite are behind a build tag, so the vet
+      # above compiles their doc.go files and nothing else. The harness starts
+      # processes and resolves a home directory, which are exactly the places
+      # a platform difference lives, so both are type-checked per platform on
+      # their own terms.
+      - name: Vet the E2E harness and suite for ${{ matrix.target }}
         env:
           TARGET: ${{ matrix.target }}
-        run: GOOS="${TARGET%%/*}" GOARCH="${TARGET##*/}" go vet -tags e2e ./test/e2e/internal/...
+        run: GOOS="${TARGET%%/*}" GOARCH="${TARGET##*/}" go vet -tags e2e ./test/e2e/internal/... ./test/e2e/gitlab/...
 
   # The HTTP transport module needs no GitLab and no credentials, so it runs
   # here rather than only on demand. It is the gate for the handler chain in

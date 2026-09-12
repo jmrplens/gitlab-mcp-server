@@ -2,11 +2,12 @@
 
 E2E tests validate the full MCP server against a real GitLab instance using in-memory transport (`mcp.NewInMemoryTransports()`). Build tag: `e2e`.
 
-There are five modules, answering different questions:
+There are six modules, answering different questions:
 
 | Module               | Build tag      | Needs GitLab | What it covers                                                                       |
 | -------------------- | -------------- | ------------ | ------------------------------------------------------------------------------------ |
 | `test/e2e/suite`     | `e2e`          | yes          | Tool behaviour against a real instance, over in-memory MCP transport                  |
+| `test/e2e/gitlab`    | `e2e`          | yes          | The rebuilt suite: the real binary over stdio, one package per runtime (`common`, `ce`, `ee`), coverage recorded from what the server dispatched |
 | `test/e2e/http`      | `httpe2e`      | no           | The HTTP transport itself: cross-origin, preflight, auth modes, rate limiting, proxy  |
 | `test/e2e/stdio`     | `stdioe2e`     | no           | The stdio transport: pipes, process lifetime, exit status, environment configuration  |
 | `test/e2e/orbit`     | `orbitlive`    | gitlab.com   | The experimental Knowledge Graph API                                                  |
@@ -49,6 +50,19 @@ No GitLab and no credentials either, but Docker is required: it starts a pinned 
 It exists because every other telemetry test in this repository is graded by code we wrote. The in-process receiver in `test/e2e/http` answers `200` to whatever it is handed and stores the bytes, which is right for the two questions it asks (was the collector credential sent, did anything private leak) and is no evidence that the export is well formed. A malformed protobuf, a resource missing an attribute a backend requires, or a metric whose unit contradicts its name all pass a stub and all ship telemetry an operator cannot use. So this module asserts acceptance and shape, and deliberately repeats none of the credential or privacy assertions.
 
 Unlike the two transport modules it is **not** in the push-triggered CI jobs, because it pulls a container image. It belongs with the Docker-mode targets.
+
+## Rebuilt suite (`test/e2e/gitlab`)
+
+```bash
+make test-e2e-ce        # ephemeral GitLab CE: the common and ce packages
+make test-e2e-ee        # ephemeral GitLab EE with the cached license: the common and ee packages
+make test-e2e-gitlab    # a self-hosted instance from .env; a package the instance cannot serve skips
+make e2e-clean-orphans  # delete what earlier runs left on a self-hosted instance, by prefix
+```
+
+The suite that replaces `test/e2e/suite`, built beside it while its tests are ported. Every test drives the **real `cmd/server` binary over stdio** through `test/e2e/internal/harness`, names its actions by canonical catalog ID, and runs each scenario on the dynamic, meta and individual surfaces as subtests. The runtime a test needs is decided by its package: `common` runs on every runtime (Free actions are verified on the CE catalog and on the licensed EE one, where schema pruning differs), `ce` holds the few facts that only hold without a license, and `ee` needs a Premium or Ultimate one. A package pointed at the wrong runtime refuses before it writes anything, naming what it found and the target to run instead; `E2E_RUNTIME_MISMATCH=skip` turns that into skips.
+
+Coverage is what the server dispatched, in a test that passed, on a named runtime, surface and mode: every child runs with telemetry on and the harness reads its spans, and the calls are recorded under `dist/e2e-calls/<target>` for `cmd/audit_e2e_coverage`. GitLab state is built through client-go by `test/e2e/internal/fixture`, never through the server under test, so fixture traffic is never coverage. Every file under `test/e2e/gitlab` and `test/e2e/internal` carries exactly `//go:build e2e` (doc.go carries none), so one compile and one analysis run see the whole suite; the harness's own tests hold that, and hold the runtime packages to never assembling a server of their own. The Docker lifecycle both targets share lives in `test/e2e/scripts/run-docker-e2e.sh`, and every run carries `-p 1 -count=1`: capability locks are process-local, and a cached PASS records no calls. The licensed run stays local; CI runs `common` and `ce` in the non-blocking `e2e-gitlab` job of `e2e.yml`.
 
 ## Quick Start
 

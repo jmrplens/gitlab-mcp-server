@@ -139,7 +139,10 @@ func runStatic(cfg staticConfig) (*staticResult, error) {
 		return nil, err
 	}
 	selected := selectPackages(loaded)
-	harness := findHarness(selected, cfg.harnessPath)
+	// From everything loaded, not from the selection: the selection keeps the
+	// test variant of each package, and the harness's test variant exports
+	// every Test function of the harness, which nothing outside it can use.
+	harness := findHarness(loaded, cfg.harnessPath)
 	if harness == nil {
 		return nil, fmt.Errorf("the harness package %s was not loaded", cfg.harnessPath)
 	}
@@ -183,10 +186,13 @@ func selectPackages(loaded []*packages.Package) []*packages.Package {
 }
 
 // findHarness returns the harness package as its consumers see it: the plain
-// variant, whose objects are the ones a consumer's type information names.
-func findHarness(selected []*packages.Package, harnessPath string) *packages.Package {
+// variant, whose objects are the ones a consumer's type information names
+// and whose scope holds no Test function. It is given the loaded packages
+// rather than the selected ones, since the selection prefers the test
+// variant, and falls back to whichever variant is there.
+func findHarness(loaded []*packages.Package, harnessPath string) *packages.Package {
 	var found *packages.Package
-	for _, pkg := range selected {
+	for _, pkg := range loaded {
 		if pkg.PkgPath != harnessPath {
 			continue
 		}

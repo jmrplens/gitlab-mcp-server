@@ -4869,14 +4869,18 @@ func TestGet_CICDCatalogEnabled_MirrorsPayload(t *testing.T) {
 // of a licensed instance then failed to decode, which is what took the meta
 // and dynamic project.create down in the enterprise e2e run.
 func TestGet_MergeTrainEnforcement_IsTheLevelGitLabSpells(t *testing.T) {
+	// want is a pointer so the unlicensed case asserts the field is absent,
+	// not merely empty: a decoder that turned a missing field into a pointer
+	// to "" would pass a string comparison and still publish a level GitLab
+	// never sent.
 	tests := []struct {
 		name    string
 		payload string
-		want    string
+		want    *string
 	}{
-		{"allow bypass", `{"id":42,"name":"test","merge_train_enforcement":"allow_bypass"}`, "allow_bypass"},
-		{"enforce for all users", `{"id":42,"name":"test","merge_train_enforcement":"enforce_for_all_users"}`, "enforce_for_all_users"},
-		{"absent on an unlicensed answer", `{"id":42,"name":"test"}`, ""},
+		{"allow bypass", `{"id":42,"name":"test","merge_train_enforcement":"allow_bypass"}`, new("allow_bypass")},
+		{"enforce for all users", `{"id":42,"name":"test","merge_train_enforcement":"enforce_for_all_users"}`, new("enforce_for_all_users")},
+		{"absent on an unlicensed answer", `{"id":42,"name":"test"}`, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -4891,12 +4895,14 @@ func TestGet_MergeTrainEnforcement_IsTheLevelGitLabSpells(t *testing.T) {
 			if err != nil {
 				t.Fatalf(fmtUnexpErr, err)
 			}
-			got := ""
-			if out.MergeTrainEnforcement != nil {
-				got = *out.MergeTrainEnforcement
-			}
-			if got != tt.want {
-				t.Errorf("MergeTrainEnforcement = %q, want %q", got, tt.want)
+			got := out.MergeTrainEnforcement
+			switch {
+			case tt.want == nil && got != nil:
+				t.Errorf("MergeTrainEnforcement = %q, want nil for an answer that carries no field", *got)
+			case tt.want != nil && got == nil:
+				t.Errorf("MergeTrainEnforcement = nil, want %q", *tt.want)
+			case tt.want != nil && *got != *tt.want:
+				t.Errorf("MergeTrainEnforcement = %q, want %q", *got, *tt.want)
 			}
 		})
 	}

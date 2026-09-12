@@ -355,10 +355,13 @@ func TestBaseline_Recorder_JoinsTheDispatchedAction(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(lines) != 1 {
-		t.Fatalf("recorded %d lines for this test, want 1", len(lines))
+	if len(lines) == 0 {
+		t.Fatal("recorded no line for this test, want at least one")
 	}
-	line := lines[0]
+	// The last line is the attempt that succeeded: callToolWithRetry records
+	// one line per attempt, so an earlier one belongs to a try GitLab answered
+	// transiently and says nothing about the join.
+	line := lines[len(lines)-1]
 	type recorded struct {
 		method, tool, action, dispatched, outcome, purpose, session, surface, mode string
 	}

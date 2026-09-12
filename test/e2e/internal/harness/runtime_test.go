@@ -78,7 +78,7 @@ func TestGuardMessage_Refusal_NamesWhatToDoAboutIt(t *testing.T) {
 		"Community Edition",
 		"free (no license found)",
 		"licensed (Premium or Ultimate)",
-		"make test-e2e-docker-enterprise",
+		"make test-e2e-ee",
 		envRuntimeMismatch + "=skip",
 	} {
 		t.Run(fragment, func(t *testing.T) {
@@ -97,7 +97,7 @@ func TestGuardMessage_FreeRefusal_PointsAtTheUnlicensedTarget(t *testing.T) {
 
 	message := guardMessage(facts, Free, "ce")
 
-	if !strings.Contains(message, "      make test-e2e-docker\n") {
+	if !strings.Contains(message, "      make test-e2e-ce\n") {
 		t.Fatalf("the refusal should point at the unlicensed target:\n%s", message)
 	}
 	if !strings.Contains(message, "premium (license)") {
