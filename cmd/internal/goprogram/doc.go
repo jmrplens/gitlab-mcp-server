@@ -24,6 +24,11 @@
 // What stays with each gate is everything above the load: its own indexers,
 // its own detectors, its own question and its own binary.
 //
+// A fifth gate, cmd/audit_e2e_coverage's static check, reads test packages
+// that exist only behind the e2e build tag. [LoadWith] takes the [Options]
+// that load needs, test variants and build tags, and [Load] is the same call
+// with neither, so the four production loads are unchanged.
+//
 // [github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared.LoadToolPackages]
 // is deliberately not folded in. It loads with NeedDeps, so it pays for the
 // dependency tree these four refuse to pay for, and it refuses more widely

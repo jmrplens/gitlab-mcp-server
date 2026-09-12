@@ -22,8 +22,22 @@ import (
 // record exists to be believed about.
 const maxShardLine = 1 << 20
 
-// Read merges every shard under dir, subdirectories included, in the order the
-// directory tree walks.
+// Shard is one shard file read back: where it was, and every line it held.
+//
+// It exists because a shard is the one unit that says which process wrote a
+// line. No call, skip or session line names its package, only the run line
+// does, and one process writes one shard, so a reader that wants to place a
+// call in its package reads the shards apart and joins each to the run line
+// beside it. Merged, that attribution is gone.
+type Shard struct {
+	// Path is the file the lines were read from.
+	Path string
+	// Records is every line of the file, in file order.
+	Records []Record
+}
+
+// ReadShards reads every shard under dir, subdirectories included, one entry
+// per file in the order the directory tree walks.
 //
 // Subdirectories are read because one run per Docker target writes into a
 // directory of its own, and the coverage audit compares the runtimes against
@@ -34,11 +48,10 @@ const maxShardLine = 1 << 20
 // shards are written by a suite run, so nothing there means the suite did not
 // run with recording on, and reporting that as zero coverage would be a claim
 // about the server made from a claim about the harness.
-func Read(dir string) ([]Record, error) {
+func ReadShards(dir string) ([]Shard, error) {
 	var (
-		records     []Record
+		shards      []Shard
 		readFailure error
-		shards      int
 	)
 	walkErr := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, entryErr error) error {
 		if entryErr != nil {
@@ -47,13 +60,12 @@ func Read(dir string) ([]Record, error) {
 		if entry.IsDir() || !isShard(entry.Name()) {
 			return nil
 		}
-		shards++
 		read, err := readShard(path)
 		if err != nil {
 			readFailure = err
 			return fs.SkipAll
 		}
-		records = append(records, read...)
+		shards = append(shards, Shard{Path: path, Records: read})
 		return nil
 	})
 	if readFailure != nil {
@@ -62,11 +74,23 @@ func Read(dir string) ([]Record, error) {
 	if walkErr != nil {
 		return nil, fmt.Errorf("read shard directory %s: %w", dir, walkErr)
 	}
-	// Asked as "did the walk reach at least one shard" rather than "is the
-	// count exactly zero": the question is whether anything was read, and a
-	// guard that only recognizes one value answers it for one value.
-	if shards <= 0 {
+	if len(shards) == 0 {
 		return nil, fmt.Errorf("no %s shard under %s: the suite records only when %s is set to an absolute directory", ShardPattern, dir, DirEnv)
+	}
+	return shards, nil
+}
+
+// Read merges every shard under dir, subdirectories included, in the order the
+// directory tree walks. It is [ReadShards] with the file boundaries dropped,
+// for a reader that wants the lines and not their provenance.
+func Read(dir string) ([]Record, error) {
+	shards, err := ReadShards(dir)
+	if err != nil {
+		return nil, err
+	}
+	var records []Record
+	for _, shard := range shards {
+		records = append(records, shard.Records...)
 	}
 	return records, nil
 }

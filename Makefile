@@ -9,7 +9,7 @@
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-validate-docs audit-edition-tier \
-	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
+	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	audit-md-escaping check-md-escaping \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
@@ -65,6 +65,14 @@ export GOTOOLCHAIN := $(GO_TOOLCHAIN)
 
 # E2E test report directory (inside dist/, gitignored)
 E2E_REPORT_DIR=dist/e2e-reports
+
+# Where the e2e suite records what it asked the server to do and what the
+# server dispatched, one shard per test process, under one directory per
+# Docker target (dist/e2e-calls/ce, dist/e2e-calls/ee). The shards are a
+# byproduct of one run and are never committed; cmd/audit_e2e_coverage reads
+# them back. The e2e targets export it as an absolute path, since the recorder
+# refuses a relative one for the same reason the request inventory does.
+E2E_CALLS_DIR=dist/e2e-calls
 
 # Where the unit suite records the requests it issues, one shard per test
 # process. A shard is a byproduct of one run and only the merged inventory is
@@ -1297,6 +1305,23 @@ audit-dynamic-aliases:
 ## audit-e2e-gaps: report catalog actions not exercised by the e2e suite (CE+EE).
 audit-e2e-gaps:
 	go run ./cmd/audit_e2e_gaps/
+
+## audit-e2e-coverage: report what the e2e suite covered, from the calls it
+## recorded rather than from mentions in its source: one runtime per directory
+## under $(E2E_CALLS_DIR), every runtime x surface x mode x action classified,
+## the levels L1 to L3, and the non-tool capabilities. Needs a run that had
+## GITLAB_MCP_TEST_E2E_CALLS_DIR set; the JSON goes to $(E2E_REPORT_DIR).
+audit-e2e-coverage:
+	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	go run ./cmd/audit_e2e_coverage/ -calls $(E2E_CALLS_DIR) -report -o $(E2E_REPORT_DIR)/e2e-coverage.json -summary -
+
+## check-e2e-static: the push-time gate over the new e2e suite, with no
+## GitLab: every typed action id names a catalog action, sits in a package
+## that can run it, and an Ultimate id in ee declares its tier; a harness
+## result thrown away is a finding. Passes on a tree where test/e2e/gitlab
+## does not exist yet.
+check-e2e-static:
+	go run ./cmd/audit_e2e_coverage/ -static
 
 ## audit-test-goroutines: report testing.T aborts made off the test goroutine
 ## (t.Fatal inside HTTP mock handlers, go statements, MCP tool handlers) and

@@ -1,0 +1,2 @@
+{"schema":1,"type":"run","run":{"package":"common","requirement":"any","edition":"community","tier":"free","tier_confirmed":true,"gitlab_version":"18.4.0","run_id":"r1","status":"started"}}
+{"schema":1,"type":"run","run":{"package":"ee","requirement":"licensed","edition":"enterprise","tier":"ultimate","tier_confirmed":true,"gitlab_version":"18.4.0-ee","run_id":"r2","status":"started"}}
