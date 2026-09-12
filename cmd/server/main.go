@@ -46,6 +46,7 @@ import (
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamiccatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/health"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/toolvisibility"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -2033,7 +2034,10 @@ func (sh *serverShell) register(ctx context.Context) error {
 	metaSchemaRoutes := surfaceRegistration.metaSchemaRoutes
 	surfaceCatalog := surfaceRegistration.surfaceCatalog
 
-	applyToolVisibilityConfig(ctx, server, cfg, sh.toolSurface, surfaceCatalog)
+	// The pass over the tools registered outside the catalog, shared with the
+	// surface evaluator so a narrowed session there is what a client of this
+	// binary sees.
+	toolvisibility.Apply(ctx, server, cfg, sh.toolSurface, surfaceCatalog)
 
 	toolCount, err := countRegisteredTools(server)
 	if err != nil {
@@ -2082,7 +2086,7 @@ func (sh *serverShell) register(ctx context.Context) error {
 //
 // The key is the shared catalog's identity plus everything else the manifest
 // reads: the surface (which decides the entry shape), the narrowing that
-// decides which registered tools are visible after applyToolVisibilityConfig
+// decides which registered tools are visible after [toolvisibility.Apply]
 // (the same key the catalogs use), the meta parameter-schema mode (the meta
 // dispatchers' own input schemas are in the manifest), and the capability
 // surface (the subscriptions section). The tier is implied by the catalog.
@@ -2093,63 +2097,6 @@ func manifestShareKey(toolSurface, capabilitySurface string, cfg *config.ServerC
 	}
 	return fmt.Sprintf("%s|%p|%s|schema=%s|capability=%s",
 		toolSurface, origin, gitlabtools.CatalogFilterKey(cfg), cfg.MetaParamSchema, capabilitySurface)
-}
-
-func applyToolVisibilityConfig(ctx context.Context, server *mcp.Server, cfg *config.ServerConfig, toolSurface string, surfaceCatalog *actioncatalog.Catalog) {
-	if len(cfg.ExcludeTools) > 0 {
-		removed := removeExcludedTools(ctx, server, cfg.ExcludeTools)
-		// Named for what it counts. This pass sees registered tool names only,
-		// so on a surface whose exclusions are applied to the catalog it
-		// legitimately removes nothing, and a bare "excluded" reading zero
-		// there said the opposite of what had happened.
-		slog.InfoContext(ctx, "excluded tools by configuration", "excluded_registered_tools", removed, "patterns", cfg.ExcludeTools)
-	}
-	// The token-scope filter is deliberately absent from this function. It is
-	// applied to the catalog, before registration, by the three catalog
-	// assemblers, which is the only place it can reach the individual surface:
-	// its keys are meta-tool group names and this surface registers one tool
-	// per action, so a pass over registered names here matched nothing and
-	// left every admin tool listed for a token with no admin_mode. See
-	// [gitlabtools.MetaToolScopes].
-	if cfg.ReadOnly {
-		removed := gitlabtools.RemoveNonReadOnlyTools(ctx, server)
-		slog.InfoContext(ctx, "read-only mode: removed write tools", "removed", removed)
-		return
-	}
-	if cfg.SafeMode {
-		// Catalog-backed dispatcher tools already carry per-action preview
-		// handlers from filterActionCatalog, and wrapping them here would block
-		// the reads they also serve. Everything else still needs wrapping,
-		// including tools registered outside the catalog such as the
-		// gitlab_interactive_* utilities.
-		exempt := catalogBackedToolNames(surfaceCatalog, toolSurface)
-		wrapped := gitlabtools.WrapMutatingToolsForSafeModeExcept(ctx, server, exempt)
-		slog.InfoContext(ctx, "safe mode: intercepted mutating operations",
-			"surface", toolSurface, "wrapped_tools", wrapped, "catalog_backed_tools", len(exempt))
-	}
-}
-
-// catalogBackedToolNames returns the tools whose handlers come from the action
-// catalog and therefore already enforce safe mode per action.
-func catalogBackedToolNames(surfaceCatalog *actioncatalog.Catalog, toolSurface string) map[string]struct{} {
-	if toolSurface == config.ToolSurfaceIndividual {
-		// One tool is one action here, so tool-level wrapping is already
-		// action-granular and nothing is exempt.
-		return nil
-	}
-	exempt := map[string]struct{}{}
-	if toolSurface == config.ToolSurfaceDynamic {
-		exempt[dynamictools.FindActionToolName] = struct{}{}
-		exempt[dynamictools.ExecuteActionToolName] = struct{}{}
-		return exempt
-	}
-	if surfaceCatalog == nil {
-		return exempt
-	}
-	for _, group := range surfaceCatalog.Groups() {
-		exempt[group.ToolName] = struct{}{}
-	}
-	return exempt
 }
 
 func logRegisteredToolSurface(toolSurface string, toolCount int, metaSchemaRoutes map[string]toolutil.ActionMap) {
@@ -2272,8 +2219,8 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 			// writes: the two others, the meta group name that the
 			// documented example carries and the canonical action ID,
 			// removed nothing and warned about nothing.
-			// removeExcludedTools still runs afterwards, for the standalone
-			// tools registered outside the catalog.
+			// [toolvisibility.Apply] still runs afterwards, for the
+			// standalone tools registered outside the catalog.
 			// Built once per configuration and shared, then bound to this
 			// entry's client, like the other two surfaces.
 			var catalogErr error
@@ -4463,55 +4410,6 @@ func countCatalogActions(routes map[string]toolutil.ActionMap) int {
 		total += len(actions)
 	}
 	return total
-}
-
-// removeExcludedTools lists all registered tools and removes those whose name
-// matches any entry in the exclusion list. Matching is exact by tool name.
-// Returns the number of tools removed.
-func removeExcludedTools(ctx context.Context, server *mcp.Server, exclude []string) int {
-	if len(exclude) == 0 {
-		return 0
-	}
-
-	excludeSet := make(map[string]struct{}, len(exclude))
-	for _, name := range exclude {
-		excludeSet[name] = struct{}{}
-	}
-
-	st, ct := newInspectionTransports()
-
-	serverSession, err := connectInspectionServer(server, ctx, st)
-	if err != nil {
-		slog.ErrorContext(ctx, "removeExcludedTools: server connect failed", "error", err)
-		return 0
-	}
-	defer serverSession.Close()
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "exclude-filter", Version: "0"}, nil)
-	session, err := connectInspectionClient(mcpClient, ctx, ct)
-	if err != nil {
-		slog.ErrorContext(ctx, "removeExcludedTools: client connect failed", "error", err)
-		return 0
-	}
-	defer session.Close()
-
-	result, err := listInspectionTools(session, ctx)
-	if err != nil {
-		slog.ErrorContext(ctx, "removeExcludedTools: list tools failed", "error", err)
-		return 0
-	}
-
-	var toRemove []string
-	for _, t := range result.Tools {
-		if _, ok := excludeSet[t.Name]; ok {
-			toRemove = append(toRemove, t.Name)
-		}
-	}
-
-	if len(toRemove) > 0 {
-		server.RemoveTools(toRemove...)
-	}
-	return len(toRemove)
 }
 
 // runToolSearch creates an in-memory MCP server, lists all tools, and
