@@ -132,6 +132,11 @@ func Main(m *testing.M, req Requirement) int {
 
 	code := m.Run()
 
+	// Before anything is closed: a hook tears down state that outlived the
+	// tests and sweeps what they left behind, through the client rather than
+	// through a session, and a hook that fails fails the run.
+	code = exitCodeAfterHooks(code, runExitHooks())
+
 	// While the sessions are still alive, so a session line can say what it
 	// served and whether its dispatch was ever observed.
 	flushRunRecords()
