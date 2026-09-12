@@ -33,7 +33,7 @@ wait-job:
 // helper) to validate the MCP server wrapping. It exercises both the
 // individual session and the catalog-backed meta-tool session.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual, meta.
+// Build tag: e2e. Mode: CE. Surface: individual, meta.
 func TestWaitTools(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()

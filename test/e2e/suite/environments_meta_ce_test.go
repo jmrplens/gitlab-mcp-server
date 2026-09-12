@@ -3,7 +3,7 @@
 // environments_meta_ce_test.go tests environment-related meta-tool actions against a live
 // GitLab instance, including protected environments, freeze periods, and deployment CRUD.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -25,7 +25,7 @@ import (
 // actions through the catalog-backed meta-tool, asserting each step's
 // expected ID round-trips through the GitLab API.
 //
-// Build tag: e2e && !enterprise. Mode: EE. Surface: meta.
+// Build tag: e2e. Mode: EE. Surface: meta.
 func TestMeta_EnvironmentsProtected(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -109,7 +109,7 @@ func TestMeta_EnvironmentsProtected(t *testing.T) {
 // catalog-backed gitlab_environment tool. Each subtest asserts the
 // expected ID or schedule round-trips through the GitLab API.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_EnvironmentsFreeze(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -195,7 +195,7 @@ func TestMeta_EnvironmentsFreeze(t *testing.T) {
 // subtest asserts the expected ID or environment name round-trips
 // through the GitLab API.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_DeploymentsExtended(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()

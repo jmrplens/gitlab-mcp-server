@@ -3,7 +3,7 @@
 // groups_meta_ce_test.go tests advanced CE/common gitlab_group meta-tool actions
 // against a live GitLab instance.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -24,7 +24,7 @@ import (
 // Each subtest asserts the expected ID or path round-trips through the
 // GitLab API.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_GroupDeep(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

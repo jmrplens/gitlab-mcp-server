@@ -180,8 +180,7 @@ gitlab-mcp-server/
 │   ├── scripts/                 # E2E provisioning scripts (setup, runner, wait, Bitbucket, EE activation)
 │   └── suite/                   # Go test package (172 test files)
 │       ├── setup_test.go        # MCP server/client setup, test helpers, shared state
-│       └── fixture_ce_test.go   # Self-contained GitLab resource builders (CE runtime)
-│       └── fixture_ee_test.go   # Self-contained GitLab resource builders (EE runtime)
+│       └── fixture_ce_test.go   # Self-contained GitLab resource builders; the EE half was ported to test/e2e/gitlab/ee and deleted
 ├── plan/                        # Implementation plans for features
 ├── mcpb/                        # Claude Desktop extension (.mcpb) manifest + icon (packed by scripts/build-mcpb.sh)
 ├── .github/                     # AI assistance infrastructure
@@ -913,7 +912,7 @@ docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v
 The suite is one test file per domain (172 files), each self-contained against the shared fixture from `setup_test.go`, in three families named by the surface they drive:
 
 - **`TestIndividual_*`**: the individual surface (`gitlab_issue_list`-style tools) through each domain's lifecycle: user, project CRUD, commits, branches, tags, releases, issues, labels, milestones, members, upload, MR lifecycle, notes, discussions, search, groups, pipelines, packages, elicitation, cleanup
-- **`TestMeta_*`**: the same operations through the meta-tools, plus the domains only reachable there (admin, epics, group extras, wikis, CI variables, CI lint, environments, issue links, deploy keys, snippets, issue discussions, draft notes, pipeline schedules, badges, access tokens, award emoji); `TestEE_*` covers the Enterprise-only ones on an EE runtime
+- **`TestMeta_*`**: the same operations through the meta-tools, plus the domains only reachable there (admin, epics, group extras, wikis, CI variables, CI lint, environments, issue links, deploy keys, snippets, issue discussions, draft notes, pipeline schedules, badges, access tokens, award emoji). The Enterprise-only ones are no longer here: their `TestEE_*` half was ported to `test/e2e/gitlab/ee`, the rebuilt suite's licensed package, and deleted with the build tag that used to select it, so `make test-e2e-ee` (or its older name `make test-e2e-docker-enterprise`) is where they run
 - **`TestDynamicToolSurface_*`**: the default dynamic two-tool find/execute surface, including standalone project discovery, multi-intent discovery, and destructive-action confirmation guards. Run only this family in Docker mode after the Docker GitLab setup scripts complete:
 
 	```bash

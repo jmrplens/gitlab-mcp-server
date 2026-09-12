@@ -3,7 +3,7 @@
 // elicitation_ce_test.go tests the MCP elicitation capability against a live GitLab instance.
 // Uses the elicitation-enabled session with an auto-accept mock handler.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -23,7 +23,7 @@ import (
 // accepts with plausible field values and the test asserts the resulting
 // issue IID is positive.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: elicitation.
+// Build tag: e2e. Mode: CE. Surface: elicitation.
 func TestElicitation(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

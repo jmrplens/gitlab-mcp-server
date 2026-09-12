@@ -8,7 +8,7 @@
 // sub-operations (custom headers, URL variables, test triggers, and event
 // resends).
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -48,7 +48,7 @@ const (
 // and lists it via shared_projects, transfers the project into the parent
 // group, and finally moves the child group under the parent.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_GroupExtrasLifecycle(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -201,7 +201,7 @@ func runGroupExtrasTransferOps(t *testing.T, ctx context.Context, e2e *E2EContex
 // documents that behavior with a skip instead of failing. When delayed
 // deletion applies, the restore must return the original group ID.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_GroupRestore(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -253,7 +253,7 @@ func TestMeta_GroupRestore(t *testing.T) {
 // group_member_unshare). Each unshare runs before the next share so the pair
 // never holds two overlapping invitations.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_GroupToGroupSharing(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -337,7 +337,7 @@ func TestMeta_GroupToGroupSharing(t *testing.T) {
 // fresh group as Developer, promotes it to Maintainer, and removes it. Each
 // step asserts the member payload round-trips the user ID and access level.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta.
 // Admin token required.
 func TestMeta_GroupMemberLifecycle(t *testing.T) {
 	t.Parallel()

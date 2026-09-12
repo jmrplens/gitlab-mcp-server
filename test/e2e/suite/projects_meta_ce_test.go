@@ -32,7 +32,7 @@ import (
 // documented action returns the expected payload and that mutations are
 // observable through subsequent reads.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectCore(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -238,7 +238,7 @@ func TestMeta_ProjectCore(t *testing.T) {
 // returns the expected webhook metadata and that mutations are observable
 // through subsequent reads.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectHooks(t *testing.T) {
 	t.Parallel()
 
@@ -434,7 +434,7 @@ func TestMeta_ProjectHooks(t *testing.T) {
 // meta-tool returns the expected payload and that subscription/promotion
 // mutations are observable through subsequent reads.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectLabelsDeep(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -543,7 +543,7 @@ func TestMeta_ProjectLabelsDeep(t *testing.T) {
 // expected payload and that filtering by milestone ID produces non-empty
 // result sets.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectMilestonesDeep(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -617,7 +617,7 @@ func TestMeta_ProjectMilestonesDeep(t *testing.T) {
 // returns the expected membership payload and that mutations are
 // observable through subsequent reads.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectMembersDeep(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -651,7 +651,7 @@ func TestMeta_ProjectMembersDeep(t *testing.T) {
 // catalog-backed tool. Each subtest asserts the meta-tool returns the
 // expected payload with non-empty badge metadata and rendered SVG content.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectBadgesDeep(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -722,7 +722,7 @@ func TestMeta_ProjectBadgesDeep(t *testing.T) {
 // subtest asserts the meta-tool returns the expected board payload and that
 // mutations are observable through subsequent reads.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectBoardsDeep(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -877,7 +877,7 @@ func TestMeta_ProjectBoardsDeep(t *testing.T) {
 // meta-tool returns the expected approval payload and that mutations are
 // observable through subsequent reads.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectApprovals(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -1023,7 +1023,7 @@ func TestMeta_ProjectApprovals(t *testing.T) {
 // map to the documented meta-tool routes and that the export payload matches
 // the requested export options.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectExport(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -1077,7 +1077,7 @@ func TestMeta_ProjectExport(t *testing.T) {
 // step asserts the meta-tool returns the expected integration metadata and
 // that mutations are observable through subsequent reads.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectIntegrations(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -1107,7 +1107,7 @@ func TestMeta_ProjectIntegrations(t *testing.T) {
 // Pages metadata. Assertions cover the project ID round-trip and the presence
 // of the documented Pages fields in the response payload.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectPages(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -34,7 +34,7 @@ import (
 // get_status, emails, contribution_events, associations_count, memberships,
 // and avatar_get, asserting each action returns the expected payload shape.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_UserSelf(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -166,7 +166,7 @@ func TestMeta_UserSelf(t *testing.T) {
 // and event_list_project to verify those actions return consistent payloads.
 // Cleanup removes the project and the lingering todos when the test exits.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_UserTodosEvents(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -225,7 +225,7 @@ func TestMeta_UserTodosEvents(t *testing.T) {
 // sub-actions, then confirms the original global notification level survives
 // every change by re-reading it after each mutating step.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_UserNamespacesNotifications(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -389,7 +389,7 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 // asserting the registered key shows up in the listing and disappears after
 // deletion. Cleanup removes the key when the test exits, even on failure.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_UserSSHKeyLifecycle(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -454,7 +454,7 @@ func TestMeta_UserSSHKeyLifecycle(t *testing.T) {
 //
 // Cleanup unblocks and deletes the user when the test exits, even on failure.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta. Admin token required.
+// Build tag: e2e. Mode: CE. Surface: meta. Admin token required.
 //
 //nolint:maintidx // Ordered admin E2E workflow keeps one created user lifecycle visible through cleanup.
 func TestMeta_UserAdmin(t *testing.T) {
@@ -789,7 +789,7 @@ func TestMeta_UserAdmin(t *testing.T) {
 // The PAT subtest runs on every tier and confirms the issued token resolves
 // to the expected user and expires in the future.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_UserServiceAccounts(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

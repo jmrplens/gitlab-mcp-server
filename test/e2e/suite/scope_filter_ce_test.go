@@ -33,7 +33,7 @@ import (
 // Assertions check that admin-only meta-tools are removed, regular
 // meta-tools are still present, and the read_api scope is observed.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestScopeFilter_NonAdminToken(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not available")
@@ -170,7 +170,7 @@ func TestScopeFilter_NonAdminToken(t *testing.T) {
 // names keeps the test tier-independent: a group absent on this runtime is
 // absent from both sides.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta. Admin token required.
+// Build tag: e2e. Mode: CE. Surface: meta. Admin token required.
 func TestScopeFilter_AdminToken(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not available")

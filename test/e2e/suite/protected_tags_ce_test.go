@@ -20,7 +20,7 @@ import (
 // action returns the expected payload and that the tag name round-trips
 // through GitLab correctly.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProtectedTags(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

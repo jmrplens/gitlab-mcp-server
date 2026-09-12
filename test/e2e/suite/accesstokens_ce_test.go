@@ -4,7 +4,7 @@
 // live GitLab instance using both individual tools and the gitlab_access
 // meta-tool. Exercises the full token lifecycle: create → get → list → revoke.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -29,7 +29,7 @@ func expiresAtNextYear() string {
 // Revoke runs last and confirms the tool returns no error for a valid ID.
 // The created project is auto-deleted by [createProject]'s ledger entry.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_AccessTokens(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -92,7 +92,7 @@ func TestIndividual_AccessTokens(t *testing.T) {
 // asserting the same create → get → list → revoke outcome and verifying the
 // tool name stays constant across the lifecycle.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AccessTokens(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

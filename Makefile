@@ -42,24 +42,15 @@ GO_ANALYSIS_PKGS=./...
 # Every e2e build tag, and it must stay every one. A tagged file is invisible
 # to go vet and to golangci-lint unless its tag is listed here, so a suite
 # added behind a new tag is analysed by nothing until it is added. That has
-# happened four times: `httpe2e` was missing until the HTTP suite broke CI,
-# `stdioe2e` until the stdio suite did, `orbitlive` had never been listed
-# at all, so test/e2e/orbit had gone unlinted since it was written, and
-# `enterprise` (below) left the 41 Enterprise files of test/e2e/suite
-# unanalysed from the day the first was written until issue 570. The same
-# list lives in cmd/gen_testing_docs as e2eTags, for the same reason.
+# happened three times: `httpe2e` was missing until the HTTP suite broke CI,
+# `stdioe2e` until the stdio suite did, and `orbitlive` had never been listed
+# at all, so test/e2e/orbit had gone unlinted since it was written. The same
+# list lives in cmd/gen_testing_docs as e2eTags, for the same reason. Every
+# file under test/e2e/suite, test/e2e/gitlab and test/e2e/internal carries
+# `e2e` and nothing else, so this one list is the whole of what the analysis
+# has to know: no package under test/e2e selects between two file sets any
+# more, and one run sees all of them.
 GO_ANALYSIS_TAGS=e2e,collectore2e,httpe2e,orbitlive,stdioe2e
-# `enterprise` is not one more entry in that list, because it is not one more
-# suite: it selects between two runtimes of the same package. Every
-# *_ce_test.go in test/e2e/suite carries `e2e && !enterprise` and every
-# *_ee_test.go carries `e2e && enterprise`, so one analysis run sees one half
-# and never the other, and adding the tag above would trade the 128 CE files
-# for the 41 EE ones. The EE half therefore gets a run of its own, scoped to
-# the one package the tag reaches. That run is what found nineteen helpers
-# and four constants only CE tests use sitting in files both halves compile,
-# unused under the EE tag: nothing had ever compiled that combination.
-GO_ANALYSIS_ENTERPRISE_TAGS=$(GO_ANALYSIS_TAGS),enterprise
-GO_ANALYSIS_ENTERPRISE_PKGS=./test/e2e/suite/
 PROJECT_GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 GO_TOOLCHAIN ?= go$(PROJECT_GO_VERSION)
 export GOTOOLCHAIN := $(GO_TOOLCHAIN)
@@ -102,6 +93,10 @@ ORBIT_FIXTURES_INDEXER_TIMEOUT ?= 600
 # When set to "true", additionally mirror gitlab-org/cli for realistic
 # cross-entity CI/MR data. Adds ~5 min of mirror time on first run.
 ORBIT_FIXTURES_MIRROR ?= false
+# The -timeout handed to go test by the licensed Docker run, test-e2e-ee. go
+# test applies it to each test binary on its own, so with the run naming two
+# packages, common and ee, each package gets the whole budget rather than the
+# two sharing it. E2E_GITLAB_TIMEOUT below is the same flag for the CE run.
 E2E_DOCKER_ENTERPRISE_TIMEOUT ?= 3600s
 # Where the e2e Docker fixture is reached from the machine running the suite.
 # Docker itself follows DOCKER_HOST or the active context, so the fixture can
@@ -339,6 +334,8 @@ test-e2e-docker: ensure-gotestsum
 # The server binary is built once and handed to every package through
 # E2E_SERVER_BINARY, so the three test binaries do not each build cmd/server.
 E2E_SERVER_BINARY=dist/e2e/$(BINARY_NAME)$(BINARY_EXT)
+# Per package binary, like E2E_DOCKER_ENTERPRISE_TIMEOUT above: common and ce
+# each get the whole of it.
 E2E_GITLAB_TIMEOUT ?= 1800s
 
 ## e2e-server-binary: build the server the rebuilt e2e suite drives, once for every package.
@@ -363,10 +360,10 @@ test-e2e-ee: ensure-gotestsum e2e-server-binary
 	./test/e2e/scripts/run-docker-e2e.sh ee -- -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ee/
 
 ## test-e2e-docker-enterprise: the licensed Docker run under its older name; an alias of test-e2e-ee.
-# The files it used to run, the `enterprise`-tagged half of test/e2e/suite,
-# were deleted once every one of their tests had a successor under
-# test/e2e/gitlab/ee, so the licensed run is the rebuilt suite's and this
-# name keeps working for anything that still spells it.
+# The files it used to run, the Enterprise half of test/e2e/suite behind a
+# build tag of its own, were deleted once every one of their tests had a
+# successor under test/e2e/gitlab/ee, so the licensed run is the rebuilt
+# suite's and this name keeps working for anything that still spells it.
 test-e2e-docker-enterprise: test-e2e-ee
 
 ## test-e2e-gitlab: run the rebuilt suite against a self-hosted GitLab (reads GITLAB_URL, GITLAB_TOKEN from .env); a package the instance cannot serve skips.
@@ -591,8 +588,6 @@ golangci-lint:
 	golangci-lint fmt --diff
 	@echo === golangci-lint run ===
 	golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
-	@echo === golangci-lint run, Enterprise half of the e2e suite ===
-	golangci-lint run --build-tags $(GO_ANALYSIS_ENTERPRISE_TAGS) $(GO_ANALYSIS_ENTERPRISE_PKGS)
 
 ## govulncheck: scan Go dependencies for known CVEs using call-graph analysis.
 ## Only reports vulnerabilities where the vulnerable function is actually called.
@@ -680,24 +675,22 @@ analyze:
 	echo "Go toolchain: $$GOTOOLCHAIN (go.mod: $(PROJECT_GO_VERSION))"; \
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
-	echo "Enterprise e2e analysis: $(GO_ANALYSIS_ENTERPRISE_PKGS) with $(GO_ANALYSIS_ENTERPRISE_TAGS)"; \
 	echo ""; \
-	run_check "[1/16] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/16] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/16] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/16] golangci-lint run (Enterprise e2e half)" golangci-lint run --build-tags $(GO_ANALYSIS_ENTERPRISE_TAGS) $(GO_ANALYSIS_ENTERPRISE_PKGS); \
-	run_check "[5/16] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/16] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[7/16] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/16] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/16] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/16] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
-	run_check "[11/16] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[12/16] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[13/16] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[14/16] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[15/16] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[16/16] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[1/15] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/15] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/15] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/15] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[5/15] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[6/15] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[7/15] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[8/15] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[9/15] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
+	run_check "[10/15] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[11/15] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[12/15] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[13/15] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[14/15] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[15/15] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \

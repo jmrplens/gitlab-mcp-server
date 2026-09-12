@@ -4,7 +4,7 @@
 // GitLab instance: context commits (create/delete), to-do creation, related
 // issues, blocking dependencies listing, and MR pipeline creation.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -40,7 +40,7 @@ const mrExtrasCIYAML = `mr-check:
 // dependencies, and finally commits a merge-request-only CI configuration to
 // the source branch and triggers a detached MR pipeline.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_MRExtras(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()

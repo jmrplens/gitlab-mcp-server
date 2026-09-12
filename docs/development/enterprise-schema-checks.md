@@ -6,11 +6,14 @@ no license, and what the maintainer runs by hand before a release.
 > **Diátaxis type**: How-to & Explanation · **Audience**: 🛠️ Maintainers
 
 The Enterprise-only tools were the least-checked part of this server for a long time,
-and the reason was structural rather than accidental. `.github/workflows/e2e.yml` runs
-the suite with `-tags e2e` against a GitLab CE image, and the `enterprise` build tag
-appears in no workflow, so 41 files and 74 test functions covering the Premium and
-Ultimate surface were never compiled. Every package that turned out to hold a broken
-GraphQL document was a package only that tag covers.
+and the reason was structural rather than accidental. `.github/workflows/e2e.yml` ran
+the old suite against a GitLab CE image, and its Premium and Ultimate half sat behind
+a second build tag that appeared in no workflow, so 41 files and 74 test functions
+covering that surface were never compiled. Every package that turned out to hold a
+broken GraphQL document was a package only that half covered. The rebuilt suite under
+`test/e2e/gitlab` has no such half: every file carries `e2e` alone, so the licensed
+package `ee` is compiled and linted by the same run as everything else, and what still
+needs a license is running it.
 
 There are two checks, and they answer different questions.
 
@@ -99,15 +102,21 @@ of tests. Budget half an hour end to end, and expect the boot to dominate.
 
 ```bash
 export GITLAB_ACTIVATION_CODE=...   # the trial activation code
-make test-e2e-docker-enterprise
+make test-e2e-ee
 ```
 
-That target starts GitLab EE from `test/e2e/docker-compose.yml`, waits for it, applies
-the license, registers the runner, runs the suite with `-tags "e2e enterprise"` and
-tears the stack down, leaving its reports under `dist/e2e-reports/`.
+That target builds the server binary once, starts GitLab EE from
+`test/e2e/docker-compose.yml` through `test/e2e/scripts/run-docker-e2e.sh`, waits for
+it, applies the license, registers the runner, runs the `common` and `ee` packages of
+`test/e2e/gitlab` against that binary over stdio and tears the stack down, leaving its
+reports under `dist/e2e-reports/` and the calls it recorded under `dist/e2e-calls/ee`.
+`make test-e2e-docker-enterprise` is the same target under its older name.
 
-The `enterprise` tag is the load-bearing part. Without it the Premium and Ultimate
-files are not compiled, which is the gap this page exists to close.
+The package is the load-bearing part, not a tag. `ee` declares in its `TestMain` that
+it needs a Premium or Ultimate license and refuses before it writes anything when the
+instance it is pointed at has none, naming what it found; and the Free actions in
+`common` run here too, on the licensed catalog, where schema pruning differs from the
+CE one.
 
 ### Where its result belongs
 
@@ -117,19 +126,22 @@ tag cannot be cut without somebody having looked at the result.
 
 ## What every push checks without a license
 
-Two things about the Enterprise suite need no GitLab at all, and neither
-happened until issue 570. The suite is compiled with `-tags "e2e enterprise"`
-in the CI compile job, and it is linted with that tag added, in a pass of its
-own over `test/e2e/suite/` (`make golangci-lint` runs it, and the comment on
-`GO_ANALYSIS_ENTERPRISE_TAGS` in the Makefile says why it cannot share the
-ordinary pass: the CE and EE halves of the suite exclude each other, so one
-run sees one half and never the other). Between the day the first
-`_ee_test.go` was written and that change, nothing had compiled those 41 files
-except a person running `make test-e2e-docker-enterprise` by hand, which is
-how nineteen helpers and four constants used only by CE tests came to be
-unused under the Enterprise tag without anyone knowing.
+Two things about the licensed package need no GitLab at all. It is compiled in
+the CI compile job, by the same `go test -tags e2e -c` that compiles the rest
+of the rebuilt suite, and it is linted by the one `golangci-lint run` that
+`make golangci-lint` performs with every e2e tag. Neither needs a step of its
+own, because `test/e2e/gitlab/ee` is an ordinary package behind the ordinary
+tag. The old suite's Enterprise half needed both, in passes of their own,
+because it sat behind a second tag that excluded the CE half, so one run could
+only ever see one of them; and until issue 570 neither pass existed, so nothing
+had compiled those 41 files except a person running the licensed target by
+hand, which is how nineteen helpers and four constants used only by CE tests
+came to sit unused in files both halves shared without anyone knowing. The
+static gate, `go run ./cmd/audit_e2e_coverage/ -static`, holds the rebuilt
+layout to the shape that closed this: every file under `test/e2e/gitlab`
+carries exactly `e2e`, and a test that needs Ultimate declares the tier.
 
-The licensed run is still where the behaviour is checked, and that is
+The licensed run is still where the behavior is checked, and that is
 unchanged. What changed is that the code it compiles is known to compile, and
 to pass every linter, before anyone boots a GitLab for it.
 

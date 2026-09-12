@@ -4,7 +4,7 @@
 // instance. Covers member listing and retrieval of the project owner for both
 // individual and meta-tool modes.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -24,7 +24,7 @@ import (
 // project owner, who is always present). The second fetches that owner by
 // member ID and asserts the round-trip.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Members(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -72,7 +72,7 @@ func TestIndividual_Members(t *testing.T) {
 // tool. Each subtest asserts the same outcome and verifies the tool name
 // stays constant across the lifecycle.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Members(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

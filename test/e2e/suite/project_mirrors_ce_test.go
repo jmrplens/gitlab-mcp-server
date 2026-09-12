@@ -24,7 +24,7 @@ import (
 //
 // Remote mirrors are a Free-tier feature (push mirrors).
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectRemoteMirrors(t *testing.T) {
 	t.Parallel()
 

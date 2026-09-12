@@ -12,7 +12,7 @@
 // the call, so this file also provides the shared helper that spins up an
 // extra in-process MCP session bound to an arbitrary token.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -82,7 +82,7 @@ func accessExtrasExpiry() gl.ISOTime {
 // deletes it. The token value is only returned at creation time, which the
 // create subtest asserts.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_GroupDeployTokens(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -154,7 +154,7 @@ func TestIndividual_GroupDeployTokens(t *testing.T) {
 // the group's invitation listing. The invitation disappears with the group
 // fixture cleanup.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_GroupInvitations(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -211,7 +211,7 @@ func TestIndividual_GroupInvitations(t *testing.T) {
 // generation is revoked during cleanup so the bot membership never outlives
 // the group fixture.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_GroupAccessTokens(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -301,7 +301,7 @@ func TestIndividual_GroupAccessTokens(t *testing.T) {
 // rotated generation is revoked during cleanup; the project fixture cleanup
 // removes the bot membership regardless.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_ProjectAccessTokenRotateSelf(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {

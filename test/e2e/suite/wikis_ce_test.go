@@ -21,7 +21,7 @@ import (
 // slug and content round-trip through the GitLab API. Cleanup removes the
 // page (and its project fixture) when the test exits.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Wikis(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -102,7 +102,7 @@ func TestIndividual_Wikis(t *testing.T) {
 // meta-tool returns consistent payloads and that mutations are observable
 // through subsequent reads.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Wikis(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

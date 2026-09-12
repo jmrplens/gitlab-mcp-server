@@ -4,7 +4,7 @@
 // instance using both individual tools and the gitlab_repository meta-tool.
 // Exercises: commit list, get, diff, and file retrieval.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -26,7 +26,7 @@ import (
 // from the default branch. Each subtest asserts the expected ID, SHA, or
 // filename round-trips through the GitLab API.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Commits(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -94,7 +94,7 @@ func TestIndividual_Commits(t *testing.T) {
 // tool. Each subtest asserts the same outcome and verifies the tool name
 // stays constant across the lifecycle.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Commits(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

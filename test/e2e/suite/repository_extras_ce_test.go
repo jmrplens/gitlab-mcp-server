@@ -6,7 +6,7 @@
 // commit, changelog generation and committing, and submodule listing plus the
 // submodule file read path.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -47,7 +47,7 @@ func repoExtrasBlobSHA(ctx context.Context, t *testing.T, proj ProjectFixture, f
 // asserts the SHA round-trips and the decoded text content matches what was
 // committed.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_RepositoryBlobs(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -94,7 +94,7 @@ func TestIndividual_RepositoryBlobs(t *testing.T) {
 // the branches diverge, and asserts the reported merge base equals the commit
 // the branch was created from.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_RepositoryMergeBase(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -131,7 +131,7 @@ func TestIndividual_RepositoryMergeBase(t *testing.T) {
 // check runs before the revert so the MR diff is still non-empty when GitLab
 // computes it.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_CommitRevertMergeRequests(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -206,7 +206,7 @@ func TestIndividual_CommitRevertMergeRequests(t *testing.T) {
 // fixture project has no previous semver tag for GitLab to infer the range
 // start from.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_RepositoryChangelog(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -264,7 +264,7 @@ func TestIndividual_RepositoryChangelog(t *testing.T) {
 // exists. A positive read requires a repository with a real submodule, which
 // cannot be provisioned through the available tools.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_RepositorySubmodules(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {

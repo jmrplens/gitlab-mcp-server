@@ -9,7 +9,7 @@
 // Throwaway runners are registered paused and tagged so they can never pick
 // up suite jobs, and the shared compose runner is never touched.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -37,7 +37,7 @@ const runnerExtrasToolRegister = "gitlab_runner_register"
 // legacy flow the affected subtests skip with a documented reason instead of
 // failing.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_RunnerExtras(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()
@@ -82,7 +82,7 @@ func TestIndividual_RunnerExtras(t *testing.T) {
 // token. Rotating the token is safe there because already-registered runners
 // authenticate with their own auth tokens, not the registration token.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: individual. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: individual. Admin token required.
 func TestIndividual_RunnerExtrasInstanceRegToken(t *testing.T) {
 	if sess.individual == nil {
 		t.Skip("individual session not configured")

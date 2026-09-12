@@ -9,7 +9,7 @@
 // surface. Also validates catalog-projected tool registration through
 // the individual session.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -30,7 +30,7 @@ import (
 // individual tool surface returns consistent user metadata. The test
 // does not create any resources.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Users(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -76,7 +76,7 @@ func TestIndividual_Users(t *testing.T) {
 // tool surface. Each subtest asserts the meta-tool returns the expected
 // user payload and that mutations are observable through subsequent reads.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual. Admin token required.
+// Build tag: e2e. Mode: CE. Surface: individual. Admin token required.
 func TestIndividual_UserManagement(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -161,7 +161,7 @@ func TestIndividual_UserManagement(t *testing.T) {
 // registered with the expected destructiveHint/readOnlyHint annotations
 // and JSON-schema-derived input/output schemas.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual. Admin token required.
+// Build tag: e2e. Mode: CE. Surface: individual. Admin token required.
 func TestIndividual_UserManagementCatalogProjection(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -219,7 +219,7 @@ func assertUserToolProjection(t *testing.T, tools []*mcp.Tool, name string, requ
 // returns consistent user metadata for the current user and the listed
 // users. The test does not create any resources.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Users(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -5,7 +5,7 @@
 // sharing, avatar upload/download, restore, transfer, create-for-user, fork
 // relations, markdown upload deletion, and forced push-mirror sync.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -113,7 +113,7 @@ func projectExtrasUploadRef(t *testing.T, uploadURL string) (string, string) {
 // member_edit (raise to Maintainer), and member_delete. Each subtest asserts
 // the returned membership carries the expected user ID and access level.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta.
 func TestMeta_ProjectMemberLifecycle(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -188,7 +188,7 @@ func TestMeta_ProjectMemberLifecycle(t *testing.T) {
 // delete_shared_group. Assertions check the share echoes the group ID and
 // that the invited-groups list contains the helper group.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectGroupSharing(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -264,7 +264,7 @@ func TestMeta_ProjectGroupSharing(t *testing.T) {
 // the upload round-trips to the same project and the downloaded image is
 // non-empty base64 content.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectAvatar(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -313,7 +313,7 @@ func TestMeta_ProjectAvatar(t *testing.T) {
 // delayed-deletion window), the restore call returns 404 and the test skips
 // with a documented reason instead of failing.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectRestore(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -370,7 +370,7 @@ func TestMeta_ProjectRestore(t *testing.T) {
 // group, then transfers it back to the personal namespace so the fixture
 // cleanup path stays valid.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectTransfer(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -423,7 +423,7 @@ func TestMeta_ProjectTransfer(t *testing.T) {
 // and asserts the resulting project lives in the target user's namespace.
 // The project and user are cleaned up through the per-test ledger.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta. Admin token required.
 func TestMeta_ProjectCreateForUser(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -462,7 +462,7 @@ func TestMeta_ProjectCreateForUser(t *testing.T) {
 // endpoint answers with names the expected upstream, then removes the
 // relationship via delete_fork_relation.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectForkRelations(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -522,7 +522,7 @@ func TestMeta_ProjectForkRelations(t *testing.T) {
 // subtest skips on instances older than GitLab 17.3, which do not return
 // upload IDs.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectUploadDeletes(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -611,7 +611,7 @@ func TestMeta_ProjectUploadDeletes(t *testing.T) {
 // mode only: the mirror target URL is a Docker network address that GitLab
 // cannot resolve in self-hosted runs.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta.
 func TestMeta_ProjectMirrorForcePush(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

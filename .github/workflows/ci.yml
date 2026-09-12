@@ -397,15 +397,12 @@ jobs:
           go-version-file: go.mod
       - run: go mod download
       - run: go build -o /dev/null ./cmd/server
+      # One compile sees the whole of the old suite now that every file in it
+      # carries `e2e` alone. It used to take two, because its Enterprise half
+      # sat behind a second tag that excluded the other half; that half was
+      # ported to test/e2e/gitlab/ee and deleted, and the second compile with it.
       - name: Verify E2E tests compile
         run: go test -tags e2e -c -o /dev/null ./test/e2e/suite/
-      # A second compile rather than a second tag on the line above: the
-      # suite's *_ce_test.go and *_ee_test.go files exclude each other, so one
-      # compile sees one half and never the other. Between the day the first
-      # _ee_test.go was written and issue 570, nothing compiled the 41 EE files
-      # except a person running make test-e2e-docker-enterprise by hand.
-      - name: Verify the Enterprise E2E tests compile
-        run: go test -tags "e2e enterprise" -c -o /dev/null ./test/e2e/suite/
       # The harness is the library every rebuilt e2e test goes through, and its
       # own tests need no GitLab: the ledger, the waits, the names, the runtime
       # guard's message, the environment a child is given, and one run of the

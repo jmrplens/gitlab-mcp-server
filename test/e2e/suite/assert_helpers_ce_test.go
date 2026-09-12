@@ -1,18 +1,18 @@
 //go:build e2e
 
 // assert_helpers_ce_test.go holds the listing projections only the Community
-// Edition suites read, split from assert_helpers_test.go so that they live
-// behind the constraint of the tests that use them.
+// Edition suites read, split from assert_helpers_test.go when the suite was
+// still two halves behind two build tags, so that they lived behind the
+// constraint of the tests that use them.
 //
-// They used to sit in the shared file, which both halves of the suite compile,
-// and were therefore unused under the Enterprise tag: every *_ce_test.go
-// carries `e2e && !enterprise`, so an Enterprise compile drops the only callers
-// and keeps the helpers. Nothing noticed for as long as nothing compiled that
-// half outside a manual run, which is what issue 570 changed. A projection an
-// Enterprise suite also needs belongs in assert_helpers_test.go, as
-// groupBoardIDs does.
+// They used to sit in the shared file, which both halves compiled, and were
+// therefore unused under the Enterprise tag: the CE files were excluded from
+// an Enterprise compile, which dropped the only callers and kept the helpers.
+// Nothing noticed for as long as nothing compiled that half outside a manual
+// run, which is what issue 570 changed. The split is history now, since every
+// file carries `e2e` alone, and the file keeps its name until the suite goes.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (

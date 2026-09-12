@@ -9,7 +9,7 @@
 // doubles as the availability probe: when it fails, the test skips rather than
 // failing an otherwise healthy suite on an older instance.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (

@@ -23,7 +23,7 @@ import (
 // meta-tool returns the expected link payload and that mutations are
 // observable through subsequent reads.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ReleaseLinksExtended(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

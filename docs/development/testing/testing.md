@@ -681,12 +681,12 @@ make test-e2e-docker
 For Enterprise/Premium E2E coverage, set `ENTERPRISE_LICENSE` in `.env` or the shell and use:
 
 ```bash
-make test-e2e-docker-enterprise
+make test-e2e-ee                  # or its older name, make test-e2e-docker-enterprise
 ```
 
-The Enterprise target runs with the `e2e enterprise` build tags, so common harness files plus `test/e2e/suite/*_ee_test.go` Enterprise/Premium tests are compiled and executed. CE-only tests live in `test/e2e/suite/*_ce_test.go` and remain in `make test-e2e-docker`, while Enterprise-specific fixture behavior can be tuned independently.
+The licensed target runs the `common` and `ee` packages of the rebuilt suite under `test/e2e/gitlab` against the real binary. There is no Enterprise build tag: every file carries `e2e` alone, and the package decides the runtime, so one compile and one analysis run see the licensed tests with everything else. The old suite under `test/e2e/suite` stays with `make test-e2e-docker` until its CE half is ported; the Premium scenarios its CE files still hold run when the instance is licensed and skip when it reports Free.
 
-The E2E harness also re-validates the GitLab tier at runtime by calling the License API (`GET /api/v4/license`). When an enterprise tier is requested (via `GITLAB_MCP_TIER=premium`/`ultimate`, or the legacy `GITLAB_ENTERPRISE=true` harness toggle) but the fixture reports a Free license, the session downgrades to CE and `*_ee_test.go` tests skip cleanly with a logged reason instead of failing outright. This keeps the suite safe against accidental CE/EE mismatches.
+The rebuilt suite re-validates the GitLab tier before it writes anything, by calling the License API (`GET /api/v4/license`). A package pointed at the wrong runtime refuses, naming what it found and the target to run instead, and `E2E_RUNTIME_MISMATCH=skip` turns that refusal into skips. The old suite keeps its own check: when an enterprise tier is requested (via `GITLAB_MCP_TIER=premium`/`ultimate`, or the legacy `GITLAB_ENTERPRISE=true` harness toggle) but the fixture reports a Free license, its session downgrades to CE and the Premium scenarios skip with a logged reason instead of failing outright.
 
 Docker mode enables pipeline and job tests that require a CI runner. It also starts an internal `e2e-fixture` HTTP service and configures GitLab to allow local outbound requests, so project webhook, push mirror, and custom emoji tests use deterministic in-network endpoints instead of public Internet access.
 

@@ -24,7 +24,7 @@ import (
 // verify the release name, tag name, and link URLs round-trip through the
 // GitLab API.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Releases(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -160,7 +160,7 @@ func TestIndividual_Releases(t *testing.T) {
 // Subtests cover create, list, get, update, and delete, then exercise the
 // link create, list, get, update, and delete actions.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Releases(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

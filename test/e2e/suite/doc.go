@@ -9,14 +9,14 @@
 // # Editions and Modes
 //
 // Every file carries the one build constraint `e2e`. The suite used to be
-// split by edition, with the `_ce_test.go` files behind `e2e && !enterprise`
-// and an `_ee_test.go` half behind `e2e && enterprise` for the features that
-// need a GitLab Enterprise license (epics, group protected branches,
-// iterations, SAML/SCIM, compliance frameworks, security policies). That
-// half was ported to test/e2e/gitlab/ee and deleted, and the `_ce_test.go`
-// files kept their suffix and lost the constraint; what remains runs on
-// either edition, and a Premium scenario a CE file still holds skips when
-// the running GitLab reports Free.
+// split by edition behind a second build tag that excluded one half from the
+// other: the `_ce_test.go` files on one side and an `_ee_test.go` half on the
+// other for the features that need a GitLab Enterprise license (epics, group
+// protected branches, iterations, SAML/SCIM, compliance frameworks, security
+// policies). That half was ported to test/e2e/gitlab/ee and deleted, the tag
+// with it, and the `_ce_test.go` files kept their suffix and lost the
+// constraint; what remains runs on either edition, and a Premium scenario a
+// CE file still holds skips when the running GitLab reports Free.
 //
 // Each domain is exercised under multiple MCP surfaces where applicable:
 //

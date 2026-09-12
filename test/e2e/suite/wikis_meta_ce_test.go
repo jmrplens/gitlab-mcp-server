@@ -23,7 +23,7 @@ import (
 // non-empty file name and path. This complements the CRUD coverage in the
 // wikis test.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_WikiUploadAttachment(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

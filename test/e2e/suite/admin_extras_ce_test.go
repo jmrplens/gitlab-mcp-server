@@ -13,7 +13,7 @@
 // fixtures only the disposable Docker instance can provide) and require an
 // admin token.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -158,7 +158,7 @@ func admExtrasCreateAlert(ctx context.Context, t *testing.T, projectPath string)
 // asserts a new non-empty secret different from the original is returned,
 // and defers deletion of the application.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta. Admin token required.
 func TestMeta_AdminApplicationRenewSecret(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -209,7 +209,7 @@ func TestMeta_AdminApplicationRenewSecret(t *testing.T) {
 // reflected in the action output, and restores the original value with a
 // deferred SDK call so the instance-wide limit never drifts.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta. Admin token required.
 func TestMeta_AdminPlanLimitsChange(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -260,7 +260,7 @@ func TestMeta_AdminPlanLimitsChange(t *testing.T) {
 // secure file (base64 content), lists and fetches it back asserting the name
 // and checksum round-trip, and deletes it asserting the list is empty again.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta. Admin token required.
 func TestMeta_AdminSecureFiles(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -351,7 +351,7 @@ func TestMeta_AdminSecureFiles(t *testing.T) {
 // variable, verifies the variable key is reported by system_hook_get, and
 // deletes the variable. The hook itself is deleted via a deferred call.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta. Admin token required.
 func TestMeta_AdminSystemHookEditURLVariables(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -449,7 +449,7 @@ func TestMeta_AdminSystemHookEditURLVariables(t *testing.T) {
 // its feature flag enabled (verified by live probing), so a clean 404 is the
 // deterministic outcome; a future GitLab that serves it passes too.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta. Admin token required.
 func TestMeta_AdminUsageData(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -561,7 +561,7 @@ func TestMeta_AdminUsageData(t *testing.T) {
 // The test performs the real call and asserts that clean error path, which
 // validates routing and error wrapping for the action without a license.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta. Admin token required.
 func TestMeta_AdminLicenseGetCE(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -596,7 +596,7 @@ func TestMeta_AdminLicenseGetCE(t *testing.T) {
 // be 2), locks and unlocks it, deletes the non-latest version (the API
 // refuses to delete the latest), and finally deletes the whole state.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta. Admin token required.
 func TestMeta_AdminTerraformStates(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -729,7 +729,7 @@ func TestMeta_AdminTerraformStates(t *testing.T) {
 // error_tracking_delete — works regardless of the settings record and is
 // asserted strictly.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta. Admin token required.
 func TestMeta_AdminErrorTracking(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -826,7 +826,7 @@ func TestMeta_AdminErrorTracking(t *testing.T) {
 // payload at its notify URL (which synchronously returns the alert IID), and
 // then walks the metric image lifecycle against that alert with a real PNG.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta. Admin token required.
 func TestMeta_AdminAlertMetricImages(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -916,7 +916,7 @@ func TestMeta_AdminAlertMetricImages(t *testing.T) {
 // probing on a fresh group), so the call is asserted to succeed against a
 // disposable group fixture.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta. Admin token required.
 func TestMeta_AdminDependencyProxyPurge(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -1034,7 +1034,7 @@ func adminExtrasImportGists(ctx context.Context, t *testing.T, ghToken string) {
 // writes them to .env.docker, so the subtest runs for real; elsewhere it
 // skips unless the operator points it at a reachable Bitbucket Server.
 //
-// Build tag: e2e && !enterprise. Mode: any (credential-gated). Surface: meta.
+// Build tag: e2e. Mode: any (credential-gated). Surface: meta.
 func TestMeta_AdminExternalImporters(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -1147,7 +1147,7 @@ func TestMeta_AdminExternalImporters(t *testing.T) {
 // it automatically in Docker mode by deleting the newest Rails-resolvable
 // schema_migrations row; the mark call here re-inserts it.
 //
-// Build tag: e2e && !enterprise. Mode: any (error path) / Docker with
+// Build tag: e2e. Mode: any (error path) / Docker with
 // E2E_DB_MIGRATION_VERSION (mutating path). Surface: meta.
 func TestMeta_AdminDBMigrationMark(t *testing.T) {
 	t.Parallel()

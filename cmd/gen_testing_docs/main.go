@@ -50,16 +50,11 @@ const (
 	// added to this list, exactly as it has to be added to GO_ANALYSIS_TAGS in
 	// the Makefile, or the tooling silently measures a smaller project than
 	// the one in the repository. None of these tags gates anything outside
-	// test/e2e, so cmd/ and internal/ resolve identically with them.
-	//
-	// `enterprise` is deliberately not here. It reveals no package: it selects
-	// between the CE and EE halves of test/e2e/suite, which exclude each
-	// other, so listing it would hide the 128 CE files from `go list` rather
-	// than reveal anything. The counts below come from reading each package
-	// directory, not from the file lists `go list` returns, so both halves
-	// are counted whichever tag is passed. The Makefile gives that tag an
-	// analysis pass of its own (GO_ANALYSIS_ENTERPRISE_TAGS) for the same
-	// reason.
+	// test/e2e, so cmd/ and internal/ resolve identically with them. Every
+	// file under test/e2e/suite, test/e2e/gitlab and test/e2e/internal is
+	// behind `e2e` alone, so this list reveals all of them at once; the
+	// counts below still come from reading each package directory rather
+	// than from the file lists `go list` returns.
 	e2eTags = "e2e,orbitlive,httpe2e,stdioe2e,collectore2e"
 
 	goFileSuffix     = ".go"

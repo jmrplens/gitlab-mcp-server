@@ -15,7 +15,7 @@
 // through the admin API and must never run against a real instance or touch
 // the suite's own credentials.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -67,7 +67,7 @@ func accessExtrasCreatePAT(ctx context.Context, t *testing.T, userID int64, pref
 // suite user (owner) then lists the group requests and approves the first
 // user while denying the second on both scopes.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: individual. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: individual. Admin token required.
 func TestIndividual_AccessRequests(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -212,7 +212,7 @@ func TestIndividual_AccessRequests(t *testing.T) {
 // new token ID and invalidates the old one), and revokes the rotated
 // generation. The suite's own credential is never involved.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: individual. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: individual. Admin token required.
 func TestIndividual_PersonalAccessTokenAdminOps(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -275,7 +275,7 @@ func TestIndividual_PersonalAccessTokenAdminOps(t *testing.T) {
 // self-revokes it — rotate first, revoke last, because each step kills the
 // credential it ran on.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: individual. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: individual. Admin token required.
 func TestIndividual_PersonalAccessTokenSelfOps(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -332,7 +332,7 @@ func TestIndividual_PersonalAccessTokenSelfOps(t *testing.T) {
 // remains on the disposable Docker instance — which is exactly why the test
 // is Docker-gated.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: individual. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: individual. Admin token required.
 func TestIndividual_InstanceDeployKeyAdd(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {

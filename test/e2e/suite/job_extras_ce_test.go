@@ -7,7 +7,7 @@
 // job.delete_artifacts, job.erase, job.retry, job.cancel, job.play, and
 // job.list_bridges through the individual tool surface.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -90,7 +90,7 @@ trigger-child:
 // Outside Docker mode the test skips when no runner picks up the pipeline's
 // jobs within the pickup budget.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_JobExtras(t *testing.T) {
 	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(_ *E2EContext) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)

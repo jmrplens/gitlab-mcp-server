@@ -20,7 +20,7 @@ import (
 // tool surface. Each subtest asserts the expected payload shape and that
 // the file paths and commit SHAs round-trip through the GitLab API.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Repository(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -82,7 +82,7 @@ func TestIndividual_Repository(t *testing.T) {
 // catalog-backed tool. Assertions cover the file paths, commit SHAs, and
 // diff entries returned by the meta-tool for the documented routes.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Repository(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

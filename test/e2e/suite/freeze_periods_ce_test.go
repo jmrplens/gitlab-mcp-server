@@ -3,7 +3,7 @@
 // freeze_periods_ce_test.go tests the freeze period MCP tools against a live GitLab instance.
 // Exercises create, list, get, update, and delete via the gitlab_environment meta-tool.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -22,7 +22,7 @@ import (
 // freeze_period_update, and freeze_period_delete actions. Each subtest
 // asserts the expected ID round-trips through the GitLab API.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_FreezePeriods(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

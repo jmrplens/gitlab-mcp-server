@@ -4,7 +4,7 @@
 // instance using both individual tools and the gitlab_project meta-tool.
 // Exercises the full badge lifecycle: create → get → list → update → delete.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -23,7 +23,7 @@ import (
 // updates its link URL, and finally deletes it. Each subtest asserts the
 // expected ID or URL round-trips and that the list contains the badge.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Badges(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -104,7 +104,7 @@ func TestIndividual_Badges(t *testing.T) {
 // test skips the explicit get subtest because the meta-tool routes through
 // the same GitLab endpoint and the list subtest confirms identity.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Badges(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

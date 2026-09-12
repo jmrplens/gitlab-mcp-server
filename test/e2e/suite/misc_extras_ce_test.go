@@ -5,7 +5,7 @@
 // catalog resource get, deployment merge requests, and the GraphQL work item
 // type listing.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -36,7 +36,7 @@ import (
 // latest release and asserts the tag name round-trips. The fetch is retried
 // because a just-created release can lag behind the latest-release endpoint.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_ReleaseGetLatest(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -85,7 +85,7 @@ func TestIndividual_ReleaseGetLatest(t *testing.T) {
 // diff is non-empty (diff computation is asynchronous). It asserts the diff
 // mentions the file committed to the feature branch.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_MRRawDiffs(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -134,7 +134,7 @@ func TestIndividual_MRRawDiffs(t *testing.T) {
 // full path. Marking is version- and instance-policy-dependent, so mutation
 // failures skip the test with the reported reason rather than failing it.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_CICatalogGet(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -315,7 +315,7 @@ component-job:
 // range behind it, so an empty list is the expected well-formed response;
 // the assertion targets the successful listing shape.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_DeploymentMergeRequests(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -363,7 +363,7 @@ func TestIndividual_DeploymentMergeRequests(t *testing.T) {
 // and asserts the system-defined Issue type is present with a populated GID,
 // which validates the GraphQL round-trip end to end on CE.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_WorkItemTypes(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {

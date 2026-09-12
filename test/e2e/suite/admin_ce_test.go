@@ -4,7 +4,7 @@
 // a live GitLab instance. Covers topic listing, settings retrieval via
 // gitlab_admin, and job token scope via gitlab_job.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -25,7 +25,7 @@ import (
 // admin settings through settings_get and asserts the returned map has at
 // least one key. Neither subtest mutates GitLab state.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Admin(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -59,7 +59,7 @@ func TestMeta_Admin(t *testing.T) {
 // through token_scope_get and asserts the response carries an inbound_enabled
 // flag.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_JobTokens(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

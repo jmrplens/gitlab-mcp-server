@@ -4,7 +4,7 @@
 // live GitLab instance. Covers create, get, list, update, commits, participants,
 // and delete for both individual and meta-tool modes.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -59,7 +59,7 @@ func setupMRProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSe
 // the GitLab API. The test waits for MR readiness before checking
 // commits so the assertions do not race with the sidekiq diff job.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_MergeRequests(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()
@@ -170,7 +170,7 @@ func TestIndividual_MergeRequests(t *testing.T) {
 // gitlab_merge_request tool. Each subtest asserts the same outcome and
 // verifies the tool name stays constant across the lifecycle.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_MergeRequests(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()

@@ -4,7 +4,7 @@
 // GitLab instance. Covers threaded discussion create, list, get, add note,
 // update note, and delete note for both individual and meta-tool modes.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -24,7 +24,7 @@ import (
 // threaded discussion. Each subtest asserts the expected discussion ID,
 // note ID, or body round-trips through the GitLab API.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_IssueDiscussions(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -122,7 +122,7 @@ func TestIndividual_IssueDiscussions(t *testing.T) {
 // gitlab_issue tool. Each subtest asserts the same outcome and verifies
 // the tool name stays constant across the lifecycle.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_IssueDiscussions(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

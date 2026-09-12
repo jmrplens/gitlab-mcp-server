@@ -26,7 +26,7 @@ import (
 // asserts the meta-tool returns the expected template payload and that the
 // fetched template content is non-empty.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_TemplatesCIYml(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -66,7 +66,7 @@ func TestMeta_TemplatesCIYml(t *testing.T) {
 // subtest asserts the meta-tool returns the expected template payload and
 // that the fetched Dockerfile content is non-empty.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_TemplatesDockerfile(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -105,7 +105,7 @@ func TestMeta_TemplatesDockerfile(t *testing.T) {
 // subtest asserts the meta-tool returns the expected template payload and
 // that the fetched gitignore content is non-empty.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_TemplatesGitignore(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -144,7 +144,7 @@ func TestMeta_TemplatesGitignore(t *testing.T) {
 // Each subtest asserts the meta-tool returns the expected template payload
 // and that the fetched license content is non-empty.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_TemplatesLicense(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -188,7 +188,7 @@ const templatePageBudget = 10
 // meta-tool returns the expected template payload. Get actions verify the
 // fetched project template content is non-empty.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_TemplatesProject(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

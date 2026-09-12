@@ -2,7 +2,7 @@
 
 // enterprise_ce_test.go verifies CE catalog behavior for Enterprise-only tools.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -21,7 +21,7 @@ import (
 // _classifications) appear in the catalog. This is a structural check:
 // exposing EE tools on CE would leak Premium/Ultimate endpoints.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: catalog.
+// Build tag: e2e. Mode: CE. Surface: catalog.
 func TestEnterpriseSecurityTools_NotRegisteredOnCE(t *testing.T) {
 	t.Parallel()
 	if sess.enterprise {

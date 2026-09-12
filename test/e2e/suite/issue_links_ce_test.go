@@ -4,7 +4,7 @@
 // instance. Covers link create, list, get, and delete between two issues
 // for both individual and meta-tool modes.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -24,7 +24,7 @@ import (
 // the link by ID, and finally deletes it. Each subtest asserts the expected
 // link ID or source/target IID round-trips through the GitLab API.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_IssueLinks(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -92,7 +92,7 @@ func TestIndividual_IssueLinks(t *testing.T) {
 // tool. Each subtest asserts the same outcome and verifies the tool name
 // stays constant across the lifecycle.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_IssueLinks(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

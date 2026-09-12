@@ -26,7 +26,7 @@ import (
 // the expected snippet metadata and that mutations are observable through
 // subsequent reads. Cleanup removes the snippet when the test exits.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_SnippetsPersonal(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -106,7 +106,7 @@ func TestMeta_SnippetsPersonal(t *testing.T) {
 // subtest asserts the meta-tool returns the expected snippet metadata and
 // that the file content round-trips correctly.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_SnippetsProject(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -205,7 +205,7 @@ func TestMeta_SnippetsProject(t *testing.T) {
 // meta-tool returns the expected discussion metadata and that the resolved
 // flag is observable through a follow-up read.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_SnippetDiscussions(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -337,7 +337,7 @@ func TestMeta_SnippetDiscussions(t *testing.T) {
 // meta-tool returns the expected note metadata and that mutations are
 // observable through subsequent reads.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_SnippetNotes(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -448,7 +448,7 @@ func TestMeta_SnippetNotes(t *testing.T) {
 // asserts the meta-tool returns the expected emoji metadata and that
 // removal is observed through a follow-up list call.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_SnippetEmoji(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

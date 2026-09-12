@@ -27,7 +27,7 @@ import (
 // the search returns the expected payload and that the basic search type
 // does not produce validation errors.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual, meta.
+// Build tag: e2e. Mode: CE. Surface: individual, meta.
 func TestSearchType_BasicSearchWorks(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -80,7 +80,7 @@ func TestSearchType_BasicSearchWorks(t *testing.T) {
 // through to the GitLab API. The same checks run for the catalog-backed
 // meta-tool search action.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual, meta.
+// Build tag: e2e. Mode: CE. Surface: individual, meta.
 func TestSearchType_InvalidValueFails(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -122,7 +122,7 @@ func TestSearchType_InvalidValueFails(t *testing.T) {
 // against accidental schema regressions that would weaken input
 // validation for both surfaces.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual, meta.
+// Build tag: e2e. Mode: CE. Surface: individual, meta.
 func TestSearchType_SchemasExposeEnum(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {

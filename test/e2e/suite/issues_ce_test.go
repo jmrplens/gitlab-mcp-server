@@ -4,7 +4,7 @@
 // instance. Covers create, get, list, update, note create/list, and delete
 // for both individual and meta-tool modes.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -27,7 +27,7 @@ import (
 // the expected IID, title, or note ID round-trips through the GitLab API.
 // The project is removed by the per-test resource ledger at test exit.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Issues(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -179,7 +179,7 @@ func TestIndividual_Issues(t *testing.T) {
 // tool. Each subtest asserts the same outcome and verifies the tool name
 // stays constant across the lifecycle.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Issues(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
