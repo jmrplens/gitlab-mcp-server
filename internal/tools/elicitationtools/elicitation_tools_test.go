@@ -72,9 +72,10 @@ func TestCancelledResult(t *testing.T) {
 	}
 }
 
-// TestUnsupportedResult verifies that UnsupportedResult
-// returns an error tool result containing the tool name and a reference to
-// the elicitation capability.
+// TestUnsupportedResult verifies the whole refusal a wizard answers with on a
+// client without elicitation: the prose naming the tool and the capability it
+// needs, the alternatives that do the same work, and the refusal envelope
+// every other refusal travels in.
 func TestUnsupportedResult(t *testing.T) {
 	result := UnsupportedResult("gitlab_interactive_issue_create")
 	if !result.IsError {
@@ -87,14 +88,16 @@ func TestUnsupportedResult(t *testing.T) {
 	if !ok {
 		t.Fatal("content[0] is not TextContent")
 	}
-	if !strings.Contains(tc.Text, "gitlab_interactive_issue_create") {
-		t.Error("error message missing tool name")
+	want := `Tool "gitlab_interactive_issue_create" requires the MCP elicitation capability. ` +
+		"Your MCP client does not support elicitation. " +
+		"Check your client's MCP documentation for elicitation support.\n\n" +
+		"Alternatives: use the standard gitlab_issue action 'create', " +
+		"gitlab_merge_request action 'create' or the equivalent tool for the object."
+	if tc.Text != want {
+		t.Errorf("refusal:\n got %q\nwant %q", tc.Text, want)
 	}
-	if !strings.Contains(tc.Text, "elicitation") {
-		t.Error("error message missing 'elicitation' reference")
-	}
-	if !strings.Contains(tc.Text, "Alternatives") {
-		t.Error("expected alternative tool suggestions in unsupported message")
+	if tc.Annotations != toolutil.ContentMutate {
+		t.Errorf("annotations = %+v, want the refusal annotation", tc.Annotations)
 	}
 }
 

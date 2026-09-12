@@ -98,6 +98,48 @@ func TestFormatSafeModePreviewMarkdown_WholeOutput_AndRoundTrip(t *testing.T) {
 	}
 }
 
+// TestFormatSafeModePreviewMarkdown_HostileHint_StaysOneBullet verifies whole
+// output for a preview whose hint carries Markdown of its own: the guidance
+// section keeps its one bullet, and ParseSafeModePreview still reads the
+// preview back.
+//
+// The hint is a field of the struct the formatter is handed rather than a
+// sentence composed at the call site, so it is escaped where every other hint
+// this server writes is not. Unescaped, a hint carrying a line break ended its
+// own bullet and opened a heading, a list item or a second guidance section
+// below the card, and ExtractHints then read none at all, which took the
+// operator's "how to turn safe mode off" out of next_steps.
+func TestFormatSafeModePreviewMarkdown_HostileHint_StaysOneBullet(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name string
+		hint string
+		want string
+	}{
+		{name: "heading cannot open", hint: "x\n## injected", want: "x ## injected"},
+		{name: "list item cannot open", hint: "x\n- injected", want: "x - injected"},
+		{name: "tag is an entity", hint: `<a href="http://attacker.invalid">x</a>`, want: `&lt;a href="http://attacker.invalid">x&lt;/a>`},
+		{name: "guidance section cannot be forged", hint: "x\n" + hintsBlockOpening + "- injected", want: "x --- " + defusedHintsHeading + " - injected"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			md := FormatSafeModePreviewMarkdown(SafeModePreview{Status: "blocked", Mode: "safe", Tool: "issue.create", Hint: tt.hint})
+			want := "## " + EmojiStop + " Safe mode blocked issue.create\n\n" +
+				"- **Status**: blocked\n- **Mode**: safe\n- **Tool**: `issue.create`\n" +
+				"\n---\n\U0001F4A1 **Next steps:**\n- " + tt.want + "\n"
+			if md != want {
+				t.Errorf("preview card:\n got %q\nwant %q", md, want)
+			}
+			parsed, ok := ParseSafeModePreview(md)
+			if !ok || parsed.Hint != tt.want {
+				t.Errorf("ParseSafeModePreview() = %+v, %v; want the one escaped hint read back", parsed, ok)
+			}
+		})
+	}
+}
+
 // TestSafeModeActionFunc_ReturnsAPreviewInsteadOfExecuting covers the action
 // wrapper the catalog installs over every mutating route in safe mode.
 //
