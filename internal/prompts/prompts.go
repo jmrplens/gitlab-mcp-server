@@ -566,9 +566,14 @@ func writeReleaseNotesMRs(b *strings.Builder, mrs []*gl.BasicMergeRequest) {
 		}
 		labels := ""
 		if len(mr.Labels) > 0 {
-			labels = " [" + strings.Join(mr.Labels, ", ") + "]"
+			// The brackets are the server's own and only the names inside them
+			// are GitLab's, so the names are escaped and the brackets are not:
+			// the cell escaper entity-encodes an opening bracket, and passing
+			// the composed text through it turned the server's punctuation into
+			// "&#91;".
+			labels = " [" + mdInline(strings.Join(mr.Labels, ", ")) + "]"
 		}
-		fmt.Fprintf(b, "- !%d: %s (@%s)%s\n", mr.IID, mdInline(mr.Title), mdInline(author), mdInline(labels))
+		fmt.Fprintf(b, "- !%d: %s (@%s)%s\n", mr.IID, mdInline(mr.Title), mdInline(author), labels)
 		if mr.Description != "" {
 			desc, _, _ := strings.Cut(mr.Description, "\n")
 			if len(desc) > 200 {

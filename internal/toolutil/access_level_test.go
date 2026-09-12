@@ -9,7 +9,9 @@ import (
 )
 
 // TestAccessLevelDescription verifies human-readable labels for every known
-// GitLab access level, plus the fallback for unknown values.
+// GitLab access level, plus the fallback for a value the table does not name,
+// which keeps the number: "Unknown" told the reader nothing about what GitLab
+// sent, and a level this server has no word for is still a level.
 func TestAccessLevelDescription(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -26,7 +28,7 @@ func TestAccessLevelDescription(t *testing.T) {
 		{"owner", gl.OwnerPermissions, "Owner"},
 		{"admin", gl.AdminPermissions, "Admin"},
 		{"minimal", gl.MinimalAccessPermissions, "Minimal access"},
-		{"unknown value", gl.AccessLevelValue(99), "Unknown"},
+		{"unknown value keeps the number", gl.AccessLevelValue(99), "Level 99"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

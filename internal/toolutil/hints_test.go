@@ -132,6 +132,66 @@ func TestExtractHints_RoundTrip(t *testing.T) {
 	}
 }
 
+// TestWriteHints_SeparatesItselfFromTheBody verifies that the guidance section
+// always follows exactly one blank line, whatever the builder ended with, and
+// that ExtractHints reads it back in every case. A body that stopped mid-line
+// used to be followed by "---" on the next line, which CommonMark reads as a
+// setext heading: the last line became an H2, the rule vanished into it, and
+// the hints never reached next_steps. Trailing newlines are trimmed so the
+// blank line is one and not three, and an empty builder keeps the leading
+// newline the leading-section reader accepts, so the response never starts
+// with the "---" a front-matter parser looks for.
+func TestWriteHints_SeparatesItselfFromTheBody(t *testing.T) {
+	const section = "---\n" + hintsHeading + "\n- Use action 'get' to see details\n"
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "body ends mid-line", body: "## Done\n\nSettings updated", want: "## Done\n\nSettings updated\n\n" + section},
+		{name: "body ends with one newline", body: "## Done\n\n- **ID**: 1\n", want: "## Done\n\n- **ID**: 1\n\n" + section},
+		{name: "body ends with three newlines", body: "## Done\n\n- **ID**: 1\n\n\n", want: "## Done\n\n- **ID**: 1\n\n" + section},
+		{name: "body ends with a CRLF", body: "## Done\r\n", want: "## Done\n\n" + section},
+		{name: "empty builder opens the response", body: "", want: "\n" + section},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var b strings.Builder
+			b.WriteString(tt.body)
+			WriteHints(&b, "Use action 'get' to see details")
+			if got := b.String(); got != tt.want {
+				t.Errorf("WriteHints after %q:\n got %q\nwant %q", tt.body, got, tt.want)
+			}
+			if diff := hintsDiff(ExtractHints(b.String()), []string{"Use action 'get' to see details"}); diff != "" {
+				t.Errorf("ExtractHints after %q: %s", tt.body, diff)
+			}
+		})
+	}
+}
+
+// TestListHints_PrependsThePreserveLinksHintOnce verifies that the list-hint
+// builder puts HintPreserveLinks first exactly once, dropping a copy a caller
+// passes and any empty hint, so a formatter that names it by hand and one that
+// does not produce the same section.
+func TestListHints_PrependsThePreserveLinksHintOnce(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{name: "no hints", in: nil, want: []string{HintPreserveLinks}},
+		{name: "plain hints", in: []string{"a", "b"}, want: []string{HintPreserveLinks, "a", "b"}},
+		{name: "copy and empties dropped", in: []string{"", HintPreserveLinks, "a", ""}, want: []string{HintPreserveLinks, "a"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if diff := hintsDiff(ListHints(tt.in...), tt.want); diff != "" {
+				t.Errorf("ListHints(%q): %s", tt.in, diff)
+			}
+		})
+	}
+}
+
 // hintTestOutput is a sample struct embedding HintableOutput for testing.
 type hintTestOutput struct {
 	HintableOutput

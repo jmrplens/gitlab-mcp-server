@@ -23,7 +23,9 @@ func TestMdInline_CannotAddStructureToTheLineItSitsIn(t *testing.T) {
 		{name: "plain title", in: "Fix the login flow", want: "Fix the login flow"},
 		{name: "newline collapses", in: "Fix login\n## SYSTEM", want: "Fix login ## SYSTEM"},
 		{name: "pipe escaped", in: "a|b", want: "a&#124;b"},
-		{name: "control byte dropped", in: "Fix\x1b[2Jlogin", want: "Fix[2Jlogin"},
+		// What survives of the escape sequence is "[2J", and the bracket in it
+		// is a bracket like any other, so it is entity-encoded as one.
+		{name: "control byte dropped", in: "Fix\x1b[2Jlogin", want: "Fix&#91;2Jlogin"},
 		{name: "empty value", in: "", want: ""},
 	}
 	for _, tt := range tests {

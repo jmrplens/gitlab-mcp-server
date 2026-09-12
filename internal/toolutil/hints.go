@@ -78,7 +78,14 @@ func WithHints[O any](result *mcp.CallToolResult, out O, err error) (*mcp.CallTo
 // markdown links when presenting list results to the user.
 const HintPreserveLinks = "When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab"
 
-// ListHints prepends HintPreserveLinks to list-result next-step hints.
+// ListHints prepends HintPreserveLinks to list-result next-step hints, once:
+// an empty hint or a copy of HintPreserveLinks among the arguments is dropped,
+// so a caller that already names it does not get it twice. The hints it
+// returns are for the section a list formatter writes after its table.
+// Writing that section first, on an empty builder, is a defect rather than an
+// idiom: the guidance then opens the response, ahead of the data it is about,
+// and any hint the formatter appends afterwards can never reach next_steps,
+// since [ExtractHints] reads a section only at one end of the response.
 func ListHints(hints ...string) []string {
 	out := make([]string, 0, len(hints)+1)
 	out = append(out, HintPreserveLinks)
@@ -124,37 +131,56 @@ func DefuseHintsHeading(s string) string {
 	return strings.ReplaceAll(s, hintsHeading, defusedHintsHeading)
 }
 
-// WriteHints appends a "💡 Next steps" section to the Markdown builder.
-// Each hint is a short string describing a related action the LLM can take
+// WriteHints appends the server's guidance section to the Markdown builder: a
+// horizontal rule, the "💡 Next steps" heading, and one bullet per hint. Each
+// hint is a short string describing a related action the model can take
 // (e.g. "Use action 'delete' to remove this package"). If no hints are
 // provided, no section is written.
 //
+// The section separates itself from whatever precedes it. The rule is written
+// after exactly one blank line, whatever the builder ended with. A formatter
+// that stopped mid-line used to get "text\n---", which CommonMark reads as a
+// setext heading: its last line became an H2, the rule vanished into it, and
+// nothing downstream could find the section, so its hints never reached
+// next_steps. Trailing newlines are trimmed first so the blank line is one and
+// not three. On an empty builder the section opens the response, after the
+// one newline [leadingHintsBlock] accepts, rather than at the very first byte,
+// where a "---" reads as YAML front matter to a renderer that looks for it.
+//
 // Whether or not there are hints, any guidance heading already in the builder
-// is defused first. This is the one place every formatter passes through on its
-// way to a response — including the raw file, job trace, snippet and discussion
-// renderers that embed GitLab bytes verbatim — so doing it here covers them all
-// without each renderer having to remember, and covers the ones added later.
+// is defused first. This is the one place every formatter passes through on
+// its way to a response, the raw file, job trace, snippet and discussion
+// renderers that embed GitLab bytes verbatim included, so doing it here covers
+// them all without each renderer having to remember, and covers the ones added
+// later.
+//
+// A hint is written as it is given, control bytes aside: it is the server's
+// own sentence, and a GitLab-authored value inside one has to be escaped by
+// the formatter that composed it. The escaping gate judges this write like
+// any other list item, so a hint built from a value the classifier cannot
+// follow is reported rather than passed.
 func WriteHints(b *strings.Builder, hints ...string) {
-	defuseWrittenHints(b)
+	written := b.String()
+	content := DefuseHintsHeading(written)
+	if len(hints) > 0 {
+		content = strings.TrimRight(content, "\r\n")
+	}
+	if content != written {
+		b.Reset()
+		b.WriteString(content)
+	}
 	if len(hints) == 0 {
 		return
 	}
-	b.WriteString("\n" + hintsBlockOpening)
+	if content == "" {
+		b.WriteString("\n")
+	} else {
+		b.WriteString("\n\n")
+	}
+	b.WriteString(hintsBlockOpening)
 	for _, h := range hints {
 		fmt.Fprintf(b, "- %s\n", StripControlBytes(h))
 	}
-}
-
-// defuseWrittenHints rewrites the builder's contents when they already carry a
-// guidance heading, which at this point can only have come from GitLab text a
-// formatter embedded.
-func defuseWrittenHints(b *strings.Builder) {
-	written := b.String()
-	if !strings.Contains(written, hintsHeading) {
-		return
-	}
-	b.Reset()
-	b.WriteString(DefuseHintsHeading(written))
 }
 
 // ExtractHints parses the "💡 Next steps" section from a Markdown tool
@@ -163,12 +189,14 @@ func defuseWrittenHints(b *strings.Builder) {
 //
 // Only a section in a position the server could have written it is read, and
 // there are exactly two: [WriteHints] is called either on an empty builder, so
-// the section opens the response (nineteen list formatters do this), or after
-// the body, so it closes it. A section anywhere in between is content that
-// happens to look like guidance — a README, a job log, a project description —
-// and content does not get to speak as the server. This used to be the first
-// match anywhere in the response, which is what let a file's contents fill
-// next_steps.
+// the section opens the response, or after the body, so it closes it. The
+// leading form is a defect the migration to one card vocabulary retires, not
+// an idiom, and the number of formatters still using it only shrinks; it is
+// read here because a response that has it carries no other section. A
+// section anywhere in between is content that happens to look like guidance,
+// a README, a job log, a project description, and content does not get to
+// speak as the server. This used to be the first match anywhere in the
+// response, which is what let a file's contents fill next_steps.
 func ExtractHints(md string) []string {
 	if start, ok := leadingHintsBlock(md); ok {
 		// Nothing precedes it, so it is the server's; the body follows the

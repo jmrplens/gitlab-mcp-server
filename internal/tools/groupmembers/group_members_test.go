@@ -959,7 +959,7 @@ func TestAccessLevelDescription_AllLevels(t *testing.T) {
 		{40, "Maintainer"},
 		{50, "Owner"},
 		{60, "Admin"},
-		{99, "Unknown"},
+		{99, "Level 99"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
