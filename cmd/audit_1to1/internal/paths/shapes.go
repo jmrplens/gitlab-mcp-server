@@ -307,6 +307,25 @@ type operation struct {
 	// Nested is, per field rendering an entity of its own, the keys that child
 	// sends.
 	Nested map[string][]string
+	// Offset is true when the route declares both page and per_page, which is
+	// GitLab's offset pagination: the answer carries X-Page, X-Next-Page,
+	// X-Total and their siblings in the response headers.
+	//
+	// Pagination is the one thing about a response that is in no entity, so
+	// nothing that compares published fields against the record can see it.
+	// This is where the record does say: it carries the params each route
+	// declares, and a route that takes per_page is a route whose answer is one
+	// page of something longer. See [PaginationCheck].
+	Offset bool
+	// Keyset is true for a route that declares per_page and no page, which is
+	// GitLab's cursor pagination: the next page is asked for with the cursor or
+	// page_token the Link header carries, and a page/total block would be the
+	// wrong shape to publish for it.
+	Keyset bool
+	// Routes is how many mounted routes were folded into this operation, which
+	// is one for an exact path and more for a shape two routes share. A reader
+	// of Offset on a merged shape needs to know it is a union.
+	Routes int
 }
 
 // operationIndex looks an endpoint up by method and path.
@@ -342,20 +361,38 @@ func newOperationIndex(record apilive.Document) *operationIndex {
 	for _, route := range record.Routes {
 		normalized := apilive.NormalizePath(route.Path)
 		response := record.FieldNames(route.Entity)
+		offset, keyset := routePagination(route)
 		built := operation{
 			Entity:   route.Entity,
 			Response: response,
 			EntityOf: entityOf(route.Entity, response),
 			Nested:   record.NestedNames(route.Entity),
+			Offset:   offset,
+			Keyset:   keyset,
+			Routes:   1,
 		}
-		if _, taken := index.byPath[route.Method+" "+normalized]; !taken {
-			index.byPath[route.Method+" "+normalized] = built
+		pathKey := route.Method + " " + normalized
+		if taken, ok := index.byPath[pathKey]; !ok {
+			index.byPath[pathKey] = built
+		} else {
+			// The record mounts a handful of routes twice, and the response of
+			// the first is what this index answers with, as it always has. The
+			// pagination facts are still merged in, because "some route at this
+			// path paginates" is the claim a finding rests on and dropping the
+			// second route's params would make it depend on mount order.
+			taken.Offset = taken.Offset || offset
+			taken.Keyset = taken.Keyset || keyset
+			taken.Routes++
+			index.byPath[pathKey] = taken
 		}
 		shapeKey := route.Method + " " + pathShape(normalized)
 		merged := index.byShape[shapeKey]
 		merged.Response = union(merged.Response, built.Response)
 		merged.EntityOf = unionEntityOf(merged.EntityOf, built.EntityOf)
 		merged.Nested = unionNested(merged.Nested, built.Nested)
+		merged.Offset = merged.Offset || offset
+		merged.Keyset = merged.Keyset || keyset
+		merged.Routes++
 		// The entity is the first one a route of this shape named, and is what
 		// a reader is shown for the operation as a whole. Which entity answers
 		// for a given key is EntityOf's business, because those two are not the
@@ -366,6 +403,22 @@ func newOperationIndex(record apilive.Document) *operationIndex {
 		index.byShape[shapeKey] = merged
 	}
 	return index
+}
+
+// routePagination reads what a route's declared params say about pagination.
+//
+// per_page is the signal rather than page, because it is the one both shapes
+// declare: 308 routes of the pinned record take it, 304 of them take page too
+// and the other four take a cursor or a page_token instead. A route taking
+// neither answers with everything it has.
+func routePagination(route apilive.Route) (offset, keyset bool) {
+	if _, ok := route.Params["per_page"]; !ok {
+		return false, false
+	}
+	if _, ok := route.Params["page"]; ok {
+		return true, false
+	}
+	return false, true
 }
 
 // entityOf attributes every key of one route's response to the entity that
