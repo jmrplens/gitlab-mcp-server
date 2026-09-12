@@ -174,6 +174,16 @@ backtick run in the body, the info string sanitized, the body byte for byte, a
 closing fence. An empty body writes nothing, heading included. `Note` ends
 the block and writes one paragraph line of the server's own prose, control
 bytes dropped, line breaks collapsed, trimmed; a blank note writes nothing.
+
+Byte for byte has one exception, and it is made when the card ends rather
+than when the fence is written: `End` defuses every copy of the guidance
+heading the builder holds, the body of a fence included. A fence contains
+structure, so a heading inside one cannot open a section of the page, but
+`ExtractHints` reads the rendered text and not the parsed document, and a
+guidance heading inside a job log used to be read back as the server's own
+next steps. The one glyph is rewritten as its entity, which every renderer
+shows identically, so the reader sees the log as it was and nothing downstream
+mistakes it for the marker.
 GitLab-authored prose belongs in `Text`, which quotes it.
 
 ### The last write
