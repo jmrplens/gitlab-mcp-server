@@ -74,12 +74,12 @@ readable without opening the tracker:
 | 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | No | No | No | No | Yes |
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | No | No | No | No | Yes |
 | 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | No | No | No | No | Yes |
-| 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | No | No | No | Was yes | Yes |
+| 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | Yes, by another user | Yes, theirs, open | No | Was yes | Yes |
 | 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | No | No | No | No | None possible |
 | 11 | go-sdk | [Declared, not negotiated, version selects MRTR](#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr) | No | No | No | No | None taken |
 | 12 | go-sdk | [A cancelled call is still answered](#a-cancelled-incoming-call-is-still-answered) | No | No | No | No | Partial |
-| 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | No | No | No | No | None possible |
-| 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | No | No | No | No | None taken |
+| 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | Yes | Yes, open | No | No | None possible |
+| 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Not by us | No | **Yes, unreleased** | No | None taken |
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | No | No | No | No | None taken |
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Retired |
 | 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
@@ -99,14 +99,21 @@ readable without opening the tracker:
 | 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | No | No | No | No | Yes |
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | No | No | No | No | Yes |
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | No | No | No | No | None |
-| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, open | No | No | Yes |
+| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 6 open | **8 of 14, v3.1.0 to v3.6.0** | No | Yes |
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | No | No | No | No | Partial |
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | No | No | No | No | Partial |
 | 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | No | No | No | No | Yes |
-| 38 | gitlab | [Three job token scope endpoints declare a response entity they do not send](#three-job-token-scope-endpoints-declare-a-response-entity-they-do-not-send) | No | No | No | No | Yes |
+| 38 | gitlab-org/gitlab | [Three job token scope endpoints declare a response entity they do not send](#three-job-token-scope-endpoints-declare-a-response-entity-they-do-not-send) | Yes | Yes, open | No | No | Yes |
+| 39 | gitlab-org/gitlab | [Two project group listings are annotated with the whole Group entity](#two-project-group-listings-are-annotated-with-the-whole-group-entity) | Yes | Yes, open | No | No | Yes |
+| 40 | client-go | [Ten modelled fields that no Grape entity exposes](#ten-modelled-fields-that-no-grape-entity-exposes-removed-from-this-servers-output) | No | No | No | No | Not needed |
+| 41 | client-go | [IssueRelation models an issue basic where GitLab renders a whole issue](#issuerelation-models-an-issue-basic-where-gitlab-renders-a-whole-issue) | No | No | No | No | Yes |
+| 42 | client-go | [MemberRole models twenty of the forty-five permissions GitLab sends](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends) | No | No | No | No | Yes |
+| 43 | client-go | [PipelineInfo decodes two entities and models only the smaller one](#pipelineinfo-decodes-two-entities-and-models-only-the-smaller-one) | No | No | No | No | Yes |
+| 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | No | No | No | No | Yes |
 
-States verified against the upstream trackers on 2026-09-05, except entry 34,
-whose merge requests were opened on 2026-09-09.
+States verified against the upstream trackers on 2026-09-12. Rows 39 to 44
+were added that day: each entry existed with its five fields and the table had
+never listed it, which is the drift this table exists to prevent.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -870,15 +877,18 @@ of change whose test is one assertion on the built URL.
   where the maintainers had said there was no good way to detect this drift.
   Every merge request references it with a non-closing `Related to`, so the
   first merge does not close the umbrella.
-- **In review**: `!3041`, `!3044`, `!3048`, `!3049`, `!3050`, `!3051`, `!3052`
-  and `!3053` are open.
+- **In review**: `!3041`, `!3044`, `!3048`, `!3050`, `!3051` and `!3052` are
+  open, each with a reviewer assigned since 2026-09-12; `!3041` has its one
+  review comment (an experimental-field disclaimer) applied.
 - **Merged**: `!3042` (`BroadcastMessage.Color`) in **v3.1.0**, tagged on
   2026-09-09 eighteen minutes after the merge; then `!3040`
   (`Appearance.SiteName`) and `!3046` (the `GroupSCIMIdentity` json tag) in
   **v3.2.0** the same day; then `!3043` (`Agent.IsReceptive`) and `!3045`
   (`SecureFile.FileExtension`) in **v3.3.0**, and `!3047`
   (`GroupServiceAccount.PublicEmail` and `UnconfirmedEmail`) in **v3.4.0**,
-  all on 2026-09-10. Do not read a merge as a release: `!3040` sat
+  all on 2026-09-10; then `!3053` (the four `Snippet` fields) in **v3.5.0**
+  and `!3049` (`LastUsedAt` and `UsageType` on both deploy key structs) in
+  **v3.6.0**, both on 2026-09-11. Do not read a merge as a release: `!3040` sat
   merged and in no tag for hours, so the version is read from which tags
   contain the merge commit rather than from the newest tag. Six releases in
   two days is why: the newest tag was wrong for five of these six.
@@ -996,9 +1006,11 @@ merge requests have gone to `gitlab-org/gitlab` from its own
 [!254542](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254542),
 [!254543](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254543),
 [!254547](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254547) and
-[!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552). The
-first of them, `!254507`, was merged into `master` on 2026-09-10; the other
-eight are open.
+[!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552).
+`!254507` was merged into `master` on 2026-09-10 and `!254519` on 2026-09-11,
+neither in a tagged release yet; the other seven are open and in review since
+2026-09-12, `!254542` with the technical writer's approval and a pipeline that
+fails only in the fork's `get_sources` step.
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
 response attribute tables as well as the examples, and the other entities
@@ -1704,8 +1716,14 @@ The test hung instead of failing, which is how the header-flush half surfaced.
 
 ### A malformed message ends the session instead of answering -32700
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes, by another user:
+  [modelcontextprotocol/go-sdk#1209](https://github.com/modelcontextprotocol/go-sdk/issues/1209)
+  (2026-08-29) describes the same stdio behavior.
+- **In review**: yes, theirs:
+  [modelcontextprotocol/go-sdk#1210](https://github.com/modelcontextprotocol/go-sdk/pull/1210),
+  open with no maintainer response as of 2026-09-12. We open no second one;
+  if it stalls, the evidence here (the e2e case and the stdio filter) goes on
+  that thread rather than into a new pull request.
 - **Merged**: no.
 - **Blocking**: it was, on stdio. One client lost its session and its
   accumulated context to a single unparseable line; there was no cross-tenant
@@ -1772,13 +1790,24 @@ seconds into a hanging GitLab call: the client's `notifications/cancelled` at
 
 ### The cancellation reason is discarded before any handler sees it
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes,
+  [modelcontextprotocol/go-sdk#1254](https://github.com/modelcontextprotocol/go-sdk/issues/1254),
+  on 2026-09-12.
+- **In review**: yes,
+  [modelcontextprotocol/go-sdk#1255](https://github.com/modelcontextprotocol/go-sdk/pull/1255):
+  `Connection.CancelCause` in the internal jsonrpc2 package, the canceller
+  cancelling with an error that carries the reason and unwraps to
+  `context.Canceled`, a debug log line with the id and the reason, and two
+  tests. Chosen as the first contribution to that SDK because the maintainers
+  had already accepted the cause plumbing it builds on (their #1100), it adds
+  no exported API, and it answers a SHOULD of the specification.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: none possible. The field is dropped inside the SDK; there is
   no seam to read it from. We log what remains — that the call was cancelled and
-  how long it ran.
+  how long it ran. When the fix lands, `context.Cause(ctx)` in a handler reads
+  `request cancelled by the peer: <reason>`, and the classification in
+  `internal/toolutil` can carry the reason into the log line.
 
 **What**: "Implementations SHOULD log cancellation reasons for debugging."
 `mcp/transport.go` unmarshals `CancelledParams`, uses `params.RequestID` to
@@ -1849,9 +1878,13 @@ only here.
 
 ### `Mcp-Name` is compared without decoding the base64 sentinel
 
-- **Reported**: no.
+- **Reported**: not by us; fixed upstream before we got to it.
 - **In review**: no.
-- **Merged**: no.
+- **Merged**: **yes**, by another contributor:
+  [modelcontextprotocol/go-sdk#1242](https://github.com/modelcontextprotocol/go-sdk/pull/1242)
+  on 2026-09-06 decodes the header before the comparison, and #1246 makes the
+  SDK's own client encode a name that is not header-safe. Neither is in a tag
+  yet (the newest is v1.8.0-pre.2 of 2026-09-04), so the pin does not carry it.
 - **Blocking**: no. Nothing on this server's surface forces the encoded form:
   every tool name is `gitlab_*`, every prompt name is ASCII, and a resource URI
   is a URI, so non-ASCII arrives percent-encoded and matches a plain header.
