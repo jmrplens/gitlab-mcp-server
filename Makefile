@@ -1,5 +1,5 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
-	run brand brand-check brand-rasters ensure-mcp-publisher mcp-publisher-version test test-short test-race coverage-conditions coverage-mutants test-pkg test-integration test-e2e test-e2e-http test-e2e-stdio test-e2e-collector ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
+	run brand brand-check brand-rasters ensure-mcp-publisher mcp-publisher-version test test-short test-race coverage-conditions coverage-mutants test-pkg test-integration test-e2e test-e2e-harness test-e2e-http test-e2e-stdio test-e2e-collector ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
 	validate-http-stateless validate-http-stateless-docker \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
 	eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
@@ -212,6 +212,19 @@ ensure-gotestsum:
 		echo "gotestsum not found; installing with go install..."; \
 		go install gotest.tools/gotestsum@latest; \
 	}
+
+## test-e2e-harness: run the e2e harness library's own tests (no GitLab needed).
+# The harness is the only route from an e2e test to a server, so a defect in it
+# would surface as a failure in whichever domain test happened to run first.
+# These tests hold it on its own terms: the ledger, the waits, the names, the
+# runtime guard's message, the environment a child is given, and one run of the
+# real binary against a stub GitLab.
+test-e2e-harness: ensure-gotestsum
+	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	bash -o pipefail -c '$(GOTESTSUM) \
+	  --format testdox \
+	  --junitfile $(E2E_REPORT_DIR)/e2e-harness-junit.xml \
+	  -- -tags e2e -count=1 -timeout 600s ./test/e2e/internal/...'
 
 ## test-e2e-stdio: run the stdio transport end-to-end module (no GitLab needed; drives the real binary over pipes).
 test-e2e-stdio: ensure-gotestsum

@@ -403,6 +403,16 @@ jobs:
       # except a person running make test-e2e-docker-enterprise by hand.
       - name: Verify the Enterprise E2E tests compile
         run: go test -tags "e2e enterprise" -c -o /dev/null ./test/e2e/suite/
+      # The harness is the library every rebuilt e2e test goes through, and its
+      # own tests need no GitLab: the ledger, the waits, the names, the runtime
+      # guard's message, the environment a child is given, and one run of the
+      # real binary against a stub instance. Running them here is what keeps a
+      # defect in the harness from surfacing later as a failure in whichever
+      # domain test happened to run first.
+      - name: Verify the E2E harness compiles
+        run: go test -tags e2e -c -o /dev/null ./test/e2e/internal/...
+      - name: Run the E2E harness tests
+        run: go test -tags e2e -count=1 ./test/e2e/internal/...
 
   # Type-checks every build-constrained file including the tests, for each
   # platform this project ships, on a Linux runner. The cross-platform matrix
@@ -433,6 +443,14 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: GOOS="${TARGET%%/*}" GOARCH="${TARGET##*/}" go vet ./...
+      # The harness is behind a build tag, so the vet above compiles its doc.go
+      # and nothing else. It starts processes and resolves a home directory,
+      # which are exactly the places a platform difference lives, so it is
+      # type-checked per platform on its own terms.
+      - name: Vet the E2E harness for ${{ matrix.target }}
+        env:
+          TARGET: ${{ matrix.target }}
+        run: GOOS="${TARGET%%/*}" GOARCH="${TARGET##*/}" go vet -tags e2e ./test/e2e/internal/...
 
   # The HTTP transport module needs no GitLab and no credentials, so it runs
   # here rather than only on demand. It is the gate for the handler chain in
