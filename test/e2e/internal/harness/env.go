@@ -40,9 +40,10 @@ type Env struct {
 	// with it.
 	Ctx context.Context
 
-	runID  string
-	ledger *ledger
-	inst   *instance
+	runID    string
+	ledger   *ledger
+	inst     *instance
+	recorder *envRecorder
 }
 
 // New prepares the harness for one test and returns its Env.
@@ -70,7 +71,18 @@ func newEnv(t *testing.T, inst *instance, opts ...Option) *Env {
 	for _, opt := range opts {
 		opt(&options)
 	}
-	requireNeeds(t, inst, options.needs)
+
+	env := &Env{T: t, runID: inst.runID, ledger: &ledger{}, inst: inst}
+	env.recorder = newEnvRecorder(env)
+	// Registered before anything else, and therefore run after everything
+	// else: t.Cleanup is last-in-first-out, so by the time the record is
+	// written the ledger has undone what the test created and the calls that
+	// undoing made are in the buffer too. It is also registered before the
+	// needs are checked, so a test skipped for want of a runner still writes
+	// the skip line that says so.
+	t.Cleanup(env.recorder.flush)
+
+	requireNeeds(t, inst, options.needs, env.recorder)
 
 	// Registered in this order on purpose: t.Cleanup runs last-in-first-out,
 	// so the ledger's undo work still holds every lock the test declared, and
@@ -82,14 +94,27 @@ func newEnv(t *testing.T, inst *instance, opts ...Option) *Env {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
+	env.Ctx = ctx
 
-	env := &Env{T: t, Ctx: ctx, runID: inst.runID, ledger: &ledger{}, inst: inst}
 	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), inst.cleanupBudget())
 		defer cleanupCancel()
 		env.ledger.cleanupAll(cleanupCtx, t)
 	})
 	return env
+}
+
+// Skipf ends this test with a reason the record carries.
+//
+// The testing package keeps a skip's reason to itself, so a test that calls
+// t.Skip directly is written down as skipped with no reason. This is how a
+// test says why, and the coverage report then reads "absent because there was
+// no runner" rather than an empty cell.
+func (e *Env) Skipf(format string, args ...any) {
+	e.T.Helper()
+	reason := fmt.Sprintf(format, args...)
+	e.recorder.noteSkip(reason)
+	e.T.Skip(reason)
 }
 
 // RunID returns the identifier every name this test hands out carries.

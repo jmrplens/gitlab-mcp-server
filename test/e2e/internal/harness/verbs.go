@@ -27,7 +27,8 @@ import (
 func (s *Session) ReadResource(uri string) *mcp.ReadResourceResult {
 	s.env.T.Helper()
 
-	result, err := s.conn.client().ReadResource(s.env.Ctx, &mcp.ReadResourceParams{URI: uri})
+	ctx := s.attribute(PurposeTest, ExpectationOK, callAttribution{target: uri})
+	result, err := s.conn.client().ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
 	if err != nil {
 		s.env.T.Fatalf("resources/read %s: %v%s", uri, err, s.conn.failureContext())
 	}
@@ -38,14 +39,17 @@ func (s *Session) ReadResource(uri string) *mcp.ReadResourceResult {
 // whose subject is the refusal.
 func (s *Session) TryReadResource(uri string) (*mcp.ReadResourceResult, error) {
 	s.env.T.Helper()
-	return s.conn.client().ReadResource(s.env.Ctx, &mcp.ReadResourceParams{URI: uri})
+
+	ctx := s.attribute(PurposeTest, ExpectationAny, callAttribution{target: uri})
+	return s.conn.client().ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
 }
 
 // GetPrompt renders one prompt, failing the test when the server refuses.
 func (s *Session) GetPrompt(name string, arguments map[string]string) *mcp.GetPromptResult {
 	s.env.T.Helper()
 
-	result, err := s.conn.client().GetPrompt(s.env.Ctx, &mcp.GetPromptParams{Name: name, Arguments: arguments})
+	ctx := s.attribute(PurposeTest, ExpectationOK, callAttribution{target: name})
+	result, err := s.conn.client().GetPrompt(ctx, &mcp.GetPromptParams{Name: name, Arguments: arguments})
 	if err != nil {
 		s.env.T.Fatalf("prompts/get %s: %v%s", name, err, s.conn.failureContext())
 	}
@@ -55,7 +59,9 @@ func (s *Session) GetPrompt(name string, arguments map[string]string) *mcp.GetPr
 // TryGetPrompt renders one prompt and hands both halves back.
 func (s *Session) TryGetPrompt(name string, arguments map[string]string) (*mcp.GetPromptResult, error) {
 	s.env.T.Helper()
-	return s.conn.client().GetPrompt(s.env.Ctx, &mcp.GetPromptParams{Name: name, Arguments: arguments})
+
+	ctx := s.attribute(PurposeTest, ExpectationAny, callAttribution{target: name})
+	return s.conn.client().GetPrompt(ctx, &mcp.GetPromptParams{Name: name, Arguments: arguments})
 }
 
 // CompletePrompt asks for the values one prompt argument offers.
@@ -74,7 +80,11 @@ func (s *Session) CompleteResource(uriTemplate, argument, value string) []string
 func (s *Session) complete(ref *mcp.CompleteReference, argument, value string) []string {
 	s.env.T.Helper()
 
-	result, err := s.conn.client().Complete(s.env.Ctx, &mcp.CompleteParams{
+	// The reference and the argument together are what a completion covers, so
+	// the record names both: a template whose project variable completes says
+	// nothing about its branch variable.
+	ctx := s.attribute(PurposeTest, ExpectationOK, callAttribution{target: completionTarget(ref) + " " + argument})
+	result, err := s.conn.client().Complete(ctx, &mcp.CompleteParams{
 		Ref:      ref,
 		Argument: mcp.CompleteParamsArgument{Name: argument, Value: value},
 	})
@@ -101,7 +111,12 @@ func completionTarget(ref *mcp.CompleteReference) string {
 // no projection would produce.
 func (s *Session) Raw(params *mcp.CallToolParams) (*mcp.CallToolResult, error) {
 	s.env.T.Helper()
-	return s.conn.client().CallTool(s.env.Ctx, params)
+
+	// PurposeRaw, so the coverage report never credits an action for a call
+	// that named a tool directly: the subject of a raw call is the envelope,
+	// and what the server made of it is somebody else's evidence.
+	ctx := s.attribute(PurposeRaw, ExpectationAny, callAttribution{})
+	return s.conn.client().CallTool(ctx, params)
 }
 
 // Subscription is one resource this test is watching.
@@ -125,8 +140,15 @@ func (s *Session) Subscribe(uri string) *Subscription {
 	s.env.T.Helper()
 
 	updates := s.conn.notifier.watch(uri)
-	if err := s.conn.client().Subscribe(s.env.Ctx, &mcp.SubscribeParams{URI: uri}); err != nil {
+	// The index is what lets an update notification be recorded against this
+	// test: it arrives on the SDK's own goroutine, where nothing says whose
+	// subscription it answers.
+	unregister := s.conn.subscribers.add(uri, s.env.recorder)
+
+	subscribeCtx := s.attribute(PurposeTest, ExpectationOK, callAttribution{target: uri})
+	if err := s.conn.client().Subscribe(subscribeCtx, &mcp.SubscribeParams{URI: uri}); err != nil {
 		s.conn.notifier.forget(uri, updates)
+		unregister()
 		s.env.T.Fatalf("resources/subscribe %s: %v%s", uri, err, s.conn.failureContext())
 		return nil
 	}
@@ -136,8 +158,13 @@ func (s *Session) Subscribe(uri string) *Subscription {
 		// would leave it polling GitLab for the rest of the run.
 		ctx, cancel := context.WithTimeout(context.Background(), unsubscribeTimeout)
 		defer cancel()
+		ctx = withAttribution(ctx, callAttribution{
+			rec: s.env.recorder, conn: s.conn, purpose: PurposeCleanup,
+			expectation: ExpectationAny, target: uri,
+		})
 		_ = s.conn.client().Unsubscribe(ctx, &mcp.UnsubscribeParams{URI: uri})
 		s.conn.notifier.forget(uri, updates)
+		unregister()
 	})
 	return &Subscription{session: s, uri: uri, updates: updates}
 }
