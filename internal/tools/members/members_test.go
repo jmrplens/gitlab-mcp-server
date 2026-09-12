@@ -156,11 +156,11 @@ func TestAccessLevelDescription_Mapping(t *testing.T) {
 		accessLevel int
 		want        string
 	}{
-		{"Guest", `[{"id":1,"username":"u","name":"n","state":"active","access_level":10,"web_url":"u"}]`, 10, "Guest (10)"},
-		{"Reporter", `[{"id":1,"username":"u","name":"n","state":"active","access_level":20,"web_url":"u"}]`, 20, "Reporter (20)"},
-		{"Developer", `[{"id":1,"username":"u","name":"n","state":"active","access_level":30,"web_url":"u"}]`, 30, "Developer (30)"},
-		{"Maintainer", `[{"id":1,"username":"u","name":"n","state":"active","access_level":40,"web_url":"u"}]`, 40, "Maintainer (40)"},
-		{"Owner", `[{"id":1,"username":"u","name":"n","state":"active","access_level":50,"web_url":"u"}]`, 50, "Owner (50)"},
+		{"Guest", `[{"id":1,"username":"u","name":"n","state":"active","access_level":10,"web_url":"https://gitlab.example.com/u"}]`, 10, "Guest (10)"},
+		{"Reporter", `[{"id":1,"username":"u","name":"n","state":"active","access_level":20,"web_url":"https://gitlab.example.com/u"}]`, 20, "Reporter (20)"},
+		{"Developer", `[{"id":1,"username":"u","name":"n","state":"active","access_level":30,"web_url":"https://gitlab.example.com/u"}]`, 30, "Developer (30)"},
+		{"Maintainer", `[{"id":1,"username":"u","name":"n","state":"active","access_level":40,"web_url":"https://gitlab.example.com/u"}]`, 40, "Maintainer (40)"},
+		{"Owner", `[{"id":1,"username":"u","name":"n","state":"active","access_level":50,"web_url":"https://gitlab.example.com/u"}]`, 50, "Owner (50)"},
 	}
 
 	for _, tc := range tests {
@@ -182,7 +182,7 @@ func TestAccessLevelDescription_Mapping(t *testing.T) {
 				"- **Username**: u\n" +
 				"- **State**: active\n" +
 				"- **Access Level**: " + tc.want + "\n" +
-				"- **URL**: [u](u)\n" +
+				"- **URL**: [https://gitlab.example.com/u](https://gitlab.example.com/u)\n" +
 				memberCardHints
 			if got := FormatMarkdown(out.Members[0]); got != want {
 				t.Errorf("FormatMarkdown =\n%q\nwant\n%q", got, want)
@@ -257,7 +257,7 @@ func TestProjectMembersList_AllListOptions(t *testing.T) {
 		}
 		testutil.RespondJSON(
 			w, http.StatusOK,
-			`[{"id":10,"username":"u","name":"n","state":"active","access_level":30,"web_url":"u"}]`,
+			`[{"id":10,"username":"u","name":"n","state":"active","access_level":30,"web_url":"https://gitlab.example.com/u"}]`,
 		)
 	}))
 

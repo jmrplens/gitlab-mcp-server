@@ -187,6 +187,13 @@ func TestScanGFM_Links_ReadsOnlyABracketedLabel(t *testing.T) {
 		{name: "a bare closing half is text", md: "| x](http://attacker.invalid/y) |\n"},
 		{name: "a value closing the label it sits in", md: "| [x](http://attacker.invalid/y)](https://gitlab.example/T/7) |\n", want: "http://attacker.invalid/y"},
 		{name: "an escaped bracket keeps the label", md: "| [x&#93;(http://attacker.invalid/y)](https://gitlab.example/T/7) |\n", want: "https://gitlab.example/T/7"},
+		// A code span takes precedence over a link, so a bracketed address
+		// inside one is text: the value a formatter moved into a span on
+		// purpose, which the model used to report as a destination anyway.
+		{name: "a link inside a code span is text", md: "| `[x](http://attacker.invalid/y)` |\n"},
+		{name: "a code span in a cell beside a real link", md: "| `[x](http://attacker.invalid/y)` | [T](https://gitlab.example/T/7) |\n", want: "https://gitlab.example/T/7"},
+		{name: "a code span in a paragraph", md: "See `[x](http://attacker.invalid/y)` here.\n"},
+		{name: "an unclosed backtick opens no span", md: "| `[x](http://attacker.invalid/y) |\n", want: "http://attacker.invalid/y"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

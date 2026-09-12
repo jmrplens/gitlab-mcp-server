@@ -390,7 +390,8 @@ func (s *gfmScanner) structure() {
 		if s.kinds[i] == gfmFence {
 			continue
 		}
-		s.doc.Bare = append(s.doc.Bare, GFMBareLine{Line: i + 1, Text: line, Bare: s.bareLine(i, line)})
+		bare := s.bareLine(i, line)
+		s.doc.Bare = append(s.doc.Bare, GFMBareLine{Line: i + 1, Text: line, Bare: bare})
 		if s.kinds[i] == gfmQuote {
 			continue
 		}
@@ -403,7 +404,13 @@ func (s *gfmScanner) structure() {
 			}
 		}
 		s.doc.Content = append(s.doc.Content, line)
-		for _, m := range gfmLinkRe.FindAllStringSubmatch(line, -1) {
+		// Links are read off the bare line, not the raw one: a code span takes
+		// precedence over a link in CommonMark, so a bracketed address inside
+		// one is the text a formatter deliberately moved into a span and not
+		// a destination a client would follow. Reading the raw line reported a
+		// link the page does not have, against exactly the value that had
+		// been contained.
+		for _, m := range gfmLinkRe.FindAllStringSubmatch(bare, -1) {
 			s.doc.Links = append(s.doc.Links, m[1])
 		}
 	}

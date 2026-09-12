@@ -293,10 +293,12 @@ func DeleteBySecret(ctx context.Context, client *gitlabclient.Client, input Dele
 // for a person to look at, and the assistant default otherwise.
 func UploadToolResult(u UploadOutput) *mcp.CallToolResult {
 	embed := ""
-	if toolutil.IsImageFile(u.Alt) && u.FullURL != "" {
+	if toolutil.IsImageFile(u.Alt) && toolutil.LinkableDestination(u.FullURL) {
 		// An image embed is a link with a '!' in front, so both halves want the
 		// same escaping MdTitleLink gives a link, applied here because the
-		// helper writes no '!'.
+		// helper writes no '!'. The same allow list decides whether there is an
+		// embed at all: an image whose source is not an http or https address
+		// is not embedded, and the card still carries the address as text.
 		embed = fmt.Sprintf("![%s](%s)",
 			toolutil.EscapeMdLinkLabel(u.Alt), toolutil.EscapeMdLinkDestination(u.FullURL))
 	}

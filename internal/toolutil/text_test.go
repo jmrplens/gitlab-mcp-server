@@ -5,6 +5,8 @@ package toolutil
 import (
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
 // TestNormalizeText uses table-driven subtests to verify NormalizeText handles
@@ -934,6 +936,162 @@ func TestMdCodeSpanCell_EscapesThePipeWithABackslash(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := MdCodeSpanCell(tt.in); got != tt.want {
 				t.Errorf("MdCodeSpanCell(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestLinkableDestination_OnlyAnHTTPAddressIs verifies the allow list byte
+// for byte: an absolute http or https address in any letter case is a
+// destination, and every other scheme, a bare scheme with no host, a
+// protocol-relative address and a blank are not. The control-byte case is the
+// one that decides where the check runs: "java\x00script:" is not a javascript
+// destination as sent and is one the moment the escaper drops the byte, so
+// the check reads the value the way the escaper leaves it.
+func TestLinkableDestination_OnlyAnHTTPAddressIs(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		want bool
+	}{
+		{name: "https", url: "https://gitlab.example.com/group/project", want: true},
+		{name: "http", url: "http://gitlab.example.com/", want: true},
+		{name: "upper case scheme", url: "HTTPS://gitlab.example.com/", want: true},
+		{name: "leading space", url: "  https://gitlab.example.com/", want: true},
+		{name: "javascript", url: "javascript:alert(1)", want: false},
+		{name: "javascript upper case", url: "JAVASCRIPT:alert(1)", want: false},
+		{name: "javascript with a control byte inside", url: "java\x00script:alert(1)", want: false},
+		{name: "data", url: "data:text/html,<script>1</script>", want: false},
+		{name: "vbscript", url: "vbscript:msgbox", want: false},
+		{name: "file", url: "file:///etc/passwd", want: false},
+		{name: "mailto", url: "mailto:someone@example.com", want: false},
+		{name: "protocol relative", url: "//attacker.invalid/x", want: false},
+		{name: "scheme and no host", url: "https://", want: false},
+		{name: "blank", url: "", want: false},
+		{name: "entity spelled colon", url: "javascript&colon;alert(1)", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := LinkableDestination(tt.url); got != tt.want {
+				t.Errorf("LinkableDestination(%q) = %v, want %v", tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMdTitleLink_NonHTTPDestination_IsNotLinked verifies whole output for a
+// destination the allow list refuses: the title is written as an escaped cell
+// with the address beside it in a code span, so the reader keeps what GitLab
+// sent and a client that hands hrefs through has no link to hand.
+//
+// The escaper contains the delimiters of a destination and says nothing about
+// its scheme, and until this test that was the whole of the defense: a
+// javascript address survived into a live link, and it was the client's
+// renderer that decided what a click did.
+func TestMdTitleLink_NonHTTPDestination_IsNotLinked(t *testing.T) {
+	tests := []struct {
+		name  string
+		title string
+		url   string
+		want  string
+	}{
+		{
+			name:  "javascript",
+			title: "Some One",
+			url:   "javascript:alert(1)",
+			want:  "Some One `javascript:alert(1)`",
+		},
+		{
+			name:  "javascript hidden behind a control byte",
+			title: "Some One",
+			url:   "java\x00script:alert(1)",
+			want:  "Some One `javascript:alert(1)`",
+		},
+		{
+			name:  "data with a pipe stays one cell",
+			title: "x",
+			url:   "data:text/html,a|b",
+			want:  "x `data:text/html,a\\|b`",
+		},
+		{
+			name:  "https is still a link",
+			title: "Some One",
+			url:   "https://gitlab.example.com/someone",
+			want:  "[Some One](https://gitlab.example.com/someone)",
+		},
+		{
+			name:  "a title that is the address is written once",
+			title: "wss://kas.example.com",
+			url:   "wss://kas.example.com",
+			want:  "`wss://kas.example.com`",
+		},
+		{
+			name:  "a blank title is written as the address alone",
+			title: "",
+			url:   "/uploads/abc/diagram.png",
+			want:  "`/uploads/abc/diagram.png`",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MdTitleLink(tt.title, tt.url); got != tt.want {
+				t.Errorf("MdTitleLink(%q, %q) = %q, want %q", tt.title, tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMdCodeSpanCell_BackslashBeforeAPipe_LeavesTheSpan verifies whole output
+// for the one value a code span cannot carry inside a table cell, a backslash
+// already in front of a pipe, and for the neighboring values that stay in
+// the span: a backslash anywhere else, and a pipe with no backslash.
+//
+// The row is split on pipes before any span is read, and there a backslash
+// escapes the pipe and a second backslash escapes the first: one added
+// backslash leaves the pipe live and two show a backslash the value never
+// had. So that value is written as text, each backslash doubled to render as
+// one and the pipe as its entity, which is faithful in every renderer.
+func TestMdCodeSpanCell_BackslashBeforeAPipe_LeavesTheSpan(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "one backslash before the pipe", in: `x\|y`, want: `x\\&#124;y`},
+		{name: "two backslashes before the pipe", in: `x\\|y`, want: `x\\\\&#124;y`},
+		{name: "backslash elsewhere stays in the span", in: `C:\dir|x`, want: "`C:\\dir\\|x`"},
+		{name: "pipe alone stays in the span", in: "a|b", want: "`a\\|b`"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MdCodeSpanCell(tt.in); got != tt.want {
+				t.Errorf("MdCodeSpanCell(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMdCodeSpanCell_RendersAsOneCell verifies the same values one level up,
+// through the GFM line model the registry gate reads: a row holding the cell
+// splits into exactly two cells, whatever the backslashes in the value, and
+// a table holding the row opens no link. The model splits a row the way the
+// table extension does, a backslash escaping whichever character follows it,
+// which is what makes two backslashes before a pipe a split and not an
+// escape.
+func TestMdCodeSpanCell_RendersAsOneCell(t *testing.T) {
+	values := []string{`x\|y`, `x\\|y`, `x\\\|y`, `C:\dir|x`, "a|b", "[x](http://attacker.invalid/)|y"}
+	for _, v := range values {
+		t.Run(v, func(t *testing.T) {
+			row := "| " + MdCodeSpanCell(v) + " | z |"
+			if cells := testutil.GFMCells(row); len(cells) != 2 {
+				t.Errorf("row %q splits into %d cell(s) %q, want 2", row, len(cells), cells)
+			}
+			doc := testutil.ScanGFM("| A | B |\n| --- | --- |\n" + row + "\n")
+			if len(doc.Links) != 0 {
+				t.Errorf("row %q opens link(s) %q, want none", row, doc.Links)
+			}
+			if doc.Rows != 1 || doc.Cells != 2 {
+				t.Errorf("row %q read as %d row(s) and %d cell(s), want 1 and 2", row, doc.Rows, doc.Cells)
 			}
 		})
 	}

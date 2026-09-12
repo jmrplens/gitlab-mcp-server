@@ -173,17 +173,55 @@ func EscapeMdLinkLabel(s string) string {
 var mdLinkDestEscaper = strings.NewReplacer("(", "%28", ")", "%29", "<", "%3C", ">", "%3E", " ", "%20", `"`, "%22", "|", "%7C", "\r", "%0D", "\n", "%0A")
 
 // EscapeMdLinkDestination renders url as the destination of a Markdown link.
+// It contains the delimiters and nothing else: whether the value may be a
+// destination at all is [LinkableDestination]'s question, asked by the
+// callers that decide to write a link.
 func EscapeMdLinkDestination(url string) string {
 	return mdLinkDestEscaper.Replace(StripControlBytes(url))
 }
 
+// LinkableDestination reports whether url may be written as the destination
+// of a link or an image: an absolute http or https address, and nothing else.
+//
+// The escaper above contains the delimiters, so a value cannot end the link
+// it is in, and it says nothing about the scheme. A javascript, data or
+// vbscript destination is a whole link that a client renders live, and it is
+// the client's renderer that decides what a click does: goldmark drops such
+// a destination on its own, and a chat surface that hands the href through
+// does not. Every address this server links is one GitLab built from its own
+// origin, so the allow list costs nothing legitimate. The check runs on the
+// value with its control bytes gone, because "java\x00script:" is the escaped
+// destination "javascript:" and would pass a check made on the bytes as sent.
+func LinkableDestination(url string) bool {
+	s := strings.TrimSpace(StripControlBytes(url))
+	lower := strings.ToLower(s)
+	for _, scheme := range []string{"http://", "https://"} {
+		if strings.HasPrefix(lower, scheme) && len(s) > len(scheme) {
+			return true
+		}
+	}
+	return false
+}
+
 // MdTitleLink returns the title as a Markdown link if url is non-empty,
 // otherwise returns the escaped title. Suitable for table cells. Both halves
-// are escaped, so neither the title nor the URL can end the link they are in.
+// are escaped, so neither the title nor the URL can end the link they are in,
+// and a destination that is not an http or https address is not linked at
+// all: the address is written in a code span, after the title when the title
+// says something else, so the reader keeps what GitLab sent and nothing in it
+// is live. A websocket endpoint or a wiki attachment's relative path lands
+// here as well as a hostile value, and a code span is the honest rendering of
+// an address a client could not have opened anyway.
 func MdTitleLink(title, url string) string {
 	escaped := EscapeMdTableCell(title)
 	if url == "" {
 		return escaped
+	}
+	if !LinkableDestination(url) {
+		if blank(title) || title == url {
+			return MdCodeSpanCell(url)
+		}
+		return escaped + " " + MdCodeSpanCell(url)
 	}
 	return fmt.Sprintf("[%s](%s)", EscapeMdLinkLabel(escaped), EscapeMdLinkDestination(url))
 }
@@ -493,6 +531,17 @@ func MdCodeSpanCell(s string) string {
 	s = codeSpanText(s)
 	if s == "" {
 		return ""
+	}
+	if strings.Contains(s, `\|`) {
+		// A backslash already in front of a pipe is the one value a code span
+		// cannot carry inside a table cell. The row is split on pipes before
+		// any span is read, a backslash escapes the pipe there and a second
+		// backslash escapes the first, so adding one leaves the pipe live and
+		// adding two shows a backslash the value never had. The cell is
+		// written as text instead: each backslash doubled so it renders as
+		// one, the pipe as its entity, and the reader keeps the bytes GitLab
+		// sent at the cost of the monospace.
+		return EscapeMdTableCell(strings.ReplaceAll(s, `\`, `\\`))
 	}
 	return backtickSpan(strings.ReplaceAll(s, "|", `\|`))
 }
