@@ -236,9 +236,13 @@ func pipelineURL(d Output) string {
 // is a one-line result rather than a card: GitLab answers the call with no
 // object, and the sentence is the server's own, composed from the deployment
 // id and the status the schema validated.
+//
+// The sentence is still escaped, because it reaches the formatter as a field
+// of the result rather than as a literal: it is one line of inline content,
+// and the inline escaper is what such a line takes.
 func FormatApproveOrRejectMarkdown(o ApproveOrRejectOutput) string {
 	var b strings.Builder
-	b.WriteString(toolutil.EmojiSuccess + " " + toolutil.StripControlBytes(o.Message) + "\n")
+	b.WriteString(toolutil.EmojiSuccess + " " + toolutil.EscapeMdTableCell(o.Message) + "\n")
 	toolutil.WriteHints(&b,
 		toolutil.HintAction(hintActionDeploymentGet, "read the deployment back with its approvals"),
 		toolutil.HintAction(hintActionDeploymentList, "see the other deployments to this environment"),

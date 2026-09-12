@@ -1369,6 +1369,22 @@ func TestFormatApproveOrRejectMarkdown_EmptyMessage(t *testing.T) {
 	}
 }
 
+// TestFormatApproveOrRejectMarkdown_HostileMessage_ReachesThePageAsText pins
+// the whole confirmation for a sentence carrying a raw anchor and a line break.
+// The sentence is one this server composes, but it reaches the formatter as a
+// field of the result, so it is escaped like any other value read off an
+// output: it stays one line and opens no link.
+func TestFormatApproveOrRejectMarkdown_HostileMessage_ReachesThePageAsText(t *testing.T) {
+	got := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{
+		Message: "Deployment #10\n<a href=\"http://attacker.invalid\">approved</a>",
+	})
+
+	want := "✅ Deployment #10 &lt;a href=\"http://attacker.invalid\">approved&lt;/a>\n" + confirmHints
+	if got != want {
+		t.Errorf("confirmation mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // toOutput — all optional fields
 // ---------------------------------------------------------------------------.

@@ -920,6 +920,50 @@ func TestFormatDiscussionMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatDiscussionMarkdown_HostileNoteBody_ReachesThePageAsText pins the
+// whole thread for the other value a discussion carries that a person writes:
+// the note body.
+//
+// A body that is one line goes through the inline escaper before it is quoted,
+// so an anchor a commenter typed is shown as the text it is rather than
+// rendered as a live link. A body that spans lines keeps its own markup inside
+// the quote and cannot reach the document through it, which is the split
+// [Card.Text] makes: the quote contains a body's structure and contains
+// nothing at all about a raw tag.
+func TestFormatDiscussionMarkdown_HostileNoteBody_ReachesThePageAsText(t *testing.T) {
+	const anchor = `<a href="http://attacker.invalid">x</a>`
+	const escaped = `&lt;a href="http://attacker.invalid">x&lt;/a>`
+
+	t.Run("a one-line body is escaped", func(t *testing.T) {
+		md := FormatDiscussionMarkdown(NewDiscussionMarkdown("abc123", []NoteMarkdown{
+			NewDiscussionNoteMarkdown(1, anchor, "alice", "2026-05-17T12:00:00Z"),
+		}), "Reply to this discussion")
+
+		want := "## Discussion abc123\n\n" +
+			"- **@alice** (17 May 2026 12:00 UTC, note 1):\n" +
+			"  > " + escaped + "\n" +
+			hintsSection("Reply to this discussion")
+		if md != want {
+			t.Errorf("discussion:\n got %q\nwant %q", md, want)
+		}
+	})
+
+	t.Run("a body that spans lines stays quoted", func(t *testing.T) {
+		md := FormatDiscussionMarkdown(NewDiscussionMarkdown("abc123", []NoteMarkdown{
+			NewDiscussionNoteMarkdown(1, "## injected\n- item", "alice", "2026-05-17T12:00:00Z"),
+		}), "Reply to this discussion")
+
+		want := "## Discussion abc123\n\n" +
+			"- **@alice** (17 May 2026 12:00 UTC, note 1):\n" +
+			"  > ## injected\n" +
+			"  > - item\n" +
+			hintsSection("Reply to this discussion")
+		if md != want {
+			t.Errorf("discussion:\n got %q\nwant %q", md, want)
+		}
+	})
+}
+
 // hostileThreadIDs are the discussion thread ids the two shared discussion
 // renderers are held to: one payload per construct a value could open, and the
 // line the heading escaper leaves of it. The guidance payload is escaped and

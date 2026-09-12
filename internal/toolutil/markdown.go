@@ -839,6 +839,11 @@ func FormatRESTDiscussionListMarkdown[T any](discussions []T, pagination Paginat
 // under their authors, and the hints last. The notes are a collection the
 // reader reads rather than a table of columns, so they keep the shape
 // [writeDiscussionNotes] gives them.
+//
+// The thread id reaches this renderer as a field of the result rather than as
+// a literal the server wrote, and a heading is the one line where a value that
+// is not a digest would open a tag, so the card's heading escaper is what
+// contains it.
 func FormatDiscussionMarkdown(discussion DiscussionMarkdown, hints ...string) string {
 	var b strings.Builder
 	c := NewCard(&b, "Discussion "+discussion.ID)
@@ -856,10 +861,21 @@ func FormatDiscussionMarkdown(discussion DiscussionMarkdown, hints ...string) st
 // can comment on the issue or merge request, and printed raw at column 0 it
 // could add list items of its own, impersonate a system note, open a heading,
 // or forge the server's guidance section.
+//
+// A body that is one line is escaped before it is quoted, which is the split
+// [Card.Text] makes: the quote contains a body's structure and contains
+// nothing at all about a raw tag, which a client renders as a live anchor
+// wherever it sits, so a one-line body is a value and gets the inline
+// escaper. A body that spans lines keeps its own markup inside the quote, as
+// every description in the tree does.
 func writeDiscussionNotes(b *strings.Builder, notes []NoteMarkdown) {
 	for _, note := range notes {
 		fmt.Fprintf(b, "- **@%s** (%s, note %d):\n", EscapeMdTableCell(note.Author), FormatTime(note.CreatedAt), note.ID)
-		quoted := WrapGFMBody(note.Body)
+		body := note.Body
+		if !strings.ContainsAny(body, "\r\n") {
+			body = cardInline(body)
+		}
+		quoted := WrapGFMBody(body)
 		if quoted == "" {
 			continue
 		}

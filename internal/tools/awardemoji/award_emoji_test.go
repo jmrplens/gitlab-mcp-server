@@ -403,6 +403,35 @@ const (
 		"- Use the selected tool surface's matching award emoji delete action with award_id, the same resource identifiers, and explicit confirm=true\n"
 )
 
+// TestFormatAwardEmojiNotFound_HostileHints_ReachThePageAsText pins the whole
+// not-found card for a result whose hints carry a raw anchor. The two hints are
+// sentences this package wrote, but they reach the formatter as fields of the
+// result rather than as literals, so each is escaped like any other value read
+// off an output and the guidance opens no link.
+func TestFormatAwardEmojiNotFound_HostileHints_ReachThePageAsText(t *testing.T) {
+	result := formatAwardEmojiNotFound(awardEmojiNotFoundOutput{
+		Identifier: "award 5 on issue IID 1 in project my-project",
+		ListHint:   "<a href=\"http://attacker.invalid\">List</a> the emoji",
+		VerifyHint: "Check the award ID",
+	})
+	if result == nil || len(result.Content) != 1 {
+		t.Fatalf("formatAwardEmojiNotFound() = %+v, want one content block", result)
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content block = %T, want *mcp.TextContent", result.Content[0])
+	}
+
+	want := "## " + toolutil.EmojiQuestion + " Award Emoji Not Found\n\n" +
+		"The award emoji **award 5 on issue IID 1 in project my-project** does not exist or is not accessible with your current permissions.\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- &lt;a href=\"http://attacker.invalid\">List&lt;/a> the emoji\n" +
+		"- Check the award ID\n"
+	if text.Text != want {
+		t.Errorf("not-found card mismatch:\ngot:\n%s\nwant:\n%s", text.Text, want)
+	}
+}
+
 // TestFormatListMarkdownString_WithEmoji pins the whole list document: the
 // collection is a table, the awarding user is a link where GitLab gave a profile
 // URL and the bare handle where it did not, and the footer carries the

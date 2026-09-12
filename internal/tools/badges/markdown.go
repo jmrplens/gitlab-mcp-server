@@ -26,8 +26,17 @@ type badgeNotFoundOutput struct {
 	Hints      []string `json:"hints,omitempty"`
 }
 
+// formatBadgeNotFound renders the not-found card. The resource label and the
+// hints are this package's own words, but they reach the formatter as fields
+// of the result rather than as literals, so each is escaped like any other
+// value read off an output: the label lands in a sentence and every hint in a
+// list item, and the inline escaper is what both take.
 func formatBadgeNotFound(out badgeNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult(out.Resource, out.Identifier, out.Hints...)
+	hints := make([]string, 0, len(out.Hints))
+	for _, hint := range out.Hints {
+		hints = append(hints, toolutil.EscapeMdTableCell(hint))
+	}
+	return toolutil.NotFoundResult(toolutil.EscapeMdTableCell(out.Resource), out.Identifier, hints...)
 }
 
 // FormatBadgeListMarkdown formats a list of badges as a Markdown table: a
