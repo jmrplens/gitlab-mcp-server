@@ -1,17 +1,24 @@
 package dbmigrations
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatMarkMarkdown formats the mark migration result as markdown.
+// FormatMarkMarkdown renders the result of marking a migration as the card of
+// one object.
+//
+// It used to write "**Status**: %s | **Version**: %d" as a bare paragraph,
+// which put the status into a line the card escaped nothing in: a status
+// carrying a tag reached the page as markup, and one carrying a line break
+// added a heading or a list item of its own.
 func FormatMarkMarkdown(out MarkOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Mark Migration\n\n**Status**: %s | **Version**: %d\n", out.Status, out.Version)
-	toolutil.WriteHints(&b, "Verify overall migration state in the GitLab admin area (no list action is exposed here)")
+	c := toolutil.NewCard(&b, "Mark Migration")
+	c.Field("Status", out.Status)
+	c.Int("Version", out.Version)
+	c.End("Verify overall migration state in the GitLab admin area (no list action is exposed here)")
 	return b.String()
 }
 

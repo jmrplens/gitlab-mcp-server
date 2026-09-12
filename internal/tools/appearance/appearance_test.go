@@ -122,9 +122,30 @@ func TestUpdate_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the GetMarkdown Markdown formatter for a representative get input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// getHints is the guidance section the read card ends with.
+const getHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use `gitlab_update_appearance` to modify appearance settings\n"
+
+// updateHints is the guidance section the update card ends with.
+const updateHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use `gitlab_get_appearance` to read the settings back\n"
+
+// markdownText returns the one text block a formatter's result carries.
+func markdownText(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
+	if len(result.Content) == 0 {
+		t.Fatal("the formatter returned no content at all")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] is %T, want *mcp.TextContent", result.Content[0])
+	}
+	return text.Text
+}
+
+// TestFormatGetMarkdown verifies the whole card an ordinary appearance renders
+// as: a row per field GitLab sent, the two messages as prose under their
+// labels, and no row for a field it did not send.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{
 		Appearance: Item{
@@ -134,16 +155,90 @@ func TestFormatGetMarkdown(t *testing.T) {
 			EmailHeaderAndFooterEnabled: true,
 		},
 	}
-	result := FormatGetMarkdown(out)
-	content := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(content, "Application Appearance") {
-		t.Error("expected 'Application Appearance' header")
+	got := markdownText(t, FormatGetMarkdown(out))
+	want := "## Application Appearance\n\n" +
+		"- **Title**: GitLab CE\n" +
+		"- **Email Header/Footer**: ✅\n" +
+		"- **Description**: Test instance\n" +
+		"- **Header Message**: Welcome\n" +
+		getHints
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
-	if !strings.Contains(content, "GitLab CE") {
-		t.Error("expected title in markdown")
+}
+
+// TestFormatGetMarkdown_EveryField verifies that every field the output type
+// carries reaches the card. The formatter used to render eight of eighteen,
+// so the logos, the favicon, the colors and all three guideline texts were
+// fetched and then dropped from what a reader sees.
+func TestFormatGetMarkdown_EveryField(t *testing.T) {
+	out := GetOutput{Appearance: Item{
+		SiteName:                    "Example GitLab",
+		Title:                       "GitLab CE",
+		Description:                 "Open source self-hosted Git management",
+		PWAName:                     "GitLab",
+		PWAShortName:                "GL",
+		PWADescription:              "Code hosting",
+		PWAIcon:                     "/uploads/pwa.png",
+		Logo:                        "/uploads/logo.png",
+		HeaderLogo:                  "/uploads/header.png",
+		Favicon:                     "/uploads/favicon.ico",
+		MemberGuidelines:            "Be nice",
+		NewProjectGuidelines:        "Follow naming conventions",
+		ProfileImageGuidelines:      "Use a real photo",
+		HeaderMessage:               "Welcome",
+		FooterMessage:               "Goodbye",
+		MessageBackgroundColor:      "#e75e40",
+		MessageFontColor:            "#ffffff",
+		EmailHeaderAndFooterEnabled: true,
+	}}
+	got := markdownText(t, FormatGetMarkdown(out))
+	want := "## Application Appearance\n\n" +
+		"- **Site Name**: Example GitLab\n" +
+		"- **Title**: GitLab CE\n" +
+		"- **PWA Name**: GitLab\n" +
+		"- **PWA Short Name**: GL\n" +
+		"- **Email Header/Footer**: ✅\n" +
+		"- **Logo**: /uploads/logo.png\n" +
+		"- **Header Logo**: /uploads/header.png\n" +
+		"- **Favicon**: /uploads/favicon.ico\n" +
+		"- **PWA Icon**: /uploads/pwa.png\n" +
+		"- **Message Background Color**: #e75e40\n" +
+		"- **Message Font Color**: #ffffff\n" +
+		"- **Description**: Open source self-hosted Git management\n" +
+		"- **PWA Description**: Code hosting\n" +
+		"- **Header Message**: Welcome\n" +
+		"- **Footer Message**: Goodbye\n" +
+		"- **Member Guidelines**: Be nice\n" +
+		"- **New Project Guidelines**: Follow naming conventions\n" +
+		"- **Profile Image Guidelines**: Use a real photo\n" +
+		getHints
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
-	if !strings.Contains(content, "Welcome") {
-		t.Error("expected header message in markdown")
+}
+
+// TestFormatGetMarkdown_MultiLineGuidelines verifies that a guideline text an
+// administrator typed over several lines becomes a quote under its label,
+// where nothing in it can add a row, a heading or a guidance section to the
+// card.
+func TestFormatGetMarkdown_MultiLineGuidelines(t *testing.T) {
+	out := GetOutput{Appearance: Item{
+		Title:            "GitLab CE",
+		MemberGuidelines: "Be nice\n\n## Rules\n- **State**: closed",
+	}}
+	got := markdownText(t, FormatGetMarkdown(out))
+	want := "## Application Appearance\n\n" +
+		"- **Title**: GitLab CE\n" +
+		"- **Email Header/Footer**: ❌\n" +
+		"- **Member Guidelines**:\n" +
+		"  > Be nice\n" +
+		"  >\n" +
+		"  > ## Rules\n" +
+		"  > - **State**: closed\n" +
+		getHints
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -198,9 +293,8 @@ func TestUpdate_AllFields(t *testing.T) {
 // FormatGetMarkdown — with PWA fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_WithPWA verifies the GetMarkdown_WithPWA Markdown formatter for a representative get_withpwa input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatGetMarkdown_WithPWA verifies the whole card for an appearance
+// carrying the progressive web app labels and a footer message.
 func TestFormatGetMarkdown_WithPWA(t *testing.T) {
 	out := GetOutput{
 		Appearance: Item{
@@ -210,16 +304,16 @@ func TestFormatGetMarkdown_WithPWA(t *testing.T) {
 			FooterMessage: "bye",
 		},
 	}
-	result := FormatGetMarkdown(out)
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "PWA Name") {
-		t.Error("expected PWA Name in markdown")
-	}
-	if !strings.Contains(text, "PWA Short Name") {
-		t.Error("expected PWA Short Name in markdown")
-	}
-	if !strings.Contains(text, "Footer Message") {
-		t.Error("expected Footer Message in markdown")
+	got := markdownText(t, FormatGetMarkdown(out))
+	want := "## Application Appearance\n\n" +
+		"- **Title**: Test\n" +
+		"- **PWA Name**: TestPWA\n" +
+		"- **PWA Short Name**: TP\n" +
+		"- **Email Header/Footer**: ❌\n" +
+		"- **Footer Message**: bye\n" +
+		getHints
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -227,25 +321,22 @@ func TestFormatGetMarkdown_WithPWA(t *testing.T) {
 // FormatGetMarkdown — empty fields (no optional PWA/messages)
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_Minimal verifies the GetMarkdown_Minimal Markdown formatter for a representative get_minimal input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatGetMarkdown_Minimal verifies that an appearance GitLab sent
+// nothing but a title for renders two rows and no label with an empty value
+// after it: the description row used to be written whatever GitLab sent.
 func TestFormatGetMarkdown_Minimal(t *testing.T) {
 	out := GetOutput{
 		Appearance: Item{
 			Title: "Minimal",
 		},
 	}
-	result := FormatGetMarkdown(out)
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "Minimal") {
-		t.Error("expected title in markdown")
-	}
-	if strings.Contains(text, "PWA Name") {
-		t.Error("should not contain PWA Name when empty")
-	}
-	if strings.Contains(text, "Header Message") {
-		t.Error("should not contain Header Message when empty")
+	got := markdownText(t, FormatGetMarkdown(out))
+	want := "## Application Appearance\n\n" +
+		"- **Title**: Minimal\n" +
+		"- **Email Header/Footer**: ❌\n" +
+		getHints
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -253,9 +344,9 @@ func TestFormatGetMarkdown_Minimal(t *testing.T) {
 // FormatUpdateMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatUpdateMarkdown_Coverage verifies the UpdateMarkdown_Coverage Markdown formatter for a representative update_coverage input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatUpdateMarkdown_Coverage verifies that the update result is a card
+// of its own: it names what happened in the heading, where it used to reuse
+// the read formatter and say "Application Appearance" for a write.
 func TestFormatUpdateMarkdown_Coverage(t *testing.T) {
 	out := UpdateOutput{
 		Appearance: Item{
@@ -263,10 +354,14 @@ func TestFormatUpdateMarkdown_Coverage(t *testing.T) {
 			Description: "Updated desc",
 		},
 	}
-	result := FormatUpdateMarkdown(out)
-	text := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "Updated") {
-		t.Error("expected title in markdown")
+	got := markdownText(t, FormatUpdateMarkdown(out))
+	want := "## Application Appearance Updated\n\n" +
+		"- **Title**: Updated\n" +
+		"- **Email Header/Footer**: ❌\n" +
+		"- **Description**: Updated desc\n" +
+		updateHints
+	if got != want {
+		t.Errorf("FormatUpdateMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 
@@ -357,14 +452,18 @@ func newAppearanceRouteClient(t *testing.T) *gitlabclient.Client {
 }
 
 // TestFormatGetMarkdown_SiteName verifies the site name reaches the rendered
-// table. It is the one appearance field the SDK does not model and the handler
+// card. It is the one appearance field the SDK does not model and the handler
 // reads off the captured response, so a formatter that dropped it would leave
 // the whole captured read with nothing to show for itself.
 func TestFormatGetMarkdown_SiteName(t *testing.T) {
-	result := FormatGetMarkdown(GetOutput{Appearance: Item{SiteName: "Example GitLab", Title: "GitLab CE"}})
-	content := result.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(content, "| Site Name | Example GitLab |") {
-		t.Errorf("markdown missing the site name row:\n%s", content)
+	got := markdownText(t, FormatGetMarkdown(GetOutput{Appearance: Item{SiteName: "Example GitLab", Title: "GitLab CE"}}))
+	want := "## Application Appearance\n\n" +
+		"- **Site Name**: Example GitLab\n" +
+		"- **Title**: GitLab CE\n" +
+		"- **Email Header/Footer**: ❌\n" +
+		getHints
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 

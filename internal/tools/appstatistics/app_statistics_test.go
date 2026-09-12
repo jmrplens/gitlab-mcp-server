@@ -4,6 +4,7 @@
 package appstatistics
 
 import (
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -55,20 +56,44 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies the GetMarkdown Markdown formatter for a representative get input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// statisticsCard renders the eleven rows in the order the card writes them,
+// so a test states the counts it cares about and the rest read zero.
+func statisticsCard(activeUsers, users, projects, groups, issues, mergeRequests, notes, forks, snippets, sshKeys, milestones int64) string {
+	return "## Application Statistics\n\n" +
+		fmt.Sprintf("- **Active Users**: %d\n", activeUsers) +
+		fmt.Sprintf("- **Users**: %d\n", users) +
+		fmt.Sprintf("- **Projects**: %d\n", projects) +
+		fmt.Sprintf("- **Groups**: %d\n", groups) +
+		fmt.Sprintf("- **Issues**: %d\n", issues) +
+		fmt.Sprintf("- **Merge Requests**: %d\n", mergeRequests) +
+		fmt.Sprintf("- **Notes**: %d\n", notes) +
+		fmt.Sprintf("- **Forks**: %d\n", forks) +
+		fmt.Sprintf("- **Snippets**: %d\n", snippets) +
+		fmt.Sprintf("- **SSH Keys**: %d\n", sshKeys) +
+		fmt.Sprintf("- **Milestones**: %d\n", milestones) +
+		"\n" + approximationNote + "\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use individual resource tools to explore specific statistics\n"
+}
+
+// TestFormatGetMarkdown verifies the whole card: one row per metric, zero
+// included, and the note saying which figures GitLab approximates.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{ActiveUsers: 80, Projects: 45, Issues: 200}
-	md := FormatGetMarkdown(out)
-	if !strings.Contains(md, "Application Statistics") {
-		t.Error("missing header")
+	got := FormatGetMarkdown(out)
+	want := statisticsCard(80, 0, 45, 0, 200, 0, 0, 0, 0, 0, 0)
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
-	if !strings.Contains(md, "80") {
-		t.Error("missing active users")
-	}
-	if !strings.Contains(md, "45") {
-		t.Error("missing projects")
+}
+
+// TestFormatGetMarkdown_Approximation verifies that the card says what GitLab
+// says about its own counts. It used to present every figure as exact, which
+// is the one thing a reader would act on wrongly.
+func TestFormatGetMarkdown_Approximation(t *testing.T) {
+	got := FormatGetMarkdown(GetOutput{Users: 10000})
+	if !strings.Contains(got, "\n\nCounts of 10000 and above are approximate rather than exact.\n") {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant the approximation note as a paragraph of its own", got)
 	}
 }
 
@@ -106,14 +131,18 @@ func TestGet_Success_Coverage(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_Cov_Coverage verifies the GetMarkdown_Cov_Coverage Markdown formatter for a representative get_cov_coverage input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatGetMarkdown_Cov_Coverage verifies the whole card for a response
+// with every metric filled, which is what the endpoint answers on an instance
+// that has been used.
 func TestFormatGetMarkdown_Cov_Coverage(t *testing.T) {
-	out := GetOutput{Projects: 50, ActiveUsers: 80, Users: 100, Issues: 20}
-	md := FormatGetMarkdown(out)
-	if !strings.Contains(md, "50") || !strings.Contains(md, "80") {
-		t.Error("expected stats in markdown")
+	out := GetOutput{
+		Forks: 10, Issues: 20, MergeRequests: 30, Notes: 40, Snippets: 5,
+		SSHKeys: 3, Milestones: 7, Users: 100, Groups: 15, Projects: 50, ActiveUsers: 80,
+	}
+	got := FormatGetMarkdown(out)
+	want := statisticsCard(80, 100, 50, 15, 20, 30, 40, 10, 5, 3, 7)
+	if got != want {
+		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
 }
 

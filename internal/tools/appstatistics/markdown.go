@@ -1,30 +1,39 @@
 package appstatistics
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatGetMarkdown formats application statistics as markdown.
+// approximationNote states what GitLab's own documentation says about these
+// counts: above ten thousand they are approximations rather than totals. The
+// card used to present every figure as exact, which is the one thing a reader
+// would act on wrongly.
+const approximationNote = "Counts of 10000 and above are approximate rather than exact."
+
+// FormatGetMarkdown renders the instance statistics as the card of one object:
+// one row per metric, in the order a reader reads them, then the note about
+// what GitLab counts.
 func FormatGetMarkdown(out GetOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Application Statistics\n\n")
-	sb.WriteString(toolutil.MarkdownTableHeader("Metric", "Count"))
-	fmt.Fprintf(&sb, "| Active Users | %d |\n", out.ActiveUsers)
-	fmt.Fprintf(&sb, "| Users | %d |\n", out.Users)
-	fmt.Fprintf(&sb, "| Projects | %d |\n", out.Projects)
-	fmt.Fprintf(&sb, "| Groups | %d |\n", out.Groups)
-	fmt.Fprintf(&sb, "| Issues | %d |\n", out.Issues)
-	fmt.Fprintf(&sb, "| Merge Requests | %d |\n", out.MergeRequests)
-	fmt.Fprintf(&sb, "| Notes | %d |\n", out.Notes)
-	fmt.Fprintf(&sb, "| Forks | %d |\n", out.Forks)
-	fmt.Fprintf(&sb, "| Snippets | %d |\n", out.Snippets)
-	fmt.Fprintf(&sb, "| SSH Keys | %d |\n", out.SSHKeys)
-	fmt.Fprintf(&sb, "| Milestones | %d |\n", out.Milestones)
-	toolutil.WriteHints(&sb, "Use individual resource tools to explore specific statistics")
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Application Statistics")
+	// Zero is an answer here, not an absence: an instance with no snippets
+	// reports none, and hiding the row would read as GitLab not saying.
+	c.Int("Active Users", out.ActiveUsers)
+	c.Int("Users", out.Users)
+	c.Int("Projects", out.Projects)
+	c.Int("Groups", out.Groups)
+	c.Int("Issues", out.Issues)
+	c.Int("Merge Requests", out.MergeRequests)
+	c.Int("Notes", out.Notes)
+	c.Int("Forks", out.Forks)
+	c.Int("Snippets", out.Snippets)
+	c.Int("SSH Keys", out.SSHKeys)
+	c.Int("Milestones", out.Milestones)
+	c.Note(approximationNote)
+	c.End("Use individual resource tools to explore specific statistics")
+	return b.String()
 }
 
 func init() {

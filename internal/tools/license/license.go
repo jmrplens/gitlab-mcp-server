@@ -2,8 +2,8 @@ package license
 
 import (
 	"context"
+	"errors"
 	"net/http"
-	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -73,23 +73,13 @@ type DeleteInput struct {
 
 // Helpers.
 
-// formatTime formats an optional [time.Time] as RFC 3339 or returns
-// the empty string when the timestamp is nil.
-func formatTime(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
-
-// formatISOTime formats an optional [gl.ISOTime] as an ISO 8601 string
-// or returns the empty string when the timestamp is nil.
-func formatISOTime(t *gl.ISOTime) string {
-	if t == nil {
-		return ""
-	}
-	return t.String()
-}
+// errNoLicense is what an answer carrying no license means: the instance has
+// none installed. GitLab answers the endpoint without one, so client-go leaves
+// the pointer nil and no error beside it, and reading the fields off it would
+// crash the handler. Rendering a zero license instead was worse than either:
+// the card said "License #0", plan blank, expired false, which reads as a
+// valid free-tier license that is not there.
+var errNoLicense = errors.New("GitLab returned no license, so this instance has none installed")
 
 // toItem converts a [gl.License] into the package's [Item] shape,
 // flattening the embedded licensee and add-on structs.
@@ -97,9 +87,9 @@ func toItem(l *gl.License) Item {
 	return Item{
 		ID:               l.ID,
 		Plan:             l.Plan,
-		CreatedAt:        formatTime(l.CreatedAt),
-		StartsAt:         formatISOTime(l.StartsAt),
-		ExpiresAt:        formatISOTime(l.ExpiresAt),
+		CreatedAt:        toolutil.RFC3339Ptr(l.CreatedAt),
+		StartsAt:         toolutil.FormatISOTimePtr(l.StartsAt),
+		ExpiresAt:        toolutil.FormatISOTimePtr(l.ExpiresAt),
 		HistoricalMax:    l.HistoricalMax,
 		MaximumUserCount: l.MaximumUserCount,
 		Expired:          l.Expired,
@@ -130,6 +120,10 @@ func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutpu
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("license_get", err, http.StatusForbidden, "license endpoints require administrator access")
 	}
+	if lic == nil {
+		return GetOutput{}, toolutil.WrapErrWithHint("license_get", errNoLicense,
+			"add one with the license_add action, or read the tier from the metadata_get action")
+	}
 	return GetOutput{License: toItem(lic)}, nil
 }
 
@@ -143,6 +137,10 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (AddO
 	lic, _, err := client.GL().License.AddLicense(opts, gl.WithContext(ctx))
 	if err != nil {
 		return AddOutput{}, toolutil.WrapErrWithStatusHint("license_add", err, http.StatusBadRequest, "verify the license key is valid. Requires administrator access")
+	}
+	if lic == nil {
+		return AddOutput{}, toolutil.WrapErrWithHint("license_add", errNoLicense,
+			"read the installed license back with the license_get action")
 	}
 	return AddOutput{License: toItem(lic)}, nil
 }
