@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -735,8 +736,31 @@ func TestListStatus_WithPagination(t *testing.T) {
 // FormatOutputMarkdown — all fields, minimal fields
 // ---------------------------------------------------------------------------
 
-// TestFormatOutputMarkdown_AllFields verifies the Markdown output includes all
-// populated fields including optional InternalURL, SelectiveSyncType, and WebEditURL.
+// assertGeoMarkdown compares a whole rendered response with what the formatter
+// is meant to write, byte for byte. A substring assertion is what let a card
+// open a table it never filled and still pass.
+func assertGeoMarkdown(t *testing.T, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("markdown mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+// geoSiteHints is the guidance section every Geo site card closes with.
+const geoSiteHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'geo.get_status' to read this site's replication status\n" +
+	"- Use action 'geo.edit' to change this site's capacities or selective sync\n" +
+	"- Use action 'geo.list' to see every Geo site on the instance\n"
+
+// geoStatusHints is the guidance section every Geo status card closes with.
+const geoStatusHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'geo.get' to read the site this status belongs to\n" +
+	"- Use action 'geo.repair' to repair the site's OAuth application\n"
+
+// TestFormatOutputMarkdown_AllFields verifies the whole card a fully populated
+// Geo site renders, the selective-sync scope and the replication details link
+// included: the type alone used to say that the site syncs a subset and never
+// which subset, and the replication page was never linked at all.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	out := Output{
 		ID:                                      1,
@@ -752,43 +776,39 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		ContainerRepositoriesMaxCapacity:        10,
 		SyncObjectStorage:                       false,
 		SelectiveSyncType:                       "namespaces",
+		SelectiveSyncNamespaceIDs:               []int64{7, 9},
 		WebEditURL:                              "https://primary.example.com/admin/geo/sites/1/edit",
+		WebGeoReplicationDetailsURL:             "https://primary.example.com/admin/geo/replication",
 		BlobDownloadTimeout:                     28800,
 		ChecksumMismatchReportThreshold:         5,
 		ChecksumMismatchSelfHealCooldownMinutes: 60,
 	}
-	md := FormatOutputMarkdown(out)
 
-	checks := []string{
-		"## Geo Site: primary-site",
-		"| Blob Download Timeout | 28800s |",
-		"| Checksum Mismatch Report Threshold | 5 |",
-		"| Checksum Mismatch Self-Heal Cooldown | 60 min |",
-		"| ID | 1 |",
-		"| Name | primary-site |",
-		"| URL | https://primary.example.com |",
-		"| Internal URL | https://primary.internal |",
-		"| Primary | true |",
-		"| Enabled | true |",
-		"| Current | true |",
-		"| Files Max Capacity | 10 |",
-		"| Repos Max Capacity | 25 |",
-		"| Verification Max Capacity | 100 |",
-		"| Sync Object Storage | false |",
-		"| Selective Sync Type | namespaces |",
-		"| Web Edit URL | [Edit](https://primary.example.com/admin/geo/sites/1/edit) |",
-	}
-	for _, c := range checks {
-		t.Run(c, func(t *testing.T) {
-			if !strings.Contains(md, c) {
-				t.Errorf("expected markdown to contain %q:\n%s", c, md)
-			}
-		})
-	}
+	assertGeoMarkdown(t, FormatOutputMarkdown(out), "## Geo Site: primary-site\n\n"+
+		"- **ID**: 1\n"+
+		"- **Name**: primary-site\n"+
+		"- **URL**: [https://primary.example.com](https://primary.example.com)\n"+
+		"- **Internal URL**: [https://primary.internal](https://primary.internal)\n"+
+		"- **Primary**: ✅\n"+
+		"- **Enabled**: ✅\n"+
+		"- **Current**: ✅\n"+
+		"- **Files Max Capacity**: 10\n"+
+		"- **Repos Max Capacity**: 25\n"+
+		"- **Verification Max Capacity**: 100\n"+
+		"- **Blob Download Timeout**: 28800s\n"+
+		"- **Checksum Mismatch Report Threshold**: 5\n"+
+		"- **Checksum Mismatch Self-Heal Cooldown**: 60 min\n"+
+		"- **Sync Object Storage**: ❌\n"+
+		"- **Selective Sync Type**: namespaces\n"+
+		"- **Selective Sync Namespace IDs**: 7, 9\n"+
+		"- **Web Edit URL**: [https://primary.example.com/admin/geo/sites/1/edit](https://primary.example.com/admin/geo/sites/1/edit)\n"+
+		"- **Replication Details**: [https://primary.example.com/admin/geo/replication](https://primary.example.com/admin/geo/replication)\n"+
+		geoSiteHints)
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies that the Markdown output
-// omits optional fields (InternalURL, SelectiveSyncType, WebEditURL) when empty.
+// TestFormatOutputMarkdown_MinimalFields verifies that a site GitLab sent no
+// optional field for writes no row for one: no internal URL, no selective
+// sync, no link to a page that was not named.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	out := Output{
 		ID:      2,
@@ -797,32 +817,42 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 		Primary: false,
 		Enabled: true,
 	}
-	md := FormatOutputMarkdown(out)
 
-	if !strings.Contains(md, "## Geo Site: secondary") {
-		t.Errorf("expected heading:\n%s", md)
-	}
-	if !strings.Contains(md, "| ID | 2 |") {
-		t.Errorf("expected ID row:\n%s", md)
-	}
-	if strings.Contains(md, "Internal URL") {
-		t.Error("should not contain Internal URL when empty")
-	}
-	if strings.Contains(md, "Selective Sync Type") {
-		t.Error("should not contain Selective Sync Type when empty")
-	}
-	if strings.Contains(md, "Web Edit URL") {
-		t.Error("should not contain Web Edit URL when empty")
-	}
+	assertGeoMarkdown(t, FormatOutputMarkdown(out), "## Geo Site: secondary\n\n"+
+		"- **ID**: 2\n"+
+		"- **Name**: secondary\n"+
+		"- **URL**: [https://secondary.example.com](https://secondary.example.com)\n"+
+		"- **Primary**: ❌\n"+
+		"- **Enabled**: ✅\n"+
+		"- **Current**: ❌\n"+
+		"- **Files Max Capacity**: 0\n"+
+		"- **Repos Max Capacity**: 0\n"+
+		"- **Verification Max Capacity**: 0\n"+
+		"- **Blob Download Timeout**: 0s\n"+
+		"- **Checksum Mismatch Report Threshold**: 0\n"+
+		"- **Checksum Mismatch Self-Heal Cooldown**: 0 min\n"+
+		"- **Sync Object Storage**: ❌\n"+
+		geoSiteHints)
 }
 
 // ---------------------------------------------------------------------------
 // FormatListMarkdown — with items, empty, with pagination
 // ---------------------------------------------------------------------------
 
-// TestFormatListMarkdown_WithItems verifies the ListMarkdown_WithItems Markdown formatter for a representative list_withitems input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// geoSiteTableHead is the heading-less head of the Geo site table.
+const geoSiteTableHead = "| ID | Name | URL | Primary | Enabled |\n" +
+	"| --- | --- | --- | --- | --- |\n"
+
+// geoSiteListHints is the guidance section the Geo site list closes with. The
+// table carries a link column, so the link instruction leads it.
+var geoSiteListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- " + toolutil.HintPreserveLinks + "\n" +
+	"- Use action 'geo.get' to read one site in full\n" +
+	"- Use action 'geo.list_status' to see the replication status of every site\n"
+
+// TestFormatListMarkdown_WithItems verifies the whole table a page of Geo
+// sites renders: the heading counting what was shown, each site's URL linked,
+// and the two flags as glyphs rather than as the words true and false.
 func TestFormatListMarkdown_WithItems(t *testing.T) {
 	out := ListOutput{
 		Sites: []Output{
@@ -830,41 +860,23 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 			{ID: 2, Name: "secondary", URL: "https://secondary.example.com", Primary: false, Enabled: false},
 		},
 	}
-	md := FormatListMarkdown(out)
 
-	checks := []string{
-		"## Geo Sites",
-		"| ID | Name | URL | Primary | Enabled |",
-		"| 1 | primary | https://primary.example.com | true | true |",
-		"| 2 | secondary | https://secondary.example.com | false | false |",
-	}
-	for _, c := range checks {
-		t.Run(c, func(t *testing.T) {
-			if !strings.Contains(md, c) {
-				t.Errorf("expected markdown to contain %q:\n%s", c, md)
-			}
-		})
-	}
+	assertGeoMarkdown(t, FormatListMarkdown(out), "## Geo Sites (2)\n\n"+
+		geoSiteTableHead+
+		"| 1 | primary | [https://primary.example.com](https://primary.example.com) | ✅ | ✅ |\n"+
+		"| 2 | secondary | [https://secondary.example.com](https://secondary.example.com) | ❌ | ❌ |\n"+
+		geoSiteListHints)
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_Empty verifies that an empty page renders the one
+// sentence and nothing else: no heading counting zero, no table header, and no
+// instruction to preserve links a render without any cannot have.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	out := ListOutput{Sites: []Output{}}
-	md := FormatListMarkdown(out)
-
-	if !strings.Contains(md, "## Geo Sites") {
-		t.Errorf("expected heading:\n%s", md)
-	}
-	if strings.Contains(md, "| 1 |") {
-		t.Error("should not contain data rows for empty list")
-	}
+	assertGeoMarkdown(t, FormatListMarkdown(ListOutput{Sites: []Output{}}), "No Geo sites found.\n")
 }
 
-// TestFormatListMarkdown_WithPagination verifies the ListMarkdown_WithPagination Markdown formatter for a representative list_withpagination input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
+// TestFormatListMarkdown_WithPagination verifies the pagination footer opens a
+// paragraph of its own between the last table row and the guidance section.
 func TestFormatListMarkdown_WithPagination(t *testing.T) {
 	out := ListOutput{
 		Sites: []Output{
@@ -872,20 +884,21 @@ func TestFormatListMarkdown_WithPagination(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{Page: 1},
 	}
-	md := FormatListMarkdown(out)
 
-	if !strings.Contains(md, "_Page 1, 1 sites shown._") {
-		t.Errorf("expected pagination footer:\n%s", md)
-	}
+	assertGeoMarkdown(t, FormatListMarkdown(out), "## Geo Sites (1)\n\n"+
+		geoSiteTableHead+
+		"| 1 | primary | [https://primary.example.com](https://primary.example.com) | ✅ | ✅ |\n"+
+		"\nPage 1 | no more pages\n"+
+		geoSiteListHints)
 }
 
 // ---------------------------------------------------------------------------
 // FormatStatusMarkdown — all fields, minimal fields
 // ---------------------------------------------------------------------------
 
-// TestFormatStatusMarkdown_AllFields verifies the StatusMarkdown_AllFields Markdown formatter for a representative status_allfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatStatusMarkdown_AllFields verifies the whole card a fully reported
+// Geo site status renders, the timestamp in the display form every other
+// formatter uses rather than the zone-less layout this one used to print.
 func TestFormatStatusMarkdown_AllFields(t *testing.T) {
 	out := StatusOutput{
 		GeoNodeID:                      1,
@@ -908,78 +921,88 @@ func TestFormatStatusMarkdown_AllFields(t *testing.T) {
 			"job_artifacts":   {Count: 8},
 			"ci_secure_files": {Count: 7},
 		},
+		UpdatedAt: time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC),
 	}
-	// Set UpdatedAt to exercise the non-zero branch
-	out.UpdatedAt = out.UpdatedAt.AddDate(2026, 0, 15)
 
-	md := FormatStatusMarkdown(out)
-
-	checks := []string{
-		"## Geo Site Status (Node ID: 1)",
-		"| Healthy | true |",
-		"| Health Status | Healthy |",
-		"| Health | Healthy |",
-		"| DB Replication Lag | 5s |",
-		"| Missing OAuth App | false |",
-		"| Projects Count | 42 |",
-		"| LFS Synced | 100.00% |",
-		"| Job Artifacts Synced | 99.50% |",
-		"| Uploads Synced | 98.00% |",
-		"| Version | 16.5.0 |",
-		"| Revision | abc123 |",
-		"| Storage Shards Match | true |",
-		"| Repositories Count | 19 |",
-		"| Replicables Tracked | 3 |",
-		"| Storage Shards | default, nvme |",
-		"| Updated At |",
-	}
-	for _, c := range checks {
-		t.Run(c, func(t *testing.T) {
-			if !strings.Contains(md, c) {
-				t.Errorf("expected markdown to contain %q:\n%s", c, md)
-			}
-		})
-	}
+	assertGeoMarkdown(t, FormatStatusMarkdown(out), "## Geo Site Status (Node ID: 1)\n\n"+
+		"- **Healthy**: ✅\n"+
+		"- **Health Status**: Healthy\n"+
+		"- **Health**: Healthy\n"+
+		"- **DB Replication Lag**: 5s\n"+
+		"- **Projects Count**: 42\n"+
+		"- **Repositories Count**: 19\n"+
+		"- **Replicables Tracked**: 3\n"+
+		"- **Storage Shards**: default, nvme\n"+
+		"- **LFS Synced**: 100.00%\n"+
+		"- **Job Artifacts Synced**: 99.50%\n"+
+		"- **Uploads Synced**: 98.00%\n"+
+		"- **Version**: 16.5.0\n"+
+		"- **Revision**: abc123\n"+
+		"- **Storage Shards Match**: ✅\n"+
+		"- **Updated**: 15 Jan 2026 10:30 UTC\n"+
+		geoStatusHints)
 }
 
-// TestFormatStatusMarkdown_MinimalFields verifies the StatusMarkdown_MinimalFields Markdown formatter for a representative status_minimalfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatStatusMarkdown_MinimalFields verifies that a status GitLab sent no
+// optional field for writes no row for one, and that a site with its OAuth
+// application in place carries no warning.
 func TestFormatStatusMarkdown_MinimalFields(t *testing.T) {
 	out := StatusOutput{
 		GeoNodeID:    2,
 		Healthy:      false,
 		HealthStatus: "Unhealthy",
 	}
-	md := FormatStatusMarkdown(out)
 
-	if !strings.Contains(md, "## Geo Site Status (Node ID: 2)") {
-		t.Errorf("expected heading:\n%s", md)
+	assertGeoMarkdown(t, FormatStatusMarkdown(out), "## Geo Site Status (Node ID: 2)\n\n"+
+		"- **Healthy**: ❌\n"+
+		"- **Health Status**: Unhealthy\n"+
+		"- **DB Replication Lag**: 0s\n"+
+		"- **Projects Count**: 0\n"+
+		"- **Repositories Count**: 0\n"+
+		"- **Storage Shards Match**: ❌\n"+
+		geoStatusHints)
+}
+
+// TestFormatStatusMarkdown_UnhealthyMultilineHealth verifies that the health
+// check's own output, which carries an exception message and so a newline,
+// becomes a quote under its label rather than breaking the card's list.
+func TestFormatStatusMarkdown_UnhealthyMultilineHealth(t *testing.T) {
+	out := StatusOutput{
+		GeoNodeID:               3,
+		HealthStatus:            "Unhealthy",
+		MissingOAuthApplication: true,
+		Health:                  "Could not connect to Geo database\nPG::ConnectionBad",
 	}
-	if !strings.Contains(md, "| Healthy | false |") {
-		t.Errorf("expected healthy row:\n%s", md)
-	}
-	if strings.Contains(md, "| Health |") {
-		t.Error("should not contain Health row when empty")
-	}
-	if strings.Contains(md, "Updated At") {
-		t.Error("should not contain Updated At when zero")
-	}
-	if strings.Contains(md, "Replicables Tracked") {
-		t.Error("should not contain Replicables Tracked when the matrix is empty")
-	}
-	if strings.Contains(md, "| Storage Shards |") {
-		t.Error("should not contain Storage Shards when the site reported none")
-	}
+
+	assertGeoMarkdown(t, FormatStatusMarkdown(out), "## Geo Site Status (Node ID: 3)\n\n"+
+		"- **Healthy**: ❌\n"+
+		"- **Health Status**: Unhealthy\n"+
+		"- **Health**:\n"+
+		"  > Could not connect to Geo database\n"+
+		"  > PG::ConnectionBad\n"+
+		"- **DB Replication Lag**: 0s\n"+
+		"- ⚠️ **Missing OAuth Application**\n"+
+		"- **Projects Count**: 0\n"+
+		"- **Repositories Count**: 0\n"+
+		"- **Storage Shards Match**: ❌\n"+
+		geoStatusHints)
 }
 
 // ---------------------------------------------------------------------------
 // FormatListStatusMarkdown — with items, empty, with pagination
 // ---------------------------------------------------------------------------
 
-// TestFormatListStatusMarkdown_WithItems verifies the ListStatusMarkdown_WithItems Markdown formatter for a representative liststatus_withitems input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// geoStatusTableHead is the heading-less head of the Geo status table.
+const geoStatusTableHead = "| Node ID | Healthy | Health Status | DB Lag (s) | Projects | Version |\n" +
+	"| --- | --- | --- | --- | --- | --- |\n"
+
+// geoStatusListHints is the guidance section the Geo status list closes with.
+// The table carries no link column, so no instruction to preserve links.
+const geoStatusListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'geo.get_status' to read one site's status in full\n"
+
+// TestFormatListStatusMarkdown_WithItems verifies the whole table a page of
+// Geo statuses renders, the health flag as a glyph rather than as a word.
 func TestFormatListStatusMarkdown_WithItems(t *testing.T) {
 	out := ListStatusOutput{
 		Statuses: []StatusOutput{
@@ -987,41 +1010,22 @@ func TestFormatListStatusMarkdown_WithItems(t *testing.T) {
 			{GeoNodeID: 2, Healthy: false, HealthStatus: "Unhealthy", DBReplicationLagSeconds: 120, ProjectsCount: 30, Version: "16.4.0"},
 		},
 	}
-	md := FormatListStatusMarkdown(out)
 
-	checks := []string{
-		"## Geo Site Statuses",
-		"| Node ID | Healthy | Health Status | DB Lag (s) | Projects | Version |",
-		"| 1 | true | Healthy | 0 | 42 | 16.5.0 |",
-		"| 2 | false | Unhealthy | 120 | 30 | 16.4.0 |",
-	}
-	for _, c := range checks {
-		t.Run(c, func(t *testing.T) {
-			if !strings.Contains(md, c) {
-				t.Errorf("expected markdown to contain %q:\n%s", c, md)
-			}
-		})
-	}
+	assertGeoMarkdown(t, FormatListStatusMarkdown(out), "## Geo Site Statuses (2)\n\n"+
+		geoStatusTableHead+
+		"| 1 | ✅ | Healthy | 0 | 42 | 16.5.0 |\n"+
+		"| 2 | ❌ | Unhealthy | 120 | 30 | 16.4.0 |\n"+
+		geoStatusListHints)
 }
 
-// TestFormatListStatusMarkdown_Empty verifies the ListStatusMarkdown_Empty Markdown formatter for a representative liststatus_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListStatusMarkdown_Empty verifies that an empty page renders the
+// one sentence and nothing else.
 func TestFormatListStatusMarkdown_Empty(t *testing.T) {
-	out := ListStatusOutput{Statuses: []StatusOutput{}}
-	md := FormatListStatusMarkdown(out)
-
-	if !strings.Contains(md, "## Geo Site Statuses") {
-		t.Errorf("expected heading:\n%s", md)
-	}
-	if strings.Contains(md, "| 1 |") {
-		t.Error("should not contain data rows for empty list")
-	}
+	assertGeoMarkdown(t, FormatListStatusMarkdown(ListStatusOutput{Statuses: []StatusOutput{}}), "No Geo site statuses found.\n")
 }
 
-// TestFormatListStatusMarkdown_WithPagination verifies the ListStatusMarkdown_WithPagination Markdown formatter for a representative liststatus_withpagination input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
+// TestFormatListStatusMarkdown_WithPagination verifies the pagination footer
+// opens a paragraph of its own between the last row and the guidance section.
 func TestFormatListStatusMarkdown_WithPagination(t *testing.T) {
 	out := ListStatusOutput{
 		Statuses: []StatusOutput{
@@ -1029,11 +1033,12 @@ func TestFormatListStatusMarkdown_WithPagination(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{Page: 2},
 	}
-	md := FormatListStatusMarkdown(out)
 
-	if !strings.Contains(md, "_Page 2, 1 statuses shown._") {
-		t.Errorf("expected pagination footer:\n%s", md)
-	}
+	assertGeoMarkdown(t, FormatListStatusMarkdown(out), "## Geo Site Statuses (1)\n\n"+
+		geoStatusTableHead+
+		"| 1 | ✅ | Healthy | 0 | 0 | 16.5.0 |\n"+
+		"\nPage 2 | no more pages\n"+
+		geoStatusListHints)
 }
 
 // ---------------------------------------------------------------------------

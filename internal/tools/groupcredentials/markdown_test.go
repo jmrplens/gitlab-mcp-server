@@ -3,21 +3,45 @@
 package groupcredentials
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestFormatPATMarkdown verifies the PATMarkdown Markdown formatter for a representative pat input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// The guidance section each group credential formatter closes with.
+const (
+	patCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.credential_list_pats' to see the group's other tokens\n" +
+		"- Use action 'group.credential_revoke_pat' to revoke this token\n"
+	patListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.credential_revoke_pat' to revoke one of these tokens\n"
+	sshKeyCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.credential_list_ssh_keys' to see the group's other keys\n" +
+		"- Use action 'group.credential_delete_ssh_key' to delete this key\n"
+	sshKeyListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.credential_delete_ssh_key' to delete one of these keys\n"
+)
+
+// assertCredentialMarkdown compares a whole rendered response with what the
+// formatter is meant to write, byte for byte. A substring assertion is what
+// let these two listings write their hints between the heading and the table
+// header — which left the header lazily continuing the guidance list, so no
+// table rendered at all — and still pass.
+func assertCredentialMarkdown(t *testing.T, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("markdown mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+// TestFormatPATMarkdown verifies the whole card one enterprise personal access
+// token renders: every timestamp in the display form, the active flag as a
+// glyph, and no row for a field GitLab did not send.
 func TestFormatPATMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    PATOutput
-		contains []string
-		excludes []string
+		name  string
+		input PATOutput
+		want  string
 	}{
 		{
 			name: "all fields present",
@@ -32,58 +56,55 @@ func TestFormatPATMarkdown(t *testing.T) {
 				Active:     true,
 				ExpiresAt:  "2026-01-01",
 			},
-			contains: []string{
-				"deploy-token", "ID: 1",
-				"10", "true",
-				"api, read_user",
-				"2026-01-01",
-				"2026-01-01T00:00:00Z",
-				"2026-06-15T10:30:00Z",
-			},
+			want: "## Personal Access Token: deploy-token (ID: 1)\n\n" +
+				"- **ID**: 1\n" +
+				"- **User ID**: 10\n" +
+				"- **Active**: ✅\n" +
+				"- **Scopes**: api, read_user\n" +
+				"- **Expires At**: 1 Jan 2026\n" +
+				"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+				"- **Last Used**: 15 Jun 2026 10:30 UTC\n" +
+				patCardHints,
 		},
 		{
-			name: "no optional fields",
+			name: "a revoked token is marked with a warning, not a tick",
 			input: PATOutput{
 				ID:        2,
 				Name:      "basic-token",
 				CreatedAt: "2026-01-01T00:00:00Z",
 				UserID:    20,
+				Revoked:   true,
 			},
-			contains: []string{"basic-token", "ID: 2", "Active", "Revoked"},
-			excludes: []string{"Expires At", "Last Used At"},
+			want: "## Personal Access Token: basic-token (ID: 2)\n\n" +
+				"- **ID**: 2\n" +
+				"- **User ID**: 20\n" +
+				"- **Active**: ❌\n" +
+				"- ⚠️ **Revoked**\n" +
+				"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+				patCardHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatPATMarkdown(tt.input)
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("expected output to contain %q, got:\n%s", s, got)
-				}
-			}
-			for _, s := range tt.excludes {
-				if strings.Contains(got, s) {
-					t.Errorf("expected output NOT to contain %q, got:\n%s", s, got)
-				}
-			}
+			assertCredentialMarkdown(t, FormatPATMarkdown(tt.input), tt.want)
 		})
 	}
 }
 
-// TestFormatPATListMarkdown verifies the PATListMarkdown Markdown formatter for a representative patlist input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatPATListMarkdown verifies the whole table a page of tokens renders:
+// the heading counting the total GitLab sent rather than the page length, the
+// table header opening a block of its own, and the hints last.
 func TestFormatPATListMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    PATListOutput
-		contains []string
+		name  string
+		input PATListOutput
+		want  string
 	}{
 		{
-			name:     "empty list",
-			input:    PATListOutput{},
-			contains: []string{"No personal access tokens found"},
+			name:  "empty list renders the one sentence",
+			input: PATListOutput{},
+			want:  "No personal access tokens found.\n",
 		},
 		{
 			name: "with tokens",
@@ -94,35 +115,31 @@ func TestFormatPATListMarkdown(t *testing.T) {
 				},
 				Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 2},
 			},
-			contains: []string{
-				"Personal Access Tokens (2)",
-				"tok1", "tok2",
-				"Active", "Revoked",
-				"api",
-			},
+			want: "## Personal Access Tokens (2)\n\n" +
+				"| ID | Name | User ID | Active | Revoked | Scopes | Expires At |\n" +
+				"| --- | --- | --- | --- | --- | --- | --- |\n" +
+				"| 1 | tok1 | 10 | ✅ | ❌ | api | 1 Jan 2026 |\n" +
+				"| 2 | tok2 | 20 | ❌ | ✅ |  |  |\n" +
+				"\nPage 1 of 1 | 2 items total\n" +
+				patListHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatPATListMarkdown(tt.input)
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("expected output to contain %q, got:\n%s", s, got)
-				}
-			}
+			assertCredentialMarkdown(t, FormatPATListMarkdown(tt.input), tt.want)
 		})
 	}
 }
 
-// TestFormatSSHKeyMarkdown verifies single SSH key markdown rendering, including
-// the optional usage-type, expiry, and last-used fields.
+// TestFormatSSHKeyMarkdown verifies the whole card one enterprise SSH key
+// renders, and that a key GitLab sent no optional field for writes no row for
+// one: a labeled row with an empty value is what the card replaced.
 func TestFormatSSHKeyMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    SSHKeyOutput
-		contains []string
-		excludes []string
+		name  string
+		input SSHKeyOutput
+		want  string
 	}{
 		{
 			name: "all optional fields present",
@@ -135,7 +152,14 @@ func TestFormatSSHKeyMarkdown(t *testing.T) {
 				LastUsedAt: "2026-05-01T00:00:00Z",
 				UserID:     10,
 			},
-			contains: []string{"my-key", "ID: 5", "auth", "Expires At", "Last Used At"},
+			want: "## SSH Key: my-key (ID: 5)\n\n" +
+				"- **ID**: 5\n" +
+				"- **User ID**: 10\n" +
+				"- **Usage Type**: auth\n" +
+				"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+				"- **Expires At**: 1 Jun 2026 00:00 UTC\n" +
+				"- **Last Used**: 1 May 2026 00:00 UTC\n" +
+				sshKeyCardHints,
 		},
 		{
 			name: "no optional fields",
@@ -145,41 +169,33 @@ func TestFormatSSHKeyMarkdown(t *testing.T) {
 				CreatedAt: "2026-01-01T00:00:00Z",
 				UserID:    11,
 			},
-			contains: []string{"basic-key", "ID: 6", "Created At"},
-			excludes: []string{"Expires At", "Last Used At", "Usage Type"},
+			want: "## SSH Key: basic-key (ID: 6)\n\n" +
+				"- **ID**: 6\n" +
+				"- **User ID**: 11\n" +
+				"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+				sshKeyCardHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatSSHKeyMarkdown(tt.input)
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("expected output to contain %q, got:\n%s", s, got)
-				}
-			}
-			for _, s := range tt.excludes {
-				if strings.Contains(got, s) {
-					t.Errorf("expected output NOT to contain %q, got:\n%s", s, got)
-				}
-			}
+			assertCredentialMarkdown(t, FormatSSHKeyMarkdown(tt.input), tt.want)
 		})
 	}
 }
 
-// TestFormatSSHKeyListMarkdown verifies the SSHKeyListMarkdown Markdown formatter for a representative sshkeylist input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatSSHKeyListMarkdown verifies the whole table a page of SSH keys
+// renders.
 func TestFormatSSHKeyListMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    SSHKeyListOutput
-		contains []string
+		name  string
+		input SSHKeyListOutput
+		want  string
 	}{
 		{
-			name:     "empty list",
-			input:    SSHKeyListOutput{},
-			contains: []string{"No SSH keys found"},
+			name:  "empty list renders the one sentence",
+			input: SSHKeyListOutput{},
+			want:  "No SSH keys found.\n",
 		},
 		{
 			name: "with keys",
@@ -190,21 +206,19 @@ func TestFormatSSHKeyListMarkdown(t *testing.T) {
 				},
 				Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 2},
 			},
-			contains: []string{
-				"SSH Keys (2)",
-				"key-1", "key-2",
-			},
+			want: "## SSH Keys (2)\n\n" +
+				"| ID | Title | User ID | Created | Expires At |\n" +
+				"| --- | --- | --- | --- | --- |\n" +
+				"| 5 | key-1 | 10 | 1 Jan 2026 00:00 UTC | 1 Jun 2026 00:00 UTC |\n" +
+				"| 6 | key-2 | 20 | 1 Feb 2026 00:00 UTC |  |\n" +
+				"\nPage 1 of 1 | 2 items total\n" +
+				sshKeyListHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatSSHKeyListMarkdown(tt.input)
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("expected output to contain %q, got:\n%s", s, got)
-				}
-			}
+			assertCredentialMarkdown(t, FormatSSHKeyListMarkdown(tt.input), tt.want)
 		})
 	}
 }

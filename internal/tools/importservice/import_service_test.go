@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -322,21 +324,25 @@ func TestImportFromBitbucketServer_Error(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGitHubImport(t *testing.T) {
 	out := &GitHubImportOutput{ID: 1, Name: testMyRepoName, FullPath: "ns/my-repo", ImportStatus: "scheduled"}
-	md := FormatGitHubImport(out)
-	if !strings.Contains(md, testMyRepoName) {
-		t.Errorf("expected markdown to contain '%s'", testMyRepoName)
-	}
+
+	assertImportMarkdown(t, FormatGitHubImport(out), "## GitHub Import: "+testMyRepoName+"\n\n"+
+		"- **ID**: 1\n"+
+		"- **Name**: "+testMyRepoName+"\n"+
+		"- **Full Path**: ns/my-repo\n"+
+		"- **Import Status**: scheduled\n"+
+		gitHubImportHints)
 }
 
-// TestFormatBitbucketServerImport verifies the BitbucketServerImport Markdown formatter for a representative bitbucketserverimport input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatBitbucketServerImport(t *testing.T) {
+// TestFormatBitbucketServerImport_Minimal verifies the whole card a Bitbucket
+// Server import renders when GitLab sent no full name.
+func TestFormatBitbucketServerImport_Minimal(t *testing.T) {
 	out := &BitbucketServerImportOutput{ID: 3, Name: testBBSRepoName, FullPath: "ns/bbs-repo"}
-	md := FormatBitbucketServerImport(out)
-	if !strings.Contains(md, testBBSRepoName) {
-		t.Errorf("expected markdown to contain '%s'", testBBSRepoName)
-	}
+
+	assertImportMarkdown(t, FormatBitbucketServerImport(out), "## Bitbucket Server Import: "+testBBSRepoName+"\n\n"+
+		"- **ID**: 3\n"+
+		"- **Name**: "+testBBSRepoName+"\n"+
+		"- **Full Path**: ns/bbs-repo\n"+
+		pollImportHints)
 }
 
 // ---------- Tests consolidated from coverage_test.go ----------.
@@ -556,62 +562,111 @@ func TestImportFromGitHub_WithOptionalStages(t *testing.T) {
 	}
 }
 
-// TestFormatGitHubImport_WithImportWarning verifies the GitHubImport Markdown
-// formatter renders the additive import_warning row when present.
+// assertImportMarkdown compares a whole rendered card with what the formatter
+// is meant to write, byte for byte.
+func assertImportMarkdown(t *testing.T, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("markdown mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+// The guidance section each import card closes with.
+const (
+	gitHubImportHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'project.get' to poll import_status until the import finishes\n" +
+		"- Use action 'admin.import_cancel_github' to cancel the import while it runs\n"
+	pollImportHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'project.get' to poll import_status until the import finishes\n"
+	cancelledImportHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'admin.import_github' to start a new import if one is still wanted\n"
+)
+
+// TestFormatGitHubImport_WithImportWarning verifies the whole card a GitHub
+// import renders: the relation type and both addresses GitLab sends, which the
+// table this replaced dropped, and the warning as prose under its own label.
 func TestFormatGitHubImport_WithImportWarning(t *testing.T) {
 	out := &GitHubImportOutput{
 		ID: 1, Name: testMyRepoName, FullPath: "ns/my-repo",
-		ImportSource: "github.com/user/repo", ImportStatus: "scheduled",
+		RefsURL:       "https://gitlab.example.com/ns/my-repo/refs",
+		ImportSource:  "github.com/user/repo",
+		ImportStatus:  "scheduled",
+		ProviderLink:  "https://github.com/user/repo",
+		RelationType:  "fork",
 		ImportWarning: "partial import",
 	}
-	md := FormatGitHubImport(out)
-	if !strings.Contains(md, "Import Warning") || !strings.Contains(md, "partial import") {
-		t.Errorf("expected import warning row in output, got:\n%s", md)
-	}
+
+	assertImportMarkdown(t, FormatGitHubImport(out), "## GitHub Import: "+testMyRepoName+"\n\n"+
+		"- **ID**: 1\n"+
+		"- **Name**: "+testMyRepoName+"\n"+
+		"- **Full Path**: ns/my-repo\n"+
+		"- **Import Source**: github.com/user/repo\n"+
+		"- **Import Status**: scheduled\n"+
+		"- **Relation Type**: fork\n"+
+		"- **Provider Link**: [https://github.com/user/repo](https://github.com/user/repo)\n"+
+		"- **Refs URL**: [https://gitlab.example.com/ns/my-repo/refs](https://gitlab.example.com/ns/my-repo/refs)\n"+
+		"- **Import Warning**: partial import\n"+
+		gitHubImportHints)
 }
 
-// TestFormatCancelledImport verifies the CancelledImport Markdown formatter for a representative cancelledimport input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestFormatCancelledImport verifies the whole card a canceled import renders,
+// the full path and import source it used to drop included.
 func TestFormatCancelledImport(t *testing.T) {
 	out := &CancelledImportOutput{
 		ID: 1, Name: "my-repo", FullPath: "ns/my-repo",
-		ImportStatus: "canceled",
+		ImportSource:          "github.com/user/repo",
+		ImportStatus:          "canceled",
+		HumanImportStatusName: "canceled",
+		ProviderLink:          "https://github.com/user/repo",
 	}
-	md := FormatCancelledImport(out)
-	if !strings.Contains(md, "canceled") {
-		t.Errorf("expected 'canceled' in output")
-	}
-	if !strings.Contains(md, "my-repo") {
-		t.Errorf("expected 'my-repo' in output")
-	}
+
+	assertImportMarkdown(t, FormatCancelledImport(out), "## Canceled Import: my-repo\n\n"+
+		"- **ID**: 1\n"+
+		"- **Name**: my-repo\n"+
+		"- **Full Path**: ns/my-repo\n"+
+		"- **Import Source**: github.com/user/repo\n"+
+		"- **Import Status**: canceled\n"+
+		"- **Status Name**: canceled\n"+
+		"- **Provider Link**: [https://github.com/user/repo](https://github.com/user/repo)\n"+
+		cancelledImportHints)
 }
 
-// TestFormatBitbucketCloudImport verifies the BitbucketCloudImport Markdown formatter for a representative bitbucketcloudimport input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatBitbucketCloudImport verifies the whole card a Bitbucket Cloud
+// import renders, its status name and provider link included.
 func TestFormatBitbucketCloudImport(t *testing.T) {
 	out := &BitbucketCloudImportOutput{
 		ID: 2, Name: "bb-repo", FullPath: "ns/bb-repo",
-		ImportSource: "bitbucket.org/user/repo", ImportStatus: "scheduled",
+		ImportSource:          "bitbucket.org/user/repo",
+		ImportStatus:          "scheduled",
+		HumanImportStatusName: "scheduled",
+		ProviderLink:          "https://bitbucket.org/user/repo",
 	}
-	md := FormatBitbucketCloudImport(out)
-	if !strings.Contains(md, "bb-repo") {
-		t.Errorf("expected 'bb-repo' in output")
-	}
-	if !strings.Contains(md, "scheduled") {
-		t.Errorf("expected 'scheduled' in output")
-	}
+
+	assertImportMarkdown(t, FormatBitbucketCloudImport(out), "## Bitbucket Cloud Import: bb-repo\n\n"+
+		"- **ID**: 2\n"+
+		"- **Name**: bb-repo\n"+
+		"- **Full Path**: ns/bb-repo\n"+
+		"- **Import Source**: bitbucket.org/user/repo\n"+
+		"- **Import Status**: scheduled\n"+
+		"- **Status Name**: scheduled\n"+
+		"- **Provider Link**: [https://bitbucket.org/user/repo](https://bitbucket.org/user/repo)\n"+
+		pollImportHints)
 }
 
-// TestFormatImportGists verifies the ImportGists Markdown formatter for a representative importgists input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatImportGists(t *testing.T) {
-	md := FormatImportGists()
-	if !strings.Contains(md, "gists") {
-		t.Errorf("expected 'gists' in output, got %q", md)
+// TestFormatBitbucketServerImport verifies the whole card a Bitbucket Server
+// import renders. That endpoint answers with the created project alone, so
+// there is no import status and no provider link to show.
+func TestFormatBitbucketServerImport(t *testing.T) {
+	out := &BitbucketServerImportOutput{
+		ID: 3, Name: "bbs-repo", FullPath: "ns/bbs-repo", FullName: "ns / bbs-repo",
 	}
+
+	assertImportMarkdown(t, FormatBitbucketServerImport(out), "## Bitbucket Server Import: bbs-repo\n\n"+
+		"- **ID**: 3\n"+
+		"- **Name**: bbs-repo\n"+
+		"- **Full Path**: ns/bbs-repo\n"+
+		"- **Full Name**: ns / bbs-repo\n"+
+		pollImportHints)
 }
 
 // ---------------------------------------------------------------------------
@@ -772,25 +827,58 @@ func importServiceSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[str
 	return byTool
 }
 
-// TestMarkdownRegistry_PointerOutputFormatters verifies the init-registered
-// value-signature formatter closures render each import output type through
-// the shared Markdown registry (covering the registration lambdas that adapt
-// the pointer-returning handlers to value-type registry keys).
+// TestMarkdownRegistry_PointerOutputFormatters verifies that the registry
+// resolves the shape the handlers actually return.
+//
+// Every handler here returns a pointer, and the registrations are made for the
+// value type; the registry dereferences a pointer whose element type has a
+// formatter, so the key the runtime reaches is the value one. The table used
+// to pass the value type in, which exercised the registration and never the
+// lookup the dispatcher performs, so a registry that did not dereference would
+// have passed this test while serving no Markdown at all. Each case therefore
+// carries a populated pointer and asserts the card it renders.
 func TestMarkdownRegistry_PointerOutputFormatters(t *testing.T) {
 	outputs := []struct {
 		name string
 		out  any
+		want string
 	}{
-		{"github", GitHubImportOutput{}},
-		{"cancelled", CancelledImportOutput{}},
-		{"bitbucket_cloud", BitbucketCloudImportOutput{}},
-		{"bitbucket_server", BitbucketServerImportOutput{}},
+		{
+			name: "github",
+			out:  &GitHubImportOutput{ID: 1, Name: "gh", ImportStatus: "scheduled"},
+			want: "## GitHub Import: gh\n\n" +
+				"- **ID**: 1\n- **Name**: gh\n- **Import Status**: scheduled\n" + gitHubImportHints,
+		},
+		{
+			name: "cancelled",
+			out:  &CancelledImportOutput{ID: 2, Name: "gh", ImportStatus: "canceled"},
+			want: "## Canceled Import: gh\n\n" +
+				"- **ID**: 2\n- **Name**: gh\n- **Import Status**: canceled\n" + cancelledImportHints,
+		},
+		{
+			name: "bitbucket_cloud",
+			out:  &BitbucketCloudImportOutput{ID: 3, Name: "bb", ImportStatus: "scheduled"},
+			want: "## Bitbucket Cloud Import: bb\n\n" +
+				"- **ID**: 3\n- **Name**: bb\n- **Import Status**: scheduled\n" + pollImportHints,
+		},
+		{
+			name: "bitbucket_server",
+			out:  &BitbucketServerImportOutput{ID: 4, Name: "bbs", FullPath: "ns/bbs"},
+			want: "## Bitbucket Server Import: bbs\n\n" +
+				"- **ID**: 4\n- **Name**: bbs\n- **Full Path**: ns/bbs\n" + pollImportHints,
+		},
 	}
 	for _, tc := range outputs {
 		t.Run(tc.name, func(t *testing.T) {
-			if result := toolutil.MarkdownForResult(tc.out); result == nil || len(result.Content) == 0 {
-				t.Errorf("MarkdownForResult(%T) returned empty result", tc.out)
+			result := toolutil.MarkdownForResult(tc.out)
+			if result == nil || len(result.Content) == 0 {
+				t.Fatalf("MarkdownForResult(%T) returned empty result", tc.out)
 			}
+			text, ok := result.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatalf("MarkdownForResult(%T) content is %T, want *mcp.TextContent", tc.out, result.Content[0])
+			}
+			assertImportMarkdown(t, text.Text, tc.want)
 		})
 	}
 }

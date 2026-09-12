@@ -1,114 +1,111 @@
 package pages
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const hintDomainGet = "Use `gitlab_pages_domain_get` to view details of a specific domain"
+// Canonical catalog action IDs the hints name. Pages is a set of routes on the
+// project catalog group, so their domain is "project".
+const (
+	actionPagesGet      = "project.pages_get"
+	actionDomainGet     = "project.pages_domain_get"
+	actionDomainList    = "project.pages_domain_list"
+	actionDomainUpdate  = "project.pages_domain_update"
+	actionDomainListAll = "project.pages_domain_list_all"
+)
 
-// FormatPagesMarkdown formats Pages settings for display.
+// FormatPagesMarkdown renders a project's Pages settings as a card, with the
+// deployments as a nested collection under a heading of their own.
 func FormatPagesMarkdown(out Output) string {
-	var sb strings.Builder
-	sb.WriteString("## Pages Settings\n\n")
-	sb.WriteString("| Property | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| URL | %s |\n", toolutil.EscapeMdTableCell(out.URL))
-	fmt.Fprintf(&sb, "| Unique Domain | %v |\n", out.IsUniqueDomainEnabled)
-	fmt.Fprintf(&sb, "| Force HTTPS | %v |\n", out.ForceHTTPS)
-	fmt.Fprintf(&sb, "| Primary Domain | %s |\n", toolutil.EscapeMdTableCell(out.PrimaryDomain))
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Pages Settings")
+	c.URL(out.URL)
+	c.Bool("Unique Domain", out.IsUniqueDomainEnabled)
+	c.Bool("Force HTTPS", out.ForceHTTPS)
+	c.Field("Primary Domain", out.PrimaryDomain)
 	if len(out.Deployments) > 0 {
-		sb.WriteString("\n### Deployments\n\n| URL | Created | Path Prefix | Root Dir |\n|---|---|---|---|\n")
+		t := c.Table("Deployments", "URL", "Created", "Path Prefix", "Root Dir")
 		for _, d := range out.Deployments {
-			fmt.Fprintf(&sb, "| %s | %s | %s | %s |\n", toolutil.MdTitleLink(d.URL, d.URL), toolutil.FormatTime(d.CreatedAt),
-				toolutil.EscapeMdTableCell(d.PathPrefix), toolutil.EscapeMdTableCell(d.RootDirectory))
+			t.Row(
+				toolutil.MdTitleLink(d.URL, d.URL),
+				toolutil.FormatTime(d.CreatedAt),
+				toolutil.EscapeMdTableCell(d.PathPrefix),
+				toolutil.EscapeMdTableCell(d.RootDirectory),
+			)
 		}
 	}
-	toolutil.WriteHints(
-		&sb,
-		toolutil.HintPreserveLinks,
-		hintDomainGet,
-	)
-	return sb.String()
-}
-
-// FormatDomainMarkdown formats a single Pages domain for display.
-func FormatDomainMarkdown(out DomainOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Pages Domain: %s\n\n", toolutil.EscapeMdHeading(out.Domain))
-	sb.WriteString("| Property | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| URL | %s |\n", toolutil.MdTitleLink(out.URL, out.URL))
-	fmt.Fprintf(&sb, "| Project | %s |\n", projectDisplay(out.ProjectID))
-	fmt.Fprintf(&sb, "| Verified | %v |\n", out.Verified)
-	fmt.Fprintf(&sb, "| Auto SSL | %v |\n", out.AutoSslEnabled)
-	if out.EnabledUntil != "" {
-		//gitlab:allow-unescaped out.EnabledUntil: a timestamp toDomainOutput formatted itself from a time.Time.
-		fmt.Fprintf(&sb, "| Enabled Until | %s |\n", out.EnabledUntil)
-	}
-	if out.Certificate.Subject != "" {
-		// The subject is read out of a certificate whoever configured the
-		// domain supplied, so its common name is whatever they put in it.
-		fmt.Fprintf(&sb, "| Cert Subject | %s |\n", toolutil.EscapeMdTableCell(out.Certificate.Subject))
-		fmt.Fprintf(&sb, "| Cert Expired | %v |\n", out.Certificate.Expired)
-	}
-	toolutil.WriteHints(
-		&sb,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_pages_domain_update` to modify domain settings",
-	)
-	return sb.String()
-}
-
-// FormatDomainListMarkdown formats a list of Pages domains.
-func FormatDomainListMarkdown(out ListDomainsOutput) string {
-	if len(out.Domains) == 0 {
-		return "No Pages domains found.\n"
-	}
-	var sb strings.Builder
-	sb.WriteString("## Pages Domains\n\n| Domain | URL | Verified | Auto SSL | Project |\n|---|---|---|---|---|\n")
-	for _, d := range out.Domains {
-		fmt.Fprintf(&sb, "| %s | %s | %v | %v | %s |\n", toolutil.EscapeMdTableCell(d.Domain), toolutil.MdTitleLink(d.URL, d.URL), d.Verified, d.AutoSslEnabled, projectDisplay(d.ProjectID))
-	}
-	toolutil.WriteHints(
-		&sb,
-		toolutil.HintPreserveLinks,
-		hintDomainGet,
-	)
-	return sb.String()
-}
-
-// FormatAllDomainsMarkdown formats a list of all Pages domains.
-func FormatAllDomainsMarkdown(out ListAllDomainsOutput) string {
-	if len(out.Domains) == 0 {
-		return "No Pages domains found.\n"
-	}
-	var sb strings.Builder
-	sb.WriteString("## All Pages Domains\n\n| Domain | URL | Verified | Auto SSL | Project |\n|---|---|---|---|---|\n")
-	for _, d := range out.Domains {
-		fmt.Fprintf(&sb, "| %s | %s | %v | %v | %s |\n", toolutil.EscapeMdTableCell(d.Domain), toolutil.MdTitleLink(d.URL, d.URL), d.Verified, d.AutoSslEnabled, projectDisplay(d.ProjectID))
-	}
-	toolutil.WriteHints(
-		&sb,
-		toolutil.HintPreserveLinks,
-		hintDomainGet,
-	)
-	return sb.String()
-}
-
-// FormatDeleteMarkdown returns a confirmation for domain deletion.
-func FormatDeleteMarkdown(domain string) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Pages domain `%s` deleted successfully.", domain)
-	toolutil.WriteHints(&b, "Use `gitlab_pages_domain_list` to verify deletion")
+	c.End(toolutil.HintAction(actionDomainList, "see the project's custom Pages domains"))
 	return b.String()
 }
 
-// FormatUnpublishMarkdown returns a confirmation for pages unpublish.
-func FormatUnpublishMarkdown() string {
+// FormatDomainMarkdown renders one Pages custom domain as a card.
+//
+// The verification code is shown only while the domain is unverified, which is
+// the one moment a reader needs it: it is the TXT record GitLab checks for.
+func FormatDomainMarkdown(out DomainOutput) string {
 	var b strings.Builder
-	b.WriteString("Pages unpublished successfully.")
-	toolutil.WriteHints(&b, "Use `gitlab_pages_domain_list` to see remaining domains")
+	c := toolutil.NewCard(&b, "Pages Domain: "+out.Domain)
+	c.URL(out.URL)
+	c.Field("Project ID", projectDisplay(out.ProjectID))
+	c.Bool("Verified", out.Verified)
+	if !out.Verified {
+		c.Code("Verification Code", out.VerificationCode)
+	}
+	c.Bool("Auto SSL", out.AutoSslEnabled)
+	c.Time("Enabled Until", out.EnabledUntil)
+	if out.Certificate.Subject != "" {
+		cert := c.Sub("Certificate")
+		// The subject is read out of a certificate whoever configured the
+		// domain supplied, so its common name is whatever they put in it.
+		cert.Field("Subject", out.Certificate.Subject)
+		cert.Warn("Expired", out.Certificate.Expired)
+	}
+	c.End(
+		toolutil.HintAction(actionDomainUpdate, "change this domain's auto-SSL flag or certificate"),
+		toolutil.HintAction(actionPagesGet, "read the project's Pages settings"),
+	)
+	return b.String()
+}
+
+// FormatDomainListMarkdown renders a project's Pages domains as a table.
+func FormatDomainListMarkdown(out ListDomainsOutput) string {
+	if len(out.Domains) == 0 {
+		return toolutil.EmptyMessage("Pages domains")
+	}
+	return domainTable("Pages Domains", out.Domains, out.Pagination,
+		toolutil.HintAction(actionDomainGet, "read one domain in full"),
+	)
+}
+
+// FormatAllDomainsMarkdown renders every Pages domain on the instance as a
+// table. The endpoint is not paginated, so the heading counts what it sent.
+func FormatAllDomainsMarkdown(out ListAllDomainsOutput) string {
+	if len(out.Domains) == 0 {
+		return toolutil.EmptyMessage("Pages domains")
+	}
+	return domainTable("All Pages Domains", out.Domains, toolutil.PaginationOutput{},
+		toolutil.HintAction(actionDomainGet, "read one domain in full"),
+		toolutil.HintAction(actionDomainListAll, "list every Pages domain on the instance again"),
+	)
+}
+
+// domainTable renders the one table shape the two domain listings share.
+func domainTable(title string, domains []DomainOutput, pagination toolutil.PaginationOutput, hints ...string) string {
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, title, len(domains), pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Domain", "URL", "Verified", "Auto SSL", "Project ID"))
+	for _, d := range domains {
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.EscapeMdTableCell(d.Domain),
+			toolutil.MdTitleLink(d.URL, d.URL),
+			toolutil.BoolEmoji(d.Verified),
+			toolutil.BoolEmoji(d.AutoSslEnabled),
+			projectDisplay(d.ProjectID),
+		))
+	}
+	toolutil.WriteListFooter(&b, pagination, true, hints...)
 	return b.String()
 }
 

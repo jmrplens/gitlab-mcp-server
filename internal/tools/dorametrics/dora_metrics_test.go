@@ -448,29 +448,30 @@ func TestGetGroupMetrics_BadRequestHint(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown validates the Markdown formatter across empty metrics,
-// populated metrics, metric name inclusion in the title, and special characters.
+// doraTableHead is the heading-less head of the DORA data point table, and
+// doraHints the guidance section it closes with.
+const (
+	doraTableHead = "| Date | Value |\n| --- | --- |\n"
+	doraHints     = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'environment.deployment_list' to correlate these metrics with deployment activity\n"
+)
+
+// TestFormatMarkdown validates the whole table the DORA formatter writes: an
+// empty series renders the one sentence, a populated one renders each date in
+// the display form and each value without the four decimals that stamped false
+// precision on a count, and a metric name carrying a pipe changes no structure.
 func TestFormatMarkdown(t *testing.T) {
 	tests := []struct {
-		name         string
-		output       Output
-		metric       string
-		wantContains []string
-		wantAbsent   []string
+		name   string
+		output Output
+		metric string
+		want   string
 	}{
 		{
-			name:   "renders empty metrics message",
+			name:   "empty series renders the one sentence",
 			output: Output{},
 			metric: "deployment_frequency",
-			wantContains: []string{
-				"DORA Metrics",
-				"deployment_frequency",
-				"No metrics data available.",
-			},
-			wantAbsent: []string{
-				"| Date | Value |",
-				"Total data points",
-			},
+			want:   "No DORA metric data points found.\n",
 		},
 		{
 			name: "renders metrics table with data points",
@@ -481,59 +482,44 @@ func TestFormatMarkdown(t *testing.T) {
 				},
 			},
 			metric: "lead_time_for_changes",
-			wantContains: []string{
-				"DORA Metrics: lead_time_for_changes",
-				"| Date | Value |",
-				"| 2026-01-15 | 1.5000 |",
-				"| 2026-01-16 | 2.0000 |",
-				"**Total data points:** 2",
-				"gitlab_deployment_list",
-			},
+			want: "## DORA Metrics: lead_time_for_changes (2)\n\n" +
+				doraTableHead +
+				"| 15 Jan 2026 | 1.5 |\n" +
+				"| 16 Jan 2026 | 2 |\n" +
+				doraHints,
 		},
 		{
 			name: "renders generic title when metric is empty",
 			output: Output{
-				Metrics: []MetricOutput{
-					{Date: "2026-03-01", Value: 0.0},
-				},
+				Metrics: []MetricOutput{{Date: "2026-03-01", Value: 0.0}},
 			},
 			metric: "",
-			wantContains: []string{
-				"## DORA Metrics\n",
-				"| 2026-03-01 | 0.0000 |",
-				"**Total data points:** 1",
-			},
-			wantAbsent: []string{
-				"DORA Metrics:",
-			},
+			want: "## DORA Metrics (1)\n\n" +
+				doraTableHead +
+				"| 1 Mar 2026 | 0 |\n" +
+				doraHints,
 		},
 		{
-			name: "escapes pipe characters in metric name",
+			// The metric reaches a heading rather than a cell, and a pipe in a
+			// heading is text: the escaper for that slot neutralizes a leading
+			// '#', a line break, a tag and a link, which are what could add
+			// structure there.
+			name: "a metric name carrying a pipe adds no structure",
 			output: Output{
 				Metrics: []MetricOutput{{Date: "2026-01-01", Value: 1.0}},
 			},
 			metric: "metric|with|pipes",
-			wantContains: []string{
-				"DORA Metrics",
-			},
+			want: "## DORA Metrics: metric|with|pipes (1)\n\n" +
+				doraTableHead +
+				"| 1 Jan 2026 | 1 |\n" +
+				doraHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			md := FormatMarkdown(tt.output, tt.metric)
-			if md == "" {
-				t.Fatal("expected non-empty markdown, got empty string")
-			}
-			for _, want := range tt.wantContains {
-				if !strings.Contains(md, want) {
-					t.Errorf("markdown missing %q\ngot:\n%s", want, md)
-				}
-			}
-			for _, absent := range tt.wantAbsent {
-				if strings.Contains(md, absent) {
-					t.Errorf("markdown should not contain %q\ngot:\n%s", absent, md)
-				}
+			if md := FormatMarkdown(tt.output, tt.metric); md != tt.want {
+				t.Errorf("dora metrics:\n got %q\nwant %q", md, tt.want)
 			}
 		})
 	}

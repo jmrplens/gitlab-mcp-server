@@ -2,8 +2,8 @@ package pages
 
 import (
 	"context"
-	"fmt"
 	"net/http"
+	"strconv"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -448,11 +448,18 @@ func toDomainOutput(d *gl.PagesDomain, extra toolutil.PagesDomainExtra) DomainOu
 // Helpers
 // ---------------------------------------------------------------------------.
 
-// projectDisplay returns a human-readable project identifier from the
-// numeric project ID returned by the GitLab Pages domains API. Used by
-// the Markdown formatters.
+// projectDisplay renders the numeric project ID the GitLab Pages domains API
+// reports, or nothing when it sent none.
+//
+// It used to render "#42", which reads as an issue or merge request reference
+// and is the wrong shape for a project; and on every project-scoped call —
+// where GitLab returns the domain without a project object at all — it printed
+// "#0", a project that does not exist. A row with no value is not written.
 func projectDisplay(id int64) string {
-	return fmt.Sprintf("#%d", id)
+	if id == 0 {
+		return ""
+	}
+	return strconv.FormatInt(id, 10)
 }
 
 // ---------------------------------------------------------------------------

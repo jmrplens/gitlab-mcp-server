@@ -2,174 +2,201 @@ package bulkimports
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// The cells that hold text somebody typed are escaped where they are written:
-// a migration's source URL, an entity's source and destination paths, and a
-// failure's exception message. The values below are declared instead, because
-// none of them can carry a pipe, a newline or a '<'.
-//
-// Two kinds are represented. The statuses and the two type fields are enums the
-// destination instance writes. The four failure fields are derived from the
-// importer's own Ruby code rather than from anything the source instance sent:
-// the pipeline and exception class names are constant paths, the step is the
-// pipeline stage that raised, and the relation is the pipeline class name with
-// its namespace and suffix removed.
-//
-//gitlab:allow-unescaped out.Status: a migration status GitLab writes, one of created, started, finished, timeout, failed or canceled.
-//gitlab:allow-unescaped out.SourceType: a migration source type GitLab writes, which is "gitlab".
-//gitlab:allow-unescaped m.Status: a migration status GitLab writes, one of created, started, finished, timeout, failed or canceled.
-//gitlab:allow-unescaped m.SourceType: a migration source type GitLab writes, which is "gitlab".
-//gitlab:allow-unescaped e.Status: an entity status GitLab writes, the same set a migration's status comes from.
-//gitlab:allow-unescaped e.EntityType: an entity type GitLab writes, either "group" or "project".
-//gitlab:allow-unescaped f.Relation: the importer relation the failure belongs to, derived from the pipeline class name.
-//gitlab:allow-unescaped f.Step: the importer step that raised, one of extractor, transformer or loader.
-//gitlab:allow-unescaped f.PipelineClass: the importer pipeline's Ruby class name, a constant path.
-//gitlab:allow-unescaped f.ExceptionClass: the raised exception's Ruby class name, a constant path.
+// Canonical catalog action IDs the hints name. Bulk imports are routes on the
+// admin catalog group, so their domain is "admin".
+const (
+	actionGet             = "admin.bulk_import_get"
+	actionCancel          = "admin.bulk_import_cancel"
+	actionEntityList      = "admin.bulk_import_entity_list"
+	actionEntityGet       = "admin.bulk_import_entity_get"
+	actionEntityFailures  = "admin.bulk_import_entity_failures"
+	labelSourceType       = "Source Type"
+	labelSourceURL        = "Source URL"
+	labelHasFailures      = "Has Failures"
+	hintFailuresDiagnosed = "read the failure diagnostics"
+)
 
-// FormatStartMigrationMarkdown formats a start migration result as markdown.
+// FormatStartMigrationMarkdown renders the migration a start request created,
+// as a card.
 func FormatStartMigrationMarkdown(out MigrationOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Bulk Import Migration Started\n\n")
-	sb.WriteString(toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, toolutil.TblRowID, out.ID)
-	fmt.Fprintf(&sb, toolutil.TblRowStatus, out.Status)
-	fmt.Fprintf(&sb, "| Source Type | %s |\n", out.SourceType)
-	fmt.Fprintf(&sb, "| Source URL | %s |\n", toolutil.EscapeMdTableCell(out.SourceURL))
-	fmt.Fprintf(&sb, toolutil.TblRowCreatedAt, toolutil.FormatTime(out.CreatedAt))
-	fmt.Fprintf(&sb, toolutil.TblRowUpdatedAt, toolutil.FormatTime(out.UpdatedAt))
-	fmt.Fprintf(&sb, toolutil.TblRowHasFailures, out.HasFailures)
-	toolutil.WriteHints(&sb, "Monitor migration progress with gitlab_get_bulk_import")
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Bulk Import Migration Started")
+	c.Int("ID", out.ID)
+	c.Field("Status", out.Status)
+	c.Field(labelSourceType, out.SourceType)
+	c.Link(labelSourceURL, "", out.SourceURL)
+	c.Time("Created", out.CreatedAt)
+	c.Time("Updated", out.UpdatedAt)
+	c.Bool(labelHasFailures, out.HasFailures)
+	c.End(toolutil.HintAction(actionGet, "watch the migration's progress"))
+	return b.String()
 }
 
-// FormatListMarkdown formats a list of bulk import migrations as markdown.
+// FormatListMarkdown renders a page of bulk import migrations as a Markdown
+// table.
 func FormatListMarkdown(out ListOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Bulk Import Migrations\n\n")
-	toolutil.WriteListSummary(&sb, len(out.Migrations), out.Pagination)
 	if len(out.Migrations) == 0 {
-		sb.WriteString("_No migrations found._\n")
-		return sb.String()
+		return toolutil.EmptyMessage("bulk import migrations")
 	}
-	sb.WriteString("| ID | Status | Source Type | Source URL | Has Failures | Created |\n|---|---|---|---|---|---|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Bulk Import Migrations", len(out.Migrations), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Status", labelSourceType, labelSourceURL, labelHasFailures, "Created"))
 	for _, m := range out.Migrations {
-		fmt.Fprintf(&sb, "| %d | %s | %s | %s | %v | %s |\n",
-			m.ID, m.Status, m.SourceType,
-			toolutil.EscapeMdTableCell(m.SourceURL),
-			m.HasFailures, toolutil.FormatTime(m.CreatedAt))
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(m.ID, 10),
+			toolutil.EscapeMdTableCell(m.Status),
+			toolutil.EscapeMdTableCell(m.SourceType),
+			toolutil.MdTitleLink(m.SourceURL, m.SourceURL),
+			toolutil.BoolEmoji(m.HasFailures),
+			toolutil.FormatTime(m.CreatedAt),
+		))
 	}
-	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(
-		&sb,
-		toolutil.HintPreserveLinks,
-		"Use gitlab_get_bulk_import with id for full details",
-		"Use gitlab_list_bulk_import_entities to inspect entities of a migration",
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(actionGet, "read one migration in full"),
+		toolutil.HintAction(actionEntityList, "inspect the entities of a migration"),
 	)
-	return sb.String()
+	return b.String()
 }
 
-// FormatGetMarkdown formats a single bulk import migration as markdown.
+// FormatGetMarkdown renders one bulk import migration as a card.
 func FormatGetMarkdown(out MigrationSummary) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Bulk Import Migration #%d\n\n", out.ID)
-	sb.WriteString(toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, toolutil.TblRowID, out.ID)
-	fmt.Fprintf(&sb, toolutil.TblRowStatus, out.Status)
-	fmt.Fprintf(&sb, "| Source Type | %s |\n", out.SourceType)
-	fmt.Fprintf(&sb, "| Source URL | %s |\n", toolutil.EscapeMdTableCell(out.SourceURL))
-	fmt.Fprintf(&sb, toolutil.TblRowHasFailures, out.HasFailures)
-	fmt.Fprintf(&sb, toolutil.TblRowCreatedAt, toolutil.FormatTime(out.CreatedAt))
-	fmt.Fprintf(&sb, toolutil.TblRowUpdatedAt, toolutil.FormatTime(out.UpdatedAt))
-	hints := []string{"Use gitlab_list_bulk_import_entities with bulk_import_id to inspect entities"}
+	var b strings.Builder
+	c := toolutil.NewCard(&b, fmt.Sprintf("Bulk Import Migration #%d", out.ID))
+	c.Int("ID", out.ID)
+	c.Field("Status", out.Status)
+	c.Field(labelSourceType, out.SourceType)
+	c.Link(labelSourceURL, "", out.SourceURL)
+	c.Bool(labelHasFailures, out.HasFailures)
+	c.Time("Created", out.CreatedAt)
+	c.Time("Updated", out.UpdatedAt)
+	hints := []string{toolutil.HintAction(actionEntityList, "inspect the entities this migration moved")}
 	if out.HasFailures {
-		hints = append(hints, "Failures detected. Use gitlab_list_bulk_import_entity_failures for diagnostics")
+		hints = append(hints, toolutil.HintAction(actionEntityFailures, hintFailuresDiagnosed))
 	}
 	if out.Status == "started" || out.Status == "created" {
-		hints = append(hints, "Use gitlab_cancel_bulk_import to abort an in-progress migration")
+		hints = append(hints, toolutil.HintAction(actionCancel, "abort this migration while it runs"))
 	}
-	toolutil.WriteHints(&sb, hints...)
-	return sb.String()
+	c.End(hints...)
+	return b.String()
 }
 
-// FormatListEntitiesMarkdown formats a list of bulk import entities as markdown.
+// FormatListEntitiesMarkdown renders a page of bulk import entities as a
+// Markdown table.
 func FormatListEntitiesMarkdown(out ListEntitiesOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## Bulk Import Entities\n\n")
-	toolutil.WriteListSummary(&sb, len(out.Entities), out.Pagination)
 	if len(out.Entities) == 0 {
-		sb.WriteString("_No entities found._\n")
-		return sb.String()
+		return toolutil.EmptyMessage("bulk import entities")
 	}
-	sb.WriteString("| ID | Bulk Import | Type | Status | Source | Destination | Failures |\n|---|---|---|---|---|---|---|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Bulk Import Entities", len(out.Entities), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Bulk Import", "Type", "Status", "Source", "Destination", "Failures"))
 	for _, e := range out.Entities {
-		fmt.Fprintf(&sb, "| %d | %d | %s | %s | %s | %s | %v |\n",
-			e.ID, e.BulkImportID, e.EntityType, e.Status,
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(e.ID, 10),
+			strconv.FormatInt(e.BulkImportID, 10),
+			toolutil.EscapeMdTableCell(e.EntityType),
+			toolutil.EscapeMdTableCell(e.Status),
 			toolutil.EscapeMdTableCell(e.SourceFullPath),
 			toolutil.EscapeMdTableCell(e.DestinationFullPath),
-			e.HasFailures)
+			toolutil.BoolEmoji(e.HasFailures),
+		))
 	}
-	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(
-		&sb,
-		toolutil.HintPreserveLinks,
-		"Use gitlab_get_bulk_import_entity for full details on a single entity",
-		"Use gitlab_list_bulk_import_entity_failures to inspect failure diagnostics",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionEntityGet, "read one entity in full"),
+		toolutil.HintAction(actionEntityFailures, hintFailuresDiagnosed),
 	)
-	return sb.String()
+	return b.String()
 }
 
-// FormatGetEntityMarkdown formats a single bulk import entity as markdown.
+// FormatGetEntityMarkdown renders one bulk import entity as a card, with the
+// per-relation counts as a nested collection.
 func FormatGetEntityMarkdown(e EntitySummary) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Bulk Import Entity #%d\n\n", e.ID)
-	sb.WriteString(toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, toolutil.TblRowID, e.ID)
-	fmt.Fprintf(&sb, "| Bulk Import ID | %d |\n", e.BulkImportID)
-	fmt.Fprintf(&sb, toolutil.TblRowStatus, e.Status)
-	fmt.Fprintf(&sb, "| Entity Type | %s |\n", e.EntityType)
-	fmt.Fprintf(&sb, "| Source | %s |\n", toolutil.EscapeMdTableCell(e.SourceFullPath))
-	fmt.Fprintf(&sb, "| Destination | %s |\n", toolutil.EscapeMdTableCell(e.DestinationFullPath))
-	fmt.Fprintf(&sb, "| Migrate Projects | %v |\n", e.MigrateProjects)
-	fmt.Fprintf(&sb, "| Migrate Memberships | %v |\n", e.MigrateMemberships)
-	fmt.Fprintf(&sb, toolutil.TblRowHasFailures, e.HasFailures)
-	fmt.Fprintf(&sb, toolutil.TblRowCreatedAt, toolutil.FormatTime(e.CreatedAt))
-	fmt.Fprintf(&sb, toolutil.TblRowUpdatedAt, toolutil.FormatTime(e.UpdatedAt))
-	sb.WriteString("\n### Stats\n\n")
-	sb.WriteString("| Relation | Source | Fetched | Imported |\n|---|---|---|---|\n")
-	fmt.Fprintf(&sb, "| Labels | %d | %d | %d |\n", e.Stats.Labels.Source, e.Stats.Labels.Fetched, e.Stats.Labels.Imported)
-	fmt.Fprintf(&sb, "| Milestones | %d | %d | %d |\n", e.Stats.Milestones.Source, e.Stats.Milestones.Fetched, e.Stats.Milestones.Imported)
+	var b strings.Builder
+	c := toolutil.NewCard(&b, fmt.Sprintf("Bulk Import Entity #%d", e.ID))
+	c.Int("ID", e.ID)
+	c.Int("Bulk Import ID", e.BulkImportID)
+	c.Field("Status", e.Status)
+	c.Field("Entity Type", e.EntityType)
+	c.Field("Source", e.SourceFullPath)
+	c.Field("Destination", e.DestinationFullPath)
+	c.Bool("Migrate Projects", e.MigrateProjects)
+	c.Bool("Migrate Memberships", e.MigrateMemberships)
+	c.Bool(labelHasFailures, e.HasFailures)
+	c.Time("Created", e.CreatedAt)
+	c.Time("Updated", e.UpdatedAt)
+	writeEntityStats(c, e.Stats)
 	if e.HasFailures {
-		toolutil.WriteHints(&sb, "Failures detected. Use gitlab_list_bulk_import_entity_failures for diagnostics")
+		c.End(toolutil.HintAction(actionEntityFailures, hintFailuresDiagnosed))
+		return b.String()
 	}
-	return sb.String()
+	c.End(toolutil.HintAction(actionEntityList, "see the migration's other entities"))
+	return b.String()
 }
 
-// FormatEntityFailuresMarkdown formats migration entity failures as markdown.
+// writeEntityStats writes the per-relation counts, and only for a relation the
+// migration reported. GitLab sends the stats object with a key per relation it
+// processed, so a relation it left out used to render as a row of three zeros:
+// a claim that nothing was imported where the truth is that nothing was said.
+// A relation whose three counts are all zero is therefore not written, and a
+// stats object with no such relation opens no section at all.
+func writeEntityStats(c *toolutil.Card, stats EntityStats) {
+	rows := []struct {
+		relation string
+		item     EntityStatItem
+	}{
+		{"Labels", stats.Labels},
+		{"Milestones", stats.Milestones},
+	}
+	reported := make([]int, 0, len(rows))
+	for i, row := range rows {
+		if row.item != (EntityStatItem{}) {
+			reported = append(reported, i)
+		}
+	}
+	if len(reported) == 0 {
+		return
+	}
+	t := c.Table("Stats", "Relation", "Source", "Fetched", "Imported")
+	for _, i := range reported {
+		//gitlab:allow-unescaped rows[i].relation: the relation's name as this formatter spells it, Labels or Milestones, never a value GitLab sent.
+		t.Row(
+			rows[i].relation,
+			strconv.Itoa(rows[i].item.Source),
+			strconv.Itoa(rows[i].item.Fetched),
+			strconv.Itoa(rows[i].item.Imported),
+		)
+	}
+}
+
+// FormatEntityFailuresMarkdown renders one entity's import failures as a
+// Markdown table.
 func FormatEntityFailuresMarkdown(out ListEntityFailuresOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Bulk Import Failures (import #%d, entity #%d)\n\n", out.BulkImportID, out.EntityID)
 	if len(out.Failures) == 0 {
-		sb.WriteString("_No failures recorded._\n")
-		return sb.String()
+		return toolutil.EmptyMessage("bulk import failures")
 	}
-	sb.WriteString("| Relation | Step | Pipeline | Class | Message | Source | Created |\n|---|---|---|---|---|---|---|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, fmt.Sprintf("Bulk Import Failures (import #%d, entity #%d)", out.BulkImportID, out.EntityID), len(out.Failures), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("Relation", "Step", "Pipeline", "Class", "Message", "Source", "Created"))
 	for _, f := range out.Failures {
-		fmt.Fprintf(&sb, "| %s | %s | %s | %s | %s | %s | %s |\n",
-			f.Relation, f.Step, f.PipelineClass, f.ExceptionClass,
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.EscapeMdTableCell(f.Relation),
+			toolutil.EscapeMdTableCell(f.Step),
+			toolutil.EscapeMdTableCell(f.PipelineClass),
+			toolutil.EscapeMdTableCell(f.ExceptionClass),
 			toolutil.EscapeMdTableCell(f.ExceptionMessage),
-			toolutil.EscapeMdTableCell(f.SourceURL),
-			toolutil.FormatTime(f.CreatedAt))
+			toolutil.MdTitleLink(f.SourceURL, f.SourceURL),
+			toolutil.FormatTime(f.CreatedAt),
+		))
 	}
-	toolutil.WriteHints(
-		&sb,
-		toolutil.HintPreserveLinks,
-		"Inspect exception_class and pipeline_class to triage import errors",
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
+		toolutil.HintAction(actionEntityGet, "read the entity these failures belong to"),
 	)
-	return sb.String()
+	return b.String()
 }
 
 func init() {

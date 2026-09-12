@@ -2,7 +2,6 @@ package importservice
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -12,12 +11,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The labels an import card repeats, and the canonical catalog action IDs its
+// hints name. The import actions are routes on the admin catalog group, so
+// their domain is "admin"; the project the import creates is read through the
+// project group.
 const (
-	fmtIDRow           = "| ID | %d |\n"
-	fmtNameRow         = "| Name | %s |\n"
-	fmtImportStatusRow = "| Import Status | %s |\n"
-	fmtFullPathRow     = "| Full Path | %s |\n"
-	hintMonitorImport  = "Monitor import progress by checking the import status periodically"
+	labelFullPath     = "Full Path"
+	labelImportSource = "Import Source"
+	labelImportStatus = "Import Status"
+	labelStatusName   = "Status Name"
+	labelProviderLink = "Provider Link"
+
+	actionProjectGet     = "project.get"
+	actionCancelImport   = "admin.import_cancel_github"
+	actionImportGitHub   = "admin.import_github"
+	hintPollImportStatus = "poll import_status until the import finishes"
 )
 
 // Import from GitHub.
@@ -298,76 +306,81 @@ func ImportFromBitbucketServer(ctx context.Context, client *gitlabclient.Client,
 
 // Markdown Formatters.
 
-// FormatGitHubImport formats a GitHub import result as markdown.
+// FormatGitHubImport renders a GitHub import as a card.
+//
+// The imported project's name is whatever the source repository was called, so
+// every value here is one a person typed; the card escapes each for the row it
+// writes. It used to drop the relation type and both addresses GitLab sends —
+// the source repository and the refs endpoint — which left a reader of a
+// mirror import unable to tell what was mirrored or from where.
 func FormatGitHubImport(out *GitHubImportOutput) string {
-	var sb strings.Builder
-	// The imported project's name is whatever the source repository was called,
-	// which is why the row below escapes the same value.
-	fmt.Fprintf(&sb, "## GitHub Import: %s\n\n", toolutil.EscapeMdHeading(out.Name))
-	sb.WriteString(toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, fmtIDRow, out.ID)
-	fmt.Fprintf(&sb, fmtNameRow, toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&sb, fmtFullPathRow, toolutil.EscapeMdTableCell(out.FullPath))
-	fmt.Fprintf(&sb, "| Import Source | %s |\n", toolutil.EscapeMdTableCell(out.ImportSource))
-	fmt.Fprintf(&sb, fmtImportStatusRow, toolutil.EscapeMdTableCell(out.ImportStatus))
-	if out.HumanImportStatusName != "" {
-		fmt.Fprintf(&sb, "| Status Name | %s |\n", toolutil.EscapeMdTableCell(out.HumanImportStatusName))
-	}
-	if out.ImportWarning != "" {
-		fmt.Fprintf(&sb, "| Import Warning | %s |\n", toolutil.EscapeMdTableCell(out.ImportWarning))
-	}
-	toolutil.WriteHints(&sb, hintMonitorImport)
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "GitHub Import: "+out.Name)
+	c.Int("ID", out.ID)
+	c.Field("Name", out.Name)
+	c.Field(labelFullPath, out.FullPath)
+	c.Field(labelImportSource, out.ImportSource)
+	c.Field(labelImportStatus, out.ImportStatus)
+	c.Field(labelStatusName, out.HumanImportStatusName)
+	c.Field("Relation Type", out.RelationType)
+	c.Link(labelProviderLink, "", out.ProviderLink)
+	c.Link("Refs URL", "", out.RefsURL)
+	c.Text("Import Warning", out.ImportWarning)
+	c.End(
+		toolutil.HintAction(actionProjectGet, hintPollImportStatus),
+		toolutil.HintAction(actionCancelImport, "cancel the import while it runs"),
+	)
+	return b.String()
 }
 
-// FormatCancelledImport formats a canceled import result as markdown.
+// FormatCancelledImport renders a canceled GitHub import as a card.
 func FormatCancelledImport(out *CancelledImportOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Canceled Import: %s\n\n", toolutil.EscapeMdHeading(out.Name))
-	sb.WriteString(toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, fmtIDRow, out.ID)
-	fmt.Fprintf(&sb, fmtNameRow, toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&sb, fmtImportStatusRow, toolutil.EscapeMdTableCell(out.ImportStatus))
-	toolutil.WriteHints(&sb, "Import has been cancelled. Start a new import if needed")
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Canceled Import: "+out.Name)
+	c.Int("ID", out.ID)
+	c.Field("Name", out.Name)
+	c.Field(labelFullPath, out.FullPath)
+	c.Field(labelImportSource, out.ImportSource)
+	c.Field(labelImportStatus, out.ImportStatus)
+	c.Field(labelStatusName, out.HumanImportStatusName)
+	c.Link(labelProviderLink, "", out.ProviderLink)
+	c.End(toolutil.HintAction(actionImportGitHub, "start a new import if one is still wanted"))
+	return b.String()
 }
 
-// FormatBitbucketCloudImport formats a Bitbucket Cloud import result as markdown.
+// FormatBitbucketCloudImport renders a Bitbucket Cloud import as a card.
 func FormatBitbucketCloudImport(out *BitbucketCloudImportOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Bitbucket Cloud Import: %s\n\n", toolutil.EscapeMdHeading(out.Name))
-	sb.WriteString(toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, fmtIDRow, out.ID)
-	fmt.Fprintf(&sb, fmtNameRow, toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&sb, fmtFullPathRow, toolutil.EscapeMdTableCell(out.FullPath))
-	fmt.Fprintf(&sb, "| Import Source | %s |\n", toolutil.EscapeMdTableCell(out.ImportSource))
-	fmt.Fprintf(&sb, fmtImportStatusRow, toolutil.EscapeMdTableCell(out.ImportStatus))
-	toolutil.WriteHints(&sb, hintMonitorImport)
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Bitbucket Cloud Import: "+out.Name)
+	c.Int("ID", out.ID)
+	c.Field("Name", out.Name)
+	c.Field(labelFullPath, out.FullPath)
+	c.Field(labelImportSource, out.ImportSource)
+	c.Field(labelImportStatus, out.ImportStatus)
+	c.Field(labelStatusName, out.HumanImportStatusName)
+	c.Link(labelProviderLink, "", out.ProviderLink)
+	c.End(toolutil.HintAction(actionProjectGet, hintPollImportStatus))
+	return b.String()
 }
 
-// FormatBitbucketServerImport formats a Bitbucket Server import result as markdown.
+// FormatBitbucketServerImport renders a Bitbucket Server import as a card.
+// The endpoint answers with the created project alone: no import status, no
+// provider link.
 func FormatBitbucketServerImport(out *BitbucketServerImportOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Bitbucket Server Import: %s\n\n", toolutil.EscapeMdHeading(out.Name))
-	sb.WriteString(toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, fmtIDRow, out.ID)
-	fmt.Fprintf(&sb, fmtNameRow, toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&sb, fmtFullPathRow, toolutil.EscapeMdTableCell(out.FullPath))
-	toolutil.WriteHints(&sb, hintMonitorImport)
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Bitbucket Server Import: "+out.Name)
+	c.Int("ID", out.ID)
+	c.Field("Name", out.Name)
+	c.Field(labelFullPath, out.FullPath)
+	c.Field("Full Name", out.FullName)
+	c.End(toolutil.HintAction(actionProjectGet, hintPollImportStatus))
+	return b.String()
 }
 
-// FormatImportGists formats the gist import result as markdown.
-func FormatImportGists() string {
-	return "GitHub gists import into GitLab snippets initiated successfully."
-}
-
-// init registers value-type Markdown formatters so the discovery audit can
-// resolve OutputType dereferences for the pointer-returning import handlers.
-// The handlers return *GitHubImportOutput, *CancelledImportOutput, etc., but
-// HasRegisteredMarkdownFormatter dereferences the pointer type to look up
-// the value-type key, so the registrations below use value signatures.
+// init registers value-type Markdown formatters so the registry resolves the
+// pointer the import handlers return: MarkdownForResult dereferences a pointer
+// whose element type has a formatter, so the registrations below use value
+// signatures.
 func init() {
 	toolutil.RegisterMarkdown(func(out GitHubImportOutput) string { return FormatGitHubImport(&out) })
 	toolutil.RegisterMarkdown(func(out CancelledImportOutput) string { return FormatCancelledImport(&out) })

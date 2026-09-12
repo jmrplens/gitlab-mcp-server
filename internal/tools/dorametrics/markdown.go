@@ -1,35 +1,51 @@
 package dorametrics
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatMarkdown renders DORA metrics as a Markdown table.
+// actionDeploymentList is the canonical catalog ID of the action whose result
+// a reader correlates these metrics with.
+const actionDeploymentList = "environment.deployment_list"
+
+// FormatMarkdown renders a DORA metric series as a Markdown table: a
+// collection of data points that share columns.
+//
+// The metric name comes from the caller because the output carries neither the
+// metric nor the date window that was asked for, so the registered formatter
+// can only render the series itself. Naming the metric and its unit in the
+// value column needs both in Output.
 func FormatMarkdown(out Output, metric string) string {
-	var sb strings.Builder
+	if len(out.Metrics) == 0 {
+		return toolutil.EmptyMessage("DORA metric data points")
+	}
 	title := "DORA Metrics"
 	if metric != "" {
-		title = "DORA Metrics: " + toolutil.EscapeMdTableCell(metric)
+		title = "DORA Metrics: " + metric
 	}
-	fmt.Fprintf(&sb, "## %s\n\n", title)
-	if len(out.Metrics) == 0 {
-		sb.WriteString("No metrics data available.\n")
-		return sb.String()
-	}
-	sb.WriteString("| Date | Value |\n|------|-------|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, title, len(out.Metrics), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("Date", "Value"))
 	for _, m := range out.Metrics {
-		//gitlab:allow-unescaped m.Date: the day GitLab reports the metric for, a YYYY-MM-DD date.
-		fmt.Fprintf(&sb, "| %s | %.4f |\n", m.Date, m.Value)
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.FormatTime(m.Date),
+			metricValue(m.Value),
+		))
 	}
-	fmt.Fprintf(&sb, "\n**Total data points:** %d\n", len(out.Metrics))
-	toolutil.WriteHints(
-		&sb,
-		"Use `gitlab_deployment_list` to correlate with deployment activity",
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(actionDeploymentList, "correlate these metrics with deployment activity"),
 	)
-	return sb.String()
+	return b.String()
+}
+
+// metricValue renders one data point. The four DORA metrics are counted in
+// different units — deployments, seconds, a ratio — so a fixed four decimals
+// stamped false precision on a count and on a duration alike.
+func metricValue(v float64) string {
+	return strconv.FormatFloat(v, 'f', -1, 64)
 }
 
 func init() {

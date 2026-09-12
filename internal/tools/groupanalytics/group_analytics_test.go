@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"testing"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -115,178 +114,148 @@ func callMembersCount(ctx context.Context, client *gitlabclient.Client, groupPat
 
 // --- Markdown Formatters ---
 
-// TestFormatIssuesCountMarkdown verifies the Markdown output for recently
-// created issues count, checking header, table structure, values, and hints.
+// The guidance section each of the three analytics cards closes with.
+const (
+	issuesCountHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.analytics_mr_count' to compare with merge request activity\n" +
+		"- Use action 'issue.list_group' to read the issues themselves\n"
+	mrCountHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.analytics_issues_count' to compare with issue activity\n" +
+		"- Use action 'merge_request.list_group' to read the merge requests themselves\n"
+	membersCountHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'group.members' to read the members themselves\n" +
+		"- Use action 'group.analytics_issues_count' to see the group's development activity\n"
+)
+
+// assertAnalyticsCard compares a whole rendered card with what the formatter
+// is meant to write, byte for byte.
+func assertAnalyticsCard(t *testing.T, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("analytics card:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestFormatIssuesCountMarkdown verifies the whole card the issue count
+// renders, a zero count included: zero is the answer GitLab gave, not an
+// absence, so the row is written.
 func TestFormatIssuesCountMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    IssuesCountOutput
-		contains []string
+		name  string
+		input IssuesCountOutput
+		want  string
 	}{
 		{
-			name: "formats non-zero count",
-			input: IssuesCountOutput{
-				GroupPath:   "my-group",
-				IssuesCount: 42,
-			},
-			contains: []string{
-				"## Recently Created Issues Count",
-				"| Group | `my-group` |",
-				"| Issues Count (last 90 days) | **42** |",
-				"gitlab_get_recently_created_mr_count",
-				"gitlab_issue_list_group",
-			},
+			name:  "formats non-zero count",
+			input: IssuesCountOutput{GroupPath: "my-group", IssuesCount: 42},
+			want: "## Recently Created Issues Count\n\n" +
+				"- **Group**: `my-group`\n" +
+				"- **Issues Count (last 90 days)**: 42\n" +
+				issuesCountHints,
 		},
 		{
-			name: "formats zero count",
-			input: IssuesCountOutput{
-				GroupPath:   "empty-group",
-				IssuesCount: 0,
-			},
-			contains: []string{
-				"| Group | `empty-group` |",
-				"| Issues Count (last 90 days) | **0** |",
-			},
+			name:  "formats zero count",
+			input: IssuesCountOutput{GroupPath: "empty-group"},
+			want: "## Recently Created Issues Count\n\n" +
+				"- **Group**: `empty-group`\n" +
+				"- **Issues Count (last 90 days)**: 0\n" +
+				issuesCountHints,
 		},
 		{
-			name: "formats nested group path",
-			input: IssuesCountOutput{
-				GroupPath:   "parent/child",
-				IssuesCount: 100,
-			},
-			contains: []string{
-				"| Group | `parent/child` |",
-				"**100**",
-			},
+			name:  "formats nested group path",
+			input: IssuesCountOutput{GroupPath: "parent/child", IssuesCount: 100},
+			want: "## Recently Created Issues Count\n\n" +
+				"- **Group**: `parent/child`\n" +
+				"- **Issues Count (last 90 days)**: 100\n" +
+				issuesCountHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatIssuesCountMarkdown(tt.input)
-			for _, want := range tt.contains {
-				if !strings.Contains(got, want) {
-					t.Errorf("output missing %q\ngot:\n%s", want, got)
-				}
-			}
+			assertAnalyticsCard(t, FormatIssuesCountMarkdown(tt.input), tt.want)
 		})
 	}
 }
 
-// TestFormatMRCountMarkdown verifies the MRCountMarkdown Markdown formatter for a representative mrcount input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMRCountMarkdown verifies the whole card the merge request count
+// renders.
 func TestFormatMRCountMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    MRCountOutput
-		contains []string
+		name  string
+		input MRCountOutput
+		want  string
 	}{
 		{
-			name: "formats non-zero MR count",
-			input: MRCountOutput{
-				GroupPath:          "dev-team",
-				MergeRequestsCount: 17,
-			},
-			contains: []string{
-				"## Recently Created Merge Requests Count",
-				"| Group | `dev-team` |",
-				"| Merge Requests Count (last 90 days) | **17** |",
-				"gitlab_get_recently_created_issues_count",
-				"gitlab_mr_list_group",
-			},
+			name:  "formats non-zero MR count",
+			input: MRCountOutput{GroupPath: "dev-team", MergeRequestsCount: 17},
+			want: "## Recently Created Merge Requests Count\n\n" +
+				"- **Group**: `dev-team`\n" +
+				"- **Merge Requests Count (last 90 days)**: 17\n" +
+				mrCountHints,
 		},
 		{
-			name: "formats zero MR count",
-			input: MRCountOutput{
-				GroupPath:          "quiet-team",
-				MergeRequestsCount: 0,
-			},
-			contains: []string{
-				"| Group | `quiet-team` |",
-				"**0**",
-			},
+			name:  "formats zero MR count",
+			input: MRCountOutput{GroupPath: "quiet-team"},
+			want: "## Recently Created Merge Requests Count\n\n" +
+				"- **Group**: `quiet-team`\n" +
+				"- **Merge Requests Count (last 90 days)**: 0\n" +
+				mrCountHints,
 		},
 		{
-			name: "formats large MR count",
-			input: MRCountOutput{
-				GroupPath:          "mega-corp/platform",
-				MergeRequestsCount: 99999,
-			},
-			contains: []string{
-				"| Group | `mega-corp/platform` |",
-				"**99999**",
-			},
+			name:  "formats large MR count",
+			input: MRCountOutput{GroupPath: "mega-corp/platform", MergeRequestsCount: 99999},
+			want: "## Recently Created Merge Requests Count\n\n" +
+				"- **Group**: `mega-corp/platform`\n" +
+				"- **Merge Requests Count (last 90 days)**: 99999\n" +
+				mrCountHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatMRCountMarkdown(tt.input)
-			for _, want := range tt.contains {
-				if !strings.Contains(got, want) {
-					t.Errorf("output missing %q\ngot:\n%s", want, got)
-				}
-			}
+			assertAnalyticsCard(t, FormatMRCountMarkdown(tt.input), tt.want)
 		})
 	}
 }
 
-// TestFormatMembersCountMarkdown verifies the MembersCountMarkdown Markdown formatter for a representative memberscount input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMembersCountMarkdown verifies the whole card the member count
+// renders.
 func TestFormatMembersCountMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    MembersCountOutput
-		contains []string
+		name  string
+		input MembersCountOutput
+		want  string
 	}{
 		{
-			name: "formats non-zero members count",
-			input: MembersCountOutput{
-				GroupPath:       "my-org",
-				NewMembersCount: 5,
-			},
-			contains: []string{
-				"## Recently Added Members Count",
-				"| Group | `my-org` |",
-				"| New Members Count (last 90 days) | **5** |",
-				"gitlab_group_members_list",
-				"gitlab_get_recently_created_issues_count",
-			},
+			name:  "formats non-zero members count",
+			input: MembersCountOutput{GroupPath: "my-org", NewMembersCount: 5},
+			want: "## Recently Added Members Count\n\n" +
+				"- **Group**: `my-org`\n" +
+				"- **New Members Count (last 90 days)**: 5\n" +
+				membersCountHints,
 		},
 		{
-			name: "formats zero members count",
-			input: MembersCountOutput{
-				GroupPath:       "stable-org",
-				NewMembersCount: 0,
-			},
-			contains: []string{
-				"| Group | `stable-org` |",
-				"**0**",
-			},
+			name:  "formats zero members count",
+			input: MembersCountOutput{GroupPath: "stable-org"},
+			want: "## Recently Added Members Count\n\n" +
+				"- **Group**: `stable-org`\n" +
+				"- **New Members Count (last 90 days)**: 0\n" +
+				membersCountHints,
 		},
 		{
-			name: "formats deeply nested group path",
-			input: MembersCountOutput{
-				GroupPath:       "a/b/c/d",
-				NewMembersCount: 1,
-			},
-			contains: []string{
-				"| Group | `a/b/c/d` |",
-				"**1**",
-			},
+			name:  "formats deeply nested group path",
+			input: MembersCountOutput{GroupPath: "a/b/c/d", NewMembersCount: 1},
+			want: "## Recently Added Members Count\n\n" +
+				"- **Group**: `a/b/c/d`\n" +
+				"- **New Members Count (last 90 days)**: 1\n" +
+				membersCountHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatMembersCountMarkdown(tt.input)
-			for _, want := range tt.contains {
-				if !strings.Contains(got, want) {
-					t.Errorf("output missing %q\ngot:\n%s", want, got)
-				}
-			}
+			assertAnalyticsCard(t, FormatMembersCountMarkdown(tt.input), tt.want)
 		})
 	}
 }

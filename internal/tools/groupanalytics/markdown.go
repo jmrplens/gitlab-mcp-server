@@ -1,57 +1,60 @@
 package groupanalytics
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const fmtGroupRow = "| Group | `%s` |\n"
+// Canonical catalog action IDs the hints name. These three actions are routes
+// on the group catalog group, so their domain is "group".
+const (
+	actionIssuesCount  = "group.analytics_issues_count"
+	actionMRCount      = "group.analytics_mr_count"
+	actionMembersCount = "group.analytics_members_count"
+	actionIssueList    = "issue.list_group"
+	actionMRList       = "merge_request.list_group"
+	actionMemberList   = "group.members"
+)
 
-// FormatIssuesCountMarkdown formats a recently created issues count as Markdown.
+// FormatIssuesCountMarkdown renders the recently created issue count as a card.
 func FormatIssuesCountMarkdown(out IssuesCountOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Recently Created Issues Count\n\n")
-	fmt.Fprint(&sb, toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, fmtGroupRow, toolutil.EscapeMdTableCell(out.GroupPath))
-	fmt.Fprintf(&sb, "| Issues Count (last 90 days) | **%d** |\n", out.IssuesCount)
-	toolutil.WriteHints(
-		&sb,
-		"Use `gitlab_get_recently_created_mr_count` to compare with merge request activity",
-		"Use `gitlab_issue_list_group` to view the actual issues",
+	return countCard("Recently Created Issues Count", out.GroupPath,
+		"Issues Count (last 90 days)", out.IssuesCount,
+		toolutil.HintAction(actionMRCount, "compare with merge request activity"),
+		toolutil.HintAction(actionIssueList, "read the issues themselves"),
 	)
-	return sb.String()
 }
 
-// FormatMRCountMarkdown formats a recently created merge requests count as Markdown.
+// FormatMRCountMarkdown renders the recently created merge request count as a
+// card.
 func FormatMRCountMarkdown(out MRCountOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Recently Created Merge Requests Count\n\n")
-	fmt.Fprint(&sb, toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, fmtGroupRow, toolutil.EscapeMdTableCell(out.GroupPath))
-	fmt.Fprintf(&sb, "| Merge Requests Count (last 90 days) | **%d** |\n", out.MergeRequestsCount)
-	toolutil.WriteHints(
-		&sb,
-		"Use `gitlab_get_recently_created_issues_count` to compare with issue activity",
-		"Use `gitlab_mr_list_group` to view the actual merge requests",
+	return countCard("Recently Created Merge Requests Count", out.GroupPath,
+		"Merge Requests Count (last 90 days)", out.MergeRequestsCount,
+		toolutil.HintAction(actionIssuesCount, "compare with issue activity"),
+		toolutil.HintAction(actionMRList, "read the merge requests themselves"),
 	)
-	return sb.String()
 }
 
-// FormatMembersCountMarkdown formats a recently added members count as Markdown.
+// FormatMembersCountMarkdown renders the recently added member count as a card.
 func FormatMembersCountMarkdown(out MembersCountOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Recently Added Members Count\n\n")
-	fmt.Fprint(&sb, toolutil.TblFieldValue)
-	fmt.Fprintf(&sb, fmtGroupRow, toolutil.EscapeMdTableCell(out.GroupPath))
-	fmt.Fprintf(&sb, "| New Members Count (last 90 days) | **%d** |\n", out.NewMembersCount)
-	toolutil.WriteHints(
-		&sb,
-		"Use `gitlab_group_members_list` to view the actual members",
-		"Use `gitlab_get_recently_created_issues_count` to see group development activity",
+	return countCard("Recently Added Members Count", out.GroupPath,
+		"New Members Count (last 90 days)", out.NewMembersCount,
+		toolutil.HintAction(actionMemberList, "read the members themselves"),
+		toolutil.HintAction(actionIssuesCount, "see the group's development activity"),
 	)
-	return sb.String()
+}
+
+// countCard renders the one shape all three analytics answers share: the group
+// the count was taken over, and the count. The path goes in a code span, being
+// the value a caller copies into the next request.
+func countCard(heading, groupPath, label string, count int64, hints ...string) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, heading)
+	c.Code("Group", groupPath)
+	c.Int(label, count)
+	c.End(hints...)
+	return b.String()
 }
 
 func init() {
