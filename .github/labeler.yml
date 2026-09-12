@@ -229,6 +229,9 @@ e2e:
   - changed-files:
       - any-glob-to-any-file:
           - test/e2e/suite/**
+          - test/e2e/gitlab/**
+          - test/e2e/internal/**
+          - internal/testutil/e2ecalls/**
           - test/e2e/orbit/**
           - test/e2e/collector/**
           - test/e2e/scripts/**

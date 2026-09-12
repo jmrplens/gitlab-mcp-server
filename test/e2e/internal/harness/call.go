@@ -96,6 +96,12 @@ const (
 	// FailureProtocolError is a JSON-RPC error rather than a tool result: the
 	// call never became a tool outcome at all.
 	FailureProtocolError Failure = "protocol_error"
+	// FailureWithheld is an action the session was configured not to serve,
+	// declined on the wire. It is the expectation [Withheld] records, and it
+	// names the configuration rather than the answer because the surfaces
+	// answer differently: the dispatchers refuse the action as unknown or
+	// unavailable, and the individual surface never registered the tool.
+	FailureWithheld Failure = "withheld"
 )
 
 // String returns the class as a record spells it.
@@ -186,6 +192,19 @@ type callResult struct {
 
 // ok reports whether the server ran the action and reported no failure.
 func (r callResult) ok() bool { return r.err == nil && r.failure == "" }
+
+// said returns the server's own words for an answer: the text of a tool
+// result, or the message of a JSON-RPC error, which is the only text an
+// unregistered tool is refused with.
+func (r callResult) said() string {
+	if r.text != "" {
+		return r.text
+	}
+	if r.err != nil {
+		return r.err.Error()
+	}
+	return ""
+}
 
 // describe is the one-line summary a failed assertion carries. The elapsed
 // time is part of it because the two failures that look alike in a log, a
@@ -296,6 +315,70 @@ func ExpectToolError(s *Session, id ActionID, params map[string]any, contains st
 	return answer.text
 }
 
+// Withheld asserts that an action this session was configured not to serve is
+// declined on the wire, and returns what the server said.
+//
+// Every other verb refuses to send a call for an action the session does not
+// serve, because sent by mistake it reads as a server defect. This one sends
+// it on purpose: the refusal is the subject, and it is the whole of what
+// read-only mode, a narrowed credential and an operator's exclusion look like
+// to a client. The three surfaces decline in three shapes and all three are
+// accepted here, since each is that surface's correct answer: the dynamic
+// dispatcher names the action as unknown or as withheld with its reason; the
+// meta dispatcher's tool no longer admits the action in its schema, so the
+// SDK refuses the argument before the dispatcher runs, or the whole group is
+// gone and the tool is unregistered; and the individual surface answers a
+// JSON-RPC error for a tool it never registered. An action the session does
+// serve fails the test, because then there is no withholding to assert and
+// the call belongs to Refused.
+func Withheld(s *Session, id ActionID, params map[string]any, opts ...CallOption) string {
+	s.env.T.Helper()
+
+	resolved := resolveCallOptions(opts).expecting(string(FailureWithheld))
+	call, err := s.project(id, params, resolved.confirm)
+	if err != nil {
+		s.env.T.Fatalf("%v", err)
+		return ""
+	}
+	if s.Serves(id) {
+		s.env.T.Fatalf("%s: the %s session in %s mode serves it, so there is no withholding to assert; "+
+			"use Refused or ExpectToolError for an action the session serves", callLabel(id, resolved), s.Surface(), s.Mode())
+		return ""
+	}
+
+	answer := s.send(id, call, resolved)
+	if answer.failure == "" {
+		s.env.T.Fatalf("%s: the %s session in %s mode ran an action it was configured not to serve: %s",
+			callLabel(id, resolved), s.Surface(), s.Mode(), answer.describe())
+		return ""
+	}
+	if !withheldAnswer(answer) {
+		s.env.T.Fatalf("%s: declined as %s rather than as a withheld action: %s",
+			callLabel(id, resolved), answer.failure, firstLines(answer.said(), 6))
+	}
+	return answer.said()
+}
+
+// withheldAnswer reports whether an answer is one of the shapes a withheld
+// action is declined in.
+//
+// The invalid-params shape is admitted only when it is the action argument
+// the schema refused: a meta tool whose group lost the action lists the rest
+// in its enum, and that is the refusal. A parameter of the action refused
+// for another reason means the action was admitted, and so served.
+func withheldAnswer(answer callResult) bool {
+	switch answer.failure {
+	case FailureUnknownAction:
+		return true
+	case FailureInvalidParams:
+		return strings.Contains(answer.text, "/properties/action")
+	case FailureProtocolError:
+		return answer.err != nil && strings.Contains(answer.err.Error(), "unknown tool")
+	default:
+		return false
+	}
+}
+
 // Eventually runs an action until the predicate accepts its answer, or the
 // timeout runs out.
 //
@@ -363,6 +446,26 @@ func (s *Session) invoke(id ActionID, params map[string]any, opts callOptions) c
 // resolve turns an action ID into the call this session takes, refusing the
 // three cases that would otherwise be sent and misread.
 func (s *Session) resolve(id ActionID, params map[string]any, confirm bool) (toolCall, error) {
+	call, err := s.project(id, params, confirm)
+	if err != nil {
+		return toolCall{}, err
+	}
+	if !s.Serves(id) {
+		return toolCall{}, fmt.Errorf("the %s session does not serve %s: the %s mode, the credential's scopes, the %s tier "+
+			"its credential could read, or the operator's exclusions removed it", s.Surface(), id, s.Mode(), s.Tier())
+	}
+	return call, nil
+}
+
+// project spells the call this session's surface takes for an action, without
+// asking whether the session serves it.
+//
+// The projection is asked first, because it knows the surface's own reason: an
+// action whose individual tool name a sibling owns is unservable for that
+// reason and not because a mode removed it, and the session's action set
+// cannot tell the two apart. Whether the session serves the action is the
+// caller's question, and [Withheld] deliberately asks the opposite one.
+func (s *Session) project(id ActionID, params map[string]any, confirm bool) (toolCall, error) {
 	inst := s.conn.inst
 	projected, err := newProjection(inst.facts.Tier, inst.client.IsGitLabDotCom())
 	if err != nil {
@@ -376,19 +479,7 @@ func (s *Session) resolve(id ActionID, params map[string]any, confirm bool) (too
 		return toolCall{}, fmt.Errorf("action %s needs %s, and the %s package runs on %s: move the scenario to a "+
 			"package whose requirement provides it", id, action.minimumTier, inst.pkg, ceiling)
 	}
-	// The projection first, because it knows the surface's own reason: an
-	// action whose individual tool name a sibling owns is unservable for that
-	// reason and not because a mode removed it, and the session's action set
-	// cannot tell the two apart.
-	call, err := action.callOn(s.Surface(), params, confirm)
-	if err != nil {
-		return toolCall{}, err
-	}
-	if !s.Serves(id) {
-		return toolCall{}, fmt.Errorf("the %s session does not serve %s: the %s mode, the credential's scopes or the "+
-			"operator's exclusions removed it", s.Surface(), id, s.Mode())
-	}
-	return call, nil
+	return action.callOn(s.Surface(), params, confirm)
 }
 
 // send makes the call, retrying what failed in transit.
@@ -538,11 +629,20 @@ func classifyToolError(text string) Failure {
 	switch {
 	case strings.Contains(lowered, "re-send with confirm=true"):
 		return FailureNeedsConfirmation
-	case strings.Contains(lowered, "unknown action"):
+	case strings.Contains(lowered, "unknown action"),
+		// The dynamic dispatcher's answer for an action a scope or the
+		// operator withheld. It is logged on the span as unknown_action, so
+		// it is classified as the server counts it and not as a plain
+		// tool error, which is what its wording would otherwise read as.
+		strings.Contains(lowered, "exists but is not available"):
 		return FailureUnknownAction
 	case strings.Contains(lowered, "is required for this action"),
 		strings.Contains(lowered, "missing required params"),
-		strings.Contains(lowered, "'action' is required"):
+		strings.Contains(lowered, "'action' is required"),
+		// The SDK's own schema validation, which runs before any handler:
+		// an argument the tool's input schema refuses never reaches the
+		// dispatcher, and reads as the same class as a dispatcher refusing it.
+		strings.Contains(lowered, `validating "arguments"`):
 		return FailureInvalidParams
 	case strings.Contains(lowered, "404"), strings.Contains(lowered, "not found"):
 		return FailureNotFound

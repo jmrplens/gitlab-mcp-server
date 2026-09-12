@@ -306,3 +306,38 @@ func TestProjection_TierDecidesWhatExists(t *testing.T) {
 			len(free.actions), len(ultimate.actions))
 	}
 }
+
+// TestActionTier_ReadsTheWholeCatalog checks that a test can ask the tier of
+// an action its own runtime does not serve.
+//
+// The instance behind the Env is Free, and the licensed action is still
+// answered with its tier: that is what lets a common test assert, on every
+// runtime, that a listing carries nothing above the tier the instance has.
+func TestActionTier_ReadsTheWholeCatalog(t *testing.T) {
+	inst := stubInstance(t)
+	env := newEnv(t, inst)
+	licensed := licensedActionFor(t, inst)
+
+	cases := []struct {
+		name      string
+		id        ActionID
+		wantKnown bool
+		wantAbove bool
+	}{
+		{name: "free action", id: "server.status", wantKnown: true},
+		{name: "licensed action", id: licensed, wantKnown: true, wantAbove: true},
+		{name: "not an action", id: "not_a_domain.not_an_action"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			tier, known := env.ActionTier(testCase.id)
+
+			if known != testCase.wantKnown {
+				t.Fatalf("ActionTier(%s) known = %t, want %t", testCase.id, known, testCase.wantKnown)
+			}
+			if above := tier > edition.Free; above != testCase.wantAbove {
+				t.Errorf("ActionTier(%s) = %s, want above Free = %t", testCase.id, tier, testCase.wantAbove)
+			}
+		})
+	}
+}

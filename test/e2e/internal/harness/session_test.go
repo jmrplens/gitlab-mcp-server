@@ -13,6 +13,7 @@ package harness
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
@@ -460,6 +462,225 @@ func TestSession_ReadOnlyMode_WithholdsTheWritesAndSaysSo(t *testing.T) {
 	if !strings.Contains(err.Error(), "read-only mode") {
 		t.Errorf("the refusal is %q, want it to name the mode that removed the action", err)
 	}
+}
+
+// TestSession_Actions_ListsWhatServesAnswersFor checks that the served set a
+// test compares a listing against is the same answer Serves gives, sorted and
+// with the mode's removals applied.
+func TestSession_Actions_ListsWhatServesAnswersFor(t *testing.T) {
+	inst := stubInstance(t)
+	env := newEnv(t, inst)
+	session := env.Session(ServerConfig{Surface: SurfaceDynamic, Mode: ModeReadOnly, Private: true})
+
+	actions := session.Actions()
+	if len(actions) == 0 {
+		t.Fatal("the session serves no action at all")
+	}
+	if !slices.IsSorted(actions) {
+		t.Error("Actions() is not sorted")
+	}
+	for _, id := range actions {
+		if !session.Serves(id) {
+			t.Errorf("Actions() lists %s, which Serves denies", id)
+		}
+	}
+	if slices.Contains(actions, "project.delete") {
+		t.Error("the read-only session lists project.delete")
+	}
+	if !slices.Contains(actions, "project.get") {
+		t.Error("the read-only session does not list project.get, which reads")
+	}
+}
+
+// TestWithheld_ReadOnlyMode_IsDeclinedOnEverySurface drives the verb that
+// sends a call the session was configured not to serve, against the real
+// binary in read-only mode on all three surfaces.
+//
+// Each surface declines in its own shape, and each shape is what a client of
+// that surface would be told: the dynamic dispatcher names the action as
+// withheld and says by whom, the meta tool's schema no longer lists the
+// action among the ones its group has, and the individual surface never
+// registered the tool. The refusal never reaches GitLab, which is why the
+// stub behind this test can answer it.
+func TestWithheld_ReadOnlyMode_IsDeclinedOnEverySurface(t *testing.T) {
+	inst := stubInstance(t)
+
+	cases := []struct {
+		surface Surface
+		want    string
+	}{
+		{surface: SurfaceDynamic, want: "configured to withhold it"},
+		{surface: SurfaceMeta, want: "/properties/action"},
+		{surface: SurfaceIndividual, want: "unknown tool"},
+	}
+	for _, testCase := range cases {
+		t.Run(string(testCase.surface), func(t *testing.T) {
+			env := newEnv(t, inst)
+			session := env.Session(ServerConfig{Surface: testCase.surface, Mode: ModeReadOnly, Private: true})
+
+			said := Withheld(session, "project.delete", map[string]any{"project_id": "group/project"})
+
+			if !strings.Contains(said, testCase.want) {
+				t.Errorf("the %s surface declined with %q, want it to say %q", testCase.surface, said, testCase.want)
+			}
+		})
+	}
+}
+
+// TestServerConfig_NarrowedBy_RecordsTheModeTheCredentialImposed pins when a
+// session is recorded as read-only without having asked for it.
+//
+// Only a narrowing the token caused moves the mode, and only from the
+// default: an operator's read-only mode is already read-only, and a safe-mode
+// session with a narrowed token stays recorded as safe, since that is the
+// mode the previews its tests see come from.
+func TestServerConfig_NarrowedBy_RecordsTheModeTheCredentialImposed(t *testing.T) {
+	cases := []struct {
+		name     string
+		mode     Mode
+		narrowed bool
+		want     Mode
+	}{
+		{name: "default and narrowed", mode: ModeDefault, narrowed: true, want: ModeReadOnly},
+		{name: "default and write-capable", mode: ModeDefault, narrowed: false, want: ModeDefault},
+		{name: "read-only already", mode: ModeReadOnly, narrowed: true, want: ModeReadOnly},
+		{name: "safe and narrowed", mode: ModeSafe, narrowed: true, want: ModeSafe},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			cfg := ServerConfig{Mode: testCase.mode}.normalized()
+			serverCfg := &config.ServerConfig{ReadOnly: testCase.narrowed, ReadOnlyFromTokenScope: testCase.narrowed}
+
+			if got := cfg.narrowedBy(serverCfg).Mode; got != testCase.want {
+				t.Errorf("narrowedBy() mode = %s, want %s", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestSession_ReadAPICredential_IsServedReadOnlyByTheBinary checks the
+// narrowing end to end: a token whose scopes cannot write is served a
+// read-only surface by the binary whatever the session asked for, the served
+// set the assemblers predict with NarrowToTokenScope is what tools/list says,
+// and the session is recorded as read-only so its refusals are filed under
+// the mode that produced them.
+//
+// The child is told nothing about the narrowing. GITLAB_MCP_READ_ONLY is what
+// was asked for, which is false, so a served set that matches is the binary's
+// own reading of the token's scopes and not the harness's.
+func TestSession_ReadAPICredential_IsServedReadOnlyByTheBinary(t *testing.T) {
+	inst := instanceForStub(t, startScopedStubGitLab(t, []string{"read_api"}))
+	env := newEnv(t, inst)
+	session := env.Session(ServerConfig{Surface: SurfaceDynamic, Private: true})
+
+	if got := session.Mode(); got != ModeReadOnly {
+		t.Fatalf("a read_api session is recorded in %s mode, want %s", got, ModeReadOnly)
+	}
+	if !strings.Contains(session.Label(), string(ModeReadOnly)) {
+		t.Errorf("the session label %q does not say the session is read-only", session.Label())
+	}
+	if session.Serves("project.delete") {
+		t.Error("the narrowed session serves project.delete")
+	}
+	if !session.Serves("project.get") {
+		t.Error("the narrowed session does not serve project.get, which reads")
+	}
+
+	said := Withheld(session, "project.delete", map[string]any{"project_id": "group/project"})
+	if !strings.Contains(said, "does not carry a GitLab scope") {
+		t.Errorf("the refusal does not name the credential as the cause: %q", said)
+	}
+}
+
+// startScopedStubGitLab serves what the plain stub serves, plus a token whose
+// scopes are the given ones, so the server narrows itself from them.
+func startScopedStubGitLab(t *testing.T, scopes []string) *httptest.Server {
+	t.Helper()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		writeStubJSON(w, map[string]any{"version": "18.0.0", "revision": "abcdef", "enterprise": false})
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		writeStubJSON(w, map[string]any{"id": 7, "username": "harness", "name": "Harness", "is_admin": false})
+	})
+	mux.HandleFunc("/api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		writeStubJSON(w, map[string]any{"id": 11, "name": "narrow", "scopes": scopes, "active": true})
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	return server
+}
+
+// otherUserToken is a credential that is not the run's own, for the tests of
+// a session given a token of its own.
+const otherUserToken = "glpat-harness-other-user"
+
+// TestSession_OtherUsersToken_IsServedTheTierThatTokenCanRead checks that a
+// session given another user's token is held to the catalog the binary
+// builds for that token, and not to the run's.
+//
+// The license endpoint answers administrators only. The run's own token is
+// an administrator's and the instance is Ultimate to it; the other token is
+// refused there and the binary, reading no license, serves it the Free
+// catalog. The served-set check passes only if the harness asked the same
+// question with the same token, which is what a licensed Docker run found it
+// did not: it expected every licensed group and the server registered none.
+func TestSession_OtherUsersToken_IsServedTheTierThatTokenCanRead(t *testing.T) {
+	inst := instanceForStub(t, startPerTokenStubGitLab(t))
+	if !inst.facts.Tier.IsEnterprise() {
+		t.Fatalf("the run's own token sees tier %s, want a licensed one", inst.facts.Tier)
+	}
+	env := newEnv(t, inst)
+	session := env.Session(ServerConfig{Surface: SurfaceMeta, Token: otherUserToken, Private: true})
+
+	if got := session.Tier(); got != edition.Free {
+		t.Errorf("the other user's session detected tier %s, want %s: the license endpoint refused its token", got, edition.Free)
+	}
+	if licensed := licensedActionFor(t, inst); session.Serves(licensed) {
+		t.Errorf("the other user's session serves %s, which its Free catalog cannot have", licensed)
+	}
+	if !session.Serves("project.get") {
+		t.Error("the other user's session does not serve project.get, which every tier has")
+	}
+	if got := session.Mode(); got != ModeDefault {
+		t.Errorf("the other user's session is recorded in %s mode, want %s: its token can write", got, ModeDefault)
+	}
+}
+
+// startPerTokenStubGitLab serves an Ultimate license to the run's own token
+// and refuses it to any other, the way GitLab answers an administrator and
+// everybody else; both tokens are write-capable and neither's scopes are
+// published, so only the tier separates what the two are served.
+func startPerTokenStubGitLab(t *testing.T) *httptest.Server {
+	t.Helper()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		writeStubJSON(w, map[string]any{"version": "18.0.0", "revision": "abcdef", "enterprise": true})
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, req *http.Request) {
+		admin := req.Header.Get("PRIVATE-TOKEN") == stubToken
+		writeStubJSON(w, map[string]any{"id": 7, "username": "harness", "name": "Harness", "is_admin": admin})
+	})
+	mux.HandleFunc("/api/v4/license", func(w http.ResponseWriter, req *http.Request) {
+		if req.Header.Get("PRIVATE-TOKEN") != stubToken {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		writeStubJSON(w, map[string]any{"id": 1, "plan": "ultimate"})
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	return server
 }
 
 // TestSession_DestructiveWithoutConfirmation_IsRefusedByTheServer checks the

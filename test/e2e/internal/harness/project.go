@@ -182,6 +182,28 @@ func (p *projection) lookup(id ActionID) (projectedAction, bool) {
 	return action, found
 }
 
+// ActionTier returns the licensing tier a catalog action needs, and whether
+// the catalog has the action at all.
+//
+// It reads the whole catalog rather than the one this instance serves, so a
+// test on a Free runtime can ask about an action only a licensed one has and
+// assert that it is not served. A GitLab.com-only action is still absent on a
+// self-managed instance, since no tier adds it there.
+func (e *Env) ActionTier(id ActionID) (edition.Tier, bool) {
+	e.T.Helper()
+
+	projected, err := newProjection(edition.Ultimate, e.inst.client.IsGitLabDotCom())
+	if err != nil {
+		e.T.Fatalf("building the catalog projection: %v", err)
+		return edition.Free, false
+	}
+	action, known := projected.lookup(id)
+	if !known {
+		return edition.Free, false
+	}
+	return action.minimumTier, true
+}
+
 // toolCall is one tools/call: the tool to name and the arguments to send.
 type toolCall struct {
 	// tool is the registered tool name.

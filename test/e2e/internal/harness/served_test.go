@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 )
@@ -179,7 +180,8 @@ func TestExpectedSurface_EachSurface_NamesWhatItRegisters(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			expected, err := expectedSurface(inst, ServerConfig{Surface: testCase.surface}.normalized(), nil)
+			cfg := ServerConfig{Surface: testCase.surface}.normalized()
+			expected, err := expectedSurface(inst, cfg.Surface, serverConfigFor(inst, cfg, inst.credential()))
 			if err != nil {
 				t.Fatalf("expectedSurface(%s): %v", testCase.surface, err)
 			}
@@ -197,7 +199,7 @@ func TestExpectedSurface_EachSurface_NamesWhatItRegisters(t *testing.T) {
 // tool the server removed, and every read-only session would abort.
 func TestIndividualRegistrations_ReadOnlyMode_KeepsOnlyTheReads(t *testing.T) {
 	inst := stubInstance(t)
-	serverCfg := serverConfigFor(inst, ServerConfig{Surface: SurfaceIndividual, Mode: ModeReadOnly}.normalized(), nil)
+	serverCfg := serverConfigFor(inst, ServerConfig{Surface: SurfaceIndividual, Mode: ModeReadOnly}.normalized(), inst.credential())
 	catalog, _, err := gitlabtools.SharedIndividualCatalog(inst.client, serverCfg)
 	if err != nil {
 		t.Fatalf("assembling the individual catalog: %v", err)
@@ -241,7 +243,7 @@ func TestServerConfigFor_ReadOnlyCredential_NarrowsTheSurface(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			serverCfg := serverConfigFor(inst, ServerConfig{}.normalized(), testCase.scopes)
+			serverCfg := serverConfigFor(inst, ServerConfig{}.normalized(), credentialFacts{scopes: testCase.scopes, tier: inst.facts.Tier})
 			if serverCfg.ReadOnly != testCase.wantReadOnly {
 				t.Errorf("ReadOnly = %t, want %t for scopes %v", serverCfg.ReadOnly, testCase.wantReadOnly, testCase.scopes)
 			}
@@ -249,6 +251,37 @@ func TestServerConfigFor_ReadOnlyCredential_NarrowsTheSurface(t *testing.T) {
 				t.Error("the narrowing did not record that the credential caused it")
 			}
 		})
+	}
+}
+
+// TestServerConfigFor_CredentialTier_DecidesTheCatalog checks that the tier
+// the expectation is built at is the credential's and not the run's: a token
+// that could read no license is served the Free catalog on a licensed
+// instance, and the expectation for it must name the Free groups only.
+func TestServerConfigFor_CredentialTier_DecidesTheCatalog(t *testing.T) {
+	inst := stubInstance(t)
+	inst.facts.Tier = edition.Ultimate
+
+	licensed := serverConfigFor(inst, ServerConfig{Surface: SurfaceMeta}.normalized(), inst.credential())
+	unlicensed := serverConfigFor(inst, ServerConfig{Surface: SurfaceMeta}.normalized(), credentialFacts{tier: edition.Free})
+
+	if licensed.Tier != edition.Ultimate || unlicensed.Tier != edition.Free {
+		t.Fatalf("tiers = %s and %s, want the credential's: ultimate and free", licensed.Tier, unlicensed.Tier)
+	}
+	withLicense, err := expectedSurface(inst, SurfaceMeta, licensed)
+	if err != nil {
+		t.Fatalf("expectedSurface(ultimate): %v", err)
+	}
+	withoutLicense, err := expectedSurface(inst, SurfaceMeta, unlicensed)
+	if err != nil {
+		t.Fatalf("expectedSurface(free): %v", err)
+	}
+	if len(withoutLicense.tools) >= len(withLicense.tools) {
+		t.Errorf("the Free expectation names %d groups and the Ultimate one %d, and Free is a subset",
+			len(withoutLicense.tools), len(withLicense.tools))
+	}
+	if slices.Contains(withoutLicense.tools, "gitlab_vulnerability") {
+		t.Error("the Free expectation names gitlab_vulnerability, a licensed group")
 	}
 }
 
@@ -262,7 +295,7 @@ func TestServerConfigFor_CarriesTheShapeTheBinaryBuilt(t *testing.T) {
 		Mode:         ModeSafe,
 		Capabilities: CapabilitiesMinimal,
 		ExcludeTools: []string{"gitlab_issue"},
-	}.normalized(), []string{"api"})
+	}.normalized(), credentialFacts{scopes: []string{"api"}, tier: inst.facts.Tier})
 
 	cases := []struct {
 		name string

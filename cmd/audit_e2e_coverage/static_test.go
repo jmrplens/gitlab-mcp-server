@@ -197,7 +197,10 @@ func TestRunStatic_NonConstantSites_Listed(t *testing.T) {
 // of the dead-export rule: the unused symbols are named, a type used only
 // through what hands it out is not among them, a field set by keyed literal
 // is used while the alias sharing its name is not, and without the ratchet
-// they are a note rather than a finding.
+// they are a note rather than a finding. The fake harness carries an
+// in-package Test function, which must not be listed: the scan reads the
+// plain package and not its test variant, or every test of the real harness
+// would be a dead export the ratchet then fails on.
 func TestRunStatic_DeadExports_ListedNotFailedUntilRatchet(t *testing.T) {
 	result := runFakeStatic(t, fakeStaticConfig(t))
 
