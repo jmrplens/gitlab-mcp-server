@@ -130,6 +130,49 @@ func TestActions_TheRealCatalog_NamesAnOwnerForEveryAction(t *testing.T) {
 	}
 }
 
+// TestActions_TheRealCatalog_CarriesTheRouteOfEveryAction verifies the half of
+// an action the pagination rule reads. A route with no output type publishes
+// nothing a comparison can see, so an action arriving without one would be
+// skipped silently rather than judged, and the catalog is where that has to
+// hold rather than at the reader.
+func TestActions_TheRealCatalog_CarriesTheRouteOfEveryAction(t *testing.T) {
+	actions, err := Actions()
+	if err != nil {
+		t.Fatalf("Actions() error = %v", err)
+	}
+	withOutput := 0
+	for _, action := range actions {
+		if action.Route.OutputType != nil {
+			withOutput++
+		}
+	}
+	if withOutput == 0 {
+		t.Fatalf("no action of the %d in the catalog carried an output type", len(actions))
+	}
+}
+
+// TestPackageName_Owner_IsSpelledTheWayARowSpellsIt verifies the join key
+// itself. The inventory records a package path and the catalog records an owner
+// name, and this is the one place the two are made to meet; getting the root
+// owner wrong here would silently detach every action the orchestration package
+// owns from the requests it made.
+func TestPackageName_Owner_IsSpelledTheWayARowSpellsIt(t *testing.T) {
+	cases := []struct {
+		owner string
+		want  string
+	}{
+		{owner: "issues", want: ToolsDir + "/issues"},
+		{owner: RootOwner, want: ToolsDir},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.owner, func(t *testing.T) {
+			if got := PackageName(testCase.owner); got != testCase.want {
+				t.Errorf("PackageName(%q) = %q, want %q", testCase.owner, got, testCase.want)
+			}
+		})
+	}
+}
+
 // TestActions_ACatalogThatWillNotBuild_IsReported verifies that a caller is
 // told rather than handed an empty action list, which would score every
 // package as covering nothing it owns.

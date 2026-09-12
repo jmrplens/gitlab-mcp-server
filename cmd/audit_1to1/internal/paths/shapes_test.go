@@ -28,6 +28,11 @@ type response struct {
 	// Conditions gate a field of this response, by field name. A field with
 	// none is one GitLab always sends.
 	Conditions map[string][]apilive.Condition
+	// Params are the parameter names the route declares. Only page and per_page
+	// mean anything to a reader of this fixture, since they are what says
+	// whether GitLab pages the endpoint; a param's type and requiredness are
+	// nothing the checks here ask about.
+	Params []string
 }
 
 // recordIn writes a live GitLab record a test can join against, from a map of
@@ -60,6 +65,12 @@ func fixtureDocument(operations map[string]response) apilive.Document {
 			continue
 		}
 		route := apilive.Route{Method: method, Path: apilive.EndpointPrefix + trimAPIPrefix(path)}
+		for _, name := range answer.Params {
+			if route.Params == nil {
+				route.Params = map[string]apilive.Param{}
+			}
+			route.Params[name] = apilive.Param{}
+		}
 		if len(answer.Response) > 0 || answer.Entity != "" {
 			route.Entity = answer.Entity
 			if route.Entity == "" {

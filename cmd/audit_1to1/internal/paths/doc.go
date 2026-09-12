@@ -13,7 +13,7 @@
 // This rule reads the request instead. Its input is the inventory
 // internal/testutil records and cmd/gen_request_inventory commits, which is the
 // first honest answer to what this server sends GitLab, and it puts that
-// inventory through four checks.
+// inventory through five checks.
 //
 // # Has the path ever been observed
 //
@@ -137,6 +137,42 @@
 // finding is written down with its category and its evidence, on the terms
 // every other declaration table here works on: a declaration that stops
 // matching is itself a finding.
+//
+// # Does a list say where it ends
+//
+// R-PAGE, and the reason it is a rule of this package rather than a scope of its
+// own: it needs exactly the three inputs this one already reads in a single
+// pass, and it asks about a part of GitLab's answer that is in no entity.
+//
+// Pagination arrives in headers. An offset page comes with X-Page, X-Next-Page,
+// X-Per-Page, X-Total and X-Total-Pages; a keyset page comes with a Link. So
+// every rule that compares a published field against client-go's struct, the
+// documentation or the entity record is looking in the one place the answer is
+// not, and all six of them were green on internal/tools/impersonationtokens,
+// which returns a bare array of tokens while GitLab serves twenty at a time. A
+// caller cannot tell it has one page and cannot ask for the next.
+//
+// The oracle is the live record's params: 308 of its 2110 mounted routes declare
+// per_page, 304 of those declare page beside it and the other four take a cursor
+// or a page_token. That is a far stronger statement than a guess from an
+// endpoint's name, and it is available because the record asks the router rather
+// than reading prose.
+//
+// An action is judged when its output is a collection envelope, which is exactly
+// one content field that is a list of objects, with this server's own framing
+// taken out first. That strictness is where "the route declares the params but
+// the action reads a single object" is answered: a project carrying
+// shared_with_groups is a single-object read, and admitting it would have turned
+// 24 findings into 79.
+//
+// The join from an action to an endpoint is the package, for the same reason the
+// observation check's is, and it costs the same way: of the 24 findings, 14 name
+// an action whose own route declares per_page and 10 matched a sibling's
+// endpoint. Those 10 are written down in pagination_declarations.go with the
+// route the record holds for each, on the terms every declaration table here
+// works on. It reports and does not gate, since a finding is a surface change;
+// its declaration table gates, since a claim that has stopped being true is not
+// a candidate. See [PaginationCheck].
 //
 // # Where the report goes
 //

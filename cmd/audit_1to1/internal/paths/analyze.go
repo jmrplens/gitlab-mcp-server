@@ -32,6 +32,10 @@ type Report struct {
 	// return, compared with what we publish. A report and not a gate, for the
 	// reason [ShapeCheck] records.
 	Shapes ShapeCheck `json:"shapes"`
+	// Pagination is whether an action that hands a model a list also hands it
+	// the way to ask for the rest of it. A report and not a gate, for the reason
+	// [PaginationCheck] records.
+	Pagination PaginationCheck `json:"pagination"`
 }
 
 // Summary is the count of everything the report holds.
@@ -116,6 +120,23 @@ type Summary struct {
 	// upstream merge request rather than an edit here. The remainder is a
 	// field the SDK already gives us and only this server does not publish.
 	TypedUnsurfacedNotInSDK int `json:"typed_unsurfaced_not_in_sdk"`
+	// The pagination counts are R-PAGE, the one question here that is about a
+	// response header rather than a field: PaginatedRoutes and KeysetRoutes are
+	// what the record says GitLab pages at all, and the collection counts are
+	// how the actions reading a list divide against them. See
+	// [PaginationCheck].
+	PaginatedRoutes        int `json:"paginated_routes"`
+	KeysetRoutes           int `json:"keyset_routes"`
+	CollectionActions      int `json:"collection_actions"`
+	CollectionsPaginated   int `json:"collection_actions_publishing_pagination"`
+	CollectionsUnasked     int `json:"collection_actions_not_asked_about"`
+	CollectionsUnpaginated int `json:"collection_actions_without_pagination"`
+	// CollectionsUndeclared is the half of those no declaration accounts for,
+	// which is what a reader is asked to act on.
+	CollectionsUndeclared int `json:"collection_actions_without_pagination_undeclared"`
+	// PaginationGrain says what the collection counts were asked at, for the
+	// same reason Grain does above: the number is what gets quoted.
+	PaginationGrain string `json:"pagination_endpoint_grain"`
 }
 
 // observedGrain is what [Summary.Grain] says, spelled once.
@@ -134,6 +155,11 @@ const observedGrain = "package: an action counts as observed when the package th
 // The documentation comparison is deliberately absent from the gate unless it
 // found something undeclared: it is a candidate list, for the reasons in
 // [EndpointCheck].
+//
+// So are the two shape comparisons and the pagination check, each for its own
+// recorded reason. What their declaration tables do reach the gate through is
+// StaleDeclarations: a finding is a candidate and a claim that has stopped being
+// true is not.
 func (s Summary) clean() bool {
 	return s.GraphQLRefused == 0 &&
 		s.UndeclaredSilent == 0 &&
@@ -210,10 +236,12 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 	shapes := shapeCheck(root, inventory.Requests, publishedTypes(root))
 	sentAlways, sentWhen, sentDeclared := unsurfacedCounts(shapes.Sent.Unsurfaced)
 	typedSentAlways, typedSentWhen, typedSentDeclared := unsurfacedCounts(shapes.Typed.Unsurfaced)
+	pagination := paginationCheck(root, inventory.Requests, actions)
 
 	stale = append(stale, endpoints.staleDeclarations()...)
 	stale = append(stale, shapes.Typed.staleDeclarations()...)
 	stale = append(stale, shapes.Sent.staleDeclarations()...)
+	stale = append(stale, pagination.staleDeclarations()...)
 	sort.Strings(stale)
 
 	report := Report{
@@ -224,6 +252,7 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 		StaleDeclarations: stale,
 		Endpoints:         endpoints,
 		Shapes:            shapes,
+		Pagination:        pagination,
 		Summary: Summary{
 			InventoryRows:           len(inventory.Requests),
 			GraphQLDocuments:        len(documents.Documents),
@@ -258,11 +287,20 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 			TypedUndeclaredFields:   shapes.Typed.undeclared(),
 			TypedNestedCompared:     shapes.Typed.NestedCompared,
 			TypedNestedUnpublished:  len(shapes.Typed.Nested),
+			PaginatedRoutes:         pagination.Routes.Offset,
+			KeysetRoutes:            pagination.Routes.Keyset,
+			CollectionActions:       pagination.Collections.Actions,
+			CollectionsPaginated:    pagination.Collections.Paginated,
+			CollectionsUnasked:      pagination.Collections.Unasked,
+			CollectionsUnpaginated:  pagination.Collections.Unpaginated,
+			CollectionsUndeclared:   pagination.Collections.Undeclared,
+			PaginationGrain:         paginationGrain,
 		},
 	}
 	if gapsOnly {
 		report.SilentOwners = keepUndeclared(report.SilentOwners)
 		report.Endpoints.Undocumented = keepUndeclaredEndpoints(report.Endpoints.Undocumented)
+		report.Pagination.Unpaginated = keepUndeclaredCollections(report.Pagination.Unpaginated)
 	}
 	return report, nil
 }

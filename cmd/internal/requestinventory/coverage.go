@@ -9,6 +9,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // ToolsDir is where a domain package lives, and the prefix a recorded package
@@ -22,12 +23,28 @@ const ToolsDir = "internal/tools"
 // keeps an action owned by it from being classified as owned by nothing.
 const RootOwner = "tools"
 
-// Action is one catalog action as this dimension sees it: an identity and the
+// Action is one catalog action as this dimension sees it: an identity, the
 // package that owns it, which is the only handle the recording can be joined
-// on.
+// on, and the route the catalog registered it with.
+//
+// The route is carried because the dimension asks two questions of an action
+// and they need different halves of it. The coverage question below needs the
+// owner alone. The pagination question needs what the action publishes and what
+// it accepts, both of which live on the route as reflect types and schema maps
+// that no source scan would have to reconstruct. Carrying it here is what keeps
+// the catalog built once per run: the alternative is a second
+// [tools.BuildActionCatalog] in the caller, which would also fork the decision
+// this file makes once about which tier to build at.
 type Action struct {
 	ID    string
 	Owner string
+	// ReadOnly is the action's own classification, not the route's: pagination
+	// is a question about a read, and a mutation answering with a list is
+	// answering about what it just changed.
+	ReadOnly bool
+	// Route carries the input and output types and their schemas. Its Handler
+	// is bound to no client here, since nothing in this package calls it.
+	Route toolutil.ActionRoute
 }
 
 // buildCatalog is a seam: the catalog is compiled into whichever binary asks
@@ -44,7 +61,12 @@ func Actions() ([]Action, error) {
 	}
 	actions := make([]Action, 0, catalog.CountActions())
 	for _, action := range catalog.Actions() {
-		actions = append(actions, Action{ID: string(action.ID), Owner: action.OwnerPackage})
+		actions = append(actions, Action{
+			ID:       string(action.ID),
+			Owner:    action.OwnerPackage,
+			ReadOnly: action.ReadOnly,
+			Route:    action.Route,
+		})
 	}
 	return actions, nil
 }
@@ -144,6 +166,17 @@ func Packages(owners []Owner) []string {
 		names = append(names, owner.Package)
 	}
 	return names
+}
+
+// PackageName is the owner spelled the way a recorded row spells its package,
+// which is what joins an action to the requests its package was seen making. It
+// is [ToolsDir] itself for [RootOwner] and a path under it for every domain,
+// the same two cases [PackageDir] resolves against the filesystem.
+func PackageName(owner string) string {
+	if owner == RootOwner {
+		return ToolsDir
+	}
+	return ToolsDir + "/" + owner
 }
 
 // PackageDir is where the package an owner names lives, which is ToolsDir
