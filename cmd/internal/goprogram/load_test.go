@@ -83,24 +83,11 @@ const overlayFixtureMarker = "overlaid"
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
 	}
-	if !declaresOverlayMarker(loaded) {
+	// The constant reaching the type checker is the only proof that the
+	// overlay was honored rather than silently dropped.
+	if !declaresConstant(loaded, "overlayFixtureMarker") {
 		t.Error("Load() did not type-check the overlaid file")
 	}
-}
-
-// declaresOverlayMarker reports whether the overlaid constant reached the type
-// checker, which is the only proof that the overlay was honored rather than
-// silently dropped.
-func declaresOverlayMarker(loaded []*packages.Package) bool {
-	for _, pkg := range loaded {
-		if pkg.Types == nil {
-			continue
-		}
-		if pkg.Types.Scope().Lookup("overlayFixtureMarker") != nil {
-			return true
-		}
-	}
-	return false
 }
 
 // TestLoad_BrokenPackage_IsRefused verifies the rule this package exists for. A
@@ -150,6 +137,93 @@ func TestLoad_DirectoryOutsideAModule_IsReported(t *testing.T) {
 	if !strings.Contains(err.Error(), "load packages") {
 		t.Errorf("Load() error = %q, want it to say the load failed", err)
 	}
+}
+
+// TestLoadWith_Tests_IncludesTheTestVariant verifies the one thing the options
+// variant adds for a gate over test files: with Tests set, the package comes
+// back type-checked with its _test.go files in it, which [Load] never does.
+// The proof is this very file appearing in a loaded package's syntax.
+func TestLoadWith_Tests_IncludesTheTestVariant(t *testing.T) {
+	loaded, err := LoadWith(repoRoot(t), []string{selfPattern}, Options{Tests: true})
+	if err != nil {
+		t.Fatalf("LoadWith() error = %v, want nil", err)
+	}
+	if !loadedFile(loaded, "load_test.go") {
+		t.Error("LoadWith(Tests: true) loaded no package holding load_test.go")
+	}
+}
+
+// TestLoad_Default_ExcludesTestFiles pins the other half of that contract: the
+// four earlier gates load production source only, and the options variant
+// must not have changed what [Load] hands them.
+func TestLoad_Default_ExcludesTestFiles(t *testing.T) {
+	loaded, err := Load(repoRoot(t), []string{selfPattern}, nil)
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil", err)
+	}
+	if loadedFile(loaded, "load_test.go") {
+		t.Error("Load() loaded a package holding load_test.go, which only a Tests load should")
+	}
+}
+
+// TestLoadWith_BuildTags_SelectsConstrainedSource verifies that a build tag
+// reaches the loader: a file behind a constraint is absent under the default
+// load and present when the tag is asked for. The e2e packages exist only
+// behind their tag, so a load that dropped it would type-check nothing and
+// report a clean run over an empty tree.
+func TestLoadWith_BuildTags_SelectsConstrainedSource(t *testing.T) {
+	const constrained = `//go:build goprogramfixture
+
+package goprogram
+
+// constrainedFixtureMarker exists only behind the goprogramfixture tag.
+const constrainedFixtureMarker = "constrained"
+`
+	overlay := overlayFor(t, constrained)
+	cases := []struct {
+		name string
+		tags []string
+		want bool
+	}{
+		{name: "without the tag the file is excluded", tags: nil, want: false},
+		{name: "with the tag the file is type-checked", tags: []string{"goprogramfixture"}, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			loaded, err := LoadWith(repoRoot(t), []string{selfPattern}, Options{BuildTags: tc.tags, Overlay: overlay})
+			if err != nil {
+				t.Fatalf("LoadWith() error = %v, want nil", err)
+			}
+			if got := declaresConstant(loaded, "constrainedFixtureMarker"); got != tc.want {
+				t.Errorf("constrained file type-checked = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+// loadedFile reports whether any loaded package carries a file of that base
+// name in its syntax, which is how a test tells a test variant from the plain
+// package.
+func loadedFile(loaded []*packages.Package, base string) bool {
+	for _, pkg := range loaded {
+		for _, file := range pkg.CompiledGoFiles {
+			if filepath.Base(file) == base {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// declaresConstant reports whether the type checker saw a package-level
+// constant of that name in any loaded package.
+func declaresConstant(loaded []*packages.Package, name string) bool {
+	for _, pkg := range loaded {
+		if pkg.Types != nil && pkg.Types.Scope().Lookup(name) != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // TestPackageLoadError_CleanPackage_ReturnsNil verifies the happy path of the

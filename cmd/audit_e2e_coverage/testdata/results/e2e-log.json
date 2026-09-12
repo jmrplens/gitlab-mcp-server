@@ -1,0 +1,19 @@
+{"Time":"2026-09-12T10:00:00Z","Action":"start","Package":"example.com/e2efake/test/e2e/gitlab/common"}
+{"Time":"2026-09-12T10:00:01Z","Action":"run","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestIssue_List"}
+{"Time":"2026-09-12T10:00:01Z","Action":"output","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestIssue_List","Output":"=== RUN   TestIssue_List\n"}
+{"Time":"2026-09-12T10:00:02Z","Action":"pass","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestIssue_List","Elapsed":1.25}
+{"Time":"2026-09-12T10:00:02Z","Action":"run","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestIssue_Delete"}
+{"Time":"2026-09-12T10:00:03Z","Action":"pass","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestIssue_Delete","Elapsed":0.5}
+{"Time":"2026-09-12T10:00:03Z","Action":"run","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestProject_Get"}
+{"Time":"2026-09-12T10:00:03Z","Action":"run","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestProject_Get/dynamic"}
+{"Time":"2026-09-12T10:00:04Z","Action":"fail","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestProject_Get/dynamic","Elapsed":0.1}
+{"Time":"2026-09-12T10:00:04Z","Action":"fail","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestProject_Get","Elapsed":0.2}
+{"Time":"2026-09-12T10:00:04Z","Action":"run","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestResources_Read"}
+{"Time":"2026-09-12T10:00:05Z","Action":"pass","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestResources_Read","Elapsed":0.3}
+{"Time":"2026-09-12T10:00:05Z","Action":"run","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestPipeline_Create"}
+{"Time":"2026-09-12T10:00:05Z","Action":"skip","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestPipeline_Create","Elapsed":0}
+{"Time":"2026-09-12T10:00:05Z","Action":"run","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestMR_Approvals"}
+{"Time":"2026-09-12T10:00:05Z","Action":"run","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestMR_Approvals/ApprovalState"}
+{"Time":"2026-09-12T10:00:05Z","Action":"pass","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestMR_Approvals/ApprovalState","Elapsed":0}
+{"Time":"2026-09-12T10:00:05Z","Action":"pass","Package":"example.com/e2efake/test/e2e/gitlab/common","Test":"TestMR_Approvals","Elapsed":0}
+{"Time":"2026-09-12T10:00:06Z","Action":"pass","Package":"example.com/e2efake/test/e2e/gitlab/common","Elapsed":6}

@@ -21,6 +21,27 @@ import (
 const LoadMode = packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
 	packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports
 
+// Options is what a load may ask for beyond what every gate shares.
+//
+// The four gates that existed first load production source with no build tag
+// and no test files, and [Load] still gives them exactly that. The e2e
+// coverage gate reads test packages that only exist behind the e2e tag, which
+// is a different load and not a different wording of the same one, so it asks
+// for both here rather than every caller gaining two parameters it passes as
+// zero.
+type Options struct {
+	// Tests includes each package's test variants, type-checked from source,
+	// so a gate over _test.go files sees them as the test binary would.
+	Tests bool
+	// BuildTags are the build constraints the load satisfies, as -tags would.
+	// Empty means the default constraints, which is what every earlier caller
+	// loads under.
+	BuildTags []string
+	// Overlay supplies source that is not on disk, as [Load]'s parameter
+	// does.
+	Overlay map[string][]byte
+}
+
 // Load type-checks the packages named by patterns, rooted at dir, and returns
 // them in the loader's order. Every returned package type-checked without
 // error, so a caller may read TypesInfo without checking it first.
@@ -34,7 +55,16 @@ const LoadMode = packages.NeedName | packages.NeedFiles | packages.NeedCompiledG
 // gate that audited no package would otherwise pass, which is the same silence
 // [packageLoadError] refuses one package at a time.
 func Load(dir string, patterns []string, overlay map[string][]byte) ([]*packages.Package, error) {
-	cfg := &packages.Config{Mode: LoadMode, Dir: dir, Tests: false, Overlay: overlay}
+	return LoadWith(dir, patterns, Options{Overlay: overlay})
+}
+
+// LoadWith is [Load] with the options a caller states: test variants, build
+// tags, an overlay. Everything [Load] refuses, this refuses on the same terms.
+func LoadWith(dir string, patterns []string, opts Options) ([]*packages.Package, error) {
+	cfg := &packages.Config{Mode: LoadMode, Dir: dir, Tests: opts.Tests, Overlay: opts.Overlay}
+	if len(opts.BuildTags) > 0 {
+		cfg.BuildFlags = []string{"-tags=" + strings.Join(opts.BuildTags, ",")}
+	}
 	loaded, err := packages.Load(cfg, patterns...)
 	if err != nil {
 		return nil, fmt.Errorf("load packages: %w", err)
