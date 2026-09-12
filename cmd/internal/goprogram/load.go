@@ -7,6 +7,23 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+// ModulePath is this repository's module path, the prefix every gate trims off
+// an import path so a report names a package the way the repository does, and
+// the prefix it resolves the shared packages under.
+//
+// It is spelled here once. Two gates used to carry their own copy, one built
+// from a module constant and one written out in full, and a module path that
+// moves (it did, at v3) is a change that has to land in every copy at once or
+// a gate goes on resolving a package that no longer exists.
+const ModulePath = "github.com/jmrplens/gitlab-mcp-server/v3"
+
+// ToolutilPath is the import path of the package that owns the escaping
+// helpers, ActionSpec, the route constructors and the shared GraphQL
+// executors: the one package every gate resolves calls into. Resolution keys
+// on the path rather than on the package name so an import alias cannot fool
+// it.
+const ToolutilPath = ModulePath + "/internal/toolutil"
+
 // LoadMode is what the gates need from the loader: syntax to walk, types so an
 // identifier resolves to the object it names and a constant expression folds to
 // the one string it denotes, and imports so an object has one identity across

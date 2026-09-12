@@ -2302,21 +2302,46 @@ func TestCreateServer_ToolManifestRoutesAreServerScoped(t *testing.T) {
 // TestCreateServer_FilteringModes verifies that createServer exercises the
 // request-scoped scope filtering and safe-mode wrapping branches used by HTTP
 // server-pool entries.
+//
+// The read_api half asserts what a read_api token is actually served, built
+// the way both transports build it: the scopes are narrowed into the
+// configuration first, by gitlabclient.NarrowToTokenScope, which the HTTP pool
+// applies per entry and stdio once at startup, and createServer then builds
+// the read-only catalog that configuration names (ADR-0018). createServer
+// narrows nothing on its own, so a configuration handed to it with read_api
+// and no narrowing keeps every write tool, and that is the control below.
+//
+// This test used to look for gitlab_create_project on an unnarrowed server, a
+// name nothing registers, so the loop matched nothing and the test passed
+// whatever the server did. Both halves of the premise were wrong, and the
+// never-registered name is what kept either from being noticed.
 func TestCreateServer_FilteringModes(t *testing.T) {
 	client := newMockGitLabClient(t)
 
-	readAPIServer := mustCreateServer(t, client, &config.ServerConfig{
+	readAPICfg := &config.ServerConfig{
+		ToolSurface: config.ToolSurfaceIndividual,
+		TokenScopes: []string{"read_api"},
+	}
+	if !gitlabclient.NarrowToTokenScope(readAPICfg) {
+		t.Fatal("NarrowToTokenScope did not narrow a read_api token, so the assertions below would be about the wrong configuration")
+	}
+	readAPINames := listedToolNames(t, client, readAPICfg)
+	if _, listed := readAPINames["gitlab_project_create"]; listed {
+		t.Error("a narrowed read_api configuration lists gitlab_project_create, the mutating project creation tool")
+	}
+	if _, listed := readAPINames["gitlab_project_get"]; !listed {
+		t.Error("a narrowed read_api configuration does not list gitlab_project_get, so the absence above proves nothing")
+	}
+
+	// The control: the same scopes with no narrowing keep the write tool,
+	// which is what says the removal above came from the narrowing and not
+	// from a name that was never registered.
+	unnarrowed := listedToolNames(t, client, &config.ServerConfig{
 		ToolSurface: config.ToolSurfaceIndividual,
 		TokenScopes: []string{"read_api"},
 	})
-	readAPITools, err := listRegisteredTools(readAPIServer, "read-api-filter-test")
-	if err != nil {
-		t.Fatalf("list read-api tools: %v", err)
-	}
-	for _, tool := range readAPITools {
-		if tool.Name == "gitlab_create_project" {
-			t.Fatal("read_api scope should remove mutating project creation tool")
-		}
+	if _, listed := unnarrowed["gitlab_project_create"]; !listed {
+		t.Error("an unnarrowed read_api configuration does not list gitlab_project_create either, so the removal proves nothing")
 	}
 
 	safeModeServer := mustCreateServer(t, client, &config.ServerConfig{ToolSurface: config.ToolSurfaceIndividual, SafeMode: true})

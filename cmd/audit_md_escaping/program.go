@@ -10,14 +10,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 )
 
-// modulePath is this repository's module path, trimmed off an import path so a
-// report names a package the way the repository does.
-const modulePath = "github.com/jmrplens/gitlab-mcp-server/v3"
-
-// toolutilPath is the import path of the package that owns the escaping
-// helpers. Resolution keys on the path rather than on the package name so an
-// import alias cannot fool it.
-const toolutilPath = modulePath + "/internal/toolutil"
+// modulePath and toolutilPath are the gates' shared spellings, kept under the
+// names this package reads them by: the path is written once, in
+// [goprogram.ModulePath], so a module move lands in every gate at once.
+const (
+	modulePath   = goprogram.ModulePath
+	toolutilPath = goprogram.ToolutilPath
+)
 
 // program is the loaded, indexed source the audit reasons over.
 type program struct {
