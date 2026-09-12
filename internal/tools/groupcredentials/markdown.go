@@ -57,7 +57,7 @@ func FormatPATListMarkdown(out PATListOutput) string {
 			//gitlab:allow-unescaped t.ExpiresAt: a date gl.ISOTime rendered as YYYY-MM-DD.
 			t.ID, toolutil.EscapeMdTableCell(t.Name), t.UserID, t.Active, t.Revoked, scopes, t.ExpiresAt)
 	}
-	sb.WriteString(toolutil.FormatPagination(out.Pagination))
+	toolutil.WritePagination(&sb, out.Pagination)
 	return sb.String()
 }
 
@@ -99,7 +99,7 @@ func FormatSSHKeyListMarkdown(out SSHKeyListOutput) string {
 			//gitlab:allow-unescaped k.ExpiresAt: a timestamp toSSHKeyOutput rendered with the constant toolutil.DateTimeFormat layout.
 			k.ID, toolutil.EscapeMdTableCell(k.Title), k.UserID, k.CreatedAt, k.ExpiresAt)
 	}
-	sb.WriteString(toolutil.FormatPagination(out.Pagination))
+	toolutil.WritePagination(&sb, out.Pagination)
 	return sb.String()
 }
 

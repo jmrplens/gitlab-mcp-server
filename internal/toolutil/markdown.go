@@ -137,18 +137,46 @@ func WriteMdURLNewline(b *strings.Builder, url string) {
 	WriteMdURL(b, url)
 }
 
-// WritePagination appends a newline-wrapped pagination summary to the builder.
+// StartMdBlock separates what is written next from what the formatter wrote
+// before it, so the next line opens a Markdown block of its own.
+//
+// A line written straight after a table row does not open anything: GFM reads
+// it as another row, splits it on its pipes and drops whatever the header has
+// no column for. The pagination line went out that way from four packages —
+// "Page 2 of 7 | 84 items total | 20 per page" arriving as a two-cell row with
+// the third cell gone — and so did the "Showing N of M results" line, which
+// became a one-cell row in six more. Neither was visible in a test asserting
+// the substring is present, because it is.
+func StartMdBlock(b *strings.Builder) {
+	written := b.String()
+	if written == "" || strings.HasSuffix(written, "\n\n") {
+		return
+	}
+	if !strings.HasSuffix(written, "\n") {
+		b.WriteByte('\n')
+	}
+	b.WriteByte('\n')
+}
+
+// WritePagination appends a pagination summary as a block of its own.
+//
+// Prefer it over writing [FormatPagination]'s result into a builder directly:
+// the separation above the line is the whole difference between a paginated
+// list and a table with a corrupted last row.
 func WritePagination(b *strings.Builder, p PaginationOutput) {
-	fmt.Fprintf(b, FmtMdSectionText, FormatPagination(p))
+	StartMdBlock(b)
+	b.WriteString(FormatPagination(p))
+	b.WriteByte('\n')
 }
 
 // WriteListSummary appends a brief "Showing N of M results (page X of Y)"
-// line between the heading and the table body. It is a no-op when there is
-// only a single page, because the heading count already conveys everything.
+// line as a block of its own. It is a no-op when there is only a single page,
+// because the heading count already conveys everything.
 func WriteListSummary(b *strings.Builder, shown int, p PaginationOutput) {
 	if p.TotalPages <= 1 {
 		return
 	}
+	StartMdBlock(b)
 	fmt.Fprintf(b, "Showing %d of %d results (page %d of %d)\n\n", shown, p.TotalItems, p.Page, p.TotalPages)
 }
 

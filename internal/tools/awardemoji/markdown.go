@@ -38,7 +38,7 @@ func FormatListMarkdownString(out ListOutput) string {
 		fmt.Fprintf(&b, "- :%s: by %s (ID: %d) - %s\n", toolutil.EscapeMdTableCell(e.Name),
 			toolutil.EscapeMdTableCell(awardEmojiUserMarkdown(e)), e.ID, toolutil.FormatTime(e.CreatedAt))
 	}
-	b.WriteString(toolutil.FormatPagination(out.Pagination))
+	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b, toolutil.HintPreserveLinks, "Use the selected tool surface's matching award emoji actions for this resource; delete actions require explicit confirm=true plus the same resource identifiers and award_id")
 	return b.String()
 }

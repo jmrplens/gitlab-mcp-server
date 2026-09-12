@@ -63,7 +63,7 @@ func FormatListMarkdown(out ListOutput) string {
 			toolutil.EscapeMdTableCell(scopes), expires)
 	}
 	b.WriteString("\n")
-	b.WriteString(toolutil.FormatPagination(out.Pagination))
+	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(
 		&b,
 		"Use action 'get' with token_id for full details",

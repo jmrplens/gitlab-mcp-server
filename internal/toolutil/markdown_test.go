@@ -92,6 +92,54 @@ func TestWritePagination(t *testing.T) {
 	}
 }
 
+// TestStartMdBlock verifies that what is written next opens a block of its own.
+// A line that does not is read as one more row of the table above it.
+func TestStartMdBlock(t *testing.T) {
+	tests := []struct {
+		name    string
+		written string
+		want    string
+	}{
+		{name: "an empty builder needs no separation", written: "", want: ""},
+		{name: "a finished line is separated by one newline", written: "| 1 | a |\n", want: "| 1 | a |\n\n"},
+		{name: "an unterminated line is ended and then separated", written: "text", want: "text\n\n"},
+		{name: "a blank line already there is left alone", written: "text\n\n", want: "text\n\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var b strings.Builder
+			b.WriteString(tt.written)
+			StartMdBlock(&b)
+			if got := b.String(); got != tt.want {
+				t.Errorf("StartMdBlock() left %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestWritePagination_AfterATableRow verifies the separation the pagination
+// line needs. Without it GFM reads the line as another row, splits it on its
+// own pipes and drops the cells the header has no column for.
+func TestWritePagination_AfterATableRow(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("| ID | Name |\n| --- | --- |\n| 1 | a |\n")
+	WritePagination(&b, PaginationOutput{Page: 2, TotalPages: 7, TotalItems: 84, PerPage: 20})
+	if got := b.String(); !strings.Contains(got, "| 1 | a |\n\nPage 2 of 7") {
+		t.Errorf("the pagination line must open a block of its own, got:\n%s", got)
+	}
+}
+
+// TestWriteListSummary_AfterATableRow verifies the same separation for the
+// summary line, which six list formatters write under their rows.
+func TestWriteListSummary_AfterATableRow(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("| ID |\n| --- |\n| 1 |\n")
+	WriteListSummary(&b, 20, PaginationOutput{Page: 1, TotalPages: 3, TotalItems: 50, PerPage: 20})
+	if got := b.String(); !strings.Contains(got, "| 1 |\n\nShowing 20 of 50") {
+		t.Errorf("the summary line must open a block of its own, got:\n%s", got)
+	}
+}
+
 // TestMarkdownTableHeader verifies dynamic table header generation.
 func TestMarkdownTableHeader(t *testing.T) {
 	header := MarkdownTableHeader("ID", "Name", "Status")

@@ -71,7 +71,7 @@ func FormatListMarkdownString(v ListOutput) string {
 			toolutil.EscapeMdTableCell(projectName(t)),
 		)
 	}
-	b.WriteString(toolutil.FormatPagination(v.Pagination))
+	toolutil.WritePagination(&b, v.Pagination)
 	toolutil.WriteHints(
 		&b,
 		toolutil.HintPreserveLinks,

@@ -27,7 +27,7 @@ func FormatListMarkdownString(out ListOutput) string {
 		fmt.Fprintf(&b, "- **%s** (ID: %d), kind: %s, path: `%s`\n",
 			toolutil.EscapeMdTableCell(ns.Name), ns.ID, ns.Kind, toolutil.EscapeMdTableCell(ns.FullPath))
 	}
-	b.WriteString(toolutil.FormatPagination(out.Pagination))
+	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b, "Use `gitlab_namespace_get` to view details of a specific namespace")
 	return b.String()
 }
