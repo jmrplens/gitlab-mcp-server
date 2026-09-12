@@ -18,13 +18,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 15,996 |
-| Unit test functions                                   | 15,221 |
-| E2E test functions                                    |    775 |
-| cmd test functions                                    |  3,064 |
+| Total test functions                                  | 16,166 |
+| Unit test functions                                   | 15,323 |
+| E2E test functions                                    |    843 |
+| cmd test functions                                    |  3,165 |
 | Test files (internal/)                                |    554 |
-| Test files (cmd/)                                     |    210 |
-| Test files (test/e2e/)                                |    255 |
+| Test files (cmd/)                                     |    221 |
+| Test files (test/e2e/)                                |    270 |
 | Tool sub-packages tested                              |    177 |
 | Core packages tested                                  |     23 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  98.4% |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,444 | 77.8% |
-| `TestFunc` (no underscore)             |    944 |  5.9% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,608 | 16.3% |
+| `TestFunc_Scenario` (2-part)           | 12,445 | 77.0% |
+| `TestFunc` (no underscore)             |    944 |  5.8% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,777 | 17.2% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,706 |        160 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,707 |        160 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (177) |          9,085 |        378 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            775 |        255 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          3,064 |        210 | server entry point and developer command utilities                                              |
-| **Total**               |     **15,996** |  **1,019** |                                                                                                 |
+| E2E integration         |            843 |        270 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| cmd packages            |          3,165 |        221 | server entry point and developer command utilities                                              |
+| **Total**               |     **16,166** |  **1,045** |                                                                                                 |
 
 ### Core Packages
 
@@ -77,9 +77,9 @@
 | subscriptions     |        99 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry         |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil          |       116 |   100.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
-| testutil/e2ecalls |        23 |      n/a | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                         |
+| testutil/e2ecalls |        24 |      n/a | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                         |
 | toolutil          |     1,021 |    98.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**      | **2,706** |          |                                                                                                                                                                                                                                                                    |
+| **Subtotal**      | **2,707** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -319,6 +319,7 @@
 | cmd/audit_doc_coverage                         |    91.6% |
 | cmd/audit_doc_tool_names                       |    94.2% |
 | cmd/audit_dynamic_aliases                      |    77.4% |
+| cmd/audit_e2e_coverage                         |      n/a |
 | cmd/audit_e2e_gaps                             |    92.9% |
 | cmd/audit_edition_tier                         |    86.9% |
 | cmd/audit_gateway_chars                        |    87.5% |
