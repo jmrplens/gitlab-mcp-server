@@ -99,14 +99,21 @@ readable without opening the tracker:
 | 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | No | No | No | No | Yes |
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | No | No | No | No | Yes |
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | No | No | No | No | None |
-| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, open | No | No | Yes |
+| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 6 open | **8 of 14, v3.1.0 to v3.6.0** | No | Yes |
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | No | No | No | No | Partial |
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | No | No | No | No | Partial |
 | 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | No | No | No | No | Yes |
-| 38 | gitlab | [Three job token scope endpoints declare a response entity they do not send](#three-job-token-scope-endpoints-declare-a-response-entity-they-do-not-send) | No | No | No | No | Yes |
+| 38 | gitlab-org/gitlab | [Three job token scope endpoints declare a response entity they do not send](#three-job-token-scope-endpoints-declare-a-response-entity-they-do-not-send) | Yes | Yes, open | No | No | Yes |
+| 39 | gitlab-org/gitlab | [Two project group listings are annotated with the whole Group entity](#two-project-group-listings-are-annotated-with-the-whole-group-entity) | Yes | Yes, open | No | No | Yes |
+| 40 | client-go | [Ten modelled fields that no Grape entity exposes](#ten-modelled-fields-that-no-grape-entity-exposes-removed-from-this-servers-output) | No | No | No | No | Not needed |
+| 41 | client-go | [IssueRelation models an issue basic where GitLab renders a whole issue](#issuerelation-models-an-issue-basic-where-gitlab-renders-a-whole-issue) | No | No | No | No | Yes |
+| 42 | client-go | [MemberRole models twenty of the forty-five permissions GitLab sends](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends) | No | No | No | No | Yes |
+| 43 | client-go | [PipelineInfo decodes two entities and models only the smaller one](#pipelineinfo-decodes-two-entities-and-models-only-the-smaller-one) | No | No | No | No | Yes |
+| 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | No | No | No | No | Yes |
 
-States verified against the upstream trackers on 2026-09-05, except entry 34,
-whose merge requests were opened on 2026-09-09.
+States verified against the upstream trackers on 2026-09-12. Rows 39 to 44
+were added that day: each entry existed with its five fields and the table had
+never listed it, which is the drift this table exists to prevent.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -870,15 +877,18 @@ of change whose test is one assertion on the built URL.
   where the maintainers had said there was no good way to detect this drift.
   Every merge request references it with a non-closing `Related to`, so the
   first merge does not close the umbrella.
-- **In review**: `!3041`, `!3044`, `!3048`, `!3049`, `!3050`, `!3051`, `!3052`
-  and `!3053` are open.
+- **In review**: `!3041`, `!3044`, `!3048`, `!3050`, `!3051` and `!3052` are
+  open, each with a reviewer assigned since 2026-09-12; `!3041` has its one
+  review comment (an experimental-field disclaimer) applied.
 - **Merged**: `!3042` (`BroadcastMessage.Color`) in **v3.1.0**, tagged on
   2026-09-09 eighteen minutes after the merge; then `!3040`
   (`Appearance.SiteName`) and `!3046` (the `GroupSCIMIdentity` json tag) in
   **v3.2.0** the same day; then `!3043` (`Agent.IsReceptive`) and `!3045`
   (`SecureFile.FileExtension`) in **v3.3.0**, and `!3047`
   (`GroupServiceAccount.PublicEmail` and `UnconfirmedEmail`) in **v3.4.0**,
-  all on 2026-09-10. Do not read a merge as a release: `!3040` sat
+  all on 2026-09-10; then `!3053` (the four `Snippet` fields) in **v3.5.0**
+  and `!3049` (`LastUsedAt` and `UsageType` on both deploy key structs) in
+  **v3.6.0**, both on 2026-09-11. Do not read a merge as a release: `!3040` sat
   merged and in no tag for hours, so the version is read from which tags
   contain the merge commit rather than from the newest tag. Six releases in
   two days is why: the newest tag was wrong for five of these six.
@@ -996,9 +1006,11 @@ merge requests have gone to `gitlab-org/gitlab` from its own
 [!254542](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254542),
 [!254543](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254543),
 [!254547](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254547) and
-[!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552). The
-first of them, `!254507`, was merged into `master` on 2026-09-10; the other
-eight are open.
+[!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552).
+`!254507` was merged into `master` on 2026-09-10 and `!254519` on 2026-09-11,
+neither in a tagged release yet; the other seven are open and in review since
+2026-09-12, `!254542` with the technical writer's approval and a pipeline that
+fails only in the fork's `get_sources` step.
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
 response attribute tables as well as the examples, and the other entities
