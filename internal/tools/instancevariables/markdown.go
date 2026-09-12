@@ -1,38 +1,19 @@
 package instancevariables
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // FormatOutputMarkdown renders a single instance CI/CD variable as Markdown.
+//
+// Hidden is the second half of the guard and was missing: GitLab lets an
+// instance variable be created with the value hidden from every later reader,
+// and it sends that value back to an administrator's own request, so a card
+// that asked only whether the variable was masked printed it. The shared
+// renderer this delegates to has held both halves since hidden variables
+// existed, and it reports the flag as well, which the card did not.
 func FormatOutputMarkdown(v Output) string {
-	if v.Key == "" {
-		return ""
-	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Instance Variable: %s\n\n", toolutil.EscapeMdHeading(v.Key))
-	//gitlab:allow-unescaped v.VariableType: a CI variable type GitLab picks from a fixed set (env_var, file).
-	fmt.Fprintf(&b, "- **Type**: %s\n", v.VariableType)
-	fmt.Fprintf(&b, "- **Protected**: %t\n", v.Protected)
-	fmt.Fprintf(&b, "- **Masked**: %t\n", v.Masked)
-	fmt.Fprintf(&b, "- **Raw**: %t\n", v.Raw)
-	if v.Description != "" {
-		toolutil.WriteDescription(&b, v.Description)
-	}
-	if !v.Masked {
-		fmt.Fprintf(&b, "- **Value**: %s\n", toolutil.EscapeMdTableCell(v.Value))
-	} else {
-		b.WriteString("- **Value**: [masked]\n")
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'update' to change this variable",
-		"Use action 'delete' to remove this variable",
-	)
-	return b.String()
+	return toolutil.FormatCICDVariableDetailMarkdown(toMarkdownVariable(v), "Instance Variable", false)
 }
 
 // FormatListMarkdown renders a paginated list of instance CI/CD variables as a Markdown table.
@@ -44,8 +25,12 @@ func FormatListMarkdown(out ListOutput) string {
 	)
 }
 
+// toMarkdownVariable maps an instance variable onto the shared view model.
+// Hidden travels with Masked because the shared renderer withholds the value
+// for either: a variable created with masked_and_hidden is never shown again
+// in GitLab's own UI, whether or not it is also masked.
 func toMarkdownVariable(v Output) toolutil.CICDVariableMarkdown {
-	flags := toolutil.CICDVariableFlags{Protected: v.Protected, Masked: v.Masked, Raw: v.Raw}
+	flags := toolutil.CICDVariableFlags{Protected: v.Protected, Masked: v.Masked, Hidden: v.Hidden, Raw: v.Raw}
 	return toolutil.NewCICDVariableMarkdown(v.Key, v.Value, v.VariableType, flags, "", v.Description)
 }
 

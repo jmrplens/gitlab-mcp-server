@@ -511,6 +511,39 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdown_TokenShapes_CodeSpannedAndHintedOnlyWhenPresent
+// verifies that the token is written inside a code span, and that the advice
+// to store it securely is written only on a card that carries one.
+//
+// Both halves matter. A token written as bare Markdown is read as Markdown, so
+// an underscore pair in it is eaten as emphasis and what the reader copies
+// back is not what GitLab minted. And the same Go type answers a get, which
+// carries no token: telling that reader to store a value the card does not
+// hold sends them hunting for a credential that was never shown.
+func TestFormatOutputMarkdown_TokenShapes_CodeSpannedAndHintedOnlyWhenPresent(t *testing.T) {
+	const storeHint = "Store the token value securely"
+
+	t.Run("token is code spanned and hinted", func(t *testing.T) {
+		md := FormatOutputMarkdown(Output{ID: 10, RunnerControllerID: 1, Token: "glrt-a_b_c"})
+		if !strings.Contains(md, "- **Token**: `glrt-a_b_c`\n") {
+			t.Errorf("token not written inside a code span:\n%s", md)
+		}
+		if !strings.Contains(md, storeHint) {
+			t.Errorf("card carrying a token missing the storage hint:\n%s", md)
+		}
+	})
+
+	t.Run("no token means no storage hint", func(t *testing.T) {
+		md := FormatOutputMarkdown(Output{ID: 10, RunnerControllerID: 1, Description: "my-token"})
+		if strings.Contains(md, "**Token**") {
+			t.Errorf("empty token still announced:\n%s", md)
+		}
+		if strings.Contains(md, storeHint) {
+			t.Errorf("card carrying no token still tells the reader to store one:\n%s", md)
+		}
+	})
+}
+
 // TestFormatListMarkdown verifies list Markdown with data and empty.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{

@@ -778,9 +778,9 @@ func writeFullWebhooksSection(b *strings.Builder, webhooks []*gl.ProjectHook) {
 	if len(webhooks) > 0 {
 		b.WriteString("\n| URL | Push | MR | Issues | SSL |\n|-----|------|-----|--------|-----|\n")
 		for _, h := range webhooks {
-			// Escaped outside the truncation, so no entity is cut in half.
+			// Escaped outside the redaction, so no entity is cut in half.
 			fmt.Fprintf(b, "| %s | %s | %s | %s | %s |\n",
-				mdInline(maskURL(h.URL)), toolutil.BoolEmoji(h.PushEvents), toolutil.BoolEmoji(h.MergeRequestsEvents),
+				mdInline(toolutil.RedactURLToOrigin(h.URL)), toolutil.BoolEmoji(h.PushEvents), toolutil.BoolEmoji(h.MergeRequestsEvents),
 				toolutil.BoolEmoji(h.IssuesEvents), toolutil.BoolEmoji(h.EnableSSLVerification))
 		}
 	}
@@ -859,12 +859,4 @@ func formatBytes(bytes int64) string {
 	default:
 		return fmt.Sprintf("%d B", bytes)
 	}
-}
-
-// maskURL masks the path portion of a webhook URL for security.
-func maskURL(u string) string {
-	if len(u) <= 30 {
-		return u
-	}
-	return u[:30] + "..."
 }

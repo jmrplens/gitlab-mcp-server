@@ -135,6 +135,109 @@ func TestResolveProjectPath(t *testing.T) {
 	}
 }
 
+// TestParseGitmodules_RemoteWithCredentials_PublishesNeither verifies that a
+// submodule remote carrying a password reaches neither the resolved project
+// path nor the url field the tool publishes.
+//
+// It matters because .gitmodules is part of the repository, so whoever can
+// push chooses its text, and the old resolver took its SCP branch on the
+// presence of an "@" and a ":" -- which every credentialed https remote also
+// has. "https://user:password@host/group/project.git" split on the colon of
+// its own scheme and resolved to "/user:password@host/group/project", which
+// the submodule table then printed as the project name.
+func TestParseGitmodules_RemoteWithCredentials_PublishesNeither(t *testing.T) {
+	cases := []struct {
+		name         string
+		remote       string
+		wantResolved string
+		wantURL      string
+	}{
+		{
+			name:         "https with password",
+			remote:       "https://ciuser:s3cretpw@gitlab.example.com/group/project.git",
+			wantResolved: "group/project",
+			wantURL:      "https://gitlab.example.com/group/project.git",
+		},
+		{
+			name:         "https with username only",
+			remote:       "https://ciuser@gitlab.example.com/group/project.git",
+			wantResolved: "group/project",
+			wantURL:      "https://gitlab.example.com/group/project.git",
+		},
+		{
+			name:         "ssh scheme with password",
+			remote:       "ssh://ciuser:s3cretpw@gitlab.example.com/group/project.git",
+			wantResolved: "group/project",
+			wantURL:      "ssh://gitlab.example.com/group/project.git",
+		},
+		{
+			name:         "scp style with password",
+			remote:       "ciuser:s3cretpw@gitlab.example.com:group/project.git",
+			wantResolved: "group/project",
+			wantURL:      "gitlab.example.com:group/project.git",
+		},
+		{
+			name:         "scp style ssh account is kept",
+			remote:       "git@gitlab.example.com:group/project.git",
+			wantResolved: "group/project",
+			wantURL:      "git@gitlab.example.com:group/project.git",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			entries := parseGitmodules("[submodule \"lib\"]\n\tpath = lib\n\turl = " + tc.remote + "\n")
+			if len(entries) != 1 {
+				t.Fatalf("expected 1 entry, got %d", len(entries))
+			}
+			got := entries[0]
+			if got.ResolvedProject != tc.wantResolved {
+				t.Errorf("ResolvedProject = %q, want %q", got.ResolvedProject, tc.wantResolved)
+			}
+			if got.URL != tc.wantURL {
+				t.Errorf("URL = %q, want %q", got.URL, tc.wantURL)
+			}
+			for _, secret := range []string{"s3cretpw", "ciuser"} {
+				if strings.Contains(got.ResolvedProject, secret) {
+					t.Errorf("ResolvedProject %q leaked %q", got.ResolvedProject, secret)
+				}
+				if strings.Contains(got.URL, secret) {
+					t.Errorf("URL %q leaked %q", got.URL, secret)
+				}
+			}
+		})
+	}
+}
+
+// TestFormatListMarkdown_RemoteWithCredentials_RendersNoPassword verifies that
+// the rendered submodule table, which is the text a model reads, carries no
+// part of a credentialed remote.
+func TestFormatListMarkdown_RemoteWithCredentials_RendersNoPassword(t *testing.T) {
+	entries := parseGitmodules("[submodule \"lib\"]\n\tpath = lib\n\turl = https://ciuser:s3cretpw@gitlab.example.com/group/project.git\n")
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	result := FormatListMarkdown(ListOutput{Submodules: entries, Count: len(entries)})
+	if len(result.Content) == 0 {
+		t.Fatal("expected rendered content")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected text content, got %T", result.Content[0])
+	}
+	md := text.Text
+
+	for _, secret := range []string{"s3cretpw", "ciuser"} {
+		t.Run("withholds "+secret, func(t *testing.T) {
+			if strings.Contains(md, secret) {
+				t.Errorf("submodule table leaked %q:\n%s", secret, md)
+			}
+		})
+	}
+	if !strings.Contains(md, "group/project") {
+		t.Errorf("submodule table missing the resolved project:\n%s", md)
+	}
+}
+
 // parentDir unit tests.
 
 // TestParentDir covers ParentDir with table-driven subtests.

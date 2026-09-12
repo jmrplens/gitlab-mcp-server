@@ -23,7 +23,9 @@ type ListInput struct {
 }
 
 // SubmoduleEntry represents a single submodule with its configuration and
-// current commit pointer.
+// current commit pointer. URL is the remote as .gitmodules writes it with any
+// credentials removed ([redactRemote]); ResolvedProject is the project path it
+// names, and carries no credentials either ([resolveProjectPath]).
 type SubmoduleEntry struct {
 	Name            string `json:"name"`
 	Path            string `json:"path"`
@@ -108,7 +110,7 @@ func parseGitmodules(content string) []SubmoduleEntry {
 			case "path":
 				current.Path = val
 			case "url":
-				current.URL = val
+				current.URL = redactRemote(val)
 				current.ResolvedProject = resolveProjectPath(val)
 			}
 		}
@@ -132,13 +134,24 @@ func parseKeyValue(line string) (key, value string, ok bool) {
 //   - git@host:group/project.git
 //   - https://host/group/project.git
 //   - ssh://git@host/group/project.git
+//
+// The SCP branch is taken on the absence of a scheme and not on the presence
+// of an "@" and a ":", which every credentialed https remote also has. Read
+// the old way, "https://user:password@host/group/project.git" split on its
+// first colon and resolved to "/user:password@host/group/project", so the
+// password was rendered into the submodule table as the project name. What a
+// scheme introduces is parsed with net/url, whose User is dropped and never
+// read.
 func resolveProjectPath(rawURL string) string {
-	if strings.Contains(rawURL, "@") && strings.Contains(rawURL, ":") && !strings.HasPrefix(rawURL, "ssh://") {
-		// SCP-style: git@host:path.git
-		parts := strings.SplitN(rawURL, ":", 2)
-		if len(parts) == 2 {
-			return strings.TrimSuffix(strings.TrimPrefix(parts[1], "/"), ".git")
+	if !strings.Contains(rawURL, "://") {
+		// SCP-style: [user@]host:path.git, and the userinfo goes first so that
+		// a password written where ssh would never accept one cannot survive
+		// the colon split either.
+		remote := withoutSCPUserinfo(rawURL)
+		if _, path, found := strings.Cut(remote, ":"); found {
+			return strings.TrimSuffix(strings.TrimPrefix(path, "/"), ".git")
 		}
+		return strings.TrimSuffix(strings.TrimPrefix(remote, "/"), ".git")
 	}
 
 	u, err := url.Parse(rawURL)
@@ -147,6 +160,47 @@ func resolveProjectPath(rawURL string) string {
 	}
 	path := strings.TrimPrefix(u.Path, "/")
 	return strings.TrimSuffix(path, ".git")
+}
+
+// withoutSCPUserinfo removes the credentials from an SCP-style remote,
+// "[user[:password]@]host:path". A bare "git@" is left alone: it is the ssh
+// account every such remote is written with and identifies nobody, while a
+// userinfo carrying a colon carries a password.
+func withoutSCPUserinfo(remote string) string {
+	authority, _, _ := strings.Cut(remote, "/")
+	at := strings.LastIndex(authority, "@")
+	if at < 0 {
+		return remote
+	}
+	if !strings.Contains(authority[:at], ":") {
+		return remote
+	}
+	return remote[at+1:]
+}
+
+// redactRemote removes the credentials a .gitmodules remote can carry before
+// the remote is published on the output. The file is part of the repository,
+// so whoever can push chooses the text, and a submodule pinned through
+// "https://user:password@host/group/project.git" would otherwise hand that
+// password to the model in the structured result beside the table.
+//
+// Only the userinfo goes: the host and the path are what identify the
+// submodule, which is the whole point of reporting the remote.
+func redactRemote(rawURL string) string {
+	if !strings.Contains(rawURL, "://") {
+		return withoutSCPUserinfo(rawURL)
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		// A remote carrying a scheme that will not parse is not something this
+		// can judge, so nothing of it is published.
+		return ""
+	}
+	if u.User == nil {
+		return rawURL
+	}
+	u.User = nil
+	return u.String()
 }
 
 // enrichSubmoduleCommitSHAs walks the repository tree to find nodes of type

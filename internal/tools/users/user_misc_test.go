@@ -667,6 +667,29 @@ func TestFormatUserRunnerMarkdownString_NoExpiry(t *testing.T) {
 	}
 }
 
+// TestFormatUserRunnerMarkdownString_TokenShapes_AreCodeSpannedAndGuarded
+// verifies that the created runner's token is written inside a code span and
+// that a card with no token announces none.
+//
+// A token written as bare Markdown is read as Markdown, so an underscore pair
+// in it is eaten as emphasis and the value copied back is not the one GitLab
+// minted. The one-time nature of the value is already stated by the hint below
+// it, so an empty **Token** line promises a credential the card never carried.
+func TestFormatUserRunnerMarkdownString_TokenShapes_AreCodeSpannedAndGuarded(t *testing.T) {
+	t.Run("token is inside a code span", func(t *testing.T) {
+		md := FormatUserRunnerMarkdownString(UserRunnerOutput{ID: 101, Token: "glrt-a_b_c"})
+		if !strings.Contains(md, "- **Token**: `glrt-a_b_c`\n") {
+			t.Errorf("token not written inside a code span:\n%s", md)
+		}
+	})
+	t.Run("empty token writes no line", func(t *testing.T) {
+		md := FormatUserRunnerMarkdownString(UserRunnerOutput{ID: 101, TokenExpiresAt: "2026-06-01T00:00:00Z"})
+		if strings.Contains(md, "**Token**:") {
+			t.Errorf("empty token still announced:\n%s", md)
+		}
+	})
+}
+
 // TestFormatDeleteUserIdentityMarkdownString verifies identity deletion markdown.
 func TestFormatDeleteUserIdentityMarkdownString(t *testing.T) {
 	md := FormatDeleteUserIdentityMarkdownString(DeleteUserIdentityOutput{
