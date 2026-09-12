@@ -165,6 +165,145 @@ const (
 	actionGroupDatadogDelete          harness.ActionID = "project.integration_delete_group_datadog"
 )
 
+// The group create, update and read, Free in the catalog and driven here for
+// the Ultimate download-limit fields only an Ultimate schema carries.
+const (
+	actionGroupCreate harness.ActionID = "group.create"
+	actionGroupUpdate harness.ActionID = "group.update"
+	actionGroupGet    harness.ActionID = "group.get"
+)
+
+// Epics, their notes, their discussions, their child issues and their
+// links, all reached through the group tool.
+const (
+	actionEpicCreate               harness.ActionID = "group.epic_create"
+	actionEpicList                 harness.ActionID = "group.epic_list"
+	actionEpicGet                  harness.ActionID = "group.epic_get"
+	actionEpicUpdate               harness.ActionID = "group.epic_update"
+	actionEpicDelete               harness.ActionID = "group.epic_delete"
+	actionEpicGetLinks             harness.ActionID = "group.epic_get_links"
+	actionEpicNoteCreate           harness.ActionID = "group.epic_note_create"
+	actionEpicNoteList             harness.ActionID = "group.epic_note_list"
+	actionEpicNoteGet              harness.ActionID = "group.epic_note_get"
+	actionEpicNoteUpdate           harness.ActionID = "group.epic_note_update"
+	actionEpicNoteDelete           harness.ActionID = "group.epic_note_delete"
+	actionEpicDiscussionCreate     harness.ActionID = "group.epic_discussion_create"
+	actionEpicDiscussionList       harness.ActionID = "group.epic_discussion_list"
+	actionEpicDiscussionGet        harness.ActionID = "group.epic_discussion_get"
+	actionEpicDiscussionAddNote    harness.ActionID = "group.epic_discussion_add_note"
+	actionEpicDiscussionUpdateNote harness.ActionID = "group.epic_discussion_update_note"
+	actionEpicDiscussionDeleteNote harness.ActionID = "group.epic_discussion_delete_note"
+	actionEpicIssueAssign          harness.ActionID = "group.epic_issue_assign"
+	actionEpicIssueList            harness.ActionID = "group.epic_issue_list"
+	actionEpicIssueUpdate          harness.ActionID = "group.epic_issue_update"
+	actionEpicIssueRemove          harness.ActionID = "group.epic_issue_remove"
+	actionEpicBoardList            harness.ActionID = "group.epic_board_list"
+	actionEpicBoardGet             harness.ActionID = "group.epic_board_get"
+	actionEpicLabelEventList       harness.ActionID = "group.event_epic_label_list"
+	actionEpicLabelEventGet        harness.ActionID = "group.event_epic_label_get"
+)
+
+// The group board create, the one Premium action of the board family; the
+// reads and the column actions are Free and live in the common package.
+const (
+	actionGroupBoardCreate harness.ActionID = "group.group_board_create"
+	actionGroupBoardList   harness.ActionID = "group.group_board_list"
+	actionGroupBoardGet    harness.ActionID = "group.group_board_get"
+	actionGroupBoardDelete harness.ActionID = "group.group_board_delete"
+)
+
+// Group wikis.
+const (
+	actionGroupWikiCreate harness.ActionID = "group.wiki_create"
+	actionGroupWikiList   harness.ActionID = "group.wiki_list"
+	actionGroupWikiGet    harness.ActionID = "group.wiki_get"
+	actionGroupWikiEdit   harness.ActionID = "group.wiki_edit"
+	actionGroupWikiDelete harness.ActionID = "group.wiki_delete"
+)
+
+// Group LDAP links and the LDAP sync.
+const (
+	actionGroupLDAPLinkAdd               harness.ActionID = "group.ldap_link_add"
+	actionGroupLDAPLinkList              harness.ActionID = "group.ldap_link_list"
+	actionGroupLDAPLinkDelete            harness.ActionID = "group.ldap_link_delete"
+	actionGroupLDAPLinkDeleteForProvider harness.ActionID = "group.ldap_link_delete_for_provider"
+	actionGroupLDAPSync                  harness.ActionID = "group.ldap_sync"
+)
+
+// Group SAML links and the SAML user listing.
+const (
+	actionGroupSAMLLinkList   harness.ActionID = "group.saml_link_list"
+	actionGroupSAMLLinkAdd    harness.ActionID = "group.saml_link_add"
+	actionGroupSAMLLinkGet    harness.ActionID = "group.saml_link_get"
+	actionGroupSAMLLinkDelete harness.ActionID = "group.saml_link_delete"
+	actionGroupSAMLUsersList  harness.ActionID = "group.saml_users_list"
+)
+
+// Group SSH certificates.
+const (
+	actionGroupSSHCertCreate harness.ActionID = "group.ssh_cert_create"
+	actionGroupSSHCertList   harness.ActionID = "group.ssh_cert_list"
+	actionGroupSSHCertDelete harness.ActionID = "group.ssh_cert_delete"
+)
+
+// The group credential inventory.
+const (
+	actionGroupCredentialListPATs     harness.ActionID = "group.credential_list_pats"
+	actionGroupCredentialListSSHKeys  harness.ActionID = "group.credential_list_ssh_keys"
+	actionGroupCredentialRevokePAT    harness.ActionID = "group.credential_revoke_pat"
+	actionGroupCredentialDeleteSSHKey harness.ActionID = "group.credential_delete_ssh_key"
+)
+
+// Group protected branches and protected environments.
+const (
+	actionGroupProtectedBranchProtect   harness.ActionID = "group.protected_branch_protect"
+	actionGroupProtectedBranchList      harness.ActionID = "group.protected_branch_list"
+	actionGroupProtectedBranchGet       harness.ActionID = "group.protected_branch_get"
+	actionGroupProtectedBranchUpdate    harness.ActionID = "group.protected_branch_update"
+	actionGroupProtectedBranchUnprotect harness.ActionID = "group.protected_branch_unprotect"
+	actionGroupProtectedEnvProtect      harness.ActionID = "group.protected_env_protect"
+	actionGroupProtectedEnvList         harness.ActionID = "group.protected_env_list"
+	actionGroupProtectedEnvGet          harness.ActionID = "group.protected_env_get"
+	actionGroupProtectedEnvUpdate       harness.ActionID = "group.protected_env_update"
+	actionGroupProtectedEnvUnprotect    harness.ActionID = "group.protected_env_unprotect"
+)
+
+// Group push rules.
+const (
+	actionGroupPushRuleAdd    harness.ActionID = "group.push_rule_add"
+	actionGroupPushRuleGet    harness.ActionID = "group.push_rule_get"
+	actionGroupPushRuleEdit   harness.ActionID = "group.push_rule_edit"
+	actionGroupPushRuleDelete harness.ActionID = "group.push_rule_delete"
+)
+
+// Billable members and provisioned users.
+const (
+	actionGroupBillableMembersList           harness.ActionID = "group.group_billable_members_list"
+	actionGroupBillableMemberMembershipsList harness.ActionID = "group.group_billable_member_memberships_list"
+	actionGroupBillableMemberRemove          harness.ActionID = "group.group_billable_member_remove"
+	actionGroupListProvisionedUsers          harness.ActionID = "group.list_provisioned_users"
+)
+
+// Group webhooks and their sub-operations.
+const (
+	actionGroupHookAdd                harness.ActionID = "group.hook_add"
+	actionGroupHookList               harness.ActionID = "group.hook_list"
+	actionGroupHookGet                harness.ActionID = "group.hook_get"
+	actionGroupHookEdit               harness.ActionID = "group.hook_edit"
+	actionGroupHookDelete             harness.ActionID = "group.hook_delete"
+	actionGroupHookSetCustomHeader    harness.ActionID = "group.hook_set_custom_header"
+	actionGroupHookDeleteCustomHeader harness.ActionID = "group.hook_delete_custom_header"
+	actionGroupHookSetURLVariable     harness.ActionID = "group.hook_set_url_variable"
+	actionGroupHookDeleteURLVariable  harness.ActionID = "group.hook_delete_url_variable"
+	actionGroupHookTest               harness.ActionID = "group.hook_test"
+	actionGroupHookResendEvent        harness.ActionID = "group.hook_resend_event"
+)
+
+// The group milestone burndown, the one licensed read of the group
+// milestone family, which the old suite kept behind an enterprise guard in
+// its Community group file.
+const actionGroupMilestoneBurndown harness.ActionID = "group.group_milestone_burndown"
+
 // Protected environments and the deployment approval they gate.
 const (
 	actionProtectedEnvProtect       harness.ActionID = "environment.protected_protect"

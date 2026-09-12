@@ -26,10 +26,10 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			"Update a group issue board's name and scope (assignee, milestone, labels, weight). Returns: the updated board with its group, milestone, labels, and lists. See also: gitlab_group_board_get, gitlab_group_board_list.",
 			"Rename a group issue board or retune its assignee, milestone, label, and weight scope.",
 			[]string{"update a group issue board", "rename a group board", "change a group board scope"}),
-		groupBoardDeleteSpec("group_board_delete", toolutil.DestructiveAction(client, deleteGroupBoardOutput), "gitlab_group_board_delete",
-			"Delete a group issue board permanently. Returns: a success confirmation. See also: gitlab_group_board_get, gitlab_group_board_list.",
+		groupBoardPremiumSpec(groupBoardDeleteSpec("group_board_delete", toolutil.DestructiveAction(client, deleteGroupBoardOutput), "gitlab_group_board_delete",
+			"Delete a group issue board permanently (Premium/Ultimate). Returns: a success confirmation. See also: gitlab_group_board_get, gitlab_group_board_list.",
 			"Permanently remove an issue board from a group when the team no longer needs it.",
-			[]string{"delete a group issue board", "remove a board from a group", "drop a group kanban board"}),
+			[]string{"delete a group issue board", "remove a board from a group", "drop a group kanban board"})),
 		groupBoardReadSpec("group_board_list_lists", toolutil.RouteAction(client, ListGroupBoardLists), "gitlab_group_board_list_lists",
 			"List the lists (columns) of a group issue board with pagination. Returns: each list with its assignee, label, iteration, and milestone scope plus pagination metadata. See also: gitlab_group_board_list_get, gitlab_group_board_list_create, gitlab_group_board_get.",
 			"Enumerate the columns of a group issue board to see how its workflow stages are arranged.",
@@ -68,8 +68,12 @@ func deleteGroupBoardListOutput(ctx context.Context, client *gitlabclient.Client
 }
 
 // groupBoardPremiumSpec marks a group board action as Premium/Ultimate so the
-// individual catalog hides it from CE clients. Creating additional group issue
-// boards (beyond the single CE board) is a GitLab Premium feature.
+// individual catalog hides it from CE clients. Creating and deleting group
+// issue boards through the API are GitLab Premium features: group_boards.md
+// states the tier on both, and lib/api/boards_responses.rb guards create_board
+// and delete_board alike with a forbidden! unless the group may hold several
+// boards, which a Free group may not. The delete was tagged Free until the
+// e2e port drove it on a Free catalog.
 func groupBoardPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
 	spec.Edition = "premium"
 	return spec

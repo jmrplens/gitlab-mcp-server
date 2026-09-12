@@ -99,8 +99,11 @@ var acceptedTierExceptions = map[string]tierException{
 	"group.list_provisioned_users":                 {tierPremium, "provisioned users = Premium"},
 
 	// Group issue board create/delete — group_boards.md page is Free but the
-	// create/delete sections are Premium-overridden.
+	// create/delete sections are Premium-overridden. The delete was missing
+	// here while its action was tagged Free, so the auditor and the catalog
+	// agreed with each other and not with the page.
 	"group.group_board_create": {tierPremium, "group_boards.md 'Create' section = Premium override"},
+	"group.group_board_delete": {tierPremium, "group_boards.md 'Delete' section = Premium override"},
 
 	// Group milestone burndown events — group_milestones.md page is Free but the
 	// burndown-chart-events section carries a Premium override badge.

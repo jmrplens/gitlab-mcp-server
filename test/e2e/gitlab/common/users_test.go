@@ -1,9 +1,10 @@
 //go:build e2e
 
-// users_test.go covers the instance-level service accounts of the user
-// group: list them, create one, update it. The account is a user, so it is
-// removed through the fixture library's user deletion rather than through
-// a delete of its own, which the group has none for.
+// users_test.go covers the read of the authenticated user, and the
+// instance-level service accounts of the user group: list them, create
+// one, update it. The account is a user, so it is removed through the
+// fixture library's user deletion rather than through a delete of its own,
+// which the group has none for.
 
 package common
 
@@ -15,6 +16,24 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
+
+// TestUserCurrent_RunToken_NamesTheRunUser reads the authenticated user on
+// every surface and checks it is the user the run's token belongs to, by
+// id and by username, which is the one fact every other test's writes are
+// attributed by.
+//
+// Replaces: TestBaseline_Recorder_JoinsTheDispatchedAction
+func TestUserCurrent_RunToken_NamesTheRunUser(t *testing.T) {
+	e := harness.New(t)
+
+	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
+		s := e.On(surface)
+		me := harness.Do[users.Output](s, actionUserCurrent, nil)
+		if me.ID != e.Runtime().UserID || me.Username != e.Runtime().Username {
+			e.T.Errorf("user current answered %d %q, want the run's user %d %q", me.ID, me.Username, e.Runtime().UserID, e.Runtime().Username)
+		}
+	})
+}
 
 // TestUserServiceAccounts_Instance_ListsCreatesAndUpdates creates one
 // instance service account per surface, finds it in the listing and

@@ -345,12 +345,14 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		// 866 = 854 + 12 achievement actions (Free, client-go v2.64.0). The 854
-		// was 868 −11 group webhooks −3 MR dependencies gated to Premium
+		// 865 = 866 −1 group board delete gated to Premium (group_boards.md
+		// states the tier on the delete as on the create). The 866 was 854 +
+		// 12 achievement actions (Free, client-go v2.64.0), and the 854 was
+		// 868 −11 group webhooks −3 MR dependencies gated to Premium
 		// (group_webhooks.md and merge request dependencies are
 		// Premium/Ultimate). See cmd/audit_edition_tier. The base moved from
 		// 861 with the 7 work item saved view actions, which are Free.
-		const expectedTools = 866
+		const expectedTools = 865
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {

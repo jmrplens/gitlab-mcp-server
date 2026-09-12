@@ -785,11 +785,14 @@ func assertCatalogMissingAction(t *testing.T, catalog *actioncatalog.Catalog, ac
 
 const (
 	// expectedBaseDynamicCatalogActions identifies the expected base (Free tier)
-	// dynamic catalog actions. 870 = 858 + 12 achievement actions (Free,
-	// client-go v2.64.0). The 858 was 872 −11 group webhooks −3 MR dependencies
+	// dynamic catalog actions. 869 = 870 −1 group board delete gated to
+	// Premium (group_boards.md states the tier on the delete as on the
+	// create, and GitLab refuses both on a group that may not hold several
+	// boards). The 870 was 858 + 12 achievement actions (Free, client-go
+	// v2.64.0), and the 858 was 872 −11 group webhooks −3 MR dependencies
 	// gated to Premium (group_webhooks.md and merge request dependencies are
 	// Premium/Ultimate). See cmd/audit_edition_tier.
-	expectedBaseDynamicCatalogActions = 870
+	expectedBaseDynamicCatalogActions = 869
 	// expectedEnterpriseDynamicCatalogActions identifies the expected enterprise dynamic catalog actions constant used by this package.
 	// 1089 = 1077 + 12 achievement actions (Free, client-go v2.64.0). The 1077
 	// was 1069 + 7 work item saved view actions (get/list/create/update/
