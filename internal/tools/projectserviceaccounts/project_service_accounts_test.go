@@ -555,29 +555,105 @@ func TestActionSpecs(t *testing.T) {
 	}
 }
 
-// TestMarkdownFormatters verifies the registered Markdown formatters include
-// identifying fields and empty-state text.
+// TestMarkdownFormatters verifies the whole document each registered
+// formatter renders: the card's items and guidance for one account and one
+// token, the table and footer for a page of each, and the one sentence an
+// empty page answers with.
 func TestMarkdownFormatters(t *testing.T) {
-	account := Output{ID: 7, Name: "svc", Username: "svc-user", Email: "svc@example.com", UnconfirmedEmail: "pending@example.com"}
-	if md := FormatMarkdownString(account); !strings.Contains(md, "svc-user") || !strings.Contains(md, "gitlab_project_service_account_update") {
-		t.Fatalf("FormatMarkdownString missing expected content:\n%s", md)
-	}
-	if md := FormatListMarkdownString(ListOutput{Accounts: []Output{account}}); !strings.Contains(md, "svc@example.com") || !strings.Contains(md, "clickable [text](url)") {
-		t.Fatalf("FormatListMarkdownString missing list content:\n%s", md)
-	}
-	if md := FormatListMarkdownString(ListOutput{}); !strings.Contains(md, "No project service accounts found") {
-		t.Fatalf("FormatListMarkdownString missing empty state:\n%s", md)
-	}
+	account := Output{ID: 7, Name: "svc", Username: "svc-user", Email: "svc@example.com", PublicEmail: "public@example.com", UnconfirmedEmail: "pending@example.com"}
 	token := PATOutput{ID: 11, Name: "tok", Active: true, Scopes: []string{"api"}, UserID: 7, Token: "glpat-test", CreatedAt: "2026-01-01T02:03:04Z", LastUsedAt: "2026-01-02T03:04:05Z", ExpiresAt: "2026-12-31"}
-	if md := FormatPATMarkdownString(token); !strings.Contains(md, "glpat-test") || !strings.Contains(md, "gitlab_project_service_account_pat_rotate") {
-		t.Fatalf("FormatPATMarkdownString missing expected content:\n%s", md)
-	}
-	if md := FormatListPATMarkdownString(ListPATOutput{Tokens: []PATOutput{token}}); !strings.Contains(md, "2026-12-31") || !strings.Contains(md, "clickable [text](url)") {
-		t.Fatalf("FormatListPATMarkdownString missing list content:\n%s", md)
-	}
-	if md := FormatListPATMarkdownString(ListPATOutput{}); !strings.Contains(md, "No project service account tokens found") {
-		t.Fatalf("FormatListPATMarkdownString missing empty state:\n%s", md)
-	}
+
+	t.Run("account card", func(t *testing.T) {
+		want := "## Project Service Account: svc-user\n\n" +
+			"- **ID**: 7\n" +
+			"- **Name**: svc\n" +
+			"- **Username**: svc-user\n" +
+			"- **Email**: svc@example.com\n" +
+			"- **Public Email**: public@example.com\n" +
+			"- **Unconfirmed Email**: pending@example.com\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Use action 'project.service_account_update' to modify this account\n" +
+			"- Use action 'project.service_account_pat_create' to create a token for it\n"
+		if got := FormatMarkdownString(account); got != want {
+			t.Errorf("FormatMarkdownString =\n%q\nwant\n%q", got, want)
+		}
+	})
+	t.Run("account list", func(t *testing.T) {
+		want := "## Project Service Accounts (1)\n\n" +
+			"| ID | Username | Name | Email |\n| --- | --- | --- | --- |\n" +
+			"| 7 | svc-user | svc | svc@example.com |\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Use action 'project.service_account_pat_list' to list one account's tokens\n"
+		if got := FormatListMarkdownString(ListOutput{Accounts: []Output{account}}); got != want {
+			t.Errorf("FormatListMarkdownString =\n%q\nwant\n%q", got, want)
+		}
+	})
+	t.Run("empty account list", func(t *testing.T) {
+		if got, want := FormatListMarkdownString(ListOutput{}), "No project service accounts found.\n"; got != want {
+			t.Errorf("FormatListMarkdownString =\n%q\nwant\n%q", got, want)
+		}
+	})
+	t.Run("token card", func(t *testing.T) {
+		want := "## Project Service Account Token: tok\n\n" +
+			"- **ID**: 11\n" +
+			"- **Name**: tok\n" +
+			"- **Active**: " + toolutil.BoolEmoji(true) + "\n" +
+			"- **Scopes**: api\n" +
+			"- **Granular**: " + toolutil.BoolEmoji(false) + "\n" +
+			"- **User ID**: 7\n" +
+			"- **Created**: 1 Jan 2026 02:03 UTC\n" +
+			"- **Last used**: 2 Jan 2026 03:04 UTC\n" +
+			"- **Expires**: 31 Dec 2026\n" +
+			"- **Token**: `glpat-test`\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Store the token securely. It cannot be retrieved later\n" +
+			"- Use action 'project.service_account_pat_rotate' to rotate this token\n" +
+			"- Use action 'project.service_account_pat_revoke' to revoke it\n"
+		if got := FormatPATMarkdownString(token); got != want {
+			t.Errorf("FormatPATMarkdownString =\n%q\nwant\n%q", got, want)
+		}
+	})
+	t.Run("token list", func(t *testing.T) {
+		want := "## Project Service Account Tokens (1)\n\n" +
+			"| ID | Name | Active | Revoked | Scopes | Expires |\n| --- | --- | --- | --- | --- | --- |\n" +
+			"| 11 | tok | " + toolutil.BoolEmoji(true) + " | " + toolutil.BoolEmoji(false) + " | api | 31 Dec 2026 |\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Use action 'project.service_account_pat_revoke' to revoke one of these tokens\n"
+		if got := FormatListPATMarkdownString(ListPATOutput{Tokens: []PATOutput{token}}); got != want {
+			t.Errorf("FormatListPATMarkdownString =\n%q\nwant\n%q", got, want)
+		}
+	})
+	t.Run("empty token list", func(t *testing.T) {
+		if got, want := FormatListPATMarkdownString(ListPATOutput{}), "No project service account tokens found.\n"; got != want {
+			t.Errorf("FormatListPATMarkdownString =\n%q\nwant\n%q", got, want)
+		}
+	})
+	t.Run("granular token", func(t *testing.T) {
+		granular := PATOutput{
+			ID: 12, Name: "gran", Active: true, Granular: true, Scopes: []string{"api"},
+			GranularScopes: []toolutil.TokenGranularScopeOutput{
+				{Access: "read", Permissions: []string{"read_code", "read_runners"}, ProjectID: 3},
+				{Access: "admin", Permissions: []string{"admin_runners"}, GroupID: 9},
+			},
+		}
+		want := "## Project Service Account Token: gran\n\n" +
+			"- **ID**: 12\n" +
+			"- **Name**: gran\n" +
+			"- **Active**: " + toolutil.BoolEmoji(true) + "\n" +
+			"- **Scopes**: api\n" +
+			"- **Granular**: " + toolutil.BoolEmoji(true) + "\n" +
+			"- **User ID**: 0\n" +
+			"\n### Granular Scopes\n\n" +
+			"| Access | Permissions | Project | Group |\n| --- | --- | --- | --- |\n" +
+			"| read | read_code, read_runners | 3 | - |\n" +
+			"| admin | admin_runners | - | 9 |\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Use action 'project.service_account_pat_rotate' to rotate this token\n" +
+			"- Use action 'project.service_account_pat_revoke' to revoke it\n"
+		if got := FormatPATMarkdownString(granular); got != want {
+			t.Errorf("FormatPATMarkdownString =\n%q\nwant\n%q", got, want)
+		}
+	})
 }
 
 // TestContextCancellation verifies handlers return before making API calls when

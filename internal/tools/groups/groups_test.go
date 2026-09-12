@@ -2473,393 +2473,67 @@ func TestDeleteHook_MissingGroupID(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// FormatOutputMarkdown
-// ---------------------------------------------------------------------------.
-
-// TestFormatOutputMarkdown_WithData verifies the OutputMarkdown_WithData Markdown formatter for a representative output_withdata input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatOutputMarkdown_WithData(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
-		ID:                99,
-		Name:              "infrastructure",
-		FullPath:          "org/infra",
-		FullName:          "Org / Infrastructure",
-		Visibility:        "private",
-		Description:       "Infra group",
-		WebURL:            "https://gitlab.example.com/groups/org/infra",
-		ParentID:          1,
-		CreatedAt:         "2026-01-15T10:00:00Z",
-		MarkedForDeletion: "2026-06-01",
-	})
-
-	for _, want := range []string{
-		"## Group: infrastructure",
-		"**ID**: 99",
-		"**Path**: org/infra",
-		"**Full Name**: Org / Infrastructure",
-		"**Visibility**: private",
-		"**Description**: Infra group",
-		"**URL**:",
-		"**Parent ID**: 1",
-		"**Created**:",
-		"Marked for deletion",
-		"2026-06-01",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-}
-
-// TestFormatOutputMarkdown_Minimal verifies the OutputMarkdown_Minimal Markdown formatter for a representative output_minimal input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatOutputMarkdown_Minimal(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
-		ID:         1,
-		Name:       "minimal",
-		FullPath:   "minimal",
-		Visibility: "public",
-		WebURL:     "https://gl.example.com/minimal",
-	})
-
-	if !strings.Contains(md, "## Group: minimal") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	for _, absent := range []string{
-		"**Full Name**",
-		"**Description**",
-		"**Parent ID**",
-		"**Created**",
-		"Marked for deletion",
-	} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FormatListMarkdown
-// ---------------------------------------------------------------------------.
-
-// TestFormatListMarkdown_WithData verifies the ListMarkdown_WithData Markdown formatter for a representative list_withdata input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown_WithData(t *testing.T) {
-	out := ListOutput{
-		Groups: []Output{
-			{ID: 1, Name: "group-a", FullPath: "org/group-a", Visibility: "public"},
-			{ID: 2, Name: "group-b", FullPath: "org/group-b", Visibility: "private"},
-		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
-	}
-	md := FormatListMarkdown(out)
-
-	for _, want := range []string{
-		"## Groups (2)",
-		"| ID |",
-		"| --- |",
-		"| 1 |",
-		"| 2 |",
-		"group-a",
-		"group-b",
-		"public",
-		"private",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-}
-
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No groups found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FormatMemberListMarkdown
-// ---------------------------------------------------------------------------.
-
-// TestFormatMemberListMarkdown_WithData verifies the MemberListMarkdown_WithData Markdown formatter for a representative memberlist_withdata input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatMemberListMarkdown_WithData(t *testing.T) {
-	out := MemberListOutput{
-		Members: []MemberOutput{
-			{ID: 10, Username: "devops1", Name: "DevOps One", AccessLevel: 40, State: "active"},
-			{ID: 11, Username: "devops2", Name: "DevOps Two", AccessLevel: 30, State: "active"},
-		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
-	}
-	md := FormatMemberListMarkdown(out)
-
-	for _, want := range []string{
-		"## Group Members (2)",
-		"| Username |",
-		"| --- |",
-		"devops1",
-		"devops2",
-		"Maintainer",
-		"Developer",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-}
-
-// TestFormatMemberListMarkdown_Empty verifies the MemberListMarkdown_Empty Markdown formatter for a representative memberlist_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatMemberListMarkdown_Empty(t *testing.T) {
-	md := FormatMemberListMarkdown(MemberListOutput{})
-	if !strings.Contains(md, "No members found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| Username |") {
-		t.Error("should not contain table header when empty")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FormatListProjectsMarkdown
-// ---------------------------------------------------------------------------.
-
-// TestFormatListProjectsMarkdown_WithData verifies the ListProjectsMarkdown_WithData Markdown formatter for a representative listprojects_withdata input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListProjectsMarkdown_WithData(t *testing.T) {
-	out := ListProjectsOutput{
-		Projects: []ProjectItem{
-			{ID: 42, Name: "my-project", PathWithNamespace: "org/infra/my-project", Visibility: "private", Archived: new(false)},
-			{ID: 43, Name: "old-project", PathWithNamespace: "org/infra/old-project", Visibility: "public", Archived: new(true)},
-		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
-	}
-	md := FormatListProjectsMarkdown(out)
-
-	for _, want := range []string{
-		"| ID |",
-		"| --- |",
-		"| 42 |",
-		"| 43 |",
-		"my-project",
-		"old-project",
-		"No",
-		"Yes",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-}
-
-// TestFormatListProjectsMarkdown_Empty verifies the ListProjectsMarkdown_Empty Markdown formatter for a representative listprojects_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListProjectsMarkdown_Empty(t *testing.T) {
-	md := FormatListProjectsMarkdown(ListProjectsOutput{})
-	if !strings.Contains(md, "No projects found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FormatHookMarkdown
-// ---------------------------------------------------------------------------.
-
-// TestFormatHookMarkdown_WithNameAndAllEvents verifies the HookMarkdown_WithNameAndAllEvents Markdown formatter for a representative hook_withnameandallevents input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatHookMarkdown_WithNameAndAllEvents(t *testing.T) {
-	md := FormatHookMarkdown(HookOutput{
-		ID:                       10,
-		URL:                      "https://example.com/hook",
-		Name:                     "CI Hook",
-		Description:              "Triggers CI",
-		GroupID:                  99,
-		PushEvents:               true,
-		TagPushEvents:            true,
-		MergeRequestsEvents:      true,
-		IssuesEvents:             true,
-		NoteEvents:               true,
-		JobEvents:                true,
-		PipelineEvents:           true,
-		WikiPageEvents:           true,
-		DeploymentEvents:         true,
-		ReleasesEvents:           true,
-		SubGroupEvents:           true,
-		MemberEvents:             true,
-		ConfidentialIssuesEvents: false,
-		ConfidentialNoteEvents:   false,
-		EnableSSLVerification:    true,
-		AlertStatus:              "executable",
-		CreatedAt:                "2026-01-15T10:00:00Z",
-	})
-
-	for _, want := range []string{
-		"## Group Hook: CI Hook",
-		"**ID**: 10",
-		"**URL**: [https://example.com/hook](https://example.com/hook)",
-		"**Name**: CI Hook",
-		"**Description**: Triggers CI",
-		"**Group ID**: 99",
-		"**SSL Verification**: true",
-		"push",
-		"merge_request",
-		"pipeline",
-		"**Alert Status**: executable",
-		"**Created**:",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-}
-
-// TestFormatHookMarkdown_WithoutName verifies the HookMarkdown_WithoutName Markdown formatter for a representative hook_withoutname input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatHookMarkdown_WithoutName(t *testing.T) {
-	md := FormatHookMarkdown(HookOutput{
-		ID:  5,
-		URL: "https://hooks.example.com/plain",
-	})
-
-	if !strings.Contains(md, "## Group Hook: https://hooks.example.com/plain") {
-		t.Errorf("expected URL as title when no name:\n%s", md)
-	}
-	if strings.Contains(md, "**Name**") {
-		t.Errorf("should not have Name line when empty:\n%s", md)
-	}
-	if strings.Contains(md, "**Description**") {
-		t.Errorf("should not have Description line when empty:\n%s", md)
-	}
-	if strings.Contains(md, "**Alert Status**") {
-		t.Errorf("should not have AlertStatus line when empty:\n%s", md)
-	}
-	if strings.Contains(md, "**Created**") {
-		t.Errorf("should not have Created line when empty:\n%s", md)
-	}
-}
-
-// TestFormatHookMarkdown_NoEventsEnabled verifies the HookMarkdown_NoEventsEnabled Markdown formatter for a representative hook_noeventsenabled input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatHookMarkdown_NoEventsEnabled(t *testing.T) {
-	md := FormatHookMarkdown(HookOutput{
-		ID:  1,
-		URL: "https://hooks.example.com/none",
-	})
-
-	if !strings.Contains(md, "none") {
-		t.Errorf("expected 'none' when no events enabled:\n%s", md)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FormatHookListMarkdown
-// ---------------------------------------------------------------------------.
-
-// TestFormatHookListMarkdown_WithData verifies the HookListMarkdown_WithData Markdown formatter for a representative hooklist_withdata input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatHookListMarkdown_WithData(t *testing.T) {
-	out := HookListOutput{
-		Hooks: []HookOutput{
-			{ID: 10, URL: "https://example.com/hook", PushEvents: true, MergeRequestsEvents: true, EnableSSLVerification: true},
-			{ID: 11, URL: "https://example.com/hook2", PipelineEvents: true, EnableSSLVerification: false},
-		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
-	}
-	md := FormatHookListMarkdown(out)
-
-	for _, want := range []string{
-		"## Group Hooks (2)",
-		"| ID |",
-		"| --- |",
-		"| 10 |",
-		"| 11 |",
-		"Yes",
-		"No",
-		"push",
-		"pipeline",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-}
-
-// TestFormatHookListMarkdown_Empty verifies the HookListMarkdown_Empty Markdown formatter for a representative hooklist_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatHookListMarkdown_Empty(t *testing.T) {
-	md := FormatHookListMarkdown(HookListOutput{})
-	if !strings.Contains(md, "No group webhooks found.") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // enabledEvents — comprehensive
+//
+// The Markdown formatters themselves are covered whole-output in
+// markdown_test.go, beside the card they now write.
 // ---------------------------------------------------------------------------.
 
-// TestEnabledEvents_All verifies the EnabledEvents_All handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestEnabledEvents_All verifies that every event flag HookOutput carries is
+// named, all eighteen of them: six were missing until the markdown audit
+// (issue 697), so a hook subscribed only to those read as "none".
 func TestEnabledEvents_All(t *testing.T) {
 	h := HookOutput{
-		PushEvents:          true,
-		TagPushEvents:       true,
-		MergeRequestsEvents: true,
-		IssuesEvents:        true,
-		NoteEvents:          true,
-		JobEvents:           true,
-		PipelineEvents:      true,
-		WikiPageEvents:      true,
-		DeploymentEvents:    true,
-		ReleasesEvents:      true,
-		SubGroupEvents:      true,
-		MemberEvents:        true,
+		PushEvents:                true,
+		TagPushEvents:             true,
+		MergeRequestsEvents:       true,
+		IssuesEvents:              true,
+		NoteEvents:                true,
+		JobEvents:                 true,
+		PipelineEvents:            true,
+		WikiPageEvents:            true,
+		DeploymentEvents:          true,
+		ReleasesEvents:            true,
+		MilestoneEvents:           true,
+		FeatureFlagEvents:         true,
+		SubGroupEvents:            true,
+		MemberEvents:              true,
+		VulnerabilityEvents:       true,
+		ConfidentialIssuesEvents:  true,
+		ConfidentialNoteEvents:    true,
+		EmojiEvents:               true,
+		ResourceAccessTokenEvents: true,
+		ProjectEvents:             true,
+		RepositoryUpdateEvents:    true,
 	}
-	result := enabledEvents(h)
 
-	for _, want := range []string{"push", "tag_push", "merge_request", "issues", "note", "job", "pipeline", "wiki", "deployment", "releases", "subgroup", "member"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(result, want) {
-				t.Errorf("enabledEvents missing %q: %s", want, result)
+	want := "push, tag_push, merge_request, issues, note, job, pipeline, wiki, deployment, releases, " +
+		"milestone, feature_flag, subgroup, member, vulnerability, confidential_issues, confidential_note, " +
+		"emoji, resource_access_token, project, repository_update"
+	if got := enabledEvents(h); got != want {
+		t.Errorf("enabledEvents:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestEnabledEvents_OneFlagEach verifies each of the six flags the list used
+// to drop is named on its own, which is the state a hook subscribed to only
+// that flag renders in.
+func TestEnabledEvents_OneFlagEach(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		hook HookOutput
+		want string
+	}{
+		{name: "confidential_issues", hook: HookOutput{ConfidentialIssuesEvents: true}, want: "confidential_issues"},
+		{name: "confidential_note", hook: HookOutput{ConfidentialNoteEvents: true}, want: "confidential_note"},
+		{name: "emoji", hook: HookOutput{EmojiEvents: true}, want: "emoji"},
+		{name: "resource_access_token", hook: HookOutput{ResourceAccessTokenEvents: true}, want: "resource_access_token"},
+		{name: "project", hook: HookOutput{ProjectEvents: true}, want: "project"},
+		{name: "repository_update", hook: HookOutput{RepositoryUpdateEvents: true}, want: "repository_update"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := enabledEvents(tc.hook); got != tc.want {
+				t.Errorf("enabledEvents = %q, want %q", got, tc.want)
 			}
 		})
 	}

@@ -2,68 +2,99 @@ package issuelinks
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown renders a single issue link as Markdown.
+// FormatOutputMarkdown renders a single issue link as the card of one object:
+// the link's own id and type, then the two issues it joins as nested objects,
+// each with the reference GitLab renders it by, its title linked to the issue
+// and the confidential marker when it carries one.
 func FormatOutputMarkdown(v Output) string {
 	if v.ID == 0 {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("## Issue Link\n\n")
-	fmt.Fprintf(&b, toolutil.FmtMdID, v.ID)
-	//gitlab:allow-unescaped v.LinkType: an issue link type GitLab picks from a fixed set (relates_to, blocks, is_blocked_by).
-	fmt.Fprintf(&b, "- **Link Type**: %s\n", v.LinkType)
-	// The reference line carries the issue's title, which a person types.
-	fmt.Fprintf(&b, "- **Source Issue**: %s\n", toolutil.EscapeMdTableCell(issueRefLine(v.SourceIssue)))
-	fmt.Fprintf(&b, "- **Target Issue**: %s\n", toolutil.EscapeMdTableCell(issueRefLine(v.TargetIssue)))
-	toolutil.WriteHints(&b, "Use `gitlab_issue_link_list` to see all links for this issue")
+	c := toolutil.NewCard(&b, "Issue Link")
+	c.Int("ID", int64(v.ID))
+	c.Field("Link Type", v.LinkType)
+	writeIssueRef(c, "Source Issue", v.SourceIssue)
+	writeIssueRef(c, "Target Issue", v.TargetIssue)
+	c.End(toolutil.HintAction(actionLinkList, "see all links for this issue"))
 	return b.String()
 }
 
-// issueRefLine renders an issue reference ("IID N (project M) - Title") for a
-// source/target issue object, or a placeholder when the object is absent.
-func issueRefLine(ref *IssueRefOutput) string {
+// writeIssueRef writes one side of the link as a nested object, or a row
+// saying the object was not sent: a link whose issue the response omitted is
+// an answer, and a silent row would read as a link to nothing.
+func writeIssueRef(c *toolutil.Card, label string, ref *IssueRefOutput) {
 	if ref == nil {
-		return "(not available)"
+		c.Field(label, "(not available)")
+		return
 	}
-	return fmt.Sprintf("IID %d (project %d)%s", ref.IID, ref.ProjectID, issueRefSuffix(ref))
+	side := c.Sub(label)
+	side.Int("IID", ref.IID)
+	side.Int("Project ID", ref.ProjectID)
+	side.Link("Title", ref.Title, ref.WebURL)
+	side.Markdown("State", issueStateCell(ref.State))
+	side.Flag(toolutil.EmojiConfidential, "Confidential", ref.Confidential)
 }
 
-// FormatListMarkdown renders a list of issue relations as a Markdown table.
+// FormatListMarkdown renders the issues related to one issue as a Markdown
+// table: a collection of objects that share columns.
+//
+// The row carries the link ID because it is what the unlink action takes, the
+// state with the emoji every issue row in the tree shows, and the confidential
+// marker, without which a reader cannot tell a restricted issue from an open
+// one at a glance.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Relations) == 0 {
-		return "No linked issues found.\n"
+		return toolutil.EmptyMessage("linked issues")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Issue Relations (%d)\n\n", len(out.Relations))
-	b.WriteString("| ID | IID | Title | State | Link Type | Link ID | Author |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
+	toolutil.WriteListHeading(&b, "Issue Relations", len(out.Relations), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "IID", "Title", "State", "Link Type", "Link ID", "Author"))
 	for _, r := range out.Relations {
 		author := ""
 		if r.Author != nil {
 			author = r.Author.Username
 		}
-		fmt.Fprintf(&b, "| %d | %d | %s | %s | %s | %d | %s |\n",
-			//gitlab:allow-unescaped r.State: an issue state, one of GitLab's fixed set (opened, closed).
-			//gitlab:allow-unescaped r.LinkType: an issue link type GitLab picks from a fixed set (relates_to, blocks, is_blocked_by).
-			r.ID, r.IID, toolutil.MdTitleLink(r.Title, r.WebURL), r.State, r.LinkType, r.IssueLinkID,
-			toolutil.EscapeMdTableCell(author))
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.Itoa(r.ID),
+			strconv.Itoa(r.IID),
+			relationTitleCell(r),
+			issueStateCell(r.State),
+			toolutil.EscapeMdTableCell(r.LinkType),
+			strconv.Itoa(r.IssueLinkID),
+			toolutil.MdUserHandle(author),
+		))
 	}
-	toolutil.WriteHints(&b, toolutil.HintPreserveLinks, "Use `gitlab_issue_link_create` to add a new link between issues")
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
+		toolutil.HintPreserveLinks,
+		toolutil.HintAction(actionLinkCreate, "add a new link between issues"),
+	)
 	return b.String()
 }
 
-// issueRefSuffix renders a " - Title" suffix for a source/target issue object,
-// or "" when the object is absent.
-func issueRefSuffix(ref *IssueRefOutput) string {
-	if ref == nil || ref.Title == "" {
+// relationTitleCell renders the linked issue's title as a link to it, with the
+// confidential marker appended when the issue is restricted.
+func relationTitleCell(r RelationOutput) string {
+	cell := toolutil.MdTitleLink(r.Title, r.WebURL)
+	if r.Confidential {
+		cell += " " + toolutil.EmojiConfidential
+	}
+	return cell
+}
+
+// issueStateCell renders an issue state with the emoji the issue tables and
+// cards share, and nothing at all when GitLab sent no state.
+func issueStateCell(state string) string {
+	if strings.TrimSpace(state) == "" {
 		return ""
 	}
-	return " - " + ref.Title
+	return fmt.Sprintf("%s %s", toolutil.IssueStateEmoji(state), toolutil.EscapeMdTableCell(state))
 }
 
 func init() {

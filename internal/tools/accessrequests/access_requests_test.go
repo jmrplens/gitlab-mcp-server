@@ -747,17 +747,30 @@ func TestConvertAccessRequest_WithoutDates(t *testing.T) {
 // FormatOutputMarkdown — all fields, minimal fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_AllFields verifies the OutputMarkdown_AllFields Markdown formatter for a representative output_allfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// cardHints is the guidance section every access-request card ends with, the
+// four canonical actions a reader of one request can take next.
+const cardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'accessrequests.approve_project' to approve this request at project scope\n" +
+	"- Use action 'accessrequests.approve_group' to approve this request at group scope\n" +
+	"- Use action 'accessrequests.deny_project' to deny this request at project scope\n" +
+	"- Use action 'accessrequests.deny_group' to deny this request at group scope\n"
+
+// TestFormatOutputMarkdown_AllFields pins the whole card a fully populated
+// access request renders: every row in order, the access level as its role
+// name with the number, the locked warning, the nested creator, and the
+// guidance section. The assertion is the entire document rather than a set of
+// substrings, because a substring cannot see a row that landed outside the
+// block it belongs to.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	out := Output{
 		ID:              1,
 		Username:        "alice",
 		Name:            "Alice Smith",
 		State:           "approved",
+		Locked:          true,
 		AccessLevel:     30,
 		CreatedAt:       "2026-06-15T10:30:00Z",
+		CreatedBy:       &toolutil.MemberUserOutput{Name: "Carol Admin", Username: "carol", WebURL: "https://gitlab.example.com/carol"},
 		RequestedAt:     "2026-06-16T08:00:00Z",
 		Email:           "alice@example.com",
 		PublicEmail:     "alice@public.example.com",
@@ -766,36 +779,35 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		ExpiresAt:       "2027-01-31T00:00:00Z",
 		WebURL:          "https://gitlab.example.com/alice",
 	}
-	md := FormatOutputMarkdown(out)
 
-	checks := []string{
-		"## Access Request #1",
-		"| ID | 1 |",
-		"| Username | alice |",
-		"| Name | Alice Smith |",
-		"| State | approved |",
-		"| Access Level | 30 |",
-		"| Email | alice@example.com |",
-		"| Public Email | alice@public.example.com |",
-		"| Member Role | Auditor |",
-		"| Membership State | active |",
-		"| Created At | 15 Jun 2026 10:30 UTC |",
-		"| Requested At | 16 Jun 2026 08:00 UTC |",
-		"| Expires At | 31 Jan 2027 00:00 UTC |",
-		"| URL | [alice](https://gitlab.example.com/alice) |",
-	}
-	for _, c := range checks {
-		t.Run(c, func(t *testing.T) {
-			if !strings.Contains(md, c) {
-				t.Errorf("expected markdown to contain %q:\n%s", c, md)
-			}
-		})
+	want := "## Access Request #1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Username**: @alice\n" +
+		"- **Name**: Alice Smith\n" +
+		"- **State**: approved\n" +
+		"- **Access Level**: Developer (30)\n" +
+		"- " + toolutil.EmojiWarning + " **Locked**\n" +
+		"- **Email**: alice@example.com\n" +
+		"- **Public Email**: alice@public.example.com\n" +
+		"- **Member Role**: Auditor\n" +
+		"- **Membership State**: active\n" +
+		"- **Created By**:\n" +
+		"  - **Name**: Carol Admin\n" +
+		"  - **Username**: [@carol](https://gitlab.example.com/carol)\n" +
+		"- **Created At**: 15 Jun 2026 10:30 UTC\n" +
+		"- **Requested At**: 16 Jun 2026 08:00 UTC\n" +
+		"- **Expires At**: 31 Jan 2027 00:00 UTC\n" +
+		"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n" +
+		cardHints
+
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies the OutputMarkdown_MinimalFields Markdown formatter for a representative output_minimalfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_MinimalFields pins the card of a request GitLab
+// sent nothing optional on: every guarded row is absent rather than rendered
+// with an empty value, and the unlocked request carries no warning line.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	out := Output{
 		ID:          5,
@@ -804,22 +816,36 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 		State:       "pending",
 		AccessLevel: 10,
 	}
-	md := FormatOutputMarkdown(out)
 
-	if !strings.Contains(md, "## Access Request #5") {
-		t.Errorf("expected heading:\n%s", md)
+	want := "## Access Request #5\n\n" +
+		"- **ID**: 5\n" +
+		"- **Username**: @bob\n" +
+		"- **Name**: Bob\n" +
+		"- **State**: pending\n" +
+		"- **Access Level**: Guest (10)\n" +
+		cardHints
+
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	// The other side of every row the formatter guards: a request GitLab sent
-	// none of these on renders no row at all, rather than an empty cell.
-	for _, absent := range []string{
-		"Created At", "Requested At", "Email", "Public Email",
-		"Member Role", "Membership State", "Expires At", "| URL |",
-	} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("markdown should not contain %q when the field is empty:\n%s", absent, md)
-			}
-		})
+}
+
+// TestFormatOutputMarkdown_UnknownAccessLevel pins what a level GitLab has and
+// this server's table does not renders as: the number it sent, which is the
+// one thing a reader can act on.
+func TestFormatOutputMarkdown_UnknownAccessLevel(t *testing.T) {
+	out := Output{ID: 7, Username: "dana", Name: "Dana", State: "pending", AccessLevel: 35}
+
+	want := "## Access Request #7\n\n" +
+		"- **ID**: 7\n" +
+		"- **Username**: @dana\n" +
+		"- **Name**: Dana\n" +
+		"- **State**: pending\n" +
+		"- **Access Level**: Level 35 (35)\n" +
+		cardHints
+
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -827,48 +853,66 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 // FormatListMarkdown — with items, empty list
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithItems verifies the ListMarkdown_WithItems Markdown formatter for a representative list_withitems input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// listHints is the guidance section every access-request list ends with: the
+// preserve-links reminder the linked username column earns, then the four
+// canonical actions.
+const listHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- " + toolutil.HintPreserveLinks + "\n" +
+	"- Use action 'accessrequests.approve_project' to approve one of these requests at project scope\n" +
+	"- Use action 'accessrequests.approve_group' to approve one of these requests at group scope\n" +
+	"- Use action 'accessrequests.deny_project' to deny one of these requests at project scope\n" +
+	"- Use action 'accessrequests.deny_group' to deny one of these requests at group scope\n"
+
+// TestFormatListMarkdown_WithItems pins the whole list document: the heading
+// counting what the page shows when GitLab sent no total, the table, and the
+// guidance section.
 func TestFormatListMarkdown_WithItems(t *testing.T) {
 	out := ListOutput{
 		AccessRequests: []Output{
-			{ID: 1, Username: "alice", Name: "Alice", State: "pending", AccessLevel: 30},
+			{ID: 1, Username: "alice", Name: "Alice", State: "pending", AccessLevel: 30, WebURL: "https://gitlab.example.com/alice"},
 			{ID: 2, Username: "bob", Name: "Bob", State: "approved", AccessLevel: 20},
 		},
 	}
-	md := FormatListMarkdown(out)
 
-	checks := []string{
-		"## Access Requests (2)",
-		"| ID | Username | Name | State | Access Level |",
-		"| 1 | alice | Alice | pending | 30 |",
-		"| 2 | bob | Bob | approved | 20 |",
-	}
-	for _, c := range checks {
-		t.Run(c, func(t *testing.T) {
-			if !strings.Contains(md, c) {
-				t.Errorf("expected markdown to contain %q:\n%s", c, md)
-			}
-		})
+	want := "## Access Requests (2)\n\n" +
+		"| ID | Username | Name | State | Access Level |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | [@alice](https://gitlab.example.com/alice) | Alice | pending | Developer (30) |\n" +
+		"| 2 | @bob | Bob | approved | Reporter (20) |\n" +
+		listHints
+
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatListMarkdown_Empty(t *testing.T) {
-	out := ListOutput{}
-	md := FormatListMarkdown(out)
+// TestFormatListMarkdown_Paginated pins the heading against the total GitLab
+// reported rather than the length of the page, which is what a heading that
+// counted len() told the reader wrongly on every page but the last.
+func TestFormatListMarkdown_Paginated(t *testing.T) {
+	out := ListOutput{
+		AccessRequests: []Output{{ID: 1, Username: "alice", Name: "Alice", State: "pending", AccessLevel: 30}},
+		Pagination:     toolutil.PaginationOutput{Page: 2, PerPage: 1, TotalPages: 3, TotalItems: 3},
+	}
 
-	if !strings.Contains(md, "## Access Requests (0)") {
-		t.Errorf("expected heading with 0 count:\n%s", md)
+	want := "## Access Requests (3)\n\n" +
+		"Showing 1 of 3 results (page 2 of 3)\n\n" +
+		"| ID | Username | Name | State | Access Level |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | @alice | Alice | pending | Developer (30) |\n\n" +
+		"Page 2 of 3 | 3 items total | 1 per page\n" +
+		listHints
+
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	if !strings.Contains(md, "No access requests found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+}
+
+// TestFormatListMarkdown_Empty pins the whole response of a list with nothing
+// in it: the one sentence, and no heading counting zero above it.
+func TestFormatListMarkdown_Empty(t *testing.T) {
+	if got, want := FormatListMarkdown(ListOutput{}), "No access requests found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

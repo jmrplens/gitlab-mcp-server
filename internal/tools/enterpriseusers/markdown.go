@@ -1,70 +1,67 @@
 package enterpriseusers
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown renders a single enterprise user as Markdown.
+// The next steps an enterprise-user result offers, each naming the canonical
+// catalog ID every surface accepts rather than an individual tool name the
+// default surface does not register.
+var (
+	hintDisable2FA = toolutil.HintAction("enterprise_user.disable_2fa", "reset two-factor authentication")
+	hintListUsers  = toolutil.HintAction("enterprise_user.list", "browse all enterprise users")
+	hintGetUser    = toolutil.HintAction("enterprise_user.get", "read one enterprise user in full")
+)
+
+// FormatOutputMarkdown renders one enterprise user as a card. Locked is a
+// warning rather than a tick, since a locked account is not a success, and the
+// account's address is a link so a reader can open the profile.
 func FormatOutputMarkdown(o Output) string {
 	if o.ID == 0 {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Enterprise User: %s\n\n", toolutil.EscapeMdHeading(o.Name))
-	fmt.Fprintf(&b, toolutil.FmtMdID, o.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdUsername, toolutil.EscapeMdTableCell(o.Username))
-	fmt.Fprintf(&b, toolutil.FmtMdEmail, toolutil.EscapeMdTableCell(o.Email))
-	//gitlab:allow-unescaped o.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned).
-	fmt.Fprintf(&b, toolutil.FmtMdState, o.State)
-	fmt.Fprintf(&b, "- **Admin**: %v\n", o.IsAdmin)
-	fmt.Fprintf(&b, "- **2FA Enabled**: %v\n", o.TwoFactorEnabled)
-	fmt.Fprintf(&b, "- **External**: %v\n", o.External)
-	fmt.Fprintf(&b, "- **Locked**: %v\n", o.Locked)
-	fmt.Fprintf(&b, "- **Bot**: %v\n", o.Bot)
-	if o.WebURL != "" {
-		toolutil.WriteMdURL(&b, o.WebURL)
-	}
-	if o.CreatedAt != "" {
-		//gitlab:allow-unescaped o.CreatedAt: a timestamp this package formatted itself from the time client-go parsed.
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, o.CreatedAt)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_disable_2fa_enterprise_user` to reset two-factor authentication",
-		"Use `gitlab_list_enterprise_users` to browse all enterprise users",
-	)
+	card := toolutil.NewCard(&b, "Enterprise User: "+o.Name)
+	card.Int("ID", o.ID)
+	card.Field("Username", o.Username)
+	card.Field("Email", o.Email)
+	card.Field("State", o.State)
+	card.Bool("Admin", o.IsAdmin)
+	card.Bool("2FA Enabled", o.TwoFactorEnabled)
+	card.Bool("External", o.External)
+	card.Bool("Bot", o.Bot)
+	card.Warn("Locked", o.Locked)
+	card.URL(o.WebURL)
+	card.Time("Created", o.CreatedAt)
+	card.End(hintDisable2FA, hintListUsers)
 	return b.String()
 }
 
-// FormatListMarkdown renders enterprise users as a Markdown table.
+// FormatListMarkdown renders enterprise users as a Markdown table. The handle
+// links to the profile, which is what the preserve-links hint the footer
+// carries is about: the table used to name that hint over a render with no
+// link in it.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Users) == 0 {
-		return "No enterprise users found."
+		return toolutil.EmptyMessage("enterprise users")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Enterprise Users (%d)\n\n", len(out.Users))
-	toolutil.WriteListSummary(&b, len(out.Users), out.Pagination)
-	b.WriteString("| ID | Username | Name | Email | State | 2FA |\n")
-	b.WriteString("| --: | -------- | ---- | ----- | ----- | --- |\n")
+	toolutil.WriteListHeading(&b, "Enterprise Users", len(out.Users), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "Email", "State", "2FA"))
 	for _, u := range out.Users {
-		twoFA := "No"
-		if u.TwoFactorEnabled {
-			twoFA = "Yes"
-		}
-		fmt.Fprintf(
-			&b, "| %d | %s | %s | %s | %s | %s |\n",
-			u.ID,
-			toolutil.EscapeMdTableCell(u.Username),
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(u.ID, 10),
+			toolutil.MdUserLink(u.Username, u.WebURL),
 			toolutil.EscapeMdTableCell(u.Name),
 			toolutil.EscapeMdTableCell(u.Email),
 			toolutil.EscapeMdTableCell(u.State),
-			twoFA,
-		)
+			toolutil.BoolEmoji(u.TwoFactorEnabled),
+		))
 	}
-	toolutil.WriteHints(&b, toolutil.HintPreserveLinks)
+	toolutil.WriteListFooter(&b, out.Pagination, true, hintGetUser)
 	return b.String()
 }
 

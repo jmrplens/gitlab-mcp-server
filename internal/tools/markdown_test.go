@@ -502,9 +502,16 @@ func TestFormatMember_ListMarkdown(t *testing.T) {
 			},
 			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 		}
-		md := members.FormatListMarkdownString(out)
-		if !strings.Contains(md, "| dev1 | Developer One | Developer | active |") {
-			t.Error("missing member row")
+		want := "## Project Members (1)\n\n" +
+			"| Username | Name | Access Level | State | Membership | Expires |\n" +
+			"| --- | --- | --- | --- | --- | --- |\n" +
+			"| @dev1 | Developer One | Developer (30) | active |  |  |\n" +
+			"\nPage 1 of 1 | 1 items total | 20 per page\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- Use action 'project.member_get' to see one member's details\n" +
+			"- Use action 'project.member_add' to add a member to this project\n"
+		if got := members.FormatListMarkdownString(out); got != want {
+			t.Errorf("FormatListMarkdownString =\n%q\nwant\n%q", got, want)
 		}
 	})
 
@@ -558,8 +565,8 @@ func TestFormatGroup_MemberListMarkdown(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 	}
 	md := groups.FormatMemberListMarkdown(out)
-	if !strings.Contains(md, "| admin | Admin User | Owner | active |") {
-		t.Error("missing group member row")
+	if !strings.Contains(md, "| @admin | Admin User | Owner | active |") {
+		t.Errorf("missing group member row:\n%s", md)
 	}
 }
 
@@ -580,7 +587,9 @@ func TestFormatIssue_Markdown(t *testing.T) {
 		"Issue #5: Bug report", "opened",
 		"**Labels**: bug, critical", "@dev1",
 		"**Milestone**: v1.0", "**Due Date**: 1 Mar 2026",
-		mdDescriptionHdr, "Something is broken",
+		// The issue card writes the description as a labeled row rather than
+		// under a section heading of its own.
+		"- **Description**: Something is broken",
 	}
 	for _, c := range checks {
 		t.Run(c, func(t *testing.T) {
@@ -2510,15 +2519,16 @@ func TestMarkdownRegistry_Exceptions_NameACaseEach(t *testing.T) {
 // registrations the registry refused or could only half honor to the ones
 // the tree has today, a baseline that may only shrink, so a new duplicate or
 // a new interface-typed registration fails while the known ones are retired
-// by the migration. The audit knew of two; the record shows twelve, because
+// by the migration. The audit knew of two; the record showed twelve, because
 // the shared note and discussion shapes are registered by every domain that
 // renders them and the first init to run wins for all of them, which is the
-// same defect as the runner token with more surfaces behind it.
+// same defect as the runner token with more surfaces behind it. Eleven are
+// left: the one interface-typed registration, groupimportexport's dispatcher
+// over `any`, went with that package's card migration.
 func TestMarkdownRegistry_Registrations_HaveNoUndeclaredProblems(t *testing.T) {
 	got := toolutil.MarkdownRegistrationProblems()
 
 	want := []string{
-		"Markdown formatter registered for the interface type interface {}: nothing looks a formatter up by an interface",
 		"duplicate Markdown formatter for iterationdata.Output: the first registration is kept",
 		"duplicate Markdown formatter for labeldata.Output: the first registration is kept",
 		"duplicate Markdown formatter for runners.AuthTokenOutput: the first registration is kept",

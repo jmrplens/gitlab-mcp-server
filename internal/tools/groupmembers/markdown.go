@@ -9,31 +9,40 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// accessLevel renders a membership's numeric access level as the name GitLab
+// gives it with the number beside it, "Maintainer (40)": the number is what
+// every write endpoint takes, the name is what a reader can act on.
+func accessLevel(level int) string {
+	return fmt.Sprintf("%s (%d)", toolutil.AccessLevelDescription(gl.AccessLevelValue(level)), level)
+}
+
 // FormatMemberMarkdown formats a single group member as markdown.
 func FormatMemberMarkdown(out Output) string {
 	var b strings.Builder
-	b.WriteString("## Group Member\n\n")
-	b.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&b, "| ID | %d |\n", out.ID)
-	fmt.Fprintf(&b, "| Username | %s |\n", toolutil.EscapeMdTableCell(out.Username))
-	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
-	//gitlab:allow-unescaped out.State: a membership state GitLab picks from a fixed set (active, awaiting and the rest).
-	fmt.Fprintf(&b, "| State | %s |\n", out.State)
-	fmt.Fprintf(&b, "| Access Level | %s (%d) |\n", toolutil.AccessLevelDescription(gl.AccessLevelValue(out.AccessLevel)), out.AccessLevel)
+	c := toolutil.NewCard(&b, "Group Member")
+	c.Int("ID", out.ID)
+	c.Field("Username", out.Username)
+	c.Field("Name", out.Name)
+	c.Field("State", out.State)
+	// membership_state is the membership's own state, which an Enterprise
+	// instance sends beside the account state: a member awaiting approval is
+	// an active user and not yet a member, and the card said only the first
+	// half.
+	c.Field("Membership State", out.MembershipState)
+	c.Warn("Locked", out.Locked)
+	c.Field("Access Level", accessLevel(out.AccessLevel))
 	if out.MemberRole != nil {
-		fmt.Fprintf(&b, "| Member Role | %s |\n", toolutil.EscapeMdTableCell(out.MemberRole.Name))
+		c.Field("Member Role", out.MemberRole.Name)
 	}
-	if out.ExpiresAt != "" {
-		fmt.Fprintf(&b, "| Expires | %s |\n", toolutil.FormatTime(out.ExpiresAt))
-	}
-	if out.WebURL != "" {
-		fmt.Fprintf(&b, "| URL | %s |\n", toolutil.MdTitleLink(out.Username, out.WebURL))
-	}
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use action 'group_member_edit' to change access level",
-		"Use action 'group_member_remove' to remove this member",
+	c.Time("Expires", out.ExpiresAt)
+	c.URL(out.WebURL)
+	// No HintPreserveLinks here: it tells the model to keep the clickable links
+	// "from the table", and this card has no table. It used to be written
+	// unconditionally, so a member GitLab sent no web_url for carried an
+	// instruction about links the card had not got.
+	c.End(
+		toolutil.HintAction("group.group_member_edit", "change this member's access level"),
+		toolutil.HintAction("group.group_member_remove", "remove this member"),
 	)
 	return b.String()
 }
@@ -41,19 +50,15 @@ func FormatMemberMarkdown(out Output) string {
 // FormatShareMarkdown formats a group share result as markdown.
 func FormatShareMarkdown(out ShareOutput) string {
 	var b strings.Builder
-	b.WriteString("## Group Shared\n\n")
-	b.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&b, "| ID | %d |\n", out.ID)
-	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&b, "| Path | %s |\n", toolutil.EscapeMdTableCell(out.Path))
-	if out.WebURL != "" {
-		fmt.Fprintf(&b, "| URL | %s |\n", toolutil.MdTitleLink(out.Name, out.WebURL))
-	}
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use action 'members' to see all members in the group",
-		"Use action 'group_member_unshare' to revoke this share",
+	c := toolutil.NewCard(&b, "Group Shared")
+	c.Int("ID", out.ID)
+	c.Field("Name", out.Name)
+	c.Field("Path", out.Path)
+	c.Text("Description", out.Description)
+	c.URL(out.WebURL)
+	c.End(
+		toolutil.HintAction("group.members", "see all members in the group"),
+		toolutil.HintAction("group.group_member_unshare", "revoke this share"),
 	)
 	return b.String()
 }
@@ -61,36 +66,29 @@ func FormatShareMarkdown(out ShareOutput) string {
 // FormatBillableMembersMarkdown formats a list of billable group members as
 // markdown.
 func FormatBillableMembersMarkdown(out BillableMembersOutput) string {
-	var b strings.Builder
 	if len(out.Members) == 0 {
-		b.WriteString("No billable members found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("billable members")
 	}
-	b.WriteString("## Billable Group Members\n\n")
-	b.WriteString("| Username | Name | State | Membership Type | Removable | Last Activity |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Billable Group Members", len(out.Members), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Username", "Name", "State", "Membership Type", "Locked", "Removable", "Last Activity"))
+	linked := false
 	for _, m := range out.Members {
-		username := toolutil.EscapeMdTableCell(m.Username)
-		if m.WebURL != "" {
-			username = toolutil.MdTitleLink(m.Username, m.WebURL)
-		}
-		fmt.Fprintf(
-			&b, "| %s | %s | %s | %s | %t | %s |\n",
-			username,
+		linked = linked || m.WebURL != ""
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdUserLink(m.Username, m.WebURL),
 			toolutil.EscapeMdTableCell(m.Name),
-			//gitlab:allow-unescaped m.State: a membership state GitLab picks from a fixed set (active, awaiting and the rest).
-			m.State,
+			toolutil.EscapeMdTableCell(m.State),
 			toolutil.EscapeMdTableCell(m.MembershipType),
-			m.Removable,
-			toolutil.EscapeMdTableCell(m.LastActivityOn),
-		)
+			toolutil.BoolEmoji(m.Locked),
+			toolutil.BoolEmoji(m.Removable),
+			toolutil.FormatTime(m.LastActivityOn),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
+	toolutil.WriteListFooter(&b, out.Pagination, linked,
 		toolutil.HintPreserveLinks,
-		"Use action 'group_billable_member_memberships_list' with user_id to see why a member is billable",
-		"Use action 'group_billable_member_remove' to remove a removable billable member",
+		toolutil.HintAction("group.group_billable_member_memberships_list", "see why a member is billable"),
+		toolutil.HintAction("group.group_billable_member_remove", "remove a removable billable member"),
 	)
 	return b.String()
 }
@@ -98,34 +96,28 @@ func FormatBillableMembersMarkdown(out BillableMembersOutput) string {
 // FormatBillableMembershipsMarkdown formats a billable member's memberships as
 // markdown.
 func FormatBillableMembershipsMarkdown(out BillableMembershipsOutput) string {
-	var b strings.Builder
 	if len(out.Memberships) == 0 {
-		b.WriteString("No memberships found for this billable member.\n")
-		return b.String()
+		return toolutil.EmptyMessage("memberships")
 	}
-	b.WriteString("## Billable Member Memberships\n\n")
-	b.WriteString("| Source | Access Level | Expires |\n")
-	b.WriteString("| --- | --- | --- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Billable Member Memberships", len(out.Memberships), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Source", "Access Level", "Expires"))
+	linked := false
 	for _, m := range out.Memberships {
-		source := toolutil.EscapeMdTableCell(m.SourceFullName)
-		if m.SourceMembersURL != "" {
-			source = toolutil.MdTitleLink(m.SourceFullName, m.SourceMembersURL)
-		}
+		linked = linked || m.SourceMembersURL != ""
 		access := ""
 		if m.AccessLevel != nil {
 			access = fmt.Sprintf("%s (%d)", toolutil.EscapeMdTableCell(m.AccessLevel.StringValue), m.AccessLevel.IntegerValue)
 		}
-		expires := ""
-		if m.ExpiresAt != "" {
-			expires = toolutil.FormatTime(m.ExpiresAt)
-		}
-		fmt.Fprintf(&b, "| %s | %s | %s |\n", source, access, expires)
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(m.SourceFullName, m.SourceMembersURL),
+			access,
+			toolutil.FormatTime(m.ExpiresAt),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
+	toolutil.WriteListFooter(&b, out.Pagination, linked,
 		toolutil.HintPreserveLinks,
-		"Use action 'members' on the source group/project to inspect that membership",
+		toolutil.HintAction("group.members", "inspect the source group's membership"),
 	)
 	return b.String()
 }

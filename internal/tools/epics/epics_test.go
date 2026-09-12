@@ -599,34 +599,51 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		Author:    &BasicUserOutput{Username: "alice"},
 		Assignees: []*BasicUserOutput{{Username: "bob"}},
 	}
-	result := FormatOutputMarkdown(out)
-	if result == "" {
-		t.Fatal("expected non-empty result")
+	want := "## Epic &1: Epic\n\n" +
+		"- **State**: 🟢 OPEN\n" +
+		"- **Author**: @alice\n" +
+		"- **Assignees**: @bob\n" +
+		epicCardHints
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("FormatOutputMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// epicCardHints is the guidance section every epic card closes with, named
+// once so the whole-output expectations below stay readable.
+const epicCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'group.epic_update' to modify this epic\n" +
+	"- Use action 'group.epic_get_links' to see child epics\n" +
+	"- Use action 'group.epic_note_list' to see comments on this epic\n"
+
+// TestFormatListMarkdown_Empty checks that a group with no epics renders the
+// one sentence and nothing else: no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	result := FormatListMarkdown(ListOutput{})
-	if result == "" {
-		t.Fatal("expected non-empty result")
+	want := "No epics found.\n"
+	if got := FormatListMarkdown(ListOutput{}); got != want {
+		t.Errorf("FormatListMarkdown(empty) = %q, want %q", got, want)
 	}
 }
 
-// TestFormatLinksMarkdown verifies the LinksMarkdown Markdown formatter for a representative links input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatLinksMarkdown checks the whole child-epic table: the reference in
+// GitLab's own &N spelling, the state with its emoji, the author's handle, and
+// one guidance section.
 func TestFormatLinksMarkdown(t *testing.T) {
 	out := LinksOutput{
 		ChildEpics: []LinksItem{
 			{IID: 2, Title: "Sub", State: "opened", Author: &BasicUserOutput{Username: "bob"}},
 		},
 	}
-	result := FormatLinksMarkdown(out)
-	if result == "" {
-		t.Fatal("expected non-empty result")
+	want := "## Child Epics (1)\n\n" +
+		"| IID | Title | State | Author | Created |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| &2 | Sub | 🟢 opened | @bob |  |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'group.epic_get' to see one child epic in full\n" +
+		"- Use action 'group.epic_list' to list the group's epics\n"
+	if got := FormatLinksMarkdown(out); got != want {
+		t.Errorf("FormatLinksMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1434,19 +1451,32 @@ func TestFormatOutputMarkdown_FullFields(t *testing.T) {
 			{IID: 5, LinkType: "blocks", Path: "g/sub"},
 		},
 	}
-	result := FormatOutputMarkdown(out)
-	for _, want := range []string{
-		"bob, carol", "Confidential", "planning", "onTrack",
-		"Weight", "Milestone ID",
-		"2026-01-01", "2026-03-31", "#FF0000", "Parent", "&10",
-		"Closed", "gitlab.example.com", "Linked Items", "blocks", "g/sub",
-		"Epic description body",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(result, want) {
-				t.Errorf("expected markdown to contain %q", want)
-			}
-		})
+	want := "## Epic &1: Full Epic\n\n" +
+		"- **State**: 🔴 CLOSED\n" +
+		"- **Author**: @alice\n" +
+		"- **Assignees**: @bob, @carol\n" +
+		"- 🔒 **Confidential**\n" +
+		"- **Labels**: planning, urgent\n" +
+		"- **Health**: onTrack\n" +
+		"- **Weight**: 5\n" +
+		"- **Milestone ID**: 9\n" +
+		"- **Start date**: 1 Jan 2026\n" +
+		"- **Due date**: 31 Mar 2026\n" +
+		"- **Color**: #FF0000\n" +
+		"- **Parent**:\n" +
+		"  - **IID**: 10\n" +
+		"  - **Path**: group\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Closed**: 1 Mar 2026 00:00 UTC\n" +
+		"- **URL**: [https://gitlab.example.com/groups/g/-/epics/1](https://gitlab.example.com/groups/g/-/epics/1)\n" +
+		"- **Description**: Epic description body\n" +
+		"\n### Linked Items\n\n" +
+		"| IID | Link Type | Path |\n" +
+		"| --- | --- | --- |\n" +
+		"| 5 | blocks | g/sub |\n" +
+		epicCardHints
+	if got := FormatOutputMarkdown(out); got != want {
+		t.Errorf("FormatOutputMarkdown(full)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1455,25 +1485,39 @@ func TestFormatOutputMarkdown_FullFields(t *testing.T) {
 // panicking and render the epic rows.
 func TestFormatMarkdown_NilUsers(t *testing.T) {
 	out := Output{IID: 1, Title: "No Author", State: "opened"}
-	if got := FormatOutputMarkdown(out); !strings.Contains(got, "No Author") {
-		t.Errorf("FormatOutputMarkdown missing title; got:\n%s", got)
+	wantCard := "## Epic &1: No Author\n\n" +
+		"- **State**: 🟢 opened\n" +
+		epicCardHints
+	if got := FormatOutputMarkdown(out); got != wantCard {
+		t.Errorf("FormatOutputMarkdown(no author)\n got %q\nwant %q", got, wantCard)
 	}
+	wantList := "## Group Epics (1)\n\n" +
+		"| IID | Title | State | Author | Labels | Created |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| &1 | No Author | 🟢 opened |  |  |  |\n" +
+		epicListHints
 	list := ListOutput{Epics: []Output{{IID: 1, Title: "No Author", State: "opened"}}}
-	if got := FormatListMarkdown(list); !strings.Contains(got, "No Author") {
-		t.Errorf("FormatListMarkdown missing title; got:\n%s", got)
+	if got := FormatListMarkdown(list); got != wantList {
+		t.Errorf("FormatListMarkdown(no author)\n got %q\nwant %q", got, wantList)
 	}
 	if names := userNames(nil); names != nil {
 		t.Errorf("userNames(nil) = %v, want nil", names)
 	}
 }
 
+// epicListHints is the guidance section every epic list closes with.
+const epicListHints = "\n---\n💡 **Next steps:**\n" +
+	"- " + toolutil.HintPreserveLinks + "\n" +
+	"- Use action 'group.epic_get' to see full details of one epic\n" +
+	"- Use action 'group.epic_create' to add a new epic\n"
+
 // TestFormatLinksMarkdown_Empty verifies the LinksMarkdown_Empty Markdown formatter for a representative links_empty input.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatLinksMarkdown_Empty(t *testing.T) {
-	result := FormatLinksMarkdown(LinksOutput{})
-	if !strings.Contains(result, "No child epics found") {
-		t.Errorf("expected 'No child epics found', got %q", result)
+	want := "No child epics found.\n"
+	if got := FormatLinksMarkdown(LinksOutput{}); got != want {
+		t.Errorf("FormatLinksMarkdown(empty) = %q, want %q", got, want)
 	}
 }
 
@@ -1483,11 +1527,19 @@ func TestFormatLinksMarkdown_Empty(t *testing.T) {
 // labels column from the slice.
 func TestFormatListMarkdown_WithLabels(t *testing.T) {
 	out := ListOutput{Epics: []Output{
-		{IID: 1, Title: "Epic A", State: "opened", Author: &BasicUserOutput{Username: "alice"}, Labels: []string{"backend", "priority"}},
+		{
+			IID: 1, Title: "Epic A", State: "opened", Confidential: true,
+			Author: &BasicUserOutput{Username: "alice"}, Labels: []string{"backend", "priority"},
+			WebURL: "https://gitlab.example.com/groups/g/-/epics/1",
+		},
 	}}
-	result := FormatListMarkdown(out)
-	if !strings.Contains(result, "backend, priority") {
-		t.Errorf("expected joined labels in output; got:\n%s", result)
+	want := "## Group Epics (1)\n\n" +
+		"| IID | Title | State | Author | Labels | Created |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| [&1](https://gitlab.example.com/groups/g/-/epics/1) 🔒 | [Epic A](https://gitlab.example.com/groups/g/-/epics/1) | 🟢 opened | @alice | backend, priority |  |\n" +
+		epicListHints
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("FormatListMarkdown(labels)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1824,17 +1876,21 @@ func TestGet_HierarchyAndWidgetIDs_RoundTrip(t *testing.T) {
 // renders the child table and the milestone id.
 func TestFormatOutputMarkdown_HierarchyAndWidgetIDs(t *testing.T) {
 	milestoneID := int64(77)
-	result := FormatOutputMarkdown(Output{
+	want := "## Epic &1: Q1\n\n" +
+		"- **State**: 🟢 opened\n" +
+		"- **Milestone ID**: 77\n" +
+		"\n### Child Epics\n\n" +
+		"| IID | Path |\n" +
+		"| --- | --- |\n" +
+		"| &11 | my-group/sub |\n" +
+		epicCardHints
+	got := FormatOutputMarkdown(Output{
 		IID: 1, Title: "Q1", State: "opened",
 		MilestoneID: &milestoneID,
 		Children:    []ChildItem{{IID: 11, Path: "my-group/sub"}},
 	})
-	for _, want := range []string{"Milestone ID**: 77", "### Child Epics", "| &11 | my-group/sub |"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(result, want) {
-				t.Errorf("expected %q in output; got:\n%s", want, result)
-			}
-		})
+	if got != want {
+		t.Errorf("FormatOutputMarkdown(hierarchy)\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -1852,7 +1908,12 @@ func TestFormatListMarkdown_PaginationBlocks(t *testing.T) {
 				Epics:      []Output{{IID: 1, Title: "Epic A", State: "opened"}},
 				Pagination: &toolutil.GraphQLPaginationOutput{HasNextPage: true, EndCursor: "end"},
 			},
-			want: "next page cursor: `end`",
+			want: "## Group Epics (1)\n\n" +
+				"| IID | Title | State | Author | Labels | Created |\n" +
+				"| --- | --- | --- | --- | --- | --- |\n" +
+				"| &1 | Epic A | 🟢 opened |  |  |  |\n" +
+				"\n" + toolutil.FormatGraphQLPagination(toolutil.GraphQLPaginationOutput{HasNextPage: true, EndCursor: "end"}, 1) + "\n" +
+				epicListHints,
 		},
 		{
 			name: "rest path names the next page",
@@ -1860,14 +1921,19 @@ func TestFormatListMarkdown_PaginationBlocks(t *testing.T) {
 				Epics:            []Output{{IID: 1, Title: "Epic A", State: "opened"}},
 				OffsetPagination: &toolutil.PaginationOutput{Page: 2, PerPage: 20, TotalItems: 45, TotalPages: 3, NextPage: 3, HasMore: true},
 			},
-			want: "45",
+			want: "## Group Epics (45)\n\n" +
+				"Showing 1 of 45 results (page 2 of 3)\n\n" +
+				"| IID | Title | State | Author | Labels | Created |\n" +
+				"| --- | --- | --- | --- | --- | --- |\n" +
+				"| &1 | Epic A | 🟢 opened |  |  |  |\n" +
+				"\nPage 2 of 3 | 45 items total | 20 per page\n" +
+				epicListHints,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := FormatListMarkdown(tc.out)
-			if !strings.Contains(result, tc.want) {
-				t.Errorf("expected %q in output; got:\n%s", tc.want, result)
+			if got := FormatListMarkdown(tc.out); got != tc.want {
+				t.Errorf("FormatListMarkdown()\n got %q\nwant %q", got, tc.want)
 			}
 		})
 	}

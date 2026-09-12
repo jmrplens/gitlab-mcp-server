@@ -106,11 +106,18 @@ func TestGetProject_Error(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown verifies FormatMarkdown.
+// TestFormatMarkdown verifies FormatMarkdown renders the whole card: the
+// scope-free heading, one row per count, and the guidance section naming the
+// canonical action that lists the issues behind the counts.
 func TestFormatMarkdown(t *testing.T) {
-	md := FormatMarkdown("Test", newStats(10, 7, 3))
-	if !strings.Contains(md, "10") || !strings.Contains(md, "Test") {
-		t.Error("missing content")
+	want := "## Issue Statistics\n\n" +
+		"- **All**: 10\n" +
+		"- **Opened**: 7\n" +
+		"- **Closed**: 3\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.list' to see the individual issues behind these counts\n"
+	if got := FormatMarkdown(newStats(10, 7, 3)); got != want {
+		t.Errorf("FormatMarkdown()\n got %q\nwant %q", got, want)
 	}
 }
 
@@ -142,58 +149,49 @@ const (
 // FormatMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_Populated covers FormatMarkdown with table-driven subtests for populated.
+// TestFormatMarkdown_Populated checks the whole rendering of a populated
+// statistics object, rows included: a substring check over a card is what let
+// a table row survive a migration to list items and still pass.
 func TestFormatMarkdown_Populated(t *testing.T) {
-	md := FormatMarkdown("Global", newStats(100, 60, 40))
-
-	checks := []struct {
-		label, want string
-	}{
-		{"header", "## Global Issue Statistics"},
-		{"all count", "| All | 100 |"},
-		{"opened count", "| Opened | 60 |"},
-		{"closed count", "| Closed | 40 |"},
-		{"table header status", "| Status | Count |"},
-	}
-	for _, c := range checks {
-		t.Run(c.label, func(t *testing.T) {
-			if !strings.Contains(md, c.want) {
-				t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
-			}
-		})
+	want := "## Issue Statistics\n\n" +
+		"- **All**: 100\n" +
+		"- **Opened**: 60\n" +
+		"- **Closed**: 40\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.list' to see the individual issues behind these counts\n"
+	if got := FormatMarkdown(newStats(100, 60, 40)); got != want {
+		t.Errorf("FormatMarkdown(populated)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatMarkdown_Empty covers FormatMarkdown with table-driven subtests for empty.
+// TestFormatMarkdown_Empty checks that a statistics object of zeros renders
+// every row: a zero count is an answer GitLab gave, not an absent value, so
+// the rows stay and read "0".
 func TestFormatMarkdown_Empty(t *testing.T) {
-	md := FormatMarkdown("Empty", StatisticsOutput{})
-
-	checks := []struct {
-		label, want string
-	}{
-		{"header", "## Empty Issue Statistics"},
-		{"all zero", "| All | 0 |"},
-		{"opened zero", "| Opened | 0 |"},
-		{"closed zero", "| Closed | 0 |"},
-	}
-	for _, c := range checks {
-		t.Run(c.label, func(t *testing.T) {
-			if !strings.Contains(md, c.want) {
-				t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
-			}
-		})
+	want := "## Issue Statistics\n\n" +
+		"- **All**: 0\n" +
+		"- **Opened**: 0\n" +
+		"- **Closed**: 0\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.list' to see the individual issues behind these counts\n"
+	if got := FormatMarkdown(StatisticsOutput{}); got != want {
+		t.Errorf("FormatMarkdown(zero)\n got %q\nwant %q", got, want)
 	}
 }
 
-// TestFormatMarkdown_DifferentLabels verifies FormatMarkdown when different labels.
-func TestFormatMarkdown_DifferentLabels(t *testing.T) {
-	labels := []string{"Group", "Project", "Custom Label"}
-	for _, label := range labels {
-		t.Run(label, func(t *testing.T) {
-			md := FormatMarkdown(label, newStats(1, 1, 0))
-			want := "## " + label + " Issue Statistics"
-			if !strings.Contains(md, want) {
-				t.Errorf("missing %q in:\n%s", want, md)
+// TestFormatMarkdown_HeadingNamesNoScope checks that the heading claims no
+// scope. One output type answers the instance, group and project routes, so
+// the registry has one key for all three and a heading naming a scope would
+// name the wrong one two times out of three.
+func TestFormatMarkdown_HeadingNamesNoScope(t *testing.T) {
+	md := FormatMarkdown(newStats(1, 1, 0))
+	if first, _, _ := strings.Cut(md, "\n"); first != "## Issue Statistics" {
+		t.Errorf("heading = %q, want %q", first, "## Issue Statistics")
+	}
+	for _, scope := range []string{"Global", "Group", "Project", "All Issue Statistics"} {
+		t.Run(scope, func(t *testing.T) {
+			if strings.Contains(md, scope) {
+				t.Errorf("rendering names the scope %q:\n%s", scope, md)
 			}
 		})
 	}

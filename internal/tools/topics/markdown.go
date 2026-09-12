@@ -1,7 +1,7 @@
 package topics
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -9,44 +9,48 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The topic routes a card or a list points at, by the canonical catalog ID
+// every surface resolves. Topics are instance-wide, so they are actions on the
+// admin group rather than a group of their own.
+const (
+	actionTopicGet    = "admin.topic_get"
+	actionTopicUpdate = "admin.topic_update"
+)
+
 // FormatListMarkdown formats a list of topics.
 func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	if len(out.Topics) == 0 {
-		return toolutil.ToolResultWithMarkdown("No topics found.\n")
+		return toolutil.ToolResultWithMarkdown(toolutil.EmptyMessage("topics"))
 	}
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Topics (%d)\n\n", len(out.Topics))
-	toolutil.WriteListSummary(&sb, len(out.Topics), out.Pagination)
-	sb.WriteString("| ID | Name | Title | Projects |\n")
-	sb.WriteString("|----|------|-------|----------|\n")
+	toolutil.WriteListHeading(&sb, "Topics", len(out.Topics), out.Pagination)
+	sb.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Title", "Projects"))
 	for _, t := range out.Topics {
-		fmt.Fprintf(&sb, "| %d | %s | %s | %d |\n",
-			t.ID,
+		sb.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(t.ID, 10),
 			toolutil.EscapeMdTableCell(t.Name),
 			toolutil.EscapeMdTableCell(t.Title),
-			t.TotalProjectsCount)
+			strconv.FormatUint(t.TotalProjectsCount, 10),
+		))
 	}
-	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(&sb, "Use `gitlab_get_topic` to view details of a specific topic")
+	toolutil.WriteListFooter(&sb, out.Pagination, false,
+		toolutil.HintAction(actionTopicGet, "view one topic's details"),
+	)
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
-// FormatTopicMarkdown formats a single topic.
+// FormatTopicMarkdown formats a single topic as its card.
 func FormatTopicMarkdown(t TopicItem) *mcp.CallToolResult {
 	var sb strings.Builder
 	// A topic's name and title are both free text an administrator types.
-	fmt.Fprintf(&sb, "## Topic: %s (ID: %d)\n\n", toolutil.EscapeMdHeading(t.Name), t.ID)
-	if t.Title != "" {
-		fmt.Fprintf(&sb, toolutil.FmtMdTitle, toolutil.EscapeMdTableCell(t.Title))
-	}
-	if t.Description != "" {
-		toolutil.WriteDescription(&sb, t.Description)
-	}
-	fmt.Fprintf(&sb, "- **Projects**: %d\n", t.TotalProjectsCount)
-	if t.AvatarURL != "" {
-		fmt.Fprintf(&sb, "- **Avatar**: %s\n", toolutil.EscapeMdTableCell(t.AvatarURL))
-	}
-	toolutil.WriteHints(&sb, "Use `gitlab_update_topic` to modify this topic")
+	c := toolutil.NewCard(&sb, "Topic: "+t.Name)
+	c.Int("ID", t.ID)
+	c.Field("Title", t.Title)
+	c.Text("Description", t.Description)
+	c.Field("Projects", strconv.FormatUint(t.TotalProjectsCount, 10))
+	c.Count("Organization ID", t.OrganizationID)
+	c.Link("Avatar", t.AvatarURL, t.AvatarURL)
+	c.End(toolutil.HintAction(actionTopicUpdate, "modify this topic"))
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 

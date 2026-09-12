@@ -7,62 +7,62 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatListMarkdown renders a list of child issues as a Markdown table.
+// FormatListMarkdown renders the issues of one epic as a Markdown table: a
+// collection of objects that share columns.
+//
+// The ID column carries the GraphQL global id, which is what the assign and
+// remove actions take; the reference is linked to the issue, which is what the
+// preserve-links hint is for and what the table used to promise without
+// carrying a single link.
 func FormatListMarkdown(out ListOutput) string {
-	var b strings.Builder
 	if len(out.Issues) == 0 {
-		b.WriteString("## Epic Issues\n\nNo issues found in this epic.\n")
-		return b.String()
+		return toolutil.EmptyMessage("issues in this epic")
 	}
-	fmt.Fprintf(&b, "## Epic Issues (%d)\n\n", len(out.Issues))
-	b.WriteString("| IID | Title | State | Author | Labels | Created |\n")
-	b.WriteString(toolutil.TblSep6Col)
+	var b strings.Builder
+	// A cursor connection counts nothing it has not walked, so the heading
+	// carries the count shown and the cursor line at the bottom says whether
+	// more follow.
+	toolutil.WriteListHeading(&b, "Epic Issues", len(out.Issues), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "IID", "Title", "State", "Author", "Labels", "Created"))
 	for _, issue := range out.Issues {
-		labels := ""
-		if len(issue.Labels) > 0 {
-			labels = strings.Join(issue.Labels, ", ")
-		}
-		fmt.Fprintf(
-			&b, "| #%d | %s | %s | %s | %s | %s |\n",
-			issue.IID,
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdCodeSpanCell(issue.ID),
+			toolutil.MdTitleLink(fmt.Sprintf("#%d", issue.IID), issue.WebURL),
 			toolutil.EscapeMdTableCell(issue.Title),
-			//gitlab:allow-unescaped issue.State: an issue state, one of GitLab's fixed set (opened, closed).
-			issue.State,
-			toolutil.EscapeMdTableCell(issue.Author),
-			toolutil.EscapeMdTableCell(labels),
+			issueStateCell(issue.State),
+			toolutil.MdUserHandle(issue.Author),
+			toolutil.EscapeMdTableCell(strings.Join(issue.Labels, ", ")),
 			toolutil.FormatTime(issue.CreatedAt),
-		)
+		))
 	}
-	pag := toolutil.FormatGraphQLPagination(out.Pagination, len(out.Issues))
-	if pag != "" {
-		b.WriteString("\n")
-		b.WriteString(pag)
-	}
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use action 'epic_issue_assign' to add an issue to this epic",
-		"Use action 'epic_issue_remove' to unlink an issue from this epic",
-	)
+	toolutil.WriteGraphQLPagination(&b, out.Pagination, len(out.Issues))
+	toolutil.WriteHints(&b, toolutil.ListHints(
+		toolutil.HintAction(actionEpicIssueAssign, "add an issue to this epic"),
+		toolutil.HintAction(actionEpicIssueRemove, "unlink an issue from this epic"),
+	)...)
 	return b.String()
 }
 
-// FormatAssignMarkdown renders an epic-issue assignment or removal result.
+// issueStateCell renders an issue state with the emoji every issue row in the
+// tree shows, and nothing when the query did not select one.
+func issueStateCell(state string) string {
+	if strings.TrimSpace(state) == "" {
+		return ""
+	}
+	return toolutil.IssueStateEmoji(state) + " " + toolutil.EscapeMdTableCell(state)
+}
+
+// FormatAssignMarkdown renders an epic-issue assignment or removal as the card
+// of the link it changed: the two global ids the mutation echoed, which are
+// what every later call on this pair takes.
 func FormatAssignMarkdown(out AssignOutput, action string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Epic Issue %s\n\n", action)
-	if out.EpicGID != "" {
-		//gitlab:allow-unescaped out.EpicGID: a GraphQL global id GitLab mints, gid://gitlab/Epic/ and a number.
-		fmt.Fprintf(&b, "- **Epic**: %s\n", out.EpicGID)
-	}
-	if out.ChildGID != "" {
-		//gitlab:allow-unescaped out.ChildGID: a GraphQL global id GitLab mints, gid://gitlab/Issue/ and a number.
-		fmt.Fprintf(&b, "- **Issue**: %s\n", out.ChildGID)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_epic_issue_list` to view all issues in the epic",
-		"Use `gitlab_epic_issue_remove` to unlink an issue from the epic",
+	c := toolutil.NewCard(&b, "Epic Issue "+action)
+	c.Code("Epic", out.EpicGID)
+	c.Code("Issue", out.ChildGID)
+	c.End(
+		toolutil.HintAction(actionEpicIssueList, "view all issues in the epic"),
+		toolutil.HintAction(actionEpicIssueRemove, "unlink an issue from the epic"),
 	)
 	return b.String()
 }

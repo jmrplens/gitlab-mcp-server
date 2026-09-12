@@ -239,66 +239,111 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// appListHints is the guidance section every application list ends with. The
+// table carries no link, so the preserve-links reminder is not written.
+const appListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use `gitlab_create_application` to register a new application\n"
+
+// TestFormatListMarkdown pins the whole list document: the heading counting
+// what the page shows, the table with the confidential flag as a glyph, and
+// the guidance section.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Applications: []ApplicationItem{
-			{ID: 1, ApplicationName: "App1", ApplicationID: "aid-1", CallbackURL: "http://localhost", Confidential: true},
+			{ID: 1, ApplicationName: "App1", ApplicationID: "aid-1", CallbackURL: "http://localhost", Confidential: true, Scopes: []string{"api", "read_user"}},
+			{ID: 2, ApplicationName: "App2", ApplicationID: "aid-2", CallbackURL: "http://localhost/two"},
 		},
 	}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "App1") {
-		t.Error("missing app name")
-	}
-	if !strings.Contains(md, "aid-1") {
-		t.Error("missing app id")
+
+	want := "## Applications (2)\n\n" +
+		"| ID | Name | App ID | Callback URL | Confidential | Scopes |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | App1 | `aid-1` | http://localhost | " + toolutil.BoolEmoji(true) + " | api, read_user |\n" +
+		"| 2 | App2 | `aid-2` | http://localhost/two | " + toolutil.BoolEmoji(false) + " |  |\n" +
+		appListHints
+
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_Empty pins the whole response of a list with no
+// applications: the one sentence, and no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	out := ListOutput{Applications: nil}
-	md := FormatListMarkdown(out)
-	if !strings.Contains(md, "No applications found") {
-		t.Error("missing empty message")
+	if got, want := FormatListMarkdown(ListOutput{}), "No applications found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatCreateMarkdown verifies the CreateMarkdown Markdown formatter for a representative create input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatCreateMarkdown pins the whole card of a newly registered
+// application: the secret in a code span, and the store-it-now hint the card
+// adds because it showed one.
 func TestFormatCreateMarkdown(t *testing.T) {
 	out := CreateOutput{
 		ID: 2, ApplicationName: "New", ApplicationID: "aid-2", Secret: "sec", CallbackURL: "http://cb", Confidential: false,
+		Scopes: []string{"api"},
 	}
-	md := FormatCreateMarkdown(out)
-	if !strings.Contains(md, "New") {
-		t.Error("missing app name")
-	}
-	if !strings.Contains(md, "sec") {
-		t.Error("missing secret")
+
+	want := "## Application Created\n\n" +
+		"- **ID**: 2\n" +
+		"- **Name**: New\n" +
+		"- **App ID**: `aid-2`\n" +
+		"- **Callback URL**: http://cb\n" +
+		"- **Confidential**: " + toolutil.BoolEmoji(false) + "\n" +
+		"- **Secret**: `sec`\n" +
+		"- **Scopes**: api\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Store the secret securely. It cannot be retrieved later\n"
+
+	if got := FormatCreateMarkdown(out); got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatRenewSecretMarkdown verifies the RenewSecret Markdown formatter
-// renders the application identity and the freshly rotated secret.
+// TestFormatCreateMarkdown_NoScopes pins the other side of the scopes row: an
+// application GitLab sent no scopes for renders no row at all, where the
+// two-cell table this replaced rendered a label above an empty cell.
+func TestFormatCreateMarkdown_NoScopes(t *testing.T) {
+	out := CreateOutput{ID: 3, ApplicationName: "Bare", ApplicationID: "aid-3", Secret: "sec", CallbackURL: "http://cb"}
+
+	want := "## Application Created\n\n" +
+		"- **ID**: 3\n" +
+		"- **Name**: Bare\n" +
+		"- **App ID**: `aid-3`\n" +
+		"- **Callback URL**: http://cb\n" +
+		"- **Confidential**: " + toolutil.BoolEmoji(false) + "\n" +
+		"- **Secret**: `sec`\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Store the secret securely. It cannot be retrieved later\n"
+
+	if got := FormatCreateMarkdown(out); got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatRenewSecretMarkdown pins the whole card of a rotated secret: the
+// new value, the advice to store it, and the warning that every client using
+// the previous one has to be updated.
 func TestFormatRenewSecretMarkdown(t *testing.T) {
 	out := RenewSecretOutput{
 		ID: 2, ApplicationName: "Rotated", ApplicationID: "aid-2", Secret: "freshsecret", CallbackURL: "http://cb", Confidential: true,
+		Scopes: []string{"api"},
 	}
-	md := FormatRenewSecretMarkdown(out)
-	if !strings.Contains(md, "Renewed") {
-		t.Error("missing renewed heading")
-	}
-	if !strings.Contains(md, "Rotated") {
-		t.Error("missing app name")
-	}
-	if !strings.Contains(md, "freshsecret") {
-		t.Error("missing new secret")
+
+	want := "## Application Secret Renewed\n\n" +
+		"- **ID**: 2\n" +
+		"- **Name**: Rotated\n" +
+		"- **App ID**: `aid-2`\n" +
+		"- **Callback URL**: http://cb\n" +
+		"- **Confidential**: " + toolutil.BoolEmoji(true) + "\n" +
+		"- **New Secret**: `freshsecret`\n" +
+		"- **Scopes**: api\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Store the new secret securely. It cannot be retrieved later\n" +
+		"- The previous secret is now invalid and any client using it must be updated\n"
+
+	if got := FormatRenewSecretMarkdown(out); got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

@@ -4,7 +4,6 @@ package issuelinks
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -435,27 +434,21 @@ func TestToOutput_FullAndNilIssues(t *testing.T) {
 	}
 }
 
-// TestIssueRefSuffix verifies the markdown helper for nil, empty-title, and
-// populated issue references.
-func TestIssueRefSuffix(t *testing.T) {
-	if got := issueRefSuffix(nil); got != "" {
-		t.Errorf("issueRefSuffix(nil) = %q, want empty", got)
-	}
-	if got := issueRefSuffix(&IssueRefOutput{Title: ""}); got != "" {
-		t.Errorf("issueRefSuffix(empty title) = %q, want empty", got)
-	}
-	if got := issueRefSuffix(&IssueRefOutput{Title: "Hello"}); got != " - Hello" {
-		t.Errorf("issueRefSuffix = %q", got)
-	}
-}
-
-// TestFormatListMarkdown_WithAuthor verifies the list table renders the author
-// column when the relation carries an author object.
+// TestFormatListMarkdown_WithAuthor checks the whole rendering of a relation
+// carrying an author: the handle reaches the author cell with its "@", and a
+// relation the response sent no web address for is named rather than linked.
 func TestFormatListMarkdown_WithAuthor(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{Relations: []RelationOutput{
+	want := "## Issue Relations (1)\n\n" +
+		"| ID | IID | Title | State | Link Type | Link ID | Author |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | 2 | T | 🟢 opened | relates_to | 9 | @ann |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'issue.link_create' to add a new link between issues\n"
+	got := FormatListMarkdown(ListOutput{Relations: []RelationOutput{
 		{ID: 1, IID: 2, Title: "T", State: "opened", LinkType: "relates_to", IssueLinkID: 9, Author: &UserOutput{Username: "ann"}},
 	}})
-	if !strings.Contains(md, "ann") {
-		t.Errorf("FormatListMarkdown missing author: %s", md)
+	if got != want {
+		t.Errorf("FormatListMarkdown(author)\n got %q\nwant %q", got, want)
 	}
 }

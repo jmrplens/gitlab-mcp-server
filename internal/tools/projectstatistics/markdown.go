@@ -1,24 +1,27 @@
 package projectstatistics
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatMarkdown formats project statistics as markdown.
+// FormatMarkdown renders a project's fetch statistics as a card: the total is
+// the object's one field, and the per-day counts are the nested collection
+// under it.
 func FormatMarkdown(out GetOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Project Statistics (Last 30 Days)\n\n**Total Fetches**: %d\n\n", out.TotalFetches)
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Project Statistics (Last 30 Days)")
+	c.Int("Total Fetches", out.TotalFetches)
 	if len(out.Days) > 0 {
-		sb.WriteString("| Date | Count |\n|------|-------|\n")
+		table := c.Table("Daily Fetches", "Date", "Count")
 		for _, d := range out.Days {
-			fmt.Fprintf(&sb, "| %s | %d |\n", toolutil.FormatTime(d.Date), d.Count)
+			table.Row(toolutil.FormatTime(d.Date), strconv.FormatInt(d.Count, 10))
 		}
 	}
-	toolutil.WriteHints(&sb, "Use fetcher counts to track project activity trends")
-	return sb.String()
+	c.End("Use fetcher counts to track project activity trends")
+	return b.String()
 }
 
 func init() {

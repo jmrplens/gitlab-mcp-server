@@ -2,44 +2,39 @@ package deploykeys
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown formats a single deploy key.
+// expiryCell renders a deploy key's expiry for a table cell. A key GitLab sent
+// no expiry for never expires, which is a fact about the key rather than a
+// value the response was missing.
+func expiryCell(expiresAt string) string {
+	if expiresAt == "" {
+		return "never"
+	}
+	return toolutil.FormatTime(expiresAt)
+}
+
+// FormatOutputMarkdown renders one project deploy key as a card.
 func FormatOutputMarkdown(o Output) string {
 	var b strings.Builder
 	// A deploy key title is free text, and this server's own deploy_key.add and
 	// deploy_key.update send it.
-	fmt.Fprintf(&b, "## Deploy Key: %s (ID: %d)\n\n", toolutil.EscapeMdHeading(o.Title), o.ID)
-	fmt.Fprintf(&b, "| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&b, "| ID | %d |\n", o.ID)
-	fmt.Fprintf(&b, "| Title | %s |\n", toolutil.EscapeMdTableCell(o.Title))
-	if o.Fingerprint != "" {
-		//gitlab:allow-unescaped o.Fingerprint: an MD5 fingerprint GitLab derives from the key, colon-separated hexadecimal digits.
-		fmt.Fprintf(&b, "| Fingerprint | %s |\n", o.Fingerprint)
-	}
-	if o.FingerprintSHA256 != "" {
-		//gitlab:allow-unescaped o.FingerprintSHA256: a SHA256 fingerprint GitLab derives from the key, base64 digits after a "SHA256:" prefix.
-		fmt.Fprintf(&b, "| SHA256 | %s |\n", o.FingerprintSHA256)
-	}
-	fmt.Fprintf(&b, "| Can Push | %t |\n", o.CanPush)
-	if o.UsageType != "" {
-		fmt.Fprintf(&b, "| Usage Type | %s |\n", toolutil.EscapeMdTableCell(o.UsageType))
-	}
-	if o.CreatedAt != "" {
-		fmt.Fprintf(&b, "| Created | %s |\n", toolutil.FormatTime(o.CreatedAt))
-	}
-	if o.ExpiresAt != "" {
-		fmt.Fprintf(&b, "| Expires | %s |\n", toolutil.FormatTime(o.ExpiresAt))
-	}
-	if o.LastUsedAt != "" {
-		fmt.Fprintf(&b, "| Last Used | %s |\n", toolutil.FormatTime(o.LastUsedAt))
-	}
-	writeProjectAccessTables(&b, o.ProjectsWithWriteAccess, o.ProjectsWithReadonlyAccess)
-	toolutil.WriteHints(
-		&b,
+	c := toolutil.NewCard(&b, fmt.Sprintf("Deploy Key: %s (ID: %d)", o.Title, o.ID))
+	c.Int("ID", o.ID)
+	c.Field("Title", o.Title)
+	c.Code("Fingerprint", o.Fingerprint)
+	c.Code("SHA256", o.FingerprintSHA256)
+	c.Bool("Can Push", o.CanPush)
+	c.Field("Usage Type", o.UsageType)
+	c.Time("Created", o.CreatedAt)
+	c.Time("Expires", o.ExpiresAt)
+	c.Time("Last Used", o.LastUsedAt)
+	writeProjectAccessTables(c, o.ProjectsWithWriteAccess, o.ProjectsWithReadonlyAccess)
+	c.End(
 		"If the workflow asks to fetch/get this key before update or delete, use the selected tool surface's deploy-key get action with the same project_id and this deploy_key_id next",
 		"Use the selected tool surface's deploy-key enable action with project_id and this deploy_key_id to grant this key to another project",
 		"Use the selected tool surface's deploy-key delete action with the same project_id, this deploy_key_id, and explicit confirm=true to remove this deploy key",
@@ -47,73 +42,55 @@ func FormatOutputMarkdown(o Output) string {
 	return b.String()
 }
 
-// FormatListMarkdown formats a list of project deploy keys.
+// FormatListMarkdown renders a list of project deploy keys as a table.
 func FormatListMarkdown(o ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Deploy Keys (%d)\n\n", len(o.DeployKeys))
-	toolutil.WriteListSummary(&b, len(o.DeployKeys), o.Pagination)
 	if len(o.DeployKeys) == 0 {
-		b.WriteString("No deploy keys found.\n")
-		toolutil.WritePagination(&b, o.Pagination)
-		return b.String()
+		return toolutil.EmptyMessage("deploy keys")
 	}
-	b.WriteString("| ID | Title | Can Push | Fingerprint | Created |\n")
-	b.WriteString("|---|---|---|---|---|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Deploy Keys", len(o.DeployKeys), o.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Title", "Can Push", "Fingerprint", "Created", "Expires"))
 	for _, k := range o.DeployKeys {
-		fmt.Fprintf(&b, "| %d | %s | %t | %s | %s |\n",
-			//gitlab:allow-unescaped k.Fingerprint: an MD5 fingerprint GitLab derives from the key, colon-separated hexadecimal digits.
-			//gitlab:allow-unescaped k.CreatedAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
-			k.ID, toolutil.EscapeMdTableCell(k.Title), k.CanPush, k.Fingerprint, k.CreatedAt)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(k.ID, 10),
+			toolutil.EscapeMdTableCell(k.Title),
+			toolutil.BoolEmoji(k.CanPush),
+			toolutil.MdCodeSpanCell(k.Fingerprint),
+			toolutil.FormatTime(k.CreatedAt),
+			expiryCell(k.ExpiresAt),
+		))
 	}
-	toolutil.WritePagination(&b, o.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
+	toolutil.WriteListFooter(&b, o.Pagination, false,
 		"Use the selected tool surface's deploy-key get action with the same project_id and deploy_key_id for full details",
 		"Use the selected tool surface's deploy-key add action with project_id to create a new deploy key",
 	)
 	return b.String()
 }
 
-// FormatInstanceOutputMarkdown formats a single instance deploy key.
+// FormatInstanceOutputMarkdown renders one instance deploy key as a card.
 func FormatInstanceOutputMarkdown(o InstanceOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Instance Deploy Key: %s (ID: %d)\n\n", toolutil.EscapeMdHeading(o.Title), o.ID)
-	fmt.Fprintf(&b, "| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&b, "| ID | %d |\n", o.ID)
-	fmt.Fprintf(&b, "| Title | %s |\n", toolutil.EscapeMdTableCell(o.Title))
-	if o.Fingerprint != "" {
-		//gitlab:allow-unescaped o.Fingerprint: an MD5 fingerprint GitLab derives from the key, colon-separated hexadecimal digits.
-		fmt.Fprintf(&b, "| Fingerprint | %s |\n", o.Fingerprint)
-	}
-	if o.FingerprintSHA256 != "" {
-		//gitlab:allow-unescaped o.FingerprintSHA256: a SHA256 fingerprint GitLab derives from the key, base64 digits after a "SHA256:" prefix.
-		fmt.Fprintf(&b, "| SHA256 | %s |\n", o.FingerprintSHA256)
-	}
-	if o.CreatedAt != "" {
-		fmt.Fprintf(&b, "| Created | %s |\n", toolutil.FormatTime(o.CreatedAt))
-	}
-	if o.ExpiresAt != "" {
-		fmt.Fprintf(&b, "| Expires | %s |\n", toolutil.FormatTime(o.ExpiresAt))
-	}
-	if o.LastUsedAt != "" {
-		fmt.Fprintf(&b, "| Last Used | %s |\n", toolutil.FormatTime(o.LastUsedAt))
-	}
-	if o.UsageType != "" {
-		fmt.Fprintf(&b, "| Usage Type | %s |\n", toolutil.EscapeMdTableCell(o.UsageType))
-	}
-	writeProjectAccessTables(&b, o.ProjectsWithWriteAccess, o.ProjectsWithReadonlyAccess)
-	toolutil.WriteHints(
-		&b,
+	c := toolutil.NewCard(&b, fmt.Sprintf("Instance Deploy Key: %s (ID: %d)", o.Title, o.ID))
+	c.Int("ID", o.ID)
+	c.Field("Title", o.Title)
+	c.Code("Fingerprint", o.Fingerprint)
+	c.Code("SHA256", o.FingerprintSHA256)
+	c.Time("Created", o.CreatedAt)
+	c.Time("Expires", o.ExpiresAt)
+	c.Time("Last Used", o.LastUsedAt)
+	c.Field("Usage Type", o.UsageType)
+	writeProjectAccessTables(c, o.ProjectsWithWriteAccess, o.ProjectsWithReadonlyAccess)
+	c.End(
 		"Use the selected tool surface's deploy-key enable action with project_id and this deploy_key_id to grant this instance key to a project",
 		"Use the selected tool surface's deploy-key list action with project_id to verify project-level references before deletion workflows",
 	)
 	return b.String()
 }
 
-// writeProjectAccessTables writes one table per non-empty access list, which
-// a deploy key carries when the request asked for the projects it reaches.
-func writeProjectAccessTables(b *strings.Builder, write, readonly []ProjectSummary) {
+// writeProjectAccessTables writes one nested collection per non-empty access
+// list, which a deploy key carries when the request asked for the projects it
+// reaches.
+func writeProjectAccessTables(c *toolutil.Card, write, readonly []ProjectSummary) {
 	for _, section := range []struct {
 		heading  string
 		projects []ProjectSummary
@@ -124,36 +101,35 @@ func writeProjectAccessTables(b *strings.Builder, write, readonly []ProjectSumma
 		if len(section.projects) == 0 {
 			continue
 		}
-		fmt.Fprintf(b, "\n### %s\n\n", section.heading)
-		b.WriteString("| ID | Name | Path |\n|---|---|---|\n")
+		table := c.Table(section.heading, "ID", "Name", "Path")
 		for _, p := range section.projects {
-			fmt.Fprintf(b, "| %d | %s | %s |\n", p.ID,
-				toolutil.EscapeMdTableCell(p.Name), toolutil.EscapeMdTableCell(p.PathWithNamespace))
+			table.Row(
+				strconv.FormatInt(p.ID, 10),
+				toolutil.EscapeMdTableCell(p.Name),
+				toolutil.EscapeMdTableCell(p.PathWithNamespace),
+			)
 		}
 	}
 }
 
-// FormatInstanceListMarkdown formats a list of instance deploy keys.
+// FormatInstanceListMarkdown renders a list of instance deploy keys as a table.
 func FormatInstanceListMarkdown(o InstanceListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Instance Deploy Keys (%d)\n\n", len(o.DeployKeys))
-	toolutil.WriteListSummary(&b, len(o.DeployKeys), o.Pagination)
 	if len(o.DeployKeys) == 0 {
-		b.WriteString("No instance deploy keys found.\n")
-		toolutil.WritePagination(&b, o.Pagination)
-		return b.String()
+		return toolutil.EmptyMessage("instance deploy keys")
 	}
-	b.WriteString("| ID | Title | Fingerprint | Created | Expires |\n")
-	b.WriteString("|---|---|---|---|---|\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Instance Deploy Keys", len(o.DeployKeys), o.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Title", "Fingerprint", "Created", "Expires"))
 	for _, k := range o.DeployKeys {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
-			//gitlab:allow-unescaped k.ExpiresAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
-			k.ID, toolutil.EscapeMdTableCell(k.Title), k.Fingerprint, k.CreatedAt, k.ExpiresAt)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(k.ID, 10),
+			toolutil.EscapeMdTableCell(k.Title),
+			toolutil.MdCodeSpanCell(k.Fingerprint),
+			toolutil.FormatTime(k.CreatedAt),
+			expiryCell(k.ExpiresAt),
+		))
 	}
-	toolutil.WritePagination(&b, o.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
+	toolutil.WriteListFooter(&b, o.Pagination, false,
 		"Use the selected tool surface's deploy-key enable action with project_id and deploy_key_id to grant one of these keys to a project",
 		"Use the selected tool surface's deploy-key list action with project_id to inspect project-level deploy key metadata",
 	)

@@ -14,17 +14,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // errExpectedErr identifies the err expected err constant used by this package.
 const errExpectedErr = "expected error"
-
-// errExpNonNilResult identifies the err exp non nil result constant used by this package.
-const errExpNonNilResult = "expected non-nil result"
 
 // TestScheduleExport_Success verifies that ScheduleExport succeeds when the GitLab API returns a valid response.
 // The mock GitLab API at /api/v4/groups/1/export (POST) returns a representative success body.
@@ -165,47 +160,8 @@ func TestImportFile_APIError(t *testing.T) {
 	}
 }
 
-// TestFormatScheduleExportMarkdown verifies the ScheduleExportMarkdown Markdown formatter for a representative scheduleexport input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatScheduleExportMarkdown(t *testing.T) {
-	result := FormatScheduleExportMarkdown(ScheduleExportOutput{Message: "ok"})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	result = FormatScheduleExportMarkdown(ScheduleExportOutput{})
-	if result != nil {
-		t.Error("expected nil for empty output")
-	}
-}
-
-// TestFormatExportDownloadMarkdown verifies the ExportDownloadMarkdown Markdown formatter for a representative exportdownload input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatExportDownloadMarkdown(t *testing.T) {
-	result := FormatExportDownloadMarkdown(ExportDownloadOutput{SizeBytes: 512})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	result = FormatExportDownloadMarkdown(ExportDownloadOutput{})
-	if result != nil {
-		t.Error("expected nil for empty output")
-	}
-}
-
-// TestFormatImportFileMarkdown verifies the ImportFileMarkdown Markdown formatter for a representative importfile input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatImportFileMarkdown(t *testing.T) {
-	result := FormatImportFileMarkdown(ImportFileOutput{Message: "ok"})
-	if result == nil {
-		t.Fatal(errExpNonNilResult)
-	}
-	result = FormatImportFileMarkdown(ImportFileOutput{})
-	if result != nil {
-		t.Error("expected nil for empty output")
-	}
-}
+// The Markdown formatters are covered whole-output in markdown_test.go,
+// beside the confirmations they now write.
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
@@ -421,108 +377,6 @@ func TestImportFile_WithParentID(t *testing.T) {
 	}
 	if out.Message == "" {
 		t.Error("expected non-empty message")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FormatMarkdown — dispatch for all types and unknown type
-// ---------------------------------------------------------------------------.
-
-// TestFormatMarkdown_ScheduleExportOutput verifies the Markdown_ScheduleExportOutput Markdown formatter for a representative _scheduleexportoutput input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatMarkdown_ScheduleExportOutput(t *testing.T) {
-	result := FormatMarkdown(ScheduleExportOutput{Message: "Group export scheduled successfully"})
-	if result == nil {
-		t.Fatal("expected non-nil result for ScheduleExportOutput")
-	}
-}
-
-// TestFormatMarkdown_ExportDownloadOutput verifies the Markdown_ExportDownloadOutput Markdown formatter for a representative _exportdownloadoutput input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatMarkdown_ExportDownloadOutput(t *testing.T) {
-	result := FormatMarkdown(ExportDownloadOutput{ContentBase64: "dGVzdA==", SizeBytes: 4})
-	if result == nil {
-		t.Fatal("expected non-nil result for ExportDownloadOutput")
-	}
-}
-
-// TestFormatMarkdown_ImportFileOutput verifies the Markdown_ImportFileOutput Markdown formatter for a representative _importfileoutput input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatMarkdown_ImportFileOutput(t *testing.T) {
-	result := FormatMarkdown(ImportFileOutput{Message: "Group import started successfully"})
-	if result == nil {
-		t.Fatal("expected non-nil result for ImportFileOutput")
-	}
-}
-
-// TestFormatMarkdown_UnknownType verifies the Markdown_UnknownType Markdown formatter for a representative _unknowntype input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatMarkdown_UnknownType(t *testing.T) {
-	result := FormatMarkdown("unknown type")
-	if result != nil {
-		t.Error("expected nil for unknown type")
-	}
-}
-
-// TestFormatMarkdown_EmptyScheduleExportOutput verifies the Markdown_EmptyScheduleExportOutput Markdown formatter for a representative _emptyscheduleexportoutput input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatMarkdown_EmptyScheduleExportOutput(t *testing.T) {
-	result := FormatMarkdown(ScheduleExportOutput{})
-	if result != nil {
-		t.Error("expected nil for empty ScheduleExportOutput")
-	}
-}
-
-// TestFormatMarkdown_EmptyExportDownloadOutput verifies the Markdown_EmptyExportDownloadOutput Markdown formatter for a representative _emptyexportdownloadoutput input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatMarkdown_EmptyExportDownloadOutput(t *testing.T) {
-	result := FormatMarkdown(ExportDownloadOutput{})
-	if result != nil {
-		t.Error("expected nil for empty ExportDownloadOutput")
-	}
-}
-
-// TestFormatMarkdown_EmptyImportFileOutput verifies the Markdown_EmptyImportFileOutput Markdown formatter for a representative _emptyimportfileoutput input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatMarkdown_EmptyImportFileOutput(t *testing.T) {
-	result := FormatMarkdown(ImportFileOutput{})
-	if result != nil {
-		t.Error("expected nil for empty ImportFileOutput")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FormatExportDownloadMarkdown — content check
-// ---------------------------------------------------------------------------.
-
-// TestFormatExportDownloadMarkdown_ContentCheck verifies the ExportDownloadMarkdown_ContentCheck Markdown formatter for a representative exportdownload_contentcheck input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatExportDownloadMarkdown_ContentCheck(t *testing.T) {
-	result := FormatExportDownloadMarkdown(ExportDownloadOutput{
-		ContentBase64: "dGVzdA==",
-		SizeBytes:     512,
-	})
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	found := false
-	for _, c := range result.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			if strings.Contains(tc.Text, "512 bytes") {
-				found = true
-			}
-		}
-	}
-	if !found {
-		t.Error("expected markdown to contain '512 bytes'")
 	}
 }
 

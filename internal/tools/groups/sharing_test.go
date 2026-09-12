@@ -13,6 +13,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const (
@@ -274,28 +275,48 @@ func TestTransferSubGroup_NotFound(t *testing.T) {
 	}
 }
 
-// TestFormatShareGroupMarkdown verifies the share confirmation Markdown.
+// TestFormatShareGroupMarkdown verifies the share confirmation card byte for
+// byte: the confirmation is the heading, the share's own fields are list rows
+// rather than a two-column table, and the hints close the card.
 func TestFormatShareGroupMarkdown(t *testing.T) {
 	md := FormatShareGroupMarkdown(ShareGroupOutput{
-		Message: "Group 99 shared with group 123 as Developer", AccessRole: "Developer", GroupAccess: 30,
+		Message: "Group 99 shared with group 123 as Developer", SharedGroupID: 123, AccessRole: "Developer", GroupAccess: 30,
 	})
-	if !strings.Contains(md, "Developer") || !strings.Contains(md, "shared with group 123") {
-		t.Errorf("unexpected markdown:\n%s", md)
+
+	want := "## ✅ Group 99 shared with group 123 as Developer\n\n" +
+		"- **Shared Group ID**: 123\n" +
+		"- **Access**: Developer\n" +
+		"- **Access Level**: 30\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'group.shared_with' to confirm the share\n" +
+		"- Use action 'group.unshare_from_group' to revoke it\n"
+	if md != want {
+		t.Errorf("share card:\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatSharedProjectsListMarkdown verifies the shared-projects table and
-// the empty-list path.
+// TestFormatSharedProjectsListMarkdown verifies the whole shared-projects
+// response: the heading counts what GitLab reported, the table carries its own
+// header, and the guidance closes the response rather than opening it.
 func TestFormatSharedProjectsListMarkdown(t *testing.T) {
 	md := FormatSharedProjectsListMarkdown(SharedProjectsListOutput{
-		Projects: []ProjectItem{{ID: 42, Name: "shared-proj", PathWithNamespace: "other/shared-proj", Visibility: "private", WebURL: "https://x/y"}},
+		Projects:   []ProjectItem{{ID: 42, Name: "shared-proj", PathWithNamespace: "other/shared-proj", Visibility: "private", WebURL: "https://x/y", Archived: new(false)}},
+		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 	})
-	if !strings.Contains(md, "Shared Projects") || !strings.Contains(md, "shared-proj") {
-		t.Errorf("unexpected markdown:\n%s", md)
+
+	want := "## Shared Projects (1)\n\n" +
+		"| ID | Name | Path | Visibility | Archived |\n| --- | --- | --- | --- | --- |\n" +
+		"| 42 | [shared-proj](https://x/y) | other/shared-proj | private | ❌ |\n" +
+		"\nPage 1 of 1 | 1 items total | 20 per page\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'project.get' to view a shared project's details\n"
+	if md != want {
+		t.Errorf("shared projects list:\n got %q\nwant %q", md, want)
 	}
-	empty := FormatSharedProjectsListMarkdown(SharedProjectsListOutput{})
-	if !strings.Contains(empty, "No shared projects") {
-		t.Errorf("expected empty-list message:\n%s", empty)
+
+	if empty := FormatSharedProjectsListMarkdown(SharedProjectsListOutput{}); empty != "No shared projects found.\n" {
+		t.Errorf("empty list = %q, want the one-sentence empty message", empty)
 	}
 }
 
@@ -344,10 +365,32 @@ func TestTransferSubGroup_BadRequest(t *testing.T) {
 	}
 }
 
-// TestAccessLevelNameFallback verifies the unknown-level fallback path.
-func TestAccessLevelNameFallback(t *testing.T) {
-	if got := accessLevelName(99); !strings.Contains(got, "99") {
-		t.Errorf("accessLevelName(99) = %q, want fallback with level number", got)
+// TestShareGroupWithGroup_NamesTheRoleFromTheSharedTable verifies the granted
+// role is read from toolutil's access-level table rather than a copy of it:
+// the package-local copy knew six levels, so a Planner share reported "Level
+// 15" and a level outside both tables still reports its number.
+func TestShareGroupWithGroup_NamesTheRoleFromTheSharedTable(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id": 42}`)
+	}))
+	for _, tc := range []struct {
+		name  string
+		level int
+		want  string
+	}{
+		{name: "planner", level: 15, want: "Planner"},
+		{name: "minimal access", level: 5, want: "Minimal access"},
+		{name: "unknown level", level: 99, want: "Level 99"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := ShareGroupWithGroup(t.Context(), client, ShareGroupInput{GroupID: "99", SharedGroupID: 7, GroupAccess: tc.level})
+			if err != nil {
+				t.Fatalf("ShareGroupWithGroup() error: %v", err)
+			}
+			if out.AccessRole != tc.want {
+				t.Errorf("access role = %q, want %q", out.AccessRole, tc.want)
+			}
+		})
 	}
 }
 
@@ -411,13 +454,14 @@ func TestTransferSubGroup_BadRequestHint(t *testing.T) {
 }
 
 // TestFormatSharedProjectsListMarkdown_ArchivedRow verifies the shared
-// projects table marks archived projects with "Yes" in the Archived column.
+// projects table marks an archived project with the flag glyph every other
+// boolean in this tree renders with.
 func TestFormatSharedProjectsListMarkdown_ArchivedRow(t *testing.T) {
 	md := FormatSharedProjectsListMarkdown(SharedProjectsListOutput{Projects: []ProjectItem{
 		{ID: 1, Name: "arch", Archived: new(true)},
 	}})
-	if !strings.Contains(md, "| Yes |") {
-		t.Errorf("markdown missing archived Yes cell:\n%s", md)
+	if !strings.Contains(md, "| 1 | arch |  |  | ✅ |\n") {
+		t.Errorf("markdown missing the archived row:\n%s", md)
 	}
 }
 
@@ -428,7 +472,7 @@ func TestFormatSharedProjectsListMarkdown_SimpleRowLeavesArchivedUnanswered(t *t
 	md := FormatSharedProjectsListMarkdown(SharedProjectsListOutput{Projects: []ProjectItem{
 		{ID: 1, Name: "basic"},
 	}})
-	if strings.Contains(md, "| No |") || strings.Contains(md, "| Yes |") {
+	if !strings.Contains(md, "| 1 | basic |  |  |  |\n") {
 		t.Errorf("a row with no archived flag was given an answer:\n%s", md)
 	}
 }
@@ -461,7 +505,7 @@ func TestApplyListSharedProjectsOptions_CarriesTheFiltersOnlyWhenGiven(t *testin
 // table links a project only when GitLab sent its URL.
 func TestSharingMarkdown_OptionalPartsAppearOnlyWhenPresent(t *testing.T) {
 	withRole := FormatShareGroupMarkdown(ShareGroupOutput{Message: "shared", AccessRole: "Developer", GroupAccess: 30})
-	if !strings.Contains(withRole, "**Access**: Developer (30)") {
+	if !strings.Contains(withRole, "- **Access**: Developer\n- **Access Level**: 30\n") {
 		t.Errorf("markdown missing the granted role:\n%s", withRole)
 	}
 	withoutRole := FormatShareGroupMarkdown(ShareGroupOutput{Message: "shared"})

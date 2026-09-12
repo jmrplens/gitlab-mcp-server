@@ -1,7 +1,7 @@
 package namespaces
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -14,21 +14,29 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatListMarkdownString(out))
 }
 
-// FormatListMarkdownString renders a list of namespaces as a Markdown string.
+// FormatListMarkdownString renders a page of namespaces as the table a
+// collection of objects sharing columns takes, headed with the count the
+// response can vouch for rather than with the number of rows shown.
 func FormatListMarkdownString(out ListOutput) string {
 	if len(out.Namespaces) == 0 {
-		return "No namespaces found.\n"
+		return toolutil.EmptyMessage("namespaces")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Namespaces (%d)\n\n", len(out.Namespaces))
-	toolutil.WriteListSummary(&b, len(out.Namespaces), out.Pagination)
+	toolutil.WriteListHeading(&b, "Namespaces", len(out.Namespaces), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Kind", "Full Path"))
 	for _, ns := range out.Namespaces {
-		//gitlab:allow-unescaped ns.Kind: GitLab derives the kind from the namespace class and answers group or user, so this is a word the server chose.
-		fmt.Fprintf(&b, "- **%s** (ID: %d), kind: %s, path: `%s`\n",
-			toolutil.EscapeMdTableCell(ns.Name), ns.ID, ns.Kind, toolutil.EscapeMdTableCell(ns.FullPath))
+		// For a user namespace GitLab keeps the name in step with the account
+		// holder's display name, which is free text; the paths are slugs a
+		// person chose.
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(ns.ID, 10),
+			toolutil.EscapeMdTableCell(ns.Name),
+			toolutil.EscapeMdTableCell(ns.Kind),
+			toolutil.MdCodeSpanCell(ns.FullPath),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, "Use `gitlab_namespace_get` to view details of a specific namespace")
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionNamespaceGet, "view details of one namespace"))
 	return b.String()
 }
 
@@ -37,70 +45,57 @@ func FormatMarkdown(out Output) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatMarkdownString(out))
 }
 
-// FormatMarkdownString renders a single namespace as a Markdown string.
+// FormatMarkdownString renders one namespace as a card. Every optional field
+// is written only when GitLab sent it: the administrator's figures, the
+// compute-minute and storage limits a caller who may change them is shown, and
+// the two subscription dates.
 func FormatMarkdownString(out Output) string {
 	var b strings.Builder
 	// For a user namespace GitLab keeps the name in step with the account
 	// holder's display name, which is free text; the paths are slugs a person
-	// chose, and every sibling that renders one escapes it.
-	fmt.Fprintf(&b, "## Namespace: %s\n\n", toolutil.EscapeMdHeading(out.Name))
-	fmt.Fprintf(&b, "| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&b, "| ID | %d |\n", out.ID)
-	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&b, "| Path | %s |\n", toolutil.EscapeMdTableCell(out.Path))
-	fmt.Fprintf(&b, "| Full Path | %s |\n", toolutil.EscapeMdTableCell(out.FullPath))
-	//gitlab:allow-unescaped out.Kind: GitLab derives the kind from the namespace class and answers group or user, so this is a word the server chose.
-	fmt.Fprintf(&b, "| Kind | %s |\n", out.Kind)
-	if out.ParentID > 0 {
-		fmt.Fprintf(&b, "| Parent ID | %d |\n", out.ParentID)
-	}
-	if out.WebURL != "" {
-		// GitLab builds this from the instance URL and the full path above, so
-		// it inherits whatever that path can hold.
-		fmt.Fprintf(&b, "| Web URL | %s |\n", toolutil.EscapeMdTableCell(out.WebURL))
-	}
-	if out.ProjectsCount > 0 {
-		fmt.Fprintf(&b, "| Projects Count | %d |\n", out.ProjectsCount)
-	}
-	if out.RootRepositorySize > 0 {
-		fmt.Fprintf(&b, "| Root Repository Size | %d |\n", out.RootRepositorySize)
-	}
-	if out.Plan != "" {
-		//gitlab:allow-unescaped out.Plan: one of GitLab's own seeded subscription names, such as free or ultimate, which no API lets a person write.
-		fmt.Fprintf(&b, "| Plan | %s |\n", out.Plan)
-	}
-	if out.TrialEndsOn != "" {
-		//gitlab:allow-unescaped out.TrialEndsOn: a date toOutput rendered from a gl.ISOTime with time.Format, so it holds digits and dashes.
-		fmt.Fprintf(&b, "| Trial Ends On | %s |\n", out.TrialEndsOn)
-	}
-	if out.EndDate != "" {
-		//gitlab:allow-unescaped out.EndDate: a subscription end date GitLab renders from a Date column, so it holds digits and dashes.
-		fmt.Fprintf(&b, "| Subscription End Date | %s |\n", out.EndDate)
-	}
-	if out.MaxSeatsUsed != nil {
-		fmt.Fprintf(&b, "| Max Seats Used | %d |\n", *out.MaxSeatsUsed)
-	}
-	if out.MaxSeatsUsedChangedAt != "" {
-		fmt.Fprintf(&b, "| Max Seats Used Changed At | %s |\n", toolutil.FormatTime(out.MaxSeatsUsedChangedAt))
-	}
-	if out.SeatsInUse != nil {
-		fmt.Fprintf(&b, "| Seats In Use | %d |\n", *out.SeatsInUse)
-	}
-	if out.SharedRunnersMinutesLimit != nil {
-		fmt.Fprintf(&b, "| Shared Runners Minutes Limit | %d |\n", *out.SharedRunnersMinutesLimit)
-	}
-	if out.ExtraSharedRunnersMinutesLimit != nil {
-		fmt.Fprintf(&b, "| Extra Shared Runners Minutes Limit | %d |\n", *out.ExtraSharedRunnersMinutesLimit)
-	}
-	if out.AdditionalPurchasedStorageSize != nil {
-		fmt.Fprintf(&b, "| Additional Purchased Storage Size | %d |\n", *out.AdditionalPurchasedStorageSize)
-	}
-	if out.AdditionalPurchasedStorageEndsOn != "" {
-		//gitlab:allow-unescaped out.AdditionalPurchasedStorageEndsOn: a storage expiry date GitLab renders from a Date column, so it holds digits and dashes.
-		fmt.Fprintf(&b, "| Additional Purchased Storage Ends On | %s |\n", out.AdditionalPurchasedStorageEndsOn)
-	}
-	toolutil.WriteHints(&b, "Use the namespace ID with project or group tools for further operations")
+	// chose, and the card escapes each of them.
+	c := toolutil.NewCard(&b, "Namespace: "+out.Name)
+	c.Int("ID", out.ID)
+	c.Field("Name", out.Name)
+	c.Code("Path", out.Path)
+	c.Code("Full Path", out.FullPath)
+	c.Field("Kind", out.Kind)
+	c.Count("Parent ID", out.ParentID)
+	// GitLab builds the web URL from the instance URL and the full path above,
+	// so it inherits whatever that path can hold.
+	c.URL(out.WebURL)
+	c.Count("Members Count With Descendants", out.MembersCountWithDescendants)
+	c.Count("Projects Count", out.ProjectsCount)
+	c.Count("Root Repository Size", out.RootRepositorySize)
+	c.Count("Billable Members Count", out.BillableMembersCount)
+	c.Field("Plan", out.Plan)
+	c.Flag(toolutil.EmojiInfo, "Trial", out.Trial)
+	c.Time("Trial Ends On", out.TrialEndsOn)
+	c.Time("Subscription End Date", out.EndDate)
+	writeSeatRows(c, out)
+	c.End(toolutil.HintAction(actionNamespaceGet, "use this namespace ID with the project and group actions"))
 	return b.String()
+}
+
+// writeSeatRows writes the seat, compute-minute and purchased-storage rows,
+// each present only for a caller GitLab shows it to.
+func writeSeatRows(c *toolutil.Card, out Output) {
+	writeCountPtr(c, "Max Seats Used", out.MaxSeatsUsed)
+	c.Time("Max Seats Used Changed At", out.MaxSeatsUsedChangedAt)
+	writeCountPtr(c, "Seats In Use", out.SeatsInUse)
+	writeCountPtr(c, "Shared Runners Minutes Limit", out.SharedRunnersMinutesLimit)
+	writeCountPtr(c, "Extra Shared Runners Minutes Limit", out.ExtraSharedRunnersMinutesLimit)
+	writeCountPtr(c, "Additional Purchased Storage Size", out.AdditionalPurchasedStorageSize)
+	c.Time("Additional Purchased Storage Ends On", out.AdditionalPurchasedStorageEndsOn)
+}
+
+// writeCountPtr writes a figure GitLab sends only to some callers: nil is "not
+// shown to you", and zero is an answer.
+func writeCountPtr(c *toolutil.Card, label string, v *int64) {
+	if v == nil {
+		return
+	}
+	c.Int(label, *v)
 }
 
 // FormatExistsMarkdown formats a namespace existence check as a Markdown CallToolResult.
@@ -108,21 +103,33 @@ func FormatExistsMarkdown(out ExistsOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatExistsMarkdownString(out))
 }
 
-// FormatExistsMarkdownString renders a namespace existence result as a Markdown string.
+// FormatExistsMarkdownString renders the availability answer as a card, with
+// the alternative paths GitLab offered as the collection they are. The
+// suggestions used to be joined into one line as they arrived, so a suggestion
+// carrying Markdown was rendered as Markdown.
 func FormatExistsMarkdownString(out ExistsOutput) string {
 	var b strings.Builder
-	if out.Exists {
-		b.WriteString("Namespace **exists** (path is taken).\n")
-	} else {
-		b.WriteString("Namespace **does not exist** (path is available).\n")
-	}
+	c := toolutil.NewCard(&b, "Namespace Availability")
+	c.Bool("Exists", out.Exists)
+	c.Field("Path", pathState(out.Exists))
 	if len(out.Suggests) > 0 {
-		b.WriteString("\n**Suggestions:** ")
-		b.WriteString(strings.Join(out.Suggests, ", "))
-		b.WriteString("\n")
+		suggestions := c.Table("Suggested Paths", "Path")
+		for _, suggestion := range out.Suggests {
+			suggestions.Row(toolutil.MdCodeSpanCell(suggestion))
+		}
+		c.End("Try one of the suggested paths: the one asked about is taken")
+		return b.String()
 	}
-	toolutil.WriteHints(&b, "Try one of the suggested paths if the namespace was not found")
+	c.End()
 	return b.String()
+}
+
+// pathState says what the existence answer means for a caller choosing a path.
+func pathState(exists bool) string {
+	if exists {
+		return "taken"
+	}
+	return "available"
 }
 
 func init() {

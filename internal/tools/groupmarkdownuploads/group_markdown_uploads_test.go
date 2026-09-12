@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // errExpectedErr identifies the err expected err constant used by this package.
@@ -148,31 +147,8 @@ func TestDeleteBySecretAndFilename_Error(t *testing.T) {
 	}
 }
 
-// TestFormatList verifies the List Markdown formatter for a representative list input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatList(t *testing.T) {
-	out := &ListOutput{
-		Uploads: []UploadItem{
-			{ID: 1, Size: 1024, Filename: testFilename},
-		},
-	}
-	md := FormatList(out)
-	if !strings.Contains(md, testFilename) {
-		t.Errorf("expected markdown to contain 'image.png'")
-	}
-}
-
-// TestFormatList_Empty verifies the List_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatList_Empty(t *testing.T) {
-	out := &ListOutput{Uploads: []UploadItem{}}
-	md := FormatList(out)
-	if !strings.Contains(md, "No group markdown uploads") {
-		t.Errorf("expected empty message")
-	}
-}
+// The Markdown formatter is covered whole-output in markdown_test.go, beside
+// the list vocabulary it now writes.
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
@@ -404,89 +380,6 @@ func TestDeleteBySecretAndFilename_InternalServerError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// FormatList — with pagination, special characters, nil created_at
-// ---------------------------------------------------------------------------.
-
-// TestFormatList_WithPagination verifies the List_WithPagination Markdown formatter for a representative list_withpagination input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
-func TestFormatList_WithPagination(t *testing.T) {
-	out := &ListOutput{
-		Uploads: []UploadItem{
-			{ID: 1, Size: 1024, Filename: "image.png", CreatedAt: "2026-01-01T00:00:00Z"},
-		},
-		Pagination: toolutil.PaginationOutput{
-			TotalItems: 10, Page: 1, PerPage: 20, TotalPages: 1,
-		},
-	}
-	md := FormatList(out)
-	if !strings.Contains(md, "image.png") {
-		t.Errorf("expected markdown to contain 'image.png':\n%s", md)
-	}
-	if !strings.Contains(md, "| ID |") {
-		t.Errorf("expected table header:\n%s", md)
-	}
-	if !strings.Contains(md, "1024") {
-		t.Errorf("expected size in markdown:\n%s", md)
-	}
-}
-
-// TestFormatList_SpecialCharacters verifies the List_SpecialCharacters Markdown formatter for a representative list_specialcharacters input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatList_SpecialCharacters(t *testing.T) {
-	out := &ListOutput{
-		Uploads: []UploadItem{
-			{ID: 5, Size: 256, Filename: "file|with|pipes.txt", CreatedAt: "2026-01-01"},
-		},
-	}
-	md := FormatList(out)
-	// EscapeMdTableCell should handle pipe characters
-	if !strings.Contains(md, "5") {
-		t.Errorf("expected ID in markdown:\n%s", md)
-	}
-}
-
-// TestFormatList_NilCreatedAt verifies the List_NilCreatedAt Markdown formatter for a representative list_nilcreatedat input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatList_NilCreatedAt(t *testing.T) {
-	out := &ListOutput{
-		Uploads: []UploadItem{
-			{ID: 7, Size: 512, Filename: "no-date.bin"},
-		},
-	}
-	md := FormatList(out)
-	if !strings.Contains(md, "no-date.bin") {
-		t.Errorf("expected filename in markdown:\n%s", md)
-	}
-	if !strings.Contains(md, "| 7 |") {
-		t.Errorf("expected ID row:\n%s", md)
-	}
-}
-
-// TestFormatList_MultipleRows verifies the List_MultipleRows Markdown formatter for a representative list_multiplerows input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatList_MultipleRows(t *testing.T) {
-	out := &ListOutput{
-		Uploads: []UploadItem{
-			{ID: 1, Size: 100, Filename: "a.txt", CreatedAt: "2026-01-01"},
-			{ID: 2, Size: 200, Filename: "b.txt", CreatedAt: "2026-02-01"},
-			{ID: 3, Size: 300, Filename: "c.txt", CreatedAt: "2026-03-01"},
-		},
-	}
-	md := FormatList(out)
-	for _, want := range []string{"a.txt", "b.txt", "c.txt", "| 1 |", "| 2 |", "| 3 |"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
 // List — uploaded_by mapping and keyset/order_by/sort forwarding (1:1 audit)
 // ---------------------------------------------------------------------------.
 
@@ -569,34 +462,8 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Markdown registry formatter + uploadedByLabel helper
+// uploadedByLabel helper
 // ---------------------------------------------------------------------------.
-
-// TestFormatListMarkdownString_UploadedBy verifies the registry-registered
-// formatter renders the uploaded-by column and rows.
-func TestFormatListMarkdownString_UploadedBy(t *testing.T) {
-	out := ListOutput{
-		Uploads: []UploadItem{
-			{ID: 1, Size: 1024, Filename: "image.png", CreatedAt: "2026-01-01", UploadedBy: &UploadedByOutput{Username: "bob", Name: "Bob"}},
-		},
-	}
-	md := FormatListMarkdownString(out)
-	for _, want := range []string{"Group Markdown Uploads (1)", "Uploaded By", "Bob (@bob)", "image.png"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-}
-
-// TestFormatListMarkdownString_Empty verifies the empty path of the registry formatter.
-func TestFormatListMarkdownString_Empty(t *testing.T) {
-	md := FormatListMarkdownString(ListOutput{})
-	if !strings.Contains(md, "No uploads found.") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-}
 
 // TestUploadedByLabel verifies every branch of the uploadedByLabel helper.
 func TestUploadedByLabel(t *testing.T) {

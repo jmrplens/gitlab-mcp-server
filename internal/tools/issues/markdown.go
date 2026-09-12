@@ -9,29 +9,34 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatTodoMarkdown renders a to-do item as a Markdown summary.
+// Canonical action IDs the hints name. A hint names the ID every surface
+// resolves — the dynamic surface executes it, and the meta and individual
+// surfaces resolve it to their own tool names — so a hint written this way is
+// never a name the serving surface does not register, which is what the mix of
+// tool names and bare action words in these hints used to be.
+const (
+	hintActionIssueCreate     = "issue.create"
+	hintActionIssueNoteList   = "issue.note_list"
+	hintActionIssueNoteCreate = "issue.note_create"
+	hintActionIssueMRsRelated = "issue.mrs_related"
+	hintActionTodoMarkDone    = "user.todo_mark_done"
+	hintActionMRGet           = "merge_request.get"
+	hintActionMRChangesGet    = "merge_request.changes_get"
+)
+
+// FormatTodoMarkdown renders a to-do item as the card of one object.
 func FormatTodoMarkdown(t TodoOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Todo #%d\n\n", t.ID)
-	//gitlab:allow-unescaped t.ActionName: a to-do action, a gl.TodoAction GitLab picks from a fixed set.
-	fmt.Fprintf(&b, "- **Action**: %s\n", t.ActionName)
-	//gitlab:allow-unescaped t.TargetType: a to-do target type, a gl.TodoTargetType GitLab picks from a fixed set.
-	fmt.Fprintf(&b, "- **Target Type**: %s\n", t.TargetType)
-	if t.TargetTitle != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdTarget, toolutil.EscapeMdTableCell(t.TargetTitle))
-	}
-	//gitlab:allow-unescaped t.State: a to-do state GitLab picks from a fixed set (pending, done).
-	fmt.Fprintf(&b, toolutil.FmtMdState, t.State)
-	if t.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(t.CreatedAt))
-	}
-	if t.TargetURL != "" {
-		toolutil.WriteMdURLNewline(&b, t.TargetURL)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_todo_mark_done` to mark this todo as completed",
-		"Use `gitlab_issue_get` to view the referenced issue",
+	c := toolutil.NewCard(&b, fmt.Sprintf("Todo #%d", t.ID))
+	c.Field("Action", t.ActionName)
+	c.Field("Target Type", t.TargetType)
+	c.Field("Target", t.TargetTitle)
+	c.Field("State", t.State)
+	c.Time("Created", t.CreatedAt)
+	c.URL(t.TargetURL)
+	c.End(
+		toolutil.HintAction(hintActionTodoMarkDone, "mark this todo as completed"),
+		toolutil.HintAction(actionIssueGet, "view the referenced issue"),
 	)
 	return b.String()
 }
@@ -39,36 +44,70 @@ func FormatTodoMarkdown(t TodoOutput) string {
 // formatIssueList renders an issue list under the given heading, closing with
 // the caller's hints.
 //
-// The two list surfaces differ only in those two things; the table between
+// The three list surfaces differ only in those two things; the table between
 // them is the same. Rendering it once is what keeps them that way: the row
-// format carries the issue link, the state emoji and the escaping, and a
-// change applied to one copy and not the other would silently leave the
-// project and global listings rendering differently.
+// format carries the issue link, the state emoji, the confidential marker and
+// the escaping, and a change applied to one copy and not the others would
+// silently leave the project, group and global listings rendering differently.
 func formatIssueList(out ListOutput, heading string, hints ...string) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## %s (%d)\n\n", heading, out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Issues), out.Pagination)
 	if len(out.Issues) == 0 {
-		b.WriteString(msgNoIssuesFound)
-		return b.String()
+		return toolutil.EmptyMessage("issues")
 	}
-	b.WriteString(tblHeaderIssues)
-	b.WriteString(toolutil.TblSep5Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, heading, len(out.Issues), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Author", "Labels"))
 	for _, i := range out.Issues {
-		labels := strings.Join(i.Labels, ", ")
-		//gitlab:allow-unescaped i.State: an issue state, one of GitLab's fixed set (opened, closed).
-		fmt.Fprintf(&b, "| %s | %s | %s %s | %s | %s |\n", toolutil.MdTitleLink(fmt.Sprintf("#%d", i.IID), i.WebURL), toolutil.EscapeMdTableCell(i.Title), toolutil.IssueStateEmoji(i.State), i.State, toolutil.EscapeMdTableCell(AuthorName(i.BasicOutput)), toolutil.EscapeMdTableCell(labels))
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(issueReference(i), i.WebURL),
+			issueTitleCell(i),
+			issueStateCell(i.State),
+			toolutil.MdUserHandle(AuthorName(i.BasicOutput)),
+			toolutil.EscapeMdTableCell(strings.Join(i.Labels, ", ")),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, append([]string{toolutil.HintPreserveLinks}, hints...)...)
+	toolutil.WriteListFooter(&b, out.Pagination, true, hints...)
 	return b.String()
 }
 
-// FormatListAllMarkdown renders a list of globally-scoped issues as a Markdown table.
-func FormatListAllMarkdown(out ListOutput) string {
-	return formatIssueList(out, "All Issues",
-		"Use `gitlab_issue_get` to view issue details",
-		"Use `gitlab_issue_update` to change state or labels",
+// issueReference is the text an issue row is linked by: the full reference
+// GitLab renders the issue with when the response carried one, and the #IID
+// otherwise.
+func issueReference(i Output) string {
+	if i.References != nil && i.References.Full != "" {
+		return i.References.Full
+	}
+	return fmt.Sprintf("#%d", i.IID)
+}
+
+// issueTitleCell renders an issue's title with the confidential marker a
+// restricted issue carries: without it a reader cannot tell a confidential
+// issue from an open one, and every row of these tables looked alike.
+func issueTitleCell(i Output) string {
+	cell := toolutil.EscapeMdTableCell(i.Title)
+	if i.Confidential {
+		cell += " " + toolutil.EmojiConfidential
+	}
+	return cell
+}
+
+// issueStateCell renders an issue state with its emoji, and nothing when
+// GitLab sent no state.
+func issueStateCell(state string) string {
+	if strings.TrimSpace(state) == "" {
+		return ""
+	}
+	return toolutil.IssueStateEmoji(state) + " " + toolutil.EscapeMdTableCell(state)
+}
+
+// FormatListAllMarkdown renders a page of globally-scoped issues as a Markdown
+// table. It is registered for [ListAllOutput], the type the global action
+// answers with, so this heading and these hints are what a reader of that
+// action sees: while both list actions shared one output type, the registry
+// had one key for the two of them and this formatter was never reached.
+func FormatListAllMarkdown(out ListAllOutput) string {
+	return formatIssueList(ListOutput(out), "All Issues",
+		toolutil.HintAction(actionIssueGet, "view one issue in full"),
+		toolutil.HintAction(actionIssueUpdate, "change state or labels"),
 	)
 }
 
@@ -97,6 +136,19 @@ func assigneeUsernames(i Output) []string {
 	return names
 }
 
+// handleList renders usernames as the "@handle" list a card row shows, each
+// escaped, and nothing at all when there are none, so a card never shows a
+// bare "@".
+func handleList(names []string) string {
+	handles := make([]string, 0, len(names))
+	for _, name := range names {
+		if handle := toolutil.MdUserHandle(name); handle != "" {
+			handles = append(handles, handle)
+		}
+	}
+	return strings.Join(handles, ", ")
+}
+
 // closerName returns the username of the user that closed the issue for
 // Markdown, read from the full closer object.
 func closerName(i Output) string {
@@ -106,137 +158,130 @@ func closerName(i Output) string {
 	return ""
 }
 
-// FormatTimeStatsMarkdown renders time tracking statistics as Markdown.
+// FormatTimeStatsMarkdown renders an issue's time tracking as the card of one
+// object: the two durations GitLab renders for a reader and the two counts of
+// seconds they are computed from.
 func FormatTimeStatsMarkdown(ts TimeStatsOutput) string {
 	var b strings.Builder
-	b.WriteString("## Time Tracking\n\n")
-	if ts.HumanTimeEstimate != "" {
-		//gitlab:allow-unescaped ts.HumanTimeEstimate: a duration GitLab renders from a count of seconds, "3d 4h 30m".
-		fmt.Fprintf(&b, "- **Estimate**: %s\n", ts.HumanTimeEstimate)
-	}
-	if ts.HumanTotalTimeSpent != "" {
-		//gitlab:allow-unescaped ts.HumanTotalTimeSpent: a duration GitLab renders from a count of seconds, "3d 4h 30m".
-		fmt.Fprintf(&b, "- **Spent**: %s\n", ts.HumanTotalTimeSpent)
-	}
-	fmt.Fprintf(&b, "- **Estimate (seconds)**: %d\n", ts.TimeEstimate)
-	fmt.Fprintf(&b, "- **Spent (seconds)**: %d\n", ts.TotalTimeSpent)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_issue_update` to adjust time tracking",
-	)
+	c := toolutil.NewCard(&b, "Time Tracking")
+	c.Field("Estimate", ts.HumanTimeEstimate)
+	c.Field("Spent", ts.HumanTotalTimeSpent)
+	c.Int("Estimate (seconds)", ts.TimeEstimate)
+	c.Int("Spent (seconds)", ts.TotalTimeSpent)
+	c.End(toolutil.HintAction(actionIssueUpdate, "adjust time tracking"))
 	return b.String()
 }
 
-// FormatParticipantsMarkdown renders an issue's participant list as Markdown.
+// FormatParticipantsMarkdown renders an issue's participants as a Markdown
+// table: a collection of objects that share columns.
 func FormatParticipantsMarkdown(out ParticipantsOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Participants (%d)\n\n", len(out.Participants))
 	if len(out.Participants) == 0 {
-		b.WriteString("No participants found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("participants")
 	}
-	b.WriteString("| Username | Name |\n")
-	b.WriteString(toolutil.TblSep2Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Participants", len(out.Participants), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("Username", "Name"))
 	for _, p := range out.Participants {
-		fmt.Fprintf(&b, "| @%s | %s |\n", toolutil.EscapeMdTableCell(p.Username), toolutil.EscapeMdTableCell(p.Name))
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdUserHandle(p.Username),
+			toolutil.EscapeMdTableCell(p.Name),
+		))
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_issue_get` to view the issue details",
-		"Use `gitlab_issue_note_create` to notify participants",
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction(actionIssueGet, "view the issue details"),
+		toolutil.HintAction(hintActionIssueNoteCreate, "notify participants"),
 	)
 	return b.String()
 }
 
-// FormatRelatedMRsMarkdown renders a list of related merge requests as Markdown.
+// FormatRelatedMRsMarkdown renders the merge requests tied to an issue as a
+// Markdown table.
 func FormatRelatedMRsMarkdown(out RelatedMRsOutput, heading string) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## %s (%d)\n\n", heading, len(out.MergeRequests))
 	if len(out.MergeRequests) == 0 {
-		b.WriteString("No merge requests found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("merge requests")
 	}
-	b.WriteString("| IID | Title | State | Author | Source -> Target |\n")
-	b.WriteString(toolutil.TblSep5Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, heading, len(out.MergeRequests), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("IID", "Title", "State", "Author", "Source -> Target"))
 	for _, mr := range out.MergeRequests {
 		author := ""
 		if mr.Author != nil {
 			author = mr.Author.Username
 		}
-		//gitlab:allow-unescaped mr.State: a merge request state, one of GitLab's fixed set (opened, closed, locked, merged).
-		fmt.Fprintf(&b, "| !%d | %s | %s | @%s | %s -> %s |\n", mr.IID, toolutil.EscapeMdTableCell(mr.Title), mr.State, toolutil.EscapeMdTableCell(author), toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch))
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.MdTitleLink(fmt.Sprintf("!%d", mr.IID), mr.WebURL),
+			toolutil.EscapeMdTableCell(mr.Title),
+			mrStateCell(mr.State),
+			toolutil.MdUserHandle(author),
+			toolutil.EscapeMdTableCell(mr.SourceBranch)+" -> "+toolutil.EscapeMdTableCell(mr.TargetBranch),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_mr_get` to view MR details",
-		"Use `gitlab_mr_changes_get` to see MR diff",
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(hintActionMRGet, "view one merge request in full"),
+		toolutil.HintAction(hintActionMRChangesGet, "see its diff"),
 	)
 	return b.String()
 }
 
-// FormatMarkdown renders a single issue as a Markdown summary.
+// mrStateCell renders a merge request state with its emoji, the way every
+// merge request row in the tree shows it.
+func mrStateCell(state string) string {
+	if strings.TrimSpace(state) == "" {
+		return ""
+	}
+	return toolutil.MRStateEmoji(state) + " " + toolutil.EscapeMdTableCell(state)
+}
+
+// FormatMarkdown renders a single issue as the card of one object: its own
+// fields, then the description as quoted prose under its label.
 func FormatMarkdown(i Output) string {
 	var b strings.Builder
-	confidentialTag := ""
-	if i.Confidential {
-		confidentialTag = " " + toolutil.EmojiConfidential
+	c := toolutil.NewCard(&b, issueHeading(i))
+	if i.References != nil {
+		c.Field("Reference", i.References.Full)
 	}
-	fmt.Fprintf(&b, "## %s Issue #%d: %s%s\n\n", toolutil.IssueStateEmoji(i.State), i.IID, toolutil.EscapeMdHeading(i.Title), confidentialTag)
-	if i.References != nil && i.References.Full != "" {
-		fmt.Fprintf(&b, "- **Reference**: %s\n", toolutil.EscapeMdTableCell(i.References.Full))
-	}
-	fmt.Fprintf(&b, "- **State**: %s %s\n", toolutil.IssueStateEmoji(i.State), i.State)
-	//gitlab:allow-unescaped i.IssueType: an issue type GitLab picks from a fixed set (issue, incident, test_case, task).
+	c.Markdown("State", issueStateCell(i.State))
 	if i.IssueType != "" && i.IssueType != "issue" {
-		fmt.Fprintf(&b, "- **Type**: %s\n", i.IssueType)
+		c.Field("Type", i.IssueType)
 	}
-	if i.Confidential {
-		fmt.Fprintf(&b, "- %s **Confidential**\n", toolutil.EmojiConfidential)
+	c.Flag(toolutil.EmojiConfidential, "Confidential", i.Confidential)
+	c.Markdown("Author", toolutil.MdUserHandle(AuthorName(i.BasicOutput)))
+	// A label title is free text: GitLab's only rule on one is that it carries
+	// no comma.
+	c.Field("Labels", strings.Join(i.Labels, ", "))
+	c.Markdown("Assignees", handleList(assigneeUsernames(i)))
+	if i.Milestone != nil {
+		c.Field("Milestone", i.Milestone.Title)
 	}
-	fmt.Fprintf(&b, toolutil.FmtMdAuthorAt, toolutil.EscapeMdTableCell(AuthorName(i.BasicOutput)))
-	if len(i.Labels) > 0 {
-		// A label title is free text: GitLab's only rule on one is that it
-		// carries no comma.
-		fmt.Fprintf(&b, "- **Labels**: %s\n", toolutil.EscapeMdTableCell(strings.Join(i.Labels, ", ")))
-	}
-	if names := assigneeUsernames(i); len(names) > 0 {
-		fmt.Fprintf(&b, "- **Assignees**: %s\n", toolutil.EscapeMdTableCell(strings.Join(prefixAt(names), ", ")))
-	}
-	if i.Milestone != nil && i.Milestone.Title != "" {
-		fmt.Fprintf(&b, "- **Milestone**: %s\n", toolutil.EscapeMdTableCell(i.Milestone.Title))
-	}
-	if i.DueDate != "" {
-		fmt.Fprintf(&b, "- **Due Date**: %s\n", toolutil.FormatTime(i.DueDate))
-	}
-	fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(i.CreatedAt))
-	if i.State == "closed" && closerName(i) != "" {
-		fmt.Fprintf(&b, "- **Closed By**: @%s", toolutil.EscapeMdTableCell(closerName(i)))
-		if i.ClosedAt != "" {
-			fmt.Fprintf(&b, " on %s", toolutil.FormatTime(i.ClosedAt))
-		}
-		b.WriteByte('\n')
-	}
-	if i.MergeRequestCount > 0 {
-		fmt.Fprintf(&b, "- **Linked MRs**: %d\n", i.MergeRequestCount)
-	}
+	c.Time("Due Date", i.DueDate)
+	c.Time("Created", i.CreatedAt)
+	c.Markdown("Closed By", toolutil.MdUserHandle(closerName(i)))
+	c.Time("Closed", i.ClosedAt)
+	c.Count("Linked MRs", i.MergeRequestCount)
 	if i.TaskCompletionStatus != nil && i.TaskCompletionStatus.Count > 0 {
-		fmt.Fprintf(&b, "- **Tasks**: %d/%d completed\n", i.TaskCompletionStatus.CompletedCount, i.TaskCompletionStatus.Count)
+		c.Field("Tasks", fmt.Sprintf("%d/%d completed", i.TaskCompletionStatus.CompletedCount, i.TaskCompletionStatus.Count))
 	}
-	if i.UserNotesCount > 0 {
-		fmt.Fprintf(&b, "- **Comments**: %d\n", i.UserNotesCount)
-	}
-	if i.Description != "" {
-		fmt.Fprintf(&b, "\n### Description\n\n%s%s\n", toolutil.WrapGFMBody(i.Description), toolutil.RichContentHint(toolutil.DetectRichContent(i.Description), i.WebURL))
-	}
-	toolutil.WriteMdURLNewline(&b, i.WebURL)
-	toolutil.WriteHints(
-		&b,
-		"Use gitlab_issue action 'note_list' to see comments on this issue",
-		"Use action 'update' to change title, labels, assignees, or milestone",
-		"Use action 'mrs_related' to find linked MRs",
+	c.Count("Comments", i.UserNotesCount)
+	c.URL(i.WebURL)
+	c.Text("Description", i.Description)
+	c.Note(toolutil.RichContentHint(toolutil.DetectRichContent(i.Description), i.WebURL))
+	c.End(
+		toolutil.HintAction(hintActionIssueNoteList, "see comments on this issue"),
+		toolutil.HintAction(actionIssueUpdate, "change title, labels, assignees, or milestone"),
+		toolutil.HintAction(hintActionIssueMRsRelated, "find linked MRs"),
 	)
 	return b.String()
+}
+
+// issueHeading composes the card's heading: the state as a glyph, the issue's
+// reference and its title, with the confidential marker a restricted issue
+// carries. The whole composition is escaped by the card.
+func issueHeading(i Output) string {
+	heading := fmt.Sprintf("%s Issue #%d: %s", toolutil.IssueStateEmoji(i.State), i.IID, i.Title)
+	if i.Confidential {
+		heading += " " + toolutil.EmojiConfidential
+	}
+	return heading
 }
 
 // formatGetMarkdownResult renders a single issue. The canonical resource is
@@ -246,44 +291,29 @@ func formatGetMarkdownResult(out getOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultAnnotated(FormatMarkdown(out.Output), toolutil.ContentDetail)
 }
 
-// FormatListMarkdown renders a list of issues as a Markdown table.
+// FormatListMarkdown renders a page of a project's issues as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
 	return formatIssueList(out, "Issues",
-		"Use action 'get' with an issue_iid to see full details and description",
-		"Use action 'create' to create a new issue",
-		"Use gitlab_issue action 'note_create' to add a comment",
+		toolutil.HintAction(actionIssueGet, "see one issue's full details and description"),
+		toolutil.HintAction(hintActionIssueCreate, "create a new issue"),
+		toolutil.HintAction(hintActionIssueNoteCreate, "add a comment"),
 	)
 }
 
-// FormatListGroupMarkdown renders a paginated list of group issues as a Markdown table.
+// FormatListGroupMarkdown renders a page of a group's issues as a Markdown
+// table, through the same renderer the project and global listings use.
 func FormatListGroupMarkdown(out ListGroupOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Group Issues (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Issues), out.Pagination)
-	if len(out.Issues) == 0 {
-		b.WriteString(msgNoIssuesFound)
-		return b.String()
-	}
-	b.WriteString(tblHeaderIssues)
-	b.WriteString(toolutil.TblSep5Col)
-	for _, i := range out.Issues {
-		labels := strings.Join(i.Labels, ", ")
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", toolutil.MdTitleLink(fmt.Sprintf("#%d", i.IID), i.WebURL), toolutil.EscapeMdTableCell(i.Title), i.State, toolutil.EscapeMdTableCell(AuthorName(i.BasicOutput)), toolutil.EscapeMdTableCell(labels))
-	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_issue_get` to view issue details",
-		"Use `gitlab_issue_create` to open a new issue",
+	return formatIssueList(ListOutput{Issues: out.Issues, Pagination: out.Pagination}, "Group Issues",
+		toolutil.HintAction(actionIssueGet, "view one issue in full"),
+		toolutil.HintAction(hintActionIssueCreate, "open a new issue"),
 	)
-	return b.String()
 }
 
 func init() {
 	toolutil.RegisterMarkdownResult(formatGetMarkdownResult)
 	toolutil.RegisterMarkdown(FormatMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdown)
+	toolutil.RegisterMarkdown(FormatListAllMarkdown)
 	toolutil.RegisterMarkdown(FormatTodoMarkdown)
 	toolutil.RegisterMarkdown(FormatTimeStatsMarkdown)
 	toolutil.RegisterMarkdown(FormatParticipantsMarkdown)

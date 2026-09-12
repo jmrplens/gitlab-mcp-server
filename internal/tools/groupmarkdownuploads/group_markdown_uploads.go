@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -93,9 +92,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (*L
 			Filename:   u.Filename,
 			UploadedBy: uploadedByOutput(u.UploadedBy),
 		}
-		if u.CreatedAt != nil {
-			item.CreatedAt = u.CreatedAt.String()
-		}
+		// RFC 3339, the form every other output in this tree carries and the
+		// one toolutil.FormatTime reads; time.Time.String() rendered
+		// "2001-02-03 04:05:06 +0000 UTC", which no display helper parses.
+		item.CreatedAt = toolutil.RFC3339Ptr(u.CreatedAt)
 		items = append(items, item)
 	}
 	pag := toolutil.PaginationFromResponse(resp)
@@ -166,27 +166,12 @@ func deleteBySecretAndFilenameOutput(ctx context.Context, client *gitlabclient.C
 }
 
 // Markdown Formatters.
-
-// FormatList formats the list of group markdown uploads as markdown.
-func FormatList(out *ListOutput) string {
-	if len(out.Uploads) == 0 {
-		return "No group markdown uploads found.\n"
-	}
-	var sb strings.Builder
-	sb.WriteString("| ID | Filename | Size | Created At | Uploaded By |\n")
-	sb.WriteString("|---|---|---|---|---|\n")
-	for _, u := range out.Uploads {
-		fmt.Fprintf(&sb, "| %d | %s | %d | %s | %s |\n",
-			u.ID,
-			toolutil.EscapeMdTableCell(u.Filename),
-			u.Size,
-			toolutil.EscapeMdTableCell(u.CreatedAt),
-			toolutil.EscapeMdTableCell(uploadedByLabel(u.UploadedBy)))
-	}
-	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(&sb, "Use upload URLs in Markdown content to embed files")
-	return sb.String()
-}
+//
+// The rendering of the upload list lives in markdown.go, which is the
+// formatter the registry serves. The second copy that used to sit here was
+// registered for no type at all: the handler answers with a pointer and the
+// registration named the value, so nothing ever called it, and it wrote its
+// table with no heading and no pagination.
 
 // uploadedByLabel renders a markdown upload's uploader as "name (@username)",
 // falling back gracefully when fields are empty or the user is absent.

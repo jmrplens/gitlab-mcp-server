@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -12,6 +13,10 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// actionGroupUnshare is the canonical ID of the route that revokes the share
+// this card confirms.
+const actionGroupUnshare = "group.unshare_from_group"
 
 // ---------------------------------------------------------------------------
 // ShareGroupWithGroup
@@ -33,22 +38,6 @@ type ShareGroupOutput struct {
 	SharedGroupID int64  `json:"shared_group_id,omitempty"`
 	GroupAccess   int    `json:"group_access,omitempty"`
 	AccessRole    string `json:"access_role,omitempty"`
-}
-
-// accessLevelName returns the human-readable name for a GitLab access level.
-func accessLevelName(level int) string {
-	names := map[int]string{
-		10: "Guest",
-		20: "Reporter",
-		25: "Security Manager",
-		30: "Developer",
-		40: "Maintainer",
-		50: "Owner",
-	}
-	if name, ok := names[level]; ok {
-		return name
-	}
-	return fmt.Sprintf("Level %d", level)
 }
 
 // ShareGroupWithGroup shares a group with another group.
@@ -88,7 +77,7 @@ func ShareGroupWithGroup(ctx context.Context, client *gitlabclient.Client, input
 		return ShareGroupOutput{}, toolutil.WrapErrWithStatusHint("groupShareWithGroup", err, http.StatusNotFound,
 			"verify group_id and shared_group_id with gitlab_group_get")
 	}
-	roleName := accessLevelName(input.GroupAccess)
+	roleName := toolutil.AccessLevelDescription(gl.AccessLevelValue(input.GroupAccess))
 	return ShareGroupOutput{
 		Message:       fmt.Sprintf("Group %s shared with group %d as %s", input.GroupID, input.SharedGroupID, roleName),
 		SharedGroupID: input.SharedGroupID,
@@ -257,50 +246,41 @@ func TransferSubGroup(ctx context.Context, client *gitlabclient.Client, input Tr
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// FormatShareGroupMarkdown renders the result of a group-to-group share.
+// FormatShareGroupMarkdown renders the result of a group-to-group share as the
+// card of what was created: the confirmation is the heading, and the share's
+// own fields are the rows.
 func FormatShareGroupMarkdown(out ShareGroupOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s\n", toolutil.EmojiSuccess, out.Message)
-	if out.AccessRole != "" {
-		//gitlab:allow-unescaped out.AccessRole: accessLevelName returns one of this package's own role names, or "Level" and the requested number.
-		fmt.Fprintf(&b, "- **Access**: %s (%d)\n", out.AccessRole, out.GroupAccess)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_group_shared_with_list` to confirm the share",
-		"Use `gitlab_group_unshare_from_group` to revoke it",
+	c := toolutil.NewCard(&b, toolutil.EmojiSuccess+" "+out.Message)
+	c.Count("Shared Group ID", out.SharedGroupID)
+	c.Field("Access", out.AccessRole)
+	c.Count("Access Level", int64(out.GroupAccess))
+	c.End(
+		toolutil.HintAction(actionGroupSharedWith, "confirm the share"),
+		toolutil.HintAction(actionGroupUnshare, "revoke it"),
 	)
 	return b.String()
 }
 
 // FormatSharedProjectsListMarkdown renders the projects shared with a group.
 func FormatSharedProjectsListMarkdown(out SharedProjectsListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Shared Projects (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Projects), out.Pagination)
 	if len(out.Projects) == 0 {
-		b.WriteString("No shared projects found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("shared projects")
 	}
-	b.WriteString("| ID | Name | Path | Visibility | Archived |\n")
-	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Shared Projects", len(out.Projects), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Path", "Visibility", "Archived"))
 	for _, p := range out.Projects {
-		archived := archivedCell(p)
-		name := toolutil.EscapeMdTableCell(p.Name)
-		if p.WebURL != "" {
-			name = toolutil.MdTitleLink(name, p.WebURL)
-		}
-		fmt.Fprintf(
-			&b, "| %d | %s | %s | %s | %s |\n",
-			//gitlab:allow-unescaped p.Visibility: a gl.VisibilityValue, which GitLab fills with private, internal or public.
-			p.ID, name, toolutil.EscapeMdTableCell(p.PathWithNamespace), p.Visibility, archived,
-		)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(p.ID, 10),
+			toolutil.MdTitleLink(p.Name, p.WebURL),
+			toolutil.EscapeMdTableCell(p.PathWithNamespace),
+			toolutil.EscapeMdTableCell(p.Visibility),
+			archivedCell(p),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_project_get` to view a shared project's details",
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(actionProjectGet, "view a shared project's details"),
 	)
 	return b.String()
 }

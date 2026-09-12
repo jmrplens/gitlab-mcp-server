@@ -20,11 +20,6 @@ const (
 	hintConfirmIssueExists = "verify project_id and issue_iid; use gitlab_issue_get to confirm the issue exists"
 )
 
-const (
-	msgNoIssuesFound = "No issues found.\n"
-	tblHeaderIssues  = "| IID | Title | State | Author | Labels |\n"
-)
-
 // CreateInput defines parameters for creating a new issue.
 type CreateInput struct {
 	// Basic metadata
@@ -808,11 +803,19 @@ type ListAllInput struct {
 	toolutil.KeysetPaginationInput
 }
 
+// ListAllOutput holds a page of issues from the global scope. It carries the
+// same fields as [ListOutput] and exists to be a type of its own: the Markdown
+// registry is keyed by the Go type, so while both list actions answered with
+// one type only one formatter could be registered for the two of them, and the
+// global listing rendered under the project listing's heading and hints,
+// telling a reader to pass a project_id the action does not take.
+type ListAllOutput ListOutput
+
 // ListAll retrieves a paginated list of issues visible to the authenticated user
 // across all projects (global scope).
-func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInput) (ListOutput, error) {
+func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInput) (ListAllOutput, error) {
 	if err := ctx.Err(); err != nil {
-		return ListOutput{}, err
+		return ListAllOutput{}, err
 	}
 
 	opts := &gl.ListIssuesOptions{
@@ -854,11 +857,12 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	result, resp, err := client.GL().Issues.ListIssues(opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("issueListAll", err, http.StatusUnauthorized,
+		return ListAllOutput{}, toolutil.WrapErrWithStatusHint("issueListAll", err, http.StatusUnauthorized,
 			"global issue listing requires an authenticated token; results are scoped to issues visible to the calling user (use scope=created_by_me or scope=assigned_to_me to narrow)")
 	}
 
-	return issueListOutput("issueListAll", result, resp, captured)
+	page, err := issueListOutput("issueListAll", result, resp, captured)
+	return ListAllOutput(page), err
 }
 
 // GetByIDInput defines parameters for retrieving an issue by its global ID.
@@ -1534,15 +1538,4 @@ func ListMRsRelated(ctx context.Context, client *gitlabclient.Client, input List
 			return client.GL().Issues.ListMergeRequestsRelatedToIssue(projectID, issueIID, listOptions, opts...)
 		},
 	})
-}
-
-// Markdown formatting.
-
-// prefixAt adds '@' before each username for Markdown @mention formatting.
-func prefixAt(usernames []string) []string {
-	result := make([]string, len(usernames))
-	for i, u := range usernames {
-		result[i] = "@" + u
-	}
-	return result
 }

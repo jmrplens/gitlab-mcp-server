@@ -5,7 +5,6 @@ package useremails
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -211,20 +210,14 @@ func TestDeleteForUser_Success(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies that FormatListMarkdownString returns a non-empty markdown string for an empty list.
-func TestFormatListMarkdownString_Empty(t *testing.T) {
-	md := FormatListMarkdownString(ListOutput{})
-	if md == "" {
-		t.Fatal("expected non-empty markdown for empty list")
-	}
-}
-
-// TestFormatMarkdownString verifies that FormatMarkdownString returns a non-empty markdown rendering of a token output.
+// TestFormatMarkdownString verifies the card rendered from a date-only
+// confirmation, which GitLab sends on the list-for-user route.
 func TestFormatMarkdownString(t *testing.T) {
-	md := FormatMarkdownString(Output{ID: 1, Email: "test@example.com", ConfirmedAt: "2026-01-15"})
-	if md == "" {
-		t.Fatal("expected non-empty markdown")
-	}
+	assertMarkdown(t, FormatMarkdownString(Output{ID: 1, Email: "test@example.com", ConfirmedAt: "2026-01-15"}),
+		"## Email\n\n"+
+			"- **ID**: 1\n"+
+			"- **Email**: test@example.com\n"+
+			"- **Confirmed**: ✅ 15 Jan 2026\n")
 }
 
 // assertQuery fails the test if any expected query parameter is missing or
@@ -526,8 +519,22 @@ func TestDeleteForUser_TableDriven(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithEmails verifies the Markdown table renders correctly
-// for lists with confirmed and unconfirmed emails, including header and row content.
+// assertMarkdown compares a rendered result with the whole document it is
+// meant to be. A substring assertion is what let a card open a table and then
+// write list rows into it in two packages of this tree: every row the test
+// named was present in the string and none of them rendered as a row, so the
+// rule here is the whole document or nothing.
+func assertMarkdown(t *testing.T, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("markdown mismatch\n--- got ---\n%s\n--- want ---\n%s\n--- got (quoted) ---\n%q", got, want, got)
+	}
+}
+
+// TestFormatListMarkdownString_WithEmails verifies the whole list render: the
+// heading and its count, the three columns, the confirmation state of each
+// address in the words a reader needs, and the guidance section naming the
+// canonical action ID.
 func TestFormatListMarkdownString_WithEmails(t *testing.T) {
 	out := ListOutput{
 		Emails: []Output{
@@ -536,73 +543,67 @@ func TestFormatListMarkdownString_WithEmails(t *testing.T) {
 		},
 	}
 
-	md := FormatListMarkdownString(out)
-
-	checks := []struct {
-		label    string
-		contains string
-	}{
-		{"header count", "## Emails (2)"},
-		{"table header", "| ID | Email | Confirmed At |"},
-		{"confirmed email row", "| 1 | confirmed@example.com | 2026-01-15T10:00:00Z |"},
-		{"unconfirmed email dash", "| 2 | unconfirmed@example.com | - |"},
-	}
-	for _, c := range checks {
-		t.Run(c.label, func(t *testing.T) {
-			if !strings.Contains(md, c.contains) {
-				t.Errorf("%s: markdown missing %q\ngot:\n%s", c.label, c.contains, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatListMarkdownString(out),
+		"## Emails (2)\n\n"+
+			"| ID | Email | Confirmed |\n"+
+			"| --- | --- | --- |\n"+
+			"| 1 | confirmed@example.com | ✅ 15 Jan 2026 10:00 UTC |\n"+
+			"| 2 | unconfirmed@example.com | ❌ awaiting confirmation |\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'user.get_email' to read one address\n")
 }
 
-// TestFormatMarkdownString_WithoutConfirmedAt verifies the Markdown output omits
-// the Confirmed At line when the field is empty.
+// TestFormatListMarkdownString_Empty verifies that a list with nothing in it
+// is the one sentence and nothing else: no heading counting zero above it.
+func TestFormatListMarkdownString_Empty(t *testing.T) {
+	assertMarkdown(t, FormatListMarkdownString(ListOutput{}), "No emails found.\n")
+}
+
+// TestFormatMarkdownString_WithoutConfirmedAt verifies that an address GitLab
+// has not confirmed says so. The card used to write no row at all for it,
+// which reads as an address whose state GitLab did not report rather than as
+// one waiting for its confirmation mail.
 func TestFormatMarkdownString_WithoutConfirmedAt(t *testing.T) {
-	md := FormatMarkdownString(Output{ID: 3, Email: "noconfirm@example.com"})
-
-	if !strings.Contains(md, "noconfirm@example.com") {
-		t.Errorf("expected email in markdown, got:\n%s", md)
-	}
-	if strings.Contains(md, "Confirmed At") {
-		t.Errorf("Confirmed At should be omitted when empty, got:\n%s", md)
-	}
+	assertMarkdown(t, FormatMarkdownString(Output{ID: 3, Email: "noconfirm@example.com"}),
+		"## Email\n\n"+
+			"- **ID**: 3\n"+
+			"- **Email**: noconfirm@example.com\n"+
+			"- **Confirmed**: ❌ awaiting confirmation\n")
 }
 
-// TestFormatDeleteMarkdownString validates the deletion confirmation Markdown output
-// for both true and false deletion states.
+// TestFormatMarkdownString_Confirmed verifies the confirmed card: the instant
+// in the display form, behind the tick that says the address is usable.
+func TestFormatMarkdownString_Confirmed(t *testing.T) {
+	assertMarkdown(t, FormatMarkdownString(Output{ID: 4, Email: "ok@example.com", ConfirmedAt: "2026-01-15T10:00:00Z"}),
+		"## Email\n\n"+
+			"- **ID**: 4\n"+
+			"- **Email**: ok@example.com\n"+
+			"- **Confirmed**: ✅ 15 Jan 2026 10:00 UTC\n")
+}
+
+// TestFormatDeleteMarkdownString validates the deletion confirmation for both
+// deletion states.
 func TestFormatDeleteMarkdownString(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    DeleteOutput
-		contains []string
+		name  string
+		input DeleteOutput
+		want  string
 	}{
 		{
 			name:  "successful deletion",
 			input: DeleteOutput{EmailID: 7, Deleted: true},
-			contains: []string{
-				"## Email Deleted",
-				"**Email ID**: 7",
-			},
+			want:  "## Email Deleted\n\n- **Email ID**: 7\n- **Deleted**: ✅\n",
 		},
 		{
 			name:  "failed deletion",
 			input: DeleteOutput{EmailID: 0, Deleted: false},
-			contains: []string{
-				"## Email Deleted",
-				"**Email ID**: 0",
-			},
+			want:  "## Email Deleted\n\n- **Email ID**: 0\n- **Deleted**: ❌\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			md := FormatDeleteMarkdownString(tt.input)
-			for _, want := range tt.contains {
-				if !strings.Contains(md, want) {
-					t.Errorf("markdown missing %q\ngot:\n%s", want, md)
-				}
-			}
+			assertMarkdown(t, FormatDeleteMarkdownString(tt.input), tt.want)
 		})
 	}
 }

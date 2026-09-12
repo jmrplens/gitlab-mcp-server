@@ -3,88 +3,85 @@ package workitemsavedviews
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatGetMarkdown renders one saved view, filters included.
+// FormatGetMarkdown renders one saved view as a card, filters included.
 func FormatGetMarkdown(out GetOutput) string {
-	var sb strings.Builder
+	var b strings.Builder
 	// A saved view's name is free text whoever saved it typed.
-	fmt.Fprintf(&sb, "## Saved View: %s\n\n", toolutil.EscapeMdHeading(out.SavedView.Name))
-	writeViewDetails(&sb, out.SavedView)
+	c := toolutil.NewCard(&b, "Saved View: "+out.SavedView.Name)
+	writeViewDetails(c, out.SavedView)
 	// Both documents are what whoever saved the view typed, rendered back as
 	// JSON, and JSON escaping leaves a backtick alone: the fence has to be
-	// sized to the document rather than written as three.
+	// sized to the document rather than written as three, which is what
+	// [toolutil.Card.Fence] does.
 	if out.SavedView.Filters != nil {
-		sb.WriteString("\n### Filters\n\n")
-		sb.WriteString(toolutil.MarkdownFencedBlock("json", prettyJSON(out.SavedView.Filters)))
+		c.Fence("Filters", "json", prettyJSON(out.SavedView.Filters))
 	}
 	if out.SavedView.DisplaySettings != nil {
-		sb.WriteString("\n### Display Settings\n\n")
-		sb.WriteString(toolutil.MarkdownFencedBlock("json", prettyJSON(out.SavedView.DisplaySettings)))
+		c.Fence("Display Settings", "json", prettyJSON(out.SavedView.DisplaySettings))
 	}
-	toolutil.WriteHints(&sb, "Use `work_item_saved_view.update` to change this view, or `work_item_saved_view.subscribe` to follow it")
-	return sb.String()
+	c.End(
+		toolutil.HintAction(actionUpdate, "change this view"),
+		toolutil.HintAction(actionSubscribe, "follow it"),
+	)
+	return b.String()
 }
 
 // FormatListMarkdown renders a page of saved views as a Markdown table.
+//
+// The hints are written once, at the end. The leading call this had opened a
+// guidance section above the heading, so the response carried two of them and
+// only the first reached next_steps.
 func FormatListMarkdown(out ListOutput) string {
-	var sb strings.Builder
-	toolutil.WriteHints(&sb, toolutil.HintPreserveLinks)
-	fmt.Fprintf(&sb, "## Saved Views: %s\n\n", toolutil.EscapeMdHeading(out.NamespacePath))
-
 	if len(out.SavedViews) == 0 {
-		sb.WriteString("No saved views found.\n")
-		return sb.String()
+		return toolutil.EmptyMessage("saved views")
 	}
-
-	sb.WriteString("| ID | Name | Private | Subscribed | Sort | Description |\n")
-	sb.WriteString("|----|------|---------|------------|------|-------------|\n")
+	var b strings.Builder
+	// A cursor connection counts nothing it has not walked, so the heading
+	// carries the count shown and the cursor line says whether more follow.
+	toolutil.WriteListHeading(&b, "Saved Views: "+out.NamespacePath, len(out.SavedViews), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Private", "Subscribed", "Sort", "Description"))
 	for _, view := range out.SavedViews {
-		fmt.Fprintf(&sb, "| %d | %s | %v | %v | %s | %s |\n",
-			view.ID,
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(view.ID, 10),
 			toolutil.EscapeMdTableCell(view.Name),
-			view.IsPrivate,
-			view.Subscribed,
+			toolutil.BoolEmoji(view.IsPrivate),
+			toolutil.BoolEmoji(view.Subscribed),
 			toolutil.EscapeMdTableCell(view.Sort),
 			toolutil.EscapeMdTableCell(view.Description),
-		)
+		))
 	}
-	if out.Pagination.HasNextPage {
-		fmt.Fprintf(&sb, "\n> Next page cursor: `%s`\n", out.Pagination.EndCursor)
-	}
-	toolutil.WriteHints(&sb, "Filters are omitted here, so use `work_item_saved_view.get` with an ID from the table to read them")
-	return sb.String()
+	toolutil.WriteGraphQLPagination(&b, out.Pagination, len(out.SavedViews))
+	toolutil.WriteHints(&b, toolutil.HintAction(actionGet, "read the filters this table omits, with an ID from it"))
+	return b.String()
 }
 
 // FormatMutateMarkdown renders the confirmation shared by create, update,
-// subscribe, and unsubscribe.
+// subscribe, and unsubscribe as the card of the view that changed: the heading
+// names the view, and GitLab's own message sits under it as the server's note.
 func FormatMutateMarkdown(out MutateOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Saved View\n\n%s\n\n", out.Message)
-	writeViewDetails(&sb, out.SavedView)
-	return sb.String()
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Saved View: "+out.SavedView.Name)
+	writeViewDetails(c, out.SavedView)
+	c.Note(out.Message)
+	c.End()
+	return b.String()
 }
 
-// writeViewDetails renders the scalar fields shared by the detail and mutation
+// writeViewDetails writes the scalar fields shared by the detail and mutation
 // renderings.
-func writeViewDetails(sb *strings.Builder, view Item) {
-	fmt.Fprintf(sb, "- **ID**: %d\n", view.ID)
-	if view.GID != "" {
-		//gitlab:allow-unescaped view.GID: a GraphQL global id GitLab mints, gid://gitlab/ and a type name and a number.
-		fmt.Fprintf(sb, "- **Global ID**: `%s`\n", view.GID)
-	}
-	if view.Description != "" {
-		fmt.Fprintf(sb, "- **Description**: %s\n", toolutil.EscapeMdTableCell(view.Description))
-	}
-	fmt.Fprintf(sb, "- **Private**: %v\n", view.IsPrivate)
-	fmt.Fprintf(sb, "- **Subscribed**: %v\n", view.Subscribed)
-	if view.Sort != "" {
-		//gitlab:allow-unescaped view.Sort: a work item sort key GitLab picks from its own enum (CREATED_DESC, TITLE_ASC and the rest).
-		fmt.Fprintf(sb, "- **Sort**: %s\n", view.Sort)
-	}
+func writeViewDetails(c *toolutil.Card, view Item) {
+	c.Int("ID", view.ID)
+	c.Code("Global ID", view.GID)
+	c.Text("Description", view.Description)
+	c.Bool("Private", view.IsPrivate)
+	c.Bool("Subscribed", view.Subscribed)
+	c.Field("Sort", view.Sort)
 }
 
 // prettyJSON renders a decoded opaque scalar for display, falling back to the

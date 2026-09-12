@@ -64,8 +64,8 @@ func TestShapeConverters_NilInputs(t *testing.T) {
 	if toolutil.FormatTimePtr(nil) != "" {
 		t.Error("toolutil.FormatTimePtr(nil) != empty")
 	}
-	if formatISODatePtr(nil) != "" {
-		t.Error("formatISODatePtr(nil) != empty")
+	if toolutil.FormatISOTimePtr(nil) != "" {
+		t.Error("toolutil.FormatISOTimePtr(nil) != empty")
 	}
 }
 

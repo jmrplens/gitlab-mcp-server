@@ -448,15 +448,24 @@ func TestSync(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// ldapLinkHints is the guidance section every LDAP link card ends with.
+const ldapLinkHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'group.ldap_link_delete' to remove this link\n"
+
+// ldapListHints is the guidance section a list of LDAP links ends with.
+const ldapListHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'group.ldap_link_add' to add another LDAP group link\n" +
+	"- Use action 'group.ldap_sync' to trigger an LDAP sync for this group\n"
+
+// TestFormatOutputMarkdown verifies the whole card an LDAP group link renders:
+// the access level named as well as numbered, no row for a field GitLab did
+// not send, and a heading that names the filter when the link is defined by
+// one and so carries no common name.
 func TestFormatOutputMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		output   Output
-		contains []string
-		excludes []string
+		name   string
+		output Output
+		want   string
 	}{
 		{
 			name: "renders basic link with CN and provider",
@@ -465,13 +474,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				GroupAccess: 30,
 				Provider:    "main",
 			},
-			contains: []string{
-				"## LDAP Link: engineers",
-				"**CN**: engineers",
-				"**Access Level**: 30",
-				"**Provider**: main",
-			},
-			excludes: []string{"**Filter**", "**Member Role ID**"},
+			want: "## LDAP Link: engineers\n\n" +
+				"- **CN**: engineers\n" +
+				"- **Access Level**: Developer (30)\n" +
+				"- **Provider**: main\n" +
+				ldapLinkHints,
 		},
 		{
 			name: "renders link with Filter",
@@ -481,10 +488,12 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				GroupAccess: 40,
 				Provider:    "ldap2",
 			},
-			contains: []string{
-				"**Filter**: (dept=engineering)",
-				"**Provider**: ldap2",
-			},
+			want: "## LDAP Link: devs\n\n" +
+				"- **CN**: devs\n" +
+				"- **Filter**: (dept=engineering)\n" +
+				"- **Access Level**: Maintainer (40)\n" +
+				"- **Provider**: ldap2\n" +
+				ldapLinkHints,
 		},
 		{
 			name: "renders link with MemberRoleID",
@@ -494,62 +503,70 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				Provider:     "main",
 				MemberRoleID: 99,
 			},
-			contains: []string{
-				"**Member Role ID**: 99",
-			},
+			want: "## LDAP Link: admins\n\n" +
+				"- **CN**: admins\n" +
+				"- **Access Level**: Owner (50)\n" +
+				"- **Provider**: main\n" +
+				"- **Member Role ID**: 99\n" +
+				ldapLinkHints,
 		},
 		{
-			name: "includes hint for deletion",
+			name: "a filter-based link is headed by its filter",
 			output: Output{
-				CN:          "test",
-				GroupAccess: 10,
+				Filter:      "(dept=engineering)",
+				GroupAccess: 30,
 				Provider:    "main",
 			},
-			contains: []string{"gitlab_group_ldap_link_delete"},
+			want: "## LDAP Link: (dept=engineering)\n\n" +
+				"- **Filter**: (dept=engineering)\n" +
+				"- **Access Level**: Developer (30)\n" +
+				"- **Provider**: main\n" +
+				ldapLinkHints,
+		},
+		{
+			name:   "a link with neither is headed by the object it is",
+			output: Output{GroupAccess: 10, Provider: "main"},
+			want: "## LDAP Link\n\n" +
+				"- **Access Level**: Guest (10)\n" +
+				"- **Provider**: main\n" +
+				ldapLinkHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			md := FormatOutputMarkdown(tt.output)
-			for _, want := range tt.contains {
-				if !strings.Contains(md, want) {
-					t.Errorf("markdown missing %q\ngot:\n%s", want, md)
-				}
-			}
-			for _, exclude := range tt.excludes {
-				if strings.Contains(md, exclude) {
-					t.Errorf("markdown should not contain %q\ngot:\n%s", exclude, md)
-				}
+			if got := FormatOutputMarkdown(tt.output); got != tt.want {
+				t.Errorf("FormatOutputMarkdown =\n%q\nwant\n%q", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown verifies the whole document a list of LDAP links
+// renders: the heading a list opens with, the member role column the table
+// used to leave out, and the guidance last rather than first.
 func TestFormatListMarkdown(t *testing.T) {
+	const header = "| CN | Filter | Access Level | Provider | Member Role ID |\n" +
+		"| --- | --- | --- | --- | --- |\n"
+
 	tests := []struct {
-		name     string
-		output   ListOutput
-		contains []string
+		name   string
+		output ListOutput
+		want   string
 	}{
 		{
-			name:     "renders empty list message",
-			output:   ListOutput{Links: []Output{}},
-			contains: []string{"No LDAP group links found."},
+			name:   "renders empty list message",
+			output: ListOutput{Links: []Output{}},
+			want:   "No LDAP group links found.\n",
 		},
 		{
 			name: "renders single link table",
 			output: ListOutput{Links: []Output{
-				{CN: "engineers", Filter: "(dept=eng)", GroupAccess: 30, Provider: "main"},
+				{CN: "engineers", Filter: "(dept=eng)", GroupAccess: 30, Provider: "main", MemberRoleID: 7},
 			}},
-			contains: []string{
-				"**1 LDAP link(s)**",
-				"| CN | Filter | Access | Provider |",
-				"| engineers |",
-			},
+			want: "## LDAP Group Links (1)\n\n" + header +
+				"| engineers | (dept=eng) | Developer (30) | main | 7 |\n" +
+				ldapListHints,
 		},
 		{
 			name: "renders multiple links table",
@@ -557,21 +574,17 @@ func TestFormatListMarkdown(t *testing.T) {
 				{CN: "devs", GroupAccess: 30, Provider: "main"},
 				{CN: "admins", GroupAccess: 50, Provider: "ldap2"},
 			}},
-			contains: []string{
-				"**2 LDAP link(s)**",
-				"| devs |",
-				"| admins |",
-			},
+			want: "## LDAP Group Links (2)\n\n" + header +
+				"| devs |  | Developer (30) | main | - |\n" +
+				"| admins |  | Owner (50) | ldap2 | - |\n" +
+				ldapListHints,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			md := FormatListMarkdown(tt.output)
-			for _, want := range tt.contains {
-				if !strings.Contains(md, want) {
-					t.Errorf("markdown missing %q\ngot:\n%s", want, md)
-				}
+			if got := FormatListMarkdown(tt.output); got != tt.want {
+				t.Errorf("FormatListMarkdown =\n%q\nwant\n%q", got, tt.want)
 			}
 		})
 	}

@@ -168,9 +168,16 @@ func TestSAMLUsersList_Success(t *testing.T) {
 		t.Fatalf("expected user jdoe, got %+v", out.Users)
 	}
 
-	md := FormatSAMLUsersListMarkdown(out)
-	if !strings.Contains(md, "[jdoe](https://gitlab.example.com/jdoe)") {
-		t.Errorf("expected clickable username link in markdown, got: %s", md)
+	want := "## SAML Users (1)\n\n" +
+		"| ID | Username | Name | State |\n| --- | --- | --- | --- |\n" +
+		"| 42 | [@jdoe](https://gitlab.example.com/jdoe) | Jane Doe | active |\n" +
+		"\nPage 1 of 1 | 1 items total | 20 per page\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- These are users provisioned through SAML SSO\n" +
+		"- Use action 'group.saml_link_list' to see the SAML group-to-access-level link mappings\n"
+	if got := FormatSAMLUsersListMarkdown(out); got != want {
+		t.Errorf("FormatSAMLUsersListMarkdown =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -316,9 +323,8 @@ func TestSAMLUsersList_MissingGroupID(t *testing.T) {
 // The test exercises rendering of an empty user list.
 // It asserts the empty-state message is present.
 func TestFormatSAMLUsersListMarkdown_Empty(t *testing.T) {
-	md := FormatSAMLUsersListMarkdown(SAMLUsersListOutput{})
-	if !strings.Contains(md, "No SAML users found") {
-		t.Errorf("expected empty-state message, got: %s", md)
+	if got, want := FormatSAMLUsersListMarkdown(SAMLUsersListOutput{}), "No SAML users found.\n"; got != want {
+		t.Errorf("FormatSAMLUsersListMarkdown =\n%q\nwant\n%q", got, want)
 	}
 }
 

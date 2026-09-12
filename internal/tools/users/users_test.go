@@ -1251,7 +1251,27 @@ func TestGetAssociationsCount_CancelledContext(t *testing.T) {
 // FormatMarkdownString — with data, with bio/avatar
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_WithData verifies FormatMarkdownString when with data.
+// assertMarkdown compares a rendered result with the whole document it is
+// meant to be. A substring assertion is what let a card open a table and then
+// write list rows into it in two packages of this tree: every row the test
+// named was present in the string and none of them rendered as a row, so the
+// rule here is the whole document or nothing.
+func assertMarkdown(t *testing.T, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("markdown mismatch\n--- got ---\n%s\n--- want ---\n%s\n--- got (quoted) ---\n%q", got, want, got)
+	}
+}
+
+// userCardHints is the guidance section the user card closes with.
+const userCardHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'user.get_status' to check the user's current status\n" +
+	"- Use action 'user.ssh_keys' to list the account's SSH keys\n"
+
+// TestFormatMarkdownString_WithData verifies the whole user card: the identity
+// rows, the three flags the card used to omit entirely (bot, external and the
+// lock), the avatar as a link rather than escaped text, and the SCIM
+// identities as the nested collection they are.
 func TestFormatMarkdownString_WithData(t *testing.T) {
 	out := Output{
 		ID:        1,
@@ -1269,39 +1289,69 @@ func TestFormatMarkdownString_WithData(t *testing.T) {
 			Active:    true,
 		}},
 	}
-	md := FormatMarkdownString(out)
 
-	for _, want := range []string{
-		"## GitLab User: Alice Smith",
-		"**Username**: alice",
-		"**Email**: alice@example.com",
-		"**State**: active",
-		"**Bio**: Go developer",
-		"**Admin**: true",
-		"**Avatar**: https://gitlab.example.com/alice/avatar.png",
-		"### SCIM Identities",
-		"| scim-alice | 9 | true |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatMarkdownString(out),
+		"## GitLab User: Alice Smith\n\n"+
+			"- **ID**: 1\n"+
+			"- **Username**: alice\n"+
+			"- **Email**: alice@example.com\n"+
+			"- **State**: active\n"+
+			"- **Bio**: Go developer\n"+
+			"- **Admin**: ✅\n"+
+			"- **Bot**: ❌\n"+
+			"- **External**: ❌\n"+
+			"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n"+
+			"- **Avatar**: [https://gitlab.example.com/alice/avatar.png](https://gitlab.example.com/alice/avatar.png)\n"+
+			"\n### SCIM Identities\n\n"+
+			"| Extern UID | Group ID | Active |\n"+
+			"| --- | --- | --- |\n"+
+			"| scim-alice | 9 | ✅ |\n"+
+			userCardHints)
 }
 
-// TestFormatMarkdownString_Empty verifies FormatMarkdownString when empty.
+// TestFormatMarkdownString_Locked verifies that a locked account carries the
+// warning sign rather than the tick BoolEmoji would give a true, which on
+// "Locked" reads as success.
+func TestFormatMarkdownString_Locked(t *testing.T) {
+	assertMarkdown(t, FormatMarkdownString(Output{ID: 3, Username: "carol", Name: "Carol", Locked: true}),
+		"## GitLab User: Carol\n\n"+
+			"- **ID**: 3\n"+
+			"- **Username**: carol\n"+
+			"- **Admin**: ❌\n"+
+			"- **Bot**: ❌\n"+
+			"- **External**: ❌\n"+
+			"- ⚠️ **Locked**\n"+
+			userCardHints)
+}
+
+// TestFormatMarkdownString_AvatarOnly verifies the narrow answer the avatar
+// upload gives on GitLab 19: an avatar URL and no identity at all. The user
+// card used to print an ID of zero and an empty email for it, which reads as a
+// user whose profile GitLab lost.
+func TestFormatMarkdownString_AvatarOnly(t *testing.T) {
+	out := Output{
+		NextSteps: []string{"The avatar was updated; use gitlab_user_current to fetch the profile"},
+		AvatarURL: "https://gitlab.example.com/uploads/avatar.png",
+	}
+
+	assertMarkdown(t, FormatMarkdownString(out),
+		"## Avatar Updated\n\n"+
+			"- **Avatar**: [https://gitlab.example.com/uploads/avatar.png](https://gitlab.example.com/uploads/avatar.png)\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- The avatar was updated; use gitlab_user_current to fetch the profile\n")
+}
+
+// TestFormatMarkdownString_Empty verifies that an empty user writes no row
+// that has no value: only the ID, which is an answer at zero, and the three
+// flags GitLab always sends.
 func TestFormatMarkdownString_Empty(t *testing.T) {
-	md := FormatMarkdownString(Output{})
-	if !strings.Contains(md, "## GitLab User:") {
-		t.Errorf("expected header in empty output:\n%s", md)
-	}
-	if strings.Contains(md, "**Bio**") {
-		t.Error("should not contain Bio when empty")
-	}
-	if strings.Contains(md, "**Avatar**") {
-		t.Error("should not contain Avatar when empty")
-	}
+	assertMarkdown(t, FormatMarkdownString(Output{}),
+		"## GitLab User: \n\n"+
+			"- **ID**: 0\n"+
+			"- **Admin**: ❌\n"+
+			"- **Bot**: ❌\n"+
+			"- **External**: ❌\n"+
+			userCardHints)
 }
 
 // TestFormatMarkdown_ReturnsMCPResult verifies FormatMarkdown returns MCP result.
@@ -1319,7 +1369,7 @@ func TestFormatMarkdown_ReturnsMCPResult(t *testing.T) {
 // FormatListMarkdownString — with data, empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdownString_WithData verifies FormatListMarkdownString when with data.
+// TestFormatListMarkdownString_WithData verifies the whole list render.
 func TestFormatListMarkdownString_WithData(t *testing.T) {
 	out := ListOutput{
 		Users: []Output{
@@ -1328,31 +1378,46 @@ func TestFormatListMarkdownString_WithData(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListMarkdownString(out)
 
-	for _, want := range []string{
-		"## GitLab Users (2)",
-		"| ID | Username | Name | Email | State |",
-		"| 1 | [@alice](https://gitlab.example.com/alice) | Alice | alice@example.com | active |",
-		"| 2 | [@bob](https://gitlab.example.com/bob) | Bob | bob@example.com | blocked |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatListMarkdownString(out),
+		"## GitLab Users (2)\n\n"+
+			"| ID | Username | Name | Email | State |\n"+
+			"| --- | --- | --- | --- | --- |\n"+
+			"| 1 | [@alice](https://gitlab.example.com/alice) | Alice | alice@example.com | active |\n"+
+			"| 2 | [@bob](https://gitlab.example.com/bob) | Bob | bob@example.com | blocked |\n"+
+			"\nPage 1 of 1 | 2 items total | 20 per page\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n"+
+			"- Use action 'user.get' to see full user details\n")
 }
 
-// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
+// TestFormatListMarkdownString_HeadingCountsTheTotal verifies that the heading
+// counts what GitLab reported rather than what this page holds: a heading
+// counting two above a response reporting forty-five was the commonest way a
+// list misled its reader.
+func TestFormatListMarkdownString_HeadingCountsTheTotal(t *testing.T) {
+	out := ListOutput{
+		Users:      []Output{{ID: 1, Username: "alice", Name: "Alice", WebURL: "https://gitlab.example.com/alice"}},
+		Pagination: toolutil.PaginationOutput{TotalItems: 45, Page: 1, PerPage: 1, TotalPages: 45},
+	}
+
+	assertMarkdown(t, FormatListMarkdownString(out),
+		"## GitLab Users (45)\n\n"+
+			"Showing 1 of 45 results (page 1 of 45)\n\n"+
+			"| ID | Username | Name | Email | State |\n"+
+			"| --- | --- | --- | --- | --- |\n"+
+			"| 1 | [@alice](https://gitlab.example.com/alice) | Alice |  |  |\n"+
+			"\nPage 1 of 45 | 45 items total | 1 per page\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n"+
+			"- Use action 'user.get' to see full user details\n")
+}
+
+// TestFormatListMarkdownString_Empty verifies that a list with nothing in it
+// is the one sentence and nothing else: no heading counting zero above it, and
+// no instruction to keep links a render with no table cannot have.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
-	md := FormatListMarkdownString(ListOutput{})
-	if !strings.Contains(md, "No users found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
-	}
+	assertMarkdown(t, FormatListMarkdownString(ListOutput{}), "No users found.\n")
 }
 
 // TestFormatListMarkdown_ReturnsMCPResult verifies FormatListMarkdown returns MCP result.
@@ -1370,7 +1435,10 @@ func TestFormatListMarkdown_ReturnsMCPResult(t *testing.T) {
 // FormatStatusMarkdownString — with data, empty, partial
 // ---------------------------------------------------------------------------.
 
-// TestFormatStatusMarkdownString_WithData verifies FormatStatusMarkdownString when with data.
+// statusHints is the guidance section the status card closes with.
+const statusHints = "\n---\n💡 **Next steps:**\n- Use action 'user.set_status' to update your status\n"
+
+// TestFormatStatusMarkdownString_WithData verifies the whole status card.
 func TestFormatStatusMarkdownString_WithData(t *testing.T) {
 	out := StatusOutput{
 		Emoji:         "coffee",
@@ -1378,47 +1446,27 @@ func TestFormatStatusMarkdownString_WithData(t *testing.T) {
 		Availability:  "busy",
 		ClearStatusAt: "2026-12-31T23:59:59Z",
 	}
-	md := FormatStatusMarkdownString(out)
 
-	for _, want := range []string{
-		"## User Status",
-		"**Emoji**: coffee",
-		"**Message**: Taking a break",
-		"**Availability**: busy",
-		"**Clear At**: 31 Dec 2026 23:59 UTC",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatStatusMarkdownString(out),
+		"## User Status\n\n"+
+			"- **Emoji**: coffee\n"+
+			"- **Message**: Taking a break\n"+
+			"- **Availability**: busy\n"+
+			"- **Clear At**: 31 Dec 2026 23:59 UTC\n"+
+			statusHints)
 }
 
-// TestFormatStatusMarkdownString_Empty verifies FormatStatusMarkdownString when empty.
+// TestFormatStatusMarkdownString_Empty verifies that a status GitLab sent
+// nothing for is the heading and the guidance, with no label carrying nothing.
 func TestFormatStatusMarkdownString_Empty(t *testing.T) {
-	md := FormatStatusMarkdownString(StatusOutput{})
-	if !strings.Contains(md, "## User Status") {
-		t.Errorf("expected header:\n%s", md)
-	}
-	for _, absent := range []string{"**Emoji**", "**Message**", "**Availability**", "**Clear At**"} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("should not contain %q when empty:\n%s", absent, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatStatusMarkdownString(StatusOutput{}), "## User Status\n"+statusHints)
 }
 
-// TestFormatStatusMarkdownString_Partial verifies FormatStatusMarkdownString when partial.
+// TestFormatStatusMarkdownString_Partial verifies that the rows GitLab sent
+// are written and the rest write nothing.
 func TestFormatStatusMarkdownString_Partial(t *testing.T) {
-	md := FormatStatusMarkdownString(StatusOutput{Emoji: "fire"})
-	if !strings.Contains(md, "**Emoji**: fire") {
-		t.Errorf("missing emoji:\n%s", md)
-	}
-	if strings.Contains(md, "**Message**") {
-		t.Error("should not contain Message when empty")
-	}
+	assertMarkdown(t, FormatStatusMarkdownString(StatusOutput{Emoji: "fire"}),
+		"## User Status\n\n- **Emoji**: fire\n"+statusHints)
 }
 
 // TestFormatStatusMarkdown_ReturnsMCPResult verifies FormatStatusMarkdown returns MCP result.
@@ -1433,7 +1481,9 @@ func TestFormatStatusMarkdown_ReturnsMCPResult(t *testing.T) {
 // FormatSSHKeyListMarkdownString — with data, empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatSSHKeyListMarkdownString_WithData verifies FormatSSHKeyListMarkdownString when with data.
+// TestFormatSSHKeyListMarkdownString_WithData verifies the whole list render.
+// The two timestamps go through the display form rather than reaching the
+// reader as the RFC 3339 strings GitLab sent.
 func TestFormatSSHKeyListMarkdownString_WithData(t *testing.T) {
 	out := SSHKeyListOutput{
 		Keys: []SSHKeyOutput{
@@ -1442,32 +1492,22 @@ func TestFormatSSHKeyListMarkdownString_WithData(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatSSHKeyListMarkdownString(out)
 
-	for _, want := range []string{
-		"## SSH Keys (2)",
-		"| ID | Title | Usage Type | Created At | Expires At |",
-		"| 1 | Work Laptop |",
-		"| 2 | Personal |",
-		"auth_and_signing",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatSSHKeyListMarkdownString(out),
+		"## SSH Keys (2)\n\n"+
+			"| ID | Title | Usage Type | Created At | Expires At |\n"+
+			"| --- | --- | --- | --- | --- |\n"+
+			"| 1 | Work Laptop | auth | 1 Jan 2026 00:00 UTC | 1 Jan 2026 00:00 UTC |\n"+
+			"| 2 | Personal | auth_and_signing | 1 Jun 2026 00:00 UTC |  |\n"+
+			"\nPage 1 of 1 | 2 items total | 20 per page\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'user.get_ssh_key' to view one key in full\n")
 }
 
-// TestFormatSSHKeyListMarkdownString_Empty verifies FormatSSHKeyListMarkdownString when empty.
+// TestFormatSSHKeyListMarkdownString_Empty verifies that a list with nothing
+// in it is the one sentence and nothing else.
 func TestFormatSSHKeyListMarkdownString_Empty(t *testing.T) {
-	md := FormatSSHKeyListMarkdownString(SSHKeyListOutput{})
-	if !strings.Contains(md, "No SSH keys found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
-	}
+	assertMarkdown(t, FormatSSHKeyListMarkdownString(SSHKeyListOutput{}), "No SSH keys found.\n")
 }
 
 // TestFormatSSHKeyListMarkdown_ReturnsMCPResult verifies FormatSSHKeyListMarkdown returns MCP result.
@@ -1482,7 +1522,9 @@ func TestFormatSSHKeyListMarkdown_ReturnsMCPResult(t *testing.T) {
 // FormatEmailListMarkdownString — with data, empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatEmailListMarkdownString_WithData verifies FormatEmailListMarkdownString when with data.
+// TestFormatEmailListMarkdownString_WithData verifies the whole list render.
+// An address GitLab has not confirmed says so rather than leaving the column
+// empty, which reads as a state GitLab did not report.
 func TestFormatEmailListMarkdownString_WithData(t *testing.T) {
 	out := EmailListOutput{
 		Emails: []EmailOutput{
@@ -1490,31 +1532,21 @@ func TestFormatEmailListMarkdownString_WithData(t *testing.T) {
 			{ID: 2, Email: "alias@example.com"},
 		},
 	}
-	md := FormatEmailListMarkdownString(out)
 
-	for _, want := range []string{
-		"## Email Addresses (2)",
-		"| ID | Email | Confirmed At |",
-		"| 1 | primary@example.com |",
-		"| 2 | alias@example.com |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatEmailListMarkdownString(out),
+		"## Email Addresses (2)\n\n"+
+			"| ID | Email | Confirmed |\n"+
+			"| --- | --- | --- |\n"+
+			"| 1 | primary@example.com | ✅ 1 Jan 2026 00:00 UTC |\n"+
+			"| 2 | alias@example.com | ❌ awaiting confirmation |\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'user.current' to view your full profile\n")
 }
 
-// TestFormatEmailListMarkdownString_Empty verifies FormatEmailListMarkdownString when empty.
+// TestFormatEmailListMarkdownString_Empty verifies that a list with nothing in
+// it is the one sentence and nothing else.
 func TestFormatEmailListMarkdownString_Empty(t *testing.T) {
-	md := FormatEmailListMarkdownString(EmailListOutput{})
-	if !strings.Contains(md, "No email addresses found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
-	}
+	assertMarkdown(t, FormatEmailListMarkdownString(EmailListOutput{}), "No email addresses found.\n")
 }
 
 // TestFormatEmailListMarkdown_ReturnsMCPResult verifies FormatEmailListMarkdown returns MCP result.
@@ -1529,7 +1561,10 @@ func TestFormatEmailListMarkdown_ReturnsMCPResult(t *testing.T) {
 // FormatContributionEventsMarkdownString — with data, empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatContributionEventsMarkdownString_WithData verifies FormatContributionEventsMarkdownString when with data.
+// TestFormatContributionEventsMarkdownString_WithData verifies the whole list
+// render for events that carry no target address: the target column is plain
+// text, so the footer carries no instruction to keep links the table has none
+// of.
 func TestFormatContributionEventsMarkdownString_WithData(t *testing.T) {
 	out := ContributionEventsOutput{
 		Events: []ContributionEventOutput{
@@ -1538,31 +1573,50 @@ func TestFormatContributionEventsMarkdownString_WithData(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatContributionEventsMarkdownString(out)
 
-	for _, want := range []string{
-		"## Contribution Events (2)",
-		"| ID | Action | Target Type | Target | Created At |",
-		"| 100 | pushed | Project | main |",
-		"| 101 | commented | Issue | Fix bug |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatContributionEventsMarkdownString(out),
+		"## Contribution Events (2)\n\n"+
+			"| ID | Action | Target Type | Target | Created At |\n"+
+			"| --- | --- | --- | --- | --- |\n"+
+			"| 100 | pushed | Project | main | 1 Jun 2026 12:00 UTC |\n"+
+			"| 101 | commented | Issue | Fix bug | 2 Jun 2026 14:00 UTC |\n"+
+			"\nPage 1 of 1 | 2 items total | 20 per page\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'user.get' to view the user's profile\n")
 }
 
-// TestFormatContributionEventsMarkdownString_Empty verifies FormatContributionEventsMarkdownString when empty.
+// TestFormatContributionEventsMarkdownString_Linked verifies that an event
+// carrying a target address renders a link, and that the footer then names the
+// preserve-links instruction the link is there for.
+func TestFormatContributionEventsMarkdownString_Linked(t *testing.T) {
+	out := ContributionEventsOutput{
+		Events: []ContributionEventOutput{{
+			ID:          100,
+			ActionName:  "opened",
+			TargetType:  "Issue",
+			TargetIID:   7,
+			TargetTitle: "Fix bug",
+			TargetURL:   "https://gitlab.example.com/g/p/-/issues/7",
+			CreatedAt:   "2026-06-01T12:00:00Z",
+		}},
+		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+	}
+
+	assertMarkdown(t, FormatContributionEventsMarkdownString(out),
+		"## Contribution Events (1)\n\n"+
+			"| ID | Action | Target Type | Target | Created At |\n"+
+			"| --- | --- | --- | --- | --- |\n"+
+			"| 100 | opened | Issue | [Fix bug](https://gitlab.example.com/g/p/-/issues/7) | 1 Jun 2026 12:00 UTC |\n"+
+			"\nPage 1 of 1 | 1 items total | 20 per page\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n"+
+			"- Use action 'user.get' to view the user's profile\n")
+}
+
+// TestFormatContributionEventsMarkdownString_Empty verifies that a list with
+// nothing in it is the one sentence and nothing else.
 func TestFormatContributionEventsMarkdownString_Empty(t *testing.T) {
-	md := FormatContributionEventsMarkdownString(ContributionEventsOutput{})
-	if !strings.Contains(md, "No contribution events found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
-	}
+	assertMarkdown(t, FormatContributionEventsMarkdownString(ContributionEventsOutput{}), "No contribution events found.\n")
 }
 
 // TestFormatContributionEventsMarkdown_ReturnsMCPResult verifies FormatContributionEventsMarkdown returns MCP result.
@@ -1579,7 +1633,12 @@ func TestFormatContributionEventsMarkdown_ReturnsMCPResult(t *testing.T) {
 // FormatAssociationsCountMarkdownString — with data, zero values
 // ---------------------------------------------------------------------------.
 
-// TestFormatAssociationsCountMarkdownString_WithData verifies FormatAssociationsCountMarkdownString when with data.
+// associationsHints is the guidance section the associations card closes with.
+const associationsHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'user.get' to view the user's profile\n" +
+	"- Use action 'user.contribution_events' to see recent activity\n"
+
+// TestFormatAssociationsCountMarkdownString_WithData verifies the whole card.
 func TestFormatAssociationsCountMarkdownString_WithData(t *testing.T) {
 	out := AssociationsCountOutput{
 		GroupsCount:        5,
@@ -1587,32 +1646,26 @@ func TestFormatAssociationsCountMarkdownString_WithData(t *testing.T) {
 		IssuesCount:        45,
 		MergeRequestsCount: 30,
 	}
-	md := FormatAssociationsCountMarkdownString(out)
 
-	for _, want := range []string{
-		"## User Associations Count",
-		"**Groups**: 5",
-		"**Projects**: 12",
-		"**Issues**: 45",
-		"**Merge Requests**: 30",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
+	assertMarkdown(t, FormatAssociationsCountMarkdownString(out),
+		"## User Associations Count\n\n"+
+			"- **Groups**: 5\n"+
+			"- **Projects**: 12\n"+
+			"- **Issues**: 45\n"+
+			"- **Merge Requests**: 30\n"+
+			associationsHints)
 }
 
-// TestFormatAssociationsCountMarkdownString_Zero verifies FormatAssociationsCountMarkdownString when zero.
+// TestFormatAssociationsCountMarkdownString_Zero verifies that a zero count is
+// written: here the zero is GitLab's answer rather than an absence.
 func TestFormatAssociationsCountMarkdownString_Zero(t *testing.T) {
-	md := FormatAssociationsCountMarkdownString(AssociationsCountOutput{})
-	if !strings.Contains(md, "**Groups**: 0") {
-		t.Errorf("expected Groups: 0:\n%s", md)
-	}
-	if !strings.Contains(md, "**Projects**: 0") {
-		t.Errorf("expected Projects: 0:\n%s", md)
-	}
+	assertMarkdown(t, FormatAssociationsCountMarkdownString(AssociationsCountOutput{}),
+		"## User Associations Count\n\n"+
+			"- **Groups**: 0\n"+
+			"- **Projects**: 0\n"+
+			"- **Issues**: 0\n"+
+			"- **Merge Requests**: 0\n"+
+			associationsHints)
 }
 
 // TestFormatAssociationsCountMarkdown_ReturnsMCPResult verifies FormatAssociationsCountMarkdown returns MCP result.

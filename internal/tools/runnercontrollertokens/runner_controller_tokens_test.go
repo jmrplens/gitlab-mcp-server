@@ -481,7 +481,13 @@ func TestRevoke_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown verifies Markdown with and without optional fields.
+// rctStoreHints is the guidance section a card that showed a token ends with.
+const rctStoreHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Store the token securely. It cannot be retrieved later\n"
+
+// TestFormatOutputMarkdown pins the whole card in both states: the minted
+// token with its storage advice, and the same type answering a get with
+// neither the token nor the timestamps GitLab did not send.
 func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{
 		ID: 10, RunnerControllerID: 1, Description: "my-token",
@@ -489,25 +495,27 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		CreatedAt: "2026-01-01T00:00:00Z",
 	}
 
-	md := FormatOutputMarkdown(out)
-	for _, want := range []string{"my-token", "glrt-abc123", "Last Used At", "Created At"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q: %s", want, md)
-			}
-		})
+	withToken := "## Runner Controller Token #10\n\n" +
+		"- **ID**: 10\n" +
+		"- **Controller ID**: 1\n" +
+		"- **Description**: my-token\n" +
+		"- **Token**: `glrt-abc123`\n" +
+		"- **Last Used At**: 15 Jan 2026 10:00 UTC\n" +
+		"- **Created At**: 1 Jan 2026 00:00 UTC\n" +
+		rctStoreHints
+	if got := FormatOutputMarkdown(out); got != withToken {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, withToken)
 	}
 
-	// Without token and timestamps
 	out.Token = ""
 	out.LastUsedAt = ""
 	out.CreatedAt = ""
-	md = FormatOutputMarkdown(out)
-	if strings.Contains(md, "glrt-abc123") {
-		t.Error("should not contain token when empty")
-	}
-	if strings.Contains(md, "Last Used At") {
-		t.Error("should not contain Last Used At when empty")
+	bare := "## Runner Controller Token #10\n\n" +
+		"- **ID**: 10\n" +
+		"- **Controller ID**: 1\n" +
+		"- **Description**: my-token\n"
+	if got := FormatOutputMarkdown(out); got != bare {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, bare)
 	}
 }
 
@@ -521,52 +529,77 @@ func TestFormatOutputMarkdown(t *testing.T) {
 // carries no token: telling that reader to store a value the card does not
 // hold sends them hunting for a credential that was never shown.
 func TestFormatOutputMarkdown_TokenShapes_CodeSpannedAndHintedOnlyWhenPresent(t *testing.T) {
-	const storeHint = "Store the token value securely"
-
 	t.Run("token is code spanned and hinted", func(t *testing.T) {
-		md := FormatOutputMarkdown(Output{ID: 10, RunnerControllerID: 1, Token: "glrt-a_b_c"})
-		if !strings.Contains(md, "- **Token**: `glrt-a_b_c`\n") {
-			t.Errorf("token not written inside a code span:\n%s", md)
-		}
-		if !strings.Contains(md, storeHint) {
-			t.Errorf("card carrying a token missing the storage hint:\n%s", md)
+		want := "## Runner Controller Token #10\n\n" +
+			"- **ID**: 10\n" +
+			"- **Controller ID**: 1\n" +
+			"- **Token**: `glrt-a_b_c`\n" +
+			rctStoreHints
+		if got := FormatOutputMarkdown(Output{ID: 10, RunnerControllerID: 1, Token: "glrt-a_b_c"}); got != want {
+			t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 
 	t.Run("no token means no storage hint", func(t *testing.T) {
-		md := FormatOutputMarkdown(Output{ID: 10, RunnerControllerID: 1, Description: "my-token"})
-		if strings.Contains(md, "**Token**") {
-			t.Errorf("empty token still announced:\n%s", md)
-		}
-		if strings.Contains(md, storeHint) {
-			t.Errorf("card carrying no token still tells the reader to store one:\n%s", md)
+		want := "## Runner Controller Token #10\n\n" +
+			"- **ID**: 10\n" +
+			"- **Controller ID**: 1\n" +
+			"- **Description**: my-token\n"
+		if got := FormatOutputMarkdown(Output{ID: 10, RunnerControllerID: 1, Description: "my-token"}); got != want {
+			t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 		}
 	})
 }
 
-// TestFormatListMarkdown verifies list Markdown with data and empty.
+// TestFormatListMarkdown pins the whole list document. The heading counts the
+// total GitLab reported, and falls back to the rows shown when it reported
+// none, where it used to print a zero above a table of rows.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Tokens: []Output{
-			{ID: 10, RunnerControllerID: 1, Description: "tok-1"},
+			{ID: 10, RunnerControllerID: 1, Description: "tok-1", CreatedAt: "2026-01-01T00:00:00Z"},
 			{ID: 11, RunnerControllerID: 1, Description: "tok-2"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	}
 
-	md := FormatListMarkdown(out)
-	for _, want := range []string{"tok-1", "tok-2"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q: %s", want, md)
-			}
-		})
+	listHints := "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'runnercontrollertokens.controller_token_get' to read one of these tokens in full\n"
+	want := "## Runner Controller Tokens (2)\n\n" +
+		"| ID | Controller | Description | Last Used | Created At |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 10 | 1 | tok-1 |  | 1 Jan 2026 00:00 UTC |\n" +
+		"| 11 | 1 | tok-2 |  |  |\n\n" +
+		"2 items total\n" +
+		listHints
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 
-	// Empty
-	md = FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No runner controller tokens found") {
-		t.Errorf("expected empty message, got: %s", md)
+	wantEmpty := "No runner controller tokens found.\n"
+	if got := FormatListMarkdown(ListOutput{}); got != wantEmpty {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, wantEmpty)
+	}
+}
+
+// TestFormatListMarkdown_Keyset pins the heading of a keyset page, where
+// GitLab sends no total at all: the count is what the page shows with "more
+// available" beside it, never a zero above two rows.
+func TestFormatListMarkdown_Keyset(t *testing.T) {
+	out := ListOutput{
+		Tokens:     []Output{{ID: 10, RunnerControllerID: 1, Description: "tok-1"}},
+		Pagination: toolutil.PaginationOutput{HasMore: true},
+	}
+
+	listHints := "\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'runnercontrollertokens.controller_token_get' to read one of these tokens in full\n"
+	want := "## Runner Controller Tokens (1 shown, more available)\n\n" +
+		"| ID | Controller | Description | Last Used | Created At |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 10 | 1 | tok-1 |  |  |\n" +
+		listHints
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

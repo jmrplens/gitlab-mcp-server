@@ -1,13 +1,31 @@
 package groups
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+// The routes these cards and lists point at, by the canonical catalog ID every
+// surface resolves: the dynamic surface executes it, and the meta and
+// individual surfaces resolve it to their own tool names, so a hint written
+// this way never names something the serving surface does not register. The
+// member routes live in internal/tools/groupmembers and the project ones in
+// internal/tools/projects; both are actions of a catalog group, which is what
+// the ID spells.
+const (
+	actionGroupMemberAdd  = "group.group_member_add"
+	actionGroupMemberEdit = "group.group_member_edit"
+	actionProjectGet      = "project.get"
+	actionProjectCreate   = "project.create"
+	actionGroupHookAdd    = "group.hook_add"
+	actionGroupHookEdit   = "group.hook_edit"
+	actionGroupHookDelete = "group.hook_delete"
+	actionGroupTransfer   = "group.transfer"
 )
 
 type groupNotFoundOutput struct {
@@ -23,244 +41,241 @@ func formatGroupNotFound(out groupNotFoundOutput) *mcp.CallToolResult {
 	)
 }
 
-// FormatOutputMarkdown renders a single group as a Markdown summary.
+// FormatOutputMarkdown renders a single group as its card.
 func FormatOutputMarkdown(g Output) string {
 	var b strings.Builder
-	writeGroupCard(&b, g)
-	writeGroupHints(&b)
+	writeGroupCard(&b, g).End(groupCardHints()...)
 	return b.String()
 }
 
-// writeGroupCard writes the card of the group entity without its hints, so
-// that [FormatDetailOutputMarkdown] can add its own rows before the hints
-// close the card rather than after them.
-func writeGroupCard(b *strings.Builder, g Output) {
-	fmt.Fprintf(b, "## Group: %s\n\n", toolutil.EscapeMdHeading(g.Name))
-	fmt.Fprintf(b, toolutil.FmtMdID, g.ID)
-	fmt.Fprintf(b, toolutil.FmtMdPath, toolutil.EscapeMdTableCell(g.FullPath))
-	if g.FullName != "" {
-		// A full name is the group names of the ancestry joined, and a group
-		// name is free text a person types.
-		fmt.Fprintf(b, "- **Full Name**: %s\n", toolutil.EscapeMdTableCell(g.FullName))
-	}
-	//gitlab:allow-unescaped g.Visibility: a gl.VisibilityValue, which GitLab fills with private, internal or public.
-	fmt.Fprintf(b, toolutil.FmtMdVisibility, g.Visibility)
-	if g.Description != "" {
-		toolutil.WriteDescription(b, g.Description)
-	}
-	toolutil.WriteMdURL(b, g.WebURL)
-	if g.ParentID != 0 {
-		fmt.Fprintf(b, "- **Parent ID**: %d\n", g.ParentID)
-	}
-	if g.CreatedAt != "" {
-		fmt.Fprintf(b, toolutil.FmtMdCreated, toolutil.FormatTime(g.CreatedAt))
-	}
-	if g.MarkedForDeletion != "" {
-		//gitlab:allow-unescaped g.MarkedForDeletion: a date ToOutput rendered from a gl.ISOTime as YYYY-MM-DD.
-		fmt.Fprintf(b, "- %s **Marked for deletion**: %s\n", toolutil.EmojiWarning, g.MarkedForDeletion)
+// writeGroupCard writes the card of the group entity and returns it, so that
+// [FormatDetailOutputMarkdown] can add the rows only a single-group route
+// carries before [toolutil.Card.End] closes the card rather than after them.
+func writeGroupCard(b *strings.Builder, g Output) *toolutil.Card {
+	c := toolutil.NewCard(b, "Group: "+g.Name)
+	c.Int("ID", g.ID)
+	c.Field("Path", g.FullPath)
+	// A full name is the group names of the ancestry joined, and a group name
+	// is free text a person types.
+	c.Field("Full Name", g.FullName)
+	c.Field("Visibility", g.Visibility)
+	// An archived group is read-only, which is the one thing a reader acting
+	// on it has to know before they try; it was in the JSON and nowhere in the
+	// text until the markdown audit (issue 697).
+	c.Flag(toolutil.EmojiArchived, "Archived", g.Archived)
+	c.Text("Description", g.Description)
+	c.URL(g.WebURL)
+	c.Count("Parent ID", g.ParentID)
+	c.Time("Created", g.CreatedAt)
+	c.Time(toolutil.EmojiWarning+" Marked for deletion", g.MarkedForDeletion)
+	return c
+}
+
+// groupCardHints closes a group card with its next steps. The preserve-links
+// hint is deliberately absent: it is about the links of a table, and a card
+// has none.
+func groupCardHints() []string {
+	return []string{
+		toolutil.HintAction(actionGroupProjects, "see the projects in this group"),
+		toolutil.HintAction(actionGroupMembers, "see the group's members"),
 	}
 }
 
 // archivedCell renders a project row's archived flag for the two group project
 // tables. A row GitLab rendered as BasicProjectDetails carries no flag, and
-// its cell stays empty rather than answering No for it.
+// its cell stays empty rather than answering for it.
 func archivedCell(p ProjectItem) string {
-	switch {
-	case p.Archived == nil:
+	if p.Archived == nil {
 		return ""
-	case *p.Archived:
-		return "Yes"
-	default:
-		return "No"
 	}
-}
-
-// writeGroupHints closes a group card with its next steps.
-func writeGroupHints(b *strings.Builder) {
-	toolutil.WriteHints(
-		b,
-		toolutil.HintPreserveLinks,
-		"Use action 'projects' to see projects in this group",
-		"Use action 'members' to see group members",
-	)
+	return toolutil.BoolEmoji(*p.Archived)
 }
 
 // FormatListMarkdown renders a list of groups as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Groups (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Groups), out.Pagination)
 	if len(out.Groups) == 0 {
-		b.WriteString("No groups found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("groups")
 	}
-	b.WriteString("| ID | Name | Path | Visibility |\n")
-	b.WriteString(toolutil.TblSep4Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Groups", len(out.Groups), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Path", "Visibility", "Archived"))
 	for _, g := range out.Groups {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n", g.ID, toolutil.EscapeMdTableCell(g.Name), toolutil.EscapeMdTableCell(g.FullPath), g.Visibility)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(g.ID, 10),
+			toolutil.EscapeMdTableCell(g.Name),
+			toolutil.EscapeMdTableCell(g.FullPath),
+			toolutil.EscapeMdTableCell(g.Visibility),
+			toolutil.BoolEmoji(g.Archived),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use action 'get' with a group_id to see group details",
-		"Use action 'projects' to see projects in a group",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionGroupGet, "see one group's details"),
+		toolutil.HintAction(actionGroupProjects, "see the projects in a group"),
 	)
 	return b.String()
 }
 
 // FormatMemberListMarkdown renders a list of group members as a Markdown table.
+//
+// The state column is the user account's state (active, blocked, deactivated,
+// banned), which is not the membership's own state; the membership column is
+// written only when GitLab sent one, since it is an Enterprise field.
 func FormatMemberListMarkdown(out MemberListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Group Members (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Members), out.Pagination)
 	if len(out.Members) == 0 {
-		b.WriteString("No members found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("group members")
 	}
-	b.WriteString("| Username | Name | Access Level | State |\n")
-	b.WriteString(toolutil.TblSep4Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Group Members", len(out.Members), out.Pagination)
+	columns := []string{"Username", "Name", "Access Level", "Account State"}
+	membership := memberListHasMembershipState(out.Members)
+	if membership {
+		columns = append(columns, "Membership")
+	}
+	b.WriteString(toolutil.MarkdownTableHeader(columns...))
 	for _, m := range out.Members {
-		//gitlab:allow-unescaped m.State: a membership state GitLab picks from a fixed set (active, awaiting and the rest).
-		fmt.Fprintf(&b, toolutil.FmtRow4Str, toolutil.EscapeMdTableCell(m.Username), toolutil.EscapeMdTableCell(m.Name), toolutil.EscapeMdTableCell(toolutil.AccessLevelDescription(gl.AccessLevelValue(m.AccessLevel))), m.State)
+		cells := []string{
+			toolutil.MdUserHandle(m.Username),
+			toolutil.EscapeMdTableCell(m.Name),
+			toolutil.EscapeMdTableCell(toolutil.AccessLevelDescription(gl.AccessLevelValue(m.AccessLevel))),
+			toolutil.EscapeMdTableCell(m.State),
+		}
+		if membership {
+			cells = append(cells, toolutil.EscapeMdTableCell(m.MembershipState))
+		}
+		b.WriteString(toolutil.MarkdownTableRow(cells...))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_group_member_add` to add a new member",
-		"Use `gitlab_group_member_edit` to change access level",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionGroupMemberAdd, "add a member to this group"),
+		toolutil.HintAction(actionGroupMemberEdit, "change a member's access level"),
 	)
 	return b.String()
+}
+
+// memberListHasMembershipState reports whether any row carries the Enterprise
+// membership state, which decides whether the column is written at all.
+func memberListHasMembershipState(members []MemberOutput) bool {
+	for _, m := range members {
+		if m.MembershipState != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // FormatListProjectsMarkdown renders a list of group projects as a Markdown table.
 func FormatListProjectsMarkdown(out ListProjectsOutput) string {
-	var b strings.Builder
 	if len(out.Projects) == 0 {
-		b.WriteString("No projects found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("projects")
 	}
-	b.WriteString("| ID | Name | Path | Visibility | Archived |\n")
-	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Group Projects", len(out.Projects), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Path", "Visibility", "Archived"))
 	for _, p := range out.Projects {
-		archived := archivedCell(p)
-		fmt.Fprintf(
-			&b, "| %d | %s | %s | %s | %s |\n",
-			p.ID,
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(p.ID, 10),
 			toolutil.EscapeMdTableCell(p.Name),
 			toolutil.EscapeMdTableCell(p.PathWithNamespace),
-			//gitlab:allow-unescaped p.Visibility: a gl.VisibilityValue, which GitLab fills with private, internal or public.
-			p.Visibility,
-			archived,
-		)
+			toolutil.EscapeMdTableCell(p.Visibility),
+			archivedCell(p),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_project_get` to view project details",
-		"Use `gitlab_project_create` to add a new project to this group",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionProjectGet, "view a project's details"),
+		toolutil.HintAction(actionProjectCreate, "add a new project to this group"),
 	)
 	return b.String()
 }
 
-// FormatHookMarkdown renders a single group hook as a Markdown summary.
+// FormatHookMarkdown renders a single group hook as its card. The URL
+// variables and the custom headers are written as their keys with every value
+// redacted: both are secrets GitLab masks on read, and the key is what says
+// which ones are set.
 func FormatHookMarkdown(h HookOutput) string {
 	var b strings.Builder
 	title := h.URL
 	if h.Name != "" {
 		title = h.Name
 	}
-	fmt.Fprintf(&b, "## Group Hook: %s\n\n", toolutil.EscapeMdHeading(title))
-	fmt.Fprintf(&b, toolutil.FmtMdID, h.ID)
-	toolutil.WriteMdURL(&b, h.URL)
-	if h.Name != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdName, toolutil.EscapeMdTableCell(h.Name))
-	}
-	if h.Description != "" {
-		toolutil.WriteDescription(&b, h.Description)
-	}
-	fmt.Fprintf(&b, "- **Group ID**: %d\n", h.GroupID)
-	fmt.Fprintf(&b, "- **SSL Verification**: %v\n", h.EnableSSLVerification)
-	fmt.Fprintf(&b, "- **Token Present**: %v\n", h.TokenPresent)
-	fmt.Fprintf(&b, "- **Signing Token Present**: %v\n", h.SigningTokenPresent)
-	fmt.Fprintf(&b, "- **Events**: %s\n", enabledEvents(h))
-	if h.AlertStatus != "" {
-		//gitlab:allow-unescaped h.AlertStatus: a hook alert status GitLab picks from a fixed set (executable, disabled, temporarily_disabled).
-		fmt.Fprintf(&b, "- **Alert Status**: %s\n", h.AlertStatus)
-	}
-	if h.DisabledUntil != "" {
-		fmt.Fprintf(&b, "- **Disabled Until**: %s\n", toolutil.FormatTime(h.DisabledUntil))
-	}
-	if h.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(h.CreatedAt))
-	}
-	if len(h.URLVariables) > 0 {
-		b.WriteString("\n### URL Variables\n\n")
-		b.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
-		for _, variable := range h.URLVariables {
-			b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(variable.Key), toolutil.RedactedSecretValue))
-		}
-	}
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_group_hook_edit` to modify this hook",
-		"Use `gitlab_group_hook_delete` to remove it",
+	c := toolutil.NewCard(&b, "Group Hook: "+title)
+	c.Int("ID", h.ID)
+	c.URL(h.URL)
+	c.Field("Name", h.Name)
+	c.Text("Description", h.Description)
+	c.Int("Group ID", h.GroupID)
+	c.Bool("SSL Verification", h.EnableSSLVerification)
+	c.Bool("Token Present", h.TokenPresent)
+	c.Bool("Signing Token Present", h.SigningTokenPresent)
+	c.Field("Events", enabledEvents(h))
+	c.Field("Alert Status", h.AlertStatus)
+	c.Time("Disabled Until", h.DisabledUntil)
+	c.Time("Created", h.CreatedAt)
+	toolutil.WriteHookSecretKeys(&b, hookURLVariableKeys(h), hookCustomHeaderKeys(h))
+	c.End(
+		toolutil.HintAction(actionGroupHookEdit, "modify this hook"),
+		toolutil.HintAction(actionGroupHookDelete, "remove it"),
 	)
 	return b.String()
 }
 
+// hookURLVariableKeys is the hook's templated URL variable names, values left
+// behind.
+func hookURLVariableKeys(h HookOutput) []string {
+	keys := make([]string, 0, len(h.URLVariables))
+	for _, variable := range h.URLVariables {
+		keys = append(keys, variable.Key)
+	}
+	return keys
+}
+
+// hookCustomHeaderKeys is the hook's custom header names, values left behind.
+func hookCustomHeaderKeys(h HookOutput) []string {
+	keys := make([]string, 0, len(h.CustomHeaders))
+	for _, header := range h.CustomHeaders {
+		keys = append(keys, header.Key)
+	}
+	return keys
+}
+
 // FormatHookListMarkdown renders a paginated list of group hooks as a Markdown table.
 func FormatHookListMarkdown(out HookListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Group Hooks (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Hooks), out.Pagination)
 	if len(out.Hooks) == 0 {
-		b.WriteString("No group webhooks found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("group webhooks")
 	}
-	b.WriteString("| ID | URL | Events | SSL |\n")
-	b.WriteString(toolutil.TblSep4Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Group Hooks", len(out.Hooks), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "URL", "Events", "SSL"))
 	for _, h := range out.Hooks {
-		ssl := "No"
-		if h.EnableSSLVerification {
-			ssl = "Yes"
-		}
-		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n", h.ID, toolutil.MdTitleLink(toolutil.EscapeMdTableCell(h.URL), h.URL), toolutil.EscapeMdTableCell(enabledEvents(h)), ssl)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(h.ID, 10),
+			toolutil.MdTitleLink(h.URL, h.URL),
+			toolutil.EscapeMdTableCell(enabledEvents(h)),
+			toolutil.BoolEmoji(h.EnableSSLVerification),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_group_hook_get` to view hook details",
-		"Use `gitlab_group_hook_add` to add a new hook",
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(actionGroupHookGet, "view one hook's details"),
+		toolutil.HintAction(actionGroupHookAdd, "add a new hook"),
 	)
 	return b.String()
 }
 
 // FormatTransferLocationsListMarkdown renders the candidate parent groups for a group transfer.
 func FormatTransferLocationsListMarkdown(out TransferLocationsListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Transfer Locations (%d)\n\n", len(out.Locations))
-	toolutil.WriteListSummary(&b, len(out.Locations), out.Pagination)
 	if len(out.Locations) == 0 {
-		b.WriteString("No transfer locations available.\n")
-		toolutil.WritePagination(&b, out.Pagination)
-		return b.String()
+		return toolutil.EmptyMessage("transfer locations")
 	}
-	b.WriteString("| ID | Name | Full Path |\n")
-	b.WriteString("| --- | --- | --- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Transfer Locations", len(out.Locations), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Full Path"))
 	for _, l := range out.Locations {
-		name := toolutil.EscapeMdTableCell(l.Name)
-		if l.WebURL != "" {
-			name = toolutil.MdTitleLink(l.Name, l.WebURL)
-		}
-		fmt.Fprintf(&b, "| %d | %s | %s |\n", l.ID, name, toolutil.EscapeMdTableCell(l.FullPath))
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(l.ID, 10),
+			toolutil.MdTitleLink(l.Name, l.WebURL),
+			toolutil.EscapeMdTableCell(l.FullPath),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_group_update` or the group transfer endpoint to move the group into one of these parents",
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(actionGroupTransfer, "move the group into one of these parents"),
 	)
 	return b.String()
 }
@@ -268,36 +283,23 @@ func FormatTransferLocationsListMarkdown(out TransferLocationsListOutput) string
 // FormatProvisionedUsersListMarkdown renders a paginated list of users
 // provisioned for a group through SAML/SCIM as a Markdown table.
 func FormatProvisionedUsersListMarkdown(out ProvisionedUsersListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Provisioned Users (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Users), out.Pagination)
 	if len(out.Users) == 0 {
-		b.WriteString("No provisioned users found.\n")
-		toolutil.WritePagination(&b, out.Pagination)
-		return b.String()
+		return toolutil.EmptyMessage("provisioned users")
 	}
-	b.WriteString("| ID | Username | Name | State | Email |\n")
-	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Provisioned Users", len(out.Users), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "Account State", "Email"))
 	for _, u := range out.Users {
-		username := toolutil.EscapeMdTableCell(u.Username)
-		if u.WebURL != "" {
-			username = toolutil.MdTitleLink(username, u.WebURL)
-		}
-		fmt.Fprintf(
-			&b, "| %d | %s | %s | %s | %s |\n",
-			u.ID,
-			username,
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(u.ID, 10),
+			toolutil.MdUserLink(u.Username, u.WebURL),
 			toolutil.EscapeMdTableCell(u.Name),
-			//gitlab:allow-unescaped u.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned).
-			u.State,
+			toolutil.EscapeMdTableCell(u.State),
 			toolutil.EscapeMdTableCell(u.Email),
-		)
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_group_members_list` to see the group's members and access levels",
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(actionGroupMembers, "see the group's members and access levels"),
 		"Provisioned users are managed through the group's SAML/SCIM identity provider",
 	)
 	return b.String()
@@ -315,27 +317,16 @@ func FormatProvisionedUsersListMarkdown(out ProvisionedUsersListOutput) string {
 // took for invite_token and the reasoning is the same.
 func FormatDetailOutputMarkdown(g DetailOutput) string {
 	var b strings.Builder
-	writeGroupCard(&b, g.Output)
+	c := writeGroupCard(&b, g.Output)
 	// Only what a single-group route adds, and only when GitLab sent it: each
 	// of these is behind a condition of its own, so an absent key is an answer
 	// rather than a gap.
-	if g.EnabledGitAccessProtocol != "" {
-		//gitlab:allow-unescaped g.EnabledGitAccessProtocol: a protocol GitLab picks from a fixed set (ssh, http, all).
-		fmt.Fprintf(&b, "- **Git Access Protocol**: %s\n", g.EnabledGitAccessProtocol)
-	}
-	if g.StepUpAuthRequiredOAuthProvider != "" {
-		fmt.Fprintf(&b, "- **Step-up Auth Provider**: %s\n", toolutil.EscapeMdTableCell(g.StepUpAuthRequiredOAuthProvider))
-	}
-	if len(g.SharedWithGroups) > 0 {
-		fmt.Fprintf(&b, "- **Shared With**: %d group(s)\n", len(g.SharedWithGroups))
-	}
-	if len(g.Projects) > 0 {
-		fmt.Fprintf(&b, "- **Projects**: %d\n", len(g.Projects))
-	}
-	if g.AutoBanUserOnExcessiveProjectsDownload != nil {
-		fmt.Fprintf(&b, "- **Auto-ban on Excessive Downloads**: %s\n", toolutil.BoolEmoji(*g.AutoBanUserOnExcessiveProjectsDownload))
-	}
-	writeGroupHints(&b)
+	c.Field("Git Access Protocol", g.EnabledGitAccessProtocol)
+	c.Field("Step-up Auth Provider", g.StepUpAuthRequiredOAuthProvider)
+	c.Count("Shared With Groups", int64(len(g.SharedWithGroups)))
+	c.Count("Projects", int64(len(g.Projects)))
+	c.BoolPtr("Auto-ban on Excessive Downloads", g.AutoBanUserOnExcessiveProjectsDownload)
+	c.End(groupCardHints()...)
 	return b.String()
 }
 

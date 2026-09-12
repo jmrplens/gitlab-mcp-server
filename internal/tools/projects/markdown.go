@@ -23,97 +23,88 @@ func formatProjectNotFound(out projectNotFoundOutput) *mcp.CallToolResult {
 	)
 }
 
-// FormatMarkdown renders a single project as a Markdown summary.
+// FormatMarkdown renders a single project as a card: one row per field GitLab
+// sent, the description as prose under its label, and the hints last.
 func FormatMarkdown(p Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Project: %s\n\n", toolutil.EscapeMdHeading(p.Name))
-	fmt.Fprintf(&b, toolutil.FmtMdID, p.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdPath, toolutil.EscapeMdTableCell(p.PathWithNamespace))
-	//gitlab:allow-unescaped p.Visibility: a project visibility, a gl.VisibilityValue GitLab fills with private, internal or public.
-	fmt.Fprintf(&b, toolutil.FmtMdVisibility, p.Visibility)
-	fmt.Fprintf(&b, "- **Default Branch**: %s\n", toolutil.EscapeMdTableCell(p.DefaultBranch))
-	if p.Description != "" {
-		toolutil.WriteDescription(&b, p.Description)
+	c := toolutil.NewCard(&b, "Project: "+p.Name)
+	c.Int("ID", p.ID)
+	c.Field("Path", p.PathWithNamespace)
+	c.Field("Visibility", p.Visibility)
+	c.Field("Default Branch", p.DefaultBranch)
+	c.Text("Description", p.Description)
+	if p.Namespace != nil {
+		c.Field("Namespace", p.Namespace.FullPath)
 	}
-	if p.Namespace != nil && p.Namespace.FullPath != "" {
-		fmt.Fprintf(&b, "- **Namespace**: %s\n", toolutil.EscapeMdTableCell(p.Namespace.FullPath))
+	if p.ForkedFromProject != nil {
+		c.Field("Forked From", p.ForkedFromProject.PathWithNamespace)
 	}
-	if p.ForkedFromProject != nil && p.ForkedFromProject.PathWithNamespace != "" {
-		fmt.Fprintf(&b, "- **Forked From**: %s\n", toolutil.EscapeMdTableCell(p.ForkedFromProject.PathWithNamespace))
-	}
-	if p.Archived {
-		fmt.Fprintf(&b, "- %s **Archived**\n", toolutil.EmojiArchived)
-	}
-	if p.ForksCount > 0 {
-		fmt.Fprintf(&b, "- **Forks**: %d\n", p.ForksCount)
-	}
-	if p.StarCount > 0 {
-		fmt.Fprintf(&b, "- %s **Stars**: %d\n", toolutil.EmojiStar, p.StarCount)
-	}
-	if p.OpenIssuesCount > 0 {
-		fmt.Fprintf(&b, "- **Open Issues**: %d\n", p.OpenIssuesCount)
-	}
+	c.Flag(toolutil.EmojiArchived, "Archived", p.Archived)
+	// An empty repository is why a branch, file or pipeline action against this
+	// project answers with nothing, so the card says so rather than leaving the
+	// reader to infer it.
+	c.Flag(toolutil.EmojiInfo, "Empty Repository", p.EmptyRepo)
+	// GitLab schedules a deletion rather than performing it, and answers with
+	// the date on both the current key and the one it used to send.
+	c.Time("Marked for Deletion", markedForDeletion(p))
+	c.Count("Forks", p.ForksCount)
+	c.Count("Stars", p.StarCount)
+	c.Count("Open Issues", p.OpenIssuesCount)
 	if len(p.Topics) > 0 {
-		fmt.Fprintf(&b, "- **Topics**: %s\n", toolutil.EscapeMdTableCell(strings.Join(p.Topics, ", ")))
+		c.Field("Topics", strings.Join(p.Topics, ", "))
 	}
-	if p.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(p.CreatedAt))
-	}
-	toolutil.WriteMdURL(&b, p.WebURL)
-	if p.HTTPURLToRepo != "" {
-		fmt.Fprintf(&b, "- **HTTP Clone**: %s\n", toolutil.EscapeMdTableCell(p.HTTPURLToRepo))
-	}
-	if p.SSHURLToRepo != "" {
-		fmt.Fprintf(&b, "- **SSH Clone**: %s\n", toolutil.EscapeMdTableCell(p.SSHURLToRepo))
-	}
+	c.Time("Created", p.CreatedAt)
+	c.URL(p.WebURL)
+	c.Code("HTTP Clone", p.HTTPURLToRepo)
+	c.Code("SSH Clone", p.SSHURLToRepo)
+	// A title regex is a pattern a maintainer typed, where '|' is ordinary
+	// alternation: inside a code span it reaches the reader as GitLab holds it.
+	c.Code("MR Title Regex", p.MergeRequestTitleRegex)
 	if p.MergeRequestTitleRegex != "" {
-		fmt.Fprintf(&b, "- **MR Title Regex**: `%s`\n", toolutil.EscapeMdTableCell(p.MergeRequestTitleRegex))
-		if p.MergeRequestTitleRegexDescription != "" {
-			fmt.Fprintf(&b, "- **MR Title Regex Description**: %s\n", toolutil.EscapeMdTableCell(p.MergeRequestTitleRegexDescription))
-		}
+		c.Field("MR Title Regex Description", p.MergeRequestTitleRegexDescription)
 	}
-	if p.ProtectMergeRequestPipelines != nil && *p.ProtectMergeRequestPipelines {
-		fmt.Fprintf(&b, "- **Protected MR Pipelines**: enabled\n")
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use gitlab_branch action 'list' to see branches",
-		"Use gitlab_merge_request action 'list' to see open merge requests",
-		"Use gitlab_issue action 'list' to see open issues",
-		"Use gitlab_pipeline action 'list' to see CI/CD pipelines",
-		"Use gitlab_project_get to get project details",
+	c.BoolPtr("Protected MR Pipelines", p.ProtectMergeRequestPipelines)
+	c.End(
+		toolutil.HintAction("branch.list", "see this project's branches"),
+		toolutil.HintAction("merge_request.list", "see its open merge requests"),
+		toolutil.HintAction("issue.list", "see its open issues"),
+		toolutil.HintAction("pipeline.list", "see its CI/CD pipelines"),
+		toolutil.HintAction(actionProjectUpdate, "change this project's settings"),
 	)
 	return b.String()
 }
 
-// FormatDeleteMarkdown renders a project deletion result as a Markdown summary.
+// markedForDeletion is the deletion date GitLab sent, whichever of the two keys
+// it used: marked_for_deletion_on is the current spelling and
+// marked_for_deletion_at the one the older entity sends.
+func markedForDeletion(p Output) string {
+	if p.MarkedForDeletionOn != "" {
+		return p.MarkedForDeletionOn
+	}
+	return p.MarkedForDeletionAt
+}
+
+// FormatDeleteMarkdown renders a project deletion result as a card: GitLab
+// schedules the deletion and answers with when it will happen, so the result is
+// an object rather than a one-line confirmation.
 func FormatDeleteMarkdown(out DeleteOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Project Deletion\n\n")
-	//gitlab:allow-unescaped out.Status: one of the three literals this package's own delete handlers write (already_scheduled, scheduled, success).
-	fmt.Fprintf(&b, toolutil.FmtMdStatus, out.Status)
+	c := toolutil.NewCard(&b, "Project Deletion")
+	c.Field("Status", out.Status)
 	// The message is server-authored but interpolates the caller's own
 	// project_id, which nothing validates before it lands here.
-	fmt.Fprintf(&b, "- **Message**: %s\n", toolutil.EscapeMdTableCell(out.Message))
-	if out.MarkedForDeletionOn != "" {
-		//gitlab:allow-unescaped out.MarkedForDeletionOn: a date this package rendered itself, with time.Time.Format on the DateOnly layout.
-		fmt.Fprintf(&b, "- **Marked for deletion on**: %s\n", out.MarkedForDeletionOn)
-	}
-	if out.PermanentlyRemoved {
-		b.WriteString("- **Permanently removed**: yes\n")
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_project_list` to verify deletion",
-	)
+	c.Field("Message", out.Message)
+	c.Time("Marked for Deletion On", out.MarkedForDeletionOn)
+	c.Warn("Permanently Removed", out.PermanentlyRemoved)
+	c.End(toolutil.HintAction(actionProjectList, "verify the deletion"))
 	return b.String()
 }
 
 // FormatListMarkdown renders a list of projects as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
-	return formatProjectTable("Projects", "No projects found.", out.Projects, out.SimpleProjects, out.Pagination,
-		"Use action 'get' with a project_id to see full project details",
-		"Use action 'create' to create a new project",
+	return formatProjectTable("Projects", "projects", out.Projects, out.SimpleProjects, out.Pagination,
+		toolutil.HintAction(actionProjectGet, "see one project in full"),
+		toolutil.HintAction("project.create", "create a new project"),
 	)
 }
 
@@ -121,17 +112,14 @@ func FormatListMarkdown(out ListOutput) string {
 // entities GitLab sent: full rows, or the BasicProjectDetails rows a caller
 // gets by passing simple. The project list and the fork list are the same
 // table and differ only in their title, empty line and hints.
-func formatProjectTable(title, empty string, full []Output, basic []BasicOutput, pagination toolutil.PaginationOutput, hints ...string) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, toolutil.FmtMdH2Count, title, pagination.TotalItems)
+func formatProjectTable(title, resource string, full []Output, basic []BasicOutput, pagination toolutil.PaginationOutput, hints ...string) string {
 	rows := len(full) + len(basic)
-	toolutil.WriteListSummary(&b, rows, pagination)
 	if rows == 0 {
-		b.WriteString(empty + "\n")
-		return b.String()
+		return toolutil.EmptyMessage(resource)
 	}
-	b.WriteString("| ID | Name | Path | Visibility | " + toolutil.EmojiStar + " |\n")
-	b.WriteString(toolutil.TblSep5Col)
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, title, rows, pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Path", "Visibility", toolutil.EmojiStar))
 	for _, p := range full {
 		writeProjectListRow(&b, p.BasicOutput, p.Archived)
 	}
@@ -140,9 +128,25 @@ func formatProjectTable(title, empty string, full []Output, basic []BasicOutput,
 	for _, p := range basic {
 		writeProjectListRow(&b, p, false)
 	}
-	toolutil.WritePagination(&b, pagination)
-	toolutil.WriteHints(&b, append([]string{toolutil.HintPreserveLinks}, hints...)...)
+	toolutil.WriteListFooter(&b, pagination, projectRowsLink(full, basic), hints...)
 	return b.String()
+}
+
+// projectRowsLink reports whether any row of this page carries a link, which is
+// what decides whether the footer tells the model to preserve them: an
+// instruction about links a table has none of is noise it has to read past.
+func projectRowsLink(full []Output, basic []BasicOutput) bool {
+	for _, p := range full {
+		if p.WebURL != "" {
+			return true
+		}
+	}
+	for _, p := range basic {
+		if p.WebURL != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // writeProjectListRow writes one row of a project list table. It takes the
@@ -153,82 +157,86 @@ func writeProjectListRow(b *strings.Builder, p BasicOutput, archived bool) {
 	if archived {
 		mark = " " + toolutil.EmojiArchived
 	}
-	fmt.Fprintf(b, "| %d | %s%s | %s | %s | %d |\n", p.ID, toolutil.MdTitleLink(p.Name, p.WebURL), mark, toolutil.EscapeMdTableCell(p.PathWithNamespace), p.Visibility, p.StarCount)
+	b.WriteString(toolutil.MarkdownTableRow(
+		strconv.FormatInt(p.ID, 10),
+		toolutil.MdTitleLink(p.Name, p.WebURL)+mark,
+		toolutil.EscapeMdTableCell(p.PathWithNamespace),
+		toolutil.EscapeMdTableCell(p.Visibility),
+		strconv.FormatInt(p.StarCount, 10),
+	))
 }
 
 // FormatListForksMarkdown renders a list of project forks as Markdown.
 func FormatListForksMarkdown(out ListForksOutput) string {
-	return formatProjectTable("Project Forks", "No forks found.", out.Forks, out.SimpleForks, out.Pagination,
-		"Use `gitlab_project_get` to view fork details",
-		"Use `gitlab_project_fork` to create a new fork",
+	return formatProjectTable("Project Forks", "forks", out.Forks, out.SimpleForks, out.Pagination,
+		toolutil.HintAction(actionProjectGet, "view one fork's details"),
+		toolutil.HintAction(actionProjectFork, "create a new fork"),
 	)
 }
 
 // FormatLanguagesMarkdown renders project languages as Markdown.
 func FormatLanguagesMarkdown(out LanguagesOutput) string {
-	var b strings.Builder
-	b.WriteString("## Project Languages\n\n")
 	if len(out.Languages) == 0 {
-		b.WriteString("No languages detected.\n")
-		return b.String()
+		return toolutil.EmptyMessage("languages")
 	}
-	b.WriteString("| Language | % |\n")
-	b.WriteString(toolutil.TblSep2Col)
+	var b strings.Builder
+	var pagination toolutil.PaginationOutput
+	toolutil.WriteListHeading(&b, "Project Languages", len(out.Languages), pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("Language", "%"))
 	for _, l := range out.Languages {
-		fmt.Fprintf(&b, "| %s | %.1f%% |\n", toolutil.EscapeMdTableCell(l.Name), l.Percentage)
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.EscapeMdTableCell(l.Name),
+			fmt.Sprintf("%.1f%%", l.Percentage),
+		))
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_repository_tree` to browse the codebase",
-	)
+	toolutil.WriteListFooter(&b, pagination, false,
+		"Use action 'repository.tree' to browse the codebase")
 	return b.String()
 }
 
 // FormatListHooksMarkdown renders a list of project webhooks as Markdown.
 func FormatListHooksMarkdown(out ListHooksOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Project Webhooks (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Hooks), out.Pagination)
 	if len(out.Hooks) == 0 {
-		b.WriteString("No webhooks found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("webhooks")
 	}
-	b.WriteString("| ID | Name | URL | Push | MR | Issues | Pipeline | SSL |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Project Webhooks", len(out.Hooks), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "URL", "Push", "MR", "Issues", "Pipeline", "SSL"))
 	for _, h := range out.Hooks {
-		name := h.Name
-		if name == "" {
-			name = "-"
-		}
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s | %s | %s |\n",
-			h.ID, toolutil.EscapeMdTableCell(name), toolutil.EscapeMdTableCell(h.URL),
-			boolIcon(h.PushEvents), boolIcon(h.MergeRequestsEvents),
-			boolIcon(h.IssuesEvents), boolIcon(h.PipelineEvents),
-			boolIcon(h.EnableSSLVerification))
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(h.ID, 10),
+			hookNameCell(h.Name),
+			toolutil.MdCodeSpanCell(h.URL),
+			toolutil.BoolEmoji(h.PushEvents),
+			toolutil.BoolEmoji(h.MergeRequestsEvents),
+			toolutil.BoolEmoji(h.IssuesEvents),
+			toolutil.BoolEmoji(h.PipelineEvents),
+			toolutil.BoolEmoji(h.EnableSSLVerification),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_project_hook_get` to view a webhook's details",
-		"Use `gitlab_project_hook_add` to add a new webhook",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionProjectHookGet, "view one webhook's details"),
+		toolutil.HintAction("project.hook_add", "add a new webhook"),
 	)
 	return b.String()
 }
 
-// FormatHookMarkdown renders a single project webhook as Markdown.
-func FormatHookMarkdown(out HookOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Webhook #%d\n\n", out.ID)
-	if out.Name != "" {
-		fmt.Fprintf(&b, "**Name:** %s\n", out.Name)
+// hookNameCell renders a webhook's name, or the dash that says GitLab sent
+// none, since a hook may be created without one.
+func hookNameCell(name string) string {
+	if name == "" {
+		return "-"
 	}
-	fmt.Fprintf(&b, "**URL:** %s\n", out.URL)
-	fmt.Fprintf(&b, "**SSL Verification:** %s\n", boolIcon(out.EnableSSLVerification))
-	fmt.Fprintf(&b, "**Token Present:** %s\n", boolIcon(out.TokenPresent))
-	fmt.Fprintf(&b, "**Signing Token Present:** %s\n\n", boolIcon(out.SigningTokenPresent))
-	b.WriteString("### Event Triggers\n\n")
-	b.WriteString(toolutil.MarkdownTableHeader("Event", "Enabled"))
-	events := []struct {
+	return toolutil.EscapeMdTableCell(name)
+}
+
+// hookEvents pairs each event a webhook can subscribe to with whether this hook
+// does, in the order the card lists them.
+func hookEvents(out HookOutput) []struct {
+	name string
+	on   bool
+} {
+	return []struct {
 		name string
 		on   bool
 	}{
@@ -252,49 +260,74 @@ func FormatHookMarkdown(out HookOutput) string {
 		{"Resource Deploy Token", out.ResourceDeployTokenEvents},
 		{"Vulnerability", out.VulnerabilityEvents},
 	}
-	for _, ev := range events {
-		b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(ev.name), boolIcon(ev.on)))
+}
+
+// FormatHookMarkdown renders a single project webhook as a card, with the
+// events it subscribes to as the nested collection they are and the URL
+// variable and custom header keys through the one writer of a redacted key
+// table. The name and the URL used to be written as bullet-less label lines,
+// which render as one run-on paragraph, and neither was escaped.
+func FormatHookMarkdown(out HookOutput) string {
+	var b strings.Builder
+	c := toolutil.NewCard(&b, "Webhook #"+strconv.FormatInt(out.ID, 10))
+	c.Field("Name", out.Name)
+	c.Code("URL", out.URL)
+	c.Bool("SSL Verification", out.EnableSSLVerification)
+	c.Bool("Token Present", out.TokenPresent)
+	c.Bool("Signing Token Present", out.SigningTokenPresent)
+	events := c.Table("Event Triggers", "Event", "Enabled")
+	for _, ev := range hookEvents(out) {
+		events.Row(toolutil.EscapeMdTableCell(ev.name), toolutil.BoolEmoji(ev.on))
 	}
-	if len(out.URLVariables) > 0 {
-		b.WriteString("\n### URL Variables\n\n")
-		b.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
-		for _, variable := range out.URLVariables {
-			b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(variable.Key), toolutil.RedactedSecretValue))
-		}
-	}
-	if len(out.CustomHeaders) > 0 {
-		b.WriteString("\n### Custom Headers\n\n")
-		b.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
-		for _, header := range out.CustomHeaders {
-			b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(header.Key), toolutil.RedactedSecretValue))
-		}
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_project_hook_edit` to modify event triggers",
-		"Use `gitlab_project_hook_test` to test the webhook",
+	toolutil.WriteHookSecretKeys(&b, hookKeys(out.URLVariables), headerKeys(out.CustomHeaders))
+	c.End(
+		toolutil.HintAction(actionProjectHookEdit, "modify the event triggers"),
+		toolutil.HintAction("project.hook_test", "test the webhook"),
 	)
 	return b.String()
+}
+
+// hookKeys lists the URL-variable keys a webhook has set; GitLab never sends
+// the values back.
+func hookKeys(variables []HookURLVariable) []string {
+	keys := make([]string, 0, len(variables))
+	for _, variable := range variables {
+		keys = append(keys, variable.Key)
+	}
+	return keys
+}
+
+// headerKeys lists the custom-header keys a webhook has set, for the same
+// reason as [hookKeys].
+func headerKeys(headers []HookCustomHeader) []string {
+	keys := make([]string, 0, len(headers))
+	for _, header := range headers {
+		keys = append(keys, header.Key)
+	}
+	return keys
 }
 
 // FormatListProjectUsersMarkdown renders a users list as markdown.
 func FormatListProjectUsersMarkdown(out ListProjectUsersOutput) string {
 	if len(out.Users) == 0 {
-		return "No users found.\n"
+		return toolutil.EmptyMessage("users")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Project Users (%d)\n\n", len(out.Users))
-	toolutil.WriteListSummary(&b, len(out.Users), out.Pagination)
-	b.WriteString("| ID | Name | Username | State |\n")
-	b.WriteString("|---|---|---|---|\n")
+	linked := false
+	toolutil.WriteListHeading(&b, "Project Users", len(out.Users), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Username", "State"))
 	for _, u := range out.Users {
-		//gitlab:allow-unescaped u.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned).
-		fmt.Fprintf(&b, "| %d | %s | @%s | %s |\n", u.ID, toolutil.EscapeMdTableCell(u.Name), toolutil.EscapeMdTableCell(u.Username), u.State)
+		linked = linked || u.WebURL != ""
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(u.ID, 10),
+			toolutil.EscapeMdTableCell(u.Name),
+			toolutil.MdUserLink(u.Username, u.WebURL),
+			toolutil.EscapeMdTableCell(u.State),
+		))
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_project_member_add` to add a new member",
-		"Use `gitlab_project_share_with_group` to share with a group",
+	toolutil.WriteListFooter(&b, out.Pagination, linked,
+		"Use action 'project.member_add' to add a new member",
+		"Use action 'project.share_with_group' to share this project with a group",
 	)
 	return b.String()
 }
@@ -302,316 +335,265 @@ func FormatListProjectUsersMarkdown(out ListProjectUsersOutput) string {
 // FormatListProjectGroupsMarkdown renders a project groups list as markdown.
 func FormatListProjectGroupsMarkdown(out ListProjectGroupsOutput) string {
 	if len(out.Groups) == 0 {
-		return "No groups found.\n"
+		return toolutil.EmptyMessage("groups")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Project Groups (%d)\n\n", len(out.Groups))
-	toolutil.WriteListSummary(&b, len(out.Groups), out.Pagination)
-	b.WriteString("| ID | Name | Full Path |\n")
-	b.WriteString("|---|---|---|\n")
+	linked := false
+	toolutil.WriteListHeading(&b, "Project Groups", len(out.Groups), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Full Path"))
 	for _, g := range out.Groups {
-		fmt.Fprintf(&b, "| %d | %s | %s |\n", g.ID, toolutil.EscapeMdTableCell(g.Name), toolutil.EscapeMdTableCell(g.FullPath))
+		linked = linked || g.WebURL != ""
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(g.ID, 10),
+			toolutil.MdTitleLink(g.Name, g.WebURL),
+			toolutil.EscapeMdTableCell(g.FullPath),
+		))
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_group_get` to view group details",
-	)
+	toolutil.WriteListFooter(&b, out.Pagination, linked,
+		toolutil.HintAction(actionGroupGet, "view one group's details"))
 	return b.String()
 }
 
 // FormatListStarrersMarkdown renders a starrers list as markdown.
 func FormatListStarrersMarkdown(out ListProjectStarrersOutput) string {
 	if len(out.Starrers) == 0 {
-		return "No starrers found.\n"
+		return toolutil.EmptyMessage("starrers")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Project Starrers (%d)\n\n", len(out.Starrers))
-	toolutil.WriteListSummary(&b, len(out.Starrers), out.Pagination)
-	b.WriteString("| User | Username | Starred Since |\n")
-	b.WriteString("|---|---|---|\n")
+	linked := false
+	toolutil.WriteListHeading(&b, "Project Starrers", len(out.Starrers), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("User", "Username", "Starred Since"))
 	for _, s := range out.Starrers {
-		fmt.Fprintf(&b, "| %s | @%s | %s |\n", toolutil.EscapeMdTableCell(s.User.Name), toolutil.EscapeMdTableCell(s.User.Username), toolutil.FormatTime(s.StarredSince))
+		linked = linked || s.User.WebURL != ""
+		b.WriteString(toolutil.MarkdownTableRow(
+			toolutil.EscapeMdTableCell(s.User.Name),
+			toolutil.MdUserLink(s.User.Username, s.User.WebURL),
+			toolutil.FormatTime(s.StarredSince),
+		))
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_project_get` to view full project details",
-	)
+	toolutil.WriteListFooter(&b, out.Pagination, linked,
+		toolutil.HintAction(actionProjectGet, "view the project itself"))
 	return b.String()
 }
 
-// FormatShareProjectMarkdown renders a share-project result as markdown.
+// FormatShareProjectMarkdown renders a share-project result as a card: the
+// share GitLab created is the object the action returns.
 func FormatShareProjectMarkdown(out ShareProjectOutput) string {
 	var b strings.Builder
-	b.WriteString("## Project Shared\n\n")
-	fmt.Fprintf(&b, "%s\n", out.Message)
-	if out.GroupID != 0 {
-		fmt.Fprintf(&b, "\n| Field | Value |\n")
-		b.WriteString("|---|---|\n")
-		fmt.Fprintf(&b, "| Group ID | %d |\n", out.GroupID)
-		//gitlab:allow-unescaped out.AccessRole: accessLevelName returns one of this package's six role literals, or "Level" and an integer.
-		fmt.Fprintf(&b, "| Access Role | %s |\n", out.AccessRole)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_project_list_groups` to verify the share",
-		"Use `gitlab_project_delete_shared_group` to revoke access",
+	c := toolutil.NewCard(&b, "Project Shared")
+	// The message is server-authored but interpolates the caller's own
+	// project_id, which nothing validates before it lands here.
+	c.Field("Message", out.Message)
+	c.Count("Group ID", out.GroupID)
+	c.Field("Access Role", out.AccessRole)
+	c.End(
+		toolutil.HintAction(actionProjectListInvGroups, "verify the share"),
+		toolutil.HintAction("project.delete_shared_group", "revoke the group's access"),
 	)
 	return b.String()
 }
 
-// FormatTriggerTestHookMarkdown renders a webhook test trigger result as markdown.
+// FormatTriggerTestHookMarkdown renders a webhook test trigger result as
+// markdown. The message names the event the caller asked for, so it is escaped
+// rather than written as it arrived.
 func FormatTriggerTestHookMarkdown(out TriggerTestHookOutput) string {
-	return fmt.Sprintf(toolutil.EmojiSuccess+" %s", out.Message)
+	return toolutil.EmojiSuccess + " " + toolutil.EscapeMdTableCell(out.Message) + "\n"
 }
 
-// FormatPushRuleMarkdown renders a push rule as markdown.
+// FormatPushRuleMarkdown renders a push rule as a card. Every regex is a code
+// span: a rule holding an alternation used to reach the model as
+// `^(feat&#124;fix):`, which is not the pattern GitLab enforces.
 func FormatPushRuleMarkdown(out PushRuleOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Push Rule (ID: %d)\n\n", out.ID)
-	fmt.Fprintf(&b, "**Project ID:** %d\n\n", out.ProjectID)
-
-	b.WriteString("| Rule | Value |\n")
-	b.WriteString("|---|---|\n")
-
-	type rule struct {
-		name string
-		val  string
-	}
-	rules := []rule{
-		{"Commit message regex", out.CommitMessageRegex},
-		{"Commit message negative regex", out.CommitMessageNegativeRegex},
-		{"Branch name regex", out.BranchNameRegex},
-		{"Author email regex", out.AuthorEmailRegex},
-		{"File name regex", out.FileNameRegex},
-		{"Max file size (MB)", strconv.FormatInt(out.MaxFileSize, 10)},
-		{"Deny delete tag", boolIcon(out.DenyDeleteTag)},
-		{"Member check", boolIcon(out.MemberCheck)},
-		{"Prevent secrets", boolIcon(out.PreventSecrets)},
-		{"Commit committer check", boolIcon(out.CommitCommitterCheck)},
-		{"Commit committer name check", boolIcon(out.CommitCommitterNameCheck)},
-		{"Reject unsigned commits", boolIcon(out.RejectUnsignedCommits)},
-		{"Reject non-DCO commits", boolIcon(out.RejectNonDCOCommits)},
-	}
-	for _, r := range rules {
-		val := r.val
-		if val == "" {
-			val = "-"
-		}
-		//gitlab:allow-unescaped r.name: every rule label in the slice above is a string literal written here.
-		fmt.Fprintf(&b, "| %s | %s |\n", r.name, toolutil.EscapeMdTableCell(val))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_project_edit_push_rule` to modify push rules",
-		"Use `gitlab_project_delete_push_rule` to remove push rules",
+	c := toolutil.NewCard(&b, "Push Rule (ID: "+strconv.FormatInt(out.ID, 10)+")")
+	c.Int("Project ID", out.ProjectID)
+	c.Code("Commit message regex", out.CommitMessageRegex)
+	c.Code("Commit message negative regex", out.CommitMessageNegativeRegex)
+	c.Code("Branch name regex", out.BranchNameRegex)
+	c.Code("Author email regex", out.AuthorEmailRegex)
+	c.Code("File name regex", out.FileNameRegex)
+	// GitLab's own zero for this setting means no limit, which "0" said the
+	// opposite of.
+	c.Field("Max file size (MB)", maxFileSize(out.MaxFileSize))
+	c.Bool("Deny delete tag", out.DenyDeleteTag)
+	c.Bool("Member check", out.MemberCheck)
+	c.Bool("Prevent secrets", out.PreventSecrets)
+	c.Bool("Commit committer check", out.CommitCommitterCheck)
+	c.Bool("Commit committer name check", out.CommitCommitterNameCheck)
+	c.Bool("Reject unsigned commits", out.RejectUnsignedCommits)
+	c.Bool("Reject non-DCO commits", out.RejectNonDCOCommits)
+	c.Time("Created", out.CreatedAt)
+	c.End(
+		toolutil.HintAction(actionProjectEditPushRule, "modify these push rules"),
+		toolutil.HintAction(actionProjectDeletePushRule, "remove them"),
 	)
 	return b.String()
 }
 
-// FormatDownloadAvatarMarkdown renders an avatar download result as Markdown.
+// maxFileSize renders the push rule's file-size ceiling, where GitLab's zero
+// means there is none.
+func maxFileSize(mb int64) string {
+	if mb == 0 {
+		return "unlimited"
+	}
+	return strconv.FormatInt(mb, 10)
+}
+
+// FormatDownloadAvatarMarkdown renders an avatar download result as a card.
 func FormatDownloadAvatarMarkdown(out DownloadAvatarOutput) string {
 	var b strings.Builder
-	b.WriteString("## Project Avatar\n\n")
-	fmt.Fprintf(&b, "- **Size**: %d bytes\n", out.SizeBytes)
-	fmt.Fprintf(&b, "- **Content**: base64-encoded (%d chars)\n", len(out.ContentBase64))
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_project_upload_avatar` to replace the avatar",
-	)
+	c := toolutil.NewCard(&b, "Project Avatar")
+	c.Int("Size", int64(out.SizeBytes))
+	c.Field("Content", fmt.Sprintf("base64-encoded (%d chars)", len(out.ContentBase64)))
+	c.End(toolutil.HintAction("project.upload_avatar", "replace the avatar"))
 	return b.String()
 }
 
-// FormatApprovalConfigMarkdown renders approval configuration as Markdown.
+// FormatApprovalConfigMarkdown renders approval configuration as a card.
 func FormatApprovalConfigMarkdown(out ApprovalConfigOutput) string {
 	var b strings.Builder
-	b.WriteString("## Approval Configuration\n\n")
-	b.WriteString("| Setting | Value |\n")
-	b.WriteString(toolutil.TblSep2Col)
-	fmt.Fprintf(&b, "| Approvals before merge | %d |\n", out.ApprovalsBeforeMerge)
-	fmt.Fprintf(&b, "| Reset approvals on push | %s |\n", boolIcon(out.ResetApprovalsOnPush))
-	fmt.Fprintf(&b, "| Disable overriding approvers per MR | %s |\n", boolIcon(out.DisableOverridingApproversPerMergeRequest))
-	fmt.Fprintf(&b, "| Author self-approval | %s |\n", boolIcon(out.MergeRequestsAuthorApproval))
-	fmt.Fprintf(&b, "| Disable committers approval | %s |\n", boolIcon(out.MergeRequestsDisableCommittersApproval))
-	fmt.Fprintf(&b, "| Require reauthentication to approve | %s |\n", boolIcon(out.RequireReauthenticationToApprove))
-	fmt.Fprintf(&b, "| Selective code owner removals | %s |\n", boolIcon(out.SelectiveCodeOwnerRemovals))
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_project_approval_config_change` to modify settings",
-		"Use `gitlab_project_approval_rule_list` to see approval rules",
+	c := toolutil.NewCard(&b, "Approval Configuration")
+	c.Int("Approvals before merge", out.ApprovalsBeforeMerge)
+	c.Bool("Reset approvals on push", out.ResetApprovalsOnPush)
+	c.Bool("Disable overriding approvers per MR", out.DisableOverridingApproversPerMergeRequest)
+	c.Bool("Author self-approval", out.MergeRequestsAuthorApproval)
+	c.Bool("Disable committers approval", out.MergeRequestsDisableCommittersApproval)
+	c.Bool("Require reauthentication to approve", out.RequireReauthenticationToApprove)
+	c.Bool("Selective code owner removals", out.SelectiveCodeOwnerRemovals)
+	c.End(
+		toolutil.HintAction("project.approval_config_change", "modify these settings"),
+		toolutil.HintAction(actionProjectApprovalRuleList, "see the approval rules"),
 	)
 	return b.String()
 }
 
-// FormatApprovalRuleMarkdown renders a single approval rule as Markdown.
+// FormatApprovalRuleMarkdown renders a single approval rule as a card.
 func FormatApprovalRuleMarkdown(out ApprovalRuleOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Approval Rule: %s\n\n", toolutil.EscapeMdHeading(out.Name))
-	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
-	fmt.Fprintf(&b, "- **Approvals Required**: %d\n", out.ApprovalsRequired)
-	if out.RuleType != "" {
-		//gitlab:allow-unescaped out.RuleType: an approval rule type GitLab picks from a fixed set (regular, any_approver, code_owner, report_approver).
-		fmt.Fprintf(&b, "- **Rule Type**: %s\n", out.RuleType)
-	}
-	if out.ReportType != "" {
-		//gitlab:allow-unescaped out.ReportType: an approval report type GitLab picks from a fixed set (code_coverage, scan_finding, license_scanning, any_merge_request).
-		fmt.Fprintf(&b, "- **Report Type**: %s\n", out.ReportType)
-	}
-	fmt.Fprintf(&b, "- **Applies to all protected branches**: %s\n", boolIcon(out.AppliesToAllProtectedBranches))
-	fmt.Fprintf(&b, "- **Contains hidden groups**: %s\n", boolIcon(out.ContainsHiddenGroups))
-	if names := userNames(out.Users); len(names) > 0 {
-		fmt.Fprintf(&b, "- **Users**: %s\n", toolutil.EscapeMdTableCell(strings.Join(names, ", ")))
-	}
-	if names := groupNames(out.Groups); len(names) > 0 {
-		fmt.Fprintf(&b, "- **Groups**: %s\n", toolutil.EscapeMdTableCell(strings.Join(names, ", ")))
-	}
-	if names := userNames(out.EligibleApprovers); len(names) > 0 {
-		fmt.Fprintf(&b, "- **Eligible Approvers**: %s\n", toolutil.EscapeMdTableCell(strings.Join(names, ", ")))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_project_approval_rule_update` to modify this rule",
-		"Use `gitlab_project_approval_rule_delete` to remove this rule",
+	c := toolutil.NewCard(&b, "Approval Rule: "+out.Name)
+	c.Int("ID", out.ID)
+	c.Int("Approvals Required", out.ApprovalsRequired)
+	c.Field("Rule Type", out.RuleType)
+	c.Field("Report Type", out.ReportType)
+	c.Bool("Applies to all protected branches", out.AppliesToAllProtectedBranches)
+	c.Bool("Contains hidden groups", out.ContainsHiddenGroups)
+	c.Field("Users", strings.Join(userNames(out.Users), ", "))
+	c.Field("Groups", strings.Join(groupNames(out.Groups), ", "))
+	c.Field("Eligible Approvers", strings.Join(userNames(out.EligibleApprovers), ", "))
+	c.End(
+		toolutil.HintAction("project.approval_rule_update", "modify this rule"),
+		toolutil.HintAction("project.approval_rule_delete", "remove it"),
 	)
 	return b.String()
 }
 
 // FormatListApprovalRulesMarkdown renders a list of approval rules as Markdown.
 func FormatListApprovalRulesMarkdown(out ListApprovalRulesOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Approval Rules (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Rules), out.Pagination)
 	if len(out.Rules) == 0 {
-		b.WriteString("No approval rules found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("approval rules")
 	}
-	b.WriteString("| ID | Name | Type | Approvals | All Protected | Users | Groups |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Approval Rules", len(out.Rules), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Type", "Approvals", "All Protected", "Users", "Groups"))
 	for _, r := range out.Rules {
-		//gitlab:allow-unescaped ruleType: the same approval rule type enum, or the dash this loop substitutes for an empty one.
-		ruleType := r.RuleType
-		if ruleType == "" {
-			ruleType = "-"
-		}
-		users := "-"
-		if names := userNames(r.Users); len(names) > 0 {
-			users = strings.Join(names, ", ")
-		}
-		groups := "-"
-		if names := groupNames(r.Groups); len(names) > 0 {
-			groups = strings.Join(names, ", ")
-		}
-		fmt.Fprintf(&b, "| %d | %s | %s | %d | %s | %s | %s |\n",
-			r.ID, toolutil.EscapeMdTableCell(r.Name), ruleType,
-			r.ApprovalsRequired, boolIcon(r.AppliesToAllProtectedBranches),
-			toolutil.EscapeMdTableCell(users), toolutil.EscapeMdTableCell(groups))
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(r.ID, 10),
+			toolutil.EscapeMdTableCell(r.Name),
+			dashIfEmpty(toolutil.EscapeMdTableCell(r.RuleType)),
+			strconv.FormatInt(r.ApprovalsRequired, 10),
+			toolutil.BoolEmoji(r.AppliesToAllProtectedBranches),
+			dashIfEmpty(toolutil.EscapeMdTableCell(strings.Join(userNames(r.Users), ", "))),
+			dashIfEmpty(toolutil.EscapeMdTableCell(strings.Join(groupNames(r.Groups), ", "))),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use `gitlab_project_approval_rule_get` to see rule details",
-		"Use `gitlab_project_approval_rule_create` to add a new rule",
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionProjectApprovalRuleGet, "see one rule in full"),
+		toolutil.HintAction("project.approval_rule_create", "add a new rule"),
 	)
 	return b.String()
 }
 
-// FormatPullMirrorMarkdown renders pull mirror details as Markdown.
+// dashIfEmpty renders the dash a table cell shows where a card row would write
+// nothing: a row has to have a cell in every column.
+func dashIfEmpty(cell string) string {
+	if cell == "" {
+		return "-"
+	}
+	return cell
+}
+
+// FormatPullMirrorMarkdown renders pull mirror details as a card.
 func FormatPullMirrorMarkdown(out PullMirrorOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Pull Mirror (ID: %d)\n\n", out.ID)
-	fmt.Fprintf(&b, "- **Enabled**: %s\n", boolIcon(out.Enabled))
-	if out.URL != "" {
-		// The mirror source URL is whatever the maintainer configuring it typed.
-		fmt.Fprintf(&b, "- **URL**: %s\n", toolutil.EscapeMdTableCell(out.URL))
-	}
-	if out.UpdateStatus != "" {
-		//gitlab:allow-unescaped out.UpdateStatus: a mirror update status GitLab picks from a fixed set (none, scheduled, started, finished, failed).
-		fmt.Fprintf(&b, "- **Update Status**: %s\n", out.UpdateStatus)
-	}
-	if out.LastError != "" {
-		// GitLab quotes the remote's own output back in this field.
-		fmt.Fprintf(&b, "- **Last Error**: %s\n", toolutil.EscapeMdTableCell(out.LastError))
-	}
-	if out.LastSuccessfulUpdateAt != "" {
-		fmt.Fprintf(&b, "- **Last Successful Update**: %s\n", toolutil.FormatTime(out.LastSuccessfulUpdateAt))
-	}
-	if out.LastUpdateAt != "" {
-		fmt.Fprintf(&b, "- **Last Update**: %s\n", toolutil.FormatTime(out.LastUpdateAt))
-	}
-	fmt.Fprintf(&b, "- **Trigger Builds**: %s\n", boolIcon(out.MirrorTriggerBuilds))
-	fmt.Fprintf(&b, "- **Only Protected Branches**: %s\n", boolIcon(out.OnlyMirrorProtectedBranches))
-	fmt.Fprintf(&b, "- **Overwrite Diverged Branches**: %s\n", boolIcon(out.MirrorOverwritesDivergedBranches))
-	if out.MirrorBranchRegex != "" {
-		fmt.Fprintf(&b, "- **Branch Regex**: `%s`\n", toolutil.EscapeMdTableCell(out.MirrorBranchRegex))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_project_pull_mirror_configure` to modify mirror settings",
-		"Use `gitlab_project_start_mirroring` to trigger an immediate update",
+	c := toolutil.NewCard(&b, "Pull Mirror (ID: "+strconv.FormatInt(out.ID, 10)+")")
+	c.Bool("Enabled", out.Enabled)
+	// The mirror source URL is whatever the maintainer configuring it typed.
+	c.Code("URL", out.URL)
+	c.Field("Update Status", out.UpdateStatus)
+	// GitLab quotes the remote's own output back in this field.
+	c.Text("Last Error", out.LastError)
+	c.Time("Last Successful Update", out.LastSuccessfulUpdateAt)
+	c.Time("Last Update", out.LastUpdateAt)
+	c.Time("Last Update Started", out.LastUpdateStartedAt)
+	c.Bool("Trigger Builds", out.MirrorTriggerBuilds)
+	c.Bool("Only Protected Branches", out.OnlyMirrorProtectedBranches)
+	c.Bool("Overwrite Diverged Branches", out.MirrorOverwritesDivergedBranches)
+	c.Code("Branch Regex", out.MirrorBranchRegex)
+	c.End(
+		toolutil.HintAction("project.pull_mirror_configure", "modify the mirror settings"),
+		toolutil.HintAction("project.start_mirroring", "trigger an immediate update"),
 	)
 	return b.String()
 }
 
-// FormatRepositoryStorageMarkdown renders repository storage info as Markdown.
+// FormatRepositoryStorageMarkdown renders repository storage info as a card.
 func FormatRepositoryStorageMarkdown(out RepositoryStorageOutput) string {
 	var b strings.Builder
-	b.WriteString("## Repository Storage\n\n")
-	fmt.Fprintf(&b, "- **Project ID**: %d\n", out.ProjectID)
-	fmt.Fprintf(&b, "- **Disk Path**: %s\n", toolutil.EscapeMdTableCell(out.DiskPath))
+	c := toolutil.NewCard(&b, "Repository Storage")
+	c.Int("Project ID", out.ProjectID)
+	c.Code("Disk Path", out.DiskPath)
 	// A storage shard name is an identifier the instance operator chose.
-	fmt.Fprintf(&b, "- **Repository Storage**: %s\n", toolutil.EscapeMdTableCell(out.RepositoryStorage))
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_project_start_housekeeping` to optimize the repository",
-	)
+	c.Code("Repository Storage", out.RepositoryStorage)
+	c.Time("Created", out.CreatedAt)
+	c.End(toolutil.HintAction("project.start_housekeeping", "optimize the repository"))
 	return b.String()
 }
 
 // FormatListTargetBranchRulesMarkdown renders a project's target branch rules
 // as a Markdown table.
 func FormatListTargetBranchRulesMarkdown(out ListTargetBranchRulesOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Target Branch Rules (%d)\n\n", len(out.TargetBranchRules))
 	if len(out.TargetBranchRules) == 0 {
-		b.WriteString("No target branch rules found.\n")
-		return b.String()
+		return toolutil.EmptyMessage("target branch rules")
 	}
-	b.WriteString("| ID | Source Pattern | Target Branch | Created |\n")
-	b.WriteString("| --- | --- | --- | --- |\n")
+	var b strings.Builder
+	var pagination toolutil.PaginationOutput
+	toolutil.WriteListHeading(&b, "Target Branch Rules", len(out.TargetBranchRules), pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Source Pattern", "Target Branch", "Created"))
 	for _, r := range out.TargetBranchRules {
-		created := "-"
-		if r.CreatedAt != "" {
-			created = toolutil.FormatTime(r.CreatedAt)
-		}
-		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
-			r.ID, toolutil.EscapeMdTableCell(r.Name), toolutil.EscapeMdTableCell(r.TargetBranch), created)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(r.ID, 10),
+			toolutil.MdCodeSpanCell(r.Name),
+			toolutil.MdCodeSpanCell(r.TargetBranch),
+			dashIfEmpty(toolutil.FormatTime(r.CreatedAt)),
+		))
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'target_branch_rule_create' to add a rule",
-		"Use action 'target_branch_rule_delete' with a rule_id to remove a rule",
+	toolutil.WriteListFooter(&b, pagination, false,
+		"Use action 'project.target_branch_rule_create' to add a rule",
+		"Use action 'project.target_branch_rule_delete' with a rule_id to remove a rule",
 	)
 	return b.String()
 }
 
-// FormatTargetBranchRuleMarkdown renders a single target branch rule as Markdown.
+// FormatTargetBranchRuleMarkdown renders a single target branch rule as a card.
 func FormatTargetBranchRuleMarkdown(out TargetBranchRuleOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Target Branch Rule: %s\n\n", toolutil.EscapeMdHeading(out.Name))
-	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
+	c := toolutil.NewCard(&b, "Target Branch Rule: "+out.Name)
+	c.Int("ID", out.ID)
 	// Both come straight off the caller's own create input.
-	fmt.Fprintf(&b, "- **Source Pattern**: %s\n", toolutil.EscapeMdTableCell(out.Name))
-	fmt.Fprintf(&b, "- **Target Branch**: %s\n", toolutil.EscapeMdTableCell(out.TargetBranch))
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use action 'target_branch_rule_list' to see all rules for the project",
-	)
+	c.Code("Source Pattern", out.Name)
+	c.Code("Target Branch", out.TargetBranch)
+	c.Time("Created", out.CreatedAt)
+	c.End("Use action 'project.target_branch_rule_list' to see all rules for the project")
 	return b.String()
 }
 

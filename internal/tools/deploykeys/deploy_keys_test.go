@@ -867,11 +867,34 @@ func TestListUserProject_CancelledContext(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_AllFields verifies the OutputMarkdown_AllFields Markdown formatter for a representative output_allfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// The four guidance sections the deploy-key formatters close with. Neither
+// table carries a link, so neither list asks the model to preserve any.
+const (
+	mdHintsOpening = "\n---\n\U0001F4A1 **Next steps:**\n"
+
+	keyCardHints = mdHintsOpening +
+		"- If the workflow asks to fetch/get this key before update or delete, use the selected tool surface's deploy-key get action with the same project_id and this deploy_key_id next\n" +
+		"- Use the selected tool surface's deploy-key enable action with project_id and this deploy_key_id to grant this key to another project\n" +
+		"- Use the selected tool surface's deploy-key delete action with the same project_id, this deploy_key_id, and explicit confirm=true to remove this deploy key\n"
+
+	keyListHints = mdHintsOpening +
+		"- Use the selected tool surface's deploy-key get action with the same project_id and deploy_key_id for full details\n" +
+		"- Use the selected tool surface's deploy-key add action with project_id to create a new deploy key\n"
+
+	instanceCardHints = mdHintsOpening +
+		"- Use the selected tool surface's deploy-key enable action with project_id and this deploy_key_id to grant this instance key to a project\n" +
+		"- Use the selected tool surface's deploy-key list action with project_id to verify project-level references before deletion workflows\n"
+
+	instanceListHints = mdHintsOpening +
+		"- Use the selected tool surface's deploy-key enable action with project_id and deploy_key_id to grant one of these keys to a project\n" +
+		"- Use the selected tool surface's deploy-key list action with project_id to inspect project-level deploy key metadata\n"
+)
+
+// TestFormatOutputMarkdown_AllFields pins the whole card of a project deploy
+// key with every field set: the fingerprints in code spans, the push flag as a
+// glyph, and each timestamp through FormatTime.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:                1,
 		Title:             "prod-key",
 		Key:               "ssh-rsa AAAA",
@@ -880,44 +903,40 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		CreatedAt:         "2026-01-01T00:00:00Z",
 		CanPush:           true,
 		ExpiresAt:         "2027-01-01T00:00:00Z",
+		LastUsedAt:        "2026-03-04T05:06:00Z",
+		UsageType:         "auth_and_signing",
 	})
 
-	for _, want := range []string{
-		"## Deploy Key: prod-key (ID: 1)",
-		"| ID | 1 |",
-		"| Title | prod-key |",
-		"| Fingerprint | ab:cd:ef |",
-		"| SHA256 | SHA256:xyz |",
-		"| Can Push | true |",
-		"| Created | 1 Jan 2026 00:00 UTC |",
-		"| Expires | 1 Jan 2027 00:00 UTC |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Deploy Key: prod-key (ID: 1)\n\n" +
+		"- **ID**: 1\n" +
+		"- **Title**: prod-key\n" +
+		"- **Fingerprint**: `ab:cd:ef`\n" +
+		"- **SHA256**: `SHA256:xyz`\n" +
+		"- **Can Push**: " + toolutil.BoolEmoji(true) + "\n" +
+		"- **Usage Type**: auth_and_signing\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Expires**: 1 Jan 2027 00:00 UTC\n" +
+		"- **Last Used**: 4 Mar 2026 05:06 UTC\n" +
+		keyCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies the OutputMarkdown_MinimalFields Markdown formatter for a representative output_minimalfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_MinimalFields pins the card of a key GitLab sent
+// nothing optional on: every guarded row is absent rather than rendered empty.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
-		ID:    2,
-		Title: "dev-key",
-	})
+	got := FormatOutputMarkdown(Output{ID: 2, Title: "dev-key"})
 
-	if !strings.Contains(md, "## Deploy Key: dev-key (ID: 2)") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	for _, absent := range []string{"Fingerprint", "SHA256", "Created", "Expires"} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, "| "+absent+" |") {
-				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-			}
-		})
+	want := "## Deploy Key: dev-key (ID: 2)\n\n" +
+		"- **ID**: 2\n" +
+		"- **Title**: dev-key\n" +
+		"- **Can Push**: " + toolutil.BoolEmoji(false) + "\n" +
+		keyCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -925,45 +944,36 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithKeys verifies the ListMarkdown_WithKeys Markdown formatter for a representative list_withkeys input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_WithKeys pins the whole list document, the Expires
+// column included: a table of keys that never said when any of them expires
+// is what a reader cannot act on.
 func TestFormatListMarkdown_WithKeys(t *testing.T) {
 	out := ListOutput{
 		DeployKeys: []Output{
-			{ID: 1, Title: "key-a", CanPush: true, Fingerprint: "aa:bb", CreatedAt: "2026-01-01T00:00:00Z"},
+			{ID: 1, Title: "key-a", CanPush: true, Fingerprint: "aa:bb", CreatedAt: "2026-01-01T00:00:00Z", ExpiresAt: "2027-01-01T00:00:00Z"},
 			{ID: 2, Title: "key-b", CanPush: false, Fingerprint: "cc:dd", CreatedAt: "2026-02-01T00:00:00Z"},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
 
-	for _, want := range []string{
-		"## Deploy Keys (2)",
-		"| ID |",
-		"| 1 |",
-		"| 2 |",
-		"key-a",
-		"key-b",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Deploy Keys (2)\n\n" +
+		"| ID | Title | Can Push | Fingerprint | Created | Expires |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | key-a | " + toolutil.BoolEmoji(true) + " | `aa:bb` | 1 Jan 2026 00:00 UTC | 1 Jan 2027 00:00 UTC |\n" +
+		"| 2 | key-b | " + toolutil.BoolEmoji(false) + " | `cc:dd` | 1 Feb 2026 00:00 UTC | never |\n\n" +
+		"Page 1 of 1 | 2 items total | 20 per page\n" +
+		keyListHints
+
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_Empty pins the whole response of a list with no
+// keys: the one sentence, and no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No deploy keys found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+	if got, want := FormatListMarkdown(ListOutput{}), "No deploy keys found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -971,11 +981,11 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatInstanceOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatInstanceOutputMarkdown_AllFields verifies the InstanceOutputMarkdown_AllFields Markdown formatter for a representative instanceoutput_allfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatInstanceOutputMarkdown_AllFields pins the whole card of an
+// instance deploy key, including the two nested collections of projects it
+// reaches, each under a heading of its own and ending where its rows end.
 func TestFormatInstanceOutputMarkdown_AllFields(t *testing.T) {
-	md := FormatInstanceOutputMarkdown(InstanceOutput{
+	got := FormatInstanceOutputMarkdown(InstanceOutput{
 		ID:                10,
 		Title:             "instance-key",
 		Key:               "ssh-rsa INST",
@@ -991,45 +1001,41 @@ func TestFormatInstanceOutputMarkdown_AllFields(t *testing.T) {
 		},
 	})
 
-	for _, want := range []string{
-		"## Instance Deploy Key: instance-key (ID: 10)",
-		"| ID | 10 |",
-		"| Title | instance-key |",
-		"| Fingerprint | 11:22 |",
-		"| SHA256 | SHA256:inst |",
-		"| Created | 1 Jan 2026 00:00 UTC |",
-		"| Expires | 1 Jan 2027 00:00 UTC |",
-		"### Projects with Write Access",
-		"| 100 | proj-w | group/proj-w |",
-		"### Projects with Readonly Access",
-		"| 200 | proj-r | group/proj-r |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Instance Deploy Key: instance-key (ID: 10)\n\n" +
+		"- **ID**: 10\n" +
+		"- **Title**: instance-key\n" +
+		"- **Fingerprint**: `11:22`\n" +
+		"- **SHA256**: `SHA256:inst`\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Expires**: 1 Jan 2027 00:00 UTC\n\n" +
+		"### Projects with Write Access\n\n" +
+		"| ID | Name | Path |\n" +
+		"| --- | --- | --- |\n" +
+		"| 100 | proj-w | group/proj-w |\n\n" +
+		"### Projects with Readonly Access\n\n" +
+		"| ID | Name | Path |\n" +
+		"| --- | --- | --- |\n" +
+		"| 200 | proj-r | group/proj-r |\n" +
+		instanceCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatInstanceOutputMarkdown_MinimalFields verifies the InstanceOutputMarkdown_MinimalFields Markdown formatter for a representative instanceoutput_minimalfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatInstanceOutputMarkdown_MinimalFields pins the card of an instance
+// key GitLab sent nothing optional on: no fingerprint rows, no timestamps, and
+// neither project section.
 func TestFormatInstanceOutputMarkdown_MinimalFields(t *testing.T) {
-	md := FormatInstanceOutputMarkdown(InstanceOutput{
-		ID:    11,
-		Title: "bare-key",
-	})
+	got := FormatInstanceOutputMarkdown(InstanceOutput{ID: 11, Title: "bare-key"})
 
-	if !strings.Contains(md, "## Instance Deploy Key: bare-key (ID: 11)") {
-		t.Errorf("missing header:\n%s", md)
-	}
-	for _, absent := range []string{"Fingerprint", "SHA256", "Created", "Expires", "Write Access", "Readonly Access"} {
-		t.Run(absent, func(t *testing.T) {
-			if strings.Contains(md, absent) {
-				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-			}
-		})
+	want := "## Instance Deploy Key: bare-key (ID: 11)\n\n" +
+		"- **ID**: 11\n" +
+		"- **Title**: bare-key\n" +
+		instanceCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1037,9 +1043,9 @@ func TestFormatInstanceOutputMarkdown_MinimalFields(t *testing.T) {
 // FormatInstanceListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatInstanceListMarkdown_WithKeys verifies the InstanceListMarkdown_WithKeys Markdown formatter for a representative instancelist_withkeys input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatInstanceListMarkdown_WithKeys pins the whole instance list, the
+// timestamps through FormatTime rather than as the RFC 3339 strings the
+// converter built.
 func TestFormatInstanceListMarkdown_WithKeys(t *testing.T) {
 	out := InstanceListOutput{
 		DeployKeys: []InstanceOutput{
@@ -1048,34 +1054,25 @@ func TestFormatInstanceListMarkdown_WithKeys(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatInstanceListMarkdown(out)
 
-	for _, want := range []string{
-		"## Instance Deploy Keys (2)",
-		"| ID |",
-		"| 10 |",
-		"| 11 |",
-		"inst-a",
-		"inst-b",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Instance Deploy Keys (2)\n\n" +
+		"| ID | Title | Fingerprint | Created | Expires |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 10 | inst-a | `aa:bb` | 1 Jan 2026 00:00 UTC | 1 Jan 2027 00:00 UTC |\n" +
+		"| 11 | inst-b | `cc:dd` | 1 Feb 2026 00:00 UTC | never |\n\n" +
+		"Page 1 of 1 | 2 items total | 20 per page\n" +
+		instanceListHints
+
+	if got := FormatInstanceListMarkdown(out); got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatInstanceListMarkdown_Empty verifies the InstanceListMarkdown_Empty Markdown formatter for a representative instancelist_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatInstanceListMarkdown_Empty pins the whole response of an instance
+// list with nothing in it.
 func TestFormatInstanceListMarkdown_Empty(t *testing.T) {
-	md := FormatInstanceListMarkdown(InstanceListOutput{})
-	if !strings.Contains(md, "No instance deploy keys found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+	if got, want := FormatInstanceListMarkdown(InstanceListOutput{}), "No instance deploy keys found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1833,40 +1830,60 @@ var deployKeyOptionalInputCases = []struct {
 func TestFormatDeployKeyMarkdown_SentFields(t *testing.T) {
 	write := []ProjectSummary{{ID: 11, Name: "Writer", PathWithNamespace: "group/writer"}}
 	readonly := []ProjectSummary{{ID: 12, Name: "Reader", PathWithNamespace: "group/reader"}}
-	for name, rendered := range map[string]string{
-		"project": FormatOutputMarkdown(Output{
-			ID: 1, Title: "my-key", LastUsedAt: "2026-04-07T08:09:10Z", UsageType: "auth_and_signing",
-			ProjectsWithWriteAccess: write, ProjectsWithReadonlyAccess: readonly,
-		}),
-		"instance": FormatInstanceOutputMarkdown(InstanceOutput{
-			ID: 1, Title: "my-key", LastUsedAt: "2026-04-07T08:09:10Z", UsageType: "auth_and_signing",
-			ProjectsWithWriteAccess: write, ProjectsWithReadonlyAccess: readonly,
-		}),
-	} {
-		t.Run(name, func(t *testing.T) {
-			for _, want := range []string{
-				"Usage Type", "auth_and_signing", "Last Used", "7 Apr 2026 08:09 UTC",
-				"Projects with Write Access", "group/writer",
-				"Projects with Readonly Access", "group/reader",
-			} {
-				if !strings.Contains(rendered, want) {
-					t.Errorf("%s markdown missing %q: %s", name, want, rendered)
-				}
-			}
-		})
-	}
+	projectSections := "\n### Projects with Write Access\n\n" +
+		"| ID | Name | Path |\n| --- | --- | --- |\n| 11 | Writer | group/writer |\n\n" +
+		"### Projects with Readonly Access\n\n" +
+		"| ID | Name | Path |\n| --- | --- | --- |\n| 12 | Reader | group/reader |\n"
 
-	for name, rendered := range map[string]string{
-		"project":  FormatOutputMarkdown(Output{ID: 1, Title: "my-key"}),
-		"instance": FormatInstanceOutputMarkdown(InstanceOutput{ID: 1, Title: "my-key"}),
+	for _, tc := range []struct {
+		name string
+		got  string
+		want string
+	}{
+		{
+			name: "project",
+			got: FormatOutputMarkdown(Output{
+				ID: 1, Title: "my-key", LastUsedAt: "2026-04-07T08:09:10Z", UsageType: "auth_and_signing",
+				ProjectsWithWriteAccess: write, ProjectsWithReadonlyAccess: readonly,
+			}),
+			want: "## Deploy Key: my-key (ID: 1)\n\n" +
+				"- **ID**: 1\n- **Title**: my-key\n" +
+				"- **Can Push**: " + toolutil.BoolEmoji(false) + "\n" +
+				"- **Usage Type**: auth_and_signing\n" +
+				"- **Last Used**: 7 Apr 2026 08:09 UTC\n" +
+				projectSections + keyCardHints,
+		},
+		{
+			name: "instance",
+			got: FormatInstanceOutputMarkdown(InstanceOutput{
+				ID: 1, Title: "my-key", LastUsedAt: "2026-04-07T08:09:10Z", UsageType: "auth_and_signing",
+				ProjectsWithWriteAccess: write, ProjectsWithReadonlyAccess: readonly,
+			}),
+			want: "## Instance Deploy Key: my-key (ID: 1)\n\n" +
+				"- **ID**: 1\n- **Title**: my-key\n" +
+				"- **Last Used**: 7 Apr 2026 08:09 UTC\n" +
+				"- **Usage Type**: auth_and_signing\n" +
+				projectSections + instanceCardHints,
+		},
+		{
+			name: "project without them",
+			got:  FormatOutputMarkdown(Output{ID: 1, Title: "my-key"}),
+			want: "## Deploy Key: my-key (ID: 1)\n\n" +
+				"- **ID**: 1\n- **Title**: my-key\n" +
+				"- **Can Push**: " + toolutil.BoolEmoji(false) + "\n" +
+				keyCardHints,
+		},
+		{
+			name: "instance without them",
+			got:  FormatInstanceOutputMarkdown(InstanceOutput{ID: 1, Title: "my-key"}),
+			want: "## Instance Deploy Key: my-key (ID: 1)\n\n" +
+				"- **ID**: 1\n- **Title**: my-key\n" +
+				instanceCardHints,
+		},
 	} {
-		t.Run(name+" without them", func(t *testing.T) {
-			for _, unwanted := range []string{
-				"Usage Type", "Last Used", "Projects with Write Access", "Projects with Readonly Access",
-			} {
-				if strings.Contains(rendered, unwanted) {
-					t.Errorf("%s markdown shows %q for a key that has none: %s", name, unwanted, rendered)
-				}
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", tc.got, tc.want)
 			}
 		})
 	}

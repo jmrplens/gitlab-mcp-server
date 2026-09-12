@@ -188,15 +188,57 @@ func TestStartMirroring_APIError(t *testing.T) {
 	}
 }
 
-// TestFormatPullMirrorMarkdown_NonEmpty verifies FormatPullMirrorMarkdown produces non-empty markdown describing the pull mirror configuration.
+// TestFormatPullMirrorMarkdown_NonEmpty verifies the whole pull mirror card:
+// the source URL as a code span, the flags as glyphs, and no row for anything
+// GitLab did not send.
 func TestFormatPullMirrorMarkdown_NonEmpty(t *testing.T) {
 	md := FormatPullMirrorMarkdown(PullMirrorOutput{
 		ID: 5, Enabled: true, URL: "https://github.com/example/repo.git",
 	})
-	if md == "" {
-		t.Fatal(errExpectedNonEmptyMD)
+	want := "## Pull Mirror (ID: 5)\n\n" +
+		"- **Enabled**: ✅\n" +
+		"- **URL**: `https://github.com/example/repo.git`\n" +
+		"- **Trigger Builds**: ❌\n" +
+		"- **Only Protected Branches**: ❌\n" +
+		"- **Overwrite Diverged Branches**: ❌\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use action 'project.pull_mirror_configure' to modify the mirror settings\n" +
+		"- Use action 'project.start_mirroring' to trigger an immediate update\n"
+	if md != want {
+		t.Errorf("FormatPullMirrorMarkdown()\n got: %q\nwant: %q", md, want)
 	}
-	if !strings.Contains(md, "https://github.com/example/repo.git") {
-		t.Error("markdown missing mirror URL")
+}
+
+// TestFormatPullMirrorMarkdown_FullFields verifies the rows GitLab fills for a
+// mirror that has run: the status, the remote's own error text, the three
+// timestamps in the display form, and the branch regex as a code span.
+func TestFormatPullMirrorMarkdown_FullFields(t *testing.T) {
+	md := FormatPullMirrorMarkdown(PullMirrorOutput{
+		ID: 5, Enabled: true, URL: "https://github.com/example/repo.git",
+		UpdateStatus:           "failed",
+		LastError:              "authentication failed",
+		LastSuccessfulUpdateAt: "2026-03-10T09:00:00Z",
+		LastUpdateAt:           "2026-03-11T09:00:00Z",
+		LastUpdateStartedAt:    "2026-03-11T08:59:00Z",
+		MirrorTriggerBuilds:    true,
+		MirrorBranchRegex:      "^(main|release/.*)$",
+	})
+	want := "## Pull Mirror (ID: 5)\n\n" +
+		"- **Enabled**: ✅\n" +
+		"- **URL**: `https://github.com/example/repo.git`\n" +
+		"- **Update Status**: failed\n" +
+		"- **Last Error**: authentication failed\n" +
+		"- **Last Successful Update**: 10 Mar 2026 09:00 UTC\n" +
+		"- **Last Update**: 11 Mar 2026 09:00 UTC\n" +
+		"- **Last Update Started**: 11 Mar 2026 08:59 UTC\n" +
+		"- **Trigger Builds**: ✅\n" +
+		"- **Only Protected Branches**: ❌\n" +
+		"- **Overwrite Diverged Branches**: ❌\n" +
+		"- **Branch Regex**: `^(main|release/.*)$`\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use action 'project.pull_mirror_configure' to modify the mirror settings\n" +
+		"- Use action 'project.start_mirroring' to trigger an immediate update\n"
+	if md != want {
+		t.Errorf("FormatPullMirrorMarkdown()\n got: %q\nwant: %q", md, want)
 	}
 }

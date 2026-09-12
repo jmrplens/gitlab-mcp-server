@@ -1024,11 +1024,24 @@ func TestDeleteGroup_CancelledContext(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_AllFields verifies the OutputMarkdown_AllFields Markdown formatter for a representative output_allfields input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// The two guidance sections the deploy-token formatters close with. The list
+// table carries no link, so it does not ask the model to preserve any.
+const (
+	tokenHintsOpening = "\n---\n\U0001F4A1 **Next steps:**\n"
+
+	tokenCardHints = "- Use the selected tool surface's deploy-token get action with the matching scope (project or group) and deploy_token_id to fetch this deploy token before changing it\n" +
+		"- Use the selected tool surface's deploy-token delete action with the matching scope (project or group), this deploy_token_id, and explicit confirm=true to revoke this deploy token\n"
+
+	tokenListHints = tokenHintsOpening +
+		"- Use the selected tool surface's deploy-token get action with the matching scope (project or group) and deploy_token_id for full details\n" +
+		"- Use the selected tool surface's deploy-token create action with the matching scope (project or group) to generate a new deploy token\n"
+)
+
+// TestFormatOutputMarkdown_AllFields pins the whole card of a freshly created
+// deploy token: the secret inside a code span, and the store-it-now hint the
+// card adds because it showed one.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:        42,
 		Name:      "deploy-reader",
 		Username:  "gitlab-deploy",
@@ -1039,60 +1052,50 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		ExpiresAt: "2027-06-15T00:00:00Z",
 	})
 
-	for _, want := range []string{
-		"## Deploy Token: deploy-reader (ID: 42)",
-		"| ID | 42 |",
-		"| Name | deploy-reader |",
-		"| Username | gitlab-deploy |",
-		"| Token | gldt-secret |",
-		"| Scopes | read_repository, read_registry |",
-		"| Revoked | false |",
-		"| Expired | false |",
-		"| Expires | 15 Jun 2027 00:00 UTC |",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Deploy Token: deploy-reader (ID: 42)\n\n" +
+		"- **ID**: 42\n" +
+		"- **Name**: deploy-reader\n" +
+		"- **Username**: gitlab-deploy\n" +
+		"- **Token**: `gldt-secret`\n" +
+		"- **Scopes**: read_repository, read_registry\n" +
+		"- **Expires**: 15 Jun 2027 00:00 UTC\n" +
+		tokenHintsOpening +
+		"- Store the token securely. It cannot be retrieved later\n" +
+		tokenCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_NoToken verifies the OutputMarkdown_NoToken Markdown formatter for a representative output_notoken input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatOutputMarkdown_NoToken(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+// TestFormatOutputMarkdown_NoTokenNoExpiry pins the card a get answers with:
+// no secret row, no store-it hint, and no expiry row, since GitLab sent
+// neither.
+func TestFormatOutputMarkdown_NoTokenNoExpiry(t *testing.T) {
+	got := FormatOutputMarkdown(Output{
 		ID:       1,
 		Name:     "tok",
 		Username: "u",
 		Scopes:   []string{"read_repository"},
 	})
-	if strings.Contains(md, "| Token |") {
-		t.Error("should not contain Token row when token is empty")
+
+	want := "## Deploy Token: tok (ID: 1)\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: tok\n" +
+		"- **Username**: u\n" +
+		"- **Scopes**: read_repository\n" +
+		tokenHintsOpening + tokenCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatOutputMarkdown_NoExpiresAt verifies the OutputMarkdown_NoExpiresAt Markdown formatter for a representative output_noexpiresat input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
-func TestFormatOutputMarkdown_NoExpiresAt(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
-		ID:       1,
-		Name:     "tok",
-		Username: "u",
-		Scopes:   []string{"read_repository"},
-	})
-	if strings.Contains(md, "| Expires |") {
-		t.Error("should not contain Expires row when expires_at is empty")
-	}
-}
-
-// TestFormatOutputMarkdown_RevokedExpired verifies the OutputMarkdown_RevokedExpired Markdown formatter for a representative output_revokedexpired input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_RevokedExpired pins a dead token's card: both
+// conditions are marked with the warning sign, never with the tick BoolEmoji
+// gives a true, which on "Revoked" reads as success.
 func TestFormatOutputMarkdown_RevokedExpired(t *testing.T) {
-	md := FormatOutputMarkdown(Output{
+	got := FormatOutputMarkdown(Output{
 		ID:       99,
 		Name:     "old-tok",
 		Username: "u",
@@ -1101,11 +1104,34 @@ func TestFormatOutputMarkdown_RevokedExpired(t *testing.T) {
 		Expired:  true,
 	})
 
-	if !strings.Contains(md, "| Revoked | true |") {
-		t.Errorf("expected Revoked true:\n%s", md)
+	want := "## Deploy Token: old-tok (ID: 99)\n\n" +
+		"- **ID**: 99\n" +
+		"- **Name**: old-tok\n" +
+		"- **Username**: u\n" +
+		"- **Scopes**: read_repository\n" +
+		"- " + toolutil.EmojiWarning + " **Revoked**\n" +
+		"- " + toolutil.EmojiWarning + " **Expired**\n" +
+		tokenHintsOpening + tokenCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-	if !strings.Contains(md, "| Expired | true |") {
-		t.Errorf("expected Expired true:\n%s", md)
+}
+
+// TestFormatOutputMarkdown_NoScopes pins the other side of the scopes row: a
+// token GitLab sent no scopes for renders no row at all, where the two-cell
+// table this replaced rendered a label above an empty cell.
+func TestFormatOutputMarkdown_NoScopes(t *testing.T) {
+	got := FormatOutputMarkdown(Output{ID: 3, Name: "bare", Username: "u"})
+
+	want := "## Deploy Token: bare (ID: 3)\n\n" +
+		"- **ID**: 3\n" +
+		"- **Name**: bare\n" +
+		"- **Username**: u\n" +
+		tokenHintsOpening + tokenCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1113,9 +1139,8 @@ func TestFormatOutputMarkdown_RevokedExpired(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithTokens verifies the ListMarkdown_WithTokens Markdown formatter for a representative list_withtokens input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_WithTokens pins the whole list document: the heading
+// against the total GitLab reported, the flags as glyphs, and the footer.
 func TestFormatListMarkdown_WithTokens(t *testing.T) {
 	out := ListOutput{
 		DeployTokens: []Output{
@@ -1124,55 +1149,39 @@ func TestFormatListMarkdown_WithTokens(t *testing.T) {
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
-	md := FormatListMarkdown(out)
 
-	for _, want := range []string{
-		"## Deploy Tokens (2)",
-		"| ID |",
-		"| --- |",
-		"| 1 |",
-		"| 2 |",
-		"tok1",
-		"tok2",
-		"u1",
-		"u2",
-		"read_repository",
-		"read_registry, write_registry",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Errorf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	yes, no := toolutil.BoolEmoji(true), toolutil.BoolEmoji(false)
+	want := "## Deploy Tokens (2)\n\n" +
+		"| ID | Name | Username | Scopes | Revoked | Expired |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 1 | tok1 | u1 | read_repository | " + no + " | " + no + " |\n" +
+		"| 2 | tok2 | u2 | read_registry, write_registry | " + yes + " | " + yes + " |\n\n" +
+		"Page 1 of 1 | 2 items total | 20 per page\n" +
+		tokenListHints
+
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_Empty pins the whole response of a list with no
+// tokens: the one sentence, and no heading counting zero above it.
 func TestFormatListMarkdown_Empty(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{})
-	if !strings.Contains(md, "No deploy tokens found") {
-		t.Errorf("expected empty message:\n%s", md)
-	}
-	if strings.Contains(md, "| ID |") {
-		t.Error("should not contain table header when empty")
+	if got, want := FormatListMarkdown(ListOutput{}), "No deploy tokens found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
-// TestFormatListMarkdown_ZeroTokens verifies the ListMarkdown_ZeroTokens Markdown formatter for a representative list_zerotokens input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_ZeroTokens pins that an empty page GitLab did send
+// pagination for renders the same one sentence: the heading counting zero
+// above it said the same thing twice.
 func TestFormatListMarkdown_ZeroTokens(t *testing.T) {
-	md := FormatListMarkdown(ListOutput{
+	got := FormatListMarkdown(ListOutput{
 		DeployTokens: []Output{},
 		Pagination:   toolutil.PaginationOutput{TotalItems: 0, Page: 1, PerPage: 20, TotalPages: 0},
 	})
-	if !strings.Contains(md, "## Deploy Tokens (0)") {
-		t.Errorf("expected header with count 0:\n%s", md)
-	}
-	if !strings.Contains(md, "No deploy tokens found") {
-		t.Errorf("expected empty message:\n%s", md)
+	if want := "No deploy tokens found.\n"; got != want {
+		t.Errorf("empty list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

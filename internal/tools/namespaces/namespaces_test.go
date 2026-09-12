@@ -232,21 +232,42 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString verifies FormatMarkdownString.
+// namespaceCardHint is the guidance section every namespace card ends with.
+const namespaceCardHint = "---\n💡 **Next steps:**\n" +
+	"- Use action 'namespace.get' to use this namespace ID with the project and group actions\n"
+
+// TestFormatMarkdownString verifies the whole card of a namespace carrying
+// nothing but the fields GitLab always sends.
 func TestFormatMarkdownString(t *testing.T) {
 	s := FormatMarkdownString(Output{
 		ID: 1, Name: "test", Path: "test", FullPath: "test", Kind: "user",
 	})
-	if s == "" {
-		t.Error("expected non-empty markdown")
+	want := "## Namespace: test\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: test\n" +
+		"- **Path**: `test`\n" +
+		"- **Full Path**: `test`\n" +
+		"- **Kind**: user\n\n" +
+		namespaceCardHint
+	if s != want {
+		t.Errorf("FormatMarkdownString()\n got: %q\nwant: %q", s, want)
 	}
 }
 
-// TestFormatExistsMarkdownString verifies FormatExistsMarkdownString.
+// TestFormatExistsMarkdownString verifies the whole availability card, the
+// suggestions the collection they are.
 func TestFormatExistsMarkdownString(t *testing.T) {
 	s := FormatExistsMarkdownString(ExistsOutput{Exists: true, Suggests: []string{"a", "b"}})
-	if s == "" {
-		t.Error("expected non-empty markdown")
+	want := "## Namespace Availability\n\n" +
+		"- **Exists**: ✅\n" +
+		"- **Path**: taken\n\n" +
+		"### Suggested Paths\n\n" +
+		"| Path |\n| --- |\n" +
+		"| `a` |\n| `b` |\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Try one of the suggested paths: the one asked about is taken\n"
+	if s != want {
+		t.Errorf("FormatExistsMarkdownString()\n got: %q\nwant: %q", s, want)
 	}
 }
 
@@ -375,7 +396,8 @@ func TestToOutput_SeatAndTrialFields(t *testing.T) {
 // Formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdownString_WithItems verifies FormatListMarkdownString when with items.
+// TestFormatListMarkdownString_WithItems verifies the whole table a page of
+// namespaces renders as, and the footer that follows it.
 func TestFormatListMarkdownString_WithItems(t *testing.T) {
 	s := FormatListMarkdownString(ListOutput{
 		Namespaces: []Output{
@@ -383,14 +405,33 @@ func TestFormatListMarkdownString_WithItems(t *testing.T) {
 			{ID: 2, Name: "ns2", Kind: "user", FullPath: "users/ns2"},
 		},
 	})
-	if !strings.Contains(s, "ns1") {
-		t.Error("expected ns1")
+	want := "## Namespaces (2)\n\n" +
+		"| ID | Name | Kind | Full Path |\n| --- | --- | --- | --- |\n" +
+		"| 1 | ns1 | group | `ns1` |\n" +
+		"| 2 | ns2 | user | `users/ns2` |\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use action 'namespace.get' to view details of one namespace\n"
+	if s != want {
+		t.Errorf("FormatListMarkdownString()\n got: %q\nwant: %q", s, want)
 	}
-	if !strings.Contains(s, "ns2") {
-		t.Error("expected ns2")
-	}
-	if !strings.Contains(s, "Namespaces (2)") {
-		t.Error("expected count header")
+}
+
+// TestFormatListMarkdownString_CountsTheTotalGitLabSent verifies that a page of
+// a larger result is headed with the total rather than with the page length.
+func TestFormatListMarkdownString_CountsTheTotalGitLabSent(t *testing.T) {
+	s := FormatListMarkdownString(ListOutput{
+		Namespaces: []Output{{ID: 1, Name: "ns1", Kind: "group", FullPath: "ns1"}},
+		Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 45, TotalItems: 45, PerPage: 1},
+	})
+	want := "## Namespaces (45)\n\n" +
+		"Showing 1 of 45 results (page 1 of 45)\n\n" +
+		"| ID | Name | Kind | Full Path |\n| --- | --- | --- | --- |\n" +
+		"| 1 | ns1 | group | `ns1` |\n\n" +
+		"Page 1 of 45 | 45 items total | 1 per page\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Use action 'namespace.get' to view details of one namespace\n"
+	if s != want {
+		t.Errorf("FormatListMarkdownString()\n got: %q\nwant: %q", s, want)
 	}
 }
 
@@ -402,40 +443,48 @@ func TestFormatListMarkdown_NonNil(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_AllFields verifies FormatMarkdownString when all fields.
+// TestFormatMarkdownString_AllFields verifies the whole card of a subgroup with
+// a subscription: the parent, the web URL linked to itself, the plan, the trial
+// end read through the display helper, and the seat figures.
 func TestFormatMarkdownString_AllFields(t *testing.T) {
 	maxSeats := int64(50)
 	inUse := int64(42)
 	s := FormatMarkdownString(Output{
 		ID: 1, Name: "test", Path: "test", FullPath: "grp/test", Kind: "group",
-		ParentID: 5, WebURL: "https://x", Plan: "gold",
+		ParentID: 5, WebURL: "https://x", Plan: "gold", Trial: true,
 		TrialEndsOn: "2026-12-31", MaxSeatsUsed: &maxSeats, SeatsInUse: &inUse,
 	})
-	if !strings.Contains(s, "Parent ID") {
-		t.Error("expected Parent ID")
-	}
-	if !strings.Contains(s, "gold") {
-		t.Error("expected plan")
-	}
-	if !strings.Contains(s, "https://x") {
-		t.Error("expected web URL")
-	}
-	if !strings.Contains(s, "2026-12-31") {
-		t.Error("expected trial ends on")
-	}
-	if !strings.Contains(s, "Max Seats Used") || !strings.Contains(s, "Seats In Use") {
-		t.Error("expected seat usage rows")
+	want := "## Namespace: test\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: test\n" +
+		"- **Path**: `test`\n" +
+		"- **Full Path**: `grp/test`\n" +
+		"- **Kind**: group\n" +
+		"- **Parent ID**: 5\n" +
+		"- **URL**: [https://x](https://x)\n" +
+		"- **Plan**: gold\n" +
+		"- ℹ️ **Trial**\n" +
+		"- **Trial Ends On**: 31 Dec 2026\n" +
+		"- **Max Seats Used**: 50\n" +
+		"- **Seats In Use**: 42\n\n" +
+		namespaceCardHint
+	if s != want {
+		t.Errorf("FormatMarkdownString()\n got: %q\nwant: %q", s, want)
 	}
 }
 
-// TestFormatMarkdownString_Minimal verifies FormatMarkdownString when minimal.
+// TestFormatMarkdownString_Minimal verifies that a namespace with no parent, no
+// plan and no subscription writes none of those rows.
 func TestFormatMarkdownString_Minimal(t *testing.T) {
 	s := FormatMarkdownString(Output{ID: 1, Name: "n", Path: "n", Kind: "user"})
-	if strings.Contains(s, "Parent ID") {
-		t.Error("should skip Parent ID when 0")
-	}
-	if strings.Contains(s, "Plan") {
-		t.Error("should skip Plan when empty")
+	want := "## Namespace: n\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: n\n" +
+		"- **Path**: `n`\n" +
+		"- **Kind**: user\n\n" +
+		namespaceCardHint
+	if s != want {
+		t.Errorf("FormatMarkdownString()\n got: %q\nwant: %q", s, want)
 	}
 }
 
@@ -447,22 +496,51 @@ func TestFormatMarkdown_NonNil(t *testing.T) {
 	}
 }
 
-// TestFormatExistsMarkdownString_NotExists verifies FormatExistsMarkdownString when not exists.
+// TestFormatExistsMarkdownString_NotExists verifies the whole card of an
+// available path: no suggestions table, and no hint about suggestions GitLab
+// did not send.
 func TestFormatExistsMarkdownString_NotExists(t *testing.T) {
 	s := FormatExistsMarkdownString(ExistsOutput{Exists: false})
-	if !strings.Contains(s, "does not exist") {
-		t.Errorf("got %q", s)
+	want := "## Namespace Availability\n\n" +
+		"- **Exists**: ❌\n" +
+		"- **Path**: available\n"
+	if s != want {
+		t.Errorf("FormatExistsMarkdownString()\n got: %q\nwant: %q", s, want)
 	}
 }
 
-// TestFormatExistsMarkdownString_ExistsWithSuggestions verifies FormatExistsMarkdownString when exists with suggestions.
+// TestFormatExistsMarkdownString_ExistsWithSuggestions verifies the whole card
+// of a taken path, each suggestion a code span of its own row.
 func TestFormatExistsMarkdownString_ExistsWithSuggestions(t *testing.T) {
 	s := FormatExistsMarkdownString(ExistsOutput{Exists: true, Suggests: []string{"alt1", "alt2"}})
-	if !strings.Contains(s, "exists") {
-		t.Error("expected exists")
+	want := "## Namespace Availability\n\n" +
+		"- **Exists**: ✅\n" +
+		"- **Path**: taken\n\n" +
+		"### Suggested Paths\n\n" +
+		"| Path |\n| --- |\n" +
+		"| `alt1` |\n| `alt2` |\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Try one of the suggested paths: the one asked about is taken\n"
+	if s != want {
+		t.Errorf("FormatExistsMarkdownString()\n got: %q\nwant: %q", s, want)
 	}
-	if !strings.Contains(s, "alt1") {
-		t.Error("expected suggestions")
+}
+
+// TestFormatExistsMarkdownString_HostileSuggestion verifies that a suggestion
+// carrying Markdown of its own adds no row, heading or link: the whole value
+// stays inside the code span of its cell.
+func TestFormatExistsMarkdownString_HostileSuggestion(t *testing.T) {
+	s := FormatExistsMarkdownString(ExistsOutput{Exists: true, Suggests: []string{"a|b", "x](http://attacker.invalid/)"}})
+	want := "## Namespace Availability\n\n" +
+		"- **Exists**: ✅\n" +
+		"- **Path**: taken\n\n" +
+		"### Suggested Paths\n\n" +
+		"| Path |\n| --- |\n" +
+		"| `a\\|b` |\n| `x](http://attacker.invalid/)` |\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Try one of the suggested paths: the one asked about is taken\n"
+	if s != want {
+		t.Errorf("FormatExistsMarkdownString()\n got: %q\nwant: %q", s, want)
 	}
 }
 
@@ -743,12 +821,23 @@ func TestExists_ParentIDReachesTheRequestOnlyWhenGiven(t *testing.T) {
 // nothing about suggestions when it offered none.
 func TestFormatExistsMarkdownString_SuggestionsOnlyWhenGitLabSentThem(t *testing.T) {
 	with := FormatExistsMarkdownString(ExistsOutput{Exists: true, Suggests: []string{"group2"}})
-	if !strings.Contains(with, "Suggestions") || !strings.Contains(with, "group2") {
-		t.Errorf("markdown missing the suggestions GitLab sent: %s", with)
+	wantWith := "## Namespace Availability\n\n" +
+		"- **Exists**: ✅\n" +
+		"- **Path**: taken\n\n" +
+		"### Suggested Paths\n\n" +
+		"| Path |\n| --- |\n" +
+		"| `group2` |\n\n" +
+		"---\n💡 **Next steps:**\n" +
+		"- Try one of the suggested paths: the one asked about is taken\n"
+	if with != wantWith {
+		t.Errorf("FormatExistsMarkdownString() with suggestions\n got: %q\nwant: %q", with, wantWith)
 	}
 	without := FormatExistsMarkdownString(ExistsOutput{Exists: false})
-	if strings.Contains(without, "Suggestions") {
-		t.Errorf("markdown shows suggestions GitLab did not send: %s", without)
+	wantWithout := "## Namespace Availability\n\n" +
+		"- **Exists**: ❌\n" +
+		"- **Path**: available\n"
+	if without != wantWithout {
+		t.Errorf("FormatExistsMarkdownString() without suggestions\n got: %q\nwant: %q", without, wantWithout)
 	}
 }
 
@@ -925,33 +1014,34 @@ func TestFormatMarkdownString_SentFields(t *testing.T) {
 		AdditionalPurchasedStorageSize: &storage, AdditionalPurchasedStorageEndsOn: "2027-03-31",
 		MaxSeatsUsedChangedAt: "2026-05-06T07:08:09Z", EndDate: "2027-01-31",
 	})
-	for _, want := range []string{
-		"Projects Count", "| 12 |",
-		"Root Repository Size", "| 34567 |",
-		"Shared Runners Minutes Limit", "| 400 |",
-		"Extra Shared Runners Minutes Limit", "| 50 |",
-		"Additional Purchased Storage Size", "| 10240 |",
-		"Additional Purchased Storage Ends On", "2027-03-31",
-		"Max Seats Used Changed At", "6 May 2026 07:08 UTC",
-		"Subscription End Date", "2027-01-31",
-	} {
-		t.Run("shows "+want, func(t *testing.T) {
-			if !strings.Contains(full, want) {
-				t.Errorf("FormatMarkdownString missing %q: %s", want, full)
-			}
-		})
+	wantFull := "## Namespace: group1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: group1\n" +
+		"- **Path**: `group1`\n" +
+		"- **Full Path**: `group1`\n" +
+		"- **Kind**: group\n" +
+		"- **Projects Count**: 12\n" +
+		"- **Root Repository Size**: 34567\n" +
+		"- **Subscription End Date**: 31 Jan 2027\n" +
+		"- **Max Seats Used Changed At**: 6 May 2026 07:08 UTC\n" +
+		"- **Shared Runners Minutes Limit**: 400\n" +
+		"- **Extra Shared Runners Minutes Limit**: 50\n" +
+		"- **Additional Purchased Storage Size**: 10240\n" +
+		"- **Additional Purchased Storage Ends On**: 31 Mar 2027\n\n" +
+		namespaceCardHint
+	if full != wantFull {
+		t.Errorf("FormatMarkdownString() with every sent field\n got: %q\nwant: %q", full, wantFull)
 	}
 
 	bare := FormatMarkdownString(Output{ID: 1, Name: "group1", Path: "group1", Kind: "group", FullPath: "group1"})
-	for _, unwanted := range []string{
-		"Projects Count", "Root Repository Size", "Shared Runners Minutes Limit",
-		"Extra Shared Runners Minutes Limit", "Additional Purchased Storage Size",
-		"Additional Purchased Storage Ends On", "Max Seats Used Changed At", "Subscription End Date",
-	} {
-		t.Run("omits "+unwanted, func(t *testing.T) {
-			if strings.Contains(bare, unwanted) {
-				t.Errorf("FormatMarkdownString shows %q for a namespace that has none: %s", unwanted, bare)
-			}
-		})
+	wantBare := "## Namespace: group1\n\n" +
+		"- **ID**: 1\n" +
+		"- **Name**: group1\n" +
+		"- **Path**: `group1`\n" +
+		"- **Full Path**: `group1`\n" +
+		"- **Kind**: group\n\n" +
+		namespaceCardHint
+	if bare != wantBare {
+		t.Errorf("FormatMarkdownString() for a namespace GitLab sent none of them for\n got: %q\nwant: %q", bare, wantBare)
 	}
 }

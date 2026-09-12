@@ -5,8 +5,17 @@ import (
 	"strconv"
 	"strings"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// accessLevel renders a role's numeric base access level as the name GitLab
+// gives it with the number beside it, "Developer (30)": the base level is the
+// role a custom role starts from, and the bare integer said nothing about it.
+func accessLevel(level int) string {
+	return fmt.Sprintf("%s (%d)", toolutil.AccessLevelDescription(gl.AccessLevelValue(level)), level)
+}
 
 // FormatOutputMarkdown renders a single member role as Markdown.
 func FormatOutputMarkdown(o Output) string {
@@ -16,25 +25,35 @@ func FormatOutputMarkdown(o Output) string {
 	var b strings.Builder
 	// A custom member role's name and description are typed by the group owner
 	// who created it.
-	fmt.Fprintf(&b, "## Member Role #%d: %s\n\n", o.ID, toolutil.EscapeMdHeading(o.Name))
-	if o.Description != "" {
-		fmt.Fprintf(&b, "- **Description**: %s\n", toolutil.EscapeMdTableCell(o.Description))
-	}
-	if o.GroupID != 0 {
-		fmt.Fprintf(&b, "- **Group ID**: %d\n", o.GroupID)
-	}
-	fmt.Fprintf(&b, "- **Base Access Level**: %d\n", o.BaseAccessLevel)
-	b.WriteString("\n### Permissions\n\n")
-	b.WriteString("| Permission | Granted |\n")
-	b.WriteString("| ---------- | :-----: |\n")
-	for _, row := range permissionRows(o) {
-		writePermRow(&b, row.label, row.granted)
-	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_list_instance_member_roles` or `gitlab_list_group_member_roles` to view all roles",
+	c := toolutil.NewCard(&b, fmt.Sprintf("Member Role #%d: %s", o.ID, o.Name))
+	c.Text("Description", o.Description)
+	c.Count("Group ID", o.GroupID)
+	c.Field("Base Access Level", accessLevel(o.BaseAccessLevel))
+	writeGrantedPermissions(c, o)
+	c.End(
+		toolutil.HintAction("member_role.list_group", "view every custom role of a group"),
+		toolutil.HintAction("member_role.list_instance", "view every custom role of the instance"),
 	)
 	return b.String()
+}
+
+// writeGrantedPermissions writes the permissions the role carries as a nested
+// collection, and nothing at all when it carries none: a header over no rows
+// is a table that says a role has permissions and names none.
+func writeGrantedPermissions(c *toolutil.Card, o Output) {
+	granted := make([]string, 0, len(permissionRows(o)))
+	for _, row := range permissionRows(o) {
+		if row.granted != nil && *row.granted {
+			granted = append(granted, row.label)
+		}
+	}
+	if len(granted) == 0 {
+		return
+	}
+	t := c.Table("Permissions", "Permission", "Granted")
+	for _, label := range granted {
+		t.Row(toolutil.EscapeMdTableCell(label), toolutil.BoolEmoji(true))
+	}
 }
 
 // permissionRow is one line of the permissions table: the label a reader sees
@@ -101,41 +120,29 @@ func permissionRows(o Output) []permissionRow {
 	}
 }
 
-// writePermRow appends a table row for an enabled permission. The value cell
-// holds a check mark (✓), written as an escape so the source stays ASCII.
-//
-//gitlab:allow-unescaped name: a permission label from permissionRows, written by this file and never a value GitLab sent.
-func writePermRow(b *strings.Builder, name string, val *bool) {
-	if val != nil && *val {
-		fmt.Fprintf(b, "| %s | \u2713 |\n", name)
-	}
-}
-
 // FormatListMarkdown renders a list of member roles as Markdown.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Roles) == 0 {
-		return "No member roles found."
+		return toolutil.EmptyMessage("member roles")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Member Roles (%d)\n\n", len(out.Roles))
-	b.WriteString("| ID | Name | Base Level | Group ID |\n")
-	b.WriteString("| --: | ---- | ---------: | -------: |\n")
+	toolutil.WriteListHeading(&b, "Member Roles", len(out.Roles), toolutil.PaginationOutput{})
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Base Level", "Group ID"))
 	for _, r := range out.Roles {
 		gid := "-"
 		if r.GroupID != 0 {
 			gid = strconv.FormatInt(r.GroupID, 10)
 		}
-		fmt.Fprintf(
-			&b, "| %d | %s | %d | %s |\n",
-			r.ID,
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(r.ID, 10),
 			toolutil.EscapeMdTableCell(r.Name),
-			r.BaseAccessLevel,
+			accessLevel(r.BaseAccessLevel),
 			gid,
-		)
+		))
 	}
-	toolutil.WriteHints(
-		&b,
-		"Use `gitlab_create_instance_member_role` or `gitlab_create_group_member_role` to define a new custom role",
+	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
+		toolutil.HintAction("member_role.create_group", "define a new custom role in a group"),
+		toolutil.HintAction("member_role.create_instance", "define a new custom role on the instance"),
 	)
 	return b.String()
 }

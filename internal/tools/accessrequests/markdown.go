@@ -2,77 +2,85 @@ package accessrequests
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown formats a single access request as markdown.
+// accessLevelLabel renders a membership access level as the role GitLab means
+// by it with the number beside it, "Developer (30)". The number alone was what
+// the card printed, and it is the one part of the pair a reader cannot act on.
+func accessLevelLabel(level int) string {
+	return fmt.Sprintf("%s (%d)", toolutil.AccessLevelDescription(gl.AccessLevelValue(level)), level)
+}
+
+// FormatOutputMarkdown renders one access request as a card.
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Access Request #%d\n\n", out.ID)
-	b.WriteString(toolutil.TblFieldValue)
-	fmt.Fprintf(&b, "| ID | %d |\n", out.ID)
-	fmt.Fprintf(&b, "| Username | %s |\n", toolutil.EscapeMdTableCell(out.Username))
-	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
-	//gitlab:allow-unescaped out.State: a membership state GitLab picks from a fixed set (active, awaiting, blocked and the rest).
-	fmt.Fprintf(&b, "| State | %s |\n", out.State)
-	fmt.Fprintf(&b, "| Access Level | %d |\n", out.AccessLevel)
+	c := toolutil.NewCard(&b, fmt.Sprintf("Access Request #%d", out.ID))
+	c.Int("ID", out.ID)
+	c.Field("Username", toolutil.MdUserHandle(out.Username))
+	c.Field("Name", out.Name)
+	c.Field("State", out.State)
+	if out.AccessLevel != 0 {
+		c.Field("Access Level", accessLevelLabel(out.AccessLevel))
+	}
+	c.Warn("Locked", out.Locked)
 	if out.Email != "" {
-		fmt.Fprintf(&b, "| Email | %s |\n", toolutil.EscapeMdTableCell(out.Email))
+		c.Field("Email", out.Email)
 	}
 	if out.PublicEmail != "" {
-		fmt.Fprintf(&b, "| Public Email | %s |\n", toolutil.EscapeMdTableCell(out.PublicEmail))
+		c.Field("Public Email", out.PublicEmail)
 	}
 	if out.MemberRole != nil {
-		fmt.Fprintf(&b, "| Member Role | %s |\n", toolutil.EscapeMdTableCell(out.MemberRole.Name))
+		c.Field("Member Role", out.MemberRole.Name)
 	}
 	if out.MembershipState != "" {
-		//gitlab:allow-unescaped out.MembershipState: a membership state GitLab picks from a fixed set (active, awaiting and the rest).
-		fmt.Fprintf(&b, "| Membership State | %s |\n", out.MembershipState)
+		c.Field("Membership State", out.MembershipState)
 	}
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, "| Created At | %s |\n", toolutil.FormatTime(out.CreatedAt))
+	if by := out.CreatedBy; by != nil {
+		sub := c.Sub("Created By")
+		sub.Field("Name", by.Name)
+		sub.Link("Username", toolutil.MdUserHandle(by.Username), by.WebURL)
 	}
-	if out.RequestedAt != "" {
-		fmt.Fprintf(&b, "| Requested At | %s |\n", toolutil.FormatTime(out.RequestedAt))
-	}
-	if out.ExpiresAt != "" {
-		fmt.Fprintf(&b, "| Expires At | %s |\n", toolutil.FormatTime(out.ExpiresAt))
-	}
-	if out.WebURL != "" {
-		fmt.Fprintf(&b, "| URL | %s |\n", toolutil.MdTitleLink(out.Username, out.WebURL))
-	}
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
-		"Use action 'approve' to approve this access request",
-		"Use action 'deny_project' to deny a project access request",
-		"Use action 'deny_group' to deny a group access request",
+	c.Time("Created At", out.CreatedAt)
+	c.Time("Requested At", out.RequestedAt)
+	c.Time("Expires At", out.ExpiresAt)
+	c.URL(out.WebURL)
+	c.End(
+		toolutil.HintAction(actionAccessApproveProject, "approve this request at project scope"),
+		toolutil.HintAction(actionAccessApproveGroup, "approve this request at group scope"),
+		toolutil.HintAction(actionAccessDenyProject, "deny this request at project scope"),
+		toolutil.HintAction(actionAccessDenyGroup, "deny this request at group scope"),
 	)
 	return b.String()
 }
 
-// FormatListMarkdown formats a list of access requests as markdown.
+// FormatListMarkdown renders a list of access requests as a table.
 func FormatListMarkdown(out ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Access Requests (%d)\n\n", len(out.AccessRequests))
-	toolutil.WriteListSummary(&b, len(out.AccessRequests), out.Pagination)
 	if len(out.AccessRequests) == 0 {
-		b.WriteString("No access requests found.\n")
-		toolutil.WritePagination(&b, out.Pagination)
-		return b.String()
+		return toolutil.EmptyMessage("access requests")
 	}
+	var b strings.Builder
+	toolutil.WriteListHeading(&b, "Access Requests", len(out.AccessRequests), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Username", "Name", "State", "Access Level"))
 	for _, ar := range out.AccessRequests {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %d |\n",
-			//gitlab:allow-unescaped ar.State: a membership state GitLab picks from a fixed set (active, awaiting, blocked and the rest).
-			ar.ID, toolutil.EscapeMdTableCell(ar.Username), toolutil.EscapeMdTableCell(ar.Name), ar.State, ar.AccessLevel)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(ar.ID, 10),
+			toolutil.MdUserLink(ar.Username, ar.WebURL),
+			toolutil.EscapeMdTableCell(ar.Name),
+			toolutil.EscapeMdTableCell(ar.State),
+			toolutil.EscapeMdTableCell(accessLevelLabel(ar.AccessLevel)),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		"Use action 'approve', 'deny_project', or 'deny_group' with request ID to manage requests",
+	toolutil.WriteListFooter(&b, out.Pagination, true,
+		toolutil.HintAction(actionAccessApproveProject, "approve one of these requests at project scope"),
+		toolutil.HintAction(actionAccessApproveGroup, "approve one of these requests at group scope"),
+		toolutil.HintAction(actionAccessDenyProject, "deny one of these requests at project scope"),
+		toolutil.HintAction(actionAccessDenyGroup, "deny one of these requests at group scope"),
 	)
 	return b.String()
 }

@@ -2,6 +2,7 @@ package runnercontrollertokens
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -9,49 +10,47 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// FormatOutputMarkdown renders a runner controller token as Markdown.
+// actionTokenGet is the canonical catalog ID of the single-token read, the one
+// form every surface accepts.
+const actionTokenGet = "runnercontrollertokens.controller_token_get"
+
+// FormatOutputMarkdown renders a runner controller token as a card. The secret
+// is shown only on the result that mints it, and the advice to store it is
+// added by the card from the row that showed one: a get answers with the same
+// type and no token, and telling its reader to store a value the card does not
+// hold sends them looking for one.
 func FormatOutputMarkdown(out Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Runner Controller Token #%d\n\n", out.ID)
-	fmt.Fprintf(&b, "- **Controller ID**: %d\n", out.RunnerControllerID)
-	toolutil.WriteDescription(&b, out.Description)
-	if out.Token != "" {
-		//gitlab:allow-unescaped out.Token: the secret GitLab minted, inside a code span so the reader can copy it back verbatim.
-		fmt.Fprintf(&b, "- **Token**: `%s`\n", out.Token)
-	}
-	if out.LastUsedAt != "" {
-		fmt.Fprintf(&b, "- **Last Used At**: %s\n", toolutil.FormatTime(out.LastUsedAt))
-	}
-	if out.CreatedAt != "" {
-		fmt.Fprintf(&b, "- **Created At**: %s\n", toolutil.FormatTime(out.CreatedAt))
-	}
-	// The storage advice belongs to the card that carries a token. A get
-	// answers with the same type and no token, and telling its reader to store
-	// a value the card does not hold sends them looking for one.
-	if out.Token != "" {
-		toolutil.WriteHints(&b, "Store the token value securely. It cannot be retrieved later")
-	}
+	c := toolutil.NewCard(&b, fmt.Sprintf("Runner Controller Token #%d", out.ID))
+	c.Int("ID", out.ID)
+	c.Int("Controller ID", out.RunnerControllerID)
+	c.Text("Description", out.Description)
+	c.Secret("Token", out.Token)
+	c.Time("Last Used At", out.LastUsedAt)
+	c.Time("Created At", out.CreatedAt)
+	c.End()
 	return b.String()
 }
 
-// FormatListMarkdown renders a list of runner controller tokens as Markdown.
+// FormatListMarkdown renders a list of runner controller tokens as a table.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Tokens) == 0 {
-		return "No runner controller tokens found.\n"
+		return toolutil.EmptyMessage("runner controller tokens")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Runner Controller Tokens (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Tokens), out.Pagination)
-	b.WriteString("| ID | Controller | Description | Last Used | Created At |\n")
-	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	toolutil.WriteListHeading(&b, "Runner Controller Tokens", len(out.Tokens), out.Pagination)
+	b.WriteString(toolutil.MarkdownTableHeader("ID", "Controller", "Description", "Last Used", "Created At"))
 	for _, t := range out.Tokens {
-		fmt.Fprintf(&b, "| %d | %d | %s | %s | %s |\n",
-			//gitlab:allow-unescaped t.LastUsedAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
-			//gitlab:allow-unescaped t.CreatedAt: a timestamp this package formatted itself, with time.Time.Format as RFC 3339.
-			t.ID, t.RunnerControllerID, toolutil.EscapeMdTableCell(t.Description), t.LastUsedAt, t.CreatedAt)
+		b.WriteString(toolutil.MarkdownTableRow(
+			strconv.FormatInt(t.ID, 10),
+			strconv.FormatInt(t.RunnerControllerID, 10),
+			toolutil.EscapeMdTableCell(t.Description),
+			toolutil.FormatTime(t.LastUsedAt),
+			toolutil.FormatTime(t.CreatedAt),
+		))
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, "Use `gitlab_runner_controller_token_get` to view details of a specific token")
+	toolutil.WriteListFooter(&b, out.Pagination, false,
+		toolutil.HintAction(actionTokenGet, "read one of these tokens in full"))
 	return b.String()
 }
 
