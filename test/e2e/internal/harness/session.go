@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -232,6 +233,11 @@ func (c ServerConfig) label(private int64) string {
 
 // childVariables returns the environment variables this configuration sets on
 // the server child, which is the whole of what it configures.
+//
+// The telemetry variables are merged in here rather than at the launcher,
+// because this is the one place a session's child environment is built and
+// every child runs with telemetry on: a session whose server exported no spans
+// could only ever record what its tests asked for, never what ran.
 func (c ServerConfig) childVariables() map[string]string {
 	vars := map[string]string{
 		"GITLAB_MCP_TOOL_SURFACE":       string(c.Surface),
@@ -243,6 +249,7 @@ func (c ServerConfig) childVariables() map[string]string {
 	if len(c.ExcludeTools) > 0 {
 		vars["GITLAB_MCP_EXCLUDE_TOOLS"] = strings.Join(c.ExcludeTools, ",")
 	}
+	maps.Copy(vars, telemetryVariables())
 	return vars
 }
 
@@ -320,6 +327,21 @@ type sessionConn struct {
 	// notifier fans resource-updated notifications out to the subscriptions
 	// tests opened on this session.
 	notifier *updateNotifier
+	// subscribers says whose record a resource-updated notification belongs
+	// in, which the notifier cannot answer: it wakes channels, not tests.
+	subscribers *subscriberIndex
+
+	// dispatchObserved is set the first time a span of this session's own
+	// arrives. While it is false every call of the session is a claim about
+	// what was asked for and not about what ran, and the session line says so.
+	dispatchObserved atomic.Bool
+
+	// inFlight holds the attribution of every call this session is serving
+	// right now, so an elicitation the server sends back mid-call can be
+	// recorded against the test that provoked it.
+	inFlightMu   sync.Mutex
+	inFlight     map[int64]callAttribution
+	inFlightNext atomic.Int64
 }
 
 // sessionEntry is one pooled session, started by the first test that asks for
@@ -458,11 +480,12 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 	}
 
 	conn := &sessionConn{
-		label:    label,
-		cfg:      cfg,
-		inst:     inst,
-		proc:     newServerProcess(label, bin, newChildEnv(settingsForChild, dir, cfg.childVariables())),
-		notifier: newUpdateNotifier(),
+		label:       label,
+		cfg:         cfg,
+		inst:        inst,
+		proc:        newServerProcess(label, bin, newChildEnv(settingsForChild, dir, cfg.childVariables())),
+		notifier:    newUpdateNotifier(),
+		subscribers: newSubscriberIndex(),
 	}
 	if connectErr := conn.connect(); connectErr != nil {
 		return nil, connectErr
@@ -533,6 +556,11 @@ func (c *sessionConn) connect() error {
 	defer cancel()
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "gitlab-mcp-e2e-harness", Version: "1"}, c.clientOptions())
+	// The recorder sits on the client rather than on the session, because that
+	// is where the SDK keeps its middleware, and it is installed before
+	// Connect so the handshake is inside it rather than beside it.
+	client.AddSendingMiddleware(c.recordSending())
+	client.AddReceivingMiddleware(c.recordReceiving())
 	session, err := client.Connect(ctx, c.proc.transport(lifetime), nil)
 	if err != nil {
 		return fmt.Errorf("connecting to the %s server: %w\nserver stderr:\n%s", c.label, err, c.proc.stderrTail())

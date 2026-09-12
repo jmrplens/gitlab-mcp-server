@@ -48,6 +48,13 @@ const (
 	envRuntimeMismatch = "E2E_RUNTIME_MISMATCH"
 	envExternalNetwork = "E2E_EXTERNAL_NETWORK"
 	envFixtureURL      = "E2E_FIXTURE_URL"
+	// envCommit is the revision under test, recorded on the run line so a
+	// coverage report can be tied to the tree that produced it.
+	envCommit = "E2E_COMMIT"
+	// envSeeds is the comma-separated list of per-consumer seeds the
+	// provisioning script created. A scenario whose seed was not provisioned
+	// is absent rather than failing, and the run line is where that shows.
+	envSeeds = "E2E_SEEDS"
 
 	envBitbucketServerURL = "BITBUCKET_SERVER_URL"
 	envGitHubToken        = "GH_TOKEN"
@@ -125,10 +132,15 @@ func Main(m *testing.M, req Requirement) int {
 
 	code := m.Run()
 
+	// While the sessions are still alive, so a session line can say what it
+	// served and whether its dispatch was ever observed.
+	flushRunRecords()
+
 	// Before the binary is removed, and in this order: on Windows a running
 	// executable cannot be deleted, so a child left alive would leave the
 	// build behind on every run.
 	closeSessions()
+	closeSpanReceiver()
 	removeBuiltBinary()
 	return state.finish(code)
 }

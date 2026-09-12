@@ -13,6 +13,7 @@ package harness
 
 import (
 	"context"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -36,8 +37,18 @@ const stubToken = "glpat-harness-stub"
 // uses, including the probe.
 func stubInstance(t *testing.T) *instance {
 	t.Helper()
+	return instanceForStub(t, startStubGitLab(t))
+}
 
-	stub := startStubGitLab(t)
+// instanceForStub builds the instance a harness test drives against a stub
+// GitLab the caller chose.
+//
+// Split from stubInstance because the tier is a property of the instance the
+// probe finds: a test of the licensed catalog needs a stub that answers the
+// license endpoint, and a test of everything else needs one that does not.
+func instanceForStub(t *testing.T, stub *httptest.Server) *instance {
+	t.Helper()
+
 	client, err := gitlabclient.NewClientWithToken(stub.URL, stubToken, false)
 	if err != nil {
 		t.Fatalf("building a client for the stub: %v", err)

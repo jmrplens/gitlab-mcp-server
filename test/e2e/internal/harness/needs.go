@@ -18,6 +18,7 @@ package harness
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -197,11 +198,18 @@ func (inst *instance) hasRunner() bool {
 
 // requireNeeds skips the test, naming the first requirement this run does not
 // provide.
-func requireNeeds(t *testing.T, inst *instance, needs []Need) {
+//
+// The reason goes to the recorder before the skip, because the testing package
+// keeps a skip message to itself: a coverage report that could not say why a
+// scenario was absent would read the same whether the fixture stack was
+// incomplete or the scenario was never written.
+func requireNeeds(t *testing.T, inst *instance, needs []Need, rec *envRecorder) {
 	t.Helper()
 	for _, need := range needs {
 		if ok, reason := need.available(inst); !ok {
-			t.Skipf("%s unavailable: %s", need.name, reason)
+			message := fmt.Sprintf("%s unavailable: %s", need.name, reason)
+			rec.noteSkip(message)
+			t.Skip(message)
 		}
 	}
 }

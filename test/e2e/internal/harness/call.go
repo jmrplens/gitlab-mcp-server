@@ -33,6 +33,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Expectation classes a call record can carry beside a [Failure], spelled as
+// the record spells them.
+const (
+	// ExpectationOK is a call the test expected to succeed.
+	ExpectationOK = e2ecalls.ExpectationOK
+	// ExpectationAny is a call whose outcome the test did not constrain.
+	ExpectationAny = e2ecalls.ExpectationAny
+)
+
 // Purpose says what a call was made for. A call made to build or tear down
 // fixture state is worth less as coverage than one a test asserted on, so it
 // is recorded rather than guessed at from the test name.
@@ -97,6 +106,13 @@ type callOptions struct {
 	purpose Purpose
 	confirm bool
 	timeout time.Duration
+	// expectation is what the caller asked to happen, in the record's
+	// vocabulary. Each verb sets it rather than the caller, because the verb
+	// is the assertion: Do expects success, Refused expects a class.
+	expectation string
+	// dispatch is the route the caller declared this call would run, when the
+	// server rewrites what was asked for.
+	dispatch ActionID
 }
 
 // CallOption adjusts one call.
@@ -105,6 +121,18 @@ type CallOption func(*callOptions)
 // For declares what a call was made for. Without it a call is PurposeTest.
 func For(purpose Purpose) CallOption {
 	return func(o *callOptions) { o.purpose = purpose }
+}
+
+// ExpectDispatch declares the route this call will actually run, for the cases
+// where the server rewrites what it was asked for.
+//
+// Without it, a call whose span names another route fails its test, which is
+// the assertion the whole recorder exists to make: a call that named issue.list
+// and ran issue.get proves nothing about issue.list. The rewrites are real and
+// deliberate, though: gitlab_environment get with an environment name runs
+// protected_get, so a test of that behavior says so here and is held to it.
+func ExpectDispatch(route ActionID) CallOption {
+	return func(o *callOptions) { o.dispatch = route }
 }
 
 // WithoutConfirmation sends a destructive action with no explicit approval,
@@ -121,13 +149,21 @@ func Within(timeout time.Duration) CallOption {
 }
 
 // resolveCallOptions applies the caller's options over the defaults: a test
-// call, confirmed if destructive, bounded by the test's own context.
+// call, confirmed if destructive, bounded by the test's own context, expected
+// to succeed.
 func resolveCallOptions(opts []CallOption) callOptions {
-	resolved := callOptions{purpose: PurposeTest, confirm: true}
+	resolved := callOptions{purpose: PurposeTest, confirm: true, expectation: e2ecalls.ExpectationOK}
 	for _, opt := range opts {
 		opt(&resolved)
 	}
 	return resolved
+}
+
+// expecting returns the options with the expectation a verb makes of its call,
+// which is the verb's own and not the caller's to override.
+func (o callOptions) expecting(expectation string) callOptions {
+	o.expectation = expectation
+	return o
 }
 
 // callResult is one answer, classified.
@@ -208,7 +244,7 @@ func Try[O any](s *Session, id ActionID, params map[string]any, opts ...CallOpti
 	s.env.T.Helper()
 
 	var output O
-	answer := s.invoke(id, params, resolveCallOptions(opts))
+	answer := s.invoke(id, params, resolveCallOptions(opts).expecting(e2ecalls.ExpectationAny))
 	if !answer.ok() {
 		return output, errors.New(answer.describe())
 	}
@@ -223,7 +259,7 @@ func Try[O any](s *Session, id ActionID, params map[string]any, opts ...CallOpti
 func Refused(s *Session, id ActionID, params map[string]any, want Failure, opts ...CallOption) string {
 	s.env.T.Helper()
 
-	resolved := resolveCallOptions(opts)
+	resolved := resolveCallOptions(opts).expecting(string(want))
 	answer := s.invoke(id, params, resolved)
 	if answer.failure == "" {
 		s.env.T.Fatalf("%s: the server ran the action, and the test expected it to be refused as %s",
@@ -246,7 +282,7 @@ func Refused(s *Session, id ActionID, params map[string]any, want Failure, opts 
 func ExpectToolError(s *Session, id ActionID, params map[string]any, contains string, opts ...CallOption) string {
 	s.env.T.Helper()
 
-	resolved := resolveCallOptions(opts)
+	resolved := resolveCallOptions(opts).expecting(string(FailureToolError))
 	answer := s.invoke(id, params, resolved)
 	if answer.failure == "" {
 		s.env.T.Fatalf("%s: the server ran the action, and the test expected an error mentioning %q",
@@ -321,7 +357,7 @@ func (s *Session) invoke(id ActionID, params map[string]any, opts callOptions) c
 		s.env.T.Fatalf("%v", err)
 		return callResult{}
 	}
-	return s.send(call, opts)
+	return s.send(id, call, opts)
 }
 
 // resolve turns an action ID into the call this session takes, refusing the
@@ -356,8 +392,18 @@ func (s *Session) resolve(id ActionID, params map[string]any, confirm bool) (too
 }
 
 // send makes the call, retrying what failed in transit.
-func (s *Session) send(call toolCall, opts callOptions) callResult {
-	ctx := s.env.Ctx
+//
+// The context carries who is making it, which is what the recorder reads on
+// the way out: the middleware sits on a client many tests share, and only the
+// caller knows whose call this is, what it is for and what it expects. Each
+// attempt passes through that middleware and so gets a trace and a record of
+// its own, which is right: a retry is another call, and two identical lines
+// would be one line in a record deduplicated by content.
+func (s *Session) send(id ActionID, call toolCall, opts callOptions) callResult {
+	ctx := s.attribute(opts.purpose, opts.expectation, callAttribution{
+		action:       id,
+		wantDispatch: opts.dispatch,
+	})
 	if opts.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.timeout)

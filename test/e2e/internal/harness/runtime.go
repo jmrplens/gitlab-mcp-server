@@ -58,6 +58,21 @@ func (r Requirement) String() string {
 	}
 }
 
+// token names the requirement in a record: one word, which is what a report
+// groups by. String is the sentence a refusal prints and would be a poor key.
+func (r Requirement) token() string {
+	switch r {
+	case Free:
+		return "free"
+	case Licensed:
+		return "licensed"
+	case Any:
+		return "any"
+	default:
+		return "unknown"
+	}
+}
+
 // target names the Makefile target that provides this requirement, which is
 // what a refusal tells the reader to run instead.
 func (r Requirement) target() string {
@@ -99,6 +114,15 @@ func (f runtimeFacts) editionName() string {
 		return "Enterprise Edition"
 	}
 	return "Community Edition"
+}
+
+// editionToken names the image's edition in a record: one word, beside the
+// sentence editionName prints for a person.
+func (f runtimeFacts) editionToken() string {
+	if f.Enterprise {
+		return "enterprise"
+	}
+	return "community"
 }
 
 // tierDescription says what the tier is and whether a license confirmed it.
