@@ -2010,99 +2010,33 @@ func TestStripMetaToolDescriptionPrefix_PreservesMultiLineWithoutPrefix(t *testi
 	}
 }
 
-// enrichWithHints.
-
-// TestEnrichWithHints_AddsNextSteps verifies that enrichWithHints injects
-// a next_steps field into the structured JSON content of an MCP tool result.
-func TestEnrichWithHints_AddsNextSteps(t *testing.T) {
-	type sampleOutput struct {
+// TestMakeMetaHandler_FinishesTheResult verifies that the meta-tool handler
+// finishes its result the way every dispatcher does: the hints the Markdown
+// carries are set on the typed output when its type declares next_steps, and
+// left in the Markdown alone when it does not, since the structured output
+// is validated against the schema the type declares and a spliced key would
+// fail it. The text block carries the route's content kind.
+func TestMakeMetaHandler_FinishesTheResult(t *testing.T) {
+	type hinted struct {
+		HintableOutput
 		Items []string `json:"items"`
-		Count int      `json:"count"`
 	}
-	callResult := &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: "## Results\n\n---\n💡 **Next steps:**\n- Get details\n- Delete item\n"},
-		},
-	}
-	result := sampleOutput{Items: []string{"a", "b"}, Count: 2}
-	enriched := enrichWithHints(result, callResult)
-
-	raw, ok := enriched.(json.RawMessage)
-	if !ok {
-		t.Fatalf("expected json.RawMessage, got %T", enriched)
-	}
-
-	// Verify next_steps is the first field in the JSON.
-	const prefix = `{"next_steps":`
-	if !strings.HasPrefix(string(raw), prefix) {
-		t.Errorf("JSON should start with %s, got: %.60s", prefix, string(raw))
-	}
-
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
-		t.Fatalf("failed to unmarshal: %v", err)
-	}
-	stepsAny, ok := m["next_steps"].([]any)
-	if !ok || len(stepsAny) != 2 {
-		t.Fatalf("next_steps = %v, want 2 strings", m["next_steps"])
-	}
-	if stepsAny[0] != "Get details" || stepsAny[1] != "Delete item" {
-		t.Errorf("steps = %v", stepsAny)
-	}
-	if m["count"] != float64(2) {
-		t.Errorf("count = %v, want 2", m["count"])
-	}
-}
-
-// TestEnrichWithHints_NoHintsSection verifies that enrichWithHints leaves
-// the result unchanged when the markdown contains no hints section.
-func TestEnrichWithHints_NoHintsSection(t *testing.T) {
-	callResult := &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: "## Just a title\n"},
-		},
-	}
-	original := map[string]string{"key": "val"}
-	enriched := enrichWithHints(original, callResult)
-	m, ok := enriched.(map[string]string)
-	if !ok || m["key"] != "val" {
-		t.Error("expected unchanged result when no hints")
-	}
-}
-
-// TestEnrichWithHints_NilResult verifies that enrichWithHints handles a nil
-// tool result without panicking.
-func TestEnrichWithHints_NilResult(t *testing.T) {
-	callResult := &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: "---\n💡 **Next steps:**\n- hint\n"},
-		},
-	}
-	if got := enrichWithHints(nil, callResult); got != nil {
-		t.Errorf("expected nil, got %v", got)
-	}
-}
-
-// TestEnrichWithHints_NilCallResult verifies that enrichWithHints handles
-// a nil CallToolResult without panicking.
-func TestEnrichWithHints_NilCallResult(t *testing.T) {
-	original := map[string]string{"key": "val"}
-	enriched := enrichWithHints(original, nil)
-	m, ok := enriched.(map[string]string)
-	if !ok || m["key"] != "val" {
-		t.Error("expected unchanged result for nil callResult")
-	}
-}
-
-// TestMakeMetaHandler_EnrichesStructuredContent verifies that the meta-tool
-// handler wrapper enriches structured JSON output with next_steps hints.
-func TestMakeMetaHandler_EnrichesStructuredContent(t *testing.T) {
 	routes := ActionMap{
-		"list": Route(func(_ context.Context, _ map[string]any) (any, error) {
+		"list": func() ActionRoute {
+			r := Route(func(_ context.Context, _ map[string]any) (any, error) {
+				return hinted{Items: []string{"x"}}, nil
+			})
+			r.ContentKind = ActionSpecContentList
+			return r
+		}(),
+		"plain": Route(func(_ context.Context, _ map[string]any) (any, error) {
 			return map[string]any{"items": []string{"x"}}, nil
 		}),
+		"pointer": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return &hinted{Items: []string{"y"}}, nil
+		}),
 	}
-	formatter := func(result any) *mcp.CallToolResult {
+	formatter := func(any) *mcp.CallToolResult {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: "## List\n\n---\n💡 **Next steps:**\n- View item\n"},
@@ -2110,63 +2044,39 @@ func TestMakeMetaHandler_EnrichesStructuredContent(t *testing.T) {
 		}
 	}
 	handler := MakeMetaHandler("test", routes, formatter)
-	_, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "list"})
+
+	callResult, structured, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "list"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	rawMsg, ok := raw.(json.RawMessage)
+	out, ok := structured.(hinted)
 	if !ok {
-		t.Fatalf("expected json.RawMessage, got %T", raw)
+		t.Fatalf("structured output is %T, want the typed output", structured)
 	}
-	var m map[string]any
-	if unmarshalErr := json.Unmarshal(rawMsg, &m); unmarshalErr != nil {
-		t.Fatalf("failed to unmarshal: %v", unmarshalErr)
+	if len(out.NextSteps) != 1 || out.NextSteps[0] != "View item" || len(out.Items) != 1 {
+		t.Errorf("structured output = %+v, want the hint set beside the items", out)
 	}
-	stepsAny, ok := m["next_steps"].([]any)
-	if !ok || len(stepsAny) != 1 || stepsAny[0] != "View item" {
-		t.Errorf("next_steps = %v", m["next_steps"])
+	if ann := callResult.Content[0].(*mcp.TextContent).Annotations; ann != ContentList {
+		t.Errorf("text block annotated %+v, want the list preset the route declares", ann)
 	}
-}
 
-// TestEnrichWithHints_NonObjectJSON verifies that enrichWithHints returns
-// the result unchanged when it serializes to a non-object JSON value
-// (e.g. a string or array).
-func TestEnrichWithHints_NonObjectJSON(t *testing.T) {
-	callResult := &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: "---\n💡 **Next steps:**\n- hint\n"},
-		},
+	_, plain, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "plain"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	original := "just a string"
-	enriched := enrichWithHints(original, callResult)
-	s, ok := enriched.(string)
-	if !ok || s != "just a string" {
-		t.Errorf("expected unchanged string, got %T: %v", enriched, enriched)
+	if m, isMap := plain.(map[string]any); !isMap || len(m) != 1 {
+		t.Errorf("structured output = %#v, want the map returned unchanged, since its type declares no next_steps", plain)
 	}
-}
 
-// TestEnrichWithHints_EmptyObject verifies that enrichWithHints correctly
-// handles an empty JSON object (only "{}") by producing valid JSON with
-// next_steps as the only field.
-func TestEnrichWithHints_EmptyObject(t *testing.T) {
-	callResult := &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: "---\n💡 **Next steps:**\n- do thing\n"},
-		},
+	pointerResult, pointer, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "pointer"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	type empty struct{}
-	enriched := enrichWithHints(empty{}, callResult)
-	raw, ok := enriched.(json.RawMessage)
-	if !ok {
-		t.Fatalf("expected json.RawMessage, got %T", enriched)
+	if p, isPointer := pointer.(*hinted); !isPointer || len(p.NextSteps) != 1 || p.NextSteps[0] != "View item" {
+		t.Errorf("structured output = %+v, want the pointer with its hint set in place", pointer)
 	}
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
-		t.Fatalf("invalid JSON: %v — raw: %s", err, string(raw))
-	}
-	stepsAny, ok := m["next_steps"].([]any)
-	if !ok || len(stepsAny) != 1 || stepsAny[0] != "do thing" {
-		t.Errorf("next_steps = %v", m["next_steps"])
+	if ann := pointerResult.Content[0].(*mcp.TextContent).Annotations; ann != ContentAssistant {
+		t.Errorf("text block annotated %+v, want the assistant default for a route declaring no kind", ann)
 	}
 }
 
@@ -3576,37 +3486,17 @@ func TestStripReservedKeys_MultipleKeys(t *testing.T) {
 	}
 }
 
-// TestEnrichWithHints_NonObjectJSONFromArray returns the result unchanged
-// when the marshaled JSON is an array (does not start with `{`).
-func TestEnrichWithHints_NonObjectJSONFromArray(t *testing.T) {
+// TestFinishToolResult_NonTextContentSkipped verifies the hint scan iterates
+// past non-text content blocks: a resource link must not panic and must not
+// be inspected for hints, so a result with only one is returned unchanged.
+func TestFinishToolResult_NonTextContentSkipped(t *testing.T) {
 	callResult := &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: "Some output\n\n💡 **Next steps:**\n- do thing\n"},
-		},
-	}
-	result := []string{"a", "b"}
-	got := enrichWithHints(result, callResult)
-	// Array inputs must be returned unchanged because we only enrich JSON
-	// objects to keep the {next_steps, ...} contract well-defined.
-	gotSlice, ok := got.([]string)
-	if !ok || len(gotSlice) != 2 {
-		t.Errorf("expected array result returned unchanged, got %v (%T)", got, got)
-	}
-}
-
-// TestEnrichWithHints_NonTextContentSkipped iterates past non-text content
-// blocks when looking for hints; only TextContent contributes to extraction.
-func TestEnrichWithHints_NonTextContentSkipped(t *testing.T) {
-	callResult := &mcp.CallToolResult{
-		Content: []mcp.Content{
-			// Non-text content (e.g. resource link) must not panic and must
-			// not be inspected for hints.
 			&mcp.ResourceLink{URI: "gitlab://resource"},
 		},
 	}
 	result := map[string]any{"ok": true}
-	got := enrichWithHints(result, callResult)
-	// No hints found → input must be returned unchanged.
+	_, got := FinishToolResult(callResult, result, ActionRoute{}, nil)
 	if !reflect.DeepEqual(got, result) {
 		t.Errorf("expected result unchanged when no text content, got %v", got)
 	}
@@ -4646,22 +4536,20 @@ func TestMetaToolSchema_NonOpaqueMode_SharesTheEnvelope(t *testing.T) {
 	}
 }
 
-// enrichWithHints marshal failure.
-
-// TestEnrichWithHints_UnmarshalableResult_ReturnsOriginal verifies that a
-// result value JSON cannot encode (a channel) is returned unchanged even
-// when the call result carries next-step hints.
-func TestEnrichWithHints_UnmarshalableResult_ReturnsOriginal(t *testing.T) {
+// TestFinishToolResult_UnsettableResult_ReturnsOriginal verifies that a
+// result value whose type cannot hold hints (a channel) is returned
+// unchanged even when the call result carries next-step hints.
+func TestFinishToolResult_UnsettableResult_ReturnsOriginal(t *testing.T) {
 	callResult := &mcp.CallToolResult{Content: []mcp.Content{
-		&mcp.TextContent{Text: "Done.\n\n💡 **Next steps:**\n- Use gitlab_list_projects\n"},
+		&mcp.TextContent{Text: "Done.\n\n---\n💡 **Next steps:**\n- Use gitlab_list_projects\n"},
 	}}
 	result := make(chan int)
 
-	got := enrichWithHints(result, callResult)
+	_, got := FinishToolResult(callResult, result, ActionRoute{}, nil)
 
 	gotChan, ok := got.(chan int)
 	if !ok || gotChan != result {
-		t.Errorf("enrichWithHints(chan) = %v, want original channel", got)
+		t.Errorf("FinishToolResult(chan) = %v, want original channel", got)
 	}
 }
 
@@ -5344,23 +5232,6 @@ func TestMetaToolParameterGuidanceSummaryEmptyItem(t *testing.T) {
 	}
 }
 
-// TestEnrichWithHints_NonObjectJSONResult verifies the JSON-result
-// path that requires the marshaled result to start with '{'. Result
-// values that marshal to non-object JSON (e.g. arrays) are returned
-// unchanged without crashing.
-func TestEnrichWithHints_NonObjectJSONResult(t *testing.T) {
-	callResult := &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: "<!-- HINTS: [\"step-1\"] -->\nSome text."},
-		},
-	}
-	result := []string{"a", "b"}
-	got := enrichWithHints(result, callResult)
-	if _, ok := got.([]string); !ok {
-		t.Errorf("enrichWithHints(non-object) = %T, want original []string", got)
-	}
-}
-
 // TestMakeMetaHandler_HandlerErrorDoesNotReflectUpstreamResponseBody verifies
 // that the dispatcher bounds whatever error the handler produced, not only the
 // errors the wrapping helpers in errors.go built.
@@ -6000,31 +5871,32 @@ func TestMetaCallName_NamesTheActionWhenThereIsOne(t *testing.T) {
 	}
 }
 
-// TestEnrichWithHints_HintsInALaterContentBlock verifies the scan keeps looking
-// past a text block that carries no hints. A formatter that writes a heading
-// block and then the body puts the hints in the second block, and stopping at
-// the first block would drop the next_steps a model reads before the payload.
-func TestEnrichWithHints_HintsInALaterContentBlock(t *testing.T) {
+// TestFinishToolResult_HintsInALaterContentBlock verifies the scan keeps
+// looking past a text block that carries no hints. A formatter that writes a
+// heading block and then the body puts the hints in the second block, and
+// stopping at the first block would drop the next_steps a model reads before
+// the payload.
+func TestFinishToolResult_HintsInALaterContentBlock(t *testing.T) {
+	type counted struct {
+		HintableOutput
+		Count int `json:"count"`
+	}
 	callResult := &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: "## Results\n"},
 			&mcp.TextContent{Text: "| id |\n| -- |\n\n---\n💡 **Next steps:**\n- Get details\n"},
 		},
 	}
-	enriched := enrichWithHints(map[string]any{"count": 1}, callResult)
-	raw, ok := enriched.(json.RawMessage)
+	_, structured := FinishToolResult(callResult, counted{Count: 1}, ActionRoute{}, nil)
+	out, ok := structured.(counted)
 	if !ok {
-		t.Fatalf("enrichWithHints() = %T, want json.RawMessage carrying next_steps", enriched)
+		t.Fatalf("FinishToolResult() = %T, want the typed output carrying next_steps", structured)
 	}
-	var payload map[string]any
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		t.Fatalf("unmarshal enriched result: %v", err)
+	if !reflect.DeepEqual(out.NextSteps, []string{"Get details"}) {
+		t.Errorf("next_steps = %#v, want [Get details]", out.NextSteps)
 	}
-	if !reflect.DeepEqual(payload["next_steps"], []any{"Get details"}) {
-		t.Errorf("next_steps = %#v, want [Get details]", payload["next_steps"])
-	}
-	if payload["count"] != float64(1) {
-		t.Errorf("count = %#v, want 1", payload["count"])
+	if out.Count != 1 {
+		t.Errorf("count = %d, want 1", out.Count)
 	}
 }
 

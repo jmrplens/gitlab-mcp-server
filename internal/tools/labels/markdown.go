@@ -12,10 +12,9 @@ import (
 // centralizes the title, empty-state copy, and follow-up hints so both
 // renderers stay in sync.
 var labelMarkdownOptions = toolutil.LabelMarkdownOptions{
-	DetailTitle:       "Label",
-	ListTitle:         "Labels",
-	EmptyListText:     "No labels found.",
-	EscapeDescription: true,
+	DetailTitle:   "Label",
+	ListTitle:     "Labels",
+	EmptyListText: "No labels found.",
 	DetailHints: []string{
 		"Use action 'label_update' to change label name, color, or description",
 		"Use action 'label_delete' to remove this label",

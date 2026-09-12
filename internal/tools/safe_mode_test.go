@@ -106,29 +106,26 @@ func TestWrapMutatingToolsForSafeMode_MutatingToolReturnsPreview(t *testing.T) {
 	// of the output its schema describes, and a tool that declares an
 	// outputSchema must return structured results conforming to it. A plain
 	// success carrying only prose would violate that on every mutating tool at
-	// once. The preview payload is still the text content, asserted below.
+	// once. The preview is the card the text content carries, asserted whole.
 	if !result.IsError {
 		t.Fatal("safe mode intercepted the call without marking the result as an error, so a tool declaring an outputSchema returned neither structured content nor an error")
 	}
 
-	var preview SafeModePreview
 	text := extractText(t, result)
-	if err := json.Unmarshal([]byte(text), &preview); err != nil {
-		t.Fatalf("failed to unmarshal preview: %v", err)
+	want := "## " + toolutil.EmojiStop + " Safe mode blocked gitlab_create_issue\n\n" +
+		"- **Status**: blocked\n" +
+		"- **Mode**: safe\n" +
+		"- **Tool**: `gitlab_create_issue`\n" +
+		"\n### Parameters\n\n" +
+		"```json\n{\"project_id\":123,\"title\":\"Bug report\"}\n```\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n- " + toolutil.SafeModeHint + "\n"
+	if text != want {
+		t.Errorf("preview card:\n got %q\nwant %q", text, want)
 	}
-	if preview.Status != "blocked" {
-		t.Errorf("expected status 'blocked', got %q", preview.Status)
+	preview, isPreview := toolutil.ParseSafeModePreview(text)
+	if !isPreview || preview.Tool != "gitlab_create_issue" || preview.Hint != toolutil.SafeModeHint {
+		t.Errorf("ParseSafeModePreview() = %+v, %v; want the preview read back", preview, isPreview)
 	}
-	if preview.Mode != "safe" {
-		t.Errorf("expected mode 'safe', got %q", preview.Mode)
-	}
-	if preview.Tool != "gitlab_create_issue" {
-		t.Errorf("expected tool 'gitlab_create_issue', got %q", preview.Tool)
-	}
-	if preview.Hint == "" {
-		t.Error("expected non-empty hint")
-	}
-
 	var params map[string]any
 	if err := json.Unmarshal(preview.Params, &params); err != nil {
 		t.Fatalf("failed to unmarshal params: %v", err)
@@ -195,9 +192,9 @@ func TestWrapMutatingToolsForSafeMode_NilAnnotations(t *testing.T) {
 	if n := handlerCalls.Load(); n != 0 {
 		t.Errorf("wrapped handler was called %d time(s) in safe mode", n)
 	}
-	var preview SafeModePreview
-	if err := json.Unmarshal([]byte(extractText(t, result)), &preview); err != nil {
-		t.Fatalf("failed to unmarshal preview: %v", err)
+	preview, isPreview := toolutil.ParseSafeModePreview(extractText(t, result))
+	if !isPreview {
+		t.Fatalf("safe mode did not answer with a preview card: %s", extractText(t, result))
 	}
 	if preview.Status != "blocked" {
 		t.Errorf("expected status 'blocked', got %q", preview.Status)
@@ -250,9 +247,9 @@ func TestWrapMutatingToolsForSafeMode_MixedTools(t *testing.T) {
 	if n := mutatingCalls.Load(); n != 0 {
 		t.Errorf("mutating handler was called %d time(s) in safe mode", n)
 	}
-	var preview SafeModePreview
-	if err := json.Unmarshal([]byte(extractText(t, result)), &preview); err != nil {
-		t.Fatalf("failed to unmarshal preview: %v", err)
+	preview, isPreview := toolutil.ParseSafeModePreview(extractText(t, result))
+	if !isPreview {
+		t.Fatalf("safe mode did not answer with a preview card: %s", extractText(t, result))
 	}
 	if preview.Tool != "gitlab_update_issue" {
 		t.Errorf("expected tool 'gitlab_update_issue', got %q", preview.Tool)

@@ -15,7 +15,6 @@ package suite
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +23,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // modeCall calls a tool on session and returns its concatenated text content
@@ -49,14 +49,10 @@ func modeCallText(ctx context.Context, t *testing.T, session *mcp.ClientSession,
 	return text
 }
 
-// modeSafePreview parses text as a safe-mode preview, reporting whether it is
-// one and what operation it named.
+// modeSafePreview reads text as the safe-mode preview card, reporting whether
+// it is one and what operation it named.
 func modeSafePreview(text string) (tools.SafeModePreview, bool) {
-	var preview tools.SafeModePreview
-	if err := json.Unmarshal([]byte(text), &preview); err != nil {
-		return tools.SafeModePreview{}, false
-	}
-	return preview, preview.Status == "blocked" && preview.Mode == "safe"
+	return toolutil.ParseSafeModePreview(text)
 }
 
 // TestReadOnlyMode exercises GITLAB_MCP_READ_ONLY against a live GitLab CE

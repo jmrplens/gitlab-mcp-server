@@ -1008,18 +1008,23 @@ func TestFormatLabel_ListMarkdown(t *testing.T) {
 			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 		}
 		md := labels.FormatListMarkdownString(out)
-		if !strings.Contains(md, "## Labels (1)") {
-			t.Error(errMissingHeader)
-		}
-		if !strings.Contains(md, "| bug | #ff0000 | 5 | 2 | 1 |") {
-			t.Error("missing label row")
+		want := "## Labels (1)\n\n" +
+			"| Name | Color | Scope | Open Issues | Closed Issues | Open MRs |\n" +
+			"| --- | --- | --- | --- | --- | --- |\n" +
+			"| bug | #ff0000 | group | 5 | 2 | 1 |\n" +
+			"\nPage 1 of 1 | 1 items total | 20 per page\n" +
+			"\n---\n\U0001F4A1 **Next steps:**\n" +
+			"- Use action 'label_get' with a label_id to see label details\n" +
+			"- Use action 'label_create' to create a new label\n"
+		if md != want {
+			t.Errorf("label list:\n got %q\nwant %q", md, want)
 		}
 	})
 
 	t.Run("empty", func(t *testing.T) {
 		md := labels.FormatListMarkdownString(labels.ListOutput{})
-		if !strings.Contains(md, "No labels found.") {
-			t.Error(errMissingEmptyMsg)
+		if want := "No labels found.\n"; md != want {
+			t.Errorf("empty label list = %q, want %q", md, want)
 		}
 	})
 }

@@ -97,7 +97,7 @@ func formatEventListMarkdown(title, emptyText string, events []markdownEvent, pa
 		fmt.Fprintf(&b, "- **%s**%s%s by %s, %s%s\n", e.ActionName, target, formatWikiPage(e.WikiPage),
 			toolutil.EscapeMdTableCell(author), toolutil.FormatTime(e.CreatedAt), formatOrigin(e.Imported, e.ImportedFrom))
 	}
-	b.WriteString(toolutil.FormatPagination(pagination))
+	toolutil.WritePagination(&b, pagination)
 	toolutil.WriteHints(
 		&b,
 		toolutil.HintPreserveLinks,

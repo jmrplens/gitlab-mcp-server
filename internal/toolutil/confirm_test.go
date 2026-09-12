@@ -351,6 +351,9 @@ func TestCancelledResult(t *testing.T) {
 	if tc.Text != msg {
 		t.Errorf("expected %q, got %q", msg, tc.Text)
 	}
+	if !result.IsError || tc.Annotations != ContentMutate {
+		t.Errorf("result = %+v, want an error result annotated as a refusal", result)
+	}
 }
 
 // confirmTestImpl is a shared MCP implementation descriptor for in-memory

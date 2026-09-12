@@ -94,7 +94,7 @@ type ListOutput struct {
 
 // toOutput converts a [gl.MergeTrain] into the package's [Output], mirroring
 // the embedded merge request, user, and pipeline sub-objects as full nested
-// shapes and formatting every timestamp via [toolutil.DateTimeFormat].
+// shapes and writing every timestamp in the wire form via [toolutil.RFC3339Ptr].
 func toOutput(mt *gl.MergeTrain) Output {
 	if mt == nil {
 		return Output{}
@@ -117,22 +117,12 @@ func toOutput(mt *gl.MergeTrain) Output {
 			State:       mt.MergeRequest.State,
 			WebURL:      mt.MergeRequest.WebURL,
 		}
-		if mt.MergeRequest.CreatedAt != nil {
-			out.MergeRequest.CreatedAt = mt.MergeRequest.CreatedAt.Format(toolutil.DateTimeFormat)
-		}
-		if mt.MergeRequest.UpdatedAt != nil {
-			out.MergeRequest.UpdatedAt = mt.MergeRequest.UpdatedAt.Format(toolutil.DateTimeFormat)
-		}
+		out.MergeRequest.CreatedAt = toolutil.RFC3339Ptr(mt.MergeRequest.CreatedAt)
+		out.MergeRequest.UpdatedAt = toolutil.RFC3339Ptr(mt.MergeRequest.UpdatedAt)
 	}
-	if mt.CreatedAt != nil {
-		out.CreatedAt = mt.CreatedAt.Format(toolutil.DateTimeFormat)
-	}
-	if mt.UpdatedAt != nil {
-		out.UpdatedAt = mt.UpdatedAt.Format(toolutil.DateTimeFormat)
-	}
-	if mt.MergedAt != nil {
-		out.MergedAt = mt.MergedAt.Format(toolutil.DateTimeFormat)
-	}
+	out.CreatedAt = toolutil.RFC3339Ptr(mt.CreatedAt)
+	out.UpdatedAt = toolutil.RFC3339Ptr(mt.UpdatedAt)
+	out.MergedAt = toolutil.RFC3339Ptr(mt.MergedAt)
 	return out
 }
 

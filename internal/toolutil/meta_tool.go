@@ -101,6 +101,12 @@ type ActionRoute struct {
 	// expand from the call's parameters and embed in a successful result. The
 	// catalog sets it from the action's spec when the spec's policy embeds.
 	EmbeddedResource string
+	// ContentKind is the content kind the action's spec declares, which
+	// [FinishToolResult] resolves to the annotation every text block of the
+	// result carries through [AnnotationsForContentKind]. The catalog sets it
+	// from the spec, so the declared kind and the served annotation are one
+	// value.
+	ContentKind string
 }
 
 // ParameterGuidance carries compact model-facing hints for parameters that are
@@ -2519,15 +2525,8 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 			}
 			return nil, nil, err
 		}
-		callResult := formatResult(result)
-		if callResult == nil {
-			callResult = defaultFormatResult(result)
-		}
-		if callResult.IsError {
-			return callResult, nil, nil
-		}
-		EmbedCanonicalResource(callResult, route.EmbeddedResource, input.Params, result)
-		return callResult, enrichWithHints(result, callResult), nil
+		callResult, structured := FinishToolResult(formatResult(result), result, route, input.Params)
+		return callResult, structured, nil
 	}
 }
 
@@ -2627,50 +2626,6 @@ func hasUnknownParamNames(schema, params map[string]any) bool {
 		}
 	}
 	return false
-}
-
-// enrichWithHints extracts next-step hints from the Markdown content in
-// callResult and merges them into the JSON result as a "next_steps" field.
-// The returned json.RawMessage places next_steps as the first JSON field
-// so that LLMs see actionable guidance before reading the full payload.
-// If no hints exist, result is returned unchanged.
-func enrichWithHints(result any, callResult *mcp.CallToolResult) any {
-	if result == nil || callResult == nil {
-		return result
-	}
-	var hints []string
-	for _, c := range callResult.Content {
-		tc, ok := c.(*mcp.TextContent)
-		if !ok {
-			continue
-		}
-		if h := ExtractHints(tc.Text); len(h) > 0 {
-			hints = h
-			break
-		}
-	}
-	if len(hints) == 0 {
-		return result
-	}
-	data, err := json.Marshal(result)
-	if err != nil {
-		return result
-	}
-	if len(data) == 0 || data[0] != '{' {
-		return result
-	}
-	hintsData, err := json.Marshal(hints)
-	if err != nil {
-		return result
-	}
-	// Build JSON with next_steps as the first field so LLMs see guidance early.
-	// slices.Concat sizes the result from the pieces themselves, so there is no
-	// capacity arithmetic to overflow and no guard against one.
-	opening := []byte(`{"next_steps":`)
-	if len(data) > 2 {
-		return json.RawMessage(slices.Concat(opening, hintsData, []byte(","), data[1:]))
-	}
-	return json.RawMessage(slices.Concat(opening, hintsData, []byte("}")))
 }
 
 // defaultFormatResult serializes the action result as JSON text content.

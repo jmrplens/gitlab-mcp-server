@@ -27,7 +27,7 @@ func FormatListMarkdownString(out ListOutput) string {
 			toolutil.EscapeMdTableCell(fp.FreezeStart), toolutil.EscapeMdTableCell(fp.FreezeEnd),
 			toolutil.EscapeMdTableCell(fp.CronTimezone))
 	}
-	b.WriteString(toolutil.FormatPagination(out.Pagination))
+	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b, "Use `gitlab_get_freeze_period` to view details of a specific freeze period")
 	return b.String()
 }

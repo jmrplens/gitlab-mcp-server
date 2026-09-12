@@ -597,16 +597,12 @@ func TestSharedMetaCatalog_SafeModePreviewsOnEveryServerOfOneKey(t *testing.T) {
 			if result.IsError {
 				t.Fatalf("gitlab_issue create returned an error result: %q", extractText(t, result))
 			}
-			var preview struct {
-				Status string `json:"status"`
-				Mode   string `json:"mode"`
-				Tool   string `json:"tool"`
-			}
 			text := extractText(t, result)
-			if err := json.Unmarshal([]byte(text), &preview); err != nil {
-				t.Fatalf("gitlab_issue create returned %q, which is not a preview: %v", text, err)
+			preview, isPreview := toolutil.ParseSafeModePreview(text)
+			if !isPreview {
+				t.Fatalf("gitlab_issue create returned %q, which is not a preview card", text)
 			}
-			if preview.Status != "blocked" || preview.Mode != "safe" || preview.Tool != "issue.create" {
+			if preview.Tool != "issue.create" {
 				t.Errorf("gitlab_issue create returned %+v, want a blocked safe-mode preview naming issue.create", preview)
 			}
 			if reached := requests[i].Load(); reached != 0 {

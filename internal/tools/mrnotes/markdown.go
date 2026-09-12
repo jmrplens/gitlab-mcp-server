@@ -29,25 +29,7 @@ func FormatListMarkdown(out ListOutput) string {
 
 func toNoteMarkdown(n Output) toolutil.NoteMarkdown {
 	flags := toolutil.NoteMarkdownFlags{System: n.System, Internal: n.Internal, Resolvable: n.Resolvable, Resolved: n.Resolved}
-	return toolutil.NewNoteMarkdown(n.ID, n.Body, noteAuthorUsername(n), n.CreatedAt, flags, noteResolvedByUsername(n))
-}
-
-// noteAuthorUsername returns the note author's username, read from the canonical
-// author object.
-func noteAuthorUsername(n Output) string {
-	if n.Author != nil {
-		return n.Author.Username
-	}
-	return ""
-}
-
-// noteResolvedByUsername returns the resolver's username, read from the
-// resolved_by object, or "" when the note has no resolver.
-func noteResolvedByUsername(n Output) string {
-	if n.ResolvedBy != nil {
-		return n.ResolvedBy.Username
-	}
-	return ""
+	return toolutil.NewNoteMarkdown(n.ID, n.Body, n.AuthorUsername(), n.CreatedAt, flags, n.ResolvedByUsername())
 }
 
 func init() {

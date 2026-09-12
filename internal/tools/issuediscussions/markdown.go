@@ -20,13 +20,16 @@ func FormatMarkdownString(out Output) string {
 	)
 }
 
-// FormatNoteMarkdownString renders a note as Markdown.
+// FormatNoteMarkdownString renders a note as the shared note card.
 func FormatNoteMarkdownString(out NoteOutput) string {
-	return toolutil.FormatDiscussionNoteMarkdown(
-		toMarkdownNote(out),
-		"Use action 'discussion_update_note' with note_id to edit this note",
-		"Use action 'discussion_delete_note' with note_id to remove this note",
-	)
+	return toolutil.FormatNoteMarkdown(toMarkdownNote(out), toolutil.NoteMarkdownOptions{
+		Title:             "Discussion Note",
+		IncludeResolvable: true,
+		Hints: []string{
+			"Use action 'discussion_update_note' with note_id to edit this note",
+			"Use action 'discussion_delete_note' with note_id to remove this note",
+		},
+	})
 }
 
 func toMarkdownDiscussion(out Output) toolutil.DiscussionMarkdown {

@@ -56,8 +56,9 @@ func WrapMutatingToolsForSafeModeExcept(ctx context.Context, server *mcp.Server,
 }
 
 // safeModeHandler returns an [mcp.ToolHandler] that builds a
-// [SafeModePreview] from the request and returns it as JSON text content
-// without executing the real operation.
+// [SafeModePreview] from the request and returns it as the preview card
+// [toolutil.FormatSafeModePreviewMarkdown] writes, without executing the real
+// operation.
 //
 // The result carries IsError. The tool did not run, so it produced none of the
 // output its schema describes, and the specification is unconditional about
@@ -81,26 +82,20 @@ func safeModeHandler(toolName string) mcp.ToolHandler {
 		// failing call, and a deployment in safe mode could not count what it
 		// intercepted.
 		toolutil.LogToolRefusal(ctx, req, toolName, toolutil.RefusalSafeMode)
-		preview := SafeModePreview{
+		// The arguments arrive as the client sent them, and the card echoes
+		// them in a fence; a body that is not JSON is refused rather than
+		// echoed, since the preview exists to be reviewed as the call it
+		// would have made.
+		if !json.Valid(req.Params.Arguments) {
+			return toolutil.ErrorResult("safe mode: failed to marshal preview"), nil
+		}
+		return toolutil.SafeModePreviewResult(SafeModePreview{
 			Status: "blocked",
 			Mode:   "safe",
 			Tool:   toolName,
 			Params: req.Params.Arguments,
 			Hint:   toolutil.SafeModeHint,
-		}
-
-		data, err := json.Marshal(preview)
-		if err != nil {
-			return &mcp.CallToolResult{ //nolint:nilerr // MCP convention: surface errors in result content, not as Go errors
-				Content: []mcp.Content{&mcp.TextContent{Text: "safe mode: failed to marshal preview"}},
-				IsError: true,
-			}, nil
-		}
-
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: string(data)}},
-			IsError: true,
-		}, nil
+		}), nil
 	}
 }
 

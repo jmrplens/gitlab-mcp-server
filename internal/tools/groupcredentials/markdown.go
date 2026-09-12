@@ -13,9 +13,9 @@ import (
 // declaration covers a package, so each is declared once here rather than six
 // times below.
 //
-//gitlab:allow-unescaped out.CreatedAt: a timestamp toPATOutput or toSSHKeyOutput rendered with the constant toolutil.DateTimeFormat layout.
-//gitlab:allow-unescaped out.LastUsedAt: a timestamp toPATOutput or toSSHKeyOutput rendered with the constant toolutil.DateTimeFormat layout.
-//gitlab:allow-unescaped out.ExpiresAt: a date rendered with a constant layout, gl.ISOTime.String for a token and toolutil.DateTimeFormat for an SSH key.
+//gitlab:allow-unescaped out.CreatedAt: a timestamp toPATOutput or toSSHKeyOutput wrote in the wire form through toolutil.RFC3339Ptr.
+//gitlab:allow-unescaped out.LastUsedAt: a timestamp toPATOutput or toSSHKeyOutput wrote in the wire form through toolutil.RFC3339Ptr.
+//gitlab:allow-unescaped out.ExpiresAt: a date rendered with a constant layout, gl.ISOTime.String for a token and toolutil.RFC3339Ptr for an SSH key.
 
 // FormatPATMarkdown formats a single personal access token as Markdown.
 func FormatPATMarkdown(out PATOutput) string {
@@ -57,7 +57,7 @@ func FormatPATListMarkdown(out PATListOutput) string {
 			//gitlab:allow-unescaped t.ExpiresAt: a date gl.ISOTime rendered as YYYY-MM-DD.
 			t.ID, toolutil.EscapeMdTableCell(t.Name), t.UserID, t.Active, t.Revoked, scopes, t.ExpiresAt)
 	}
-	sb.WriteString(toolutil.FormatPagination(out.Pagination))
+	toolutil.WritePagination(&sb, out.Pagination)
 	return sb.String()
 }
 
@@ -95,11 +95,11 @@ func FormatSSHKeyListMarkdown(out SSHKeyListOutput) string {
 	sb.WriteString("|---|---|---|---|---|\n")
 	for _, k := range out.Keys {
 		fmt.Fprintf(&sb, "| %d | %s | %d | %s | %s |\n",
-			//gitlab:allow-unescaped k.CreatedAt: a timestamp toSSHKeyOutput rendered with the constant toolutil.DateTimeFormat layout.
-			//gitlab:allow-unescaped k.ExpiresAt: a timestamp toSSHKeyOutput rendered with the constant toolutil.DateTimeFormat layout.
+			//gitlab:allow-unescaped k.CreatedAt: a timestamp toSSHKeyOutput wrote in the wire form through toolutil.RFC3339Ptr.
+			//gitlab:allow-unescaped k.ExpiresAt: a timestamp toSSHKeyOutput wrote in the wire form through toolutil.RFC3339Ptr.
 			k.ID, toolutil.EscapeMdTableCell(k.Title), k.UserID, k.CreatedAt, k.ExpiresAt)
 	}
-	sb.WriteString(toolutil.FormatPagination(out.Pagination))
+	toolutil.WritePagination(&sb, out.Pagination)
 	return sb.String()
 }
 

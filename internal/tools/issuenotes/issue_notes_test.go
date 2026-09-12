@@ -467,24 +467,18 @@ func TestFormatOutputMarkdown_Populated(t *testing.T) {
 	}
 	md := FormatOutputMarkdown(out)
 
-	checks := []struct {
-		label string
-		want  string
-	}{
-		{"header", "## Issue Note #200"},
-		{"author", "**Author**: fulluser"},
-		{"created", "**Created**: 1 Mar 2026 09:00 UTC"},
-		{"system", "**System note**"},
-		{"internal", "**Internal note**"},
-		{"resolvable resolved", "**Resolvable**: resolved"},
-		{"body", "Full note body"},
-	}
-	for _, c := range checks {
-		t.Run(c.label, func(t *testing.T) {
-			if !strings.Contains(md, c.want) {
-				t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
-			}
-		})
+	want := "## Issue Note #200\n\n" +
+		"- **Author**: @fulluser\n" +
+		"- **Created**: 1 Mar 2026 09:00 UTC\n" +
+		"- **System note**\n" +
+		"- **Internal note**\n" +
+		"- **Resolvable**: resolved\n" +
+		"- **Body**: Full note body\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use the selected tool surface's issue-note update action with the same project_id, issue_iid, and this note_id to edit this note\n" +
+		"- Use the selected tool surface's issue-note delete action with the same project_id, issue_iid, this note_id, and explicit confirm=true to remove this note\n"
+	if md != want {
+		t.Errorf("note card:\n got %q\nwant %q", md, want)
 	}
 }
 

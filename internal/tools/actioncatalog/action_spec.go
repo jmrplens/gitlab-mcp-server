@@ -31,6 +31,9 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 		if spec.EmbeddedResourcePolicy != "" && spec.EmbeddedResourcePolicy != toolutil.ActionSpecEmbeddedNone {
 			route.EmbeddedResource = spec.EmbeddedResource
 		}
+		// The content kind travels on the route for the same reason: it is
+		// what the dispatcher annotates the result with.
+		route.ContentKind = spec.ContentKind
 		actions = append(actions, Action{
 			Name:                   spec.Name,
 			Route:                  route,

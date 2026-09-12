@@ -6677,11 +6677,8 @@ func callModeTool(t *testing.T, session *mcp.ClientSession, name string, args ma
 // safeModeBlocked reports whether text is a safe-mode preview naming action.
 func safeModeBlocked(t *testing.T, text, action string) bool {
 	t.Helper()
-	var preview tools.SafeModePreview
-	if err := json.Unmarshal([]byte(text), &preview); err != nil {
-		return false
-	}
-	return preview.Status == "blocked" && preview.Mode == "safe" && preview.Tool == action
+	preview, isPreview := toolutil.ParseSafeModePreview(text)
+	return isPreview && preview.Tool == action
 }
 
 // TestCreateServer_SafeMode_DynamicSurfacePreviewsWritesAndRunsReads verifies
@@ -6784,8 +6781,8 @@ func TestCreateServer_SafeMode_PreviewCarriesCallArguments(t *testing.T) {
 		"action": "project.delete",
 		"params": map[string]any{"project_id": "42"},
 	})
-	var preview tools.SafeModePreview
-	if err := json.Unmarshal([]byte(text), &preview); err != nil {
+	preview, isPreview := toolutil.ParseSafeModePreview(text)
+	if !isPreview {
 		t.Fatalf("destructive action did not return a preview: %s", text)
 	}
 	if preview.Tool != "project.delete" {

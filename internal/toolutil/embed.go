@@ -39,6 +39,11 @@ func EmbeddedResourcesEnabled() bool {
 // EmbedResource is a no-op. No further URI validation is performed; callers
 // are responsible for passing well-formed URIs that match an MCP resource
 // template registered with the server.
+//
+// The block is annotated [ResourceMachineDetail]: it is the machine-facing
+// payload of one entity, for the assistant deciding what to call next and
+// for a programmatic client, with no display value for a person, which is
+// the one resource family that drops the user role.
 func EmbedResource(result *mcp.CallToolResult, uri, mimeType, text string) {
 	if result == nil || uri == "" || !embeddedResourcesEnabled.Load() {
 		return
@@ -49,6 +54,7 @@ func EmbedResource(result *mcp.CallToolResult, uri, mimeType, text string) {
 			MIMEType: mimeType,
 			Text:     text,
 		},
+		Annotations: ResourceMachineDetail,
 	})
 }
 
@@ -64,11 +70,5 @@ func EmbedResourceJSON(result *mcp.CallToolResult, uri string, value any) {
 	if err != nil {
 		return
 	}
-	result.Content = append(result.Content, &mcp.EmbeddedResource{
-		Resource: &mcp.ResourceContents{
-			URI:      uri,
-			MIMEType: "application/json",
-			Text:     string(data),
-		},
-	})
+	EmbedResource(result, uri, "application/json", string(data))
 }

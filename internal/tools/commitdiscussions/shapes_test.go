@@ -226,7 +226,7 @@ func TestBuildNotePosition_Defaults(t *testing.T) {
 	}
 }
 
-// TestFirstNoteAuthor verifies the firstNoteAuthor and noteAuthorUsername
+// TestFirstNoteAuthor verifies the firstNoteAuthor and AuthorUsername
 // nil-guard paths used by the list/note Markdown formatters.
 func TestFirstNoteAuthor(t *testing.T) {
 	if got := firstNoteAuthor(Output{}); got != "" {
@@ -235,7 +235,7 @@ func TestFirstNoteAuthor(t *testing.T) {
 	if got := firstNoteAuthor(Output{Notes: []*NoteOutput{nil}}); got != "" {
 		t.Errorf("expected empty author for nil note, got %q", got)
 	}
-	if got := noteAuthorUsername(NoteOutput{}); got != "" {
+	if got := (NoteOutput{}).AuthorUsername(); got != "" {
 		t.Errorf("expected empty author for nil author, got %q", got)
 	}
 	d := Output{Notes: []*NoteOutput{{Author: &toolutil.NoteUserOutput{Username: "alice"}}}}

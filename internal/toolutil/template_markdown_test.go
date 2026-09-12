@@ -1,36 +1,59 @@
 package toolutil
 
 import (
-	"strings"
 	"testing"
 )
 
-// TestFormatTemplateAttributeListMarkdown verifies shared template list rendering for
-// populated and empty collections, including hints and escaped table values.
-func TestFormatTemplateAttributeListMarkdown(t *testing.T) {
-	md := FormatTemplateAttributeListMarkdown([]TemplateAttributeListMarkdownItem{{Key: "mit", Name: "MIT | License", Attribute: "Yes"}}, TemplateAttributeListMarkdownOptions{
-		Title:           "Templates",
-		EmptyMessage:    "No templates found.",
-		AttributeHeader: "Popular",
-		Hints:           []string{"Use a get action for details"},
-	})
-
-	for _, want := range []string{"## Templates", "mit", "MIT &#124; License", "Yes", "Use a get action"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Fatalf("markdown missing %q:\n%s", want, md)
+// TestFormatTemplateAttributeListMarkdown_Cases_WholeOutput verifies the
+// template list in both its shapes byte for byte: the three-column table
+// when an attribute header is named, the two-column table when it is not,
+// the heading counting what was shown, the footer when there is one, and the
+// caller's hint without a link hint, since templates carry no link. An empty
+// list is the configured message alone.
+func TestFormatTemplateAttributeListMarkdown_Cases_WholeOutput(t *testing.T) {
+	item := TemplateAttributeListMarkdownItem{Key: "mit", Name: "MIT | License", Attribute: "Yes"}
+	cases := []struct {
+		name  string
+		items []TemplateAttributeListMarkdownItem
+		opts  TemplateAttributeListMarkdownOptions
+		want  string
+	}{
+		{
+			name:  "three columns",
+			items: []TemplateAttributeListMarkdownItem{item},
+			opts:  TemplateAttributeListMarkdownOptions{Title: "Templates", EmptyMessage: "No templates found.", AttributeHeader: "Popular", Hints: []string{"Use a get action for details"}},
+			want: "## Templates (1)\n\n| Key | Name | Popular |\n| --- | --- | --- |\n| mit | MIT &#124; License | Yes |\n" +
+				hintsSection("Use a get action for details"),
+		},
+		{
+			name:  "two columns with a footer",
+			items: []TemplateAttributeListMarkdownItem{{Key: "Go", Name: "Go template"}},
+			opts: TemplateAttributeListMarkdownOptions{
+				Title: "CI YAML Templates", EmptyMessage: "No templates found.\n",
+				Pagination: PaginationOutput{Page: 1, PerPage: 20, TotalItems: 1, TotalPages: 1},
+				Hints:      []string{HintPreserveLinks, "Use the key to fetch full template content"},
+			},
+			want: "## CI YAML Templates (1)\n\n| Key | Name |\n| --- | --- |\n| Go | Go template |\n\nPage 1 of 1 | 1 items total | 20 per page\n" +
+				hintsSection("Use the key to fetch full template content"),
+		},
+		{
+			name: "empty",
+			opts: TemplateAttributeListMarkdownOptions{Title: "Templates", EmptyMessage: "No templates found.", AttributeHeader: "Popular"},
+			want: "No templates found.\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := FormatTemplateAttributeListMarkdown(tc.items, tc.opts); got != tc.want {
+				t.Errorf("template list:\n got %q\nwant %q", got, tc.want)
 			}
 		})
 	}
-
-	empty := FormatTemplateAttributeListMarkdown(nil, TemplateAttributeListMarkdownOptions{Title: "Templates", EmptyMessage: "No templates found.", AttributeHeader: "Popular"})
-	if !strings.Contains(empty, "No templates found.") {
-		t.Fatalf("empty markdown missing message:\n%s", empty)
-	}
 }
 
-// TestFormatTemplateDetailMarkdown verifies optional template detail fields are
-// included only when present while preserving code block content.
+// TestFormatTemplateDetailMarkdown verifies the template card with every
+// optional row present, byte for byte, and the heading alone for a template
+// that carries nothing else.
 func TestFormatTemplateDetailMarkdown(t *testing.T) {
 	md := FormatTemplateDetailMarkdown(TemplateDetailMarkdown{
 		Title:          "Project Template: MIT",
@@ -38,7 +61,7 @@ func TestFormatTemplateDetailMarkdown(t *testing.T) {
 		Nickname:       "MIT",
 		Popular:        true,
 		Description:    "A permissive license",
-		Permissions:    []string{"commercial-use"},
+		Permissions:    []string{"commercial-use", "a|b"},
 		Conditions:     []string{"include-copyright"},
 		Limitations:    []string{"no-liability"},
 		Content:        "license text",
@@ -46,21 +69,27 @@ func TestFormatTemplateDetailMarkdown(t *testing.T) {
 		Hints:          []string{"Use this template"},
 	})
 
-	for _, want := range []string{"Project Template: MIT", "mit", "Nickname", "Popular", "A permissive license", "commercial-use", "include-copyright", "no-liability", "```\nlicense text\n```", "Use this template"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Fatalf("markdown missing %q:\n%s", want, md)
-			}
-		})
+	want := "## Project Template: MIT\n\n" +
+		"- **Key**: mit\n" +
+		"- **Nickname**: MIT\n" +
+		"- **Popular**: " + EmojiSuccess + "\n" +
+		"- **Description**: A permissive license\n" +
+		"- **Permissions**: commercial-use, a&#124;b\n" +
+		"- **Conditions**: include-copyright\n" +
+		"- **Limitations**: no-liability\n" +
+		"\n### Content\n\n```\nlicense text\n```\n" +
+		hintsSection("Use this template")
+	if md != want {
+		t.Errorf("template card:\n got %q\nwant %q", md, want)
 	}
 
 	minimal := FormatTemplateDetailMarkdown(TemplateDetailMarkdown{Title: "License: Minimal"})
-	if strings.Contains(minimal, "Description") || strings.Contains(minimal, "```") {
-		t.Fatalf("minimal markdown contains absent optional fields:\n%s", minimal)
+	if wantMinimal := "## License: Minimal\n\n"; minimal != wantMinimal {
+		t.Errorf("minimal template card = %q, want %q", minimal, wantMinimal)
 	}
 }
 
-// TestFormatTemplateDetailMarkdown_KeyLineFollowsTheKey verifies the key line
+// TestFormatTemplateDetailMarkdown_KeyLineFollowsTheKey verifies the key row
 // is written exactly when the template has a key, and never as an empty label.
 //
 // The same renderer serves license templates, which have a key, and the issue
@@ -69,44 +98,60 @@ func TestFormatTemplateDetailMarkdown(t *testing.T) {
 // the empty string rather than one that has none.
 func TestFormatTemplateDetailMarkdown_KeyLineFollowsTheKey(t *testing.T) {
 	withKey := FormatTemplateDetailMarkdown(TemplateDetailMarkdown{Title: "Project Template: MIT", Key: "mit"})
-	if !strings.Contains(withKey, "- **Key**: mit\n") {
-		t.Errorf("a template with a key did not render it:\n%s", withKey)
+	if want := "## Project Template: MIT\n\n- **Key**: mit\n"; withKey != want {
+		t.Errorf("template card with a key:\n got %q\nwant %q", withKey, want)
 	}
 
 	withoutKey := FormatTemplateDetailMarkdown(TemplateDetailMarkdown{Title: "Issue Template: Bug report"})
-	if strings.Contains(withoutKey, "**Key**") {
-		t.Errorf("a template without a key rendered an empty key line:\n%s", withoutKey)
+	if want := "## Issue Template: Bug report\n\n"; withoutKey != want {
+		t.Errorf("template card without a key:\n got %q\nwant %q", withoutKey, want)
 	}
 }
 
-// TestFormatTemplateDetailMarkdown_PlainFields verifies license-style template
-// detail rendering can preserve unbulleted field labels while sharing the
-// common renderer.
-func TestFormatTemplateDetailMarkdown_PlainFields(t *testing.T) {
+// TestFormatTemplateDetailMarkdown_LicenseShape_RendersRowsNotParagraphs
+// verifies the license family's shape, description and three lists without
+// a key, renders as card rows: the bullet-less label lines it used to write
+// rendered as one run-on paragraph.
+func TestFormatTemplateDetailMarkdown_LicenseShape_RendersRowsNotParagraphs(t *testing.T) {
 	md := FormatTemplateDetailMarkdown(TemplateDetailMarkdown{
 		Title:       "License: MIT",
 		Description: "A permissive license",
 		Permissions: []string{"commercial-use"},
 		Conditions:  []string{"include-copyright"},
 		Limitations: []string{"no-liability"},
-		PlainFields: true,
 	})
 
-	for _, want := range []string{"**Description**: A permissive license", "**Permissions**: commercial-use", "**Conditions**: include-copyright", "**Limitations**: no-liability"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(md, want) {
-				t.Fatalf("markdown missing %q:\n%s", want, md)
-			}
-		})
-	}
-	if strings.Contains(md, "- **Permissions**") {
-		t.Fatalf("plain markdown should not render bulleted detail fields:\n%s", md)
+	want := "## License: MIT\n\n" +
+		"- **Description**: A permissive license\n" +
+		"- **Permissions**: commercial-use\n" +
+		"- **Conditions**: include-copyright\n" +
+		"- **Limitations**: no-liability\n"
+	if md != want {
+		t.Errorf("license card:\n got %q\nwant %q", md, want)
 	}
 }
 
-// TestFormatTemplateDetailMarkdown_ContentWithoutHeading verifies the shared
-// template detail renderer still fences the content block in a code fence
-// when the caller did not supply a ContentHeading.
+// TestFormatTemplateDetailMarkdown_MultiLineDescription_QuotesUnderTheLabel
+// verifies a description of several paragraphs is quoted under its label,
+// indented into the item, with the empty line kept as a bare quote marker.
+func TestFormatTemplateDetailMarkdown_MultiLineDescription_QuotesUnderTheLabel(t *testing.T) {
+	md := FormatTemplateDetailMarkdown(TemplateDetailMarkdown{
+		Title:       "License: MIT",
+		Description: "para one\n\npara two",
+	})
+
+	want := "## License: MIT\n\n" +
+		"- **Description**:\n" +
+		"  > para one\n" +
+		"  >\n" +
+		"  > para two\n"
+	if md != want {
+		t.Errorf("template card with a multi-line description:\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatTemplateDetailMarkdown_ContentWithoutHeading verifies the content
+// is fenced after a blank line, under no heading, when the caller named none.
 func TestFormatTemplateDetailMarkdown_ContentWithoutHeading(t *testing.T) {
 	md := FormatTemplateDetailMarkdown(TemplateDetailMarkdown{
 		Title:   "License: MIT",
@@ -114,10 +159,7 @@ func TestFormatTemplateDetailMarkdown_ContentWithoutHeading(t *testing.T) {
 		Content: "permission text",
 	})
 
-	if !strings.Contains(md, "```\npermission text\n```") {
-		t.Fatalf("expected unfenced-heading content block in:\n%s", md)
-	}
-	if strings.Contains(md, "###") {
-		t.Fatalf("expected no content heading section, got:\n%s", md)
+	if want := "## License: MIT\n\n- **Key**: mit\n\n```\npermission text\n```\n"; md != want {
+		t.Errorf("template card with unheaded content:\n got %q\nwant %q", md, want)
 	}
 }

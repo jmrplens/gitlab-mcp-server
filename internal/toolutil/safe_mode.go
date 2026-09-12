@@ -8,6 +8,9 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // SafeModePreview is the structured response returned when a mutating
@@ -60,4 +63,80 @@ func SafeModeActionFunc(name string) ActionFunc {
 		LogToolRefusal(ctx, nil, name, RefusalSafeMode)
 		return NewSafeModePreview(name, params), nil
 	}
+}
+
+// The rows and the heading a preview card is made of, shared by the writer
+// and by [ParseSafeModePreview], which reads the card back.
+const (
+	safeModeHeadingPrefix = EmojiStop + " Safe mode blocked "
+	safeModeStatusRow     = "- **Status**: "
+	safeModeModeRow       = "- **Mode**: "
+	safeModeToolRow       = "- **Tool**: "
+	safeModeParamsTitle   = "Parameters"
+)
+
+// FormatSafeModePreviewMarkdown renders a preview as a card, the way every
+// other refusal is rendered: the intercepted tool in the heading, the status
+// and mode rows, the tool as a code span, the would-be arguments in a JSON
+// fence, and the operator's hint last. It is the registered formatter for
+// [SafeModePreview], so the dispatcher surfaces render the preview through
+// it, and [SafeModePreviewResult] is what the individual surface answers
+// with.
+func FormatSafeModePreviewMarkdown(p SafeModePreview) string {
+	var b strings.Builder
+	c := NewCard(&b, safeModeHeadingPrefix+p.Tool)
+	c.Field("Status", p.Status)
+	c.Field("Mode", p.Mode)
+	c.Code("Tool", p.Tool)
+	c.Fence(safeModeParamsTitle, "json", string(p.Params))
+	if p.Hint == "" {
+		c.End()
+	} else {
+		c.End(p.Hint)
+	}
+	return b.String()
+}
+
+// SafeModePreviewResult renders a preview as the error result the individual
+// surface answers an intercepted call with: the tool did not run, so it
+// produced none of the output its schema describes, and the specification is
+// unconditional about what a declared schema obliges.
+func SafeModePreviewResult(p SafeModePreview) *mcp.CallToolResult {
+	return ErrorResultAnnotated(FormatSafeModePreviewMarkdown(p), ContentMutate)
+}
+
+// ParseSafeModePreview reads a preview back out of the card
+// [FormatSafeModePreviewMarkdown] wrote, and reports whether the text is one:
+// a card whose status row says blocked and whose mode row says safe. It is
+// the one reader a test or an evaluator needs, so that none of them parses
+// the card by hand.
+func ParseSafeModePreview(text string) (SafeModePreview, bool) {
+	var p SafeModePreview
+	var params []string
+	inFence := false
+	for line := range strings.SplitSeq(text, "\n") {
+		switch {
+		case strings.HasPrefix(line, "```"):
+			inFence = !inFence
+		case inFence:
+			params = append(params, line)
+		case strings.HasPrefix(line, safeModeStatusRow):
+			p.Status = strings.TrimPrefix(line, safeModeStatusRow)
+		case strings.HasPrefix(line, safeModeModeRow):
+			p.Mode = strings.TrimPrefix(line, safeModeModeRow)
+		case strings.HasPrefix(line, safeModeToolRow):
+			p.Tool = strings.Trim(strings.TrimPrefix(line, safeModeToolRow), "` ")
+		}
+	}
+	if len(params) > 0 {
+		p.Params = json.RawMessage(strings.Join(params, "\n"))
+	}
+	if hints := ExtractHints(text); len(hints) > 0 {
+		p.Hint = hints[0]
+	}
+	return p, p.Status == "blocked" && p.Mode == "safe"
+}
+
+func init() {
+	RegisterMarkdown(FormatSafeModePreviewMarkdown)
 }

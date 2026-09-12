@@ -183,6 +183,24 @@ type NoteOutput struct {
 	Suggestions     []SuggestionOutput  `json:"suggestions,omitempty"`
 }
 
+// AuthorUsername returns the author's username, or "" when the note carries
+// no author object. It is the one nil guard every note formatter used to copy.
+func (n NoteOutput) AuthorUsername() string {
+	if n.Author == nil {
+		return ""
+	}
+	return n.Author.Username
+}
+
+// ResolvedByUsername returns the resolver's username, or "" when nobody has
+// resolved the note.
+func (n NoteOutput) ResolvedByUsername() string {
+	if n.ResolvedBy == nil {
+		return ""
+	}
+	return n.ResolvedBy.Username
+}
+
 // NoteOutputFromGitLab converts a [gl.Note] and what the captured response
 // adds to it into the canonical [NoteOutput] shape used by standalone note
 // tools (mrnotes, issuenotes). Timestamps are formatted as RFC 3339 strings.
@@ -284,14 +302,31 @@ func DiscussionThreadNoteOutputFromGitLab(n *gl.Note, extra NoteExtra) Discussio
 	}
 }
 
-// MarkdownNote returns the shared Markdown view model for a thread note,
-// naming the author by username.
-func (n DiscussionThreadNoteOutput) MarkdownNote() DiscussionNoteMarkdown {
-	author := ""
-	if n.Author != nil {
-		author = n.Author.Username
+// AuthorUsername returns the author's username, or "" when the note carries
+// no author object.
+func (n DiscussionThreadNoteOutput) AuthorUsername() string {
+	if n.Author == nil {
+		return ""
 	}
-	return NewDiscussionNoteMarkdown(n.ID, n.Body, author, n.CreatedAt)
+	return n.Author.Username
+}
+
+// ResolvedByUsername returns the resolver's username, or "" when nobody has
+// resolved the note.
+func (n DiscussionThreadNoteOutput) ResolvedByUsername() string {
+	if n.ResolvedBy == nil {
+		return ""
+	}
+	return n.ResolvedBy.Username
+}
+
+// MarkdownNote returns the shared Markdown view model for a thread note: the
+// author by username, and the flags and resolution state the note carries,
+// which the view model used to leave out and the discussion card could not
+// show.
+func (n DiscussionThreadNoteOutput) MarkdownNote() NoteMarkdown {
+	flags := NoteMarkdownFlags{System: n.System, Internal: n.Internal, Resolvable: n.Resolvable, Resolved: n.Resolved}
+	return NewNoteMarkdown(n.ID, n.Body, n.AuthorUsername(), n.CreatedAt, flags, n.ResolvedByUsername())
 }
 
 // DiscussionExtra is what GitLab's Discussion entity sends that client-go's

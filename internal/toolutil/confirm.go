@@ -167,18 +167,14 @@ func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string
 }
 
 // CancelledResult returns an error tool result indicating the user canceled.
+//
+// The operation was declined, so it produced none of the output its schema
+// describes. A tool that declares an outputSchema MUST return structured
+// results conforming to it, and a cancellation conforms to nothing, so this
+// is reported as an error result rather than as a success carrying only
+// prose, in the envelope every refusal travels in.
 func CancelledResult(message string) *mcp.CallToolResult {
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: message},
-		},
-		// The operation was declined, so it produced none of the output its
-		// schema describes. A tool that declares an outputSchema MUST return
-		// structured results conforming to it, and a cancellation conforms to
-		// nothing, so this is reported as an error result rather than as a
-		// success carrying only prose.
-		IsError: true,
-	}
+	return ErrorResultAnnotated(message, ContentMutate)
 }
 
 // InputRequiredResultFromError extracts the input-required tool result from a

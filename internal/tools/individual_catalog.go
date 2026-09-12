@@ -265,10 +265,10 @@ func actionSpecFromCatalogAction(action actioncatalog.Action) toolutil.ActionSpe
 // individualCatalogHandler returns the handler bound to one individual
 // tool. The handler enforces safe-mode previews for mutating actions,
 // destructive-action confirmation via [toolutil.ConfirmDestructiveAction],
-// and rich-result hint injection via [toolutil.WithHints]. The catalog
-// route's handler is invoked with the request context enhanced by
-// [toolutil.ContextWithRequest] so logging and request metadata
-// propagate.
+// and finishes the result through [toolutil.FinishToolResult], the tail the
+// meta and standalone dispatchers apply too. The catalog route's handler is
+// invoked with the request context enhanced by [toolutil.ContextWithRequest]
+// so logging and request metadata propagate.
 func individualCatalogHandler(toolName string, action actioncatalog.Action, formatResult toolutil.FormatResultFunc, opts IndividualCatalogRegisterOptions) mcp.ToolHandlerFor[map[string]any, any] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input map[string]any) (*mcp.CallToolResult, any, error) {
 		if opts.SafeMode && !individualCatalogActionReadOnly(action) {
@@ -303,12 +303,11 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 		if err != nil {
 			return nil, nil, err
 		}
-		callResult := formatResult(result)
-		if callResult != nil && callResult.IsError {
+		callResult, structured := toolutil.FinishToolResult(formatResult(result), result, action.Route, input)
+		if callResult.IsError {
 			return callResult, nil, nil
 		}
-		toolutil.EmbedCanonicalResource(callResult, action.Route.EmbeddedResource, input, result)
-		return toolutil.WithHints(callResult, result, nil)
+		return callResult, structured, nil
 	}
 }
 

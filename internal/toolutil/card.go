@@ -289,7 +289,7 @@ func (c *Card) Table(title string, columns ...string) *CardTable {
 			cells[i] = cardInline(column)
 		}
 		c.b.WriteString(markdownTableLine(cells))
-		c.b.WriteString(MarkdownTableSeparator(len(cells)))
+		c.b.WriteString(markdownTableSeparator(len(cells)))
 	}
 	return &CardTable{c: c}
 }
@@ -389,14 +389,7 @@ func (c *Card) separate() {
 // ends with now, so a heading, a table, a fence or a note opens a block of its
 // own rather than continuing the last line as a lazy paragraph or a row.
 func (c *Card) endBlock() {
-	written := c.b.String()
-	switch {
-	case written == "" || strings.HasSuffix(written, "\n\n"):
-	case strings.HasSuffix(written, "\n"):
-		c.b.WriteString("\n")
-	default:
-		c.b.WriteString("\n\n")
-	}
+	endBlock(c.b)
 }
 
 // wrote records that the builder's last line is this card's, and its parents'

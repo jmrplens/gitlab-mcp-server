@@ -45,6 +45,9 @@ func TestEmbedResource_AppendsContentBlock(t *testing.T) {
 	if er.Resource.Text != `{"iid":7}` {
 		t.Errorf("Text = %q, want {\"iid\":7}", er.Resource.Text)
 	}
+	if er.Annotations != ResourceMachineDetail {
+		t.Errorf("Annotations = %+v, want the machine-facing detail preset", er.Annotations)
+	}
 }
 
 // TestEmbedResource_DisabledIsNoOp verifies that [EmbedResource] leaves the

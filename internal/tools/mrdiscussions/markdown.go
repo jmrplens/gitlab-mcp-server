@@ -8,20 +8,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// noteAuthorUsername returns the note author's username, read from the
-// canonical author object (nil-guarded).
-func noteAuthorUsername(n NoteOutput) string {
-	if n.Author != nil {
-		return n.Author.Username
-	}
-	return ""
-}
-
 // FormatNoteMarkdown renders a single discussion note as Markdown.
 func FormatNoteMarkdown(n NoteOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Discussion Note #%d\n\n", n.ID)
-	fmt.Fprintf(&b, toolutil.FmtMdAuthor, toolutil.EscapeMdTableCell(noteAuthorUsername(n)))
+	fmt.Fprintf(&b, toolutil.FmtMdAuthor, toolutil.EscapeMdTableCell(n.AuthorUsername()))
 	fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(n.CreatedAt))
 	fmt.Fprintf(&b, "- **Resolved**: %v\n", n.Resolved)
 	fmt.Fprintf(&b, "\n%s\n", toolutil.WrapGFMBody(n.Body))
@@ -40,7 +31,7 @@ func FormatOutputMarkdown(d Output) string {
 	fmt.Fprintf(&b, "- **Notes**: %d\n", len(d.Notes))
 	fmt.Fprintf(&b, "- **Individual Note**: %v\n", d.IndividualNote)
 	for i, n := range d.Notes {
-		fmt.Fprintf(&b, "\n### Note %d (by %s)\n\n%s\n", i+1, toolutil.EscapeMdHeading(noteAuthorUsername(*n)), toolutil.WrapGFMBody(n.Body))
+		fmt.Fprintf(&b, "\n### Note %d (by %s)\n\n%s\n", i+1, toolutil.EscapeMdHeading(n.AuthorUsername()), toolutil.WrapGFMBody(n.Body))
 	}
 	toolutil.WriteHints(
 		&b,
