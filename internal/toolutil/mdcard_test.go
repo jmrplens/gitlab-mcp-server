@@ -157,6 +157,9 @@ func TestMdInlineCode(t *testing.T) {
 		{name: "a run of two is contained by three", value: "a``b", want: "```a``b```"},
 		{name: "a leading backtick is padded", value: "`x", want: "`` `x ``"},
 		{name: "a newline collapses", value: "a\nb", want: "`a b`"},
+		{name: "a value wrapped in spaces is padded, or it loses them", value: " x ", want: "`  x  `"},
+		{name: "a space on one side only is left alone", value: " x", want: "` x`"},
+		{name: "a value that is all spaces is left alone", value: "   ", want: "`   `"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

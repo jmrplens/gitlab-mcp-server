@@ -139,8 +139,29 @@ func MdInlineCode(value string) string {
 	// Markdown itself uses for nesting code.
 	fence := strings.Repeat("`", longestBacktickRun(value)+1)
 	pad := ""
-	if strings.HasPrefix(value, "`") || strings.HasSuffix(value, "`") {
+	if needsCodeSpanPad(value) {
 		pad = " "
 	}
 	return fence + pad + value + pad + fence
+}
+
+// needsCodeSpanPad reports whether a code span's content has to be padded with
+// one space at each end to reach the reader as it was written.
+//
+// CommonMark normalizes a code span before rendering it: content that both
+// begins and ends with a space, and is not all spaces, loses one space from
+// each end. Two shapes therefore need padding for opposite reasons. A value
+// that starts or ends with a backtick needs it so the fence and the value do
+// not run together; a value that starts and ends with a space needs it so the
+// normalization has padding of its own to take, instead of taking the value's.
+// " x " rendered as a bare span reaches the reader as "x".
+//
+// A value that is all spaces needs none: the rule exempts it, so padding would
+// add spaces rather than protect any, and three spaces would arrive as five.
+func needsCodeSpanPad(value string) bool {
+	if strings.HasPrefix(value, "`") || strings.HasSuffix(value, "`") {
+		return true
+	}
+	wrapped := strings.HasPrefix(value, " ") && strings.HasSuffix(value, " ")
+	return wrapped && strings.Trim(value, " ") != ""
 }
