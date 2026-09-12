@@ -93,6 +93,43 @@ var declaredDrops = map[string]dropDeclaration{
 			"its licensed branch (environment.protected_list, protected_protect, protected_get and protected_unprotect) " +
 			"is the scenario test/e2e/gitlab/ee/protectedenvs_test.go drives on every surface of a licensed runtime",
 	},
+	// S17 B6: the old suite's own infrastructure tests and the MCP-level cases
+	// the plan resolves rather than ports. The suite's own helper tests are
+	// superseded by the harness and fixture that replaced those helpers; the
+	// HTTP-transport cases are covered on the wire by test/e2e/http, which the
+	// stdio harness cannot reach; the in-process capability tests are replaced
+	// by binary-driven ports (mcp_dynamic_find, mcp_annotations, mcp_schema,
+	// mcp_manifest, mcp_confirm_guard, mcp_elicitation, mcp_wait) or dropped to
+	// a sweep that already proves them.
+	"TestPoll_ImmediateSuccess":                                b6PollDrop,
+	"TestPoll_RetrySuccess":                                    b6PollDrop,
+	"TestPoll_ReturnsContextCancellation":                      b6PollDrop,
+	"TestPoll_ReturnsTimeoutWithLastState":                     b6PollDrop,
+	"TestPoll_ReturnsConditionError":                           b6PollDrop,
+	"TestRetryWithBackoffInterval_RetrySuccess":                b6PollDrop,
+	"TestRetryWithBackoffInterval_ReturnsNonRetryableError":    b6PollDrop,
+	"TestRetryWithBackoffInterval_RespectsContextCancellation": b6PollDrop,
+	"TestShortStableHash_ReturnsStableLowercaseHex":            b6NamesDrop,
+	"TestSanitizeTestName_ConvertsGoTestNameToSlug":            b6NamesDrop,
+	"TestSanitizeTestName_TruncatesToFortyCharacters":          b6NamesDrop,
+	"TestNewE2ERunID_UsesUTCStampAndHashSuffix":                b6NamesDrop,
+	"TestConfiguredE2ERunID_UsesEnvironmentOverride":           b6NamesDrop,
+	"TestUniqueName_IncludesRunIDHashAndCounter":               b6NamesDrop,
+	"TestUniqueName_UsesDefaultPrefixForEmptyInput":            b6NamesDrop,
+	"TestResourceLedger_CleansInReverseRegistrationOrder":      b6LedgerDrop,
+	"TestResourceLedger_RecordsReturnsCopy":                    b6LedgerDrop,
+	"TestResourceLedger_RegisterIsConcurrentSafe":              b6LedgerDrop,
+	"TestResourceLedger_CleanupAllReportsFailures":             b6LedgerDrop,
+	"TestResourceLedger_CleanupAllIsIdempotent":                b6LedgerDrop,
+	"TestResourceLedger_RegisterAfterCleanupReturnsError":      b6LedgerDrop,
+	"TestMain":               b6MainDrop,
+	"TestGitLabURLHeaderE2E": b6HTTPHeaderDrop,
+	"TestHTTPStatelessBinary_FullFlow_NoSessionTracking": b6HTTPStatelessDrop,
+	"TestOAuthE2E":               b6OAuthDrop,
+	"TestIdentityE2E":            b6IdentityDrop,
+	"TestCapability_Progress":    b6ProgressDrop,
+	"TestCapability_Completions": b6CompletionsDrop,
+	"TestResources_ReadAll":      b6ResourcesReadDrop,
 }
 
 // baselineRecorderDrop is the one reason the old suite's recorder tests
@@ -104,6 +141,79 @@ var baselineRecorderDrop = dropDeclaration{
 		"in-process dispatch join the harness's own recorder replaces (test/e2e/internal/harness/record.go " +
 		"and otlp.go, tested there against the real binary); the recorder is deleted with the suite it instrumented",
 }
+
+// The reasons the S17 B6 drops share, one per superseding successor. B6 holds
+// the old suite's own infrastructure tests and the MCP-level cases that either
+// drove a server the suite assembled in its own process, or exercise a fact a
+// transport module already proves against the real binary.
+var (
+	b6PollDrop = dropDeclaration{
+		Category: dropSuperseded,
+		Reason: "a unit test of the old suite's own Poll and RetryWithBackoffInterval helpers, which the " +
+			"harness replaced with test/e2e/internal/harness/poll.go, tested there by TestPoll_* and TestRetry_*",
+	}
+	b6NamesDrop = dropDeclaration{
+		Category: dropSuperseded,
+		Reason: "a unit test of the old suite's own run-id and name helpers, which the harness replaced with " +
+			"test/e2e/internal/harness/names.go, tested there by TestShortStableHash_*, TestSanitizeTestName_*, " +
+			"TestNewRunID_*, TestConfiguredRunID_* and TestUniqueName_*",
+	}
+	b6LedgerDrop = dropDeclaration{
+		Category: dropSuperseded,
+		Reason: "a unit test of the old suite's own cleanup ledger, which the harness replaced with the ledger in " +
+			"test/e2e/internal/harness/env.go, tested there by TestLedger_*",
+	}
+	b6MainDrop = dropDeclaration{
+		Category: dropSuperseded,
+		Reason: "the old suite's TestMain, which assembled the in-process sessions the whole suite drove; the " +
+			"harness starts the real binary from harness.Main, called by each runtime package's own main_test.go",
+	}
+	b6HTTPHeaderDrop = dropDeclaration{
+		Category: dropCoveredElsewhere,
+		Reason: "reproduced the cmd/server GITLAB-URL selector closure over httptest servers in the test process; " +
+			"the real binary's per-request instance selection and pool keying are driven on the wire by " +
+			"test/e2e/http (TestGate_PublishedInstances_HeaderCannotRedirectTheCredential, " +
+			"TestGate_SinglePublishedInstance_IgnoresTheHeader, TestGate_MalformedGitLabURLHeader_IsRejectedWithDetail, " +
+			"TestClient_DistinctCredentialsGetDistinctServers)",
+	}
+	b6HTTPStatelessDrop = dropDeclaration{
+		Category: dropCoveredElsewhere,
+		Reason: "drove a hand-built binary over sessionless JSON-RPC POSTs; the harness starts the binary over stdio " +
+			"only, and the stateless HTTP flow it tested is driven against the real binary by test/e2e/http " +
+			"(TestClient_JSONResponseMode, TestGate_StatefulServesEveryRevisionExceptTheStatelessOne, " +
+			"TestGate_NonPostMethodsReachTheSDK)",
+	}
+	b6OAuthDrop = dropDeclaration{
+		Category: dropCoveredElsewhere,
+		Reason: "reassembled the OAuth bearer middleware and RFC 9728 metadata handler in the test process; the real " +
+			"binary's OAuth admission, metadata and identity propagation are driven on the wire by test/e2e/http " +
+			"(the TestOAuth_* family and TestCollectorSurfaces_OAuthModeStillRecords)",
+	}
+	b6IdentityDrop = dropDeclaration{
+		Category: dropCopiedProduction,
+		Reason: "built an in-memory server and mock GitLab to exercise toolutil.IdentityToContext/ResolveIdentity and " +
+			"the oauth caching verifier, which are unit-tested in internal/toolutil and internal/oauth; HTTP OAuth " +
+			"identity against the real binary is covered by test/e2e/http (TestCollectorSurfaces_OAuthModeStillRecords)",
+	}
+	b6ProgressDrop = dropDeclaration{
+		Category: dropCopiedProduction,
+		Reason: "built an in-process server matching cmd/server to observe a progress notification, which the harness " +
+			"client does not wire; the progress tracker is unit-tested in internal/progress and " +
+			"internal/tools/uploads (TestProjectUpload_WithProgressToken), and progress is not a coverage capability",
+	}
+	b6CompletionsDrop = dropDeclaration{
+		Category: dropSuperseded,
+		Reason: "drove completions against an in-process server; the harness completion verbs drive the real binary and " +
+			"TestCompletions_Sweep in test/e2e/gitlab/common walks every served completion reference and argument",
+	}
+	b6ResourcesReadDrop = dropDeclaration{
+		Category: dropSuperseded,
+		Reason: "read every registered resource URI against the in-process individual session; TestResources_Sweep in " +
+			"test/e2e/gitlab/common reads every static resource and every bindable template off the real binary, and " +
+			"its fixture-building calls (project snippet, board, deploy key and the group objects) are covered by the " +
+			"snippets, boards and group family ports",
+	}
+)
 
 // declaredDropCategories is the set a category must belong to.
 var declaredDropCategories = map[string]bool{

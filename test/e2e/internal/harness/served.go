@@ -68,38 +68,53 @@ type PromptSpec struct {
 	Optional []string
 }
 
-// listServed reads the four listings a session publishes.
+// listServed reads the listings a session publishes, and only the ones the
+// server declared at initialize.
+//
+// A client that calls a method the server did not declare is asking for
+// "method not found", which is what the minimal capability surface answers to
+// prompts/list: it registers no prompt, so the server declares no prompts
+// capability. Reading the declaration rather than calling unconditionally is
+// what a client is supposed to do, and it is what lets a scenario drive the
+// minimal surface at all.
 //
 // The iterators are used rather than one call each, because a listing may be
 // paginated and a first page read as the whole set would make the served-set
 // check report every tool after it as missing.
 func listServed(ctx context.Context, session *mcp.ClientSession) (servedSets, error) {
 	var served servedSets
+	capabilities := declaredCapabilities(session.InitializeResult())
 
-	for tool, err := range session.Tools(ctx, nil) {
-		if err != nil {
-			return served, fmt.Errorf("tools/list: %w", err)
+	if capabilities.tools {
+		for tool, err := range session.Tools(ctx, nil) {
+			if err != nil {
+				return served, fmt.Errorf("tools/list: %w", err)
+			}
+			served.tools = append(served.tools, tool.Name)
 		}
-		served.tools = append(served.tools, tool.Name)
 	}
-	for resource, err := range session.Resources(ctx, nil) {
-		if err != nil {
-			return served, fmt.Errorf("resources/list: %w", err)
+	if capabilities.resources {
+		for resource, err := range session.Resources(ctx, nil) {
+			if err != nil {
+				return served, fmt.Errorf("resources/list: %w", err)
+			}
+			served.resources = append(served.resources, resource.URI)
 		}
-		served.resources = append(served.resources, resource.URI)
+		for template, err := range session.ResourceTemplates(ctx, nil) {
+			if err != nil {
+				return served, fmt.Errorf("resources/templates/list: %w", err)
+			}
+			served.templates = append(served.templates, template.URITemplate)
+		}
 	}
-	for template, err := range session.ResourceTemplates(ctx, nil) {
-		if err != nil {
-			return served, fmt.Errorf("resources/templates/list: %w", err)
+	if capabilities.prompts {
+		for prompt, err := range session.Prompts(ctx, nil) {
+			if err != nil {
+				return served, fmt.Errorf("prompts/list: %w", err)
+			}
+			served.prompts = append(served.prompts, prompt.Name)
+			served.promptSpecs = append(served.promptSpecs, promptSpecOf(prompt))
 		}
-		served.templates = append(served.templates, template.URITemplate)
-	}
-	for prompt, err := range session.Prompts(ctx, nil) {
-		if err != nil {
-			return served, fmt.Errorf("prompts/list: %w", err)
-		}
-		served.prompts = append(served.prompts, prompt.Name)
-		served.promptSpecs = append(served.promptSpecs, promptSpecOf(prompt))
 	}
 
 	slices.Sort(served.tools)
@@ -108,6 +123,28 @@ func listServed(ctx context.Context, session *mcp.ClientSession) (servedSets, er
 	slices.Sort(served.prompts)
 	slices.SortFunc(served.promptSpecs, func(a, b PromptSpec) int { return strings.Compare(a.Name, b.Name) })
 	return served, nil
+}
+
+// listable says which listings the server declared at initialize.
+type listable struct {
+	tools     bool
+	resources bool
+	prompts   bool
+}
+
+// declaredCapabilities reads what the server said it serves. A session whose
+// initialize result the SDK did not record is treated as serving everything,
+// which is the behavior this had before it read the declaration at all: a
+// listing that then fails is reported rather than silently skipped.
+func declaredCapabilities(result *mcp.InitializeResult) listable {
+	if result == nil || result.Capabilities == nil {
+		return listable{tools: true, resources: true, prompts: true}
+	}
+	return listable{
+		tools:     result.Capabilities.Tools != nil,
+		resources: result.Capabilities.Resources != nil,
+		prompts:   result.Capabilities.Prompts != nil,
+	}
 }
 
 // promptSpecOf splits a listed prompt's arguments into required and optional.
