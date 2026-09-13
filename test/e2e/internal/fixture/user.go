@@ -87,24 +87,25 @@ func NewUser(e *harness.Env, prefix string, opts ...UserOption) User {
 	armSweep(e)
 
 	username := e.Name(prefix)
-	password := "Pw-" + rand.Text()
 	createOpts := &gl.CreateUserOptions{
 		Email:            new(username + userEmailDomain),
 		Name:             new("E2E " + username),
 		Username:         new(username),
-		Password:         new(password),
 		SkipConfirmation: new(true),
 	}
-	for _, opt := range opts {
-		opt(createOpts)
-	}
 
-	user, err := retryTransient(e, "create user "+username, createRetries, func() (User, error) {
+	// The password is minted per attempt, and the caller's options are applied
+	// after it, so an option setting a password of its own still wins.
+	user, err := retryWhen(e, "create user "+username, createRetries, UserCreateRetryable, func() (User, error) {
+		createOpts.Password = new("Pw-" + rand.Text())
+		for _, opt := range opts {
+			opt(createOpts)
+		}
 		created, _, err := e.Client().GL().Users.CreateUser(createOpts, gl.WithContext(e.Ctx))
 		if err != nil {
 			return User{}, err
 		}
-		return User{ID: created.ID, Username: created.Username, Email: created.Email, Password: password}, nil
+		return User{ID: created.ID, Username: created.Username, Email: created.Email, Password: *createOpts.Password}, nil
 	})
 	if err != nil {
 		e.T.Fatalf("creating user %q: %v", username, err)
