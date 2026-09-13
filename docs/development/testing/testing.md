@@ -18,13 +18,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,256 |
-| Unit test functions                                   | 15,340 |
-| E2E test functions                                    |    916 |
+| Total test functions                                  | 16,502 |
+| Unit test functions                                   | 15,341 |
+| E2E test functions                                    |  1,161 |
 | cmd test functions                                    |  3,171 |
 | Test files (internal/)                                |    555 |
 | Test files (cmd/)                                     |    221 |
-| Test files (test/e2e/)                                |    312 |
+| Test files (test/e2e/)                                |    449 |
 | Tool sub-packages tested                              |    178 |
 | Core packages tested                                  |     23 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  98.3% |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,397 | 76.3% |
-| `TestFunc` (no underscore)             |    943 |  5.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,916 | 17.9% |
+| `TestFunc_Scenario` (2-part)           | 12,464 | 75.5% |
+| `TestFunc` (no underscore)             |    943 |  5.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |  3,095 | 18.8% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,707 |        160 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (178) |          9,096 |        379 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            916 |        312 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| Tool sub-packages (178) |          9,097 |        379 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,161 |        449 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          3,171 |        221 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,256** |  **1,088** |                                                                                                 |
+| **Total**               |     **16,502** |  **1,225** |                                                                                                 |
 
 ### Core Packages
 
@@ -88,7 +88,7 @@
 | projects          |   392 |   100.0% |    57 |
 | groups            |   281 |   100.0% |    37 |
 | dynamic           |   269 |    99.8% |     2 |
-| mergerequests     |   262 |    99.8% |    30 |
+| mergerequests     |   263 |    99.8% |    30 |
 | issues            |   241 |    99.9% |    21 |
 | users             |   227 |    99.3% |    38 |
 | jobs              |   154 |    99.9% |    17 |
@@ -224,7 +224,7 @@
 | markdown                |         9 |          1 |   100.0% |         1 |
 | memberroles             |        53 |          4 |   100.0% |         6 |
 | members                 |        63 |          2 |   100.0% |         6 |
-| mergerequests           |       262 |          3 |    99.8% |        30 |
+| mergerequests           |       263 |          3 |    99.8% |        30 |
 | mergetrains             |        16 |          2 |    98.6% |         4 |
 | metadata                |         8 |          1 |   100.0% |         1 |
 | milestones              |        71 |          1 |    99.7% |         7 |
@@ -296,7 +296,7 @@
 | wikis                   |        63 |          2 |    99.5% |         6 |
 | workitems               |       116 |          3 |    99.5% |         6 |
 | workitemsavedviews      |        55 |          4 |   100.0% |         7 |
-| **Total**               | **9,096** |    **379** |          | **1,187** |
+| **Total**               | **9,097** |    **379** |          | **1,187** |
 
 </details>
 
@@ -347,7 +347,7 @@
 | cmd/gen_api_live                               |    80.1% |
 | cmd/gen_brand                                  |    87.1% |
 | cmd/gen_graphql_schema                         |    85.9% |
-| cmd/gen_icon_webp                              |    90.2% |
+| cmd/gen_icon_webp                              |    92.3% |
 | cmd/gen_lhm_manifest                           |    90.2% |
 | cmd/gen_llms                                   |    98.9% |
 | cmd/gen_request_inventory                      |    89.8% |
