@@ -13,6 +13,7 @@ package common
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/instancevariables"
@@ -38,27 +39,38 @@ func TestCIVariables_Instance_Lifecycle(t *testing.T) {
 		return nil
 	})
 
-	created := harness.Do[instancevariables.Output](s, actionCIVariableInstanceCreate, map[string]any{"key": key, "value": "instance_test_value"})
-	if created.Key != key {
-		e.T.Fatalf("instance_create answered key %q, want %q", created.Key, key)
+	const createdValue = "instance_test_value"
+	created := harness.Do[instancevariables.Output](s, actionCIVariableInstanceCreate, map[string]any{"key": key, "value": createdValue})
+	if created.Key != key || created.Value != createdValue {
+		e.T.Fatalf("instance_create answered %+v, want %s=%s", created, key, createdValue)
 	}
 
 	list := harness.Do[instancevariables.ListOutput](s, actionCIVariableInstanceList, nil)
-	if len(list.Variables) == 0 {
-		e.T.Errorf("instance_list answered no variables after the create")
+	if !slices.Contains(instanceVariableKeys(list.Variables), key) {
+		e.T.Errorf("the instance variable listing does not hold %s: %v", key, instanceVariableKeys(list.Variables))
 	}
 
 	got := harness.Do[instancevariables.Output](s, actionCIVariableInstanceGet, map[string]any{"key": key})
-	if got.Key != key {
-		e.T.Errorf("instance_get answered key %q, want %q", got.Key, key)
+	if got.Key != key || got.Value != createdValue {
+		e.T.Errorf("instance_get answered %+v, want %s=%s", got, key, createdValue)
 	}
 
-	updated := harness.Do[instancevariables.Output](s, actionCIVariableInstanceUpdate, map[string]any{"key": key, "value": "instance_updated_value"})
-	if updated.Key != key {
-		e.T.Errorf("instance_update answered key %q, want %q", updated.Key, key)
+	const updatedValue = "instance_updated_value"
+	updated := harness.Do[instancevariables.Output](s, actionCIVariableInstanceUpdate, map[string]any{"key": key, "value": updatedValue})
+	if updated.Key != key || updated.Value != updatedValue {
+		e.T.Errorf("instance_update answered %+v, want %s=%s", updated, key, updatedValue)
 	}
 
 	harness.DoVoid(s, actionCIVariableInstanceDelete, map[string]any{"key": key})
 	refused := harness.Refused(s, actionCIVariableInstanceGet, map[string]any{"key": key}, harness.FailureNotFound)
 	e.T.Logf("the deleted instance variable reads as gone: %s", firstLine(refused))
+}
+
+// instanceVariableKeys returns the keys of an instance variable listing.
+func instanceVariableKeys(listed []instancevariables.Output) []string {
+	keys := make([]string, 0, len(listed))
+	for _, variable := range listed {
+		keys = append(keys, variable.Key)
+	}
+	return keys
 }

@@ -102,21 +102,88 @@ func TestAdmin_SettingsAndAppearance(t *testing.T) {
 		e.T.Fatalf("settings_get answered an empty settings map")
 	}
 
+	// Both values below are instance-global. The lock keeps another test from
+	// reading them mid-flight, and nothing but this restores them, so a run
+	// would otherwise leave its own branch name and title behind for the next
+	// one and for whoever owns the instance.
+	restoreSetting(e, s, got.Settings, "default_branch_name")
+
+	const wantBranch = "main"
 	updated := harness.Do[settings.UpdateOutput](s, actionAdminSettingsUpdate, map[string]any{
-		"settings": map[string]any{"default_branch_name": "main"},
+		"settings": map[string]any{"default_branch_name": wantBranch},
 	})
-	if len(updated.Settings) == 0 {
-		e.T.Errorf("settings_update answered an empty settings map")
+	if name, _ := updated.Settings["default_branch_name"].(string); name != wantBranch {
+		e.T.Errorf("settings_update answered default_branch_name %q, want %q", name, wantBranch)
 	}
 
 	appearanceGet := harness.Do[appearance.GetOutput](s, actionAdminAppearanceGet, nil)
-	e.T.Logf("appearance title before: %q", appearanceGet.Appearance.Title)
+	beforeTitle := appearanceGet.Appearance.Title
+	e.T.Logf("appearance title before: %q", beforeTitle)
+	e.Defer("appearance title", func(context.Context) error {
+		_, err := harness.Try[appearance.UpdateOutput](s, actionAdminAppearanceUpd,
+			map[string]any{"title": beforeTitle}, harness.For(harness.PurposeCleanup))
+		return err
+	})
 
 	const wantTitle = "E2E GitLab"
 	appearanceUpd := harness.Do[appearance.UpdateOutput](s, actionAdminAppearanceUpd, map[string]any{"title": wantTitle})
 	if appearanceUpd.Appearance.Title != wantTitle {
 		e.T.Errorf("appearance_update answered title %q, want %q", appearanceUpd.Appearance.Title, wantTitle)
 	}
+}
+
+// restoreSetting registers a cleanup that puts one instance setting back to
+// the value the run found it at, or leaves it alone when the instance had none.
+func restoreSetting(e *harness.Env, s *harness.Session, before map[string]any, key string) {
+	e.T.Helper()
+
+	previous, present := before[key]
+	if !present {
+		return
+	}
+	e.Defer("instance setting "+key, func(context.Context) error {
+		_, err := harness.Try[settings.UpdateOutput](s, actionAdminSettingsUpdate,
+			map[string]any{"settings": map[string]any{key: previous}}, harness.For(harness.PurposeCleanup))
+		return err
+	})
+}
+
+// restoreFeature registers a cleanup that puts one instance-global feature
+// flag back where the run found it: the explicit boolean gate it carried, or
+// the delete that returns it to its default when the instance listed none.
+func restoreFeature(e *harness.Env, s *harness.Session, before []features.FeatureItem, name string) {
+	e.T.Helper()
+
+	previous, explicit := featureBooleanGate(before, name)
+	e.Defer("feature flag "+name, func(context.Context) error {
+		if !explicit {
+			_, err := harness.Try[toolutil.DeleteOutput](s, actionAdminFeatureDelete,
+				map[string]any{"name": name}, harness.For(harness.PurposeCleanup))
+			return err
+		}
+		_, err := harness.Try[features.SetOutput](s, actionAdminFeatureSet,
+			map[string]any{"name": name, "value": previous}, harness.For(harness.PurposeCleanup))
+		return err
+	})
+}
+
+// featureBooleanGate reports the instance-global value of one listed feature
+// flag. A flag the instance lists with no boolean gate is percentage- or
+// actor-gated rather than globally set, which this restores nothing for.
+func featureBooleanGate(listed []features.FeatureItem, name string) (bool, bool) {
+	for _, flag := range listed {
+		if flag.Name != name {
+			continue
+		}
+		for _, gate := range flag.Gates {
+			if gate.Key != "boolean" {
+				continue
+			}
+			value, ok := gate.Value.(bool)
+			return value, ok
+		}
+	}
+	return false, false
 }
 
 // TestAdmin_InstanceMetadata reads the instance metadata, application

@@ -25,6 +25,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/alertmanagement"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/bulkimports"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/errortracking"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/features"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securefiles"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/terraformstates"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/usagedata"
@@ -77,12 +78,13 @@ func TestAdmin_ErrorTracking(t *testing.T) {
 	project := fixture.NewProject(e, fixture.WithNamePrefix("adm-errtrack"))
 	params := map[string]any{"project_id": project.IDParam()}
 
-	if _, err := harness.Try[errortracking.SettingsOutput](s, actionAdminErrorTrackingGetSettings, params); err != nil {
-		e.T.Logf("error_tracking_get_settings answered the documented error for a fresh project: %v", err)
-	}
-	if _, err := harness.Try[errortracking.SettingsOutput](s, actionAdminErrorTrackingUpdateSettings, withParams(params, map[string]any{"active": true, "integrated": true})); err != nil {
-		e.T.Logf("error_tracking_update_settings answered the documented error for a fresh project: %v", err)
-	}
+	// Both endpoints answer not_found!('Error Tracking Setting') while the
+	// project carries no settings record, which a fresh project never does.
+	e.T.Logf("error_tracking_get_settings on a fresh project: %s",
+		firstLine(harness.Refused(s, actionAdminErrorTrackingGetSettings, params, harness.FailureNotFound)))
+	e.T.Logf("error_tracking_update_settings on a fresh project: %s",
+		firstLine(harness.Refused(s, actionAdminErrorTrackingUpdateSettings,
+			withParams(params, map[string]any{"active": true, "integrated": true}), harness.FailureNotFound)))
 
 	key := harness.Do[errortracking.ClientKeyItem](s, actionAdminErrorTrackingCreate, params)
 	if key.ID == 0 || key.PublicKey == "" || key.SentryDsn == "" {
@@ -162,7 +164,8 @@ func TestAdmin_TerraformStates(t *testing.T) {
 	// rejects the lock with 400 on this stack; a future client-go that sends
 	// the body succeeds, and both are accepted.
 	if locked, err := harness.Try[terraformstates.LockOutput](s, actionAdminTerraformStateLock, lockParams); err != nil {
-		e.T.Logf("terraform_state_lock answered the documented bodyless-request error: %v", err)
+		assertMentions(e, "terraform_state_lock", err.Error(), "ID is missing", "Operation is missing")
+		e.T.Logf("terraform_state_lock answered the documented bodyless-request error: %s", firstLine(err.Error()))
 	} else if !locked.Success {
 		e.T.Errorf("terraform_state_lock reported neither success nor an error: %+v", locked)
 	}
@@ -217,14 +220,14 @@ func TestAdmin_UsageData(t *testing.T) {
 	e.T.Logf("track_events status=%q count=%d", batch.Status, batch.Count)
 
 	const queriesFlag = "usage_data_queries_api"
+	before := harness.Do[features.ListOutput](s, actionAdminFeatureList, nil)
+	restoreFeature(e, s, before.Features, queriesFlag)
 	harness.DoVoid(s, actionAdminFeatureSet, map[string]any{"name": queriesFlag, "value": true})
-	adminDeferDelete(e, s, "usage-data queries flag", actionAdminFeatureDelete, map[string]any{"name": queriesFlag})
 	// Flipper caches flag reads for up to a minute, so the endpoint may keep
 	// answering 404 briefly after the flip.
 	queries := harness.Eventually[usagedata.QueriesOutput](s, actionAdminUsageDataQueries, nil,
 		15*time.Second, 120*time.Second, func(usagedata.QueriesOutput) bool { return true })
 	e.T.Logf("usage_data_queries recorded_at=%q", queries.RecordedAt)
-	harness.DoVoid(s, actionAdminFeatureDelete, map[string]any{"name": queriesFlag})
 
 	if nonSQL, err := harness.Try[usagedata.NonSQLMetricsOutput](s, actionAdminUsageDataNonSQL, nil); err != nil {
 		e.T.Logf("usage_data_non_sql_metrics answered the documented GitLab 19 CE error: %v", err)
@@ -283,6 +286,11 @@ func TestAdmin_BulkImports(t *testing.T) {
 	got := harness.Do[bulkimports.MigrationSummary](s, actionAdminBulkImportGet, map[string]any{"id": started.ID})
 	if got.ID != started.ID || got.SourceType != "gitlab" {
 		e.T.Errorf("bulk_import_get answered %+v, want migration %d of source_type gitlab", got, started.ID)
+	}
+	// The entity records below describe a transfer that ran; a failed, timed
+	// out or canceled migration would have them describe nothing.
+	if got.Status != "finished" {
+		e.T.Fatalf("bulk import %d ended in status %q, want finished", started.ID, got.Status)
 	}
 
 	entities := harness.Do[bulkimports.ListEntitiesOutput](s, actionAdminBulkImportEntityList, map[string]any{"bulk_import_id": started.ID})

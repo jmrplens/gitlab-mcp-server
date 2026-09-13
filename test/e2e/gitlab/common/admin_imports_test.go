@@ -32,6 +32,12 @@ import (
 // carries it.
 const settingGitHubToken = "GH_TOKEN"
 
+// importAlreadyCompleted is what GitLab answers a cancel for an import that
+// already reached a terminal state, from
+// Import::Github::CancelProjectImportService: "The import cannot be canceled
+// because it is <status>".
+const importAlreadyCompleted = "cannot be canceled because it is"
+
 // The Bitbucket Cloud credential keys the importer reads, as the repository
 // .env carries them.
 const (
@@ -80,8 +86,16 @@ func TestAdmin_ExternalImporters(t *testing.T) {
 
 		// A tiny repository can finish before the cancel lands, which GitLab
 		// then refuses with a 400 naming the state; both are the cancel path.
-		if _, err := harness.Try[importservice.CancelledImportOutput](s, actionAdminImportCancelGitHub, map[string]any{"project_id": out.ID}); err != nil {
-			t.Logf("import_cancel_github answered: %v", err)
+		cancelled, err := harness.Try[importservice.CancelledImportOutput](s, actionAdminImportCancelGitHub, map[string]any{"project_id": out.ID})
+		switch {
+		case err == nil:
+			if cancelled.ID != out.ID {
+				t.Errorf("import_cancel_github answered project %d, want the imported %d", cancelled.ID, out.ID)
+			}
+		case strings.Contains(err.Error(), importAlreadyCompleted):
+			t.Logf("the import finished before the cancel landed: %s", firstLine(err.Error()))
+		default:
+			t.Fatalf("import_cancel_github answered: %v", err)
 		}
 	})
 

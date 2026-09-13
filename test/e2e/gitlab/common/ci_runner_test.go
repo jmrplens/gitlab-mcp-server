@@ -14,6 +14,7 @@
 package common
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -54,12 +55,13 @@ func TestCIRunner_PipelineAndJobLifecycle(t *testing.T) {
 			}
 
 			list := harness.Do[pipelines.ListOutput](s, actionPipelineList, map[string]any{"project_id": project.IDParam()})
-			if len(list.Pipelines) == 0 {
-				e.T.Errorf("pipeline list answered no pipelines, want at least the one just created")
+			if !slices.ContainsFunc(list.Pipelines, func(p pipelines.Output) bool { return p.ID == pipelineID }) {
+				e.T.Errorf("pipeline list answered %d pipeline(s) and not the created %d", len(list.Pipelines), pipelineID)
 			}
 
-			status := fixture.WaitForPipeline(e, project, pipelineID, ciRunnerPipelineWait)
-			e.T.Logf("pipeline %d finished with status %q", pipelineID, status)
+			if status := fixture.WaitForPipeline(e, project, pipelineID, ciRunnerPipelineWait); status != "success" {
+				e.T.Errorf("pipeline %d finished %q, want success from the fast-pass job", pipelineID, status)
+			}
 
 			jobList := harness.Do[jobs.ListOutput](s, actionJobList, map[string]any{"project_id": project.IDParam(), "pipeline_id": pipelineID})
 			if len(jobList.Jobs) == 0 {
@@ -81,7 +83,9 @@ func TestCIRunner_PipelineAndJobLifecycle(t *testing.T) {
 			if retried.ID != pipelineID {
 				e.T.Errorf("pipeline retry answered %d, want the same pipeline %d", retried.ID, pipelineID)
 			}
-			fixture.WaitForPipeline(e, project, pipelineID, ciRunnerPipelineWait)
+			if status := fixture.WaitForPipeline(e, project, pipelineID, ciRunnerPipelineWait); status != "success" {
+				e.T.Errorf("the retried pipeline %d finished %q, want success", pipelineID, status)
+			}
 
 			harness.DoVoid(s, actionPipelineDelete, map[string]any{"project_id": project.IDParam(), "pipeline_id": pipelineID})
 		})

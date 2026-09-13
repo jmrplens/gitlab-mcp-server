@@ -188,13 +188,11 @@ func TestCICatalog_Get_AfterPublish(t *testing.T) {
 	}
 	publishCatalogVersion(e, project)
 
-	got, err := harness.Try[cicatalog.GetOutput](s, actionCICatalogGet, map[string]any{"full_path": project.Path})
-	if err != nil {
-		e.Skipf("the catalog resource is not queryable after the publish attempt (async publication or a runner-less version): %v", err)
-	}
-	if got.Resource.FullPath == "" {
-		e.T.Errorf("ci_catalog get answered a resource with no full path: %+v", got.Resource)
-	}
+	// The release publishes the version synchronously, but the catalog index
+	// the read consults is written by a background job, so the first reads can
+	// still answer not found.
+	got := harness.Eventually[cicatalog.GetOutput](s, actionCICatalogGet, map[string]any{"full_path": project.Path},
+		2*time.Second, 60*time.Second, func(out cicatalog.GetOutput) bool { return out.Resource.FullPath == project.Path })
 	e.T.Logf("read catalog resource %s (id=%s)", got.Resource.FullPath, got.Resource.ID)
 }
 
@@ -227,6 +225,11 @@ func markCatalogResource(e *harness.Env, project fixture.Project) bool {
 	return true
 }
 
+// releaseCLIImage is pinned rather than followed: the release job's outcome is
+// the assertion this scenario stands on, and a moving tag would let an
+// upstream release decide whether the suite passes.
+const releaseCLIImage = "registry.gitlab.com/gitlab-org/release-cli:v0.24.0"
+
 // catalogComponent is the CI/CD component the catalog version publishes.
 const catalogComponent = `spec:
   inputs:
@@ -248,7 +251,7 @@ func publishCatalogVersion(e *harness.Env, project fixture.Project) {
 	e.T.Helper()
 
 	releaseJob := "create-release:\n" +
-		"  image: registry.gitlab.com/gitlab-org/release-cli:latest\n" +
+		"  image: " + releaseCLIImage + "\n" +
 		"  rules:\n" +
 		"    - if: $CI_COMMIT_TAG\n" +
 		"  script:\n" +

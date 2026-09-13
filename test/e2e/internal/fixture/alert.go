@@ -61,6 +61,8 @@ func SeedAlert(e *harness.Env, project Project) int64 {
 		e.T.Fatalf("httpIntegrationCreate answered no URL or token: %+v", integration)
 	}
 
+	requireConfidentialTransport(e, integration.URL, "the alert notify endpoint")
+
 	ctx, cancel := context.WithTimeout(e.Ctx, alertNotifyTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, integration.URL,

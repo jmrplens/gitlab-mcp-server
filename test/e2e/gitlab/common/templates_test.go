@@ -13,6 +13,7 @@
 package common
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/ciyamltemplates"
@@ -67,9 +68,10 @@ func TestTemplates_Instance(t *testing.T) {
 		if len(licenseList.Licenses) == 0 {
 			e.T.Errorf("license_list answered no licenses")
 		}
-		license := harness.Do[licensetemplates.GetOutput](s, actionTemplateLicenseGet, map[string]any{"key": "mit"})
-		if license.Key == "" {
-			e.T.Errorf("license_get answered an empty key for mit")
+		const licenseKey = "mit"
+		license := harness.Do[licensetemplates.GetOutput](s, actionTemplateLicenseGet, map[string]any{"key": licenseKey})
+		if license.Key != licenseKey {
+			e.T.Errorf("license_get answered key %q, want %q", license.Key, licenseKey)
 		}
 	})
 }
@@ -111,8 +113,8 @@ func TestMarkdown_Render(t *testing.T) {
 	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
 		s := e.On(surface)
 		rendered := harness.Do[markdowntool.RenderOutput](s, actionRepositoryMarkdownRender, map[string]any{"text": "**bold** text"})
-		if rendered.HTML == "" {
-			e.T.Errorf("markdown_render answered empty HTML")
+		if !strings.Contains(rendered.HTML, "<strong>bold</strong>") || !strings.Contains(rendered.HTML, "text") {
+			e.T.Errorf("markdown_render answered %q, want the bold element and the text it was given", rendered.HTML)
 		}
 	})
 }

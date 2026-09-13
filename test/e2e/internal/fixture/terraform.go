@@ -41,6 +41,7 @@ func PushTerraformState(e *harness.Env, project Project, name string, serial int
 		e.T.Fatalf("%s is required to push Terraform state through the raw backend", SettingGitLabToken)
 	}
 	stateURL := terraformStateURL(e.Runtime().URL, project.ID, name)
+	requireConfidentialTransport(e, stateURL, "the Terraform state backend")
 	body := terraformStateBody(project.ID, serial)
 
 	ctx, cancel := context.WithTimeout(e.Ctx, terraformPushTimeout)

@@ -149,7 +149,7 @@ func runnerLegacyDisabled(err error) bool {
 		return false
 	}
 	message := strings.ToLower(err.Error())
-	for _, marker := range []string{"403", "404", "410", "forbidden", "not found", "registration"} {
+	for _, marker := range []string{"403", "404", "410", "forbidden", "not found"} {
 		if strings.Contains(message, marker) {
 			return true
 		}
