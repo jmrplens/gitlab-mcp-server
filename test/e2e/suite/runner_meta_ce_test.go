@@ -27,7 +27,7 @@ import (
 // expected runner payload and that mutations are observable through
 // subsequent reads.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Runner(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")

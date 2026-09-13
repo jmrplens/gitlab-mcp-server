@@ -7,7 +7,7 @@
 // provisioning a group issue board via API is a Premium capability, so the
 // coverage is enterprise-gated like the other EE tests.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -42,7 +42,7 @@ import (
 // empty and that both delete actions surface their documented 404 error
 // paths instead.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_GroupMarkdownUploads(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -174,7 +174,7 @@ func runGroupExtrasUploadUnavailablePath(t *testing.T, ctx context.Context, grp 
 // assertion stands and the download/import subtests skip with the reason.
 // The imported group is deleted once GitLab finishes materializing it.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_GroupExportImport(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -258,7 +258,7 @@ func TestMeta_GroupExportImport(t *testing.T) {
 // the schedule confirmation already proves the export pipeline accepted the
 // request; the poll outcome is logged either way.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_GroupRelationsExport(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -337,7 +337,7 @@ func TestMeta_GroupRelationsExport(t *testing.T) {
 // hard-deleted afterwards. Docker-gated because service-account creation is
 // an instance-admin operation on self-managed GitLab.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta.
 // Admin token required.
 func TestMeta_GroupServiceAccountPATRotate(t *testing.T) {
 	t.Parallel()

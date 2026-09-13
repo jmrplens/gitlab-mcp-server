@@ -18,13 +18,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,221 |
-| Unit test functions                                   | 15,330 |
-| E2E test functions                                    |    891 |
-| cmd test functions                                    |  3,163 |
+| Total test functions                                  | 16,256 |
+| Unit test functions                                   | 15,340 |
+| E2E test functions                                    |    916 |
+| cmd test functions                                    |  3,171 |
 | Test files (internal/)                                |    555 |
 | Test files (cmd/)                                     |    221 |
-| Test files (test/e2e/)                                |    290 |
+| Test files (test/e2e/)                                |    312 |
 | Tool sub-packages tested                              |    178 |
 | Core packages tested                                  |     23 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  98.3% |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,466 | 76.9% |
-| `TestFunc` (no underscore)             |    944 |  5.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |  2,811 | 17.3% |
+| `TestFunc_Scenario` (2-part)           | 12,397 | 76.3% |
+| `TestFunc` (no underscore)             |    943 |  5.8% |
+| `TestFunc_Scenario_Expected` (3+ part) |  2,916 | 17.9% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,707 |        160 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (178) |          9,094 |        379 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            891 |        290 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          3,163 |        221 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,221** |  **1,066** |                                                                                                 |
+| Tool sub-packages (178) |          9,096 |        379 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |            916 |        312 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| cmd packages            |          3,171 |        221 | server entry point and developer command utilities                                              |
+| **Total**               |     **16,256** |  **1,088** |                                                                                                 |
 
 ### Core Packages
 
@@ -107,7 +107,7 @@
 | groupmembers      |    94 |   100.0% |    10 |
 | pipelineschedules |    94 |    99.0% |    11 |
 | groupmilestones   |    90 |    99.7% |     8 |
-| mrapprovals       |    85 |    99.4% |     7 |
+| mrapprovals       |    86 |    99.4% |     7 |
 | files             |    84 |   100.0% |     8 |
 | integrations      |    79 |    99.5% |    12 |
 
@@ -180,7 +180,7 @@
 | geo                     |        75 |          3 |    98.3% |         8 |
 | gitignoretemplates      |        15 |          1 |   100.0% |         2 |
 | groupanalytics          |         8 |          2 |   100.0% |         3 |
-| groupboards             |        65 |          2 |    99.4% |        10 |
+| groupboards             |        66 |          2 |    99.4% |        10 |
 | groupcredentials        |        43 |          3 |   100.0% |         4 |
 | groupepicboards         |        15 |          3 |    98.4% |         2 |
 | groupimportexport       |        23 |          2 |   100.0% |         3 |
@@ -229,7 +229,7 @@
 | metadata                |         8 |          1 |   100.0% |         1 |
 | milestones              |        71 |          1 |    99.7% |         7 |
 | modelregistry           |         7 |          3 |   100.0% |         1 |
-| mrapprovals             |        85 |          3 |    99.4% |         7 |
+| mrapprovals             |        86 |          3 |    99.4% |         7 |
 | mrapprovalsettings      |         9 |          2 |   100.0% |         4 |
 | mrchanges               |        38 |          1 |    98.4% |         4 |
 | mrcontextcommits        |        23 |          1 |   100.0% |         3 |
@@ -296,7 +296,7 @@
 | wikis                   |        63 |          2 |    99.5% |         6 |
 | workitems               |       116 |          3 |    99.5% |         6 |
 | workitemsavedviews      |        55 |          4 |   100.0% |         7 |
-| **Total**               | **9,094** |    **379** |          | **1,187** |
+| **Total**               | **9,096** |    **379** |          | **1,187** |
 
 </details>
 
@@ -320,7 +320,7 @@
 | cmd/audit_doc_coverage                         |    91.6% |
 | cmd/audit_doc_tool_names                       |    94.2% |
 | cmd/audit_dynamic_aliases                      |    77.4% |
-| cmd/audit_e2e_coverage                         |    95.7% |
+| cmd/audit_e2e_coverage                         |    95.9% |
 | cmd/audit_e2e_gaps                             |    92.9% |
 | cmd/audit_edition_tier                         |    86.9% |
 | cmd/audit_gateway_chars                        |    87.5% |
@@ -366,7 +366,7 @@
 | cmd/internal/provenance                        |   100.0% |
 | cmd/internal/requestinventory                  |   100.0% |
 | cmd/internal/testsource                        |   100.0% |
-| cmd/server                                     |    99.8% |
+| cmd/server                                     |    99.9% |
 
 ### Core Packages
 
@@ -681,12 +681,12 @@ make test-e2e-docker
 For Enterprise/Premium E2E coverage, set `ENTERPRISE_LICENSE` in `.env` or the shell and use:
 
 ```bash
-make test-e2e-docker-enterprise
+make test-e2e-ee                  # or its older name, make test-e2e-docker-enterprise
 ```
 
-The Enterprise target runs with the `e2e enterprise` build tags, so common harness files plus `test/e2e/suite/*_ee_test.go` Enterprise/Premium tests are compiled and executed. CE-only tests live in `test/e2e/suite/*_ce_test.go` and remain in `make test-e2e-docker`, while Enterprise-specific fixture behavior can be tuned independently.
+The licensed target runs the `common` and `ee` packages of the rebuilt suite under `test/e2e/gitlab` against the real binary. There is no Enterprise build tag: every file carries `e2e` alone, and the package decides the runtime, so one compile and one analysis run see the licensed tests with everything else. The old suite under `test/e2e/suite` stays with `make test-e2e-docker` until its CE half is ported; the Premium scenarios its CE files still hold run when the instance is licensed and skip when it reports Free.
 
-The E2E harness also re-validates the GitLab tier at runtime by calling the License API (`GET /api/v4/license`). When an enterprise tier is requested (via `GITLAB_MCP_TIER=premium`/`ultimate`, or the legacy `GITLAB_ENTERPRISE=true` harness toggle) but the fixture reports a Free license, the session downgrades to CE and `*_ee_test.go` tests skip cleanly with a logged reason instead of failing outright. This keeps the suite safe against accidental CE/EE mismatches.
+The rebuilt suite re-validates the GitLab tier before it writes anything, by calling the License API (`GET /api/v4/license`). A package pointed at the wrong runtime refuses, naming what it found and the target to run instead, and `E2E_RUNTIME_MISMATCH=skip` turns that refusal into skips. The old suite keeps its own check: when an enterprise tier is requested (via `GITLAB_MCP_TIER=premium`/`ultimate`, or the legacy `GITLAB_ENTERPRISE=true` harness toggle) but the fixture reports a Free license, its session downgrades to CE and the Premium scenarios skip with a logged reason instead of failing outright.
 
 Docker mode enables pipeline and job tests that require a CI runner. It also starts an internal `e2e-fixture` HTTP service and configures GitLab to allow local outbound requests, so project webhook, push mirror, and custom emoji tests use deterministic in-network endpoints instead of public Internet access.
 

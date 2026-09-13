@@ -88,8 +88,9 @@ var declaredDropCategories = map[string]bool{
 }
 
 // retiredTests lists the old Test functions whose files are gone: the 74 of
-// the old suite's EE half, deleted with the `enterprise` build constraint
-// once every one of them had a Replaces successor under test/e2e/gitlab/ee.
+// the old suite's EE half, deleted with the build constraint that used to
+// select it once every one of them had a Replaces successor under
+// test/e2e/gitlab/ee.
 //
 // The port map reads the old suite's Test functions from its files, and a
 // deleted file declares nothing, so without this list every Replaces line

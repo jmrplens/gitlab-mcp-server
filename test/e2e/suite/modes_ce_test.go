@@ -64,7 +64,7 @@ func modeSafePreview(text string) (tools.SafeModePreview, bool) {
 // operation, and the issue count taken afterwards through the unrestricted
 // session proves nothing was written.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: read-only.
+// Build tag: e2e. Mode: CE. Surface: read-only.
 func TestReadOnlyMode(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -160,7 +160,7 @@ func TestReadOnlyMode(t *testing.T) {
 // actions routed through the same gitlab_execute_action tool must execute
 // normally, and the project must be left untouched.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: dynamic safe-mode.
+// Build tag: e2e. Mode: CE. Surface: dynamic safe-mode.
 func TestSafeModeDynamicSurface(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)

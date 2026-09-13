@@ -4,7 +4,7 @@
 // and delete MCP tools against a live GitLab instance. Flag creation is
 // already exercised elsewhere and is reused here only as fixture setup.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -23,7 +23,7 @@ import (
 // verifies a follow-up get fails. A best-effort cleanup removes the flag if
 // the delete subtest never ran.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_FeatureFlagExtras(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()

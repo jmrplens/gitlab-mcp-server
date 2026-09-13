@@ -15,7 +15,7 @@ There are six modules, answering different questions:
 
 Each tag has to be listed in `GO_ANALYSIS_TAGS` in the Makefile and in `e2eTags` in `cmd/gen_testing_docs`, or the module is invisible to `go vet`, to `golangci-lint` and to the generated test metrics. A file behind a tag nothing names is analysed by nothing.
 
-`enterprise` is the one tag that is not a module's. It switches `test/e2e/suite` between two halves that exclude each other: every `*_ce_test.go` carries `e2e && !enterprise` and every `*_ee_test.go` carries `e2e && enterprise`, so a single analysis run sees one half and never the other, and putting the tag in the list above would trade the 128 CE files for the 41 EE ones. It therefore has an analysis pass of its own (`GO_ANALYSIS_ENTERPRISE_TAGS`, scoped to the suite, run by `make golangci-lint`) and a compile step of its own in CI, and it stays out of `e2eTags` because the generated metrics read each directory and already count both halves. Until issue 570 nothing compiled the EE half outside a manual `make test-e2e-docker-enterprise`, which is how nineteen helpers and four constants used only by CE tests came to sit unused under that tag in files both halves share; they now live in `assert_helpers_ce_test.go` and `network_endpoints_ce_test.go`, behind the constraint of the tests that use them.
+Those five tags are the whole list. Every file under `test/e2e/suite`, `test/e2e/gitlab` and `test/e2e/internal` carries `e2e` alone, so one compile and one analysis run see all of them, and the runtime a test needs is decided by the package it is in rather than by a tag. `test/e2e/suite` used to be two halves behind a second tag that excluded each other, which meant a single run could only see one half and the Enterprise one needed a compile step and an analysis pass of its own; that half was ported to `test/e2e/gitlab/ee` and deleted, and both passes went with it.
 
 ## HTTP transport module
 
@@ -136,7 +136,7 @@ DOCKER_HOST=ssh://truenas \
 E2E_DOCKER_GITLAB_URL=http://192.168.0.40:8929 \
 E2E_DOCKER_BITBUCKET_URL=http://192.168.0.40:7990 \
 E2E_BITBUCKET_BIND=0.0.0.0 \
-make test-e2e-docker          # or test-e2e-docker-enterprise
+make test-e2e-docker          # or test-e2e-ce, test-e2e-ee
 ```
 
 `E2E_DOCKER_GITLAB_URL` is also handed to the container as its `external_url`
@@ -151,11 +151,14 @@ that host's network: use it on a LAN you trust.
 Enterprise mode uses the same Docker topology with the EE image and a local
 Ultimate subscription. Store a 24-character activation code in `.env` as
 `ENTERPRISE_LICENSE` or `GITLAB_ACTIVATION_CODE`, or export it in the shell; the
-Docker target passes activation codes to the GitLab EE container during startup.
-`make test-e2e-docker-enterprise` runs with the `e2e enterprise` build tags, so
-common harness files plus `test/e2e/suite/*_ee_test.go` Enterprise/Premium tests
-are compiled and executed. CE-only tests live in `test/e2e/suite/*_ce_test.go`
-and remain in `make test-e2e-docker`.
+lifecycle script passes it to the GitLab EE container during startup.
+`make test-e2e-ee` is the licensed run, and `make test-e2e-docker-enterprise`
+is the same target under its older name. It runs the `common` and `ee`
+packages of the rebuilt suite against the real binary: there is no Enterprise
+build tag, and the package decides the runtime, so `ee` refuses an unlicensed
+instance before it writes anything while `common` runs its Free actions on
+the licensed catalog too. The old suite under `test/e2e/suite` stays with
+`make test-e2e-docker` until its CE half is ported.
 After a successful activation-code run, the setup script exports the generated
 license key to `test/e2e/.enterprise-license` with owner-only permissions. Future
 runs prefer that ignored local cache and install it through the License API, so
@@ -166,10 +169,12 @@ setup script installs those through the License API without writing the secret
 into `test/e2e/.env.docker`.
 
 ```bash
-make test-e2e-docker-enterprise
+make test-e2e-ee
 ```
 
-Equivalent manual setup:
+Equivalent manual setup, which is what `test/e2e/scripts/run-docker-e2e.sh ee`
+does; in Docker mode the harness reads `test/e2e/.env.docker` itself, and
+builds `cmd/server` once per process unless `E2E_SERVER_BINARY` names a build:
 
 ```bash
 GITLAB_ACTIVATION_CODE="$ENTERPRISE_LICENSE" env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml up -d
@@ -177,11 +182,15 @@ GITLAB_ACTIVATION_CODE="$ENTERPRISE_LICENSE" env GITLAB_IMAGE=gitlab/gitlab-ee:l
 GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
 ./test/e2e/scripts/register-runner.sh
 
-set -a && source test/e2e/.env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/suite/
+E2E_MODE=docker go test -v -tags e2e -p 1 -count=1 -timeout 3600s ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ee/
 
 env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml down -v
 ```
+
+The old suite runs against the same licensed stack with its usual line,
+`set -a && source test/e2e/.env.docker && set +a` and then
+`go test -v -tags e2e -timeout 600s ./test/e2e/suite/`; a Premium scenario a
+CE file still holds runs there rather than skipping.
 
 Docker mode enables pipeline and job tests that require a CI runner, and starts an internal fixture service used by webhook and custom emoji tests. The setup script also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` into `.env.docker` so CI runs all non-EE tests without public Internet dependencies.
 

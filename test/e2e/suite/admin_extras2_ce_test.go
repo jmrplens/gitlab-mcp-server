@@ -8,7 +8,7 @@
 // bulk_import_entity_list, bulk_import_entity_get,
 // bulk_import_entity_failures, and bulk_import_cancel.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -125,7 +125,7 @@ func admBulkWaitTerminal(ctx context.Context, t *testing.T, importID int64) stri
 // started and canceled immediately, asserting the canceled status
 // round-trips. Both destination groups are registered for deletion.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: meta. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: meta. Admin token required.
 func TestMeta_AdminBulkImports(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

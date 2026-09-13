@@ -5,7 +5,7 @@
 // destructive detection): it calls tools/list on both individual and meta
 // sessions and verifies that destructiveHint is consistent with tool semantics.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (

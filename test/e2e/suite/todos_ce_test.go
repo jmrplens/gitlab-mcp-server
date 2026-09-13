@@ -23,7 +23,7 @@ import (
 // asserts the todo payload shape and that mark_all_done clears pending
 // todos in a follow-up list call.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Todos(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -56,7 +56,7 @@ func TestIndividual_Todos(t *testing.T) {
 // returns consistent todo payloads and that mark_all_done clears pending
 // todos in a follow-up list call.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Todos(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

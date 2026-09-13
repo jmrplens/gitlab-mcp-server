@@ -3,7 +3,7 @@
 // environments_ce_test.go tests the environment MCP tools against a live GitLab instance.
 // Covers create, get, list, update, stop, and delete for both individual and meta-tool modes.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -23,7 +23,7 @@ import (
 // environment, and gitlab_delete_environment tools. Each subtest asserts
 // the expected ID or name round-trips through the GitLab API.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Environments(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()
@@ -117,7 +117,7 @@ func TestIndividual_Environments(t *testing.T) {
 // gitlab_environment tool. Each subtest asserts the same outcome and
 // verifies the tool name stays constant across the lifecycle.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Environments(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

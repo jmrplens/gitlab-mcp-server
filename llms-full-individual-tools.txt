@@ -4603,7 +4603,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_group_board_delete
 
-Delete a group issue board permanently. Returns: a success confirmation. See also: gitlab_group_board_get, gitlab_group_board_list.
+Delete a group issue board permanently (Premium/Ultimate). Returns: a success confirmation. See also: gitlab_group_board_get, gitlab_group_board_list.
 
 **Parameters:**
 
@@ -9150,13 +9150,13 @@ Create an approval rule on a merge request. Returns: the created rule with its t
 
 **Parameters:**
 
-- `approval_project_rule_id` (integer) (required): Project-level approval rule ID to inherit from
+- `approval_project_rule_id` (integer): Project-level approval rule ID to inherit from
 - `approvals_required` (integer) (required): Number of approvals required
-- `group_ids` (array of integers) (required): Group IDs eligible to approve
+- `group_ids` (array of integers): Group IDs eligible to approve
 - `merge_request_iid` (integer) (required): Merge request internal ID
 - `name` (string) (required): Rule name
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `user_ids` (array of integers) (required): User IDs eligible to approve
+- `user_ids` (array of integers): User IDs eligible to approve
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -9180,12 +9180,12 @@ Update an approval rule on a merge request. Returns: the updated rule with its t
 **Parameters:**
 
 - `approval_rule_id` (integer) (required): Approval rule ID
-- `approvals_required` (integer) (required): Number of approvals required
-- `group_ids` (array of integers) (required): Group IDs eligible to approve
+- `approvals_required` (integer): Number of approvals required
+- `group_ids` (array of integers): Group IDs eligible to approve
 - `merge_request_iid` (integer) (required): Merge request internal ID
-- `name` (string) (required): Rule name
+- `name` (string): Rule name
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `user_ids` (array of integers) (required): User IDs eligible to approve
+- `user_ids` (array of integers): User IDs eligible to approve
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 

@@ -6,7 +6,7 @@ faq:
   - q: "How do I run the E2E suite against an ephemeral GitLab?"
     a: "Run `make test-e2e-docker`. That target orchestrates the Docker stack, waits for GitLab, configures the test user and CI runner, runs the Go E2E suite with the `e2e` build tag, and writes JUnit plus JSON reports. The default path uses GitLab CE and creates temporary GitLab data that is removed when the stack is torn down, so you get high-confidence validation without relying on a real `.env` GitLab instance."
   - q: "How do I run Enterprise/Premium Docker E2E coverage?"
-    a: "Set `ENTERPRISE_LICENSE` in `.env` or your shell and run `make test-e2e-docker-enterprise`. That target uses the GitLab EE image plus the `e2e enterprise` build tags, so the common harness files and the `test/e2e/suite/*_ee_test.go` Enterprise/Premium tests are compiled and executed. When `ENTERPRISE_LICENSE` holds a 24-character activation code, the first successful run exports a reusable license key to `test/e2e/.enterprise-license`, so later runs install it through the License API instead of spending the activation code again."
+    a: "Set `ENTERPRISE_LICENSE` in `.env` or your shell and run `make test-e2e-ee` (`make test-e2e-docker-enterprise` is the same target under its older name). It uses the GitLab EE image and runs the `common` and `ee` packages of the rebuilt suite under `test/e2e/gitlab` against the real server binary; there is no Enterprise build tag, the package decides the runtime. When `ENTERPRISE_LICENSE` holds a 24-character activation code, the first successful run exports a reusable license key to `test/e2e/.enterprise-license`, so later runs install it through the License API instead of spending the activation code again."
   - q: "When should I use Docker E2E mode instead of unit tests?"
     a: "Use Docker E2E when changing tool registration, catalog projection, or schemas; when changing pipeline, job, webhook, custom emoji, or mirror behavior; and when verifying release candidates before publishing binaries. It is usually unnecessary for editing a narrow Markdown page or debugging a failing unit test with mocked GitLab responses. Docker E2E is slower than unit tests but is the preferred validation path for architecture migrations because it exercises the real GitLab API together with the MCP transport."
   - q: "How do I clean up Docker E2E test data?"
@@ -39,10 +39,10 @@ That target orchestrates the Docker stack, waits for GitLab, configures the test
 To run the Enterprise/Premium coverage against GitLab EE, set `ENTERPRISE_LICENSE` in `.env` or your shell and use:
 
 ```bash
-make test-e2e-docker-enterprise
+make test-e2e-ee    # or its older name, make test-e2e-docker-enterprise
 ```
 
-That target runs with the `e2e enterprise` build tags, so common harness files plus `test/e2e/suite/*_ee_test.go` Enterprise/Premium tests are compiled and executed. CE-only tests live in `test/e2e/suite/*_ce_test.go` and stay in `make test-e2e-docker`, while Enterprise fixtures can be tuned independently.
+That target runs the `common` and `ee` packages of the rebuilt suite under `test/e2e/gitlab` against the real server binary over stdio. There is no Enterprise build tag: every file carries `e2e` alone, and the package decides the runtime, so `ee` refuses an unlicensed instance before it writes anything while `common` runs its Free actions on the licensed catalog too. The suite under `test/e2e/suite` stays with `make test-e2e-docker` until its CE half is ported.
 
 When `ENTERPRISE_LICENSE` contains a 24-character activation code, the first successful run exports the generated reusable license key to `test/e2e/.enterprise-license`. Later Enterprise runs prefer that ignored local cache and install it through the License API, so they do not need to spend the activation code again.
 

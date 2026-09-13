@@ -5,7 +5,7 @@
 // meta-tool. Exercises the full variable lifecycle: create → get → list →
 // update → delete.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -24,7 +24,7 @@ import (
 // subtest asserts the returned key/value round-trips through the GitLab
 // API and that list contains the created variable.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_CIVariables(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -101,7 +101,7 @@ func TestIndividual_CIVariables(t *testing.T) {
 // tool, using create, get, list, update, and delete. Each subtest asserts
 // the same outcome and verifies the tool name stays constant.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_CIVariables(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

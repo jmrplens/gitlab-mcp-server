@@ -3,7 +3,7 @@
 // group_milestones_ce_test.go tests the group milestone MCP tools against a live GitLab instance.
 // Exercises create, list, get, and delete via the gitlab_group meta-tool.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -27,7 +27,7 @@ import (
 // deletes the group via a deferred call so the GitLab instance stays
 // clean even when subtests fail.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_GroupMilestones(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)

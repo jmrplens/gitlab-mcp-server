@@ -88,12 +88,28 @@ func TestAuditEvents_EachScope_ListsAndGetsWhatTheFixtureCaused(t *testing.T) {
 			e.T.Errorf("get_group answered event %d, want the listed %d", groupEvent.ID, groupEvents.AuditEvents[0].ID)
 		}
 
+		// The instance listing holds every event the instance ever recorded,
+		// so a non-empty answer proves nothing about this fixture: wait until
+		// it carries one of the two events found above, and read that one.
+		wanted := map[int64]bool{projectEvents.AuditEvents[0].ID: true, groupEvents.AuditEvents[0].ID: true}
+		fixtureEventIn := func(out auditevents.ListOutput) (int64, bool) {
+			for _, event := range out.AuditEvents {
+				if wanted[event.ID] {
+					return event.ID, true
+				}
+			}
+			return 0, false
+		}
 		instanceEvents := harness.Eventually(s, actionAuditEventListInstance,
-			map[string]any{"per_page": 20}, auditEventInterval, auditEventWait, hasAuditEvents)
+			map[string]any{"per_page": 100}, auditEventInterval, auditEventWait, func(out auditevents.ListOutput) bool {
+				_, found := fixtureEventIn(out)
+				return found
+			})
+		fixtureEventID, _ := fixtureEventIn(instanceEvents)
 		instanceEvent := harness.Do[auditevents.Output](s, actionAuditEventGetInstance,
-			map[string]any{"event_id": instanceEvents.AuditEvents[0].ID})
-		if instanceEvent.ID != instanceEvents.AuditEvents[0].ID {
-			e.T.Errorf("get_instance answered event %d, want the listed %d", instanceEvent.ID, instanceEvents.AuditEvents[0].ID)
+			map[string]any{"event_id": fixtureEventID})
+		if instanceEvent.ID != fixtureEventID {
+			e.T.Errorf("get_instance answered event %d, want the fixture's %d", instanceEvent.ID, fixtureEventID)
 		}
 	})
 }

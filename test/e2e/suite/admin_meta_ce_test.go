@@ -5,7 +5,7 @@
 // settings, appearance, broadcast messages, feature flags, system hooks,
 // Sidekiq metrics, plan limits, metadata, applications, and custom attributes.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -36,7 +36,7 @@ import (
 // topic, fetches it, and updates its description. Cleanup deletes the topic
 // via a deferred call so the instance stays clean even when subtests fail.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AdminTopics(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -106,7 +106,7 @@ func TestMeta_AdminTopics(t *testing.T) {
 // changes only the default branch name to "main" — and runs in isolation
 // because instance-global state is touched.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AdminSettingsAppearance(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -160,7 +160,7 @@ func TestMeta_AdminSettingsAppearance(t *testing.T) {
 // stays clean. Each subtest asserts the expected ID round-trips and the
 // operation reports no error.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AdminBroadcast(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -235,7 +235,7 @@ func TestMeta_AdminBroadcast(t *testing.T) {
 // true, and then deletes it. The feature name is suffixed with the current
 // millisecond timestamp so parallel runs cannot collide on the same flag.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AdminFeatures(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -300,7 +300,7 @@ func TestMeta_AdminFeatures(t *testing.T) {
 // The test event is allowed to fail silently on isolated networks because
 // the example.com URL will not deliver; the deletion still runs.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AdminSystemHooks(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -372,7 +372,7 @@ func TestMeta_AdminSystemHooks(t *testing.T) {
 // is mutated, so the test can run in parallel with other admin-only tests
 // that touch different instance endpoints.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AdminSidekiqMetrics(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -426,7 +426,7 @@ func TestMeta_AdminSidekiqMetrics(t *testing.T) {
 // call asserts that the GitLab version is non-empty so an empty response
 // (proxy misroute) is caught early.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AdminPlanLimitsMetadata(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -482,7 +482,7 @@ func TestMeta_AdminPlanLimitsMetadata(t *testing.T) {
 // intentionally non-deliverable so the application cannot be exercised
 // against a real callback endpoint.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AdminApplications(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -537,7 +537,7 @@ func TestMeta_AdminApplications(t *testing.T) {
 // Cleanup deletes the attribute via a deferred call so the user is restored
 // even when subtests fail.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AdminCustomAttributes(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -12,7 +12,7 @@
 // empty-tar gzip layer through the registry v2 blob upload protocol, and
 // PUTs one manifest per tag.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -190,7 +190,7 @@ func pkgImgPushImage(ctx context.Context, t *testing.T, registryURL, repository,
 // tag, and finally registry_delete for the whole repository. The repository
 // ID is discovered through the already-covered registry_list_project action.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only, needs :5050 registry). Surface: meta.
+// Build tag: e2e. Mode: CE (Docker only, needs :5050 registry). Surface: meta.
 func TestMeta_PackageRegistryImages(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

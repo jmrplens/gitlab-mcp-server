@@ -52359,7 +52359,7 @@
   },
   {
     "name": "gitlab_group_board_delete",
-    "description": "Delete a group issue board permanently. Returns: a success confirmation. See also: gitlab_group_board_get, gitlab_group_board_list.",
+    "description": "Delete a group issue board permanently (Premium/Ultimate). Returns: a success confirmation. See also: gitlab_group_board_get, gitlab_group_board_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -125792,10 +125792,7 @@
         "project_id",
         "merge_request_iid",
         "name",
-        "approvals_required",
-        "approval_project_rule_id",
-        "user_ids",
-        "group_ids"
+        "approvals_required"
       ],
       "type": "object"
     },
@@ -126305,11 +126302,7 @@
       "required": [
         "project_id",
         "merge_request_iid",
-        "approval_rule_id",
-        "name",
-        "approvals_required",
-        "user_ids",
-        "group_ids"
+        "approval_rule_id"
       ],
       "type": "object"
     },

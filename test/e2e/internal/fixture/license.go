@@ -40,8 +40,14 @@ func CachedEnterpriseLicense(e *harness.Env) string {
 
 	path := licenseCachePath(e.Setting(SettingEnterpriseLicenseFile), e.RepoRoot())
 	key, err := readCachedLicense(path)
-	if err != nil {
+	if errors.Is(err, errNoLicenseCached) {
 		e.Skipf("reading the cached Enterprise license: %v (provision one with test/e2e/scripts/setup-gitlab.sh, or name it with %s)", err, SettingEnterpriseLicenseFile)
+	}
+	if err != nil {
+		// A cache that is there and cannot be read (a directory, a
+		// permission) is a broken checkout, not an unlicensed run, and a
+		// skip would take the license lifecycle out of the suite silently.
+		e.T.Fatalf("reading the cached Enterprise license: %v", err)
 	}
 	return key
 }
@@ -60,11 +66,15 @@ func licenseCachePath(configured, root string) string {
 }
 
 // readCachedLicense reads the key out of one cache file, refusing an empty
-// one the same way as a missing one.
+// one the same way as a missing one; any other read failure is reported as
+// itself, since it says the cache is broken rather than absent.
 func readCachedLicense(path string) (string, error) {
 	data, err := os.ReadFile(path)
-	if err != nil {
+	if errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("%w at %s: %w", errNoLicenseCached, path, err)
+	}
+	if err != nil {
+		return "", fmt.Errorf("reading %s: %w", path, err)
 	}
 	key := strings.TrimSpace(string(data))
 	if key == "" {

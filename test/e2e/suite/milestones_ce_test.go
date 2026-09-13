@@ -4,7 +4,7 @@
 // GitLab instance. Covers milestone create, get, update (with close), and
 // delete for both individual and meta-tool modes.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -23,7 +23,7 @@ import (
 // asserts the expected IID, title, or state round-trips through the
 // GitLab API.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Milestones(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -94,7 +94,7 @@ func TestIndividual_Milestones(t *testing.T) {
 // gitlab_project tool. Each subtest asserts the same outcome and
 // verifies the tool name stays constant across the lifecycle.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Milestones(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

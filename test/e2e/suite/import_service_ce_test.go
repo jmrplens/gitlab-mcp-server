@@ -14,7 +14,7 @@
 //
 // The field wiring itself is covered exhaustively by the importservice unit tests.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 package suite
 
 import (

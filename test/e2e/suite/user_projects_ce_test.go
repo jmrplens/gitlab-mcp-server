@@ -20,7 +20,7 @@ import (
 // each tool returns the expected payload shape. The test does not create
 // any GitLab resources and runs without a project fixture.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_UserProjects(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -51,7 +51,7 @@ func TestIndividual_UserProjects(t *testing.T) {
 // catalog-backed tool. Each subtest asserts the meta-tool returns the
 // expected payload shape.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_UserProjects(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

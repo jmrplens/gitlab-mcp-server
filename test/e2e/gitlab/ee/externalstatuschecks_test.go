@@ -60,8 +60,13 @@ func TestExternalStatusChecks_Lifecycle_CreatesSetsRetriesAndDeletes(t *testing.
 		s := e.On(surface)
 		project := f.project.IDParam()
 
+		// The project is this scenario's own, so the deprecated listing has
+		// nothing to show before the create; an item here is a decoder or an
+		// endpoint answering for somebody else.
 		deprecated := harness.Do[externalstatuschecks.ListProjectStatusCheckOutput](s, actionStatusCheckListProjectChecks, map[string]any{"project_id": project})
-		e.T.Logf("the deprecated project listing holds %d check(s) before the create", len(deprecated.Items))
+		if len(deprecated.Items) != 0 {
+			e.T.Errorf("a fresh project lists %d external status check(s) before the create: %+v", len(deprecated.Items), deprecated.Items)
+		}
 
 		name := e.Name("check")
 		created := harness.Do[externalstatuschecks.ProjectStatusCheckOutput](s, actionStatusCheckCreateProject, map[string]any{

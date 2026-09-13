@@ -7,7 +7,7 @@
 // (user.key_get_by_fingerprint), avatar upload (user.upload_avatar), and
 // marking a single todo done (user.todo_mark_done).
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -86,7 +86,7 @@ func userExtrasSSHKey(t *testing.T) (string, string) {
 // deferred best-effort delete guards against leftovers if the delete subtest
 // never runs.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_UserEmails(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -143,7 +143,7 @@ func TestIndividual_UserEmails(t *testing.T) {
 // runs in Docker mode only where the whole instance is disposable and a
 // crashed previous run cannot leave a colliding fingerprint behind.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: individual.
+// Build tag: e2e. Mode: CE (Docker only). Surface: individual.
 func TestIndividual_UserGPGKeys(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -203,7 +203,7 @@ func TestIndividual_UserGPGKeys(t *testing.T) {
 // the admin-only fingerprint lookup endpoint, asserting the IDs match. The
 // key is removed via a deferred delete.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual. Admin token required.
+// Build tag: e2e. Mode: CE. Surface: individual. Admin token required.
 func TestIndividual_UserKeyByFingerprint(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -241,7 +241,7 @@ func TestIndividual_UserKeyByFingerprint(t *testing.T) {
 // avatar URL. GitLab keeps exactly one avatar per user, so no cleanup is
 // needed beyond the upload replacing whatever was there.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_UserAvatarUpload(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -272,7 +272,7 @@ func TestIndividual_UserAvatarUpload(t *testing.T) {
 // setup), then marks that todo done via MCP and asserts the confirmation
 // echoes the todo ID.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_UserTodoMarkDone(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {

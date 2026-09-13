@@ -4,7 +4,7 @@
 // instance using both individual tools and the gitlab_issue meta-tool.
 // Exercises the full emoji lifecycle on issues: create → list → get → delete.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -24,7 +24,7 @@ import (
 // asserts the expected ID round-trips through get and that the list
 // contains at least the created emoji.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_AwardEmoji(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -91,7 +91,7 @@ func TestIndividual_AwardEmoji(t *testing.T) {
 // emoji_issue_delete. Each subtest asserts the same outcome and verifies
 // the tool name stays constant across the lifecycle.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AwardEmoji(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

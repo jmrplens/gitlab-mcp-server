@@ -26,7 +26,7 @@ import (
 // notes, snippets, global, and commits. Each subtest asserts the action
 // returns successfully with the expected payload shape.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_SearchExtended(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

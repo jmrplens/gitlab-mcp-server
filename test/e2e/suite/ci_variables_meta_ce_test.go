@@ -4,7 +4,7 @@
 // the gitlab_ci_variable meta-tool against a live GitLab instance.
 // Exercises the group variable lifecycle: list → create → get → update.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -27,7 +27,7 @@ import (
 // deletes both the variable and the group via deferred calls so the
 // GitLab instance stays clean even when subtests fail.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_CIVariablesGroup(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

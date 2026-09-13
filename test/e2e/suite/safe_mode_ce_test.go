@@ -23,7 +23,7 @@ import (
 // executing it; read-only calls must pass through and return the
 // expected payload.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: safe-mode.
+// Build tag: e2e. Mode: CE. Surface: safe-mode.
 func TestSafeMode(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)

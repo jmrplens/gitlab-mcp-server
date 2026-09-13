@@ -21,7 +21,7 @@ import (
 // Each subtest asserts the tag name and target SHA round-trip through the
 // GitLab API, and cleanup removes the tag and release on test exit.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Tags(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -101,7 +101,7 @@ func TestIndividual_Tags(t *testing.T) {
 // Subtests cover create, list, get, update, delete, and release_create off
 // the resulting tag, verifying the meta-tool returns consistent payloads.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Tags(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -4,7 +4,7 @@
 // Each top-level test function creates its own project fixture and runs all
 // subtests independently of any other domain test file.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -24,7 +24,7 @@ import (
 // Each subtest asserts the expected branch name, commit SHA, or
 // protection level round-trips through the GitLab API.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Branches(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -168,7 +168,7 @@ func TestIndividual_Branches(t *testing.T) {
 // tool. Each subtest asserts the same outcome and verifies the tool name
 // stays constant across the lifecycle.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Branches(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

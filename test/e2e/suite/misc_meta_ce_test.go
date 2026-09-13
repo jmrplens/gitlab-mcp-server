@@ -4,7 +4,7 @@
 // Covers feature flags, feature flag user lists, branch rules (GraphQL), CI/CD catalog (GraphQL),
 // deployments, and user SSH/GPG key listing for both individual and meta-tool modes.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -29,7 +29,7 @@ import (
 // treats errors as fatal because the meta-tool requires the feature
 // flag API to be available in the running GitLab edition.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_FeatureFlags(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -55,7 +55,7 @@ func TestMeta_FeatureFlags(t *testing.T) {
 // have been defined; the assertion checks the call succeeds and logs
 // the count for visibility.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_BranchRules(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -101,7 +101,7 @@ func TestMeta_BranchRules(t *testing.T) {
 // have been published; the assertion checks the call succeeds and logs the
 // count for visibility.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_CICatalog(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -124,7 +124,7 @@ func TestMeta_CICatalog(t *testing.T) {
 // triggered; the assertion checks the call succeeds and logs the count
 // for visibility.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Deployments(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -151,7 +151,7 @@ func TestMeta_Deployments(t *testing.T) {
 // purpose is to verify the meta-tool route works against the live
 // GitLab instance.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_UserKeys(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -182,7 +182,7 @@ func TestMeta_UserKeys(t *testing.T) {
 // rules. The list may be empty when no branch rules have been defined;
 // the assertion checks the call succeeds and logs the count.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_BranchRules(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

@@ -5,7 +5,7 @@
 // access tokens, personal tokens, deploy tokens, deploy keys, access
 // requests, and invitations.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -31,7 +31,7 @@ import (
 // without error. The created project is auto-deleted by the fixture's
 // per-test resource ledger.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AccessTokensProject(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -121,7 +121,7 @@ func TestMeta_AccessTokensProject(t *testing.T) {
 // for visibility; it does not mutate personal tokens because the E2E token is
 // the active credential for the test run.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AccessTokensPersonal(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -149,7 +149,7 @@ func TestMeta_AccessTokensPersonal(t *testing.T) {
 // and defers deletion via deploy_token_delete_project. Each subtest asserts
 // the expected ID and that the meta-tool returns a structured output.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AccessDeployTokens(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -232,7 +232,7 @@ func TestMeta_AccessDeployTokens(t *testing.T) {
 // enable step. The parallel flag is dropped in Enterprise mode because
 // shared GitLab state is touched across both fixtures.
 //
-// Build tag: e2e && !enterprise. Mode: CE/EE. Surface: meta.
+// Build tag: e2e. Mode: CE/EE. Surface: meta.
 func TestMeta_DeployKeysExtended(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()
@@ -323,7 +323,7 @@ func TestMeta_DeployKeysExtended(t *testing.T) {
 // well-formed even when no requests are pending, asserting that the meta-tool
 // returns a structured empty slice rather than an error.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_AccessRequests(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -354,7 +354,7 @@ func TestMeta_AccessRequests(t *testing.T) {
 // returned invitation status is one of the GitLab-recognized states
 // (accepted, pending, expired).
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Invitations(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -1,13 +1,15 @@
 //go:build e2e
 
 // network_endpoints_ce_test.go holds the Docker-network URL helper only the
-// Community Edition mirror suites read. It is split from
-// network_endpoints_test.go, which both halves of the suite compile, so that it
-// lives behind the constraint of its callers: under the Enterprise tag every
-// *_ce_test.go drops out and the helper was left unused, which nothing noticed
-// while nothing compiled that half outside a manual run (issue 570).
+// Community Edition mirror suites read. It was split from
+// network_endpoints_test.go when the suite was still two halves behind two
+// build tags, so that it lived behind the constraint of its callers: an
+// Enterprise compile dropped every *_ce_test.go and left the helper unused,
+// which nothing noticed while nothing compiled that half outside a manual run
+// (issue 570). Every file carries `e2e` alone now, and the file keeps its name
+// until the suite goes.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (

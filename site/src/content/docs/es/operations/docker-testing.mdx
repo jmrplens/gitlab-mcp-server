@@ -6,7 +6,7 @@ faq:
   - q: "¿Cómo ejecuto la suite E2E contra una instancia efímera de GitLab?"
     a: "Ejecuta `make test-e2e-docker`. Ese objetivo orquesta el stack Docker, espera a GitLab, configura el usuario y el runner de CI de pruebas, ejecuta la suite E2E de Go con el build tag `e2e` y escribe reportes JUnit y JSON. La ruta por defecto usa GitLab CE y crea datos temporales que se eliminan al desmontar el stack, de modo que obtienes validación de alta confianza sin depender de una instancia real configurada en `.env`."
   - q: "¿Cómo ejecuto la cobertura Enterprise/Premium de E2E con Docker?"
-    a: "Define `ENTERPRISE_LICENSE` en `.env` o en la shell y ejecuta `make test-e2e-docker-enterprise`. Ese objetivo usa la imagen GitLab EE más los build tags `e2e enterprise`, así que se compilan y ejecutan los archivos comunes de harness y los tests Enterprise/Premium de `test/e2e/suite/*_ee_test.go`. Cuando `ENTERPRISE_LICENSE` contiene un activation code de 24 caracteres, la primera ejecución correcta exporta una licencia reutilizable a `test/e2e/.enterprise-license`, de modo que las siguientes ejecuciones la instalan mediante la License API en lugar de consumir otra vez el activation code."
+    a: "Define `ENTERPRISE_LICENSE` en `.env` o en la shell y ejecuta `make test-e2e-ee` (`make test-e2e-docker-enterprise` es el mismo objetivo con su nombre anterior). Usa la imagen GitLab EE y ejecuta los paquetes `common` y `ee` de la suite reconstruida bajo `test/e2e/gitlab` contra el binario real del servidor; no existe un build tag Enterprise, el paquete decide el runtime. Cuando `ENTERPRISE_LICENSE` contiene un activation code de 24 caracteres, la primera ejecución correcta exporta una licencia reutilizable a `test/e2e/.enterprise-license`, de modo que las siguientes ejecuciones la instalan mediante la License API en lugar de consumir otra vez el activation code."
   - q: "¿Cuándo debería usar el modo E2E con Docker en lugar de tests unitarios?"
     a: "Usa E2E con Docker al cambiar el registro de herramientas, la proyección del catálogo o los schemas; al cambiar el comportamiento de pipelines, jobs, webhooks, emoji personalizados o mirrors; y al verificar release candidates antes de publicar binarios. Normalmente no hace falta para editar una página Markdown estrecha o depurar un test unitario fallando con respuestas mock de GitLab. E2E con Docker es más lento que los tests unitarios pero es la ruta de validación preferida para migraciones de arquitectura porque ejercita la API real de GitLab junto con el transporte MCP."
   - q: "¿Cómo limpio los datos de prueba de E2E con Docker?"
@@ -39,10 +39,10 @@ Ese objetivo orquesta el stack Docker, espera a GitLab, configura el usuario y e
 Para ejecutar la cobertura Enterprise/Premium contra GitLab EE, define `ENTERPRISE_LICENSE` en `.env` o en la shell y usa:
 
 ```bash
-make test-e2e-docker-enterprise
+make test-e2e-ee    # o su nombre anterior, make test-e2e-docker-enterprise
 ```
 
-Ese objetivo se ejecuta con los build tags `e2e enterprise`, así que compila los archivos comunes de harness y los tests Enterprise/Premium de `test/e2e/suite/*_ee_test.go`. Los tests solo CE viven en `test/e2e/suite/*_ce_test.go` y quedan en `make test-e2e-docker`, mientras las fixtures Enterprise pueden ajustarse de forma independiente.
+Ese objetivo ejecuta los paquetes `common` y `ee` de la suite reconstruida bajo `test/e2e/gitlab` contra el binario real del servidor sobre stdio. No existe un build tag Enterprise: cada archivo lleva solo `e2e`, y el paquete decide el runtime, así que `ee` rechaza una instancia sin licencia antes de escribir nada mientras `common` ejecuta también sus acciones Free sobre el catálogo con licencia. La suite bajo `test/e2e/suite` sigue en `make test-e2e-docker` hasta que se porte su mitad CE.
 
 Cuando `ENTERPRISE_LICENSE` contiene un activation code de 24 caracteres, la primera ejecución correcta exporta la licencia reutilizable generada a `test/e2e/.enterprise-license`. Las siguientes ejecuciones Enterprise prefieren ese cache local ignorado por Git y lo instalan mediante la License API, así no consumen otra vez el activation code.
 

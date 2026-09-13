@@ -261,7 +261,7 @@ The server can present GitLab in three shapes, controlled by `GITLAB_MCP_TOOL_SU
 | ----------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
 | **Dynamic** (default)         | 2 (`gitlab_find_action`, `gitlab_execute_action`) | Lowest token cost; reaches the full catalog via find/execute.    |
 | **Meta-tools** (`meta`)       | 34 base / 51 Ultimate / 52 GitLab.com Ultimate    | Domain-grouped dispatchers with an `action` parameter.           |
-| **Individual** (`individual`) | ~866 Free/CE · ~1019 Premium · 1085–1091 Ultimate | One MCP tool per GitLab operation; needs a large context window. |
+| **Individual** (`individual`) | ~865 Free/CE · ~1019 Premium · 1085–1091 Ultimate | One MCP tool per GitLab operation; needs a large context window. |
 
 Tool counts scale with your GitLab edition (`GITLAB_MCP_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/concepts/dynamic-tools.md) and [Meta-Tools Reference](docs/concepts/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `GITLAB_MCP_CAPABILITY_SURFACE=minimal`.
 
@@ -275,8 +275,8 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 
 | Configuration (`GITLAB_MCP_TOOL_SURFACE` / `GITLAB_MCP_CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `GITLAB_MCP_META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | --------------------------------------------------------------------------- | -------- | ------------: | ----------------: | ------------------------------ | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                                                | Free/CE  |             2 |               870 | n/a                            |              1,524 |         8,835 |       10,359 |
-| `dynamic` / `minimal`                                                       | Free/CE  |             2 |               870 | n/a                            |              1,524 |           170 |        1,694 |
+| `dynamic` / `full` (default)                                                | Free/CE  |             2 |               869 | n/a                            |              1,524 |         8,835 |       10,359 |
+| `dynamic` / `minimal`                                                       | Free/CE  |             2 |               869 | n/a                            |              1,524 |           170 |        1,694 |
 | `dynamic` / `full` (default)                                                | Premium  |             2 |             1,023 | n/a                            |              1,524 |         8,835 |       10,359 |
 | `dynamic` / `minimal`                                                       | Premium  |             2 |             1,023 | n/a                            |              1,524 |           170 |        1,694 |
 | `dynamic` / `full` (default)                                                | Ultimate |             2 |             1,089 | n/a                            |              1,524 |         8,835 |       10,359 |
@@ -467,21 +467,21 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,277 |     282,337 |
-| Unit tests (`_test.go`)  |       779 |     466,123 |
-| End-to-end tests         |       340 |      87,711 |
-| **Total**                | **2,396** | **836,171** |
+| Source (`.go`, non-test) |     1,277 |     282,630 |
+| Unit tests (`_test.go`)  |       779 |     466,539 |
+| End-to-end tests         |       369 |      84,682 |
+| **Total**                | **2,425** | **833,851** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                | 10,434 |
+| Source functions                | 10,440 |
 | . Exported (public)             |  3,137 |
-| . Unexported (private)          |  7,297 |
-| Unit test functions (`TestXxx`) | 15,339 |
-| Subtests (`t.Run(...)`)         |  6,177 |
-| End-to-end test functions       |    910 |
+| . Unexported (private)          |  7,303 |
+| Unit test functions (`TestXxx`) | 15,350 |
+| Subtests (`t.Run(...)`)         |  5,859 |
+| End-to-end test functions       |    935 |
 
 ### Ratios worth noting
 
@@ -489,18 +489,18 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.65× more tests than code |
 | Average source file length         |                 ~221 lines |
-| Average test file length           |                 ~598 lines |
-| Comment lines in source            |  56,120 (~19.9% of source) |
+| Average test file length           |                 ~599 lines |
+| Comment lines in source            |  56,226 (~19.9% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 8,554 |
-| `defer` statements                 | 1,483 |
+| `if err != nil` checks             | 8,559 |
+| `defer` statements                 | 1,408 |
 | `struct` types defined             | 3,322 |
-| `//nolint` suppressions            |   358 |
+| `//nolint` suppressions            |   350 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
@@ -522,8 +522,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~5,133 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 15,410 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~5,138 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 15,414 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

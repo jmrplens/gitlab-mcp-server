@@ -4,7 +4,7 @@
 // meta-tool against a live GitLab instance. Exercises the full board
 // lifecycle: create → list → get → delete.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -24,7 +24,7 @@ import (
 // Cleanup relies on the explicit delete subtest; project removal is
 // handled by the per-test resource ledger.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Boards(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

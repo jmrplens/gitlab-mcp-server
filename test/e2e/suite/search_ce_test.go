@@ -21,7 +21,7 @@ import (
 // surface. Each subtest asserts the expected payload shape with non-empty
 // results matching the unique content marker.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Search(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -67,7 +67,7 @@ func TestIndividual_Search(t *testing.T) {
 // meta-tool returns consistent payloads with non-empty results matching
 // the unique content marker.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Search(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

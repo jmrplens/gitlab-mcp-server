@@ -22,7 +22,7 @@ import (
 // event listing. Each subtest asserts the meta-tool returns the expected
 // state event payload with the documented action types.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_StateEvents(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

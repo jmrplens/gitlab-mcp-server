@@ -4,7 +4,7 @@
 // GitLab instance using both individual tools and the gitlab_custom_emoji
 // meta-tool. Exercises custom emoji create → list → delete lifecycle.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -25,7 +25,7 @@ import (
 // created emoji. Each subtest asserts the expected name or ID round-trips
 // and that the list contains the created emoji.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_CustomEmoji(t *testing.T) {
 	t.Parallel()
 
@@ -89,7 +89,7 @@ func TestIndividual_CustomEmoji(t *testing.T) {
 // gitlab_custom_emoji tool. The temporary group fixture is cleaned up via
 // t.Cleanup so the GitLab instance stays clean even when subtests fail.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_CustomEmoji(t *testing.T) {
 	t.Parallel()
 

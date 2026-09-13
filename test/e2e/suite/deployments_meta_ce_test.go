@@ -3,7 +3,7 @@
 // deployments_meta_ce_test.go tests the deployment MCP tools against a live GitLab instance.
 // Exercises get, update, and delete via the gitlab_environment meta-tool (deployment_* actions).
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -24,7 +24,7 @@ import (
 // Each subtest asserts the expected ID round-trips through the GitLab
 // API and verifies the tool name stays constant across the lifecycle.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_DeploymentsGetUpdateDelete(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

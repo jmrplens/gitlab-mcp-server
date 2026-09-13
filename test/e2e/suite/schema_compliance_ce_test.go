@@ -21,7 +21,7 @@ import (
 // lockdown. This prevents LLMs from silently passing unknown arguments
 // that would otherwise round-trip silently through the GitLab API.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual, meta.
+// Build tag: e2e. Mode: CE. Surface: individual, meta.
 func TestSchema_AdditionalPropertiesFalse(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -88,7 +88,7 @@ func TestSchema_AdditionalPropertiesFalse(t *testing.T) {
 // action spec catalog. This guards against regressions where a meta-tool
 // is registered without a matching output schema.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestSchema_MetaToolsHaveOutputSchema(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -121,7 +121,7 @@ func TestSchema_MetaToolsHaveOutputSchema(t *testing.T) {
 // the pagination output enrichment pipeline that exposes a uniform
 // pagination contract across every list tool.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestSchema_PaginationHasMore(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil && sess.meta == nil {

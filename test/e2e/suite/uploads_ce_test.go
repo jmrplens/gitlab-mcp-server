@@ -7,7 +7,7 @@
 // gitlab_upload_get, gitlab_upload_list) and the catalog-backed
 // gitlab_project meta-tool surface for upload actions.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -28,7 +28,7 @@ import (
 // subtest asserts the expected upload payload shape with non-empty name
 // and URL.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Uploads(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -72,7 +72,7 @@ func TestIndividual_Uploads(t *testing.T) {
 // content, verifying the meta-tool returns consistent upload payloads
 // with non-empty name and URL.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Uploads(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

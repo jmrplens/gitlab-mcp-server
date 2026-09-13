@@ -671,7 +671,7 @@ The report holds the findings deduplicated by package, schema type and field, wi
 
 #### Make targets
 
-- `make check-graphql-shapes`: the CI gate; also step [16/16] of `make analyze`.
+- `make check-graphql-shapes`: the CI gate; also step [15/15] of `make analyze`.
 - `make audit-graphql-shapes`: the same gate, listing everything it judged.
 - `make audit-graphql-sent`: the same run, writing `plan/graphql-sent.json`. The record is deliberately uncommitted and not freshness-gated: a schema re-pin would churn it every time.
 
@@ -961,7 +961,7 @@ Human report to stdout (per-site `file:line [category] boundary`), summary line,
 #### Make targets
 
 - `make audit-test-goroutines` — writes `plan/test-goroutines-backlog.json`.
-- `make check-test-goroutines` — CI gate; also step [7/16] of `make analyze`.
+- `make check-test-goroutines` — CI gate; also step [6/15] of `make analyze`.
 
 ### audit_test_names
 
@@ -1027,7 +1027,7 @@ Per-file tallies (`sites`, `fixable`), a summary line, and optionally the JSON w
 #### Make targets
 
 - `make audit-test-subtests` — writes `plan/test-subtests-backlog.json`.
-- `make check-test-subtests` — CI gate; also step [8/16] of `make analyze`.
+- `make check-test-subtests` — CI gate; also step [7/15] of `make analyze`.
 
 ### audit_md_escaping
 
@@ -1083,7 +1083,7 @@ Findings grouped by package, each naming the file, line, formatter, construct, v
 #### Make targets
 
 - `make audit-md-escaping` — report plus `plan/md-escaping-backlog.json`, with the two staged rules judged beside the gating contexts.
-- `make check-md-escaping` — CI gate over the six gating contexts, holding `internal/toolutil` to no unresolved value; also step [10/16] of `make analyze`.
+- `make check-md-escaping` — CI gate over the six gating contexts, holding `internal/toolutil` to no unresolved value; also step [9/15] of `make analyze`.
 
 ## Release & supply-chain audits
 
@@ -1116,7 +1116,7 @@ One line per violation under a `supply-chain audit FAILED (N problems):` header,
 
 #### Make targets
 
-- `make check-supply-chain` — CI gate; also step [9/16] of `make analyze`.
+- `make check-supply-chain` — CI gate; also step [8/15] of `make analyze`.
 
 ### audit_install_buttons
 
@@ -1282,7 +1282,7 @@ Writes `gitlab-api-live.json` into `-dir` and reports the entity, field, route a
 #### Make targets
 
 - `make gen-api-live`
-- `make check-api-live` — CI gate; also step [15/16] of `make analyze`.
+- `make check-api-live` — CI gate; also step [14/15] of `make analyze`.
 
 ### gen_lhm_manifest
 

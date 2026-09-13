@@ -20,7 +20,7 @@ import (
 // round-trip through the GitLab API. Cleanup removes the snippet when the
 // test exits, even on failure.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_Snippets(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -103,7 +103,7 @@ func TestIndividual_Snippets(t *testing.T) {
 // cover create, get, content, list, update, and delete, verifying the
 // meta-tool returns consistent payloads.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Snippets(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

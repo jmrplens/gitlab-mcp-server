@@ -2722,7 +2722,6 @@ Action guidance:
 - delete: Delete a group (marks it for deletion, or permanently removes it with permanently_remove=true). Destructive: this removes the group and all its projects. Confirm before calling.
 - get: Get one exact group by group_id (numeric ID or full path). Use this when the prompt already targets a specific group and needs metadata such as visibility, parent, web URL, or statistics.
 - group_board_create_list: Add a new column backed by a group label to a group issue board's workflow.
-- group_board_delete: Permanently remove an issue board from a group when the team no longer needs it.
 - group_board_delete_list: Remove a column from a group issue board when that workflow stage is no longer used.
 - group_board_get: Inspect one group issue board's milestone, scope labels, and columns by its board ID.
 - group_board_get_list: Inspect one column of a group issue board, including its label, assignee, and iteration scope.
@@ -2800,7 +2799,6 @@ Parameter guidance:
 - delete.group_id: scope_group. Source: Group numeric ID or full path to delete. Avoid: permanently_remove=true requires full_path and bypasses the retention window.
 - get.group_id: scope_group. Source: Group numeric ID or full path from the prompt or prior discovery step. Avoid: Use group_id for path or ID. Do not send project_id for group lookups.
 - group_board_create_list.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- group_board_delete.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_board_delete_list.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_board_get.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_board_get_list.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").

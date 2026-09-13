@@ -45,7 +45,7 @@ func guardResultText(result *mcp.CallToolResult) string {
 // silently: the call is blocked with a confirm=true instruction, nothing is
 // deleted, and the explicit confirm=true retry executes the deletion.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual (no elicitation).
+// Build tag: e2e. Mode: CE. Surface: individual (no elicitation).
 func TestDestructiveConfirmGuard_NoElicitationClient(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)

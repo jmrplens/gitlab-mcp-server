@@ -18,6 +18,12 @@ const baselineResultsSuffix = ".results.json"
 // directory has no results stream beside it.
 var errBaselineUnjudged = errors.New("the baseline carries no test verdicts and no results stream sits beside it")
 
+// errBaselineStreamMismatch is a results stream that sits beside the baseline
+// and judges none, or not all, of the tests its calls name: a stream from
+// another run, which would leave the calls unjudged and the comparison
+// vacuous.
+var errBaselineStreamMismatch = errors.New("the results stream beside the baseline does not judge the tests its calls name")
+
 // joinBaselineResults gives every baseline runtime its verdicts, so that the
 // comparison has something to compare against.
 //
@@ -29,7 +35,12 @@ var errBaselineUnjudged = errors.New("the baseline carries no test verdicts and 
 // which is exactly the silence it exists to refuse. A baseline whose calls
 // already carry verdicts, the way the harness writes them, needs no stream
 // and is left alone; one that carries none and has no stream is refused
-// rather than compared vacuously.
+// rather than compared vacuously. So is one whose stream judges none of the
+// tests the calls name, or leaves some of them without a verdict: that is a
+// stream from another run, and a stream that matches nothing would leave
+// the reached set empty and the superset check passing against nothing, the
+// same silence by another door. A call that names no test at all is a
+// cleanup the old suite could not attribute, and stays unjudged on purpose.
 func joinBaselineResults(runtimes []*runtimeRecords) error {
 	for _, rt := range runtimes {
 		if baselineJudged(rt) {
@@ -43,9 +54,36 @@ func joinBaselineResults(runtimes []*runtimeRecords) error {
 			}
 			return fmt.Errorf("%s: %w", rt.dir, err)
 		}
-		joinResults(rt, results)
+		join := joinResults(rt, results)
+		if unjudged := baselineUnjudgedCalls(rt); join.Filled == 0 || len(unjudged) > 0 {
+			return fmt.Errorf("%s: %w: %s judged %d call(s) and left %d naming a test without a verdict (first: %s)",
+				rt.dir, errBaselineStreamMismatch, path, join.Filled, len(unjudged), firstOrNone(unjudged))
+		}
 	}
 	return nil
+}
+
+// baselineUnjudgedCalls lists the tests named by calls that carry no verdict
+// after the join, each once.
+func baselineUnjudgedCalls(rt *runtimeRecords) []string {
+	seen := map[string]bool{}
+	var names []string
+	for _, call := range rt.calls {
+		if call.Test == "" || call.TestStatus != "" || seen[call.Test] {
+			continue
+		}
+		seen[call.Test] = true
+		names = append(names, call.Test)
+	}
+	return names
+}
+
+// firstOrNone renders the first of a list, or "none" for an empty one.
+func firstOrNone(names []string) string {
+	if len(names) == 0 {
+		return "none"
+	}
+	return names[0]
 }
 
 // baselineJudged reports whether any call of the runtime carries a verdict.

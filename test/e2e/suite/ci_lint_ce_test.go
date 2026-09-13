@@ -4,7 +4,7 @@
 // using both individual tools and the gitlab_template meta-tool. Validates
 // CI configuration content and project-level linting.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -24,7 +24,7 @@ import (
 // asserts Valid=false. Together they exercise both inline content and
 // repository-backed lint paths.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_CILint(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()
@@ -65,7 +65,7 @@ func TestIndividual_CILint(t *testing.T) {
 // tool, using lint and lint_project. Each subtest asserts the same
 // Valid / Invalid outcome and verifies the tool name stays constant.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_CILint(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()

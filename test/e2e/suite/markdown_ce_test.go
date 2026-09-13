@@ -4,7 +4,7 @@
 // GitLab instance. Covers basic markdown-to-HTML rendering and GitLab Flavored
 // Markdown (GFM) rendering with project context.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -23,7 +23,7 @@ import (
 // expected tags. Each subtest runs without a project fixture so the
 // render endpoint stays stateless.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_MarkdownRender(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

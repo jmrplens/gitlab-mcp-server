@@ -6,7 +6,7 @@
 // pipeline creation succeeds with jobs left pending, which is enough for the
 // resource group to materialize and for the trigger run to return a pipeline.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -57,7 +57,7 @@ func pipelineExtrasSetupProject(ctx context.Context, t *testing.T) ProjectFixtur
 // exist, and the upcoming jobs listing is asserted only for shape since the
 // queue content depends on runner activity.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_PipelineResourceGroups(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -124,7 +124,7 @@ func TestIndividual_PipelineResourceGroups(t *testing.T) {
 // triggered pipeline is left pending (no runner needed) and is removed with
 // the project fixture.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_PipelineTriggerRun(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {

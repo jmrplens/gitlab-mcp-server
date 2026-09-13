@@ -97,9 +97,12 @@ func NewIteration(e *harness.Env, group Group) Iteration {
 			Errors []string `json:"errors"`
 		} `json:"iterationCadenceCreate"`
 	}
+	// A transport, document or decoding error is a broken endpoint and fails
+	// the test; only GitLab's own refusal in the payload, which is how an
+	// instance without the feature answers, is a reason to skip.
 	err := mutate(e, cadenceMutation, map[string]any{"groupPath": group.Path, "title": e.Name("cadence")}, &cadence)
 	if err != nil {
-		e.Skipf("creating an iteration cadence in group %s: %v", group.Path, err)
+		e.T.Fatalf("creating an iteration cadence in group %s: %v", group.Path, err)
 	}
 	if errs := cadence.IterationCadenceCreate.Errors; len(errs) > 0 {
 		e.Skipf("GitLab refused an iteration cadence in group %s: %s", group.Path, strings.Join(errs, "; "))

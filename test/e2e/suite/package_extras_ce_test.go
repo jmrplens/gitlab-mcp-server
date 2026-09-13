@@ -6,7 +6,7 @@
 // publish-directory composite tools, and container registry protection rule
 // updates.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -81,7 +81,7 @@ func pkgExtrasCreateGroupProject(ctx context.Context, t *testing.T) (groups.Deta
 // registry listing asserts a successful (typically empty) response; it skips
 // gracefully when the instance has the container registry disabled.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_PackageGroupExtras(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()
@@ -163,7 +163,7 @@ func TestIndividual_PackageGroupExtras(t *testing.T) {
 // asserting per-file results and totals. Both tools run against the
 // in-process MCP server, so local temp paths are directly readable.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_PackagePublishComposite(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()
@@ -234,7 +234,7 @@ func TestIndividual_PackagePublishComposite(t *testing.T) {
 // pushed container image and therefore stay uncovered until the Wave-4 image
 // push enabler lands.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
+// Build tag: e2e. Mode: CE. Surface: individual.
 func TestIndividual_PackageRegistryRules(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()

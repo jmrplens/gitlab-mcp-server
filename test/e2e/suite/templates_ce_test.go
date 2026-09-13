@@ -23,7 +23,7 @@ import (
 // returns the expected template payload and that get operations return
 // non-empty template content.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_Templates(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -57,7 +57,7 @@ func TestMeta_Templates(t *testing.T) {
 // the rendered headings and links from the input. The test does not create
 // any GitLab resources and runs without a project fixture.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_MarkdownRender(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

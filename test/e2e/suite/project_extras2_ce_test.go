@@ -5,7 +5,7 @@
 // group integration configuration (including Jira and group Datadog), and
 // the Pages write actions (settings update, custom domains, unpublish).
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -66,7 +66,7 @@ func projectExtrasSkipIfPagesDisabled(t *testing.T, err error, action string) {
 // and re-imports it as a new project via import_from_file. The imported
 // project is registered for permanent deletion in the per-test ledger.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectExportDownloadImport(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -189,7 +189,7 @@ func TestMeta_ProjectExportDownloadImport(t *testing.T) {
 // removes both integrations via integration_delete. Assertions check the
 // integration slug round-trips and reads report an active integration.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectIntegrationConfig(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -292,7 +292,7 @@ func TestMeta_ProjectIntegrationConfig(t *testing.T) {
 // exercised against the fresh group where no Datadog integration exists, so
 // both are asserted to return the documented not-configured error.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e. Mode: CE. Surface: meta.
 func TestMeta_ProjectGroupIntegrations(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -426,7 +426,7 @@ func projectExtrasDeployPages(ctx context.Context, t *testing.T, proj ProjectFix
 // and unpublish are asserted strictly. On self-hosted instances without
 // Pages each call site converts the rejection into a documented skip.
 //
-// Build tag: e2e && !enterprise. Mode: CE (full assertions need the Docker
+// Build tag: e2e. Mode: CE (full assertions need the Docker
 // runner). Surface: meta.
 func TestMeta_ProjectPagesWrite(t *testing.T) {
 	t.Parallel()

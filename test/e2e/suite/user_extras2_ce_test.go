@@ -11,7 +11,7 @@
 // All tests here need an admin token and mutate instance-level state, so
 // they are gated to Docker mode where the GitLab instance is disposable.
 //
-// Build tag: e2e && !enterprise.
+// Build tag: e2e.
 package suite
 
 import (
@@ -97,7 +97,7 @@ func userExtrasCreateUser(ctx context.Context, t *testing.T, prefix string, muta
 // embedded GPG fixture key to it, reads the key back, and deletes it. All
 // three actions require an admin token.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: individual. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: individual. Admin token required.
 func TestIndividual_UserGPGKeysForUser(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -156,7 +156,7 @@ func TestIndividual_UserGPGKeysForUser(t *testing.T) {
 // seed an identity without a real OAuth flow), then deletes that identity
 // via MCP and asserts the confirmation payload.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: individual. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: individual. Admin token required.
 func TestIndividual_UserDeleteIdentity(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -196,7 +196,7 @@ func TestIndividual_UserDeleteIdentity(t *testing.T) {
 // via the raw admin API so the fixture runner of the Docker compose stack is
 // never touched.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: individual. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: individual. Admin token required.
 func TestIndividual_UserCreateRunner(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -233,7 +233,7 @@ func TestIndividual_UserCreateRunner(t *testing.T) {
 // deletes its user and the approved user is removed in cleanup. Docker mode
 // only: the seeded fixtures exist only on the disposable instance.
 //
-// Build tag: e2e && !enterprise. Mode: Docker. Surface: individual.
+// Build tag: e2e. Mode: Docker. Surface: individual.
 func TestIndividual_UserApproveReject(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -294,7 +294,7 @@ func TestIndividual_UserApproveReject(t *testing.T) {
 // user", HTTP 400) instead of a transport failure. This exercises the full
 // MCP round-trip for the action with the only state reachable in E2E.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: individual. Admin token required.
+// Build tag: e2e. Mode: CE (Docker only). Surface: individual. Admin token required.
 func TestIndividual_UserDisableTwoFactor(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
