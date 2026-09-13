@@ -73,22 +73,22 @@ readable without opening the tracker:
 | 5 | client-go | [`GetNamespace` breaks on a path lookup](#getnamespace-cannot-decode-a-path-based-lookup) | No | No | No | No | Yes |
 | 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | No | No | No | No | Yes |
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | No | No | No | No | Yes |
-| 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | No | No | No | No | Yes |
+| 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | Yes, [#1262](https://github.com/modelcontextprotocol/go-sdk/issues/1262) | No, proposal first | No | No | Yes |
 | 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | Yes, by another user | Yes, theirs, open | No | Was yes | Yes |
-| 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | No | No | No | No | None possible |
-| 11 | go-sdk | [Declared, not negotiated, version selects MRTR](#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr) | No | No | No | No | None taken |
-| 12 | go-sdk | [A cancelled call is still answered](#a-cancelled-incoming-call-is-still-answered) | No | No | No | No | Partial |
+| 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | Yes, [#1263](https://github.com/modelcontextprotocol/go-sdk/issues/1263) | No, proposal first | No | No | None possible |
+| 11 | go-sdk | [Declared, not negotiated, version selects MRTR](#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr) | Yes, [#1258](https://github.com/modelcontextprotocol/go-sdk/issues/1258) | Yes, [#1266](https://github.com/modelcontextprotocol/go-sdk/pull/1266), open | No | No | None taken |
+| 12 | go-sdk | [A cancelled call is still answered](#a-cancelled-incoming-call-is-still-answered) | Yes, [#1259](https://github.com/modelcontextprotocol/go-sdk/issues/1259) | Yes, [#1267](https://github.com/modelcontextprotocol/go-sdk/pull/1267), open | No | No | Partial |
 | 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | Yes | Yes, open | No | No | None possible |
 | 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Not by us | No | **Yes, unreleased** | No | None taken |
-| 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | No | No | No | No | None taken |
+| 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | Yes, [#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260) | Yes, [#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268), open | No | No | None taken |
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Retired |
 | 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
-| 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | No | No | No | No | None possible |
+| 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | Yes, [#1264](https://github.com/modelcontextprotocol/go-sdk/issues/1264) | No, proposal first | No | No | None possible |
 | 19 | client-go | [Security mutations discard GraphQL errors](#the-security-attribute-and-category-mutations-discard-graphql-errors) | No | No | No | No | Yes |
 | 20 | client-go | [Dependency Firewall lacks `operation` and the enablement endpoint](#the-dependency-firewall-wrapper-is-missing-an-attribute-and-an-endpoint) | No | No | No | No | None |
-| 21 | go-sdk | [A middleware cannot ask whether a request carries params](#a-middleware-cannot-ask-whether-a-request-carries-params) | No | No | No | No | Yes |
+| 21 | go-sdk | [A middleware cannot ask whether a request carries params](#a-middleware-cannot-ask-whether-a-request-carries-params) | Yes, [#1261](https://github.com/modelcontextprotocol/go-sdk/issues/1261) | Yes, [#1269](https://github.com/modelcontextprotocol/go-sdk/pull/1269), open | No | No | Yes |
 | 22 | client-go | [Enum constants lag the documented value sets](#enum-constants-lag-the-documented-value-sets) | No | No | No | No | Yes |
-| 23 | go-sdk | [No per-session resource-updated delivery](#a-resource-update-cannot-be-delivered-to-one-session) | No | No | No | No | Yes |
+| 23 | go-sdk | [No per-session resource-updated delivery](#a-resource-update-cannot-be-delivered-to-one-session) | Yes, [#1265](https://github.com/modelcontextprotocol/go-sdk/issues/1265) | No, proposal first | No | No | Yes |
 | 24 | gitlab-org/gitlab | [Approvals page documents the POST's response under the GET](#the-merge-request-approvals-page-documents-the-deprecated-posts-response-under-the-get) | No | No | No | No | Yes |
 | 25 | client-go | [`CreateProjectForkRelation` declares a response GitLab does not send](#createprojectforkrelation-declares-a-response-gitlab-does-not-send) | No | No | No | No | Yes |
 | 26 | client-go | [The invitations wrapper is missing two parameters and a response field](#the-invitations-wrapper-is-missing-two-parameters-and-a-response-field) | No | No | No | No | Yes |
@@ -111,11 +111,14 @@ readable without opening the tracker:
 | 43 | client-go | [PipelineInfo decodes two entities and models only the smaller one](#pipelineinfo-decodes-two-entities-and-models-only-the-smaller-one) | No | No | No | No | Yes |
 | 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | No | No | No | No | Yes |
 | 45 | client-go | [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields) | No | No | No | Yes, on Community Edition | None possible |
+| 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239), open | No | Was yes | Yes |
 
-States verified against the upstream trackers on 2026-09-12. Rows 39 to 44
-were added that day: each entry existed with its five fields and the table had
-never listed it, which is the drift this table exists to prevent. Row 45 is the
-entry the e2e rebuild's EE port found the same day.
+States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
+again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
+on the 12th: each entry existed with its five fields and the table had never
+listed it, which is the drift this table exists to prevent. Rows 45 and 46 are
+what the e2e rebuild found, the first from the EE port and the second from the
+CE coverage that closed the gap against the old suite's baseline.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -1736,10 +1739,23 @@ tolerates their absence, since the listing runs without them today.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
+Nine of the entries here were filed upstream together on 2026-09-13, one issue
+each so that a maintainer can triage, label and close them apart, with
+[modelcontextprotocol/go-sdk#1257](https://github.com/modelcontextprotocol/go-sdk/issues/1257)
+as an index over the set. The four that need no new exported API carry a pull
+request; the four that do are proposals waiting on a decision about the shape,
+because a maintainer chooses their own API and a pull request that assumes the
+answer wastes both sides' time. The tenth, `Mcp-Name`, was fixed upstream by
+somebody else before we got to it.
+
 ### No keep-alive interval for SSE streams on StreamableHTTPOptions
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes,
+  [modelcontextprotocol/go-sdk#1262](https://github.com/modelcontextprotocol/go-sdk/issues/1262),
+  on 2026-09-13, as a proposal: the option it asks for is new exported API.
+  The issue separates the two halves, since flushing the response headers when
+  a stream is committed needs no API at all and is arguably a plain bug.
+- **In review**: no. Waiting on the maintainers to say which shape they want.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes, and it covers more than the requested option would.
@@ -1811,8 +1827,19 @@ passing if the SDK ever fixes this and the filter is removed.
 
 ### A cancelled incoming call is still answered
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes,
+  [modelcontextprotocol/go-sdk#1259](https://github.com/modelcontextprotocol/go-sdk/issues/1259),
+  on 2026-09-13.
+- **In review**: yes,
+  [modelcontextprotocol/go-sdk#1267](https://github.com/modelcontextprotocol/go-sdk/pull/1267):
+  `Connection.CancelFromPeer` records that the peer cancelled a given id, which
+  is what the jsonrpc2 layer could not tell apart from an ordinary context
+  ending, and the response is then suppressed for that id alone. The streamable
+  transport implements `ResponseDropper` so the POST's stream is released
+  rather than left hanging, and `loggingConn` forwards it, since that wrapper
+  would otherwise swallow the interface and reinstate the response. The
+  narrowest reading of the clause was chosen deliberately: `notDone` still
+  writes a response when the caller's own context ended for any other reason.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: partial and honest rather than a fix. The response cannot be
@@ -1864,8 +1891,21 @@ the server's output.
 
 ### The declared protocol version, not the negotiated one, selects MRTR
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes,
+  [modelcontextprotocol/go-sdk#1258](https://github.com/modelcontextprotocol/go-sdk/issues/1258),
+  on 2026-09-13.
+- **In review**: yes,
+  [modelcontextprotocol/go-sdk#1266](https://github.com/modelcontextprotocol/go-sdk/pull/1266):
+  an unexported `ServerSession.protocolVersion` that answers with
+  `NegotiatedProtocolVersion` and falls back to the declared value for a
+  session that never ran `initialize`, read by both the MRTR check and the
+  server-initiated-request assertion. Fixing only the first makes the symptom
+  worse rather than better, which the pull request shows by running the test
+  against exactly that half. Two more sites read the declared value the same
+  way, `Server.notifySessions` and `Server.ResourceUpdated`, and are left out
+  on purpose: the second has to decide what happens to a session that
+  subscribed through the legacy method and is routed into the new branch, which
+  is a judgement rather than a swap. The pull request says so and offers it.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: none taken, deliberately. Disagreeing with the SDK here would
@@ -1895,8 +1935,12 @@ behaviour is stated where someone writing a client would look.
 
 ### Application code cannot send notifications/cancelled for a listen stream
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes,
+  [modelcontextprotocol/go-sdk#1263](https://github.com/modelcontextprotocol/go-sdk/issues/1263),
+  on 2026-09-13, as a proposal: closing it needs a method the SDK does not
+  have. It is the one finding of the nine that names a MUST rather than a
+  SHOULD.
+- **In review**: no. Waiting on the maintainers to say which shape they want.
 - **Merged**: no.
 - **Blocking**: no. The client still receives the completion result the SDK
   writes when the stream's handler returns, which tells a conforming client the
@@ -1959,8 +2003,21 @@ served. It is upstream by this file's own test: it happens to any caller of
 
 ### A middleware cannot ask whether a request carries params
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes,
+  [modelcontextprotocol/go-sdk#1261](https://github.com/modelcontextprotocol/go-sdk/issues/1261),
+  on 2026-09-13.
+- **In review**: yes,
+  [modelcontextprotocol/go-sdk#1269](https://github.com/modelcontextprotocol/go-sdk/pull/1269):
+  `mcp.HasParams(req Request) bool`. This is the one of the four pull requests
+  that adds an exported symbol, and the body says so and offers the smaller
+  answer instead, which is the `getRequestMeta` fix plus the guarantee written
+  into the `AddReceivingMiddleware` doc comments and no new function. It is a
+  function over `Request` rather than an exported `isNil`, because a params
+  type declared the documented way, `struct{ mcp.ParamsBase }`, promotes
+  `isNil` through a field selector and dereferences the nil outer pointer
+  before the body runs, so exporting the predicate would ship one that is
+  itself unsafe. The same pull request stops three accessors panicking on that
+  value.
 - **Merged**: no.
 - **Blocking**: no, once known. The check is three lines of `reflect` and this
   server now makes it in one place.
@@ -1991,8 +2048,20 @@ guarantee, would keep the next middleware from writing the same line.
 
 ### The protocol version is classified by string ordering
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes,
+  [modelcontextprotocol/go-sdk#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260),
+  on 2026-09-13.
+- **In review**: yes,
+  [modelcontextprotocol/go-sdk#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268):
+  classify by membership in the supported set rather than by comparing strings,
+  so an unrecognised version is refused with the error the versioning page
+  requires instead of being read as a legacy handshake. Writing that pull
+  request corrected this entry's own reach: the window is **not** stdio-only.
+  The streamable header gate is
+  `!slices.Contains(supported, v) && v < "2026-07-28"`, so an unknown version
+  sorting **above** that revision passes it and lands in the same
+  classification, and `mcp/sse.go` has no header check at all. Every transport
+  can reach it.
 - **Merged**: no.
 - **Blocking**: no. The window contains only malformed version strings.
 - **Workaround**: none taken. The clean seam is a wrapping `mcp.Transport` that
@@ -2021,9 +2090,13 @@ reach it: the header check rejects a `_meta`-only version with `-32020`, and
 
 ### A resource update cannot be delivered to one session
 
-- **Reported**: no. Deferred: the workaround is complete and no upstream change
-  is being asked for yet.
-- **In review**: no.
+- **Reported**: yes,
+  [modelcontextprotocol/go-sdk#1265](https://github.com/modelcontextprotocol/go-sdk/issues/1265),
+  on 2026-09-13, as a proposal offering both shapes below. The earlier note
+  here said reporting was deferred because the workaround is complete; it went
+  out with the rest of the batch, since a complete workaround is a reason not
+  to be blocked and not a reason to keep the gap to ourselves.
+- **In review**: no. Waiting on the maintainers to say which shape they want.
 - **Merged**: no.
 - **Blocking**: no.
 - **Workaround**: yes. `sessionOwners.sendingMiddleware` in
@@ -2155,6 +2228,64 @@ three lines stay reviewable on their own: both list endpoints are missing
 `is_array: true`, which is real but repository-wide, and `success status:`
 against the styleguide's `code:` is the prevailing idiom rather than a defect.
 
+### Cancelling an auto-merge answers a status hash under a merge request annotation
+
+- **Reported**: yes, as the merge request below rather than as an issue of its
+  own, the way the job token scope annotations went.
+- **In review**: yes,
+  [gitlab-org/gitlab!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239),
+  from the community fork: the endpoint presents the merge request on success
+  and renders the service's error with its own status. Unlike
+  [!254698](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254698), which
+  corrected annotations to match the code, this one moves the code to match the
+  documentation, because here the page and the annotation agree with each other
+  and only the handler disagrees. That is a change to an observable response of
+  a stable endpoint, so the merge request says so plainly and offers the
+  opposite change as the alternative for them to pick.
+- **Merged**: no.
+- **Blocking**: it was, for the action. `merge_request.cancel_auto_merge`
+  answered a model with an object carrying no IID, no state and no title, so a
+  caller could not tell a cancelled auto-merge from a broken call.
+- **Workaround**: yes, and it is the right shape whatever GitLab does:
+  `CancelAutoMerge` in `internal/tools/mergerequests/merge_requests.go` reads
+  the merge request back when the answer carries no IID, which is what
+  `toggleSubscription` beside it already does when a subscription toggle is
+  answered 304 with an empty body. Pinned by
+  `TestMRCancelAutoMerge_StatusHashIsReadBack`.
+
+**What**: `POST /projects/:id/merge_requests/:iid/cancel_merge_when_pipeline_succeeds`
+is annotated `success Entities::MergeRequest` in `lib/api/merge_requests.rb`,
+which is what the API documentation publishes and what `cmd/gen_api_live`
+records in `docs/development/gitlab-api-live.json`, since that record reads the
+`desc` block. The endpoint body is `AutoMergeService.new(...).cancel(mr)` with
+no `present` after it, and `AutoMerge::BaseService#cancel` returns
+`::BaseService#success`, so what goes on the wire is `{"status":"success"}`.
+A `desc` annotation documents a response; it does not render one, and this is a
+route where the two disagree.
+
+**The failure path is lost the same way**, which writing the merge request
+turned up: `clear_auto_merge` rescues and returns
+`error("Can't cancel the automatic merge", 406)`, and Grape has no reason to
+read `http_status` out of a plain hash, so a cancellation that fails is
+answered `201` with the error hash as its body while the page documents `406`.
+Both halves of the documented contract were lost in the same missing `present`.
+
+**Why it is worth recording rather than just working around**: the annotation
+is an oracle three of our own audit rules read. R-PATH's type grain joins an
+output type to the endpoints client-go's methods name and then asks this record
+what those endpoints send, so a route whose annotation is wrong quietly teaches
+every rule downstream the wrong answer. This is the first case found where the
+generated record is confidently wrong rather than merely silent, which is the
+class the record's own documentation says a scan cannot catch either.
+
+**How we found it**: the e2e rebuild. The old CE suite called the action and
+threw the answer away, and its own note recorded that a live 19.3 instance had
+replied with a body carrying no IID, so the evidence had been written down and
+never acted on. Asserting the answer is what turned it into a failure. The
+handler's unit test mocked a full merge request body, which is why the server's
+contract was wrong in the same direction as the record and no gate could see
+the disagreement.
+
 ## Other
 
 ### go-selfupdate depends on the deprecated x/crypto/openpgp
@@ -2189,8 +2320,13 @@ runs, the same shape as
 [the cancellation reason](#the-cancellation-reason-is-discarded-before-any-handler-sees-it). Adding `GetID()` to the `Request` interface, or a
 field on `RequestExtra`, would close it.
 
-- **Reported**: no.
-- **In review**: no.
+- **Reported**: yes,
+  [modelcontextprotocol/go-sdk#1264](https://github.com/modelcontextprotocol/go-sdk/issues/1264),
+  on 2026-09-13, as a proposal: `GetID()` on the `Request` interface or a field
+  on `RequestExtra`, with the trade-off between them stated, since adding a
+  method to an exported interface breaks anything outside the package that
+  implements it.
+- **In review**: no. Waiting on the maintainers to say which shape they want.
 - **Merged**: no.
 - **Blocking**: no. One Conditionally Required attribute is omitted; the span is
   otherwise complete and the metric does not carry the attribute at all.
