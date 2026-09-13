@@ -70,20 +70,23 @@ func TestIssueWeightEvents_TwoChanges_ListTheFinalWeight(t *testing.T) {
 	harness.SurfacesWith(e, buildWeightFixture, func(e *harness.Env, surface harness.Surface, f weightFixture) {
 		s := e.On(surface)
 
+		// The events are written asynchronously and one at a time, so the
+		// wait is for the final weight to appear, not for the first event:
+		// a listing that holds only the first change is still on its way.
 		events := harness.Eventually(s, actionIssueWeightEventList,
 			map[string]any{"project_id": f.project.IDParam(), "issue_iid": f.issue.IID}, resourceEventInterval, resourceEventWait,
-			func(out resourceevents.ListWeightEventsOutput) bool { return len(out.Events) > 0 })
-		sawFinal := false
+			func(out resourceevents.ListWeightEventsOutput) bool {
+				for _, event := range out.Events {
+					if event.Weight == finalWeight {
+						return true
+					}
+				}
+				return false
+			})
 		for _, event := range events.Events {
 			if event.ID == 0 {
 				e.T.Errorf("a weight event has no ID: %+v", event)
 			}
-			if event.Weight == finalWeight {
-				sawFinal = true
-			}
-		}
-		if !sawFinal {
-			e.T.Errorf("no weight event records the final weight %d among %d event(s): %+v", finalWeight, len(events.Events), events.Events)
 		}
 	})
 }

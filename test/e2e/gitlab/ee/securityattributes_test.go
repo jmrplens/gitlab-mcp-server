@@ -10,6 +10,7 @@ package ee
 
 import (
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/securityattributes"
@@ -21,6 +22,12 @@ import (
 const (
 	attributeColor        = "#FF0000"
 	attributeUpdatedColor = "#00FF00"
+)
+
+// The wait for the bulk update's background job to assign the attribute.
+const (
+	bulkUpdateInterval = 2 * time.Second
+	bulkUpdateWait     = 60 * time.Second
 )
 
 // classificationFixture is a top-level group with a project in it, which is
@@ -81,6 +88,16 @@ func TestSecurityAttributes_Lifecycle_AssignsToAProjectAndDeletes(t *testing.T) 
 		if added.AddedCount < 1 {
 			e.T.Errorf("the project update added %d attributes, want at least the one", added.AddedCount)
 		}
+		// Take the attribute off again before the bulk add, so that the bulk
+		// add has something to do: on a project that already carries it a
+		// bulk update answering success proves nothing, and the removal at
+		// the end would pass on the direct add alone.
+		cleared := harness.Do[securityattributes.ProjectUpdateOutput](s, actionSecurityAttributeProjectUpdate, map[string]any{
+			"project_id": f.project.ID, "remove_attribute_ids": []int64{attribute.ID},
+		})
+		if cleared.RemovedCount < 1 {
+			e.T.Errorf("the project update removed %d attributes before the bulk add, want at least the one", cleared.RemovedCount)
+		}
 
 		bulk := harness.Do[securityattributes.BulkUpdateOutput](s, actionSecurityAttributeBulkUpdate, map[string]any{
 			"project_ids": []int64{f.project.ID}, "attribute_ids": []int64{attribute.ID}, "mode": securityattributes.BulkUpdateModeAdd,
@@ -89,11 +106,16 @@ func TestSecurityAttributes_Lifecycle_AssignsToAProjectAndDeletes(t *testing.T) 
 			e.T.Errorf("the bulk update answered status %q, want success: %+v", bulk.Status, bulk)
 		}
 
-		removed := harness.Do[securityattributes.ProjectUpdateOutput](s, actionSecurityAttributeProjectUpdate, map[string]any{
+		// The bulk update is a background job: GitLab's BulkUpdateService
+		// enqueues a scheduler worker and answers "initiated", so the
+		// assignment lands later. No action reads a project's attributes,
+		// so the removal is what observes it: retried until it finds the
+		// one the bulk add assigned, which is what proves the bulk add did.
+		removed := harness.Eventually(s, actionSecurityAttributeProjectUpdate, map[string]any{
 			"project_id": f.project.ID, "remove_attribute_ids": []int64{attribute.ID},
-		})
+		}, bulkUpdateInterval, bulkUpdateWait, func(out securityattributes.ProjectUpdateOutput) bool { return out.RemovedCount >= 1 })
 		if removed.RemovedCount < 1 {
-			e.T.Errorf("the project update removed %d attributes, want at least the one", removed.RemovedCount)
+			e.T.Errorf("the project update removed %d attributes after the bulk add, want the one the bulk add assigned", removed.RemovedCount)
 		}
 
 		harness.DoVoid(s, actionSecurityAttributeDelete, map[string]any{"attribute_id": attribute.ID})

@@ -110,6 +110,70 @@ func TestJoinBaselineResults_UnjudgedShards_TakeTheStreamBeside(t *testing.T) {
 	}
 }
 
+// TestJoinBaselineResults_StreamFromAnotherRun_Refused verifies that a stream
+// beside the baseline which judges tests the calls never name, or leaves a
+// named test without a verdict, is refused: joined silently it would leave
+// every call unjudged, the reached set empty and the superset check passing
+// against nothing. A call naming no test (an unattributed cleanup) is not
+// what trips it.
+func TestJoinBaselineResults_StreamFromAnotherRun_Refused(t *testing.T) {
+	cases := []struct {
+		name   string
+		stream []string
+		calls  []string
+		want   string
+	}{
+		{
+			name: "judges other tests only",
+			stream: []string{
+				`{"Time":"2026-09-01T10:00:00Z","Action":"run","Package":"example.com/old/test/e2e/suite","Test":"TestElsewhere"}`,
+				`{"Time":"2026-09-01T10:00:01Z","Action":"pass","Package":"example.com/old/test/e2e/suite","Test":"TestElsewhere","Elapsed":1}`,
+			},
+			calls: []string{"TestOld_Passed"},
+			want:  "judged 0 call(s) and left 1 naming a test without a verdict (first: TestOld_Passed)",
+		},
+		{
+			name: "judges some of the named tests",
+			stream: []string{
+				`{"Time":"2026-09-01T10:00:00Z","Action":"run","Package":"example.com/old/test/e2e/suite","Test":"TestOld_Passed"}`,
+				`{"Time":"2026-09-01T10:00:01Z","Action":"pass","Package":"example.com/old/test/e2e/suite","Test":"TestOld_Passed","Elapsed":1}`,
+			},
+			calls: []string{"TestOld_Passed", "TestOld_Missing"},
+			want:  "judged 1 call(s) and left 1 naming a test without a verdict (first: TestOld_Missing)",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "baseline-ce")
+			if err := os.MkdirAll(dir, 0o750); err != nil {
+				t.Fatal(err)
+			}
+			rt := &runtimeRecords{dir: dir, key: "community/free", packages: map[*e2ecalls.Call]string{}}
+			for _, name := range tc.calls {
+				call := fixtureCall(callSpec{test: name, action: "issue.list", dispatched: "issue.list", shape: dynamicDefault})
+				call.TestStatus = ""
+				rt.calls = append(rt.calls, call)
+				rt.packages[call] = "suite"
+			}
+			// The unattributed cleanup the old suite's recorder writes with no
+			// test name: unjudged after the join, and not a mismatch.
+			cleanup := fixtureCall(callSpec{test: "", action: "project.delete", dispatched: "project.delete", shape: dynamicDefault})
+			cleanup.TestStatus = ""
+			rt.calls = append(rt.calls, cleanup)
+			rt.packages[cleanup] = "suite"
+			writeFile(t, dir+baselineResultsSuffix, strings.Join(append(tc.stream, ""), "\n"))
+
+			err := joinBaselineResults([]*runtimeRecords{rt})
+			if !errors.Is(err, errBaselineStreamMismatch) {
+				t.Fatalf("joinBaselineResults() error = %v, want %v", err, errBaselineStreamMismatch)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("joinBaselineResults() error = %q, want it to say %q", err, tc.want)
+			}
+		})
+	}
+}
+
 // TestJoinBaselineResults_UnjudgedShardsWithoutAStream_Refused verifies that
 // a baseline that could only reach nothing is refused, naming the file it
 // looked for, instead of being compared against.

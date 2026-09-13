@@ -6,10 +6,11 @@
 // before GitLab is asked.
 //
 // The key is a placeholder of the shape GitLab validates and nothing ever
-// sends to Datadog: the integration is created inactive, since GitLab
-// cannot verify the key, and it is deleted in the same test. The endpoint is
-// licensed although the catalog lists the actions as Free, which is why the
-// scenario lives here rather than in the common package.
+// sends to Datadog: GitLab stores it without contacting Datadog, so the set
+// leaves the integration active, which is what the read asserts, and the
+// delete in the same test turns it off. The endpoint is licensed although
+// the catalog lists the actions as Free, which is why the scenario lives
+// here rather than in the common package.
 
 package ee
 

@@ -285,15 +285,25 @@ func assertSASTFindings(e *harness.Env, scope string, out securityfindings.ListO
 		if finding.Severity != "CRITICAL" {
 			e.T.Errorf("%s: finding %s is %s, want CRITICAL", scope, finding.UUID, finding.Severity)
 		}
+		// Exactly one of the report's identifiers per finding: a global
+		// count alone would accept a finding carrying none beside one
+		// carrying two, which is the shape a malformed decode takes.
+		var expected []string
 		for _, identifier := range finding.Identifiers {
 			if !slices.Contains(sastIdentifiers, identifier.Name) {
 				e.T.Errorf("%s: finding %s carries %s, which the report never published", scope, finding.UUID, identifier.Name)
+				continue
 			}
-			if slices.Contains(seen, identifier.Name) {
-				e.T.Errorf("%s: two findings carry %s", scope, identifier.Name)
-			}
-			seen = append(seen, identifier.Name)
+			expected = append(expected, identifier.Name)
 		}
+		if len(expected) != 1 {
+			e.T.Errorf("%s: finding %s carries %d of the report's identifiers %v, want exactly one", scope, finding.UUID, len(expected), expected)
+			continue
+		}
+		if slices.Contains(seen, expected[0]) {
+			e.T.Errorf("%s: two findings carry %s", scope, expected[0])
+		}
+		seen = append(seen, expected[0])
 	}
 	if len(seen) != want {
 		e.T.Errorf("%s: the findings carry %v, want %d distinct identifiers", scope, seen, want)

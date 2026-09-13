@@ -57,22 +57,32 @@ func TestReadCachedLicense_Files_AreReadTrimmedOrRefused(t *testing.T) {
 		path    string
 		want    string
 		refused bool
+		broken  bool
 	}{
 		{name: "present", path: present, want: "dGVzdA=="},
 		{name: "empty", path: empty, refused: true},
 		{name: "missing", path: filepath.Join(dir, "missing"), refused: true},
+		// A directory where the file should be opens and cannot be read: a
+		// broken cache, which is reported as itself and never as absent, so
+		// that the caller fails rather than skips.
+		{name: "directory", path: dir, broken: true},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			got, err := readCachedLicense(testCase.path)
-			if testCase.refused {
+			switch {
+			case testCase.refused:
 				if !errors.Is(err, errNoLicenseCached) {
 					t.Errorf("readCachedLicense(%s) error = %v, want %v", testCase.name, err, errNoLicenseCached)
 				}
-				return
-			}
-			if err != nil || got != testCase.want {
-				t.Errorf("readCachedLicense(%s) = (%q, %v), want (%q, nil)", testCase.name, got, err, testCase.want)
+			case testCase.broken:
+				if err == nil || errors.Is(err, errNoLicenseCached) {
+					t.Errorf("readCachedLicense(%s) error = %v, want a read error that is not %v", testCase.name, err, errNoLicenseCached)
+				}
+			default:
+				if err != nil || got != testCase.want {
+					t.Errorf("readCachedLicense(%s) = (%q, %v), want (%q, nil)", testCase.name, got, err, testCase.want)
+				}
 			}
 		})
 	}

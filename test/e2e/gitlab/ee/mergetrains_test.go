@@ -26,21 +26,20 @@ import (
 // mergeTrainFixture is a group-scoped project with merge trains enabled.
 type mergeTrainFixture struct {
 	project fixture.Project
-	// enabled is whether GitLab kept both switches, which decides whether
-	// the add is refused for want of a pipeline or for want of a train.
-	enabled bool
 }
 
 // buildMergeTrainFixture creates the group, the project in it, and turns
-// the trains on.
+// the trains on. The project lives in a group so that GitLab keeps both
+// switches; a project whose switches did not stick would make the scenario
+// assert the refusals of a project without a train, which is not what it
+// claims to cover, so that is a failure rather than a note.
 func buildMergeTrainFixture(e *harness.Env) mergeTrainFixture {
 	group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("mt"))
 	project := fixture.NewProject(e, fixture.WithNamePrefix("mt"), fixture.InGroup(group))
-	enabled := fixture.EnableMergeTrains(e, project)
-	if !enabled {
-		e.T.Logf("GitLab did not keep merge trains enabled on %s; the add and the entry read assert the refusals a project without a train gives", project.Path)
+	if !fixture.EnableMergeTrains(e, project) {
+		e.T.Fatalf("GitLab did not keep merge trains enabled on %s, which is a group project on a licensed instance", project.Path)
 	}
-	return mergeTrainFixture{project: project, enabled: enabled}
+	return mergeTrainFixture{project: project}
 }
 
 // TestMergeTrains_ProjectInGroup_ListsAndRefusesAnUnpipelinedRequest lists

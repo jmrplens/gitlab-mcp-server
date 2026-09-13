@@ -27,6 +27,12 @@ import (
 // attaches, and the one the provisioning script's feature flags enable.
 const dependencyScanning = "dependency_scanning"
 
+// scanProfileNotConfigured is the status GitLab lists a profile with while
+// no project holds it attached: the listing enumerates every profile of the
+// scan types the project can hold, so a detach shows as this status and
+// never as an absence.
+const scanProfileNotConfigured = "NOT_CONFIGURED"
+
 // TestSecurityScanProfiles_ProjectInGroup_AttachesListsAndDetaches walks
 // the lifecycle once per surface on a project of its own, since a profile
 // attached by one surface would already be present for the next.
@@ -56,14 +62,20 @@ func TestSecurityScanProfiles_ProjectInGroup_AttachesListsAndDetaches(t *testing
 		if statuses.ProjectFullPath != project.Path {
 			e.T.Errorf("the status listing echoes %q, want %q", statuses.ProjectFullPath, project.Path)
 		}
-		var profileID string
+		// The listing names every profile of the scan types the project can
+		// hold, attached or not, with a status per profile; what the attach
+		// changes is the status, which is what the detach below reverts.
+		var profileID, attachedStatus string
 		for _, status := range statuses.Statuses {
 			if strings.EqualFold(status.ScanProfile.ScanType, dependencyScanning) {
-				profileID = status.ScanProfile.ID
+				profileID, attachedStatus = status.ScanProfile.ID, status.Status
 			}
 		}
 		if profileID == "" {
 			e.T.Fatalf("the attached %s profile is not among the project's statuses: %+v", dependencyScanning, statuses.Statuses)
+		}
+		if attachedStatus == scanProfileNotConfigured {
+			e.T.Errorf("the attached %s profile is still %s in the project's statuses: %+v", dependencyScanning, attachedStatus, statuses.Statuses)
 		}
 
 		detached := harness.Do[securityscanprofiles.MutationOutput](s, actionScanProfileDetach, map[string]any{
@@ -71,6 +83,21 @@ func TestSecurityScanProfiles_ProjectInGroup_AttachesListsAndDetaches(t *testing
 		})
 		if detached.Status != "success" {
 			e.T.Errorf("detach answered status %q, want success: %+v", detached.Status, detached)
+		}
+		// A success answer is the mutation's word; the listing is GitLab's,
+		// and a detached profile stays listed with its status back to not
+		// configured.
+		after := harness.Do[securityscanprofiles.ListProjectStatusesOutput](s, actionScanProfileListProjectStatuses,
+			map[string]any{"project_full_path": project.Path})
+		detachedStatus := ""
+		for _, status := range after.Statuses {
+			if status.ScanProfile.ID == profileID {
+				detachedStatus = status.Status
+			}
+		}
+		if detachedStatus != scanProfileNotConfigured {
+			e.T.Errorf("the detached profile %s reads %q in the project's statuses, want %s (was %s while attached): %+v",
+				profileID, detachedStatus, scanProfileNotConfigured, attachedStatus, after.Statuses)
 		}
 	})
 }

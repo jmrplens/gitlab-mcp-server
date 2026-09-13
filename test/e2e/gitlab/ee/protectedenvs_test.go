@@ -131,9 +131,13 @@ func TestDeploymentApproval_ProtectedEnvironment_RefusesTheDeployer(t *testing.T
 			e.T.Fatalf("deployment_create answered %+v, want a deployment with an ID", deployed)
 		}
 
+		// The wording is GitLab's own, from ee/app/services/deployments/
+		// approval_service.rb: it names self-approval, which is the one
+		// refusal this scenario is about, where "deployment" alone would
+		// also accept an environment that is not protected or has no rule.
 		refused := harness.ExpectToolError(s, actionDeploymentApproveOrReject, map[string]any{
 			"project_id": project.IDParam(), "deployment_id": deployed.ID, "status": "approved", "comment": "e2e deployment approval",
 		}, "deployment")
-		e.T.Logf("approving deployment %d (%s) as its deployer is refused: %s", deployed.ID, deployed.Status, firstLine(refused))
+		assertMentions(e, "the self-approval refusal", refused, "cannot approve your own deployment")
 	})
 }
