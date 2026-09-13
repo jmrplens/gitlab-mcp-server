@@ -48,6 +48,7 @@ import (
 // cleanup failure: the delete the test asserts on is the one in the body.
 func adminDeferDelete(e *harness.Env, s *harness.Session, label string, action harness.ActionID, params map[string]any) {
 	e.Defer(label, func(context.Context) error {
+		//nolint:contextcheck // Try drives the session's own transport and takes no context; the ledger's context bounds the sweep rather than one call.
 		if _, err := harness.Try[toolutil.DeleteOutput](s, action, params, harness.For(harness.PurposeCleanup)); err != nil {
 			e.T.Logf("best-effort cleanup of %s answered: %v", label, err)
 		}
@@ -157,6 +158,7 @@ func restoreFeature(e *harness.Env, s *harness.Session, before []features.Featur
 	previous, explicit := featureBooleanGate(before, name)
 	e.Defer("feature flag "+name, func(context.Context) error {
 		if !explicit {
+			//nolint:contextcheck // Try drives the session's own transport and takes no context; the ledger's context bounds the sweep rather than one call.
 			_, err := harness.Try[toolutil.DeleteOutput](s, actionAdminFeatureDelete,
 				map[string]any{"name": name}, harness.For(harness.PurposeCleanup))
 			return err
