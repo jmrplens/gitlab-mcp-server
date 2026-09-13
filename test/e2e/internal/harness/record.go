@@ -128,13 +128,13 @@ func attributionFrom(ctx context.Context) (callAttribution, bool) {
 }
 
 // attribute returns a context that records the next request against this
-// session and this test.
-func (s *Session) attribute(purpose Purpose, expectation string, attr callAttribution) context.Context {
+// session and this test, built on the context the call runs under.
+func (s *Session) attribute(base context.Context, purpose Purpose, expectation string, attr callAttribution) context.Context {
 	attr.rec = s.env.recorder
 	attr.conn = s.conn
 	attr.purpose = purpose
 	attr.expectation = expectation
-	return withAttribution(s.env.Ctx, attr)
+	return withAttribution(base, attr)
 }
 
 // newTraceParent mints a trace and returns its id with the header value that

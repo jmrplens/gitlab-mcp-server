@@ -47,9 +47,10 @@ import (
 // already deleted answers not found, which is logged rather than reported as a
 // cleanup failure: the delete the test asserts on is the one in the body.
 func adminDeferDelete(e *harness.Env, s *harness.Session, label string, action harness.ActionID, params map[string]any) {
-	e.Defer(label, func(context.Context) error {
-		//nolint:contextcheck // Try drives the session's own transport and takes no context; the ledger's context bounds the sweep rather than one call.
-		if _, err := harness.Try[toolutil.DeleteOutput](s, action, params, harness.For(harness.PurposeCleanup)); err != nil {
+	e.Defer(label, func(ctx context.Context) error {
+		//nolint:contextcheck // Under(ctx) is how a call takes a context here; what the linter follows past it is the reconnect, which uses the session's lifetime on purpose.
+		if _, err := harness.Try[toolutil.DeleteOutput](s, action, params,
+			harness.For(harness.PurposeCleanup), harness.Under(ctx)); err != nil {
 			e.T.Logf("best-effort cleanup of %s answered: %v", label, err)
 		}
 		return nil
@@ -120,9 +121,9 @@ func TestAdmin_SettingsAndAppearance(t *testing.T) {
 	appearanceGet := harness.Do[appearance.GetOutput](s, actionAdminAppearanceGet, nil)
 	beforeTitle := appearanceGet.Appearance.Title
 	e.T.Logf("appearance title before: %q", beforeTitle)
-	e.Defer("appearance title", func(context.Context) error {
+	e.Defer("appearance title", func(ctx context.Context) error {
 		_, err := harness.Try[appearance.UpdateOutput](s, actionAdminAppearanceUpd,
-			map[string]any{"title": beforeTitle}, harness.For(harness.PurposeCleanup))
+			map[string]any{"title": beforeTitle}, harness.For(harness.PurposeCleanup), harness.Under(ctx))
 		return err
 	})
 
@@ -142,50 +143,78 @@ func restoreSetting(e *harness.Env, s *harness.Session, before map[string]any, k
 	if !present {
 		return
 	}
-	e.Defer("instance setting "+key, func(context.Context) error {
+	e.Defer("instance setting "+key, func(ctx context.Context) error {
 		_, err := harness.Try[settings.UpdateOutput](s, actionAdminSettingsUpdate,
-			map[string]any{"settings": map[string]any{key: previous}}, harness.For(harness.PurposeCleanup))
+			map[string]any{"settings": map[string]any{key: previous}}, harness.For(harness.PurposeCleanup), harness.Under(ctx))
 		return err
 	})
 }
 
-// restoreFeature registers a cleanup that puts one instance-global feature
-// flag back where the run found it: the explicit boolean gate it carried, or
-// the delete that returns it to its default when the instance listed none.
-func restoreFeature(e *harness.Env, s *harness.Session, before []features.FeatureItem, name string) {
-	e.T.Helper()
-
-	previous, explicit := featureBooleanGate(before, name)
-	e.Defer("feature flag "+name, func(context.Context) error {
-		if !explicit {
-			//nolint:contextcheck // Try drives the session's own transport and takes no context; the ledger's context bounds the sweep rather than one call.
-			_, err := harness.Try[toolutil.DeleteOutput](s, actionAdminFeatureDelete,
-				map[string]any{"name": name}, harness.For(harness.PurposeCleanup))
-			return err
-		}
-		_, err := harness.Try[features.SetOutput](s, actionAdminFeatureSet,
-			map[string]any{"name": name, "value": previous}, harness.For(harness.PurposeCleanup))
-		return err
-	})
+// featureState is how the instance held one feature flag before a test
+// touched it.
+//
+// The three fields are three different states, and two of them used to read
+// alike. A flag nothing lists is at its default, so deleting it puts it back;
+// a flag listed with a boolean gate is set globally, so that value puts it
+// back; and a flag listed with only percentage or actor gates is a rollout in
+// progress, which neither a delete nor a set can restore.
+type featureState struct {
+	// Listed says the instance carried a record for the flag at all.
+	Listed bool
+	// Boolean says that record carried an instance-global boolean gate.
+	Boolean bool
+	// Value is that gate.
+	Value bool
 }
 
-// featureBooleanGate reports the instance-global value of one listed feature
-// flag. A flag the instance lists with no boolean gate is percentage- or
-// actor-gated rather than globally set, which this restores nothing for.
-func featureBooleanGate(listed []features.FeatureItem, name string) (bool, bool) {
+// Restorable reports whether the flag actions can put this state back, which
+// is false exactly for a rollout gated by percentage or by actor.
+func (f featureState) Restorable() bool { return !f.Listed || f.Boolean }
+
+// featureStateOf reads how the instance held one flag out of a listing.
+func featureStateOf(listed []features.FeatureItem, name string) featureState {
 	for _, flag := range listed {
 		if flag.Name != name {
 			continue
 		}
+		state := featureState{Listed: true}
 		for _, gate := range flag.Gates {
 			if gate.Key != "boolean" {
 				continue
 			}
-			value, ok := gate.Value.(bool)
-			return value, ok
+			state.Value, state.Boolean = gate.Value.(bool)
+			break
 		}
+		return state
 	}
-	return false, false
+	return featureState{}
+}
+
+// restoreFeature registers a cleanup that puts one instance-global feature
+// flag back where the run found it: the boolean gate it carried, or the delete
+// that returns it to its default when the instance listed it nowhere.
+//
+// It refuses a state it cannot restore rather than guessing, since the guess
+// available (the delete) would drop a rollout the instance's own operator
+// configured.
+func restoreFeature(e *harness.Env, s *harness.Session, before featureState, name string) {
+	e.T.Helper()
+	if !before.Restorable() {
+		e.T.Fatalf("feature flag %s is rolled out by percentage or actor, and these actions can put back only a boolean gate; "+
+			"the caller has to leave such a flag alone", name)
+	}
+
+	e.Defer("feature flag "+name, func(ctx context.Context) error {
+		if !before.Listed {
+			//nolint:contextcheck // Under(ctx) is how a call takes a context here; what the linter follows past it is the reconnect, which uses the session's lifetime on purpose.
+			_, err := harness.Try[toolutil.DeleteOutput](s, actionAdminFeatureDelete,
+				map[string]any{"name": name}, harness.For(harness.PurposeCleanup), harness.Under(ctx))
+			return err
+		}
+		_, err := harness.Try[features.SetOutput](s, actionAdminFeatureSet,
+			map[string]any{"name": name, "value": before.Value}, harness.For(harness.PurposeCleanup), harness.Under(ctx))
+		return err
+	})
 }
 
 // TestAdmin_InstanceMetadata reads the instance metadata, application
@@ -209,10 +238,10 @@ func TestAdmin_InstanceMetadata(t *testing.T) {
 	current := harness.Do[planlimits.GetOutput](s, actionAdminPlanLimitsGet, map[string]any{"plan_name": planName})
 	original := current.PyPiMaxFileSize
 	raised := original + 1
-	e.Defer("restore plan limit", func(context.Context) error {
+	e.Defer("restore plan limit", func(ctx context.Context) error {
 		if _, err := harness.Try[planlimits.ChangeOutput](s, actionAdminPlanLimitsChg, map[string]any{
 			"plan_name": planName, "pypi_max_file_size": original,
-		}, harness.For(harness.PurposeCleanup)); err != nil {
+		}, harness.For(harness.PurposeCleanup), harness.Under(ctx)); err != nil {
 			e.T.Logf("restoring the default plan's PyPI limit answered: %v", err)
 		}
 		return nil
@@ -449,4 +478,64 @@ func TestAdmin_DependencyProxyPurge(t *testing.T) {
 	group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("adm-depproxy"))
 	harness.DoVoid(s, actionAdminDependencyProxyDelete, map[string]any{"group_id": group.IDParam()})
 	e.T.Logf("scheduled the dependency proxy cache purge for group %d", group.ID)
+}
+
+// TestFeatureStateOf_TellsTheThreeStatesApart pins the distinction the restore
+// rests on.
+//
+// A flag nothing lists and a flag listed with only percentage or actor gates
+// both carry no boolean value, and reading them as one state is what made the
+// restore delete a rollout: the delete is right for the first and destroys the
+// second.
+func TestFeatureStateOf_TellsTheThreeStatesApart(t *testing.T) {
+	const name = "usage_data_queries_api"
+	listed := []features.FeatureItem{
+		{Name: "another_flag", Gates: []features.GateItem{{Key: "boolean", Value: true}}},
+		{Name: "globally_on", Gates: []features.GateItem{{Key: "boolean", Value: true}}},
+		{Name: "globally_off", Gates: []features.GateItem{{Key: "boolean", Value: false}}},
+		{Name: "rolling_out", Gates: []features.GateItem{{Key: "percentage_of_actors", Value: float64(25)}}},
+	}
+
+	cases := []struct {
+		name           string
+		flag           string
+		want           featureState
+		wantRestorable bool
+	}{
+		{
+			name:           "absent",
+			flag:           name,
+			want:           featureState{},
+			wantRestorable: true,
+		},
+		{
+			name:           "globally on",
+			flag:           "globally_on",
+			want:           featureState{Listed: true, Boolean: true, Value: true},
+			wantRestorable: true,
+		},
+		{
+			name:           "globally off",
+			flag:           "globally_off",
+			want:           featureState{Listed: true, Boolean: true, Value: false},
+			wantRestorable: true,
+		},
+		{
+			name:           "rolling out by actor",
+			flag:           "rolling_out",
+			want:           featureState{Listed: true},
+			wantRestorable: false,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := featureStateOf(listed, testCase.flag)
+			if got != testCase.want {
+				t.Errorf("featureStateOf(%q) = %+v, want %+v", testCase.flag, got, testCase.want)
+			}
+			if got.Restorable() != testCase.wantRestorable {
+				t.Errorf("featureStateOf(%q).Restorable() = %v, want %v", testCase.flag, got.Restorable(), testCase.wantRestorable)
+			}
+		})
+	}
 }

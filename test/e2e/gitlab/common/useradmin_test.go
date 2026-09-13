@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +32,13 @@ import (
 const (
 	userDeletionInterval = 2 * time.Second
 	userDeletionWait     = 90 * time.Second
+)
+
+// What a user creation through the server is retried on, for the password
+// GitLab occasionally refuses as commonly used.
+const (
+	userCreateAttempts   = 5
+	userCreateRetryDelay = time.Second
 )
 
 // The user states GitLab reports, as the users API spells them.
@@ -67,13 +75,7 @@ func TestUserAdmin_Lifecycle_CreatesChangesStateAndDeletes(t *testing.T) {
 		s := e.On(surface)
 		username := e.Name("usr")
 
-		created := harness.Do[users.Output](s, actionUserCreate, map[string]any{
-			"email":             username + "@e2e-test.invalid",
-			"name":              "E2E " + username,
-			"username":          username,
-			"password":          "Pw-" + rand.Text(),
-			"skip_confirmation": true,
-		})
+		created := createUserThroughTheServer(e, s, username)
 		if created.ID == 0 || created.Username != username {
 			e.T.Fatalf("user create answered %+v, want an account named %q with an ID", created, username)
 		}
@@ -135,16 +137,58 @@ func userState(e *harness.Env, userID int64) string {
 	return user.State
 }
 
+// weakPasswordRefusal reports the one refusal a fresh password fixes.
+//
+// It is deliberately narrower than fixture.UserCreateRetryable, which also
+// retries the transient failures. The create is not idempotent: it carries a
+// username, so an attempt GitLab committed before the answer was lost would
+// meet its own account on the next one and be refused for the name. GitLab
+// judges the password before it writes anything, so this refusal is the one
+// case where nothing was created and the same username is free to send again.
+func weakPasswordRefusal(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "commonly used")
+}
+
+// createUserThroughTheServer creates one account through the server, minting a
+// fresh password on every attempt.
+//
+// GitLab judges a password against its own weak-password rules, and a random
+// one occasionally lands on something it refuses; the fixture builder mints a
+// new one per attempt for exactly that reason (fixture.UserCreateRetryable),
+// and a scenario that creates its user through the server rather than through
+// the builder needs the same treatment or it fails before its subject begins.
+func createUserThroughTheServer(e *harness.Env, s *harness.Session, username string) users.Output {
+	e.T.Helper()
+
+	created, err := harness.Retry(e.Ctx, e.T, "user create "+username, userCreateAttempts, userCreateRetryDelay,
+		func(int) (users.Output, bool, string, error) {
+			out, tryErr := harness.Try[users.Output](s, actionUserCreate, map[string]any{
+				"email":             username + "@e2e-test.invalid",
+				"name":              "E2E " + username,
+				"username":          username,
+				"password":          "Pw-" + rand.Text(),
+				"skip_confirmation": true,
+			})
+			return out, weakPasswordRefusal(tryErr), "the random password was refused as commonly used", tryErr
+		})
+	if err != nil {
+		e.T.Fatalf("creating the user %q through the server: %v", username, err)
+	}
+	return created
+}
+
 // awaitUserRemovals waits for the accounts the surfaces deleted to leave the
 // instance, and writes down what GitLab still holds when they have not left
 // within the window.
 //
 // The wait is one for all the surfaces rather than one each, and it runs after
 // the last of them, so the accounts deleted earlier are already queued while it
-// waits. Its expiry is logged rather than failed on: GitLab removes a user from
-// a background job, so what an expiry measures is the depth of that instance's
-// job queue, which is not the thing under test. What is under test is the
-// delete's own answer, and that is asserted where the call is made.
+// waits. An expiry with some of them gone is logged rather than failed on:
+// GitLab removes a user from a background job, so what that measures is the
+// depth of the instance's job queue, which is not the thing under test. An
+// expiry with none of them gone is failed on, because a queue that moved for
+// nobody is not a slow queue: it is a delete the instance accepted and never
+// performed, and nothing else in these tests would see it.
 func awaitUserRemovals(e *harness.Env, userIDs []int64) {
 	e.T.Helper()
 
@@ -156,9 +200,20 @@ func awaitUserRemovals(e *harness.Env, userIDs []int64) {
 		}
 		return false, fmt.Sprintf("users %v still answer", remaining), nil
 	})
-	if err != nil {
-		e.T.Logf("the background deletion of users %v had not landed within %s: %v", remaining, userDeletionWait, err)
+	if err == nil {
+		return
 	}
+	// How many are left is what separates a slow queue from a delete that does
+	// nothing. Some gone and some pending is the queue, and that is not the
+	// thing under test; none gone at all is the delete, and this is the only
+	// place a test would see that.
+	if len(remaining) == len(userIDs) {
+		e.T.Errorf("none of the deleted users %v had left the instance after %s; the deletes were accepted and nothing was removed: %v",
+			remaining, userDeletionWait, err)
+		return
+	}
+	e.T.Logf("the background deletion of users %v had not landed within %s, with %d of %d already gone: %v",
+		remaining, userDeletionWait, len(userIDs)-len(remaining), len(userIDs), err)
 }
 
 // userIsGone reports whether a user answers 404, which is where a deletion

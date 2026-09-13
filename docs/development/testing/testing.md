@@ -18,10 +18,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,502 |
-| Unit test functions                                   | 15,341 |
-| E2E test functions                                    |  1,161 |
-| cmd test functions                                    |  3,171 |
+| Total test functions                                  | 16,506 |
+| Unit test functions                                   | 15,342 |
+| E2E test functions                                    |  1,164 |
+| cmd test functions                                    |  3,172 |
 | Test files (internal/)                                |    555 |
 | Test files (cmd/)                                     |    221 |
 | Test files (test/e2e/)                                |    449 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,464 | 75.5% |
+| `TestFunc_Scenario` (2-part)           | 12,466 | 75.5% |
 | `TestFunc` (no underscore)             |    943 |  5.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  3,095 | 18.8% |
+| `TestFunc_Scenario_Expected` (3+ part) |  3,097 | 18.8% |
 
 ## Test Distribution
 
@@ -48,9 +48,9 @@
 | Core packages           |          2,707 |        160 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (178) |          9,097 |        379 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,161 |        449 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          3,171 |        221 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,502** |  **1,225** |                                                                                                 |
+| E2E integration         |          1,164 |        449 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| cmd packages            |          3,172 |        221 | server entry point and developer command utilities                                              |
+| **Total**               |     **16,506** |  **1,225** |                                                                                                 |
 
 ### Core Packages
 

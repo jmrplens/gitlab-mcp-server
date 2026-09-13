@@ -219,21 +219,41 @@ func TestAdmin_UsageData(t *testing.T) {
 	})
 	e.T.Logf("track_events status=%q count=%d", batch.Status, batch.Count)
 
-	const queriesFlag = "usage_data_queries_api"
-	before := harness.Do[features.ListOutput](s, actionAdminFeatureList, nil)
-	restoreFeature(e, s, before.Features, queriesFlag)
-	harness.DoVoid(s, actionAdminFeatureSet, map[string]any{"name": queriesFlag, "value": true})
-	// Flipper caches flag reads for up to a minute, so the endpoint may keep
-	// answering 404 briefly after the flip.
-	queries := harness.Eventually[usagedata.QueriesOutput](s, actionAdminUsageDataQueries, nil,
-		15*time.Second, 120*time.Second, func(usagedata.QueriesOutput) bool { return true })
-	e.T.Logf("usage_data_queries recorded_at=%q", queries.RecordedAt)
+	assertUsageDataQueries(e, s)
 
 	if nonSQL, err := harness.Try[usagedata.NonSQLMetricsOutput](s, actionAdminUsageDataNonSQL, nil); err != nil {
 		e.T.Logf("usage_data_non_sql_metrics answered the documented GitLab 19 CE error: %v", err)
 	} else {
 		e.T.Logf("usage_data_non_sql_metrics served recorded_at=%q", nonSQL.RecordedAt)
 	}
+}
+
+// assertUsageDataQueries reads the usage-data queries endpoint, which GitLab
+// serves only while the usage_data_queries_api feature flag is on, and puts
+// the flag back where it found it.
+//
+// An instance that rolls the flag out by percentage or by actor is left alone:
+// the flag actions can put back a boolean gate and nothing else, so turning it
+// on here would drop a rollout its operator configured, and the endpoint goes
+// unread on that instance rather than the rollout going unrestored.
+func assertUsageDataQueries(e *harness.Env, s *harness.Session) {
+	e.T.Helper()
+
+	const queriesFlag = "usage_data_queries_api"
+	before := featureStateOf(harness.Do[features.ListOutput](s, actionAdminFeatureList, nil).Features, queriesFlag)
+	if !before.Restorable() {
+		e.T.Logf("this instance rolls %s out by percentage or actor, so the queries endpoint is left unread rather than "+
+			"the rollout left unrestored", queriesFlag)
+		return
+	}
+	restoreFeature(e, s, before, queriesFlag)
+	harness.DoVoid(s, actionAdminFeatureSet, map[string]any{"name": queriesFlag, "value": true})
+
+	// Flipper caches flag reads for up to a minute, so the endpoint may keep
+	// answering 404 briefly after the flip.
+	queries := harness.Eventually[usagedata.QueriesOutput](s, actionAdminUsageDataQueries, nil,
+		15*time.Second, 120*time.Second, func(usagedata.QueriesOutput) bool { return true })
+	e.T.Logf("usage_data_queries recorded_at=%q", queries.RecordedAt)
 }
 
 // TestAdmin_DBMigrationMark asserts the schema-migration mark on its error
