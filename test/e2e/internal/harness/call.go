@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -616,6 +617,12 @@ func safeModePreview(result *mcp.CallToolResult, text string) (string, bool) {
 	return "", false
 }
 
+// answeredStatus matches the status client-go writes after the request it
+// made, "METHOD URL: 404 body", which is the one GitLab actually answered. It
+// asks for the colon and the space around the number so that a group or a
+// project whose id happens to be 404 is not read as a refusal.
+var answeredStatus = regexp.MustCompile(`: (40[134])\b`)
+
 // classifyToolError names the class an error result falls into, from the text
 // the server put in it.
 //
@@ -624,6 +631,12 @@ func safeModePreview(result *mcp.CallToolResult, text string) (string, bool) {
 // than in the result, so the only thing a client holds at the moment it has to
 // classify is the message, and a test that named no class at all could not
 // tell a refused confirmation from a 404.
+//
+// GitLab's own status is read off the last one the text answers with, and
+// only then off the words: the hints this server writes name the statuses an
+// endpoint can answer ("can return 401 or 404"), and a 401 refusal whose hint
+// mentioned 404 used to be classified as not found on the strength of the
+// hint alone.
 func classifyToolError(text string) Failure {
 	lowered := strings.ToLower(text)
 	switch {
@@ -644,10 +657,17 @@ func classifyToolError(text string) Failure {
 		// dispatcher, and reads as the same class as a dispatcher refusing it.
 		strings.Contains(lowered, `validating "arguments"`):
 		return FailureInvalidParams
-	case strings.Contains(lowered, "404"), strings.Contains(lowered, "not found"):
+	}
+	if answered := answeredStatus.FindAllStringSubmatch(lowered, -1); len(answered) > 0 {
+		if answered[len(answered)-1][1] == "404" {
+			return FailureNotFound
+		}
+		return FailureForbidden
+	}
+	switch {
+	case strings.Contains(lowered, "not found"):
 		return FailureNotFound
-	case strings.Contains(lowered, "403"), strings.Contains(lowered, "401"),
-		strings.Contains(lowered, "forbidden"), strings.Contains(lowered, "unauthorized"):
+	case strings.Contains(lowered, "forbidden"), strings.Contains(lowered, "unauthorized"):
 		return FailureForbidden
 	default:
 		return FailureToolError

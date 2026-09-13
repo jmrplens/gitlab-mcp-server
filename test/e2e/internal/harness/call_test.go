@@ -104,6 +104,28 @@ func TestClassify_EveryRefusal_LandsInItsOwnClass(t *testing.T) {
 			wantOutcome: e2ecalls.RefusedOutcome(string(FailureForbidden)),
 		},
 		{
+			// The status GitLab answered decides, not the ones the hint
+			// names: this hint mentions 404 and the answer was 401.
+			name:        "the hint names other statuses",
+			text:        "list group SAML links: authentication failed. Suggestion: self-managed instances without SAML SSO can return 401 or 404: GET http://gitlab.example/api/v4/groups/117/saml_group_links: 401 {message: 401 Unauthorized}",
+			wantFailure: FailureForbidden,
+			wantOutcome: e2ecalls.RefusedOutcome(string(FailureForbidden)),
+		},
+		{
+			// A number in the request's path is not a status.
+			name:        "the path carries a status-like number",
+			text:        "set hook variable: GitLab rejected the request: PUT http://gitlab.example/api/v4/groups/404/hooks/403/url_variables/x: 422 {error: Illegal key or value}",
+			wantFailure: FailureToolError,
+			wantOutcome: e2ecalls.OutcomeToolError,
+		},
+		{
+			// The individual surface's not-found card names no status.
+			name:        "not found card",
+			text:        "## Snippet Not Found\n\nThe snippet **12** does not exist or is not accessible with your current permissions.",
+			wantFailure: FailureNotFound,
+			wantOutcome: e2ecalls.RefusedOutcome(string(FailureNotFound)),
+		},
+		{
 			name:        "anything else",
 			text:        "create branch: branch already exists",
 			wantFailure: FailureToolError,

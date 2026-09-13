@@ -110,10 +110,12 @@ readable without opening the tracker:
 | 42 | client-go | [MemberRole models twenty of the forty-five permissions GitLab sends](#memberrole-models-twenty-of-the-forty-five-permissions-gitlab-sends) | No | No | No | No | Yes |
 | 43 | client-go | [PipelineInfo decodes two entities and models only the smaller one](#pipelineinfo-decodes-two-entities-and-models-only-the-smaller-one) | No | No | No | No | Yes |
 | 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | No | No | No | No | Yes |
+| 45 | client-go | [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields) | No | No | No | Yes, on Community Edition | None possible |
 
 States verified against the upstream trackers on 2026-09-12. Rows 39 to 44
 were added that day: each entry existed with its five fields and the table had
-never listed it, which is the drift this table exists to prevent.
+never listed it, which is the drift this table exists to prevent. Row 45 is the
+entry the e2e rebuild's EE port found the same day.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -1689,6 +1691,48 @@ resolves both to Ultimate from the next expose's `external_status_checks` and
 struct that keeps serving both entities cannot answer the pointer question,
 which is why this server split each of the three into one output type per
 entity before surfacing anything.
+
+### The work item get, create and update documents select licensed fields
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: yes, on Community Edition. `issue.work_item_get`,
+  `issue.work_item_create` and `issue.work_item_update` cannot answer there:
+  GitLab refuses the whole document, so the three actions fail on every call
+  a Free instance is given, while the listing and the type listing work.
+- **Workaround**: none possible without replacing the SDK's documents. The
+  selection set is built inside `GetWorkItem`, `CreateWorkItem` and
+  `UpdateWorkItem` from one template, and nothing a caller passes changes it.
+  The e2e suite records the state instead: `test/e2e/gitlab/common`'s work
+  item lifecycle skips on a Free runtime naming this entry, and its type
+  listing runs on both.
+
+**Where**: `workitems.go`, `workItemTemplate`, which `getWorkItemTemplate`,
+`createWorkItemTemplate` and `updateWorkItemTemplate` clone.
+
+**What**: the shared template selects five widgets that exist only in the
+Enterprise schema: `color`, `healthStatus`, `iteration`, `status` and
+`weight`. A Community Edition instance answers the whole document with
+`Field 'color' doesn't exist on type 'WorkItemFeatures'` and the four
+siblings, and the SDK surfaces that as `Mutation.workItemCreate failed`, so a
+caller on Free cannot read, create or update a work item at all. The SDK
+knows the problem: `ListWorkItemsOptions.ReturnedFields` exists precisely so
+the listing can leave those five out, its comment says the five "error
+against Community Edition instances", and `WorkItemDefaultListFields` is
+documented as CE-safe. The other three operations were given no such
+selector and select everything.
+
+**How we found it**: the rebuilt e2e suite drove the work item lifecycle on
+the Community runtime for the first time (the old suite kept it in its
+Enterprise half), and `work_item_create` failed on all three surfaces with
+the five field errors above; verified against v3.0.0 and against `main` on
+2026-09-12, where the three functions still execute the full template.
+
+**Effort**: small. Either the three operations take the same `ReturnedFields`
+the listing takes, with the same CE-safe default, or the template drops the
+five widgets into fragments the caller opts into. The decoder already
+tolerates their absence, since the listing runs without them today.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

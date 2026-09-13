@@ -79,6 +79,11 @@ type stubGitLab struct {
 	graphqlAnswers []string
 	// graphqlDocuments records every document the stub was sent.
 	graphqlDocuments []string
+	// hookEventAnswers are the raw bodies of the hook events listing,
+	// answered one per read, the last repeating; a body that is not JSON is
+	// answered as a 404, which is how a real GitLab answers before the
+	// first delivery on some releases.
+	hookEventAnswers []string
 
 	server *httptest.Server
 }
@@ -109,6 +114,7 @@ func newStubGitLab(t *testing.T) (*stubGitLab, *gitlabclient.Client) {
 	mux.HandleFunc("/api/v4/projects/{id}/issues/{iid}", stub.stateAnswer)
 	mux.HandleFunc("/api/v4/projects/{id}/labels/{label}", stub.stateAnswer)
 	mux.HandleFunc("/api/v4/projects/{id}/milestones/{milestone}", stub.stateAnswer)
+	mux.HandleFunc("/api/v4/groups/{id}/hooks/{hook}/events", stub.hookEvents)
 	mux.HandleFunc("/api/graphql", stub.graphql)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("stub GitLab: unexpected %s %s", r.Method, r.URL.Path)
@@ -444,6 +450,21 @@ func (s *stubGitLab) graphql(w http.ResponseWriter, r *http.Request) {
 	}
 	s.graphqlDocuments = append(s.graphqlDocuments, document.Query)
 	body := nextStatus(&s.graphqlAnswers)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(body))
+}
+
+// hookEvents answers the next scripted hook events body, or a 404 for a
+// body that is not JSON.
+func (s *stubGitLab) hookEvents(w http.ResponseWriter, _ *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	body := nextStatus(&s.hookEventAnswers)
+	if !json.Valid([]byte(body)) {
+		writeError(w, http.StatusNotFound, "404 Not Found")
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(body))

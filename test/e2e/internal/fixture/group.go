@@ -124,6 +124,23 @@ func groupOf(g *gl.Group) Group {
 	return Group{ID: g.ID, Path: g.FullPath, Name: g.Name, ParentID: g.ParentID}
 }
 
+// AddGroupMember makes user a member of the group at the given access
+// level. The membership goes with the group, so nothing is registered.
+func AddGroupMember(e *harness.Env, group Group, user User, accessLevel gl.AccessLevelValue) {
+	e.T.Helper()
+
+	_, err := retryTransient(e, "add group member "+user.Username, createRetries, func() (struct{}, error) {
+		_, _, err := e.Client().GL().GroupMembers.AddGroupMember(group.ID, &gl.AddGroupMemberOptions{
+			UserID:      new(user.ID),
+			AccessLevel: new(accessLevel),
+		}, gl.WithContext(e.Ctx))
+		return struct{}{}, err
+	})
+	if err != nil {
+		e.T.Fatalf("adding user %s to group %d: %v", user.Username, group.ID, err)
+	}
+}
+
 // DeleteGroup removes a group permanently, with everything under it.
 //
 // It follows the project's two steps for the same reason: an instance with

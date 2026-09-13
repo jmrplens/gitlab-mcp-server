@@ -199,6 +199,28 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_Editions_BoardCreateAndDeleteArePremium pins the tier of
+// every group board action: the board create and delete are Premium, since
+// GitLab's API refuses both on a group that may not hold several boards and
+// group_boards.md states the tier on both, and everything else is Free. The
+// delete was tagged Free until the e2e port drove it on a Free catalog.
+func TestActionSpecs_Editions_BoardCreateAndDeleteArePremium(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	premium := map[string]bool{"group_board_create": true, "group_board_delete": true}
+
+	for _, spec := range ActionSpecs(client) {
+		t.Run(spec.Name, func(t *testing.T) {
+			want := ""
+			if premium[spec.Name] {
+				want = "premium"
+			}
+			if spec.Edition != want {
+				t.Errorf("%s has Edition %q, want %q", spec.Name, spec.Edition, want)
+			}
+		})
+	}
+}
+
 func groupBoardSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

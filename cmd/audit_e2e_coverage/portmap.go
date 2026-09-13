@@ -43,11 +43,41 @@ const (
 // declaredDrops holds every old Test function that no new test replaces,
 // each with a category and a reason.
 //
-// It ships empty and fills as the port proceeds. A drop naming a test the
-// old suite does not have is a finding, and so is one naming a test that a
-// Replaces line also claims: the two are different answers to where a
-// scenario went, and both cannot be true.
-var declaredDrops = map[string]dropDeclaration{}
+// It fills as the port proceeds. A drop naming a test the old suite does
+// not have is a finding, and so is one naming a test that a Replaces line
+// also claims: the two are different answers to where a scenario went, and
+// both cannot be true.
+var declaredDrops = map[string]dropDeclaration{
+	// The old suite's own baseline recorder, instrumented in S09 to record
+	// the baseline the port is compared with. Its stack-walking attribution,
+	// its source index of subtest literals, its outcome classifier and its
+	// argument reader exist only because that suite drove an in-process
+	// transport where no test frame was on the handler's stack; the harness
+	// attributes every call on the caller's goroutine and asserts the
+	// dispatched route on every call at flush, and its recorder is tested in
+	// test/e2e/internal/harness against the real binary. The one test of
+	// the ten that reached GitLab, the join of user.current, is replaced
+	// rather than dropped.
+	"TestBaseline_Attribution_NamesTheRunningSubtest":                  baselineRecorderDrop,
+	"TestBaseline_Attribution_ReadsTheContextFirst":                    baselineRecorderDrop,
+	"TestBaseline_SubtestIndex_ParsesThisFile":                         baselineRecorderDrop,
+	"TestBaseline_DeclaredFunctionName_StripsWhatTheRuntimeAppends":    baselineRecorderDrop,
+	"TestBaseline_ParseGoroutineDump_ReadsFramesAndCreators":           baselineRecorderDrop,
+	"TestBaseline_MergeNameParts_DropsTheSharedLiteral":                baselineRecorderDrop,
+	"TestBaseline_RewriteSubtestName_SpellsNamesLikeTheTestingPackage": baselineRecorderDrop,
+	"TestBaseline_Outcome_ClassifiesLikeTheHarness":                    baselineRecorderDrop,
+	"TestBaseline_Arguments_NamesTypedAndUntypedInputs":                baselineRecorderDrop,
+}
+
+// baselineRecorderDrop is the one reason the old suite's recorder tests
+// share: they test the instrument that produced the baseline, which goes
+// with the suite it instrumented.
+var baselineRecorderDrop = dropDeclaration{
+	Category: dropSuperseded,
+	Reason: "a unit test of the old suite's baseline recorder, whose stack-walking attribution and " +
+		"in-process dispatch join the harness's own recorder replaces (test/e2e/internal/harness/record.go " +
+		"and otlp.go, tested there against the real binary); the recorder is deleted with the suite it instrumented",
+}
 
 // declaredDropCategories is the set a category must belong to.
 var declaredDropCategories = map[string]bool{

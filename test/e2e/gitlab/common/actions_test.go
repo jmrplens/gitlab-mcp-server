@@ -80,6 +80,73 @@ const (
 	actionGroupLabelDelete harness.ActionID = "group.group_label_delete"
 )
 
+// The group's own lifecycle and one membership write, which the old suite
+// drove only to build the state its Enterprise scenarios stood on.
+const (
+	actionGroupCreate    harness.ActionID = "group.create"
+	actionGroupGet       harness.ActionID = "group.get"
+	actionGroupUpdate    harness.ActionID = "group.update"
+	actionGroupDelete    harness.ActionID = "group.delete"
+	actionGroupMemberAdd harness.ActionID = "group.group_member_add"
+)
+
+// A project's own lifecycle, and the objects the old suite created in one
+// through the server before every Enterprise scenario: a branch, a commit,
+// a merge request, an environment, an issue and its update, a pipeline.
+const (
+	actionProjectCreate          harness.ActionID = "project.create"
+	actionProjectUpdate          harness.ActionID = "project.update"
+	actionBranchCreate           harness.ActionID = "branch.create"
+	actionRepositoryCommitCreate harness.ActionID = "repository.commit_create"
+	actionMergeRequestCreate     harness.ActionID = "merge_request.create"
+	actionEnvironmentCreate      harness.ActionID = "environment.create"
+	actionIssueUpdate            harness.ActionID = "issue.update"
+	actionPipelineCreate         harness.ActionID = "pipeline.create"
+)
+
+// A snippet's create and delete, and the read that proves the delete.
+const (
+	actionSnippetCreate harness.ActionID = "snippet.create"
+	actionSnippetGet    harness.ActionID = "snippet.get"
+	actionSnippetDelete harness.ActionID = "snippet.delete"
+)
+
+// The Free half of the group board family: the reads and the rename of a
+// board the fixture library built, and the label columns of one. The
+// create and the delete are Premium and live in the ee package.
+const (
+	actionGroupBoardList       harness.ActionID = "group.group_board_list"
+	actionGroupBoardGet        harness.ActionID = "group.group_board_get"
+	actionGroupBoardUpdate     harness.ActionID = "group.group_board_update"
+	actionGroupBoardListLists  harness.ActionID = "group.group_board_list_lists"
+	actionGroupBoardCreateList harness.ActionID = "group.group_board_create_list"
+	actionGroupBoardGetList    harness.ActionID = "group.group_board_get_list"
+	actionGroupBoardUpdateList harness.ActionID = "group.group_board_update_list"
+	actionGroupBoardDeleteList harness.ActionID = "group.group_board_delete_list"
+)
+
+// A group's service accounts and their tokens, Free like the project's.
+const (
+	actionGroupServiceAccountList      harness.ActionID = "group.service_account_list"
+	actionGroupServiceAccountCreate    harness.ActionID = "group.service_account_create"
+	actionGroupServiceAccountUpdate    harness.ActionID = "group.service_account_update"
+	actionGroupServiceAccountDelete    harness.ActionID = "group.service_account_delete"
+	actionGroupServiceAccountPATCreate harness.ActionID = "group.service_account_pat_create"
+	actionGroupServiceAccountPATList   harness.ActionID = "group.service_account_pat_list"
+	actionGroupServiceAccountPATRotate harness.ActionID = "group.service_account_pat_rotate"
+	actionGroupServiceAccountPATRevoke harness.ActionID = "group.service_account_pat_revoke"
+)
+
+// Work items, the Free half of the issue tool's GraphQL surface.
+const (
+	actionWorkItemTypeList harness.ActionID = "issue.work_item_type_list"
+	actionWorkItemCreate   harness.ActionID = "issue.work_item_create"
+	actionWorkItemList     harness.ActionID = "issue.work_item_list"
+	actionWorkItemGet      harness.ActionID = "issue.work_item_get"
+	actionWorkItemUpdate   harness.ActionID = "issue.work_item_update"
+	actionWorkItemDelete   harness.ActionID = "issue.work_item_delete"
+)
+
 // The runner reads and the two project-scoped writes an instance runner
 // refuses.
 const (
