@@ -1612,6 +1612,16 @@ func listMergeRequestIssues(ctx context.Context, args mergeRequestItemsListArgs,
 
 // CancelAutoMerge cancels the "merge when pipeline succeeds" (auto-merge)
 // setting on a merge request. Returns the updated merge request.
+//
+// GitLab does not send one back. The route's Grape annotation names
+// API::Entities::MergeRequest, which is what the API documentation and
+// docs/development/gitlab-api-live.json both record, but the endpoint ends in
+// AutoMergeService#cancel and renders that service's status hash instead, so
+// the body is {"status":"success"} with no merge request in it. client-go
+// decodes that into a zero-valued struct and reports no error, and this
+// handler used to hand the model an empty object: no IID, no state, no title.
+// A cancel that answers nothing is read back the way toggleSubscription reads
+// back a 304, with a Get of the merge request the caller named.
 func CancelAutoMerge(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -1622,8 +1632,10 @@ func CancelAutoMerge(ctx context.Context, client *gitlabclient.Client, input Get
 	if input.MRIID <= 0 {
 		return Output{}, toolutil.ErrRequiredInt64("mrCancelAutoMerge", "merge_request_iid")
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
-	mr, _, err := client.GL().MergeRequests.CancelMergeWhenPipelineSucceeds(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
+	// The capture rides its own context so the fall-back Get below starts from
+	// the caller's, with a capture of its own.
+	callCtx, captured := gitlabclient.WithResponseCapture(ctx)
+	mr, _, err := client.GL().MergeRequests.CancelMergeWhenPipelineSucceeds(string(input.ProjectID), input.MRIID, gl.WithContext(callCtx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusMethodNotAllowed) || toolutil.IsHTTPStatus(err, http.StatusNotAcceptable) {
 			return Output{}, toolutil.WrapErrWithHint("mrCancelAutoMerge", err,
@@ -1631,6 +1643,12 @@ func CancelAutoMerge(ctx context.Context, client *gitlabclient.Client, input Get
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("mrCancelAutoMerge", err, http.StatusNotFound,
 			hintVerifyMR)
+	}
+	// An instance that answered with its service's status hash rather than the
+	// merge request leaves nothing to hand back. Read it instead, so the caller
+	// is told the state the cancel left the request in.
+	if mr == nil || mr.IID == 0 {
+		return Get(ctx, client, input)
 	}
 	return mergeRequestOutput("mrCancelAutoMerge", mr, captured)
 }

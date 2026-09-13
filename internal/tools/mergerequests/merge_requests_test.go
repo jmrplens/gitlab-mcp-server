@@ -1137,6 +1137,46 @@ func TestMRCancelAutoMerge_Success(t *testing.T) {
 	}
 }
 
+// TestMRCancelAutoMerge_StatusHashIsReadBack verifies that a cancel answered
+// with the service's status hash rather than with a merge request is read back
+// instead of handed to the caller empty.
+//
+// This is what a real instance sends. The route's Grape annotation names
+// API::Entities::MergeRequest, so the API documentation and the live API
+// record both say a merge request comes back, but the endpoint ends in
+// AutoMergeService#cancel and renders that service's success hash. client-go
+// decodes it into a zero-valued struct and reports no error, so without the
+// fall-back read the model is handed an object with no IID, no state and no
+// title, and cannot tell a cancelled auto-merge from a broken one.
+func TestMRCancelAutoMerge_StatusHashIsReadBack(t *testing.T) {
+	var reread bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == pathMR1+"/cancel_merge_when_pipeline_succeeds":
+			testutil.RespondJSON(w, http.StatusOK, `{"status":"success"}`)
+		case r.Method == http.MethodGet && r.URL.Path == pathMR1:
+			reread = true
+			testutil.RespondJSON(w, http.StatusOK, `{"id":100,"iid":1,"title":"feat: add login","state":"opened","source_branch":"feature/login","target_branch":"develop","merge_when_pipeline_succeeds":false}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	out, err := CancelAutoMerge(context.Background(), client, GetInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("CancelAutoMerge() unexpected error: %v", err)
+	}
+	if !reread {
+		t.Error("the cancel answered no merge request and the handler did not read one back")
+	}
+	if out.IID != 1 {
+		t.Errorf(fmtIIDWant1, out.IID)
+	}
+	if out.Title != "feat: add login" || out.State != "opened" {
+		t.Errorf("CancelAutoMerge() answered %+v, want the merge request the read returned", out)
+	}
+}
+
 // TestMR_CancelAutoMergeNotAutoMerging verifies MR when cancel auto merge not auto merging.
 func TestMR_CancelAutoMergeNotAutoMerging(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
