@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // pipeline_schedules_ce_test.go tests the pipeline schedule MCP tools against a live GitLab
 // instance. Covers the full schedule lifecycle: create, get, list, update, variable CRUD,

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // issue_links_ce_test.go tests the issue link MCP tools against a live GitLab
 // instance. Covers link create, list, get, and delete between two issues

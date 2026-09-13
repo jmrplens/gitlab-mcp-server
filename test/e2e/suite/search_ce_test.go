@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // search_ce_test.go tests the search MCP tools against a live GitLab instance.
 // Covers code and project search via both individual tools and the gitlab_search meta-tool.

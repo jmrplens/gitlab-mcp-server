@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // user_extras_ce_test.go covers previously unexercised user-domain actions:
 // current-user secondary emails (user.add_email / user.delete_email),

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // tags_meta_ce_test.go tests extended tag MCP tools against a live GitLab instance via the
 // gitlab_tag meta-tool. Covers protected tag lifecycle (protect → list → get → unprotect)

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // members_ce_test.go tests the project member MCP tools against a live GitLab
 // instance. Covers member listing and retrieval of the project owner for both

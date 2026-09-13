@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // issues_ce_test.go tests the core issue CRUD MCP tools against a live GitLab
 // instance. Covers create, get, list, update, note create/list, and delete

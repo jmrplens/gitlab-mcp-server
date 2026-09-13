@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // tags_ce_test.go tests the tag MCP tools against a live GitLab instance.
 // Covers the full tag lifecycle: create → get → list → delete via both individual

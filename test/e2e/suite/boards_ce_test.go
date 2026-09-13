@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // boards_ce_test.go tests the issue board MCP tools via the gitlab_project
 // meta-tool against a live GitLab instance. Exercises the full board

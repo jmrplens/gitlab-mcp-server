@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // oauth_ce_test.go tests the full OAuth authorization flow end-to-end against a
 // real GitLab instance. Validates that Bearer tokens are verified via the

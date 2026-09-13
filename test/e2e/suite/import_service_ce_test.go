@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // import_service_ce_test.go exercises the repository import tools against a live
 // GitLab instance. The Bitbucket Cloud import drives the v2.41.0

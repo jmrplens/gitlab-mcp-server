@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // commits_ce_test.go tests the commit and file MCP tools against a live GitLab
 // instance using both individual tools and the gitlab_repository meta-tool.

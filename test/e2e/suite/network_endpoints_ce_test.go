@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // network_endpoints_ce_test.go holds the Docker-network URL helper only the
 // Community Edition mirror suites read. It is split from

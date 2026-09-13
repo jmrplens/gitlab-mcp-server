@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // environments_meta_ce_test.go tests environment-related meta-tool actions against a live
 // GitLab instance, including protected environments, freeze periods, and deployment CRUD.

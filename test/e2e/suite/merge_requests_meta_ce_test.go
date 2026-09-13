@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // merge_requests_meta_ce_test.go tests advanced gitlab_merge_request meta-tool
 // actions against a live GitLab instance. Covers list variants (global, group),

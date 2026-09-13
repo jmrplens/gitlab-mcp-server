@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // project_mirrors_ce_test.go exercises project remote mirror actions through the
 // gitlab_project meta-tool using Docker-local GitLab mirror targets.

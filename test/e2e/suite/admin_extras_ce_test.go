@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // admin_extras_ce_test.go covers the remaining gitlab_admin meta-tool actions
 // the e2e gap audit reported as unexercised: OAuth application secret

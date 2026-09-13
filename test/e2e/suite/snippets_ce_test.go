@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // snippets_ce_test.go tests the snippet MCP tools against a live GitLab instance.
 // Covers personal snippet CRUD via both individual tools and the gitlab_snippet meta-tool.

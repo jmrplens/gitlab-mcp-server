@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // access_meta_ce_test.go tests the access-management MCP tools via the
 // gitlab_access meta-tool against a live GitLab instance. Covers project

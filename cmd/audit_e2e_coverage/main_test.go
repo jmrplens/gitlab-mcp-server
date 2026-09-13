@@ -424,8 +424,9 @@ func TestRun_Static_WithCalls_ReachesTheClassification(t *testing.T) {
 }
 
 // TestRun_PortMap_OverTheFixtures verifies -port-map through run(): the
-// unresolved tests and the findings are printed and the exit code says the
-// map is incomplete; an old suite that does not exist is a usage error.
+// unresolved tests and the findings are printed, the retired list is
+// counted in the summary and the exit code says the map is incomplete; an
+// old suite that does not exist is a usage error.
 func TestRun_PortMap_OverTheFixtures(t *testing.T) {
 	opts := fixtureOptions(t)
 	opts.calls = ""
@@ -434,15 +435,17 @@ func TestRun_PortMap_OverTheFixtures(t *testing.T) {
 	opts.oldSuite = filepath.Join("portmap", "old")
 	opts.newSuite = filepath.Join("portmap", "new")
 	opts.drops = fixtureDrops
+	opts.retired = fixtureRetired
 	code, stdout, stderr := runFixture(t, opts)
 	if code != exitFindings {
 		t.Errorf("run() = %d, want %d", code, exitFindings)
 	}
 	if !strings.Contains(stdout, "port map: TestMeta_Unresolved has no Replaces: successor and no declared drop\n") ||
-		!strings.Contains(stdout, "port map: 6 old tests, 3 replaced, 1 dropped, 2 unresolved, 4 findings\n") {
+		!strings.Contains(stdout, "port map: 7 old tests (1 retired), 4 replaced, 1 dropped, 2 unresolved, 5 findings\n") {
 		t.Errorf("stdout is not the port map report:\n%s", stdout)
 	}
-	if !strings.Contains(stderr, "port map: TestIssue_Ghost replaces TestMeta_Ghost") {
+	if !strings.Contains(stderr, "port map: TestIssue_Ghost replaces TestMeta_Ghost") ||
+		!strings.Contains(stderr, "port map: TestMeta_Issues is retired and still declared in the old suite") {
 		t.Errorf("stderr lacks the findings:\n%s", stderr)
 	}
 
@@ -456,7 +459,7 @@ func TestRun_PortMap_OverTheFixtures(t *testing.T) {
 	}
 	opts.oldSuite = filepath.Join("portmap", "old")
 	opts.newSuite = "absent"
-	if earlyCode, earlyOut, _ := runFixture(t, opts); earlyCode != exitFindings || !strings.Contains(earlyOut, "6 old tests, 0 replaced") {
+	if earlyCode, earlyOut, _ := runFixture(t, opts); earlyCode != exitFindings || !strings.Contains(earlyOut, "7 old tests (1 retired), 0 replaced") {
 		t.Errorf("run() before the new suite exists = %d, %q; want exit 1 with nothing replaced", earlyCode, earlyOut)
 	}
 }
@@ -544,7 +547,7 @@ func TestRun_PortMap_Complete(t *testing.T) {
 	opts.dir = root
 	opts.oldSuite = "old"
 	opts.newSuite = "new"
-	if code, stdout, _ := runFixture(t, opts); code != exitOK || !strings.Contains(stdout, "1 old tests, 1 replaced, 0 dropped, 0 unresolved, 0 findings") {
+	if code, stdout, _ := runFixture(t, opts); code != exitOK || !strings.Contains(stdout, "1 old tests (0 retired), 1 replaced, 0 dropped, 0 unresolved, 0 findings") {
 		t.Errorf("run() = %d, %q; want 0 and a complete map", code, stdout)
 	}
 }

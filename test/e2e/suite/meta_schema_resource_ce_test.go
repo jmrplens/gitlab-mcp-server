@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // meta_schema_resource_ce_test.go validates that the gitlab://tools manifest
 // exposes catalog per-action InputSchemas for real meta-tools.

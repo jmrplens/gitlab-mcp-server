@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // uploads_ce_test.go exercises the project upload domain against a live
 // GitLab CE instance.

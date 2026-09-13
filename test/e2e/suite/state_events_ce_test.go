@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // state_events_ce_test.go tests the resource state event MCP tools against a live GitLab
 // instance. Covers issue and merge request state event listing via the gitlab_issue and

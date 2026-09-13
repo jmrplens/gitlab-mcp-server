@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // releases_meta_ce_test.go tests extended release link MCP tools against a live GitLab instance.
 // Covers link_get, link_update, and link_create_batch actions via the gitlab_release meta-tool.

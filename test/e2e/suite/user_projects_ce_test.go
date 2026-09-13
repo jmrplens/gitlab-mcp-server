@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // user_projects_ce_test.go tests user contributed and starred project listing
 // MCP tools against a live GitLab instance.

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // wikis_meta_ce_test.go tests the wiki attachment upload action via the
 // gitlab_wiki meta-tool against a live GitLab instance, complementing

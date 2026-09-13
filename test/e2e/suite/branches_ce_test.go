@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // branches_ce_test.go contains self-contained E2E tests for the branches domain.
 // Each top-level test function creates its own project fixture and runs all

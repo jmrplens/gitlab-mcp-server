@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // scope_filter_ce_test.go verifies PAT scope-based tool filtering in an
 // end-to-end scenario. It creates a non-admin user with a limited-scope

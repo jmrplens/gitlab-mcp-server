@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // pipeline_extras_ce_test.go covers pipeline-domain actions that the main
 // pipeline suites do not exercise: resource group get/edit/upcoming-jobs and

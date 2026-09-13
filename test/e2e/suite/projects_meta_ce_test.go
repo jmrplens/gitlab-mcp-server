@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // projects_meta_ce_test.go tests project-level MCP tools via the gitlab_project meta-tool
 // against a live GitLab instance. Covers core CRUD, fork, star, archive, hooks, labels,

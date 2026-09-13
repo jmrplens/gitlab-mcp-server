@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // award_emoji_ce_test.go tests the award emoji MCP tools against a live GitLab
 // instance using both individual tools and the gitlab_issue meta-tool.

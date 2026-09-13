@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // fixture_ce_test.go provides self-contained GitLab resource builders for E2E
 // tests. Each builder creates a real resource via MCP tools and registers

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // model_registry_ce_test.go tests the GitLab Model Registry MCP tools via the
 // gitlab_model_registry meta-tool against a live GitLab instance. Covers

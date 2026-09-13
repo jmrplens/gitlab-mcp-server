@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // wait_ce_test.go tests the gitlab_pipeline_wait and gitlab_job_wait MCP tools
 // against a live GitLab instance. Requires a CI runner.

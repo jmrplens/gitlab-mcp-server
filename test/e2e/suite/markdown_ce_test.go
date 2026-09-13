@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // markdown_ce_test.go tests the GitLab markdown rendering MCP tool against a live
 // GitLab instance. Covers basic markdown-to-HTML rendering and GitLab Flavored

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // job_extras_ce_test.go tests the CI job artifact, manual-job, bridge, and
 // erase MCP tools against a live GitLab instance with a CI runner. Covers

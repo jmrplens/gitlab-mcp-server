@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -86,10 +87,103 @@ var declaredDropCategories = map[string]bool{
 	dropSuperseded:       true,
 }
 
+// retiredTests lists the old Test functions whose files are gone: the 74 of
+// the old suite's EE half, deleted with the `enterprise` build constraint
+// once every one of them had a Replaces successor under test/e2e/gitlab/ee.
+//
+// The port map reads the old suite's Test functions from its files, and a
+// deleted file declares nothing, so without this list every Replaces line
+// naming one of these would read as naming a test the old suite never had,
+// and the map could no longer say that the EE half was ported. Each is held
+// to the rule a live one is: replaced or dropped, or unresolved. One found
+// declared in the old suite is a finding, since retiring it is the claim
+// that its file is gone; the list goes with the old suite when the suite
+// goes.
+var retiredTests = []string{
+	"TestEE_MetaGroupEnterpriseOperations",
+	"TestEE_MetaRunnerManagement",
+	"TestEE_MetaUserServiceAccounts",
+	"TestEnterpriseOrbit_NotRegisteredOnSelfManaged",
+	"TestGroupDatadogIntegration",
+	"TestIndividual_GroupCreateUltimateFields",
+	"TestIndividual_MRDependenciesList",
+	"TestIndividual_PushRules",
+	"TestIndividual_Vulnerabilities",
+	"TestMeta_AdminLicenseLifecycle",
+	"TestMeta_Attestations",
+	"TestMeta_AuditEventListActions",
+	"TestMeta_AuditEvents",
+	"TestMeta_CompliancePolicy",
+	"TestMeta_DORAMetrics",
+	"TestMeta_Dependencies",
+	"TestMeta_DeploymentApproveOrReject",
+	"TestMeta_EnterpriseUsers",
+	"TestMeta_EpicBoards",
+	"TestMeta_EpicDiscussions",
+	"TestMeta_EpicIssues",
+	"TestMeta_EpicLinks",
+	"TestMeta_EpicNotes",
+	"TestMeta_Epics",
+	"TestMeta_ExternalStatusChecks",
+	"TestMeta_Geo",
+	"TestMeta_GroupBillableMembers",
+	"TestMeta_GroupBoardListColumns",
+	"TestMeta_GroupEpicBoards",
+	"TestMeta_GroupEpicLabelEvents",
+	"TestMeta_GroupHookExtras",
+	"TestMeta_GroupIterations",
+	"TestMeta_GroupLDAPLinks",
+	"TestMeta_GroupLDAPSync",
+	"TestMeta_GroupLabelArchive",
+	"TestMeta_GroupMRApprovalSettings",
+	"TestMeta_GroupProtectedBranchesEE",
+	"TestMeta_GroupProtectedEnvironmentsEE",
+	"TestMeta_GroupProvisionedUsers",
+	"TestMeta_GroupPushRules",
+	"TestMeta_GroupSAML",
+	"TestMeta_GroupSAMLUsers",
+	"TestMeta_GroupSCIM",
+	"TestMeta_GroupSSHCerts",
+	"TestMeta_GroupServiceAccounts",
+	"TestMeta_GroupStorageMoves_Graceful404",
+	"TestMeta_GroupWikis",
+	"TestMeta_IssueWeightEvents",
+	"TestMeta_IssueWorkItems",
+	"TestMeta_MRApprovalSettings",
+	"TestMeta_MRBlockingDependencies",
+	"TestMeta_MemberRoles",
+	"TestMeta_MergeTrainGet",
+	"TestMeta_MergeTrains",
+	"TestMeta_ProjectAliases",
+	"TestMeta_ProjectIterations",
+	"TestMeta_ProjectMirroring",
+	"TestMeta_ProjectSecuritySettings",
+	"TestMeta_ProjectServiceAccounts",
+	"TestMeta_ProjectStorageMoves_Graceful404",
+	"TestMeta_ProtectedEnvUpdate",
+	"TestMeta_ProtectedEnvs",
+	"TestMeta_PushRules",
+	"TestMeta_RunnerControllerLifecycle",
+	"TestMeta_SecurityAttributes",
+	"TestMeta_SecurityCategories",
+	"TestMeta_SecurityClassifications",
+	"TestMeta_SecurityFindings",
+	"TestMeta_SecurityScanProfiles",
+	"TestMeta_SnippetStorageMoves_Graceful404",
+	"TestMeta_StorageMoves",
+	"TestMeta_TargetBranchRules",
+	"TestMeta_Vulnerabilities",
+	"TestMeta_VulnerabilityLifecycle",
+}
+
 // portMap is the resolution of every old Test function.
 type portMap struct {
-	// Old lists every Test function of the old suite, sorted.
+	// Old lists every Test function of the old suite, sorted: the ones its
+	// files declare and the retired ones.
 	Old []string `json:"old"`
+	// Retired lists the old tests on the map by declaration rather than by
+	// file, sorted.
+	Retired []string `json:"retired"`
 	// Replaced maps an old test to the new tests that name it.
 	Replaced map[string][]string `json:"replaced"`
 	// Dropped maps an old test to its drop declaration.
@@ -109,8 +203,9 @@ func (m *portMap) complete() bool {
 }
 
 // buildPortMap reads the old suite's Test functions and the new suite's
-// Replaces lines, and resolves each old test.
-func buildPortMap(oldDir, newDir string) (*portMap, error) {
+// Replaces lines, and resolves each old test against the retired list and
+// the declared drops it is given.
+func buildPortMap(oldDir, newDir string, retired []string, drops map[string]dropDeclaration) (*portMap, error) {
 	oldTests, err := testFunctions(oldDir)
 	if err != nil {
 		return nil, fmt.Errorf("old suite: %w", err)
@@ -122,17 +217,40 @@ func buildPortMap(oldDir, newDir string) (*portMap, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new suite: %w", err)
 	}
-	return resolvePortMap(oldTests, replaces, declaredDrops), nil
+	return resolvePortMap(oldTests, retired, replaces, drops), nil
 }
 
 // resolvePortMap is [buildPortMap] once the two suites have been read, so a
 // test can hand it lists instead of directories.
-func resolvePortMap(oldTests []string, replaces map[string][]string, drops map[string]dropDeclaration) *portMap {
+//
+// declared are the Test functions the old suite's files hold and retired the
+// ones on the map by declaration alone; together they are the old tests. A
+// retired test the files still declare is a finding, and a name retired
+// twice is one too.
+func resolvePortMap(declared, retired []string, replaces map[string][]string, drops map[string]dropDeclaration) *portMap {
 	known := map[string]bool{}
-	for _, name := range oldTests {
+	for _, name := range declared {
 		known[name] = true
 	}
-	m := &portMap{Old: oldTests, Replaced: map[string][]string{}, Dropped: map[string]dropDeclaration{}}
+	m := &portMap{Replaced: map[string][]string{}, Dropped: map[string]dropDeclaration{}}
+	oldTests := slices.Clone(declared)
+	seenRetired := map[string]bool{}
+	for _, name := range retired {
+		switch {
+		case seenRetired[name]:
+			m.Findings = append(m.Findings, name+" is retired twice")
+		case known[name]:
+			m.Findings = append(m.Findings, name+" is retired and still declared in the old suite")
+		default:
+			known[name] = true
+			seenRetired[name] = true
+			oldTests = append(oldTests, name)
+			m.Retired = append(m.Retired, name)
+		}
+	}
+	sort.Strings(oldTests)
+	sort.Strings(m.Retired)
+	m.Old = oldTests
 	for newTest, olds := range replaces {
 		for _, old := range olds {
 			if !known[old] {

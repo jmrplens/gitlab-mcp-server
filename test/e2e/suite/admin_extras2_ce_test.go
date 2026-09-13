@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // admin_extras2_ce_test.go covers the GitLab direct-transfer (bulk import)
 // action family of the gitlab_admin meta-tool with a self-to-self migration:

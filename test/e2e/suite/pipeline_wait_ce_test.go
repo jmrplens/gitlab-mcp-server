@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // pipeline_wait_ce_test.go contains CE/common pipeline wait helpers used by
 // Docker CI runner tests.

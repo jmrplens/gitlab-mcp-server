@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // templates_ce_test.go tests GitLab template listing and markdown rendering
 // MCP tools via the gitlab_template and gitlab_repository meta-tools

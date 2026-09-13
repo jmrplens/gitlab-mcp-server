@@ -8,16 +8,15 @@
 //
 // # Editions and Modes
 //
-// The suite is split across GitLab editions and tooling modes:
-//
-//   - CE (community edition) — files suffixed `_ce_test.go` exercise behavior
-//     common to all GitLab installations. Selected with the build constraint
-//     `e2e && !enterprise`.
-//   - EE (enterprise edition) — files suffixed `_ee_test.go` exercise features
-//     that require GitLab Enterprise (epics, group protected branches,
-//     iterations, SAML/SCIM, compliance frameworks, security policies).
-//     Selected with the build constraint `e2e && enterprise`. When the running
-//     GitLab reports CE, EE tests skip instead of failing.
+// Every file carries the one build constraint `e2e`. The suite used to be
+// split by edition, with the `_ce_test.go` files behind `e2e && !enterprise`
+// and an `_ee_test.go` half behind `e2e && enterprise` for the features that
+// need a GitLab Enterprise license (epics, group protected branches,
+// iterations, SAML/SCIM, compliance frameworks, security policies). That
+// half was ported to test/e2e/gitlab/ee and deleted, and the `_ce_test.go`
+// files kept their suffix and lost the constraint; what remains runs on
+// either edition, and a Premium scenario a CE file still holds skips when
+// the running GitLab reports Free.
 //
 // Each domain is exercised under multiple MCP surfaces where applicable:
 //

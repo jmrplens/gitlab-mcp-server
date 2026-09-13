@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // ci_lint_ce_test.go tests the CI lint MCP tools against a live GitLab instance
 // using both individual tools and the gitlab_template meta-tool. Validates

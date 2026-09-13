@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // users_meta_ce_test.go tests GitLab user domain MCP tools via the gitlab_user
 // meta-tool against a live GitLab instance. Covers self-info, status, emails,

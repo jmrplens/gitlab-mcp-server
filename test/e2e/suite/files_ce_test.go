@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // files_ce_test.go tests the file MCP tools against a live GitLab instance.
 // Covers text, image, and binary file download via gitlab_file_get (base64

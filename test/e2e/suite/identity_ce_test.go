@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // identity_ce_test.go tests identity propagation for the transports that carry
 // it: stdio, through a context injected at startup, and the verifier's cache

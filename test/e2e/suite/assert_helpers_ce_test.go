@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // assert_helpers_ce_test.go holds the listing projections only the Community
 // Edition suites read, split from assert_helpers_test.go so that they live

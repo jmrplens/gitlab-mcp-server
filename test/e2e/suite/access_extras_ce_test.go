@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // access_extras_ce_test.go covers previously unexercised access-domain
 // actions that do not need an admin token: group deploy tokens

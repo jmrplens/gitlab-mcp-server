@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // http_stateless_ce_test.go verifies the compiled server binary in HTTP mode
 // with --stateless --json-response: self-contained JSON-RPC POSTs succeed

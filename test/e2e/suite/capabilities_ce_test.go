@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // capabilities_ce_test.go contains end-to-end tests for the MCP server
 // capabilities not already covered by elicitation_test.go: progress and

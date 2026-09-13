@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // deploy_tokens_ce_test.go tests the deploy token MCP tools against a live GitLab instance.
 // Exercises create, list, get, and delete via the gitlab_access meta-tool.

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // setup_helpers_ce_test.go verifies E2E name generation helpers without requiring
 // a live GitLab instance.

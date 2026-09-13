@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // work_item_saved_views_ce_test.go covers the work item saved view actions on the
 // gitlab_issue meta-tool: list, create, get, update, subscribe, unsubscribe and

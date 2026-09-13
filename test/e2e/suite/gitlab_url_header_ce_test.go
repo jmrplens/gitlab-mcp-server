@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // gitlab_url_header_ce_test.go tests the GITLAB-URL header feature in HTTP mode.
 // Validates fixed default URL enforcement, per-request URL selection when no

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // repository_extras_ce_test.go covers repository-domain actions that the main
 // repository and commit suites do not exercise: blob and raw blob retrieval,

@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // mr_discussions_ce_test.go tests the MR discussion MCP tools against a live GitLab instance.
 // Covers discussion create, list, get, reply, resolve, and note delete for both

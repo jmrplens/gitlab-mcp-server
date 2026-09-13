@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // merge_requests_ce_test.go tests the core merge request CRUD MCP tools against a
 // live GitLab instance. Covers create, get, list, update, commits, participants,

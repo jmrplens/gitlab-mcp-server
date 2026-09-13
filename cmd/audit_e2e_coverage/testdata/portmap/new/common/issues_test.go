@@ -23,6 +23,13 @@ func TestIssue_Both(t *testing.T) {
 	_ = t
 }
 
+// TestIssue_Retired replaces a test the old tree no longer declares, which
+// the retired list keeps on the map.
+// Replaces: TestMeta_Retired
+func TestIssue_Retired(t *testing.T) {
+	_ = t
+}
+
 // helper carries a Replaces line that counts for nothing, since it is not a
 // test.
 // Replaces: TestMeta_Unresolved

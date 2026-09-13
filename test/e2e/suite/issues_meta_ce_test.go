@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // issues_meta_ce_test.go tests advanced gitlab_issue meta-tool actions against a
 // live GitLab instance. Covers retrieval variants (get_by_id, list_all,

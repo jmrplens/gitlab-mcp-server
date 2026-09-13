@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // resource_ledger_ce_test.go defines the per-test resource cleanup ledger and
 // verifies that cleanup is ordered, idempotent, and safe under concurrent use.

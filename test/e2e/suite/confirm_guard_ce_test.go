@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // confirm_guard_ce_test.go verifies the destructive-action confirmation guard
 // for clients that do not support MCP elicitation: without an interactive

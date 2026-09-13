@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // deployments_meta_ce_test.go tests the deployment MCP tools against a live GitLab instance.
 // Exercises get, update, and delete via the gitlab_environment meta-tool (deployment_* actions).

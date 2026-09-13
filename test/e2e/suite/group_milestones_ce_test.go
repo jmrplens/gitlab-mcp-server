@@ -1,4 +1,4 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
 // group_milestones_ce_test.go tests the group milestone MCP tools against a live GitLab instance.
 // Exercises create, list, get, and delete via the gitlab_group meta-tool.
