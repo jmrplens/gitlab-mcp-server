@@ -16,6 +16,7 @@
 package harness
 
 import (
+	"context"
 	"errors"
 	"log"
 	"slices"
@@ -90,6 +91,35 @@ func (e *Env) Package() string { return e.inst.pkg }
 // per process. It is the same answer NeedRunner gives, offered to a fixture
 // that would otherwise wait a whole budget for a pipeline nothing will run.
 func (e *Env) HasRunner() bool { return e.inst.hasRunner() }
+
+// RepoRoot returns the repository root every path the harness resolves
+// starts from, for a fixture that reads a file the provisioning scripts left
+// there. A path relative to the working directory would name a different
+// file for each of the three packages, which is why the root is the one
+// place to resolve from.
+func (e *Env) RepoRoot() string {
+	e.T.Helper()
+	root, err := repoRoot()
+	if err != nil {
+		e.T.Fatalf("resolving the repository root: %v", err)
+	}
+	return root
+}
+
+// ReprobeTier asks the instance what tier it is now, the way the bootstrap
+// asked, and returns the answer beside what the bootstrap found.
+//
+// It exists for the one test that changes the license: adding and removing
+// one changes what every later session is served, so that test says
+// afterwards that the instance is where it was found. Nothing here updates
+// the harness's own record, on purpose: a tier that changed is a failure of
+// the test that changed it, not a new fact for the next test to be built on.
+func (e *Env) ReprobeTier() (now, before edition.Tier) {
+	e.T.Helper()
+	ctx, cancel := context.WithTimeout(e.Ctx, probeTimeout)
+	defer cancel()
+	return e.inst.client.DetectTier(ctx), e.inst.facts.Tier
+}
 
 // exitHooks is what runs after the last test of the package and before Main
 // returns.

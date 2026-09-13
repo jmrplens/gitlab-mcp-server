@@ -245,6 +245,10 @@ func classifyRuntimes(opts options, runtimes []*runtimeRecords, selectors []stri
 			fmt.Fprintln(stderr, "audit_e2e_coverage: baseline:", err)
 			return nil, exitUsage
 		}
+		if err = joinBaselineResults(baseline); err != nil {
+			fmt.Fprintln(stderr, "audit_e2e_coverage: baseline:", err)
+			return nil, exitUsage
+		}
 	}
 	status = exitOK
 	// An empty list rather than null when no runtime was selected, so a

@@ -24,7 +24,7 @@ import (
 // TestSubscriptions_Sweep subscribes to every advertised subscribable template
 // whose URI binds from the World.
 //
-// Replaces: the subscription coverage the old suite had none of, since
+// It replaces no old test: the old suite had no subscription coverage, since
 // subscriptions are wired only in cmd/server, which the in-process suite never
 // started.
 func TestSubscriptions_Sweep(t *testing.T) {

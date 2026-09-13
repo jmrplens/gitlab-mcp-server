@@ -1,9 +1,64 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"sort"
 )
+
+// baselineResultsSuffix is appended to a baseline runtime's directory to
+// name the gotestsum stream recorded beside it: the old suite's shards carry
+// no verdicts of their own, and S09 wrote its results to
+// dist/e2e-calls/baseline-<runtime>.results.json next to
+// dist/e2e-calls/baseline-<runtime>/.
+const baselineResultsSuffix = ".results.json"
+
+// errBaselineUnjudged is a baseline whose calls carry no verdict and whose
+// directory has no results stream beside it.
+var errBaselineUnjudged = errors.New("the baseline carries no test verdicts and no results stream sits beside it")
+
+// joinBaselineResults gives every baseline runtime its verdicts, so that the
+// comparison has something to compare against.
+//
+// A credit counts only in a passing test, and the old suite's recorder wrote
+// no verdict onto its calls: its shards were joined with the gotestsum
+// stream when the baseline report was produced, and the same join has to
+// happen here. Without it every baseline call classifies as failed, the
+// baseline reaches nothing, and the superset check passes against nothing,
+// which is exactly the silence it exists to refuse. A baseline whose calls
+// already carry verdicts, the way the harness writes them, needs no stream
+// and is left alone; one that carries none and has no stream is refused
+// rather than compared vacuously.
+func joinBaselineResults(runtimes []*runtimeRecords) error {
+	for _, rt := range runtimes {
+		if baselineJudged(rt) {
+			continue
+		}
+		path := rt.dir + baselineResultsSuffix
+		results, err := readResults(path)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("%s: %w (looked for %s)", rt.dir, errBaselineUnjudged, path)
+			}
+			return fmt.Errorf("%s: %w", rt.dir, err)
+		}
+		joinResults(rt, results)
+	}
+	return nil
+}
+
+// baselineJudged reports whether any call of the runtime carries a verdict.
+// One is enough to say the shards were written with verdicts: a recorder
+// that writes them writes them on every call.
+func baselineJudged(rt *runtimeRecords) bool {
+	for _, call := range rt.calls {
+		if call.TestStatus != "" {
+			return true
+		}
+	}
+	return false
+}
 
 // reachedKey is one runtime x surface x mode x action x credit a passing test
 // reached, which is the unit the superset check compares.
@@ -60,7 +115,7 @@ func compareBaseline(current, baseline *classification, baselineDir string) *bas
 	now := reachedSet(current)
 	result := &baselineResult{BaselineDirectory: baselineDir, BaselineReached: len(before), Reached: len(now)}
 	for key := range before {
-		if !now[key] {
+		if !satisfied(now, key) {
 			result.Lost = append(result.Lost, key.String())
 		}
 	}
@@ -71,4 +126,37 @@ func compareBaseline(current, baseline *classification, baselineDir string) *bas
 	}
 	sort.Strings(result.Lost)
 	return result
+}
+
+// satisfied reports whether the run reached what one baseline key says the
+// old suite reached.
+//
+// A credit is its own key, and most are not interchangeable: a refusal, an
+// error path and a preview each show a behavior a successful call shows
+// nothing about. The two that say only "the action ran and answered" are
+// ordered, though. A cleanup credit is that answer made after the test
+// body, a sweep credit that answer made with no assertion on it, and an
+// asserted credit that answer with the test's assertion behind it, so each
+// is met by itself or by the stronger ones. Without this, the old suite's
+// habit of deleting in a cleanup what its body had already deleted, and
+// counting GitLab's answer as an ok, would be a credit the port could only
+// keep by repeating the habit.
+func satisfied(now map[reachedKey]bool, key reachedKey) bool {
+	if now[key] {
+		return true
+	}
+	switch key.credit {
+	case creditCleanup:
+		return now[key.with(creditSweep)] || now[key.with(creditAsserted)]
+	case creditSweep:
+		return now[key.with(creditAsserted)]
+	default:
+		return false
+	}
+}
+
+// with returns the key with another credit, for the lookup of a stronger one.
+func (k reachedKey) with(credit credit) reachedKey {
+	k.credit = credit
+	return k
 }

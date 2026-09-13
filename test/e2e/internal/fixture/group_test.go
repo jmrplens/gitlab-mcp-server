@@ -112,3 +112,12 @@ func TestGroupOf_Fields_ReadsWhatATestNeeds(t *testing.T) {
 		t.Errorf("groupOf() = %+v, want %+v", got, want)
 	}
 }
+
+// TestGroupIDParam_SpellsTheIDAsTheSchemaDeclaresIt pins the spelling of a
+// group ID for a group_id declared a string, the twin of the project's:
+// the individual surface refuses a number against that schema.
+func TestGroupIDParam_SpellsTheIDAsTheSchemaDeclaresIt(t *testing.T) {
+	if got, want := (Group{ID: 71}).IDParam(), "71"; got != want {
+		t.Errorf("IDParam() = %q, want %q", got, want)
+	}
+}

@@ -24,8 +24,9 @@ import (
 // TestPreviews_Sweep previews every mutating action whose required parameters
 // bind from the World, on the dynamic, meta and individual surfaces.
 //
-// Replaces: the safe-mode coverage the old suite held to two hand-picked
-// actions in TestSafeMode and TestSafeModeDynamicSurface.
+// It widens what TestModes_Safe replaced: the old suite held its safe-mode
+// coverage to two hand-picked actions in TestSafeMode and
+// TestSafeModeDynamicSurface, and this drives every mutating one.
 func TestPreviews_Sweep(t *testing.T) {
 	e := harness.New(t)
 	world := fixture.SharedWorld(e)

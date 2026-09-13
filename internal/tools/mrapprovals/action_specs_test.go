@@ -4,6 +4,7 @@ package mrapprovals
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -177,6 +178,83 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 			assertRichDiscoveryMeta(t, tool, spec)
 		})
 	}
+}
+
+// TestActionSpecs_RuleSchemas_RequireOnlyWhatTheAPIDemands pins the
+// required list of the rule create and update schemas to the fields GitLab
+// itself demands, and holds every optional field out of it.
+//
+// It exists because the individual surface validates arguments against
+// the published schema before any handler runs, and a field the generator
+// marked required by default refused every create that named no source rule
+// and no approvers: the licensed end-to-end run found
+// gitlab_mr_approval_rule_create answering "missing properties:
+// approval_project_rule_id, user_ids, group_ids" on the individual surface
+// while the two dispatcher surfaces, which decode the arguments directly,
+// ran the same call.
+func TestActionSpecs_RuleSchemas_RequireOnlyWhatTheAPIDemands(t *testing.T) {
+	byTool := approvalSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, approvalActionHandler())))
+
+	cases := []struct {
+		tool     string
+		required []string
+		optional []string
+	}{
+		{
+			tool:     "gitlab_mr_approval_rule_create",
+			required: []string{"project_id", "merge_request_iid", "name", "approvals_required"},
+			optional: []string{"approval_project_rule_id", "user_ids", "group_ids"},
+		},
+		{
+			tool:     "gitlab_mr_approval_rule_update",
+			required: []string{"project_id", "merge_request_iid", "approval_rule_id"},
+			optional: []string{"name", "approvals_required", "user_ids", "group_ids"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.tool, func(t *testing.T) {
+			// The individual projection, not the route's own schema: the
+			// projection reflects its required list from the input type, and
+			// that is the list the surface validates arguments against.
+			tool, err := toolutil.IndividualToolFromActionSpec(byTool[tc.tool], toolutil.IndividualToolProjectionOptions{})
+			if err != nil {
+				t.Fatalf("IndividualToolFromActionSpec(%s) error: %v", tc.tool, err)
+			}
+			schema, ok := tool.InputSchema.(map[string]any)
+			if !ok {
+				t.Fatalf("%s input schema is %T, want map[string]any", tc.tool, tool.InputSchema)
+			}
+			required := schemaRequiredFields(schema)
+			for _, field := range tc.required {
+				if !slices.Contains(required, field) {
+					t.Errorf("%s does not require %q; required = %v", tc.tool, field, required)
+				}
+			}
+			for _, field := range tc.optional {
+				if slices.Contains(required, field) {
+					t.Errorf("%s requires %q, which GitLab treats as optional; required = %v", tc.tool, field, required)
+				}
+			}
+		})
+	}
+}
+
+// schemaRequiredFields reads the required list of an input schema, which
+// the generator writes as []string and a round trip through JSON as []any.
+func schemaRequiredFields(schema map[string]any) []string {
+	switch required := schema["required"].(type) {
+	case []string:
+		return required
+	case []any:
+		fields := make([]string, 0, len(required))
+		for _, raw := range required {
+			if field, ok := raw.(string); ok {
+				fields = append(fields, field)
+			}
+		}
+		return fields
+	}
+	return nil
 }
 
 // assertRichDiscoveryMeta asserts that an action spec carries non-generic

@@ -74,6 +74,11 @@ type stubGitLab struct {
 	runners []*gl.Runner
 	// state is what the World's readers see, keyed by the request path.
 	state map[string]any
+	// graphqlAnswers are answered one per document, the last repeating,
+	// each the raw body of a GraphQL response.
+	graphqlAnswers []string
+	// graphqlDocuments records every document the stub was sent.
+	graphqlDocuments []string
 
 	server *httptest.Server
 }
@@ -104,6 +109,7 @@ func newStubGitLab(t *testing.T) (*stubGitLab, *gitlabclient.Client) {
 	mux.HandleFunc("/api/v4/projects/{id}/issues/{iid}", stub.stateAnswer)
 	mux.HandleFunc("/api/v4/projects/{id}/labels/{label}", stub.stateAnswer)
 	mux.HandleFunc("/api/v4/projects/{id}/milestones/{milestone}", stub.stateAnswer)
+	mux.HandleFunc("/api/graphql", stub.graphql)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("stub GitLab: unexpected %s %s", r.Method, r.URL.Path)
 		http.NotFound(w, r)
@@ -421,6 +427,26 @@ func (s *stubGitLab) stateAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeError(w, http.StatusNotFound, "404 Not Found")
+}
+
+// graphql answers the next scripted body to any document, recording the
+// document it was sent.
+func (s *stubGitLab) graphql(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var document struct {
+		Query string `json:"query"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&document); err != nil {
+		writeError(w, http.StatusBadRequest, "malformed document: "+err.Error())
+		return
+	}
+	s.graphqlDocuments = append(s.graphqlDocuments, document.Query)
+	body := nextStatus(&s.graphqlAnswers)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(body))
 }
 
 // nextStatus pops the next status of a sequence, keeping the last one.

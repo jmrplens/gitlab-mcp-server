@@ -176,6 +176,68 @@ func NewToken(e *harness.Env, user User, scopes ...string) Token {
 	return token
 }
 
+// GroupToken is a group access token a builder minted, and the bot user
+// GitLab created to hold it.
+type GroupToken struct {
+	// ID is what the group token actions take.
+	ID int64
+	// Value is the secret itself, shown once at creation.
+	Value string
+	// UserID is the bot user the token belongs to, which is what an approval
+	// rule names to make the bot an approver.
+	UserID int64
+	// GroupID is the group the token was minted in.
+	GroupID int64
+}
+
+// NewGroupToken mints a group access token at accessLevel with the given
+// scopes and registers its revocation on the Env. With no scopes, "api" is
+// assumed.
+//
+// It is the one way to get a bot user out of GitLab without an administrator,
+// and the one credential some endpoints accept: resetting a merge request's
+// approvals is refused to a person and allowed to a project or group bot,
+// so a test of that action runs a session on this token.
+func NewGroupToken(e *harness.Env, group Group, accessLevel gl.AccessLevelValue, scopes ...string) GroupToken {
+	e.T.Helper()
+
+	if len(scopes) == 0 {
+		scopes = []string{"api"}
+	}
+	name := e.Name("grptok")
+	expiry := gl.ISOTime(time.Now().Add(tokenLifetime))
+
+	token, err := retryTransient(e, "create group token "+name, createRetries, func() (GroupToken, error) {
+		created, _, err := e.Client().GL().GroupAccessTokens.CreateGroupAccessToken(group.ID, &gl.CreateGroupAccessTokenOptions{
+			Name:        new(name),
+			Scopes:      &scopes,
+			AccessLevel: new(accessLevel),
+			ExpiresAt:   &expiry,
+		}, gl.WithContext(e.Ctx))
+		if err != nil {
+			return GroupToken{}, err
+		}
+		if created.Token == "" {
+			return GroupToken{}, fmt.Errorf("group token %q was created without a value", name)
+		}
+		return GroupToken{ID: created.ID, Value: created.Token, UserID: created.UserID, GroupID: group.ID}, nil
+	})
+	if err != nil {
+		e.T.Fatalf("minting a group token in group %d: %v", group.ID, err)
+	}
+
+	e.Defer("group token "+name, func(ctx context.Context) error {
+		ctx, cancel := withCleanupTimeout(ctx)
+		defer cancel()
+		_, revokeErr := e.Client().GL().GroupAccessTokens.RevokeGroupAccessToken(group.ID, token.ID, gl.WithContext(ctx))
+		if revokeErr != nil && !IsStatus(revokeErr, http.StatusNotFound) {
+			return fmt.Errorf("revoking group token %d of group %d: %w", token.ID, group.ID, revokeErr)
+		}
+		return nil
+	})
+	return token
+}
+
 // SSHPublicKey generates a fresh ED25519 key pair and returns the public half
 // in authorized_keys form, for a deploy key or a user key. The private half
 // is discarded: nothing in a test ever connects with it.

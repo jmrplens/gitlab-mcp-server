@@ -26,8 +26,9 @@ import (
 // TestResources_Sweep reads every static resource and every bindable template
 // the full-capability server serves.
 //
-// Replaces: the resource coverage the old suite held to a handful of URIs in
-// its capability tests.
+// It replaces no old test by name: the old suite held its resource coverage
+// to a handful of URIs in its capability tests, which the port of those
+// tests names.
 func TestResources_Sweep(t *testing.T) {
 	e := harness.New(t)
 	world := fixture.SharedWorld(e)

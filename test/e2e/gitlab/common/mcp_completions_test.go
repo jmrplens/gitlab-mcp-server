@@ -23,8 +23,8 @@ import (
 // TestCompletions_Sweep drives a completion for every prompt argument and
 // every resource template variable the full-capability server serves.
 //
-// Replaces: the completion coverage the old suite had none of, since no
-// TestMain session drove completions.
+// It replaces no old test: the old suite had no completion coverage, since
+// no TestMain session drove completions.
 func TestCompletions_Sweep(t *testing.T) {
 	e := harness.New(t)
 	s := e.On(harness.SurfaceDynamic)
