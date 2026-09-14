@@ -593,6 +593,14 @@ func (s *Session) send(id ActionID, call toolCall, opts callOptions) callResult 
 		if answer.err == nil || !retryable(answer, s.conn) || attempt == callRetries-1 {
 			return answer
 		}
+		// A retry is another call and the token is the same, so whatever the
+		// failed attempt reported is still in the collector and would be read
+		// as the answering attempt's. The sequence would then restart from a
+		// lower value and a scenario asserting a monotonic one would fail on
+		// a transport hiccup. Only the attempt that answers keeps its notes.
+		if opts.progressToken != "" {
+			s.conn.progress.expect(opts.progressToken)
+		}
 		// A child that died takes its pipe with it, so reconnecting is the
 		// only thing that can make the next attempt different.
 		if !s.conn.alive() {

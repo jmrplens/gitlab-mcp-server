@@ -417,6 +417,10 @@ func TestSession_HTTPTransport_StartsAndAnswers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an HTTP session was refused: %v", err)
 	}
+	// This session is the test's own rather than the pool's, so nothing else
+	// ends it: without this the child outlives the stub GitLab it was pointed
+	// at and holds its port for the rest of the package.
+	t.Cleanup(conn.close)
 	if conn.cfg.Transport != TransportHTTP {
 		t.Errorf("the session runs on %q, want %q: it was downgraded rather than refused",
 			conn.cfg.Transport, TransportHTTP)

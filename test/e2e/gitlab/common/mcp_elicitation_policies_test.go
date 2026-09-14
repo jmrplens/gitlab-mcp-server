@@ -98,8 +98,13 @@ func TestElicitation_None_FailsClosedOnAFlowThatNeedsIt(t *testing.T) {
 		Arguments: map[string]any{"project_id": project.IDParam()},
 	})
 	if err != nil {
-		// A protocol error is an acceptable refusal too: what matters is that
-		// the flow did not run.
+		// A JSON-RPC error is an acceptable refusal, but only when it is this
+		// refusal. Accepting every error would accept a transport failure or
+		// a child that died as proof of failing closed, which is the one
+		// thing this scenario exists to demonstrate.
+		if !containsAny(strings.ToLower(err.Error()), "elicit", "capability", "gitlab_issue") {
+			t.Fatalf("%s failed with an error that is not a refusal to elicit: %v", interactiveIssueCreateTool, err)
+		}
 		return
 	}
 	if result == nil || !result.IsError {

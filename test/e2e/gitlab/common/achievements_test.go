@@ -130,11 +130,15 @@ func TestAchievement_Lifecycle_CreateAwardReorderRevokeDelete(t *testing.T) {
 	})
 
 	t.Run("the awards are reordered", func(t *testing.T) {
+		// The order asked for is the assertion, not the count: a handler that
+		// dropped user_achievement_ids on the floor would answer the same two
+		// awards in the order they were made, and a cardinality check would
+		// pass on it. The two positions are compared rather than the whole
+		// list, since the answer is the user's awards and this scenario is
+		// not the only thing that may have given them one.
 		reordered := harness.Do[achievements.ReorderOutput](s, actionAchievementUserAchievementReord,
 			map[string]any{"user_achievement_ids": []int64{secondAward, firstAward}})
-		if len(reordered.UserAchievements) < 2 {
-			t.Errorf("the reorder answered %d awards, want the set it was given", len(reordered.UserAchievements))
-		}
+		assertAwardOrder(t, reordered.UserAchievements, secondAward, firstAward)
 	})
 
 	t.Run("an award is revoked and kept", func(t *testing.T) {
@@ -185,6 +189,32 @@ func awardAchievement(t *testing.T, s *harness.Session, achievementID, userID in
 		t.Fatalf("award answered %+v, want an award with an ID of its own", awarded.UserAchievement)
 	}
 	return awarded.UserAchievement.ID
+}
+
+// assertAwardOrder fails unless the answer carries both awards with the
+// earlier argument first, which is the order the reorder asked for.
+func assertAwardOrder(t *testing.T, awards []achievements.UserAchievement, wantFirst, wantSecond int64) {
+	t.Helper()
+
+	first, second := awardPosition(awards, wantFirst), awardPosition(awards, wantSecond)
+	switch {
+	case first < 0 || second < 0:
+		t.Errorf("the reorder answered %+v, want it to carry awards %d and %d", awards, wantFirst, wantSecond)
+	case first > second:
+		t.Errorf("award %d is at position %d and award %d at %d, want the order the call asked for",
+			wantFirst, first, wantSecond, second)
+	}
+}
+
+// awardPosition returns where an award sits in an answer, or -1 when the
+// answer does not carry it.
+func awardPosition(awards []achievements.UserAchievement, id int64) int {
+	for position, award := range awards {
+		if award.ID == id {
+			return position
+		}
+	}
+	return -1
 }
 
 // listsAchievement reports whether a listing carries the given definition.

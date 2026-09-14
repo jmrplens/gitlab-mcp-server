@@ -158,8 +158,9 @@ packages of the rebuilt suite against the real binary: there is no Enterprise
 build tag, and the package decides the runtime, so `ee` refuses an unlicensed
 instance before it writes anything while `common` runs its Free actions on
 the licensed catalog too. `make test-e2e-docker` is now the CE run under its
-older name: the suite under `test/e2e/suite` is superseded and nothing runs
-it any more.
+older name: the suite under `test/e2e/suite` is superseded, so no default or
+release gate runs it, and the only way to is to ask for it from a manual
+dispatch of the E2E workflow with `legacy_suite=true`.
 After a successful activation-code run, the setup script exports the generated
 license key to `test/e2e/.enterprise-license` with owner-only permissions. Future
 runs prefer that ignored local cache and install it through the License API, so

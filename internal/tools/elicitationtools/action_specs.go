@@ -150,7 +150,7 @@ func releaseCreateDescription() string {
 }
 
 func projectCreateDescription() string {
-	return "Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the project. Declining an optional prompt continues with that field unset.\n\n" +
+	return "Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the project. Declining an optional prompt continues with that field unset, except initialize_with_readme, where a decline continues with false.\n\n" +
 		"Input: no fields. Every project detail is elicited. Requires permission to create projects for the authenticated user.\n\n" +
 		descElicitSequenceIntro +
 		"- name (string, required): project display name and (when path is omitted) URL slug.\n" +

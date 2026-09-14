@@ -19,6 +19,7 @@
 package common
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/users"
@@ -65,13 +66,52 @@ func TestHTTPTransport_ServesTheSameSurfaceAsStdio(t *testing.T) {
 	})
 	overStdio := e.On(harness.SurfaceDynamic)
 
-	if got, want := len(overHTTP.Actions()), len(overStdio.Actions()); got != want {
-		t.Errorf("the HTTP session reaches %d actions and the stdio one %d, want one catalog", got, want)
-	}
-	if got, want := len(overHTTP.Tools()), len(overStdio.Tools()); got != want {
-		t.Errorf("the HTTP session serves %d tools and the stdio one %d", got, want)
-	}
+	// The sets rather than their sizes: two catalogs of the same size can be
+	// different catalogs, and a swap of one action for another is exactly the
+	// drift this is here to catch.
+	assertSameSurface(t, "actions", actionNames(overHTTP.Actions()), actionNames(overStdio.Actions()))
+	assertSameSurface(t, "tools", overHTTP.Tools(), overStdio.Tools())
 	if got, want := overHTTP.Tier(), overStdio.Tier(); got != want {
 		t.Errorf("the HTTP session resolved tier %s and the stdio one %s", got, want)
 	}
+}
+
+// assertSameSurface fails when the two transports publish different listings,
+// naming what each has that the other does not rather than only that they
+// differ: the names are what a reader needs to tell a catalog change from a
+// transport defect.
+func assertSameSurface(t *testing.T, what string, overHTTP, overStdio []string) {
+	t.Helper()
+	if only := missingFrom(overStdio, overHTTP); len(only) > 0 {
+		t.Errorf("the HTTP session serves %s the stdio one does not: %v", what, only)
+	}
+	if only := missingFrom(overHTTP, overStdio); len(only) > 0 {
+		t.Errorf("the stdio session serves %s the HTTP one does not: %v", what, only)
+	}
+}
+
+// missingFrom returns the entries of have that want does not carry.
+func missingFrom(want, have []string) []string {
+	present := make(map[string]struct{}, len(want))
+	for _, name := range want {
+		present[name] = struct{}{}
+	}
+	var missing []string
+	for _, name := range have {
+		if _, ok := present[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	slices.Sort(missing)
+	return missing
+}
+
+// actionNames renders a listing of action IDs as the strings a comparison
+// reads.
+func actionNames(actions []harness.ActionID) []string {
+	names := make([]string, 0, len(actions))
+	for _, action := range actions {
+		names = append(names, string(action))
+	}
+	return names
 }

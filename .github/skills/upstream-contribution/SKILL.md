@@ -179,7 +179,7 @@ add     tw::triaged                  10:04:42
 remove  docs-only                    10:05:21  <- recalculated, and withdrawn
 ```
 
-The cost is two things at once. The ready is wasted, and it is rate limited to one per hour per merge request for a non-member, so a retry can cost an hour.
+The cost is two things at once. The ready is wasted, and it is rate-limited to one per hour per merge request for a non-member, so a retry can cost an hour.
 
 And the labeller classified an eleven-file change touching `lib/gitlab/gpg.rb` and nine spec files as `docs-only`, on the strength of its single documentation file. **That label is transitory and what it triggers is not.** It was withdrawn five minutes later when the diff existed and the classification was recomputed, but by then it had already pulled in `~documentation` and `~"tw::triaged"` and had the bot request review from two technical writers, and none of those three were undone. A merge request can therefore end up correctly labelled and still sitting in the wrong review queue, which is the state that is easy to miss because the wrong label is no longer there to explain it.
 

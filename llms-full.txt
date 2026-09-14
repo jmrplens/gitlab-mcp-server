@@ -4388,7 +4388,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Interactive Project Create**
 
-Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the project. Declining an optional prompt continues with that field unset.
+Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the project. Declining an optional prompt continues with that field unset, except initialize_with_readme, where a decline continues with false.
 
 Input: no fields. Every project detail is elicited. Requires permission to create projects for the authenticated user.
 
@@ -19858,7 +19858,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_interactive_project_create
 
-Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the project. Declining an optional prompt continues with that field unset.
+Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the project. Declining an optional prompt continues with that field unset, except initialize_with_readme, where a decline continues with false.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 

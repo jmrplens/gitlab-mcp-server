@@ -112,9 +112,10 @@ tracker.Step(ctx, 4, 4, "Creating the issue...")
 | Token source      | `CallToolRequest.Params.GetProgressToken()` | Provided by the MCP client                 |
 | Error handling    | Silent                                      | Failed notifications logged at debug level |
 | Context awareness | Yes                                         | Returns early if context is canceled       |
-| `--json-response` | Incompatible                                | Progress is undeliverable and is dropped   |
+| `--json-response` | Incompatible under `--stateless`            | Progress is undeliverable and is dropped   |
 
-**`--json-response` turns progress off.** A JSON response body carries one
+**`--json-response` turns progress off in a stateless deployment**, and in a
+stateful one for any request whose client holds no stream open. A JSON response body carries one
 response and no out-of-band frames, so a notification raised while a call is
 running has nowhere to travel: the SDK routes it to the standalone SSE stream,
 which a stateless deployment never connects because it answers `GET` with `405`.

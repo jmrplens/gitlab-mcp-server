@@ -89,11 +89,18 @@ func TestDependencyFirewall_Evaluate_RefusesWithTheFlagOffAndAnswersWithItOn(t *
 	t.Run("with the flag on the evaluation answers a verdict", func(t *testing.T) {
 		out, err := harness.Try[dependencyfirewall.EvaluatePackageOutput](s, actionDependencyFirewallEvaluate, params)
 		if err != nil {
-			// The endpoint is an experiment: a release that defines the flag
-			// and still answers 404 for a project with no firewall configured
-			// is a fact about the instance rather than about the action, and
-			// the message says which it was.
-			e.T.Logf("the evaluation was refused with %s on: %v", dependencyfirewall.FeatureFlag, err)
+			// One refusal is a fact about the instance rather than about the
+			// action, and only one: the endpoint is an experiment, so a
+			// release that defines the flag and still answers not-found for a
+			// project with no firewall configured says nothing about this
+			// handler. Everything else is a finding, and accepting it here is
+			// how a transport failure, a credential refused or a decoder that
+			// stopped matching would pass as a verdict nobody read.
+			if !mentionsAny(err.Error(), dependencyfirewall.FeatureFlag, "not found") {
+				e.T.Fatalf("the evaluation failed for a reason that is not the documented not-found: %v", err)
+			}
+			e.T.Logf("the evaluation answered the not-found card with %s on, so this release serves no firewall for a "+
+				"project without one: %v", dependencyfirewall.FeatureFlag, err)
 			return
 		}
 		if !containsOutcome(out.Outcome) {

@@ -898,8 +898,8 @@ func acceptedValue(property map[string]any) any {
 	case "integer", "number":
 		return 0
 	case "array":
-		if len(options) > 0 {
-			return []any{options[0]}
+		if choices := itemOptions(property, options); len(choices) > 0 {
+			return []any{choices[0]}
 		}
 		return []any{}
 	default:
@@ -908,6 +908,25 @@ func acceptedValue(property map[string]any) any {
 		}
 		return ""
 	}
+}
+
+// itemOptions reads the values a multi-select property admits.
+//
+// The specification puts them on the item schema, so a server that follows it
+// sends `items.enum` and nothing on the array itself; reading only the array's
+// own enum answered such a property with an empty selection, which a required
+// multi-select refuses. The array's enum is still accepted, since a schema
+// this policy can read is better answered than declined.
+func itemOptions(property map[string]any, own []any) []any {
+	items, isObject := property["items"].(map[string]any)
+	if !isObject {
+		return own
+	}
+	options, isList := items["enum"].([]any)
+	if !isList || len(options) == 0 {
+		return own
+	}
+	return options
 }
 
 // client returns the live MCP session.

@@ -180,6 +180,26 @@ func newChildEnv(s settings, root string, extra map[string]string) childEnv {
 	}
 }
 
+// environWithoutCredential returns the child's environment with the token
+// left out, which is the environment an HTTP child is given.
+//
+// It is a separate call rather than a flag on the struct because the two
+// transports want opposite things and both are right: a stdio child holds the
+// credential, and an HTTP one holds none and reads each caller's out of the
+// request. Given both, the child could serve a call whose header never
+// reached the request and the scenario that checks exactly that would pass on
+// the environment instead.
+func (c childEnv) environWithoutCredential() []string {
+	environ := c.environ()
+	kept := environ[:0]
+	for _, entry := range environ {
+		if !strings.HasPrefix(entry, envGitLabToken+"=") {
+			kept = append(kept, entry)
+		}
+	}
+	return kept
+}
+
 // environ returns the child's environment as exec wants it, sorted so two
 // children built from the same inputs are started identically.
 func (c childEnv) environ() []string {
@@ -306,7 +326,7 @@ func (p *serverProcess) httpTransport(ctx context.Context, addr string) (mcp.Tra
 		"--http", "--http-addr", addr,
 		"--gitlab-url", p.env.GitLabURL,
 	)
-	cmd.Env = p.env.environ()
+	cmd.Env = p.env.environWithoutCredential()
 	cmd.Dir = p.env.Root
 	cmd.Stderr = sink
 
@@ -322,6 +342,12 @@ func (p *serverProcess) httpTransport(ctx context.Context, addr string) (mcp.Tra
 	p.reap(cmd, exited)
 
 	if err := waitForHTTPServer(ctx, addr, exited); err != nil {
+		// The context outlives a readiness failure, since it is the session's
+		// and not this call's, so nothing else would end a child that started
+		// and never listened. Left alone it holds the port for the rest of
+		// the run, and the next session asking for a free one can be handed
+		// this same address.
+		stopChild(cmd, exited)
 		return nil, fmt.Errorf("%w\nserver stderr:\n%s", err, p.stderrTail())
 	}
 	return &mcp.StreamableClientTransport{
@@ -404,7 +430,28 @@ const (
 	// httpProbeTimeout bounds one probe, so a hung connection does not eat the
 	// whole start budget.
 	httpProbeTimeout = 5 * time.Second
+	// childStopTimeout bounds the wait for a child that was killed to be
+	// collected, so a process that somehow ignores the kill costs one second
+	// rather than the rest of the run.
+	childStopTimeout = 1 * time.Second
 )
+
+// stopChild ends a child that started and never became usable, and waits for
+// the reaper to record it.
+//
+// A kill rather than an interrupt, because the child never reached the state
+// where it answers anything and there is nothing to shut down gracefully;
+// Windows has no interrupt to send it either.
+func stopChild(cmd *exec.Cmd, exited <-chan struct{}) {
+	if cmd.Process == nil {
+		return
+	}
+	_ = cmd.Process.Kill()
+	select {
+	case <-exited:
+	case <-time.After(childStopTimeout):
+	}
+}
 
 // reap starts the one goroutine that collects the child.
 //

@@ -36,6 +36,20 @@ func firstLine(text string) string {
 	return line
 }
 
+// mentionsAny reports whether text carries any of the substrings, without
+// regard to case. It is the question a test asks before accepting a refusal:
+// a scenario that accepts every error accepts a transport failure as the
+// refusal it was looking for.
+func mentionsAny(text string, substrings ...string) bool {
+	lowered := strings.ToLower(text)
+	for _, want := range substrings {
+		if strings.Contains(lowered, strings.ToLower(want)) {
+			return true
+		}
+	}
+	return false
+}
+
 // containsID reports whether an ID is among those listed. It is a name for
 // the question every listing here is asked, so an assertion reads as one.
 func containsID(ids []int64, want int64) bool {

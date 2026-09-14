@@ -1042,7 +1042,26 @@ func TestAcceptElicitation_FillsWhatTheSchemaRequires(t *testing.T) {
 			want: map[string]any{"selection": "first"},
 		},
 		{
+			// The specification puts a multi-select's values on the item
+			// schema, so this is the shape a server that follows it sends.
 			name: "many of an enum",
+			schema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"selections": map[string]any{
+						"type":  "array",
+						"items": map[string]any{"type": "string", "enum": []any{"first", "second"}},
+					},
+				},
+				"required": []any{"selections"},
+			},
+			want: map[string]any{"selections": []any{"first"}},
+		},
+		{
+			// And the shape that puts them on the array itself is answered
+			// too rather than declined, since a selection this policy can
+			// read is better answered than left empty.
+			name: "many of an enum written on the array",
 			schema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
