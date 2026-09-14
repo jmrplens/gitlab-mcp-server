@@ -158,3 +158,21 @@ const (
 	actionRunnerEnableProject  harness.ActionID = "runner.enable_project"
 	actionRunnerDisableProject harness.ActionID = "runner.disable_project"
 )
+
+// Achievements, whose twelve actions are the whole of a GraphQL domain: a
+// definition and an award of it are two records with two IDs, and the last
+// three act on the award rather than on the definition.
+const (
+	actionAchievementCreate                harness.ActionID = "achievement.create"
+	actionAchievementUpdate                harness.ActionID = "achievement.update"
+	actionAchievementDelete                harness.ActionID = "achievement.delete"
+	actionAchievementList                  harness.ActionID = "achievement.list"
+	actionAchievementAward                 harness.ActionID = "achievement.award"
+	actionAchievementRevoke                harness.ActionID = "achievement.revoke"
+	actionAchievementRecipients            harness.ActionID = "achievement.recipients"
+	actionAchievementUniqueUsers           harness.ActionID = "achievement.unique_users"
+	actionAchievementUserList              harness.ActionID = "achievement.user_list"
+	actionAchievementUserAchievementUpdate harness.ActionID = "achievement.user_achievement_update"
+	actionAchievementUserAchievementDelete harness.ActionID = "achievement.user_achievement_delete"
+	actionAchievementUserAchievementReord  harness.ActionID = "achievement.user_achievement_reorder"
+)
