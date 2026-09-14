@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -176,7 +177,13 @@ func TestProjectExport_DownloadAndImport_RoundTrips(t *testing.T) {
 func assertImportFinished(e *harness.Env, s *harness.Session, projectID int64) {
 	e.T.Helper()
 
-	params := map[string]any{"project_id": projectID}
+	// The ID as a string, like every other call in this file: project_id is
+	// toolutil.StringOrInt, whose own comment says it exists because models
+	// send numeric IDs as JSON numbers, and the SDK validates the argument
+	// against the published schema ("type": "string") before that tolerance
+	// can run. Passing the number here is refused client-side in a
+	// millisecond and never reaches the server.
+	params := map[string]any{"project_id": strconv.FormatInt(projectID, 10)}
 	last := "none"
 	// The read is allowed to fail transiently while GitLab settles, and an
 	// earlier version treated every failure as transient and dropped it. A run

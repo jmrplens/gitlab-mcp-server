@@ -192,6 +192,13 @@ func createUserThroughTheServer(e *harness.Env, s *harness.Session, username str
 func awaitUserRemovals(e *harness.Env, userIDs []int64) {
 	e.T.Helper()
 
+	// GitLab removes a rejected or deleted account in a background job, so the
+	// queue is drained before the wait rather than polled through: on a Docker
+	// instance carrying a whole suite's worth of jobs the removal can sit
+	// behind them for longer than any window this test would be right to keep
+	// open. This is the same drain the fixtures do before a readiness wait.
+	fixture.DrainSidekiq(e.Ctx, e.Client())
+
 	remaining := slices.Clone(userIDs)
 	err := harness.Poll(e.Ctx, userDeletionInterval, userDeletionWait, func() (bool, string, error) {
 		remaining = slices.DeleteFunc(remaining, func(userID int64) bool { return userIsGone(e, userID) })
