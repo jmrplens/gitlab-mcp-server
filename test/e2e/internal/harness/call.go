@@ -117,6 +117,10 @@ type callOptions struct {
 	// ctx is the context this call runs under, when the caller has one of
 	// its own. Empty means the Env's, which is what a test body has.
 	ctx context.Context
+	// progressToken asks the server to report progress for this call, and is
+	// what the notifications are filed under. Empty asks for none, which is
+	// what every ordinary call does.
+	progressToken string
 	// expectation is what the caller asked to happen, in the record's
 	// vocabulary. Each verb sets it rather than the caller, because the verb
 	// is the assertion: Do expects success, Refused expects a class.
@@ -575,7 +579,14 @@ func (s *Session) send(id ActionID, call toolCall, opts callOptions) callResult 
 	var answer callResult
 	for attempt := range callRetries {
 		started := time.Now()
-		result, err := s.conn.client().CallTool(ctx, &mcp.CallToolParams{Name: call.tool, Arguments: call.arguments})
+		callParams := &mcp.CallToolParams{Name: call.tool, Arguments: call.arguments}
+		if opts.progressToken != "" {
+			// The specification sends the token in _meta, and the server only
+			// reports progress for a call that asked; SetProgressToken is the
+			// SDK's spelling of that key.
+			callParams.SetProgressToken(opts.progressToken)
+		}
+		result, err := s.conn.client().CallTool(ctx, callParams)
 		answer = classify(result, err)
 		answer.duration = time.Since(started)
 

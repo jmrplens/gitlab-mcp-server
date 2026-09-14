@@ -118,6 +118,7 @@ func TestServerConfig_Invalid_IsRefusedWithAReason(t *testing.T) {
 		{name: "scripted with no responder", config: ServerConfig{Elicitation: ElicitationScripted}, want: "needs a Responder"},
 		{name: "http transport", config: ServerConfig{Transport: TransportHTTP}, want: "not wired yet"},
 		{name: "unknown transport", config: ServerConfig{Transport: TransportKind("carrier pigeon")}, want: "unknown transport"},
+		{name: "unknown tier pin", config: ServerConfig{Tier: TierPin("enterprise")}, want: "unknown tier pin"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -154,6 +155,7 @@ func TestServerConfig_Key_SeparatesWhatMakesADifferentServer(t *testing.T) {
 		{name: "capabilities", config: ServerConfig{Capabilities: CapabilitiesMinimal}, url: "https://gitlab.test", token: "token-a"},
 		{name: "exclusions", config: ServerConfig{ExcludeTools: []string{"gitlab_issue"}}, url: "https://gitlab.test", token: "token-a"},
 		{name: "elicitation", config: ServerConfig{Elicitation: ElicitationAutoAccept}, url: "https://gitlab.test", token: "token-a"},
+		{name: "tier pin", config: ServerConfig{Tier: TierUltimate}, url: "https://gitlab.test", token: "token-a"},
 		{name: "instance", config: ServerConfig{}, url: "https://other.test", token: "token-a"},
 		{name: "credential", config: ServerConfig{}, url: "https://gitlab.test", token: "token-b"},
 	}
@@ -235,6 +237,19 @@ func TestServerConfig_ChildVariables_AreTheOnesTheBinaryReads(t *testing.T) {
 				"GITLAB_MCP_EXCLUDE_TOOLS": "gitlab_issue,gitlab_project_delete",
 			},
 		},
+		{
+			// The absence of the variable is what asks the child to detect the
+			// tier, so an empty value here is the assertion and not a gap: a
+			// GITLAB_MCP_TIER of "" would be a configuration error.
+			name:   "no tier pinned",
+			config: ServerConfig{},
+			want:   map[string]string{"GITLAB_MCP_TIER": ""},
+		},
+		{
+			name:   "pinned tier",
+			config: ServerConfig{Tier: TierUltimate},
+			want:   map[string]string{"GITLAB_MCP_TIER": "ultimate"},
+		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -262,6 +277,7 @@ func TestServerConfig_Label_NamesTheShapeWithoutHashes(t *testing.T) {
 		{name: "excluded", config: ServerConfig{ExcludeTools: []string{"gitlab_issue"}}, want: "dynamic-default-full-excluded"},
 		{name: "auto-accepting", config: ServerConfig{Elicitation: ElicitationAutoAccept}, want: "dynamic-default-full-auto-accept"},
 		{name: "private", config: ServerConfig{Private: true}, private: 3, want: "dynamic-default-full-private3"},
+		{name: "pinned tier", config: ServerConfig{Tier: TierPremium}, want: "dynamic-default-full-premium"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -269,6 +285,58 @@ func TestServerConfig_Label_NamesTheShapeWithoutHashes(t *testing.T) {
 				t.Errorf("label = %q, want %q", label, testCase.want)
 			}
 		})
+	}
+}
+
+// TestServerConfig_ResolvedTier_PrefersThePinOverDetection pins the one answer
+// both the child's catalog and the harness's expectation of it are built from.
+//
+// The two have to agree or nothing else works: the child registers the tier it
+// was given and the harness compares what it served against a catalog it
+// assembles here, so a resolution that differed would fail every session that
+// pinned a tier with a served-set mismatch rather than a message about tiers.
+func TestServerConfig_ResolvedTier_PrefersThePinOverDetection(t *testing.T) {
+	cases := []struct {
+		name     string
+		pin      TierPin
+		detected edition.Tier
+		want     edition.Tier
+	}{
+		{name: "no pin keeps detection", pin: TierDetect, detected: edition.Ultimate, want: edition.Ultimate},
+		{name: "no pin keeps a detected free", pin: TierDetect, detected: edition.Free, want: edition.Free},
+		{name: "free pins below detection", pin: TierFree, detected: edition.Ultimate, want: edition.Free},
+		{name: "premium pins above detection", pin: TierPremium, detected: edition.Free, want: edition.Premium},
+		{name: "ultimate pins above detection", pin: TierUltimate, detected: edition.Free, want: edition.Ultimate},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			cfg := ServerConfig{Tier: testCase.pin}.normalized()
+			if tier := cfg.resolvedTier(testCase.detected); tier != testCase.want {
+				t.Errorf("resolvedTier(%s) = %s, want %s", testCase.detected, tier, testCase.want)
+			}
+		})
+	}
+}
+
+// TestAllTierPins_AreEveryPinAndNotTheAbsenceOfOne checks the sweep list a
+// scenario ranges over: every pin the configuration accepts, and never
+// TierDetect, which is not a tier but the absence of a pin.
+func TestAllTierPins_AreEveryPinAndNotTheAbsenceOfOne(t *testing.T) {
+	pins := AllTierPins()
+
+	if slices.Contains(pins, TierDetect) {
+		t.Errorf("AllTierPins carries TierDetect: %v", pins)
+	}
+	for _, pin := range pins {
+		if _, ok := edition.ParseTier(pin.String()); !ok {
+			t.Errorf("AllTierPins carries %q, which the binary's own parser refuses", pin)
+		}
+		if err := (ServerConfig{Tier: pin}).normalized().validate(); err != nil {
+			t.Errorf("AllTierPins carries %q, which the harness refuses: %v", pin, err)
+		}
+	}
+	if want := []TierPin{TierFree, TierPremium, TierUltimate}; !slices.Equal(pins, want) {
+		t.Errorf("AllTierPins = %v, want %v", pins, want)
 	}
 }
 

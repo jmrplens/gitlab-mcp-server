@@ -552,10 +552,11 @@ func outcomeOf(method string, result mcp.Result, err error) string {
 func (c *sessionConn) recordReceiving() mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
-			switch method {
-			case methodElicit:
-				c.recordElicitation(req)
-			case methodResourceUpdated:
+			// An elicitation is deliberately not handled here. The SDK
+			// delivers one to ClientOptions.ElicitationHandler rather than
+			// through this chain, so a case for it would never fire; it is
+			// recorded by [sessionConn.recordingElicitationHandler] instead.
+			if method == methodResourceUpdated {
 				c.recordResourceUpdate(req)
 			}
 			return next(ctx, method, req)

@@ -13,6 +13,7 @@
 package harness
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -944,4 +945,216 @@ func TestFlushRunRecords_WritesTheLinesThatBelongToThePackage(t *testing.T) {
 		}
 	}
 	t.Errorf("the shard holds no run line; %d records were written", len(records))
+}
+
+// TestRecordingElicitationHandler_RecordsBeforeAnsweringAndKeepsTheAnswer pins
+// where an elicitation is written down.
+//
+// The recorder used to look for one in the receiving middleware, on method
+// elicitation/create. The SDK never delivers it there: an elicitation reaches
+// ClientOptions.ElicitationHandler instead, so the middleware's case never
+// fired and every interactive flow ran uncounted. The coverage report read
+// zero elicitations while the flows themselves passed, which is the worst
+// shape a gap can take. The wrapper is the fix, and this holds it in place:
+// the request is recorded, and the policy's own answer still reaches the
+// server unchanged.
+func TestRecordingElicitationHandler_RecordsBeforeAnsweringAndKeepsTheAnswer(t *testing.T) {
+	conn := &sessionConn{}
+
+	var seen int
+	answered := &mcp.ElicitResult{Action: "accept", Content: map[string]any{"title": "from the policy"}}
+	wrapped := conn.recordingElicitationHandler(func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		seen++
+		return answered, nil
+	})
+	if wrapped == nil {
+		t.Fatal("wrapping a policy handler produced nil, so the session would advertise no elicitation capability")
+	}
+
+	got, err := wrapped(t.Context(), &mcp.ElicitRequest{Params: &mcp.ElicitParams{Message: "confirm?"}})
+	if err != nil {
+		t.Fatalf("the wrapped handler answered an error: %v", err)
+	}
+	if seen != 1 {
+		t.Errorf("the policy handler ran %d times, want exactly 1", seen)
+	}
+	if got != answered {
+		t.Errorf("the wrapper answered %+v, want the policy's own result", got)
+	}
+}
+
+// TestRecordingElicitationHandler_NoPolicy_StaysNil checks that the wrapper
+// does not manufacture a handler.
+//
+// ElicitationNone means the client advertises no elicitation capability, which
+// is what makes the server fail closed instead of prompting. A wrapper that
+// returned a non-nil function for a nil policy would advertise the capability
+// and quietly turn that scenario into a different one.
+func TestRecordingElicitationHandler_NoPolicy_StaysNil(t *testing.T) {
+	conn := &sessionConn{}
+	if wrapped := conn.recordingElicitationHandler(nil); wrapped != nil {
+		t.Error("wrapping no policy produced a handler, so the client would advertise elicitation it cannot serve")
+	}
+}
+
+// TestAcceptElicitation_FillsWhatTheSchemaRequires pins the auto-accept
+// policy against the four shapes this server asks for.
+//
+// The policy answered with empty content until 2026-09-14, which could never
+// work: the SDK validates the accepted content against the requested schema
+// before it applies the schema's defaults, and every schema the server sends
+// marks its one property required, so an empty accept failed the call with
+// InvalidParams instead of approving anything. The cases below are the real
+// schemas from internal/elicitation/schemas.go.
+func TestAcceptElicitation_FillsWhatTheSchemaRequires(t *testing.T) {
+	cases := []struct {
+		name   string
+		schema any
+		want   map[string]any
+	}{
+		{
+			name: "the destructive-action confirmation",
+			schema: map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"confirmed": map[string]any{"type": "boolean", "default": false}},
+				"required":   []any{"confirmed"},
+			},
+			want: map[string]any{"confirmed": true},
+		},
+		{
+			name: "free text",
+			schema: map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"title": map[string]any{"type": "string"}},
+				"required":   []any{"title"},
+			},
+			want: map[string]any{"title": ""},
+		},
+		{
+			name: "one of an enum",
+			schema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"selection": map[string]any{"type": "string", "enum": []any{"first", "second"}},
+				},
+				"required": []any{"selection"},
+			},
+			want: map[string]any{"selection": "first"},
+		},
+		{
+			name: "many of an enum",
+			schema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"selections": map[string]any{"type": "array", "enum": []any{"first", "second"}},
+				},
+				"required": []any{"selections"},
+			},
+			want: map[string]any{"selections": []any{"first"}},
+		},
+		{
+			name:   "a schema this policy cannot read",
+			schema: "not an object",
+			want:   map[string]any{},
+		},
+		{
+			name: "a property the schema does not describe",
+			schema: map[string]any{
+				"type":       "object",
+				"properties": map[string]any{},
+				"required":   []any{"mystery"},
+			},
+			want: map[string]any{"mystery": ""},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			result, err := acceptElicitation(t.Context(), &mcp.ElicitRequest{
+				Params: &mcp.ElicitParams{RequestedSchema: testCase.schema},
+			})
+			if err != nil {
+				t.Fatalf("acceptElicitation() error = %v, want nil", err)
+			}
+			if result.Action != "accept" {
+				t.Errorf("action = %q, want accept", result.Action)
+			}
+			if fmt.Sprint(result.Content) != fmt.Sprint(testCase.want) {
+				t.Errorf("content = %v, want %v", result.Content, testCase.want)
+			}
+		})
+	}
+}
+
+// TestAcceptElicitation_NoParams_AcceptsWithNothing checks the policy answers
+// an acceptance rather than a nil result when there is no schema to read.
+func TestAcceptElicitation_NoParams_AcceptsWithNothing(t *testing.T) {
+	result, err := acceptElicitation(t.Context(), &mcp.ElicitRequest{})
+	if err != nil {
+		t.Fatalf("acceptElicitation() error = %v, want nil", err)
+	}
+	if result.Action != "accept" || len(result.Content) != 0 {
+		t.Errorf("acceptElicitation() = %+v, want an empty acceptance", result)
+	}
+}
+
+// TestProgressCollector_FilesOnlyWhatWasAskedFor pins the collector's rules.
+//
+// A session is shared by many calls and the server may report progress for one
+// this harness never asked about, so a collector that kept everything would
+// grow for the life of the session and hand one call another's notifications.
+func TestProgressCollector_FilesOnlyWhatWasAskedFor(t *testing.T) {
+	collector := newProgressCollector()
+	collector.expect("wanted")
+
+	collector.deliver(&mcp.ProgressNotificationParams{ProgressToken: "wanted", Progress: 1, Total: 3, Message: "first"})
+	collector.deliver(&mcp.ProgressNotificationParams{ProgressToken: "unasked", Progress: 9})
+	collector.deliver(&mcp.ProgressNotificationParams{ProgressToken: "wanted", Progress: 2, Total: 3})
+	collector.deliver(&mcp.ProgressNotificationParams{ProgressToken: 42, Progress: 7})
+	collector.deliver(nil)
+
+	notes := collector.collect("wanted")
+	if len(notes) != 2 {
+		t.Fatalf("collected %d note(s), want the 2 filed under the token: %+v", len(notes), notes)
+	}
+	if notes[0].Progress != 1 || notes[0].Total != 3 || notes[0].Message != "first" {
+		t.Errorf("first note = %+v, want the fields the server sent", notes[0])
+	}
+	if notes[1].Progress != 2 {
+		t.Errorf("second note = %+v, want the second delivery", notes[1])
+	}
+	if again := collector.collect("wanted"); len(again) != 0 {
+		t.Errorf("collecting twice answered %+v, want nothing: the token is done", again)
+	}
+	if unasked := collector.collect("unasked"); len(unasked) != 0 {
+		t.Errorf("a token nothing expected collected %+v, want nothing", unasked)
+	}
+}
+
+// TestProgressCollector_NoNotifications_CollectsEmpty checks that a call which
+// asked for progress and got none reads as empty rather than as a failure.
+//
+// An action that reports no progress is not a broken action; what a scenario
+// makes of the emptiness is its own business.
+func TestProgressCollector_NoNotifications_CollectsEmpty(t *testing.T) {
+	collector := newProgressCollector()
+	collector.expect("quiet")
+	if notes := collector.collect("quiet"); len(notes) != 0 {
+		t.Errorf("collected %+v, want nothing", notes)
+	}
+}
+
+// TestNewProgressToken_IsUniqueAndRecognisable checks the tokens two calls
+// mint cannot collide, since a repeat would mix their notifications.
+func TestNewProgressToken_IsUniqueAndRecognisable(t *testing.T) {
+	seen := map[string]bool{}
+	for range 64 {
+		token := newProgressToken()
+		if !strings.HasPrefix(token, "progress-") {
+			t.Fatalf("token %q does not carry the prefix that identifies it in a record", token)
+		}
+		if seen[token] {
+			t.Fatalf("token %q was minted twice", token)
+		}
+		seen[token] = true
+	}
 }

@@ -17,6 +17,8 @@ package harness
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"sync"
 	"time"
 
@@ -276,4 +278,117 @@ func (n *updateNotifier) watching(uri string) int {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	return len(n.watchers[uri])
+}
+
+// ProgressNote is one progress notification a call provoked.
+type ProgressNote struct {
+	// Progress is how far the work had got when the server sent this.
+	Progress float64
+	// Total is what Progress counts towards, zero when the server sent none.
+	Total float64
+	// Message is the server's own description of the step, if it sent one.
+	Message string
+}
+
+// progressCollector keeps the progress notifications of the calls that asked
+// for them, keyed by the token the call minted.
+//
+// It collects rather than fans out, unlike [updateNotifier]: a subscription's
+// update arrives long after the call that subscribed returned, so a test waits
+// for it, while progress arrives while its own call is still in flight and is
+// read once that call comes back.
+type progressCollector struct {
+	mu    sync.Mutex
+	notes map[string][]ProgressNote
+}
+
+// newProgressCollector returns a collector holding nothing.
+func newProgressCollector() *progressCollector {
+	return &progressCollector{notes: map[string][]ProgressNote{}}
+}
+
+// expect starts collecting for one token.
+func (c *progressCollector) expect(token string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.notes[token] = nil
+}
+
+// deliver files one notification under the token it names.
+//
+// A notification for a token nothing is collecting is dropped: the server is
+// free to send progress for a call this harness did not ask about, and a
+// collector that grew for those would leak for the life of the session.
+func (c *progressCollector) deliver(params *mcp.ProgressNotificationParams) {
+	if params == nil {
+		return
+	}
+	token, isString := params.ProgressToken.(string)
+	if !isString {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, expected := c.notes[token]; !expected {
+		return
+	}
+	c.notes[token] = append(c.notes[token], ProgressNote{
+		Progress: params.Progress,
+		Total:    params.Total,
+		Message:  params.Message,
+	})
+}
+
+// collect returns what arrived for one token and stops collecting for it.
+func (c *progressCollector) collect(token string) []ProgressNote {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	notes := c.notes[token]
+	delete(c.notes, token)
+	return notes
+}
+
+// WithProgress runs one action asking the server to report progress, and
+// returns the answer beside the notifications that arrived for it.
+//
+// It is the only way a test sees the progress capability end to end. The
+// handlers' own trackers are unit tested in process, which proves the tracker
+// fires and nothing about whether a notification reaches a client: the token
+// has to survive _meta, the dispatcher, the handler and the transport, and on
+// HTTP it has to reach the session the call came in on.
+//
+// The call is otherwise an ordinary [Do]: it fails the test when the action
+// does, and the notifications are whatever the server chose to send, which for
+// an action that reports none is an empty slice rather than a failure. What a
+// scenario asserts about them is its own business.
+func WithProgress[O any](s *Session, id ActionID, params map[string]any, opts ...CallOption) (O, []ProgressNote) {
+	s.env.T.Helper()
+
+	token := newProgressToken()
+	s.conn.progress.expect(token)
+	defer func() { s.conn.progress.collect(token) }()
+
+	output := Do[O](s, id, params, append(opts, withProgressToken(token))...)
+	return output, s.conn.progress.collect(token)
+}
+
+// withProgressToken is the internal option WithProgress sets. It is not
+// exported because a token nobody collects would be asked for and dropped.
+func withProgressToken(token string) CallOption {
+	return func(o *callOptions) { o.progressToken = token }
+}
+
+// newProgressToken mints a token unique within this run.
+//
+// crypto/rand for the same reason the trace ids use it: the tokens of two
+// sessions must not collide, and a counter would have to be shared across
+// them to promise that.
+func newProgressToken() string {
+	var raw [8]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		// rand.Read never returns an error on any supported platform, and a
+		// token that repeats would only mix two calls' notifications.
+		return "progress-fallback"
+	}
+	return "progress-" + hex.EncodeToString(raw[:])
 }
