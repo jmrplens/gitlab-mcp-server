@@ -106,7 +106,7 @@ readable without opening the tracker:
 | 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | No | No | No | No | Yes |
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | No | No | No | No | Yes |
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | No | No | No | No | None |
-| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 6 open | **8 of 14, v3.1.0 to v3.6.0** | No | Yes |
+| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 4 open | **10 of 14, v3.1.0 to v3.9.0** | No | Yes |
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | No | No | No | No | Partial |
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | No | No | No | No | Partial |
 | 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | No | No | No | No | Yes |
@@ -893,9 +893,12 @@ of change whose test is one assertion on the built URL.
   where the maintainers had said there was no good way to detect this drift.
   Every merge request references it with a non-closing `Related to`, so the
   first merge does not close the umbrella.
-- **In review**: `!3041`, `!3044`, `!3048`, `!3050`, `!3051` and `!3052` are
-  open, each with a reviewer assigned since 2026-09-12; `!3041` has its one
-  review comment (an experimental-field disclaimer) applied.
+- **In review**: four are open. `!3051` (the eight `Namespace` fields) is
+  approved and waiting on a maintainer; `!3048` (the seven `Hook` fields) has
+  a reviewer LGTM, with both of its threads answered and resolved, one of them
+  by adding the `custom_webhook_template` assertion to the edit test; `!3050`
+  and `!3052` have had a reviewer assigned since 2026-09-12 and no comment
+  since.
 - **Merged**: `!3042` (`BroadcastMessage.Color`) in **v3.1.0**, tagged on
   2026-09-09 eighteen minutes after the merge; then `!3040`
   (`Appearance.SiteName`) and `!3046` (the `GroupSCIMIdentity` json tag) in
@@ -904,10 +907,13 @@ of change whose test is one assertion on the built URL.
   (`GroupServiceAccount.PublicEmail` and `UnconfirmedEmail`) in **v3.4.0**,
   all on 2026-09-10; then `!3053` (the four `Snippet` fields) in **v3.5.0**
   and `!3049` (`LastUsedAt` and `UsageType` on both deploy key structs) in
-  **v3.6.0**, both on 2026-09-11. Do not read a merge as a release: `!3040` sat
+  **v3.6.0**, both on 2026-09-11; then `!3044` (`LicenseTemplate.Popular`) in
+  **v3.7.0** and `!3041` (`Topic.OrganizationID`) in **v3.9.0**, merged on
+  2026-09-12 and 2026-09-13. Do not read a merge as a release: `!3040` sat
   merged and in no tag for hours, so the version is read from which tags
-  contain the merge commit rather than from the newest tag. Six releases in
-  two days is why: the newest tag was wrong for five of these six.
+  contain the merge commit rather than from the newest tag. Nine releases in
+  five days is why: the newest tag was wrong for five of the first six, and
+  `!3044` is in three tags while `!3041` is in one.
 - **Blocking**: no.
 - **Workaround**: yes. Each field is read from the captured response beside
   the SDK's decode, through the readers in `internal/toolutil/sent_shapes.go`.
