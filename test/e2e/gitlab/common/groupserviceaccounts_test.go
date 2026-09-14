@@ -35,7 +35,7 @@ func activeTokenIDs(tokens []groupserviceaccounts.PATOutput) []int64 {
 // account per surface, in a group of the surface's own so the empty listing
 // before is exact, through its whole life and its token's.
 //
-// Replaces: TestMeta_GroupServiceAccounts
+// Replaces: TestMeta_GroupServiceAccounts, TestMeta_GroupServiceAccountPATRotate
 func TestGroupServiceAccounts_Lifecycle_AccountAndToken(t *testing.T) {
 	e := harness.New(t, harness.Needs(harness.NeedAdmin))
 

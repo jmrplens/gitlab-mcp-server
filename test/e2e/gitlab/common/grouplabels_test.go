@@ -33,7 +33,7 @@ func labelNames(labels []grouplabels.Output) []string {
 // deletes it, and leaves the plain one for the test's own cleanup to
 // delete through the server, as an agent undoing its work would.
 //
-// Replaces: TestMeta_GroupLabelArchive
+// Replaces: TestMeta_GroupLabelArchive, TestMeta_GroupLabels
 func TestGroupLabels_Archived_RoundTripsThroughCreateListAndUpdate(t *testing.T) {
 	e := harness.New(t)
 
