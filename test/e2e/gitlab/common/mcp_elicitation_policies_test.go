@@ -30,15 +30,20 @@ import (
 // TestElicitation_AutoAccept_AnswersEveryPromptFromItsSchema drives the guided
 // project flow with a client that accepts each request without being scripted.
 //
-// The project flow is the one that can be completed this way: every prompt it
-// raises either has a value its own schema admits (a visibility enum, the
-// readme boolean) or is optional. The issue flow cannot, since it asks for a
-// title and an empty one is refused by GitLab, which is why the scripted
-// scenario exists beside this one.
-//
-// What this catches is the class the fix was for: an auto-accepted answer that
+// What this covers is the class the fix was for: an auto-accepted answer that
 // does not satisfy the requested schema never reaches the handler at all, so
-// the flow fails in the client's own validation and the server looks innocent.
+// the flow dies inside the client's own validation and the server looks
+// innocent. The proof that it does not happen is that the call reaches GitLab,
+// whatever GitLab then makes of it.
+//
+// It deliberately does NOT assert that the flow completes. An earlier version
+// of this comment claimed the project flow is the one that can be finished
+// this way, because every prompt has a value its own schema admits. That is
+// false and the suite found it: `name` is a required string, a policy that
+// answers from the schema alone has nothing to put there, and GitLab refuses
+// the empty one. No client that accepts without being asked can invent a
+// project name, so this is a fact about auto-accept rather than a defect, and
+// the scripted scenario beside this one is what covers a completed flow.
 func TestElicitation_AutoAccept_AnswersEveryPromptFromItsSchema(t *testing.T) {
 	e := harness.New(t)
 
@@ -61,17 +66,24 @@ func TestElicitation_AutoAccept_AnswersEveryPromptFromItsSchema(t *testing.T) {
 	if result == nil {
 		t.Fatal("the auto-accepting flow answered nothing")
 	}
-	// The flow may still end in a refusal GitLab decided, a name collision
-	// being the obvious one, and that is not what this covers. What it must
-	// never be is a failure to answer the prompts: that is the client's own
-	// schema validation refusing an empty answer, and it names the parameters.
-	if result.IsError {
-		text := rawText(result)
-		if containsAny(text, "InvalidParams", "invalid params", "required") {
-			t.Errorf("the auto-accepted answers did not satisfy the requested schema: %s", text)
-		} else {
-			t.Logf("the flow ran and GitLab refused the creation, which this does not cover: %s", text)
-		}
+	// A refusal GitLab decided is the expected ending here and is not what
+	// this covers. The two are told apart by where the message comes from
+	// rather than by a word in it: an answer that reached the API names the
+	// request, and the previous version of this check keyed on "required",
+	// which the server's own hint carries ("all required fields are valid"),
+	// so a perfectly good run was reported as a schema violation.
+	if !result.IsError {
+		return
+	}
+	text := rawText(result)
+	switch {
+	case containsAny(text, "/api/v4/", "400", "bad request"):
+		t.Logf("the answers satisfied every requested schema and GitLab refused the creation, "+
+			"which is where an unscripted client ends on a flow that needs a name: %s", firstLine(text))
+	case containsAny(text, "InvalidParams", "invalid params", `validating "content"`, "jsonschema"):
+		t.Errorf("the auto-accepted answers did not satisfy the requested schema, so no call was made: %s", text)
+	default:
+		t.Errorf("the flow failed for a reason this scenario cannot classify: %s", text)
 	}
 }
 

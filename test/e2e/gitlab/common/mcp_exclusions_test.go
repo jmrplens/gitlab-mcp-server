@@ -112,15 +112,23 @@ func TestExcludeTools_LeavesEverythingElseAlone(t *testing.T) {
 	}
 }
 
-// TestExcludeTools_TheWithheldActionIsNamedAsWithheld checks the message rather
-// than the absence.
+// TestExcludeTools_TheExcludedActionIsUnknownRatherThanWithheld checks the
+// message rather than the absence, and checks it says less than a withheld
+// action's does.
 //
-// A dispatcher asked for an action it does not have used to answer "unknown
-// action, did you mean ..." with a list of real read-only actions, which reads
-// to a model as a server that lacks the capability rather than one whose
-// operator removed it. The distinction is the whole point of recording what
-// each filter took out.
-func TestExcludeTools_TheWithheldActionIsNamedAsWithheld(t *testing.T) {
+// The two look alike and are opposite decisions. An action a token's scope or
+// a protective mode removed is named as withheld, with the cause, because a
+// model reading "unknown action, did you mean ..." concludes the server lacks
+// the capability rather than that something narrowed it. An action
+// --exclude-tools removed is the other way round: `ExcludedByName` is kept out
+// of the withheld lists on purpose (internal/tools/catalog_filter.go:28), since
+// naming it would leak the operator's configuration and contradict the
+// exclusion that operator asked for.
+//
+// So the assertion here is that the refusal gives nothing away: it must not
+// name the exclusion, the tool, or the configuration. This is the scenario
+// that would fail if somebody "fixed" the message by merging the two lists.
+func TestExcludeTools_TheExcludedActionIsUnknownRatherThanWithheld(t *testing.T) {
 	e := harness.New(t)
 	s := e.Session(harness.ServerConfig{
 		Surface:      harness.SurfaceDynamic,
@@ -137,7 +145,14 @@ func TestExcludeTools_TheWithheldActionIsNamedAsWithheld(t *testing.T) {
 	if result == nil || !result.IsError {
 		t.Fatalf("an excluded action answered %s, want a refusal", rawText(result))
 	}
-	if text := rawText(result); !containsAny(text, "excluded", "not available", "withheld", "unavailable") {
-		t.Errorf("the refusal is %q, want it to say the action was withheld rather than that it is unknown", text)
+	text := rawText(result)
+	if !containsAny(text, "unknown action") {
+		t.Errorf("the refusal is %q, want the answer an action the dispatcher does not have gets", text)
+	}
+	// The leak this protects against: a refusal that says the operator removed
+	// something tells a caller what the deployment is configured to withhold.
+	if containsAny(text, "exclude", "excluded", "withheld", "removed by", excludedGroup) {
+		t.Errorf("the refusal is %q, and it names the exclusion or the excluded tool: "+
+			"an excluded action must be indistinguishable from one the catalog never had", text)
 	}
 }
