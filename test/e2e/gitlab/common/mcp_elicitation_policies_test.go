@@ -16,10 +16,12 @@
 package common
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
@@ -108,6 +110,107 @@ func TestElicitation_None_FailsClosedOnAFlowThatNeedsIt(t *testing.T) {
 	// the scripted action rather than concluding the capability is missing.
 	if text := rawText(result); !containsAny(text, "elicitation", "gitlab_issue") {
 		t.Errorf("the refusal is %q, want it to name elicitation or the non-interactive alternative", text)
+	}
+}
+
+// TestElicitation_InteractiveMRCreate drives the guided merge request flow,
+// the second of the four and the one with the most prompts.
+//
+// It needs a source branch that differs from the target, which is the one
+// precondition GitLab checks before anything the flow asked for matters: a
+// merge request between a branch and itself is refused with a validation
+// error, and the flow would then look broken for a reason that is not the
+// flow's.
+func TestElicitation_InteractiveMRCreate(t *testing.T) {
+	e := harness.New(t)
+	project := fixture.NewProject(e, fixture.WithNamePrefix("elicitmr"))
+	source := fixture.NewBranch(e, project, e.Name("elicited"))
+
+	s := e.Session(harness.ServerConfig{
+		Surface:      harness.SurfaceIndividual,
+		Elicitation:  harness.ElicitationScripted,
+		Responder:    branchAwareElicitResponder(source.Name, project.DefaultBranch),
+		Capabilities: harness.CapabilitiesMinimal,
+		Private:      true,
+	})
+
+	result, err := s.Raw(&mcp.CallToolParams{
+		Name:      "gitlab_interactive_mr_create",
+		Arguments: map[string]any{"project_id": project.IDParam()},
+	})
+	if err != nil {
+		t.Fatalf("the guided merge request flow failed: %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("the guided merge request flow answered an error: %s", rawText(result))
+	}
+}
+
+// TestElicitation_InteractiveReleaseCreate drives the guided release flow.
+//
+// The flow's own description says the tag must already exist, so one is made
+// first: a release for a tag GitLab does not have is refused, and the refusal
+// would be about the tag rather than about the elicitation this covers.
+func TestElicitation_InteractiveReleaseCreate(t *testing.T) {
+	e := harness.New(t)
+	project := fixture.NewProject(e, fixture.WithNamePrefix("elicitrel"))
+	tagName := e.Name("v0")
+
+	if _, _, err := e.Client().GL().Tags.CreateTag(project.ID, &gl.CreateTagOptions{
+		TagName: &tagName,
+		Ref:     &project.DefaultBranch,
+	}); err != nil {
+		t.Fatalf("creating the tag the release flow needs: %v", err)
+	}
+
+	s := e.Session(harness.ServerConfig{
+		Surface:      harness.SurfaceIndividual,
+		Elicitation:  harness.ElicitationScripted,
+		Responder:    tagAwareElicitResponder(tagName),
+		Capabilities: harness.CapabilitiesMinimal,
+		Private:      true,
+	})
+
+	result, err := s.Raw(&mcp.CallToolParams{
+		Name:      "gitlab_interactive_release_create",
+		Arguments: map[string]any{"project_id": project.IDParam()},
+	})
+	if err != nil {
+		t.Fatalf("the guided release flow failed: %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("the guided release flow answered an error: %s", rawText(result))
+	}
+}
+
+// branchAwareElicitResponder answers the merge request flow's two branch
+// prompts with real branches and everything else from the schema.
+//
+// Answering them from the schema like the rest would offer a title-shaped
+// string, and GitLab refuses a merge request whose source branch does not
+// exist — a refusal about the answer rather than about the flow.
+func branchAwareElicitResponder(source, target string) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+	return func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		content := scriptedElicitContent(req)
+		if _, asked := content["source_branch"]; asked {
+			content["source_branch"] = source
+		}
+		if _, asked := content["target_branch"]; asked {
+			content["target_branch"] = target
+		}
+		return &mcp.ElicitResult{Action: "accept", Content: content}, nil
+	}
+}
+
+// tagAwareElicitResponder answers the release flow's tag prompt with a tag the
+// project has, for the reason above.
+func tagAwareElicitResponder(tag string) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+	return func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		content := scriptedElicitContent(req)
+		if _, asked := content["tag_name"]; asked {
+			content["tag_name"] = tag
+		}
+		return &mcp.ElicitResult{Action: "accept", Content: content}, nil
 	}
 }
 
