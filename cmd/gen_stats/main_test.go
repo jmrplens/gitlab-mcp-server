@@ -80,7 +80,7 @@ func TestFake(t *testing.T) {
 // fakeE2ETest is the fixture's build-tagged end-to-end test with one defer.
 const fakeE2ETest = `//go:build e2e
 
-package suite
+package gitlab
 
 import "testing"
 
@@ -192,7 +192,7 @@ func TestCollectStats_TrackedFileShapes_SkipOrFail(t *testing.T) {
 			name: "deleted on disk is skipped",
 			mutate: func(t *testing.T, root string) {
 				t.Helper()
-				if err := os.Remove(filepath.Join(root, "test", "e2e", "suite", "flow_test.go")); err != nil {
+				if err := os.Remove(filepath.Join(root, "test", "e2e", "gitlab", "flow_test.go")); err != nil {
 					t.Fatalf("remove: %v", err)
 				}
 			},
@@ -785,11 +785,11 @@ func TestScanGoDecls_UnparseableFile_Reports(t *testing.T) {
 // unit test file, and one end-to-end test file.
 func fakeRepositoryFiles() map[string]string {
 	return map[string]string{
-		readmePath:                    fakeReadme,
-		"go.mod":                      fakeGoMod,
-		"internal/a/a.go":             fakeSource,
-		"internal/a/a_test.go":        fakeUnitTest,
-		"test/e2e/suite/flow_test.go": fakeE2ETest,
+		readmePath:                     fakeReadme,
+		"go.mod":                       fakeGoMod,
+		"internal/a/a.go":              fakeSource,
+		"internal/a/a_test.go":         fakeUnitTest,
+		"test/e2e/gitlab/flow_test.go": fakeE2ETest,
 	}
 }
 

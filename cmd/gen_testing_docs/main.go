@@ -35,7 +35,7 @@ const (
 	cmdPattern      = "./cmd/..."
 	internalPattern = "./internal/..."
 	e2ePattern      = "./test/e2e/..."
-	e2eSuiteRun     = "./test/e2e/suite/"
+	e2eSuiteRun     = "./test/e2e/gitlab/..."
 	e2ePath         = "test/e2e"
 	e2eDisplay      = "test/e2e/"
 	// e2eTags reveal the build-tagged e2e packages to `go list`. Every file in
@@ -51,8 +51,8 @@ const (
 	// the Makefile, or the tooling silently measures a smaller project than
 	// the one in the repository. None of these tags gates anything outside
 	// test/e2e, so cmd/ and internal/ resolve identically with them. Every
-	// file under test/e2e/suite, test/e2e/gitlab and test/e2e/internal is
-	// behind `e2e` alone, so this list reveals all of them at once; the
+	// file under test/e2e/gitlab and test/e2e/internal is behind `e2e`
+	// alone, so this list reveals both of them at once; the
 	// counts below still come from reading each package directory rather
 	// than from the file lists `go list` returns.
 	e2eTags = "e2e,orbitlive,httpe2e,stdioe2e,collectore2e"
@@ -313,7 +313,7 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 
 	metrics := repositoryMetrics{
 		NamingCounts: map[string]int{},
-		E2ENote:      "E2E tests are counted statically from test/e2e because two of the four modules need something this run does not have: test/e2e/suite needs a provisioned GitLab instance and test/e2e/orbit needs a gitlab.com token for the Knowledge Graph API, while test/e2e/http and test/e2e/stdio need neither and run on every CI push. The count here is of `_test.go` files; the README's end-to-end row counts every tracked `.go` file under test/e2e, so it is higher by the non-test helpers (`doc.go`, `name_helpers.go`).",
+		E2ENote:      "E2E tests are counted statically from test/e2e because two of the five modules need something this run does not have: test/e2e/gitlab needs a provisioned GitLab instance and test/e2e/orbit needs a gitlab.com token for the Knowledge Graph API, while test/e2e/http, test/e2e/stdio and test/e2e/collector need neither and the first two run on every CI push. The count here is of `_test.go` files; the README's end-to-end row counts every tracked `.go` file under test/e2e, so it is higher by the non-test helpers, which are each module's `doc.go` plus the fixture and harness libraries under test/e2e/internal.",
 	}
 
 	coverageByPackage, recorded, err := collectCoverage(ctx, opts)
@@ -366,7 +366,10 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 	}
 
 	if opts.includeE2ERun {
-		if _, e2eErr := runGo(ctx, []string{"test", "-tags", "e2e", "-timeout", opts.timeout.String(), e2eSuiteRun}); e2eErr != nil {
+		// -p 1 because the runtime packages share one GitLab instance: run in
+		// parallel they provision against each other and fail for reasons that
+		// have nothing to do with the server.
+		if _, e2eErr := runGo(ctx, []string{"test", "-tags", "e2e", "-p", "1", "-timeout", opts.timeout.String(), e2eSuiteRun}); e2eErr != nil {
 			return repositoryMetrics{}, fmt.Errorf("run e2e tests: %w", e2eErr)
 		}
 		metrics.E2ENote = "E2E tests were executed with -tags e2e during this generation run. Coverage tables still report unit-test coverage for ./internal/... and ./cmd/...."
@@ -1027,7 +1030,7 @@ func renderDistribution(metrics repositoryMetrics) string {
 		{layerCore, "Core packages", "shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities"},
 		{layerToolsOrchestration, "Tools orchestration", "registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests"},
 		{layerToolSubpackage, fmt.Sprintf("Tool sub-packages (%d)", countTestedPackages(packagesByLayer(metrics.Packages, layerToolSubpackage))), "domain-specific GitLab tool handlers"},
-		{layerE2E, "E2E integration", "build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance"},
+		{layerE2E, "E2E integration", "build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance"},
 		{layerCmd, "cmd packages", "server entry point and developer command utilities"},
 	}
 	for _, row := range rows {

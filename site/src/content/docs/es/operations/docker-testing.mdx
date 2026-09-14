@@ -42,7 +42,7 @@ Para ejecutar la cobertura Enterprise/Premium contra GitLab EE, define `ENTERPRI
 make test-e2e-ee    # o su nombre anterior, make test-e2e-docker-enterprise
 ```
 
-Ese objetivo ejecuta los paquetes `common` y `ee` de la suite reconstruida bajo `test/e2e/gitlab` contra el binario real del servidor sobre stdio. No existe un build tag Enterprise: cada archivo lleva solo `e2e`, y el paquete decide el runtime, así que `ee` rechaza una instancia sin licencia antes de escribir nada mientras `common` ejecuta también sus acciones Free sobre el catálogo con licencia. La suite bajo `test/e2e/suite` sigue en `make test-e2e-docker` hasta que se porte su mitad CE.
+Ese objetivo ejecuta los paquetes `common` y `ee` de la suite bajo `test/e2e/gitlab` contra el binario real del servidor sobre stdio. No existe un build tag Enterprise: cada archivo lleva solo `e2e`, y el paquete decide el runtime, así que `ee` rechaza una instancia sin licencia antes de escribir nada mientras `common` ejecuta también sus acciones Free sobre el catálogo con licencia. La mitad sin licencia es `make test-e2e-ce`, de la que `make test-e2e-docker` es un nombre antiguo.
 
 Cuando `ENTERPRISE_LICENSE` contiene un activation code de 24 caracteres, la primera ejecución correcta exporta la licencia reutilizable generada a `test/e2e/.enterprise-license`. Las siguientes ejecuciones Enterprise prefieren ese cache local ignorado por Git y lo instalan mediante la License API, así no consumen otra vez el activation code.
 
@@ -57,7 +57,7 @@ docker compose -f test/e2e/docker-compose.yml up -d
 ./test/e2e/scripts/register-runner.sh
 
 set -a && source test/e2e/.env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/suite/
+go test -v -tags e2e -p 1 -timeout 2700s ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
 
 docker compose -f test/e2e/docker-compose.yml down -v
 ```
@@ -70,13 +70,12 @@ GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
 env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml down -v
 ```
 
-Para ejecutar solo el flujo de herramientas dinámicas después de preparar el entorno:
+Cada escenario se ejecuta sobre las superficies dynamic, meta e individual como subtests, así que una superficie se ejecuta sola nombrando el subtest en vez de una familia de tests:
 
 ```bash
-E2E_MODE=docker \
-  go test -v -tags e2e -timeout 600s \
-  -run '^TestDynamicToolSurface' \
-  ./test/e2e/suite/
+go test -v -tags e2e -p 1 -timeout 2700s \
+  -run '/dynamic$' \
+  ./test/e2e/gitlab/common/
 ```
 
 ## Cuándo usarlo

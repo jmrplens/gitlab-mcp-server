@@ -30,7 +30,7 @@ gitlab-mcp-server/
 │   ├── audit_doc_coverage/      # docs/reference/tools/*.md vs catalog coverage gaps (DOC-002)
 │   ├── audit_doc_tool_names/    # Every gitlab_* name the docs mention is a registered tool
 │   ├── audit_dynamic_aliases/   # Dynamic alias collision governance
-│   ├── audit_e2e_gaps/          # Catalog actions the e2e suite never exercises
+│   ├── audit_e2e_coverage/      # What the e2e suite dispatched, the catalog actions it never reached, and the push-time gate over the typed action ids
 │   ├── audit_edition_tier/      # Doc-grounded Free/Premium/Ultimate tier audit
 │   ├── audit_gateway_chars/     # Served text carries no character a gateway validator rejects
 │   ├── audit_install_buttons/   # One-click install buttons decode to one configuration per command
@@ -73,7 +73,7 @@ gitlab-mcp-server/
 │   │   └── ...                  # 178 packages under internal/tools/... in total
 │   ├── resources/               # 45 MCP resource handlers
 │   └── prompts/                 # 37 MCP prompt handlers
-├── test/e2e/                    # End-to-end integration tests (suite/ + infra)
+├── test/e2e/                    # End-to-end integration tests (gitlab/ + internal/ + infra)
 ├── docs/                        # Documentation (this directory)
 ├── plan/                        # Implementation plans
 ├── VERSION                      # Single source of truth for project version
@@ -273,15 +273,15 @@ func TestCreate_Success(t *testing.T) {
 
 ### End-to-End Tests
 
-E2E tests run against a real GitLab instance via in-memory MCP transport (build tag `e2e`):
+E2E tests drive the real `cmd/server` binary over stdio against a real GitLab instance (build tag `e2e`):
 
 ```bash
 make test-e2e
-# or: go test -v -tags e2e -timeout 300s ./test/e2e/suite/
+# or: go test -v -tags e2e -p 1 -timeout 2700s ./test/e2e/gitlab/...
 
 # Compile-only check (no GitLab instance needed)
-go test -tags e2e -c -o NUL ./test/e2e/suite/       # Windows
-go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
+go test -tags e2e -c -o NUL ./test/e2e/gitlab/...       # Windows
+go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...  # Linux
 ```
 
 #### Docker Mode (Ephemeral GitLab)
@@ -306,12 +306,13 @@ GITLAB_MCP_SKIP_TLS_VERIFY=true
 
 #### E2E Test Structure
 
-| File                                | Description                                                     |
-| ----------------------------------- | --------------------------------------------------------------- |
-| `test/e2e/suite/setup_test.go`      | Shared state, MCP server setup, helpers, drainSidekiq           |
-| `test/e2e/suite/fixture_ce_test.go` | Self-contained GitLab CE resource builders                      |
-| `test/e2e/suite/fixture_ee_test.go` | Self-contained GitLab EE resource builders                      |
-| `test/e2e/suite/*_test.go`          | 169 further test files (individual, meta and dynamic workflows) |
+| Path                         | Description                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `test/e2e/internal/harness/` | Starts the real binary over stdio, runs each scenario on all three surfaces, records what it dispatched |
+| `test/e2e/internal/fixture/` | Self-contained GitLab resource builders, each cleaning up after itself                                  |
+| `test/e2e/gitlab/common/`    | Scenarios any instance serves, run on the CE runtime and the licensed one alike                         |
+| `test/e2e/gitlab/ce/`        | What holds only on an unlicensed instance                                                               |
+| `test/e2e/gitlab/ee/`        | Premium and Ultimate scenarios                                                                          |
 
 ## MCP Inspector
 

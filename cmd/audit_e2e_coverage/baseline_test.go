@@ -88,10 +88,10 @@ func TestJoinBaselineResults_UnjudgedShards_TakeTheStreamBeside(t *testing.T) {
 	rt.packages[passed], rt.packages[failed] = "suite", "suite"
 
 	writeFile(t, dir+baselineResultsSuffix, strings.Join([]string{
-		`{"Time":"2026-09-01T10:00:00Z","Action":"run","Package":"example.com/old/test/e2e/suite","Test":"TestOld_Passed"}`,
-		`{"Time":"2026-09-01T10:00:01Z","Action":"pass","Package":"example.com/old/test/e2e/suite","Test":"TestOld_Passed","Elapsed":1}`,
-		`{"Time":"2026-09-01T10:00:02Z","Action":"run","Package":"example.com/old/test/e2e/suite","Test":"TestOld_Failed"}`,
-		`{"Time":"2026-09-01T10:00:03Z","Action":"fail","Package":"example.com/old/test/e2e/suite","Test":"TestOld_Failed","Elapsed":1}`,
+		`{"Time":"2026-09-01T10:00:00Z","Action":"run","Package":"example.com/old/e2e/suite","Test":"TestOld_Passed"}`,
+		`{"Time":"2026-09-01T10:00:01Z","Action":"pass","Package":"example.com/old/e2e/suite","Test":"TestOld_Passed","Elapsed":1}`,
+		`{"Time":"2026-09-01T10:00:02Z","Action":"run","Package":"example.com/old/e2e/suite","Test":"TestOld_Failed"}`,
+		`{"Time":"2026-09-01T10:00:03Z","Action":"fail","Package":"example.com/old/e2e/suite","Test":"TestOld_Failed","Elapsed":1}`,
 		"",
 	}, "\n"))
 
@@ -126,8 +126,8 @@ func TestJoinBaselineResults_StreamFromAnotherRun_Refused(t *testing.T) {
 		{
 			name: "judges other tests only",
 			stream: []string{
-				`{"Time":"2026-09-01T10:00:00Z","Action":"run","Package":"example.com/old/test/e2e/suite","Test":"TestElsewhere"}`,
-				`{"Time":"2026-09-01T10:00:01Z","Action":"pass","Package":"example.com/old/test/e2e/suite","Test":"TestElsewhere","Elapsed":1}`,
+				`{"Time":"2026-09-01T10:00:00Z","Action":"run","Package":"example.com/old/e2e/suite","Test":"TestElsewhere"}`,
+				`{"Time":"2026-09-01T10:00:01Z","Action":"pass","Package":"example.com/old/e2e/suite","Test":"TestElsewhere","Elapsed":1}`,
 			},
 			calls: []string{"TestOld_Passed"},
 			want:  "judged 0 call(s) and left 1 naming a test without a verdict (first: TestOld_Passed)",
@@ -135,8 +135,8 @@ func TestJoinBaselineResults_StreamFromAnotherRun_Refused(t *testing.T) {
 		{
 			name: "judges some of the named tests",
 			stream: []string{
-				`{"Time":"2026-09-01T10:00:00Z","Action":"run","Package":"example.com/old/test/e2e/suite","Test":"TestOld_Passed"}`,
-				`{"Time":"2026-09-01T10:00:01Z","Action":"pass","Package":"example.com/old/test/e2e/suite","Test":"TestOld_Passed","Elapsed":1}`,
+				`{"Time":"2026-09-01T10:00:00Z","Action":"run","Package":"example.com/old/e2e/suite","Test":"TestOld_Passed"}`,
+				`{"Time":"2026-09-01T10:00:01Z","Action":"pass","Package":"example.com/old/e2e/suite","Test":"TestOld_Passed","Elapsed":1}`,
 			},
 			calls: []string{"TestOld_Passed", "TestOld_Missing"},
 			want:  "judged 1 call(s) and left 1 naming a test without a verdict (first: TestOld_Missing)",

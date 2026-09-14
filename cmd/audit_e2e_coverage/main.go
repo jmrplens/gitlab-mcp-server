@@ -82,7 +82,7 @@ func main() {
 	flag.BoolVar(&opts.report, "report", false, "print the gap work list as TSV instead of the JSON report")
 	flag.StringVar(&opts.output, "o", "", "write the JSON report to this path instead of stdout")
 	flag.StringVar(&opts.summary, "summary", "", "write a Markdown summary to this path, or - for stdout, which then carries the summary in place of the JSON")
-	flag.StringVar(&opts.oldSuite, "old-suite", "test/e2e/suite", "the old suite the port map reads Test functions from")
+	flag.StringVar(&opts.oldSuite, "old-suite", "", "the retired suite the port map reads Test functions from; required, since that tree is no longer in this repository")
 	flag.StringVar(&opts.newSuite, "new-suite", gitlabTestDir, "the new suite the port map reads Replaces: lines from")
 	flag.Parse()
 	os.Exit(run(opts, os.Stdout, os.Stderr))
@@ -170,7 +170,15 @@ func printStatic(opts options, result *staticResult, stdout, stderr io.Writer) {
 }
 
 // runPortMap runs -port-map and prints what is unresolved.
+//
+// The retired suite it reads is no longer in this repository, so -old-suite
+// has to name a checkout that still carries it. Saying so is better than
+// reading a path that is not there and reporting every test as dropped.
 func runPortMap(opts options, stdout, stderr io.Writer) int {
+	if opts.oldSuite == "" {
+		fmt.Fprintln(stderr, "audit_e2e_coverage: port map: -old-suite is required: the retired suite was deleted, so point it at a checkout that still has it")
+		return exitUsage
+	}
 	m, err := buildPortMap(filepath.Join(opts.dir, opts.oldSuite), filepath.Join(opts.dir, opts.newSuite), opts.retired, opts.drops)
 	if err != nil {
 		fmt.Fprintln(stderr, "audit_e2e_coverage: port map:", err)

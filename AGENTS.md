@@ -168,7 +168,7 @@ dispatch. `internal/tools/markdown.go` is a thin delegator (~19 lines) to
 - **Build tag**: all E2E tests are gated by `-tags e2e`. The unit test
   suite must still compile when that tag is set.
 - **Compile-only check** (no GitLab required):
-  `go test -tags e2e -c -o /dev/null ./test/e2e/suite/`
+  `go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...`
 - **Self-hosted mode** reads `GITLAB_URL` + `GITLAB_TOKEN` from `.env`.
   Tests create and delete real resources; the user must have permission.
   `make test-e2e` adds a confirmation prompt.
@@ -176,8 +176,7 @@ dispatch. `internal/tools/markdown.go` is a thin delegator (~19 lines) to
   service:
 
   ```bash
-  set -a && source test/e2e/.env.docker && set +a
-  E2E_MODE=docker go test -v -tags e2e -timeout 600s ./test/e2e/suite/
+  make test-e2e-ce   # provisions the stack, runs it, tears it down
   ```
 
   Pipeline/Job tools **only** work in Docker mode (CI runner required).
@@ -192,8 +191,9 @@ dispatch. `internal/tools/markdown.go` is a thin delegator (~19 lines) to
 
   See `docs/development/orbit-fixtures.md` for the fixture layout and
   indexer caveat.
-- **Dynamic-surface only** in Docker mode:
-  `E2E_MODE=docker go test -v -tags e2e -timeout 600s -run '^TestDynamicToolSurface' ./test/e2e/suite/`
+- **The surface is a subtest, not a family**: every scenario runs on
+  dynamic, meta and individual, so `-run 'TestIssue_Lifecycle/dynamic'`
+  is how one surface is driven on its own.
 
 ## Release process
 

@@ -219,7 +219,7 @@ func TestPackageName_ImportPaths_Reduced(t *testing.T) {
 		want       string
 	}{
 		{importPath: "example.com/m/test/e2e/gitlab/common", want: "common"},
-		{importPath: "example.com/m/test/e2e/suite", want: "suite"},
+		{importPath: "example.com/m/test/e2e/ce", want: "ce"},
 		{importPath: "single", want: "single"},
 		{importPath: "", want: ""},
 	}

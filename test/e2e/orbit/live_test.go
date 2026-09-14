@@ -32,7 +32,7 @@
 //
 // The test file uses the external `orbit_test` package so it is
 // co-located with the rest of the e2e surface and can be run or evolved
-// independently of the mock-based e2e suite in test/e2e/suite/.
+// independently of the GitLab suite in test/e2e/gitlab/.
 // See docs/development/orbit-fixtures.md for the fixture layout, the
 // data the fixture-driven subtests expect, and the Orbit indexer
 // eventually-consistent caveat.
@@ -52,7 +52,7 @@ import (
 	// test/e2e/orbit/ (external test package) so it can also be
 	// runnable on its own against any GitLab instance with the
 	// `orbitlive` build tag, without pulling in the full e2e
-	// suite from test/e2e/suite/.
+	// suite from test/e2e/gitlab/.
 	orbit "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/orbit"
 )
 

@@ -667,7 +667,7 @@ func TestCollectMetrics_FakeModule_CountsEveryLayer(t *testing.T) {
 		{key: "tools", layer: layerToolsOrchestration, summary: "Package tools orchestrates the fake catalog.", tests: 1, files: 1},
 		{key: "issues", layer: layerToolSubpackage, summary: "Package issues mirrors a real catalog owner.", tests: 1, files: 1, tools: catalogIssues},
 		{key: "widgets", layer: layerToolSubpackage, summary: "Package documentation unavailable.", tests: 1, files: 1, tools: 3},
-		{key: "test/e2e/suite", layer: layerE2E, summary: "Package documentation unavailable.", tests: 2, files: 1},
+		{key: "test/e2e/gitlab/common", layer: layerE2E, summary: "Package documentation unavailable.", tests: 2, files: 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
@@ -727,7 +727,7 @@ func TestCollectMetrics_FakeModule_RunsCoverageAndE2E(t *testing.T) {
 		{key: "tools", want: "n/a"},
 		{key: "issues", want: "100.0%"},
 		{key: "widgets", want: "66.7%"},
-		{key: "test/e2e/suite", want: "n/a"},
+		{key: "test/e2e/gitlab/common", want: "n/a"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
@@ -766,13 +766,13 @@ func TestCollectMetrics_FakeModuleFailures_ReturnEachError(t *testing.T) {
 	}{
 		{
 			name:    "missing e2e tree",
-			mutate:  func(files map[string]string) { delete(files, "test/e2e/suite/flow_test.go") },
+			mutate:  func(files map[string]string) { delete(files, "test/e2e/gitlab/common/flow_test.go") },
 			opts:    options{skipCoverage: true},
 			wantErr: "list packages",
 		},
 		{
 			name:     "warning row",
-			mutate:   func(files map[string]string) { delete(files, "test/e2e/suite/flow_test.go") },
+			mutate:   func(files map[string]string) { delete(files, "test/e2e/gitlab/common/flow_test.go") },
 			opts:     options{skipCoverage: true},
 			wantErr:  "unexpected go list row",
 			wantDirs: []string{"test/e2e"},
@@ -802,7 +802,7 @@ func TestCollectMetrics_FakeModuleFailures_ReturnEachError(t *testing.T) {
 		{
 			name: "failing e2e test",
 			mutate: func(files map[string]string) {
-				files["test/e2e/suite/flow_test.go"] = "//go:build e2e\n\n" + strings.Replace(failingTest, "package core", "package suite", 1)
+				files["test/e2e/gitlab/common/flow_test.go"] = "//go:build e2e\n\n" + strings.Replace(failingTest, "package core", "package common", 1)
 			},
 			opts:    options{skipCoverage: true, includeE2ERun: true},
 			wantErr: "run e2e tests",
@@ -1101,7 +1101,7 @@ func TestRun_Failures_ReturnEachError(t *testing.T) {
 		{name: "bad flag", args: []string{"--top-tool-rows", "0"}, wantErr: "top-tool-rows"},
 		{
 			name:    "collector failure",
-			mutate:  func(files map[string]string) { delete(files, "test/e2e/suite/flow_test.go") },
+			mutate:  func(files map[string]string) { delete(files, "test/e2e/gitlab/common/flow_test.go") },
 			args:    []string{"--skip-coverage", "--file", "docs/testing.md"},
 			wantErr: "list packages",
 		},
@@ -1620,7 +1620,7 @@ func TestPackageKey_PathShapes_ShortLabels(t *testing.T) {
 		{relPath: "internal/tools", want: "tools"},
 		{relPath: "internal/config", want: "config"},
 		{relPath: "cmd/server", want: "cmd/server"},
-		{relPath: "test/e2e/suite", want: "test/e2e/suite"},
+		{relPath: "test/e2e/gitlab/common", want: "test/e2e/gitlab/common"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.relPath, func(t *testing.T) {
@@ -1642,7 +1642,7 @@ func TestClassifyLayer_PathShapes_MapsEveryLayer(t *testing.T) {
 		{relPath: "internal/tools/issues", want: layerToolSubpackage},
 		{relPath: "internal/config", want: layerCore},
 		{relPath: "cmd/server", want: layerCmd},
-		{relPath: "test/e2e/suite", want: layerE2E},
+		{relPath: "test/e2e/gitlab/common", want: layerE2E},
 		{relPath: "scripts/tool", want: layerOther},
 	}
 	for _, tt := range tests {
@@ -2031,7 +2031,7 @@ func sampleMetrics() repositoryMetrics {
 			{RelPath: "internal/tools/issues", Key: "issues", Layer: layerToolSubpackage, TestFunctions: 1500, TestFiles: 4, ToolCount: 30, Coverage: cov(99.2)},
 			{RelPath: "internal/tools/branches", Key: "branches", Layer: layerToolSubpackage, TestFunctions: 20, TestFiles: 2, ToolCount: 8, Coverage: cov(85)},
 			{RelPath: "internal/tools/empty", Key: "empty", Layer: layerToolSubpackage, ToolCount: 2},
-			{RelPath: "test/e2e/suite", Key: "test/e2e/suite", Layer: layerE2E, TestFunctions: 7, TestFiles: 5},
+			{RelPath: "test/e2e/gitlab/common", Key: "test/e2e/gitlab/common", Layer: layerE2E, TestFunctions: 7, TestFiles: 5},
 		},
 		NamingCounts:           map[string]int{pattern3Part: 1000, pattern2Part: 500, patternNoUnderscore: 100, patternTestCov: 4, patternOther: 0},
 		OverallCoverage:        cov(90.1),
@@ -2077,7 +2077,7 @@ func fakeModuleFiles() map[string]string {
 			"// ActionSpecs returns the fake widget actions.\nfunc ActionSpecs() []ActionSpec {\n\treturn []ActionSpec{{Name: \"list\"}, {Name: \"get\"}, {Name: \"delete\"}}\n}\n",
 		"internal/tools/widgets/widgets_test.go": "package widgets\n\nimport \"testing\"\n\n" +
 			"func TestRegister_Default_AddsTools(t *testing.T) {\n\tRegister()\n}\n",
-		"test/e2e/suite/flow_test.go": "//go:build e2e\n\npackage suite\n\nimport \"testing\"\n\n" +
+		"test/e2e/gitlab/common/flow_test.go": "//go:build e2e\n\npackage common\n\nimport \"testing\"\n\n" +
 			"func TestFullWorkflow(t *testing.T) {}\n\n" +
 			"func TestMetaToolWorkflow(t *testing.T) {}\n",
 	}

@@ -200,7 +200,7 @@ go test ./internal/tools/... -coverprofile=cover.out
 go tool cover -func=cover.out
 
 # E2E tests (requires real GitLab)
-go test -tags e2e -timeout 300s ./test/e2e/suite/
+go test -tags e2e -p 1 -timeout 2700s ./test/e2e/gitlab/...
 ```
 
 ## Documentation

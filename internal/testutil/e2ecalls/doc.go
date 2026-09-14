@@ -5,10 +5,11 @@
 //
 // # Why the record exists
 //
-// Coverage used to be credited by mentions in the source: cmd/audit_e2e_gaps
-// globs the suite's test files and credits any catalog action whose ID appears
-// on a code line. That counts an action nothing runs, and it counted eighteen
-// of them that neither Docker target can reach. A call counts here only when
+// Coverage used to be credited by mentions in the source: the audit that ran
+// before this one globbed the suite's test files and credited any catalog
+// action whose ID appeared on a code line. That counts an action nothing runs,
+// and it counted eighteen of them that neither Docker target can reach. A
+// call counts here only when
 // the server dispatched it, in a test that passed, on a named runtime, surface
 // and mode, which is what these lines carry.
 //
