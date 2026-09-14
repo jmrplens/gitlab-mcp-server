@@ -178,12 +178,26 @@ func assertImportFinished(e *harness.Env, s *harness.Session, projectID int64) {
 
 	params := map[string]any{"project_id": projectID}
 	last := "none"
+	// The read is allowed to fail transiently while GitLab settles, and an
+	// earlier version treated every failure as transient and dropped it. A run
+	// where every read failed then reported a five-minute timeout with a last
+	// status of "none" and no reason at all, which is the least actionable
+	// thing an e2e failure can say. The error is kept, reported, and stops the
+	// poll once it has repeated enough times to be the answer rather than a
+	// hiccup.
+	var lastErr error
+	consecutive := 0
 	err := harness.Poll(e.Ctx, importStatusInterval, importStatusWait, func() (bool, string, error) {
 		status, tryErr := harness.Try[projectimportexport.ImportStatusOutput](s, actionProjectImportStatus, params)
 		if tryErr != nil {
-			//nolint:nilerr // A transient read is retried until the poll deadline.
-			return false, "import_status error", nil
+			lastErr = tryErr
+			consecutive++
+			if consecutive >= importStatusFailuresAllowed {
+				return false, "", fmt.Errorf("import_status failed %d times in a row: %w", consecutive, tryErr)
+			}
+			return false, "import_status error: " + firstLine(tryErr.Error()), nil
 		}
+		consecutive = 0
 		last = status.ImportStatus
 		if last == "failed" {
 			return false, "", fmt.Errorf("the import failed: %s", status.ImportError)
@@ -191,9 +205,16 @@ func assertImportFinished(e *harness.Env, s *harness.Session, projectID int64) {
 		return last == "finished", "status=" + last, nil
 	})
 	if err != nil {
-		e.T.Errorf("the import of project %d never finished (last status %q): %v", projectID, last, err)
+		e.T.Errorf("the import of project %d never finished (last status %q, last read error %v): %v",
+			projectID, last, lastErr, err)
 	}
 }
+
+// importStatusFailuresAllowed is how many consecutive failed status reads are
+// taken as settling rather than as the answer. Beyond it the poll ends naming
+// the error, so a broken read costs one interval times this rather than the
+// whole window.
+const importStatusFailuresAllowed = 10
 
 // importArchive imports an archive as a new project, retrying the refusal
 // GitLab's settings cache makes while the enabled source is not visible
