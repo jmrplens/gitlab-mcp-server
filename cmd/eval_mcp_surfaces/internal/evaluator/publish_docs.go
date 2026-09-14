@@ -93,6 +93,14 @@ const (
 	modelEvaluationSuffix = " Model Evaluation"
 	boldIntFormat         = "**%d**"
 	boldStringFormat      = "**%s**"
+
+	// reportKeyStimulus is the report header key that says what the model was
+	// given. A run whose prompts name the expected tool, action or parameters
+	// is measuring the prompt builder, not the model, so the header has to
+	// carry the answer before any number taken from it may be published.
+	reportKeyStimulus = "Stimulus"
+	// stimulusUncoached is the only Stimulus value publication accepts.
+	stimulusUncoached = "uncoached"
 )
 
 // fullDockerAttemptsByPreset stores the minimum per-model attempts for complete Docker preset reports.
@@ -118,6 +126,7 @@ type publishReport struct {
 	ToolExecution          string
 	GitBranch              string
 	GitCommit              string
+	Stimulus               string
 	Diagnostics            map[string]int
 	UnresolvedHarnessNoise bool
 	Rows                   []publishRow
@@ -518,6 +527,7 @@ func readPublishReport(path string) (publishReport, error) {
 		ToolExecution:          input.ToolExecution,
 		GitBranch:              firstMetadataValue(content, "Git branch"),
 		GitCommit:              firstMetadataValue(content, "Git commit"),
+		Stimulus:               firstMetadataValue(content, reportKeyStimulus),
 		Diagnostics:            input.Diagnostics,
 		UnresolvedHarnessNoise: reportMentionsHarnessNoise(content),
 	}
@@ -997,6 +1007,9 @@ func publishCostTokens(usage map[string]string) string {
 func validatePublishReports(reports []publishReport, label string, allowHarnessNoise bool) error {
 	labelLower := strings.ToLower(label)
 	for _, report := range reports {
+		if err := requireUncoachedStimulus(report); err != nil {
+			return err
+		}
 		if publishSectionForSurface(report.ToolSurface) == publishSectionUnknown {
 			return fmt.Errorf("publish input %s uses unsupported tool_surface %q", report.Path, report.ToolSurface)
 		}
@@ -1013,6 +1026,27 @@ func validatePublishReports(reports []publishReport, label string, allowHarnessN
 		}
 	}
 	return nil
+}
+
+// requireUncoachedStimulus refuses a report whose header does not declare that
+// the model was given an uncoached prompt.
+//
+// A published number is read as a measurement of the model. It is only that
+// when the prompt withholds the answer the scorer checks for, so the run says
+// so in its own header and publication refuses anything else. A report that
+// declares nothing is refused by the same rule as one that declares coaching:
+// silence is what every report written so far carries.
+func requireUncoachedStimulus(report publishReport) error {
+	if strings.EqualFold(strings.TrimSpace(report.Stimulus), stimulusUncoached) {
+		return nil
+	}
+	declared := strings.TrimSpace(report.Stimulus)
+	if declared == "" {
+		return fmt.Errorf("publish input %s declares no %q line in its report header; publication requires %q, which only a run whose prompts withhold the expected call may write",
+			report.Path, reportKeyStimulus+":", reportKeyStimulus+": "+stimulusUncoached)
+	}
+	return fmt.Errorf("publish input %s declares %q in its report header; publication requires %q, which only a run whose prompts withhold the expected call may write",
+		report.Path, reportKeyStimulus+": "+declared, reportKeyStimulus+": "+stimulusUncoached)
 }
 
 // reportMentionsHarnessNoise reports whether report mentions harness noise.

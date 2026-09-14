@@ -6,6 +6,38 @@ managed section (CE dynamic, CE meta-tools, Enterprise/Premium meta-tools,
 Enterprise/Premium dynamic), so publishing one does not replace the others.
 Raw reports and traces are not committed.
 
+## What the numbers below measure, and what they do not
+
+Every table on this page is superseded. The measurement layer that produced
+them is being rewritten, and until the first run under the rewritten scorer is
+published, these four facts belong beside the figures:
+
+- **They were taken from trees that are not in the history.** The CE dynamic
+  and Enterprise dynamic tables come from `901ce569286f`, the Enterprise
+  meta-tools table from `fe2715491ac7`. Neither commit is an ancestor of
+  `main`, so nothing on this page can be reproduced by checking out a released
+  version.
+- **For part of the corpus the prompt contains the call the scorer checks
+  for.** The prompt builder in `cmd/eval_mcp_surfaces` interpolates the
+  expected tool, action and parameters into the task text, and the system
+  prompt names the correct action and parameter for about twenty domains. A
+  tool-selection or action-selection figure taken from those tasks measures how
+  reliably a model copies a value it was handed.
+- **Recovery counts repairs made from an answer key.** When a first call fails
+  validation, the harness replies with the exact envelope the step expected.
+  Each such reply is one repair attempt, and repair attempts are the
+  denominator of the Recovery column, so the column says how often a model
+  applies a correction it was handed verbatim.
+- **The scorer compares parameter names, never their values.** A call is
+  accepted when the required parameter names are present and no forbidden or
+  unknown name is; the only argument value read anywhere in the pass is
+  `confirm`. A project id pointing at the wrong project scores the same as the
+  right one.
+
+The gate that holds this is in the publisher: a report may not be published
+unless its header declares `Stimulus: uncoached`, which only a run whose
+prompts withhold the expected call can write.
+
 ## Dynamic Results
 
 <!-- START MODEL EVAL DYNAMIC RESULTS -->

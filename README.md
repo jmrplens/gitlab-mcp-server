@@ -305,6 +305,8 @@ Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Wind
 
 The project includes an automated evaluator for model-facing MCP quality. It runs schema-only checks against the tool catalog or executes validated model tool calls through MCP against Docker GitLab CE or licensed Enterprise instances populated with fixtures. It measures whether each model chooses the correct action, sends valid parameters, recovers from actionable GitLab errors, and respects destructive-action safeguards — across Anthropic, Google, OpenAI, and Qwen.
 
+The tables below are superseded and the measurement layer behind them is being rewritten: they come from two commits that are not in this history, part of the corpus puts the expected call in the prompt the scorer then checks against, repairs are made from an answer key the harness supplies, and the scorer compares parameter names rather than their values, all of which is set out in [What the numbers measure](docs/development/testing/model-results.md#what-the-numbers-below-measure-and-what-they-do-not).
+
 <!-- START MODEL EVAL DYNAMIC SUMMARY -->
 Current published result: **Docker CE dynamic 20260627-232303**.
 

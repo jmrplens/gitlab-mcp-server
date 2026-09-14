@@ -159,18 +159,24 @@ the CE wrapper.
 
 Artifacts are written under `dist/evaluation/surfaces/<timestamp>-<surface>-docker/`.
 The timestamp is captured once at startup and reused for every report, trace,
-fixture, and log file in that run. By default the wrapper uses the stable
-economy matrix:
+fixture, and log file in that run.
 
-```text
-anthropic:claude-haiku-4-5-20251001,google:gemini-flash-latest,openai:gpt-5.4-nano,qwen:qwen3.6-flash
-```
+The wrapper holds no model matrix of its own. It passes `--models` only when
+`EVAL_SURFACE_MODELS` is set, so with that variable unset the evaluator resolves
+the matrix itself from `EVAL_MODELS` in `.env` (see `.env.example` for the list a
+fresh clone starts with), and falls back to its source default when that is empty
+too. `google:gemini-flash-latest` is an alias resolved by Google to the latest
+Gemini Flash model available to the API key, so two runs a month apart are not
+necessarily the same model; use ListModels before pinning a different Google model
+ID. Set `EVAL_SURFACE_OUT_ROOT` to change the artifact root, or
+`EVAL_SURFACE_KEEP_DOCKER=1` to leave the Docker GitLab instance running for
+inspection after the run.
 
-Set `EVAL_SURFACE_MODELS` to override the model matrix. `google:gemini-flash-latest`
-is an alias resolved by Google to the latest Gemini Flash model available to the
-API key; use ListModels before pinning a different Google model ID. Set
-`EVAL_SURFACE_OUT_ROOT` to change the artifact root, or `EVAL_SURFACE_KEEP_DOCKER=1`
-to leave the Docker GitLab instance running for inspection after the run.
+Publication is opt-in. A full multi-preset run writes its reports and stops;
+`EVAL_SURFACE_PUBLISH_DOCS=true` is what asks it to update `README.md` and
+`docs/development/testing/model-results.md` afterwards. The publisher refuses a
+report whose header does not declare `Stimulus: uncoached`, so a run whose prompts
+still carry the expected call cannot be published whatever the variable says.
 
 `EVAL_SURFACE_*` keeps its bare name. The rename to `GITLAB_MCP_<NAME>` exists
 because a stdio server shares a shell with every other tool its user runs, and

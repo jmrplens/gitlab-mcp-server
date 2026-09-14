@@ -81,6 +81,75 @@ func TestValidatePublishReports_RejectsPartialDockerPresetWithoutTargetedLabel(t
 	}
 }
 
+// TestValidatePublishReports_RefusesAReportThatDoesNotDeclareAnUncoachedStimulus
+// verifies that publication is refused unless the report header carries
+// "Stimulus: uncoached", and that the refusal names that declaration.
+//
+// Every report written before this gate existed is silent about its stimulus,
+// and the corpus that produced them supplies the expected tool, action and
+// parameters inside the prompt the scorer then checks against. The refusal has
+// to name the missing line rather than say only that it refused, because the
+// operator reading it has to know what to change and cannot guess a header key.
+// The table drives the header value, since silence and an explicit declaration
+// of coaching are different mistakes that must both be refused.
+func TestValidatePublishReports_RefusesAReportThatDoesNotDeclareAnUncoachedStimulus(t *testing.T) {
+	const withStimulus = "Stimulus: `%s`\n"
+	full := fullDockerAttemptsByPreset[presetDockerRead]
+	declared := fmt.Sprintf(withStimulus, stimulusUncoached)
+
+	cases := []struct {
+		name        string
+		stimulus    string
+		wantErr     bool
+		wantMessage []string
+	}{
+		{
+			name:        "header absent",
+			stimulus:    "",
+			wantErr:     true,
+			wantMessage: []string{"declares no", "Stimulus:", "Stimulus: uncoached"},
+		},
+		{
+			name:        "header declares coaching",
+			stimulus:    fmt.Sprintf(withStimulus, "coached"),
+			wantErr:     true,
+			wantMessage: []string{"Stimulus: coached", "Stimulus: uncoached"},
+		},
+		{
+			name:     "header declares uncoached",
+			stimulus: declared,
+			wantErr:  false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			content := strings.Replace(singleModelPublishReport("openai:gpt-5.4-nano", presetDockerRead, full), declared, tc.stimulus, 1)
+			if strings.Contains(content, declared) != (tc.stimulus == declared) {
+				t.Fatalf("fixture rewrite did not take effect; header still reads %q", declared)
+			}
+			report, err := readPublishReport(writeTempPublishReport(t, content))
+			if err != nil {
+				t.Fatalf("readPublishReport() error = %v", err)
+			}
+			validateErr := validatePublishReports([]publishReport{report}, "2026-05-05 Docker economy models", false)
+			if !tc.wantErr {
+				if validateErr != nil {
+					t.Fatalf("validatePublishReports() error = %v, want nil", validateErr)
+				}
+				return
+			}
+			if validateErr == nil {
+				t.Fatal("validatePublishReports() error = nil, want a stimulus refusal")
+			}
+			for _, want := range tc.wantMessage {
+				if !strings.Contains(validateErr.Error(), want) {
+					t.Errorf("validatePublishReports() error = %q, want it to name %q", validateErr, want)
+				}
+			}
+		})
+	}
+}
+
 // TestSortedPublishRows_ReplacesDuplicateModelPresetRows verifies SortedPublishRows when replaces duplicate model preset rows.
 func TestSortedPublishRows_ReplacesDuplicateModelPresetRows(t *testing.T) {
 	oldPath := writeTempPublishReport(t, singleModelPublishReport("google:gemini-3.1-flash-lite-preview", presetDockerMutatingSafe, fullDockerAttemptsByPreset[presetDockerMutatingSafe]))
@@ -815,11 +884,11 @@ func TestPublishParsingHelpers_CoverFallbacks(t *testing.T) {
 		t.Fatal("parseExpectedOps(no slash) != 7")
 	}
 
-	reports := []publishReport{{Path: "report.md", Backend: backendGitLab, ToolExecution: "dry-run", Rows: []publishRow{{Attempts: 1}}}}
+	reports := []publishReport{{Path: "report.md", Backend: backendGitLab, ToolExecution: "dry-run", Stimulus: stimulusUncoached, Rows: []publishRow{{Attempts: 1}}}}
 	if err := validatePublishReports(reports, "targeted", false); err == nil || !strings.Contains(err.Error(), "--execute-tools") {
 		t.Fatalf("validatePublishReports(backend) error = %v, want execute-tools", err)
 	}
-	reports = []publishReport{{Path: "report.md", ToolExecution: "mcp", UnresolvedHarnessNoise: true, Rows: []publishRow{{Attempts: 1}}}}
+	reports = []publishReport{{Path: "report.md", ToolExecution: "mcp", UnresolvedHarnessNoise: true, Stimulus: stimulusUncoached, Rows: []publishRow{{Attempts: 1}}}}
 	if err := validatePublishReports(reports, "targeted", false); err == nil || !strings.Contains(err.Error(), "harness noise") {
 		t.Fatalf("validatePublishReports(noise) error = %v, want harness noise", err)
 	}
@@ -955,6 +1024,7 @@ func singleModelPublishReportForSurface(model, preset string, attempts int, tool
 		"Mode: model tool-calling\n" +
 		"Model: `" + model + "`\n" +
 		"Tool surface: `" + toolSurface + "`\n" +
+		"Stimulus: `" + stimulusUncoached + "`\n" +
 		"Backend: `gitlab`\n" +
 		"Preset: `" + preset + "`\n" +
 		"Tool execution: `mcp`\n" +
@@ -995,6 +1065,7 @@ func multiModelPublishReport() string {
 		"Mode: model tool-calling\n" +
 		"Model: `anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview`\n" +
 		"Tool surface: `meta`\n" +
+		"Stimulus: `" + stimulusUncoached + "`\n" +
 		"Backend: `gitlab`\n" +
 		"Preset: `docker-read`\n" +
 		"Tool execution: `mcp`\n" +
@@ -1039,6 +1110,7 @@ func dynamicFullRunPublishReportNoPreset() string {
 		"Mode: model tool-calling\n" +
 		"Model: `openai:gpt-5.4-nano`\n" +
 		"Tool surface: `dynamic`\n" +
+		"Stimulus: `" + stimulusUncoached + "`\n" +
 		"Backend: `gitlab`\n" +
 		"Tool execution: `mcp`\n" +
 		"Catalog tools: 3\n" +

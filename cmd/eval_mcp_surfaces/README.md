@@ -17,7 +17,7 @@
 | `--edition` | `all` | Optional task edition filter: `all`, `ce`, or `enterprise`. Docker presets set this automatically unless explicitly overridden. |
 | `--coverage-report` | empty | Optional Markdown file listing uncovered high-risk routes for the selected run. |
 | `--compare` | empty | Repeatable report path for comparison mode. Accepts token reports from `cmd/audit_tokens` and evaluation reports from this command. |
-| `--publish-docs` | `false` | Publish reviewed evaluation reports into managed blocks in `README.md` and `docs/development/testing/model-results.md`. |
+| `--publish-docs` | `false` | Publish reviewed evaluation reports into managed blocks in `README.md` and `docs/development/testing/model-results.md`. Refused unless every selected report declares `Stimulus: uncoached` in its header. |
 | `--publish-from` | empty | Repeatable reviewed `eval_mcp_surfaces` report path consumed by `--publish-docs` or `--check-docs`. |
 | `--publish-results-doc` | `docs/development/testing/model-results.md` | Results document updated by `--publish-docs`. |
 | `--publish-readme` | `README.md` | README file updated by `--publish-docs`. |
