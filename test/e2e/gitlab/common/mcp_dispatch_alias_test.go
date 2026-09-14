@@ -104,18 +104,30 @@ func TestDispatchAlias_FileHistory_CollapsesIntoCommitListOnTheIndividualSurface
 	if !bound {
 		t.Skip("the World binds no project_id, so there is no repository to read history from")
 	}
-	if !s.Serves(actionRepositoryFileHistory) {
-		// Worth saying rather than passing over: it would mean the losing
-		// action of a shared tool name is unreachable on this surface, which
-		// is a fact about the projection nothing else in the suite states.
-		t.Skipf("%s is not served on the individual surface, so the shared tool name leaves it unreachable there",
-			actionRepositoryFileHistory)
+	// The collapse is total rather than a rewrite: the run of 2026-09-14
+	// answered that the losing action is not served here at all, so a caller
+	// on this surface reaches the handler only under the winning ID. Asserted
+	// rather than skipped, because a skip states nothing and this is a real
+	// property of the projection that no other scenario records.
+	if s.Serves(actionRepositoryFileHistory) {
+		history := harness.Do[commits.ListOutput](s, actionRepositoryFileHistory,
+			map[string]any{"project_id": projectID},
+			harness.ExpectDispatch(actionRepositoryCommitList))
+		if len(history.Commits) == 0 {
+			t.Error("the collapsed call answered an empty history for a project that has commits")
+		}
+		return
 	}
 
-	history := harness.Do[commits.ListOutput](s, actionRepositoryFileHistory,
-		map[string]any{"project_id": projectID},
-		harness.ExpectDispatch(actionRepositoryCommitList))
-	if len(history.Commits) == 0 {
-		t.Error("the collapsed call answered an empty history for a project that has commits")
+	// What a caller does get: the winning ID, under the tool name both
+	// declare. If this ever stops being served the two actions have lost
+	// their handler on this surface rather than merely sharing it.
+	listed := harness.Do[commits.ListOutput](s, actionRepositoryCommitList,
+		map[string]any{"project_id": projectID})
+	if len(listed.Commits) == 0 {
+		t.Error("commit_list answered an empty listing on the individual surface for a project that has commits")
 	}
+	t.Logf("%s is not served on the individual surface: the tool name both actions declare belongs to %s, "+
+		"and the projection drops the other rather than rewriting it",
+		actionRepositoryFileHistory, actionRepositoryCommitList)
 }
