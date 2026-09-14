@@ -278,10 +278,11 @@ func TestProjectRoot_RemovedWorkingDirectory_ReturnsError(t *testing.T) {
 }
 
 // TestMetaTools_CarriesWhatTheServerRegistersForTheSurface verifies the meta
-// listing is the served one rather than [tools.RegisterAllMeta]'s.
+// listing is the served one.
 //
 // cmd/server builds the meta catalog with IncludeMCP, so gitlab_server is on
-// the surface a client sees; RegisterAllMeta builds without it and is one tool
+// the surface a client sees; the RegisterAllMeta convenience that was deleted
+// with issue 616 built without it and was one tool
 // short, which is how the published meta counts came to say 33 where the binary
 // serves 34. The standalone elicitation tools are asserted alongside it because
 // they are the other half of what the server registers here.

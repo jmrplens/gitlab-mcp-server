@@ -35,7 +35,7 @@ Domain packages own handlers, typed input/output structs, Markdown formatters, a
 
 Root runtime registration is catalog-backed:
 
-- `RegisterAllMeta` registers catalog-projected domain meta-tools plus approved standalone surface specs.
+- `RegisterMetaCatalog` registers catalog-projected domain meta-tools, and `RegisterMetaStandaloneTools` the approved standalone surface specs beside them.
 - `RegisterAll` registers individual tools through catalog projection.
 - Dynamic find/execute builds its registry from the same catalog.
 - Tool manifest resources, LLM files, audits, metrics, and evaluation tooling read the same catalog.

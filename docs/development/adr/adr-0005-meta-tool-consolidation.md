@@ -19,7 +19,7 @@ superseded_by: "ADR-0014 for meta registration mechanics"
 - 28 routes redistributed: MR emoji/events → `gitlab_merge_request`, snippet emoji → `gitlab_snippet`, epic discussions → `gitlab_group`
 - Annotation differentiation: `gitlab_template` and `gitlab_search` now use `ReadOnlyMetaAnnotations`, `gitlab_user` uses `NonDestructiveMetaAnnotations`
 
-**Update (2026-05-15)**: Catalog-first consolidation preserved the domain-scoped meta-tool decision while replacing the registration mechanism. `RegisterAllMeta` now registers catalog-backed groups and standalone surface tools from canonical specs; package-level `RegisterMeta` functions are no longer an approved path for ordinary GitLab API actions.
+**Update (2026-05-15)**: Catalog-first consolidation preserved the domain-scoped meta-tool decision while replacing the registration mechanism. The meta surface is registered from canonical specs with `RegisterMetaCatalog` and `RegisterMetaStandaloneTools`; package-level `RegisterMeta` functions are no longer an approved path for ordinary GitLab API actions. A `RegisterAllMeta` convenience wrapped that pair until 3.1.0, building its catalog without the MCP group and so serving one tool fewer than the binary; it was deleted rather than corrected.
 
 ## Context
 
@@ -173,7 +173,7 @@ Enterprise/Premium deployments add 17 gated meta-tools. GitLab.com Enterprise/Pr
 2. **Backward compatibility**: Individual tools remain unchanged (RegisterAll). Only meta-mode changes.
 3. **Action naming**: Absorbed actions use `{subdomain}_{verb}` prefix to avoid collisions (e.g., `member_list`, `label_create`)
 4. **Description enhancement**: Each consolidated meta-tool gets comprehensive action documentation in its tool description
-5. **Catalog-first migration**: package-level meta registration is not used by `RegisterAllMeta()` for ordinary GitLab API actions; visible meta groups are built from catalog metadata.
+5. **Catalog-first migration**: package-level meta registration is not used for ordinary GitLab API actions; visible meta groups are built from catalog metadata by `RegisterMetaCatalog()`.
 
 ## Consequences
 

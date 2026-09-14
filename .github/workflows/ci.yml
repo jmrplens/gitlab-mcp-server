@@ -482,9 +482,12 @@ jobs:
         run: go test -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/
 
   # stdio is the primary transport and nothing drove it until this module
-  # existed: the e2e suite uses an in-memory transport in the same process, so
-  # no pipes, no process, no separation of stdout from stderr, and none of the
-  # environment-variable configuration stdio mode actually uses. Two defects
+  # existed: the e2e suite of the day built the server in its own process and
+  # drove an in-memory transport, so no pipes, no process, no separation of
+  # stdout from stderr, and none of the environment-variable configuration
+  # stdio mode actually uses. The GitLab suite drives the real binary over
+  # stdio now, and this module still owns the questions that are about the
+  # transport rather than about a tool. Two defects
   # that shipped were reachable here and invisible everywhere else, one of them
   # held in place by a unit test asserting the opposite.
   e2e-stdio:

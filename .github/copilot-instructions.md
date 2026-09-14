@@ -65,7 +65,7 @@ gitlab-mcp-server/
 │   ├── tools/              # Tool orchestration layer + 177 internal/tools packages
 │   │   ├── action_catalog.go # Canonical action catalog built from domain ActionSpecs
 │   │   ├── register.go     # RegisterAll() — projects individual tools from the canonical action catalog
-│   │   ├── register_meta.go # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
+│   │   ├── register_meta.go # RegisterMetaStandaloneTools() — the standalone surfaces; catalog groups come from RegisterMetaCatalog
 │   │   ├── dynamic/        # Low-token dynamic find/execute surface
 │   │   ├── dynamiccatalog/ # Build(): the dynamic catalog assembled the way the server assembles it
 │   │   ├── toolvisibility/ # Apply(): the post-registration pass over the tools outside the catalog, shared by cmd/server and the evaluator

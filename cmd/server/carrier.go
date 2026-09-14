@@ -143,8 +143,8 @@ func (c *requestCarriers) middleware(next http.Handler) http.Handler {
 // cancelled straight away rather than left to run for an answer that can no
 // longer be delivered.
 //
-// A request with no token at all is left alone. That is stdio, the in-memory
-// transport the e2e suite drives, and any other path that never passed through
+// A request with no token at all is left alone. That is stdio, an in-memory
+// transport, and any other path that never passed through
 // [requestCarriers.middleware]. stdio needs no equivalent: a client that goes
 // away closes the pipe, and the transport read failure cancels every request in
 // flight.

@@ -64,7 +64,7 @@ gitlab-mcp-server/
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
 │   ├── tools/                   # Tool orchestration layer + 178 packages under internal/tools/... (168 with action_specs.go)
 │   │   ├── register.go          # RegisterAll() — catalog-backed individual tool projection
-│   │   ├── register_meta.go     # RegisterAllMeta() — catalog-backed meta-tool groups and standalone surfaces
+│   │   ├── register_meta.go     # RegisterMetaStandaloneTools() — the standalone surfaces; catalog groups come from RegisterMetaCatalog
 │   │   ├── meta_tool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
 │   │   ├── markdown.go          # markdownForResult delegator to toolutil.MarkdownForResult
 │   │   ├── branches/            # Branch management tools (example sub-package)
@@ -94,7 +94,7 @@ graph TD
     SPECS[CollectActionSpecs<br/>domain ActionSpecs] --> CATALOG[BuildActionCatalog]
     MAIN -->|builds| CATALOG
     CATALOG --> IND[individual projection<br/>tools.RegisterAll]
-    CATALOG --> META[meta projection<br/>tools.RegisterAllMeta]
+    CATALOG --> META[meta projection<br/>tools.RegisterMetaCatalog]
     CATALOG --> DYN[dynamic projection<br/>dynamic.RegisterCatalogFindExecuteTools]
     STANDALONE[StandaloneSurfaceToolSpecs<br/>project discovery + interactive flows] -.->|dynamic route injection| DYN
     SURFACE -->|individual| IND
