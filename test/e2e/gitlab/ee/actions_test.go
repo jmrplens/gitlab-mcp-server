@@ -397,3 +397,9 @@ const (
 	actionVulnerabilityRevert                  harness.ActionID = "vulnerability.revert"
 	actionVulnerabilityDismiss                 harness.ActionID = "vulnerability.dismiss"
 )
+
+// The Dependency Firewall, whose one action is projected under the project
+// tool and so carries that domain rather than one of its own.
+const (
+	actionDependencyFirewallEvaluate harness.ActionID = "project.dependency_firewall_evaluate"
+)
